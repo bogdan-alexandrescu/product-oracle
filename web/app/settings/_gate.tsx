@@ -1,23 +1,25 @@
-"use client";
+'use client';
 
-import { usePathname, useRouter } from "@/lib/nav";
-import { useEffect, type ReactNode } from "react";
+import { usePathname, useRouter } from '@/lib/nav';
+import { useEffect, type ReactNode } from 'react';
 
-import { Empty, LinkButton, PageHeader, PageSkeleton, Panel } from "@/components/ds";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { useMe } from "@/lib/me";
-import { useQuery } from "@/lib/use-query";
-import { SETTINGS_WRITES, settingsTabOf, useSettingsTabs } from "@/lib/settings-tabs";
+import { Empty, LinkButton, PageHeader, PageSkeleton, Panel } from '@/components/ds';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { useMe } from '@/lib/me';
+import { useQuery } from '@/lib/use-query';
+import { SETTINGS_WRITES, settingsTabOf, useSettingsTabs } from '@/lib/settings-tabs';
 
 /** Where a role turned away from a page finds what it can have instead (qa-settings-37). */
 const ELSEWHERE: Record<string, { text: string; href?: string; label?: string }> = {
-  "/settings/api-tokens": {
-    text: "Owners see every token here. Your own API tokens are on My account.",
-    href: "/account",
-    label: "Open My account",
+  '/settings/api-tokens': {
+    text: 'Owners see every token here. Your own API tokens are on My account.',
+    href: '/account',
+    label: 'Open My account',
   },
   // Pass F, F-77: the lowest role that can use it, not only "ask an owner".
-  "/settings/webhooks": { text: "An approver or owner can set up webhooks. Ask one if you need it." },
+  '/settings/webhooks': {
+    text: 'An approver or owner can set up webhooks. Ask one if you need it.',
+  },
 };
 
 /**
@@ -33,11 +35,15 @@ export function SettingsGate({ children }: { children: ReactNode }) {
   const write = SETTINGS_WRITES[pathname];
   const turnedAway = !!me && !!tab && !(tabs.includes(tab) && (!write || can(write)));
   // qa-settings-37: who to ask, by name (every member reads the people list).
-  const peopleQ = useQuery(turnedAway ? "people|owners" : "", () =>
-    turnedAway ? unwrap(api.GET("/v1/people", { params: { query: { limit: 500 } } })) : Promise.resolve([] as Schemas["PersonOut"][]),
+  const peopleQ = useQuery(turnedAway ? 'people|owners' : '', () =>
+    turnedAway
+      ? unwrap(api.GET('/v1/people', { params: { query: { limit: 500 } } }))
+      : Promise.resolve([] as Schemas['PersonOut'][]),
   );
-  const owners = (peopleQ.data ?? []).filter((p) => p.role === "owner").map((p) => p.name);
-  const askOwner = owners.length ? `Ask an owner (${owners.join(" or ")}) if you need it.` : "Ask an owner if you need it.";
+  const owners = (peopleQ.data ?? []).filter((p) => p.role === 'owner').map((p) => p.name);
+  const askOwner = owners.length
+    ? `Ask an owner (${owners.join(' or ')}) if you need it.`
+    : 'Ask an owner if you need it.';
   // qa-settings-1: signed out, on to sign-in and back here after (as /home and /account do).
   const signedOut = !loading && !me;
   useEffect(() => {
@@ -59,10 +65,13 @@ export function SettingsGate({ children }: { children: ReactNode }) {
           <LinkButton href={ELSEWHERE[pathname].href} variant="secondary">
             {ELSEWHERE[pathname].label}
           </LinkButton>
-        ) : !ELSEWHERE[pathname] && tabs[0] && (
-          <LinkButton href={tabs[0].href} variant="ghost">
-            Open {tabs[0].label}
-          </LinkButton>
+        ) : (
+          !ELSEWHERE[pathname] &&
+          tabs[0] && (
+            <LinkButton href={tabs[0].href} variant="ghost">
+              Open {tabs[0].label}
+            </LinkButton>
+          )
         )}
       </Panel>
     </>

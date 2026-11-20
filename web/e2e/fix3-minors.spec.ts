@@ -1,6 +1,6 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /*
  * Train AB's leftover minors (/simple/priorities, the "simple-plan" mock's dated plan): a row
@@ -8,9 +8,8 @@ import { expect, test, type Locator, type Page } from "./test";
  * theirs, and the move dialog says where it lands. Desktop 1440x900 and phone 390x844.
  */
 
-const rows = (page: Page): Locator => page.getByTestId("prio-row");
-const moveDialog = (page: Page): Locator =>
-  page.getByRole("dialog", { name: /^Why move / });
+const rows = (page: Page): Locator => page.getByTestId('prio-row');
+const moveDialog = (page: Page): Locator => page.getByRole('dialog', { name: /^Why move / });
 
 async function open(page: Page, width: number, height: number): Promise<void> {
   await page.setViewportSize({ width, height });
@@ -18,10 +17,10 @@ async function open(page: Page, width: number, height: number): Promise<void> {
     .context()
     .addInitScript(([key, value]) => localStorage.setItem(key, value), [
       MOCK_SCENARIO_KEY,
-      "simple-plan",
+      'simple-plan',
     ] as const);
   await login(page);
-  await page.goto("/simple/priorities");
+  await page.goto('/simple/priorities');
   await expect(rows(page).first()).toBeVisible();
 }
 
@@ -32,25 +31,26 @@ async function listed(
   return rows(page).evaluateAll((els) =>
     els.map((e) => ({
       rank: Number(e.querySelector('[data-testid="prio-rank"]')!.textContent),
-      above: e.getAttribute("data-above") === "true",
-      title: e.querySelector('[data-testid="prio-title"]')!.textContent ?? "",
-      code: e.querySelector('[data-testid="prio-own-key"]')?.textContent ?? "",
+      above: e.getAttribute('data-above') === 'true',
+      title: e.querySelector('[data-testid="prio-title"]')!.textContent ?? '',
+      code: e.querySelector('[data-testid="prio-own-key"]')?.textContent ?? '',
     })),
   );
 }
 
 /** A row named as the move dialog's heading names it: its title, then its own key when it has one. */
-const named = (r: { title: string; code: string }): string => (r.code && r.code !== r.title ? `${r.title} (${r.code})` : r.title);
+const named = (r: { title: string; code: string }): string =>
+  r.code && r.code !== r.title ? `${r.title} (${r.code})` : r.title;
 
 /** Drags row `from`'s handle to just past the middle of row `to`, as a person would. */
 async function drag(page: Page, from: number, to: number): Promise<void> {
   const handle = rows(page)
     .nth(from)
-    .getByRole("button", { name: /^Drag / });
+    .getByRole('button', { name: /^Drag / });
   await rows(page)
     .nth(to)
-    .evaluate((e) => e.scrollIntoView({ block: "center" }));
-  await handle.evaluate((e) => e.scrollIntoView({ block: "nearest" }));
+    .evaluate((e) => e.scrollIntoView({ block: 'center' }));
+  await handle.evaluate((e) => e.scrollIntoView({ block: 'nearest' }));
   const h = (await handle.boundingBox())!;
   const target = (await rows(page).nth(to).boundingBox())!;
   await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2);
@@ -61,23 +61,36 @@ async function drag(page: Page, from: number, to: number): Promise<void> {
   await page.mouse.up();
 }
 
-for (const [device, width, height] of [["desktop", 1440, 900], ["phone", 390, 844]] as const) {
+for (const [device, width, height] of [
+  ['desktop', 1440, 900],
+  ['phone', 390, 844],
+] as const) {
   test.describe(`fix3-minors: a drag above the line stays above it (${device})`, () => {
-    test("dragged onto a row above the line, it asks for that row's rank and says it lands under it, above the line", async ({ page }) => {
+    test("dragged onto a row above the line, it asks for that row's rank and says it lands under it, above the line", async ({
+      page,
+    }) => {
       await open(page, width, height);
       const list = await listed(page);
       const split = list.findIndex((r) => !r.above);
       // Two rows next to each other above the line, with rows that miss it between them by rank.
-      const from = list.findIndex((r, i) => i + 1 < split && list.some((x) => !x.above && x.rank > r.rank && x.rank < list[i + 1].rank));
+      const from = list.findIndex(
+        (r, i) =>
+          i + 1 < split &&
+          list.some((x) => !x.above && x.rank > r.rank && x.rank < list[i + 1].rank),
+      );
       expect(from).toBeGreaterThanOrEqual(0);
       const to = from + 1;
       await drag(page, from, to);
       const dialog = moveDialog(page);
-      await expect(dialog.getByRole("heading")).toHaveText(new RegExp(`to rank ${list[to].rank}$`));
-      await expect(dialog.getByTestId("move-lands")).toHaveText(`It lands just under ${named(list[to])}, above the line.`);
+      await expect(dialog.getByRole('heading')).toHaveText(new RegExp(`to rank ${list[to].rank}$`));
+      await expect(dialog.getByTestId('move-lands')).toHaveText(
+        `It lands just under ${named(list[to])}, above the line.`,
+      );
     });
 
-    test("dragged past the line, it asks for the last rank above it and stays above it", async ({ page }) => {
+    test('dragged past the line, it asks for the last rank above it and stays above it', async ({
+      page,
+    }) => {
       await open(page, width, height);
       const list = await listed(page);
       const split = list.findIndex((r) => !r.above);
@@ -92,41 +105,55 @@ for (const [device, width, height] of [["desktop", 1440, 900], ["phone", 390, 84
       const under = aboveByRank[aboveByRank.indexOf(moving) - 1];
       await drag(page, split - 2, split + 1);
       const dialog = moveDialog(page);
-      await expect(dialog.getByRole("heading")).toHaveText(new RegExp(`to rank ${lastAboveRank}$`));
-      await expect(dialog.getByTestId("move-lands")).toHaveText(`It lands just under ${named(under)}, above the line.`);
-      await dialog.getByLabel("Reason").fill("Ship it with the plan");
-      await dialog.getByRole("button", { name: /^Move/ }).click();
+      await expect(dialog.getByRole('heading')).toHaveText(new RegExp(`to rank ${lastAboveRank}$`));
+      await expect(dialog.getByTestId('move-lands')).toHaveText(
+        `It lands just under ${named(under)}, above the line.`,
+      );
+      await dialog.getByLabel('Reason').fill('Ship it with the plan');
+      await dialog.getByRole('button', { name: /^Move/ }).click();
       await expect(dialog).toBeHidden();
-      await expect(rows(page).filter({ hasText: moving.title }).getByTestId("prio-rank")).toHaveText(String(lastAboveRank));
+      await expect(
+        rows(page).filter({ hasText: moving.title }).getByTestId('prio-rank'),
+      ).toHaveText(String(lastAboveRank));
       const after = await listed(page);
       const at = after.findIndex((r) => r.title === moving.title);
-      expect(after[at]).toEqual({ rank: lastAboveRank, above: true, title: moving.title, code: moving.code });
+      expect(after[at]).toEqual({
+        rank: lastAboveRank,
+        above: true,
+        title: moving.title,
+        code: moving.code,
+      });
       expect(after[at - 1].title).toBe(under.title);
       expect(at).toBeLessThan(after.findIndex((r) => !r.above));
     });
 
     // fix3-minors review: the clamp holds for any dated plan, also one whose rows are already in
     // rank order (what makes the line has the first ranks), not only one the dates regroup.
-    test("in a dated plan whose line three far-apart rows make, the list splits at the line in rank order", async ({ page }) => {
+    test('in a dated plan whose line three far-apart rows make, the list splits at the line in rank order', async ({
+      page,
+    }) => {
       await open(page, width, height);
       // A line on a picked day that only three rows make, far apart by rank (ranks 4, 17 and 26:
       // since walkc-roadmap-tasks a planned item ends with its plan slices, Setup checklist on Nov 20).
-      await page.locator("#prio-line").selectOption("pick");
-      await page.getByLabel("The line's date").fill("2026-11-20");
-      await page.getByRole("button", { name: "Apply" }).click();
+      await page.locator('#prio-line').selectOption('pick');
+      await page.getByLabel("The line's date").fill('2026-11-20');
+      await page.getByRole('button', { name: 'Apply' }).click();
       // build-plan QP1: the parts' headings say what makes and misses the line.
-      await expect(page.getByTestId("prio-part-head").first()).toContainText("Makes Nov 20, 2026");
-      await expect(page.getByTestId("prio-part-count").first()).toHaveText("3 features, in rank order");
+      await expect(page.getByTestId('prio-part-head').first()).toContainText('Makes Nov 20, 2026');
+      await expect(page.getByTestId('prio-part-count').first()).toHaveText(
+        '3 features, in rank order',
+      );
       const list = await listed(page);
       expect(list.filter((r) => r.above).length).toBe(3);
       // QA pass 3 (qa-simple-plan-2): the list is split at the line, the three that make it first.
       expect(list.map((r) => r.above).slice(0, 4)).toEqual([true, true, true, false]);
       const makes = list.filter((r) => r.above).map((r) => r.rank);
-      expect(makes.at(-1)! - makes[0], "far apart by rank").toBeGreaterThan(10);
+      expect(makes.at(-1)! - makes[0], 'far apart by rank').toBeGreaterThan(10);
       // Each side keeps rank order; the drag past the line is the test above (a row needed by
       // another stays where it is, so this one does not drag here).
       const ranks = (above: boolean) => list.filter((r) => r.above === above).map((r) => r.rank);
-      for (const side of [ranks(true), ranks(false)]) expect(side).toEqual([...side].sort((a, b) => a - b));
+      for (const side of [ranks(true), ranks(false)])
+        expect(side).toEqual([...side].sort((a, b) => a - b));
     });
   });
 }

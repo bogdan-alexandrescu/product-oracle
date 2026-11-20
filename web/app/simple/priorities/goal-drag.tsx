@@ -1,28 +1,42 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
-import type { Schemas } from "@/lib/api/client";
+import type { Schemas } from '@/lib/api/client';
 
-import { DragGhost, featureOf, type useBucketWrites } from "./goal-buckets";
-import { planFeatures, weeksWords } from "./plan-buckets";
+import { DragGhost, featureOf, type useBucketWrites } from './goal-buckets';
+import { planFeatures, weeksWords } from './plan-buckets';
 
-type Buckets = Schemas["GoalBucketsOut"];
+type Buckets = Schemas['GoalBucketsOut'];
 type Feature = ReturnType<typeof planFeatures>[number];
 /**
  * A task moved by the change engine rather than the goal buckets' own write: a draft (the goal
  * buckets do not list it yet), or any task of someone who proposes. Where it is, its write, the
  * code its preview shows (null: none people know yet) and whether it is a draft.
  */
-export type Own = { from: string | null; move: (to: { id: string; title: string }) => Promise<unknown>; code: string | null; draft?: boolean };
-type Carried = { f: Feature; id: string; from: string | null; by: "pointer" | "keys"; x: number; y: number; moved: boolean; own?: Own };
+export type Own = {
+  from: string | null;
+  move: (to: { id: string; title: string }) => Promise<unknown>;
+  code: string | null;
+  draft?: boolean;
+};
+type Carried = {
+  f: Feature;
+  id: string;
+  from: string | null;
+  by: 'pointer' | 'keys';
+  x: number;
+  y: number;
+  moved: boolean;
+  own?: Own;
+};
 
 const EDGE = 72; // px from the window's top or bottom where a drag scrolls the page
 const SPEED = 14; // px a frame
 
 /** The goal card under a point, by its goal id. */
 function goalAt(x: number, y: number): string | null {
-  const el = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-goal-id]");
+  const el = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-goal-id]');
   return el?.dataset.goalId ?? null;
 }
 
@@ -33,18 +47,36 @@ function goalAt(x: number, y: number): string | null {
  * Enter or Space picks it up, the arrows choose a goal, Enter drops, Escape cancels.
  */
 /** The goal ids of the buckets drawn on the page, top to bottom, once each. */
-const drawnGoals = (): string[] => [...new Set([...document.querySelectorAll<HTMLElement>("[data-goal-id]:not([data-testid=archived-goal])")].map((c) => c.dataset.goalId ?? "").filter(Boolean))];
+const drawnGoals = (): string[] => [
+  ...new Set(
+    [...document.querySelectorAll<HTMLElement>('[data-goal-id]:not([data-testid=archived-goal])')]
+      .map((c) => c.dataset.goalId ?? '')
+      .filter(Boolean),
+  ),
+];
 
-export function useBucketDrag({ gb, writes }: { gb: Buckets | undefined; writes: ReturnType<typeof useBucketWrites> }) {
+export function useBucketDrag({
+  gb,
+  writes,
+}: {
+  gb: Buckets | undefined;
+  writes: ReturnType<typeof useBucketWrites>;
+}) {
   const [carried, setCarried] = useState<Carried | null>(null);
   const [over, setOver] = useState<string | null>(null);
-  const [said, setSaid] = useState("");
+  const [said, setSaid] = useState('');
   const [edge, setEdge] = useState<{ dir: 1 | -1; words: string } | null>(null);
-  const ref = useRef<{ carried: Carried | null; over: string | null }>({ carried: null, over: null });
+  const ref = useRef<{ carried: Carried | null; over: string | null }>({
+    carried: null,
+    over: null,
+  });
   useEffect(() => {
     ref.current = { carried, over };
   });
-  const titleOf = useCallback((id: string | null) => gb?.goals.find((g) => g.id === id)?.title ?? "", [gb]);
+  const titleOf = useCallback(
+    (id: string | null) => gb?.goals.find((g) => g.id === id)?.title ?? '',
+    [gb],
+  );
 
   const drop = useCallback(
     async (c: Carried, to: string | null) => {
@@ -61,30 +93,51 @@ export function useBucketDrag({ gb, writes }: { gb: Buckets | undefined; writes:
         return;
       }
       // The change engine applies or proposes: its note says which.
-      setSaid(c.own ? "" : `Moved ${c.f.name} to ${titleOf(to)}.`);
+      setSaid(c.own ? '' : `Moved ${c.f.name} to ${titleOf(to)}.`);
       if (c.own) await c.own.move({ id: to, title: titleOf(to) });
-      else await writes.move(c.id, c.from, to, <>Moved {c.f.name} to {titleOf(to)}.</>);
+      else
+        await writes.move(
+          c.id,
+          c.from,
+          to,
+          <>
+            Moved {c.f.name} to {titleOf(to)}.
+          </>,
+        );
     },
     [titleOf, writes],
   );
 
   const grip = (f: Feature, e: React.PointerEvent | React.KeyboardEvent, own?: Own) => {
-    const rec = own ? { id: `own:${f.code}`, goal_ids: own.from ? [own.from] : [] } : featureOf(gb, f.code, f.name);
+    const rec = own
+      ? { id: `own:${f.code}`, goal_ids: own.from ? [own.from] : [] }
+      : featureOf(gb, f.code, f.name);
     if (!rec || ref.current.carried) return;
     const from = rec.goal_ids[0] ?? null;
-    if ("pointerId" in e) {
+    if ('pointerId' in e) {
       if (e.button !== 0) return;
       e.preventDefault();
-      setCarried({ f, id: rec.id, from, by: "pointer", x: e.clientX, y: e.clientY, moved: false, own });
+      setCarried({
+        f,
+        id: rec.id,
+        from,
+        by: 'pointer',
+        x: e.clientX,
+        y: e.clientY,
+        moved: false,
+        own,
+      });
     } else {
-      setCarried({ f, id: rec.id, from, by: "keys", x: 0, y: 0, moved: false, own });
-      setSaid(`Picked up ${f.name}. Use the arrow keys to choose a goal, Enter to drop it there, Escape to cancel.`);
+      setCarried({ f, id: rec.id, from, by: 'keys', x: 0, y: 0, moved: false, own });
+      setSaid(
+        `Picked up ${f.name}. Use the arrow keys to choose a goal, Enter to drop it there, Escape to cancel.`,
+      );
     }
   };
 
   // The pointer: follow it, light the goal under it, scroll at the window's edges, drop on release.
   useEffect(() => {
-    if (carried?.by !== "pointer") return;
+    if (carried?.by !== 'pointer') return;
     let frame = 0;
     let last = { x: carried.x, y: carried.y };
     const target = (x: number, y: number) => {
@@ -96,10 +149,16 @@ export function useBucketDrag({ gb, writes }: { gb: Buckets | undefined; writes:
       if (dir) {
         window.scrollBy(0, dir * SPEED);
         target(last.x, last.y);
-        const cards = [...document.querySelectorAll<HTMLElement>("[data-goal-id]")];
-        const next = dir > 0 ? cards.find((c) => c.getBoundingClientRect().top > window.innerHeight) : [...cards].reverse().find((c) => c.getBoundingClientRect().bottom < 0);
+        const cards = [...document.querySelectorAll<HTMLElement>('[data-goal-id]')];
+        const next =
+          dir > 0
+            ? cards.find((c) => c.getBoundingClientRect().top > window.innerHeight)
+            : [...cards].reverse().find((c) => c.getBoundingClientRect().bottom < 0);
         const g = gb?.goals.find((x) => x.id === next?.dataset.goalId);
-        setEdge({ dir, words: `${dir > 0 ? "↓ Scrolling down" : "↑ Scrolling up"}${g ? ` to goal ${g.order}, ${g.title}` : ""}: keep holding at the edge` });
+        setEdge({
+          dir,
+          words: `${dir > 0 ? '↓ Scrolling down' : '↑ Scrolling up'}${g ? ` to goal ${g.order}, ${g.title}` : ''}: keep holding at the edge`,
+        });
       } else setEdge(null);
       frame = requestAnimationFrame(tick);
     };
@@ -120,14 +179,14 @@ export function useBucketDrag({ gb, writes }: { gb: Buckets | undefined; writes:
       setOver(null);
       setEdge(null);
     };
-    window.addEventListener("pointermove", move, { passive: false });
-    window.addEventListener("pointerup", up);
-    window.addEventListener("pointercancel", cancel);
+    window.addEventListener('pointermove', move, { passive: false });
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', cancel);
     return () => {
       cancelAnimationFrame(frame);
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-      window.removeEventListener("pointercancel", cancel);
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', cancel);
     };
     // Bound once per pick-up; the position lives in `last`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -135,7 +194,7 @@ export function useBucketDrag({ gb, writes }: { gb: Buckets | undefined; writes:
 
   // The keys: the arrows step through the other goals, Enter drops, Escape cancels.
   useEffect(() => {
-    if (carried?.by !== "keys" || !gb) return;
+    if (carried?.by !== 'keys' || !gb) return;
     // The goals drawn on the page, in their order there: the arrows step through what a person sees.
     const goals = drawnGoals()
       .map((id) => gb.goals.find((g) => g.id === id))
@@ -144,44 +203,57 @@ export function useBucketDrag({ gb, writes }: { gb: Buckets | undefined; writes:
       const c = ref.current.carried;
       if (!c) return;
       const at = goals.findIndex((g) => g.id === ref.current.over);
-      if (["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft"].includes(e.key)) {
+      if (['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'].includes(e.key)) {
         e.preventDefault();
-        const step = e.key === "ArrowDown" || e.key === "ArrowRight" ? 1 : -1;
-        const next = goals[at < 0 ? (step > 0 ? 0 : goals.length - 1) : (at + step + goals.length) % goals.length];
+        const step = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : -1;
+        const next =
+          goals[
+            at < 0 ? (step > 0 ? 0 : goals.length - 1) : (at + step + goals.length) % goals.length
+          ];
         if (!next) return;
         setOver(next.id);
         setSaid(`Over goal ${next.order}, ${next.title}. Enter drops it there.`);
-        document.querySelector(`[data-goal-id="${next.id}"]`)?.scrollIntoView({ block: "nearest" });
-      } else if (e.key === "Enter" || e.key === " ") {
+        document.querySelector(`[data-goal-id="${next.id}"]`)?.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         e.stopPropagation();
         void drop(c, ref.current.over);
-      } else if (e.key === "Escape" || e.key === "Tab") {
-        if (e.key === "Escape") e.preventDefault();
+      } else if (e.key === 'Escape' || e.key === 'Tab') {
+        if (e.key === 'Escape') e.preventDefault();
         setCarried(null);
         setOver(null);
         setSaid(`Move cancelled. ${c.f.name} stays where it was.`);
       }
     };
-    window.addEventListener("keydown", key, true);
-    return () => window.removeEventListener("keydown", key, true);
+    window.addEventListener('keydown', key, true);
+    return () => window.removeEventListener('keydown', key, true);
   }, [carried?.by, carried?.id, carried?.from, gb, drop]);
 
   let ghost: ReactNode = null;
-  if (carried?.by === "pointer" && carried.moved) {
-    const phone = typeof window !== "undefined" && window.innerWidth < 640;
+  if (carried?.by === 'pointer' && carried.moved) {
+    const phone = typeof window !== 'undefined' && window.innerWidth < 640;
     ghost = (
       <DragGhost
         code={carried.own ? carried.own.code : carried.f.code}
         name={carried.f.name}
-        weeks={carried.f.weeks != null ? weeksWords(carried.f.weeks) : carried.own?.draft ? "Draft" : "PM-owned"}
-        className={phone ? "!left-4 w-[calc(100%-32px)] max-w-none" : ""}
+        weeks={
+          carried.f.weeks != null
+            ? weeksWords(carried.f.weeks)
+            : carried.own?.draft
+              ? 'Draft'
+              : 'PM-owned'
+        }
+        className={phone ? '!left-4 w-[calc(100%-32px)] max-w-none' : ''}
         style={{ left: phone ? undefined : carried.x - 24, top: carried.y - 18 }}
       />
     );
   }
   const edgeBar = edge ? (
-    <div aria-hidden data-testid="drag-edge" className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex h-16 items-center justify-center border-t-2 border-dashed border-accent bg-accent-soft/90 text-[15px] font-[650] text-accent-ink max-sm:bottom-16 lg:left-[232px]">
+    <div
+      aria-hidden
+      data-testid="drag-edge"
+      className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex h-16 items-center justify-center border-t-2 border-dashed border-accent bg-accent-soft/90 text-[15px] font-[650] text-accent-ink max-sm:bottom-16 lg:left-[232px]"
+    >
       {edge.words}
     </div>
   ) : null;

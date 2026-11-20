@@ -1,4 +1,4 @@
-import { Link } from "@/lib/nav";
+import { Link } from '@/lib/nav';
 
 /**
  * The crumb back to the Plan (qa-plan-22) on the pages its links open that have no Plan tab:

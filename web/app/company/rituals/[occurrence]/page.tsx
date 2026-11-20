@@ -1,7 +1,7 @@
-import { Suspense } from "react";
+import { Suspense } from 'react';
 
-import { OccurrenceDetail } from "../_components/OccurrenceDetail";
-import { PageSkeleton } from "@/components/ds";
+import { OccurrenceDetail } from '../_components/OccurrenceDetail';
+import { PageSkeleton } from '@/components/ds';
 
 // Typed by hand rather than with Next's generated PageProps, so a plain `tsc --noEmit`
 // (without a build's .next/types) checks it.

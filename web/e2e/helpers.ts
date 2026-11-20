@@ -1,7 +1,15 @@
-import { expect, type Locator, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from '@playwright/test';
 
-import { MOCK_LOGIN } from "../lib/api/mock/fixtures";
-import { CONSOLE_HELD_RUN, ROADMAP_CROSS_PRD_RUN, ROADMAP_DEPS_CHANGED_RUN, ROADMAP_DRIFT_RUN, ROADMAP_FILE_PROBLEM_RUN, ROADMAP_REVIEW_RUN, ROADMAP_REVIEW_RUN_ATTEMPT2 } from "../lib/api/mock/runs";
+import { MOCK_LOGIN } from '../lib/api/mock/fixtures';
+import {
+  CONSOLE_HELD_RUN,
+  ROADMAP_CROSS_PRD_RUN,
+  ROADMAP_DEPS_CHANGED_RUN,
+  ROADMAP_DRIFT_RUN,
+  ROADMAP_FILE_PROBLEM_RUN,
+  ROADMAP_REVIEW_RUN,
+  ROADMAP_REVIEW_RUN_ATTEMPT2,
+} from '../lib/api/mock/runs';
 
 export const ADMIN = MOCK_LOGIN;
 
@@ -11,10 +19,10 @@ export const ADMIN = MOCK_LOGIN;
  * (#723; e2e/simple-mode.spec.ts signs in without one).
  */
 export async function login(page: Page, email: string = ADMIN.email) {
-  await page.goto("/login?next=%2Fhome");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(ADMIN.password);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.goto('/login?next=%2Fhome');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(ADMIN.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/home$/);
 }
 
@@ -25,7 +33,9 @@ export async function login(page: Page, email: string = ADMIN.email) {
  */
 export async function openRoadmapItem(page: Page, key: string) {
   // The Timeline (mk-qa4-roadmap QR1 A): an item's bar on a desktop, its row in the quarter list on a phone.
-  const bar = page.locator(`[data-testid="timeline-row"][data-item="${key}"] [data-testid="timeline-bar"]`).first();
+  const bar = page
+    .locator(`[data-testid="timeline-row"][data-item="${key}"] [data-testid="timeline-bar"]`)
+    .first();
   await bar.scrollIntoViewIfNeeded();
   await expect(bar).toBeVisible();
   await bar.click();
@@ -37,8 +47,11 @@ export async function openRoadmapItem(page: Page, key: string) {
  * left "Open Claude's sign-in page" waiting past the test's timeout.
  */
 export async function standInClaudePage(page: Page) {
-  await page.context().route("https://claude.com/**", (route) =>
-    route.fulfill({ contentType: "text/html", body: "<title>Claude</title><h1>Sign in to Claude</h1>" }),
+  await page.context().route('https://claude.com/**', (route) =>
+    route.fulfill({
+      contentType: 'text/html',
+      body: '<title>Claude</title><h1>Sign in to Claude</h1>',
+    }),
   );
 }
 
@@ -80,12 +93,16 @@ export async function selectText(page: Page, key: string, text: string) {
  */
 export async function clearName(page: Page, email: string) {
   await login(page);
-  await page.goto("/settings/members");
-  await page.getByTestId("member-row").filter({ hasText: email }).getByTestId("member-open").click();
-  const member = page.getByTestId("member-inspector");
-  await member.getByLabel("Name", { exact: true }).fill("");
-  await member.getByRole("button", { name: "Save" }).click();
-  await expect(member.getByRole("button", { name: "Saved" })).toBeVisible();
+  await page.goto('/settings/members');
+  await page
+    .getByTestId('member-row')
+    .filter({ hasText: email })
+    .getByTestId('member-open')
+    .click();
+  const member = page.getByTestId('member-inspector');
+  await member.getByLabel('Name', { exact: true }).fill('');
+  await member.getByRole('button', { name: 'Save' }).click();
+  await expect(member.getByRole('button', { name: 'Saved' })).toBeVisible();
   await signOut(page);
 }
 
@@ -98,20 +115,23 @@ export async function clearName(page: Page, email: string) {
  */
 export async function disconnectAll(page: Page, provider: string) {
   const card = page.getByTestId(`connection-card-${provider}`).filter({ visible: true });
-  await expect(card.getByRole("button", { name: "Add another account" })).toBeVisible();
+  await expect(card.getByRole('button', { name: 'Add another account' })).toBeVisible();
   const rows = card.locator('li[data-testid^="connection-"]');
   for (let left = await rows.count(); left > 0; left--) {
     const row = rows.first();
-    await row.getByRole("button", { name: "Disconnect", exact: true }).click();
-    await row.getByRole("button", { name: "Confirm disconnect" }).click();
+    await row.getByRole('button', { name: 'Disconnect', exact: true }).click();
+    await row.getByRole('button', { name: 'Confirm disconnect' }).click();
     await expect(rows).toHaveCount(left - 1);
   }
-  await expect(card).toContainText("Not connected");
+  await expect(card).toContainText('Not connected');
 }
 
 export async function signOut(page: Page) {
-  await page.getByTestId("user-menu").click();
-  await page.getByRole("dialog", { name: "Account" }).getByRole("button", { name: "Sign out" }).click();
+  await page.getByTestId('user-menu').click();
+  await page
+    .getByRole('dialog', { name: 'Account' })
+    .getByRole('button', { name: 'Sign out' })
+    .click();
   await expect(page).toHaveURL(/\/login/);
 }
 
@@ -125,13 +145,13 @@ export async function joinMeeting(page: Page, email: string, back: string = ADMI
   const url = page.url();
   const size = page.viewportSize()!;
   await page.setViewportSize({ width: 1366, height: 820 });
-  await page.goto("/home");
+  await page.goto('/home');
   await signOut(page);
   await login(page, email);
   await page.goto(url);
-  await page.getByRole("button", { name: "Join", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Join", exact: true })).toHaveCount(0);
-  await page.goto("/home");
+  await page.getByRole('button', { name: 'Join', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Join', exact: true })).toHaveCount(0);
+  await page.goto('/home');
   await signOut(page);
   await login(page, back);
   await page.setViewportSize(size);
@@ -143,15 +163,15 @@ export async function joinMeeting(page: Page, email: string, back: string = ADMI
  * qa-settings-12): types its city and clicks its option. `scope`: the page or the panel.
  */
 export async function pickZone(scope: Page | Locator, zone: string) {
-  const box = scope.getByRole("combobox", { name: "Company time zone" });
-  await box.fill(zone.split("/").pop()!.replace(/_/g, " "));
-  await scope.getByRole("listbox", { name: "Time zones" }).locator(`[data-zone="${zone}"]`).click();
-  await expect(box).toHaveAttribute("data-zone", zone);
+  const box = scope.getByRole('combobox', { name: 'Company time zone' });
+  await box.fill(zone.split('/').pop()!.replace(/_/g, ' '));
+  await scope.getByRole('listbox', { name: 'Time zones' }).locator(`[data-zone="${zone}"]`).click();
+  await expect(box).toHaveAttribute('data-zone', zone);
 }
 
 /** The version view's outline rail (>= 1280 px; one section is open at a time). */
 export function sectionStrip(page: Page): Locator {
-  return page.getByTestId("outline-rail").filter({ visible: true });
+  return page.getByTestId('outline-rail').filter({ visible: true });
 }
 
 /** A section's row in the visible outline (rail, switcher popover or Sections sheet). */
@@ -170,9 +190,14 @@ export async function openSection(page: Page, key: string): Promise<Locator> {
   const s = section(page, key);
   await expect(s).toBeVisible();
   // A PRD reads as one document (PT1 a): wait until the page has scrolled to the section and lit it.
-  if (await page.getByTestId("prd-look").filter({ visible: true }).count()) {
-    await expect(page.locator(`[data-prd-sec="${key}"]`).filter({ visible: true })).toHaveAttribute("data-current", "");
-    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  if (await page.getByTestId('prd-look').filter({ visible: true }).count()) {
+    await expect(page.locator(`[data-prd-sec="${key}"]`).filter({ visible: true })).toHaveAttribute(
+      'data-current',
+      '',
+    );
+    await page.evaluate(
+      () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
+    );
   }
   return s;
 }
@@ -183,8 +208,12 @@ export async function openSection(page: Page, key: string): Promise<Locator> {
  * the card is then hovered open again. The pointer first leaves any card already open, which
  * may cover the next chip, and waits for it to close.
  */
-export async function hoverCard(page: Page, chip: Locator, text: string | RegExp): Promise<Locator> {
-  const card = page.getByRole("tooltip");
+export async function hoverCard(
+  page: Page,
+  chip: Locator,
+  text: string | RegExp,
+): Promise<Locator> {
+  const card = page.getByRole('tooltip');
   await expect(async () => {
     await page.mouse.move(0, 0);
     await expect(card).toHaveCount(0, { timeout: 1_500 });
@@ -200,10 +229,10 @@ export async function hoverCard(page: Page, chip: Locator, text: string | RegExp
             t = setTimeout(end, 300);
           }
           function end() {
-            window.removeEventListener("scroll", on, true);
+            window.removeEventListener('scroll', on, true);
             done();
           }
-          window.addEventListener("scroll", on, true);
+          window.addEventListener('scroll', on, true);
         }),
     );
     await expect(card).toContainText(text, { timeout: 500 });
@@ -212,24 +241,35 @@ export async function hoverCard(page: Page, chip: Locator, text: string | RegExp
 }
 
 /** Opens a review panel tab (Feedback, Sources, History) in the visible panel. */
-export async function openTab(page: Page, name: "Feedback" | "Sources" | "History") {
-  await page.getByRole("tab", { name: new RegExp(`^${name}`) }).filter({ visible: true }).click();
+export async function openTab(page: Page, name: 'Feedback' | 'Sources' | 'History') {
+  await page
+    .getByRole('tab', { name: new RegExp(`^${name}`) })
+    .filter({ visible: true })
+    .click();
 }
 
 /** Picks a Feedback state chip (Open, Staged, Declined, Done). */
-export async function feedbackState(page: Page, state: "Open" | "Staged" | "Declined" | "Done") {
-  await page.getByTestId("feedback-state").filter({ visible: true }).getByRole("button", { name: new RegExp(`^${state}`) }).click();
+export async function feedbackState(page: Page, state: 'Open' | 'Staged' | 'Declined' | 'Done') {
+  await page
+    .getByTestId('feedback-state')
+    .filter({ visible: true })
+    .getByRole('button', { name: new RegExp(`^${state}`) })
+    .click();
 }
 
 /** The review panel's feedback for every section, not only the open one. */
 export async function showAll(page: Page) {
-  await page.getByTestId("inspector-scope").filter({ visible: true }).getByRole("button", { name: /^All sections/ }).click();
+  await page
+    .getByTestId('inspector-scope')
+    .filter({ visible: true })
+    .getByRole('button', { name: /^All sections/ })
+    .click();
 }
 
 /** Picks an item from the open section's ⋯ menu. */
 export async function sectionAction(scope: Locator, heading: string, item: string | RegExp) {
-  await scope.getByRole("button", { name: `Actions for ${heading}` }).click();
-  await scope.getByRole("menuitem", { name: item }).click();
+  await scope.getByRole('button', { name: `Actions for ${heading}` }).click();
+  await scope.getByRole('menuitem', { name: item }).click();
 }
 
 /**
@@ -242,51 +282,64 @@ export async function seedStuckRuns(page: Page): Promise<string> {
   return page.evaluate(() => {
     // In the mock's own turn (seedRun): a call of the app's in flight cannot save over the runs.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const write = (globalThis as { __poMockWrite?: (change: (db: any) => string) => Promise<string> }).__poMockWrite;
-    if (!write) throw new Error("The mock API is not loaded: sign in before seeding");
+    type MockWrite = (change: (db: any) => string) => Promise<string>;
+    const write = (globalThis as { __poMockWrite?: MockWrite }).__poMockWrite;
+    if (!write) throw new Error('The mock API is not loaded: sign in before seeding');
     return write((db) => {
-      type R = Record<string, unknown> & { id: string; document_slug: string; segments: Record<string, unknown>[] };
+      type R = Record<string, unknown> & {
+        id: string;
+        document_slug: string;
+        segments: Record<string, unknown>[];
+      };
       const runs: R[] = db.runs.runs;
-      const base = runs.find((r) => r.document_slug === "team-onboarding")!;
+      const base = runs.find((r) => r.document_slug === 'team-onboarding')!;
       const clone = (id: string, at: string): R => ({
         ...JSON.parse(JSON.stringify(base)),
         id,
-        status: "running",
+        status: 'running',
         checkpoints: [],
         waiting_on: null,
         created_at: at,
         started_at: at,
-    });
-    const lost = clone("7a11c0de-0000-4000-8000-000000000001", "2026-10-17T06:00:00Z");
-    Object.assign(lost, {
-      stuck: "Submission seg-1-a2 was lost and is still not found. Retry looks again; Cancel ends the run.",
-      can_retry: true,
-      searching: "Oracle still looks for submission seg-1-a1, given up on: if it landed, it is cancelled and its cost counted.",
-    });
-    const failed = clone("7a11c0de-0000-4000-8000-000000000002", "2026-10-17T07:00:00Z");
-    failed.segments[0] = { ...failed.segments[0], status: "failed", error: "Couldn't import its output: DataError on 5 tries in a row." };
-    Object.assign(failed, {
-      import_failed:
-        "Couldn't import team-onboarding's output: DataError on 5 tries in a row, and Oracle stopped trying. Retry tries again.",
-      can_retry_import: true,
-    });
-    const done = runs.find((r) => r.document_slug === "annual-billing" && r.status === "succeeded")!;
-    done.segments[0] = { ...done.segments[0], cost_usd: 16.4 };
-    Object.assign(done, {
-      spent_usd: 16.4,
-      stuck:
-        "After the run ended its spend reached $16.40, over its $13.50 ceiling: workflow mock-wf-done still runs in SwarmCloud, and Oracle counts its spend on the run until it ends. An approver stopped cancelling mock-wf-done: Cancel again turns Oracle's cancel calls back on (nothing restarts), or cancel it in SwarmCloud's console.",
-      cancel_again: ["mock-wf-done"],
-      can_dismiss_overrun: false,
-    });
-    runs.push(lost, failed);
-    return done.id;
+      });
+      const lost = clone('7a11c0de-0000-4000-8000-000000000001', '2026-10-17T06:00:00Z');
+      Object.assign(lost, {
+        stuck:
+          'Submission seg-1-a2 was lost and is still not found. Retry looks again; Cancel ends the run.',
+        can_retry: true,
+        searching:
+          'Oracle still looks for submission seg-1-a1, given up on: if it landed, it is cancelled and its cost counted.',
+      });
+      const failed = clone('7a11c0de-0000-4000-8000-000000000002', '2026-10-17T07:00:00Z');
+      failed.segments[0] = {
+        ...failed.segments[0],
+        status: 'failed',
+        error: "Couldn't import its output: DataError on 5 tries in a row.",
+      };
+      Object.assign(failed, {
+        import_failed:
+          "Couldn't import team-onboarding's output: DataError on 5 tries in a row, and Oracle stopped trying. Retry tries again.",
+        can_retry_import: true,
+      });
+      const done = runs.find(
+        (r) => r.document_slug === 'annual-billing' && r.status === 'succeeded',
+      )!;
+      done.segments[0] = { ...done.segments[0], cost_usd: 16.4 };
+      Object.assign(done, {
+        spent_usd: 16.4,
+        stuck:
+          "After the run ended its spend reached $16.40, over its $13.50 ceiling: workflow mock-wf-done still runs in SwarmCloud, and Oracle counts its spend on the run until it ends. An approver stopped cancelling mock-wf-done: Cancel again turns Oracle's cancel calls back on (nothing restarts), or cancel it in SwarmCloud's console.",
+        cancel_again: ['mock-wf-done'],
+        can_dismiss_overrun: false,
+      });
+      runs.push(lost, failed);
+      return done.id;
     });
   });
 }
 
 /** The run seedSentBack adds, and the summary of the draft Oracle refused and sent back. */
-export const SENT_BACK_RUN = "7a11c0de-0000-4000-8000-0000000000e1";
+export const SENT_BACK_RUN = '7a11c0de-0000-4000-8000-0000000000e1';
 export const SENT_BACK_SUMMARY =
   "Oracle refused prd.md: 2 citations use source 'jira', which isn't accepted; 3 references fail because of them.";
 
@@ -300,62 +353,133 @@ export async function seedSentBack(page: Page): Promise<string> {
     ({ id, summary }) => {
       // In the mock's own turn (seedRun): a call of the app's in flight cannot save over the run.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const write = (globalThis as { __poMockWrite?: (change: (db: any) => string) => Promise<string> }).__poMockWrite;
-      if (!write) throw new Error("The mock API is not loaded: sign in before seeding");
+      type MockWrite = (change: (db: any) => string) => Promise<string>;
+      const write = (globalThis as { __poMockWrite?: MockWrite }).__poMockWrite;
+      if (!write) throw new Error('The mock API is not loaded: sign in before seeding');
       return write((db) => {
         type S = Record<string, unknown> & { seq: number; checkpoint: string };
-        const base = db.runs.runs.find((r: { document_slug: string }) => r.document_slug === "team-onboarding");
-        const at = "2026-10-17T09:00:00Z";
-        const wf = "mock-wf-sent-back";
+        const base = db.runs.runs.find(
+          (r: { document_slug: string }) => r.document_slug === 'team-onboarding',
+        );
+        const at = '2026-10-17T09:00:00Z';
+        const wf = 'mock-wf-sent-back';
         // As the API stores the refusal: two citations of source 'jira', cited three times.
         const problems: Record<string, unknown>[] = [
-          { code: "invalid_citation", message: "citation #1 (j1) is invalid: source 'jira' isn't accepted", section_key: null, cite_key: "j1", line: null },
-          { code: "invalid_citation", message: "citation #2 (j2) is invalid: source 'jira' isn't accepted", section_key: null, cite_key: "j2", line: null },
-          { code: "unknown_citation", message: "[c:j1] in section 'problem' is not defined in front matter 'citations'", section_key: "problem", cite_key: "j1", line: 14 },
-          { code: "unknown_citation", message: "[c:j2] in section 'problem' is not defined in front matter 'citations'", section_key: "problem", cite_key: "j2", line: 14 },
-          { code: "unknown_citation", message: "[c:j1] in section 'goals' is not defined in front matter 'citations'", section_key: "goals", cite_key: "j1", line: 20 },
+          {
+            code: 'invalid_citation',
+            message: "citation #1 (j1) is invalid: source 'jira' isn't accepted",
+            section_key: null,
+            cite_key: 'j1',
+            line: null,
+          },
+          {
+            code: 'invalid_citation',
+            message: "citation #2 (j2) is invalid: source 'jira' isn't accepted",
+            section_key: null,
+            cite_key: 'j2',
+            line: null,
+          },
+          {
+            code: 'unknown_citation',
+            message: "[c:j1] in section 'problem' is not defined in front matter 'citations'",
+            section_key: 'problem',
+            cite_key: 'j1',
+            line: 14,
+          },
+          {
+            code: 'unknown_citation',
+            message: "[c:j2] in section 'problem' is not defined in front matter 'citations'",
+            section_key: 'problem',
+            cite_key: 'j2',
+            line: 14,
+          },
+          {
+            code: 'unknown_citation',
+            message: "[c:j1] in section 'goals' is not defined in front matter 'citations'",
+            section_key: 'goals',
+            cite_key: 'j1',
+            line: 20,
+          },
         ];
-        const error = `prd.md was rejected: ${problems.map((p) => `[${p.code}] ${p.message}`).join("; ")}`;
-        const run = { ...JSON.parse(JSON.stringify(base)), id, document_slug: "public-signup", document_id: null, created_at: at, started_at: at };
+        const error = `prd.md was rejected: ${problems.map((p) => `[${p.code}] ${p.message}`).join('; ')}`;
+        const run = {
+          ...JSON.parse(JSON.stringify(base)),
+          id,
+          document_slug: 'public-signup',
+          document_id: null,
+          created_at: at,
+          started_at: at,
+        };
         const segments: S[] = run.segments;
         for (const s of segments) {
           Object.assign(s, {
             id: crypto.randomUUID(),
-            status: "succeeded",
+            status: 'succeeded',
             cost_usd: 1,
-            attempts: [{ attempt: 1, workflow_id: wf, submitted_at: at, cost_usd: 1, note: null, note_by: null, state: "succeeded" }],
+            attempts: [
+              {
+                attempt: 1,
+                workflow_id: wf,
+                submitted_at: at,
+                cost_usd: 1,
+                note: null,
+                note_by: null,
+                state: 'succeeded',
+              },
+            ],
           });
         }
         const findings = [
           "Oracle could not import prd.md as the document's next version, so it sent the draft back before a person reviews it.",
           "Citations: citation #1 (j1) is invalid: source 'jira' isn't accepted; citation #2 (j2) is invalid: source 'jira' isn't accepted.",
-        ].join("\n");
+        ].join('\n');
         Object.assign(segments[3], {
-          status: "running",
-          artifacts: ["prd.md"],
-          draft_import: { document_id: null, slug: null, kind: null, version: null, created: null, warnings: [], error, problems, summary, source: null, prd_links: null },
-      });
-      (segments[3].attempts as unknown[]).push({ attempt: 2, workflow_id: wf, submitted_at: at, cost_usd: 0, note: findings, note_by: "Oracle", state: "running" });
-      // Oracle answered the PRD review itself: no checkpoint stands for it.
-      run.checkpoints = segments.slice(0, 3).map((s) => ({
-        id: crypto.randomUUID(),
-        run_id: id,
-        kind: s.checkpoint,
-        status: "approved",
-        approver_role: "approver",
-        segment_seq: s.seq,
-        decided_by: null,
-        decided_at: at,
-        note: null,
-        payload: {},
-        created_at: at,
-        can_decide: false,
-        cannot_approve: null,
-      }));
-      Object.assign(run, { status: "running", waiting_on: null });
-      db.runs.runs.push(run);
-      db.runs.artifacts[`${id}|4|prd.md`] = "---\ntitle: Public signup PRD\n---\n\n# Public signup PRD {#title}\n";
-      return id;
+          status: 'running',
+          artifacts: ['prd.md'],
+          draft_import: {
+            document_id: null,
+            slug: null,
+            kind: null,
+            version: null,
+            created: null,
+            warnings: [],
+            error,
+            problems,
+            summary,
+            source: null,
+            prd_links: null,
+          },
+        });
+        (segments[3].attempts as unknown[]).push({
+          attempt: 2,
+          workflow_id: wf,
+          submitted_at: at,
+          cost_usd: 0,
+          note: findings,
+          note_by: 'Oracle',
+          state: 'running',
+        });
+        // Oracle answered the PRD review itself: no checkpoint stands for it.
+        run.checkpoints = segments.slice(0, 3).map((s) => ({
+          id: crypto.randomUUID(),
+          run_id: id,
+          kind: s.checkpoint,
+          status: 'approved',
+          approver_role: 'approver',
+          segment_seq: s.seq,
+          decided_by: null,
+          decided_at: at,
+          note: null,
+          payload: {},
+          created_at: at,
+          can_decide: false,
+          cannot_approve: null,
+        }));
+        Object.assign(run, { status: 'running', waiting_on: null });
+        db.runs.runs.push(run);
+        db.runs.artifacts[`${id}|4|prd.md`] =
+          '---\ntitle: Public signup PRD\n---\n\n# Public signup PRD {#title}\n';
+        return id;
       });
     },
     { id: SENT_BACK_RUN, summary: SENT_BACK_SUMMARY },
@@ -390,8 +514,10 @@ type RunSeed = { run: { id: string }; artifacts: Record<string, string> };
 export async function seedRun(page: Page, seed: RunSeed): Promise<string> {
   return page.evaluate((seed) => {
     type Db = { runs: { runs: { id: string }[]; artifacts: Record<string, string> } };
-    const write = (globalThis as { __poMockWrite?: (change: (db: Db) => string) => Promise<string> }).__poMockWrite;
-    if (!write) throw new Error("The mock API is not loaded: sign in before seeding");
+    const write = (
+      globalThis as { __poMockWrite?: (change: (db: Db) => string) => Promise<string> }
+    ).__poMockWrite;
+    if (!write) throw new Error('The mock API is not loaded: sign in before seeding');
     return write((db) => {
       db.runs.runs = db.runs.runs.filter((r) => r.id !== seed.run.id);
       db.runs.runs.push(seed.run);
@@ -442,7 +568,7 @@ export async function seedConsoleHeld(page: Page): Promise<string> {
 }
 
 /** The finished run seedDecidedRun adds. */
-export const DECIDED_RUN = "7a11c0de-0000-4000-8000-0000000000d1";
+export const DECIDED_RUN = '7a11c0de-0000-4000-8000-0000000000d1';
 
 /**
  * Seeds the mock with a finished Ground Truth to PRD run for annual-billing whose stops were
@@ -454,20 +580,40 @@ export async function seedDecidedRun(page: Page): Promise<string> {
   return page.evaluate((id) => {
     // In the mock's own turn (seedRun): a call of the app's in flight cannot save over the run (#520).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const write = (globalThis as { __poMockWrite?: (change: (db: any) => string) => Promise<string> }).__poMockWrite;
-    if (!write) throw new Error("The mock API is not loaded: sign in before seeding");
+    type MockWrite = (change: (db: any) => string) => Promise<string>;
+    const write = (globalThis as { __poMockWrite?: MockWrite }).__poMockWrite;
+    if (!write) throw new Error('The mock API is not loaded: sign in before seeding');
     return write((db) => {
       type S = Record<string, unknown> & { seq: number; checkpoint: string };
-      const base = db.runs.runs.find((r: { document_slug: string }) => r.document_slug === "team-onboarding");
-      const at = (minute: number) => `2026-10-15T09:${String(minute).padStart(2, "0")}:00Z`;
-      const run = { ...JSON.parse(JSON.stringify(base)), id, document_slug: "annual-billing", created_at: at(0), started_at: at(0), finished_at: at(50) };
+      const base = db.runs.runs.find(
+        (r: { document_slug: string }) => r.document_slug === 'team-onboarding',
+      );
+      const at = (minute: number) => `2026-10-15T09:${String(minute).padStart(2, '0')}:00Z`;
+      const run = {
+        ...JSON.parse(JSON.stringify(base)),
+        id,
+        document_slug: 'annual-billing',
+        created_at: at(0),
+        started_at: at(0),
+        finished_at: at(50),
+      };
       const segments: S[] = run.segments;
       for (const s of segments) {
         Object.assign(s, {
           id: crypto.randomUUID(),
-          status: "succeeded",
+          status: 'succeeded',
           cost_usd: 1,
-          attempts: [{ attempt: 1, workflow_id: "mock-wf-decided", submitted_at: at(s.seq * 10), cost_usd: 1, note: null, note_by: null, state: "succeeded" }],
+          attempts: [
+            {
+              attempt: 1,
+              workflow_id: 'mock-wf-decided',
+              submitted_at: at(s.seq * 10),
+              cost_usd: 1,
+              note: null,
+              note_by: null,
+              state: 'succeeded',
+            },
+          ],
         });
       }
       const stop = (s: S, status: string, note: string | null, minute: number) => ({
@@ -475,7 +621,7 @@ export async function seedDecidedRun(page: Page): Promise<string> {
         run_id: id,
         kind: s.checkpoint,
         status,
-        approver_role: "approver",
+        approver_role: 'approver',
         segment_seq: s.seq,
         decided_by: db.user_id,
         decided_at: at(minute),
@@ -486,13 +632,13 @@ export async function seedDecidedRun(page: Page): Promise<string> {
         cannot_approve: null,
       });
       run.checkpoints = [
-        stop(segments[0], "approved", "Goals read right", 5),
-        stop(segments[1], "changes_requested", "Size the export feature again", 15),
-        stop(segments[1], "approved", null, 25),
-        stop(segments[2], "approved", null, 35),
-        stop(segments[3], "approved", null, 45),
+        stop(segments[0], 'approved', 'Goals read right', 5),
+        stop(segments[1], 'changes_requested', 'Size the export feature again', 15),
+        stop(segments[1], 'approved', null, 25),
+        stop(segments[2], 'approved', null, 35),
+        stop(segments[3], 'approved', null, 45),
       ];
-      Object.assign(run, { status: "succeeded", waiting_on: null });
+      Object.assign(run, { status: 'succeeded', waiting_on: null });
       db.runs.runs.push(run);
       return id;
     });
@@ -504,9 +650,9 @@ export async function seedDecidedRun(page: Page): Promise<string> {
  * leaving Search off: type them until Search takes them.
  */
 export async function searchSources(page: Page, words: string) {
-  const button = page.getByRole("button", { name: "Search" });
+  const button = page.getByRole('button', { name: 'Search' });
   await expect(async () => {
-    await page.getByLabel("Search", { exact: true }).fill(words);
+    await page.getByLabel('Search', { exact: true }).fill(words);
     await expect(button).toBeEnabled({ timeout: 1000 });
   }).toPass();
   await button.click();

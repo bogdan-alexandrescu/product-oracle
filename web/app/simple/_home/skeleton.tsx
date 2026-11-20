@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { Bar, GoalBandSkeleton, HomeCardSkeleton } from "@/app/simple/_home/cards";
-import { Icon } from "@/components/ds/Icon";
-import { SimplePage } from "@/components/simple/SimplePage";
+import { Bar, GoalBandSkeleton, HomeCardSkeleton } from '@/app/simple/_home/cards';
+import { Icon } from '@/components/ds/Icon';
+import { SimplePage } from '@/components/simple/SimplePage';
 
 /**
  * The greeting's sentence keeps the lines its longest form wraps to, so the goal band under it
@@ -21,10 +21,11 @@ import { SimplePage } from "@/components/simple/SimplePage";
  * short greeting leaves no empty lines (the band moves up once, never down). The header is the
  * container.
  */
-export const LEAD = "simple-lead min-h-[6lh] @[18.5rem]:min-h-[5lh] @[22rem]:min-h-[4lh] @[29.25rem]:min-h-[3lh] @[39.5rem]:min-h-[2lh]";
+export const LEAD =
+  'simple-lead min-h-[6lh] @[18.5rem]:min-h-[5lh] @[22rem]:min-h-[4lh] @[29.25rem]:min-h-[3lh] @[39.5rem]:min-h-[2lh]';
 
 const RESERVE =
-  "min-[600px]:[body:not(:has(nav[aria-label=Simple]))_&]:pl-[var(--simple-rail-width)] max-[600px]:[body:not(:has([data-testid=phone-header]))_&]:pt-[var(--phone-top-bar)]";
+  'min-[600px]:[body:not(:has(nav[aria-label=Simple]))_&]:pl-[var(--simple-rail-width)] max-[600px]:[body:not(:has([data-testid=phone-header]))_&]:pt-[var(--phone-top-bar)]';
 
 /**
  * Simple's Home before the person and their permissions are known (#723 production walk: the
@@ -39,7 +40,11 @@ export function HomeSkeleton() {
     // it stays (home-greeting-fit-3).
     <div className={RESERVE}>
       <SimplePage title="Home">
-        <header data-testid="home-greeting" data-skeleton="true" className="@container -mt-4 flex flex-col gap-1">
+        <header
+          data-testid="home-greeting"
+          data-skeleton="true"
+          className="@container -mt-4 flex flex-col gap-1"
+        >
           <p className="simple-small">
             <Bar className="w-40" />
           </p>

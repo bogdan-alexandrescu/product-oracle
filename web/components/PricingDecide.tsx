@@ -1,13 +1,13 @@
-"use client";
+'use client';
 
-import { useRouter } from "@/lib/nav";
-import { useState } from "react";
+import { useRouter } from '@/lib/nav';
+import { useState } from 'react';
 
-import { MEMOS_KEY } from "@/app/company/market/_components/lib";
-import { Button } from "@/components/ds";
-import { api, unwrap } from "@/lib/api/client";
-import { useMe } from "@/lib/me";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import { MEMOS_KEY } from '@/app/company/market/_components/lib';
+import { Button } from '@/components/ds';
+import { api, unwrap } from '@/lib/api/client';
+import { useMe } from '@/lib/me';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
 /**
  * A pricing memo's header (H9): once its latest version is approved, Decide for the pricing
@@ -18,26 +18,30 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 export function PricingDecide({ slug }: { slug: string }) {
   const router = useRouter();
   const { me, can } = useMe();
-  const q = useQuery(MEMOS_KEY, () => unwrap(api.GET("/v1/pricing-memos")));
+  const q = useQuery(MEMOS_KEY, () => unwrap(api.GET('/v1/pricing-memos')));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const memo = q.data?.find((m) => m.slug === slug);
-  if (!memo || (memo.state !== "approved" && memo.state !== "decided")) return null;
+  if (!memo || (memo.state !== 'approved' && memo.state !== 'decided')) return null;
   const owner = memo.pricing_owner;
-  const mine = !!owner && owner.id === me?.user_id && can("decide_pricing_memo", true);
+  const mine = !!owner && owner.id === me?.user_id && can('decide_pricing_memo', true);
 
-  if (memo.state === "decided" && memo.decision) {
+  if (memo.state === 'decided' && memo.decision) {
     return (
-      <Button variant="ghost" onClick={() => router.push(`/company/decisions?d=${memo.decision!.number}`)} data-testid="pricing-decided">
+      <Button
+        variant="ghost"
+        onClick={() => router.push(`/company/decisions?d=${memo.decision!.number}`)}
+        data-testid="pricing-decided"
+      >
         Decided: D-{memo.decision.number}
-        {memo.decision.chosen_label ? ` · ${memo.decision.chosen_label}` : ""}
+        {memo.decision.chosen_label ? ` · ${memo.decision.chosen_label}` : ''}
       </Button>
     );
   }
   if (!mine) {
     return (
       <span className="text-sm font-medium text-text2" data-testid="pricing-waiting">
-        Waiting for {owner?.name ?? "the pricing owner"} to decide
+        Waiting for {owner?.name ?? 'the pricing owner'} to decide
       </span>
     );
   }
@@ -46,7 +50,9 @@ export function PricingDecide({ slug }: { slug: string }) {
     setBusy(true);
     setError(null);
     try {
-      const d = await unwrap(api.POST("/v1/pricing-memos/{doc}/decide", { params: { path: { doc: slug } } }));
+      const d = await unwrap(
+        api.POST('/v1/pricing-memos/{doc}/decide', { params: { path: { doc: slug } } }),
+      );
       router.push(`/company/decisions?d=${d.number}`);
     } catch (e) {
       setError(errorMessage(e));
@@ -61,7 +67,13 @@ export function PricingDecide({ slug }: { slug: string }) {
           {error}
         </span>
       )}
-      <Button variant="primary" icon="check" disabled={busy} onClick={() => void decide()} data-testid="pricing-decide">
+      <Button
+        variant="primary"
+        icon="check"
+        disabled={busy}
+        onClick={() => void decide()}
+        data-testid="pricing-decide"
+      >
         Decide
       </Button>
     </>

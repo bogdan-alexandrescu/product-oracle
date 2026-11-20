@@ -1,6 +1,6 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /**
  * dod-perf: the Simple plan's performance target on the "simple-500" mock (500 invented
@@ -25,22 +25,24 @@ import { expect, test, type Locator, type Page } from "./test";
  * reads layout per pointer move; no_claim = a real phone's GPU.
  */
 
-const URL = "/simple/roadmap";
+const URL = '/simple/roadmap';
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 const DESKTOP = { viewport: { width: 1440, height: 900 } };
 const FRAME = 1000 / 60;
 
 // No trace: its recorder snapshots the whole page on every mouse move, which is what it would time.
-test.use({ trace: "off" });
+test.use({ trace: 'off' });
 
-type View = "timeline" | "gantt" | "board" | "waterfall";
+type View = 'timeline' | 'gantt' | 'board' | 'waterfall';
 
 /** What a view draws per item: the Timeline a row per item (its day chart on a desktop, its
  * list by quarter on a phone), the board a card, the Gantt and the waterfall a bar. */
 function itemsOf(page: Page, view: View, phone: boolean): Locator {
-  if (view === "board") return page.getByTestId("board-card");
-  if (view === "timeline")
-    return phone ? page.getByTestId("timeline-list").getByTestId("timeline-row") : page.getByTestId("timeline-row");
+  if (view === 'board') return page.getByTestId('board-card');
+  if (view === 'timeline')
+    return phone
+      ? page.getByTestId('timeline-list').getByTestId('timeline-row')
+      : page.getByTestId('timeline-row');
   return page.locator('g[data-testid="bar"]');
 }
 
@@ -51,8 +53,8 @@ const DRAWN = 500;
 async function paint(page: Page, view: View, phone: boolean): Promise<number> {
   const t0 = Date.now();
   await page.goto(URL);
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible({ timeout: 15_000 });
-  if (view !== "timeline") await page.getByTestId(`format-${view}`).click();
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible({ timeout: 15_000 });
+  if (view !== 'timeline') await page.getByTestId(`format-${view}`).click();
   await expect(itemsOf(page, view, phone).first()).toBeVisible({ timeout: 15_000 });
   await expect(itemsOf(page, view, phone)).toHaveCount(DRAWN, { timeout: 15_000 });
   return Date.now() - t0;
@@ -61,11 +63,13 @@ async function paint(page: Page, view: View, phone: boolean): Promise<number> {
 async function bestPaint(page: Page, view: View, phone: boolean): Promise<number> {
   const paints: number[] = [];
   for (let n = 0; n < 3; n++) {
-    if (n) await page.goto("about:blank");
+    if (n) await page.goto('about:blank');
     paints.push(await paint(page, view, phone));
     if (paints[n] < 2000) break;
   }
-  console.log(`[dod-perf] ${phone ? "phone" : "desktop"} ${view}: items drawn in ${paints.join(", ")} ms`);
+  console.log(
+    `[dod-perf] ${phone ? 'phone' : 'desktop'} ${view}: items drawn in ${paints.join(', ')} ms`,
+  );
   return Math.min(...paints);
 }
 
@@ -92,7 +96,10 @@ async function recordFrames(page: Page) {
  * missed). dod-perf review: rounding against a 16.7 ms schedule counted a late frame as missed.
  */
 const GRID = 16;
-async function stopFrames(page: Page, label: string): Promise<{ p95: number; raw95: number; median: number; n: number }> {
+async function stopFrames(
+  page: Page,
+  label: string,
+): Promise<{ p95: number; raw95: number; median: number; n: number }> {
   const stamps = await page.evaluate(() => {
     const w = window as unknown as { __perfFrames: number[]; __perfOn: boolean };
     w.__perfOn = false;
@@ -103,10 +110,17 @@ async function stopFrames(page: Page, label: string): Promise<{ p95: number; raw
     return sorted[Math.min(sorted.length - 1, Math.ceil(0.95 * sorted.length) - 1)] ?? Infinity;
   };
   const frames = stamps.slice(1).map((t, n) => t - stamps[n]);
-  const paced = stamps.slice(1).map((t, n) => (Math.floor(t / GRID) - Math.floor(stamps[n] / GRID)) * FRAME);
+  const paced = stamps
+    .slice(1)
+    .map((t, n) => (Math.floor(t / GRID) - Math.floor(stamps[n] / GRID)) * FRAME);
   const sorted = [...frames].sort((a, b) => a - b);
-  const r = { p95: q95(paced), raw95: q95(frames), median: sorted[Math.floor(sorted.length / 2)] ?? Infinity, n: frames.length };
-  if (process.env.PERF_SEQ) console.log(frames.map((f) => Math.round(f)).join(" "));
+  const r = {
+    p95: q95(paced),
+    raw95: q95(frames),
+    median: sorted[Math.floor(sorted.length / 2)] ?? Infinity,
+    n: frames.length,
+  };
+  if (process.env.PERF_SEQ) console.log(frames.map((f) => Math.round(f)).join(' '));
   console.log(
     `[dod-perf] ${label}: ${r.n} frames, median ${r.median.toFixed(1)} ms, p95 ${r.p95.toFixed(1)} ms on the 60 Hz schedule (raw deltas' p95 ${r.raw95.toFixed(1)} ms, worst ${sorted.at(-1)?.toFixed(1)} ms)`,
   );
@@ -122,7 +136,9 @@ async function mouseDrag(page: Page, target: Locator, dx: number, dy = 0) {
   // A row scrolled into sight is painted (content-visibility) a frame or two later: until it is,
   // a press there lands on the row, not its bar, so wait for the bar under the pointer.
   await expect
-    .poll(() => target.evaluate((el, [px, py]) => el.contains(document.elementFromPoint(px, py)), [x, y]))
+    .poll(() =>
+      target.evaluate((el, [px, py]) => el.contains(document.elementFromPoint(px, py)), [x, y]),
+    )
     .toBe(true);
   await page.mouse.move(x, y);
   await page.mouse.down();
@@ -142,32 +158,51 @@ async function touchDrag(page: Page, target: Locator, surface: Locator, dx: numb
   const box = (await target.boundingBox())!;
   const x = box.x + Math.min(box.width / 2, 20);
   const y = box.y + box.height / 2;
-  const ev = { pointerId: 7, pointerType: "touch", isPrimary: true, bubbles: true, button: 0, buttons: 1 };
-  await target.dispatchEvent("pointerdown", { ...ev, clientX: x, clientY: y });
+  const ev = {
+    pointerId: 7,
+    pointerType: 'touch',
+    isPrimary: true,
+    bubbles: true,
+    button: 0,
+    buttons: 1,
+  };
+  await target.dispatchEvent('pointerdown', { ...ev, clientX: x, clientY: y });
   await page.waitForTimeout(650);
   await recordFrames(page);
   for (let n = 1; n <= 40; n++) {
-    await surface.dispatchEvent("pointermove", { ...ev, clientX: x + (dx * n) / 40, clientY: y + (dy * n) / 40 });
+    await surface.dispatchEvent('pointermove', {
+      ...ev,
+      clientX: x + (dx * n) / 40,
+      clientY: y + (dy * n) / 40,
+    });
     await page.waitForTimeout(8);
   }
   return async () => {
-    await surface.dispatchEvent("pointerup", { ...ev, buttons: 0, clientX: x + dx, clientY: y + dy });
+    await surface.dispatchEvent('pointerup', {
+      ...ev,
+      buttons: 0,
+      clientX: x + dx,
+      clientY: y + dy,
+    });
   };
 }
 
 for (const [where, use] of [
-  ["desktop", DESKTOP],
-  ["phone", PHONE],
+  ['desktop', DESKTOP],
+  ['phone', PHONE],
 ] as const) {
-  const phone = where === "phone";
+  const phone = where === 'phone';
   test.describe(`500 items, ${where} @timing`, () => {
     test.use(use);
     test.beforeEach(async ({ context, page }) => {
-      await context.addInitScript((key) => localStorage.setItem(key, "simple-500"), MOCK_SCENARIO_KEY);
+      await context.addInitScript(
+        (key) => localStorage.setItem(key, 'simple-500'),
+        MOCK_SCENARIO_KEY,
+      );
       await login(page);
     });
 
-    const views: View[] = ["timeline", "gantt", "board", "waterfall"];
+    const views: View[] = ['timeline', 'gantt', 'board', 'waterfall'];
     for (const view of views) {
       test(`${view}: items drawn under 2 s @timing`, async ({ page }) => {
         // simple-roadmap-500-paint (see the file's cards).
@@ -176,29 +211,37 @@ for (const [where, use] of [
       });
     }
 
-    const drags: View[] = phone ? ["gantt", "waterfall", "board"] : ["timeline", "gantt", "waterfall", "board"];
+    const drags: View[] = phone
+      ? ['gantt', 'waterfall', 'board']
+      : ['timeline', 'gantt', 'waterfall', 'board'];
     for (const view of drags) {
       test(`${view}: a drag at 60 fps @timing`, async ({ page }) => {
         // simple-roadmap-500-drag (see the file's cards).
         await paint(page, view, phone);
         let end: () => Promise<void>;
-        if (view === "board") {
+        if (view === 'board') {
           const card = page.locator('[data-testid="board-card"][data-horizon="now"]').first();
-          end = phone ? await touchDrag(page, card, card, 0, 120) : await mouseDrag(page, card, 400, 40);
-        } else if (view === "timeline") {
+          end = phone
+            ? await touchDrag(page, card, card, 0, 120)
+            : await mouseDrag(page, card, 400, 40);
+        } else if (view === 'timeline') {
           // At 6 months the first movable bar is in sight (the Timeline opens on 3 months).
-          await page.getByTestId("zoom-6m").click();
+          await page.getByTestId('zoom-6m').click();
           // A bar the viewer may move (its label says the arrows move it); its live dates show.
-          const bar = page.locator('[data-testid="timeline-bar"][aria-label*="Arrows move it"]').first();
+          const bar = page
+            .locator('[data-testid="timeline-bar"][aria-label*="Arrows move it"]')
+            .first();
           end = await mouseDrag(page, bar, 160);
         } else {
           const bar = page.locator('g[data-testid="bar"][data-kind="dated"]').first();
-          const body = bar.locator("rect[data-body]");
-          end = phone ? await touchDrag(page, bar, page.getByTestId("chart-svg"), 60) : await mouseDrag(page, body, 160);
+          const body = bar.locator('rect[data-body]');
+          end = phone
+            ? await touchDrag(page, bar, page.getByTestId('chart-svg'), 60)
+            : await mouseDrag(page, body, 160);
         }
         const r = await stopFrames(page, `${where} ${view} drag`);
         // Checked once the frames are counted, so its polling is not timed with the drag.
-        if (view === "timeline") await expect(page.getByTestId("drag-live")).toBeVisible();
+        if (view === 'timeline') await expect(page.getByTestId('drag-live')).toBeVisible();
         await end();
         expect(r.n).toBeGreaterThan(10);
         if (phone) expect(r.p95).toBeLessThanOrEqual(2 * FRAME + 0.01);

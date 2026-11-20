@@ -3,40 +3,46 @@
  * helpers the page and the mock share. No imports of the transport, so the mock can use
  * them too.
  */
-import type { components } from "@/lib/api/schema";
-import type { Operation } from "@/lib/me";
+import type { components } from '@/lib/api/schema';
+import type { Operation } from '@/lib/me';
 
-type S = components["schemas"];
+type S = components['schemas'];
 
 /** A stored logo: re-encoded to PNG by the API, served at `url` to members. */
-export type BrandLogo = S["BrandLogo"];
+export type BrandLogo = S['BrandLogo'];
 /** GET /v1/branding (`can_edit`: owners only). */
-export type BrandingOut = S["BrandingOut"];
+export type BrandingOut = S['BrandingOut'];
 /** PUT /v1/branding. */
-export type BrandingIn = S["BrandingIn"];
+export type BrandingIn = S['BrandingIn'];
 
-export type LogoVariant = "light" | "dark";
+export type LogoVariant = 'light' | 'dark';
 
 /** The branding operations (their operationIds). */
 export const BRANDING_OPS = {
-  get: "get_branding",
-  put: "put_branding",
-  upload: "upload_brand_logo",
-  remove: "delete_brand_logo",
-  logo: "get_brand_logo",
+  get: 'get_branding',
+  put: 'put_branding',
+  upload: 'upload_brand_logo',
+  remove: 'delete_brand_logo',
+  logo: 'get_brand_logo',
 } as const satisfies Record<string, Operation>;
 
 /** Limits the API enforces (oracle.branding). */
-export const BRANDING_LIMITS = { name: 80, disclaimer: 500, logoBytes: 512 * 1024, logoPx: 2000 } as const;
-export const DEFAULT_DISCLAIMER = "This roadmap shows our current plans. It is not a commitment, and plans and timing can change.";
-export const TOO_LIGHT = "This colour is too light to read on white. Pick a darker one.";
-export const LOGO_TYPES = "image/png,image/jpeg,image/webp";
+export const BRANDING_LIMITS = {
+  name: 80,
+  disclaimer: 500,
+  logoBytes: 512 * 1024,
+  logoPx: 2000,
+} as const;
+export const DEFAULT_DISCLAIMER =
+  'This roadmap shows our current plans. It is not a commitment, and plans and timing can change.';
+export const TOO_LIGHT = 'This colour is too light to read on white. Pick a darker one.';
+export const LOGO_TYPES = 'image/png,image/jpeg,image/webp';
 
 /** "#rrggbb" or "#rgb" as "#rrggbb" in lower case; null when it is not a hex colour. */
 export function normalHex(value: string): string | null {
   const v = value.trim().toLowerCase();
   if (/^#[0-9a-f]{6}$/.test(v)) return v;
-  if (/^#[0-9a-f]{3}$/.test(v)) return `#${[...v.slice(1)].map((c) => c + c).join("")}`;
+  if (/^#[0-9a-f]{3}$/.test(v)) return `#${[...v.slice(1)].map((c) => c + c).join('')}`;
   return null;
 }
 
@@ -60,10 +66,11 @@ export function contrastOnWhite(hex: string): number {
 export const DARK_LUMINANCE = 0.5;
 
 /** Whether a background takes the dark logo (oracle.branding.dark_background). */
-export const darkBackground = (hex: string | null | undefined) => !!hex && luminance(hex) < DARK_LUMINANCE;
+export const darkBackground = (hex: string | null | undefined) =>
+  !!hex && luminance(hex) < DARK_LUMINANCE;
 
 /** Which logo a built-in theme's exports and decks use (GET /v1/branding's `theme_logos`). */
-export type ThemeLogo = S["ThemeLogo"];
+export type ThemeLogo = S['ThemeLogo'];
 
 /** AA for normal text: at least 4.5:1. */
 export const passesAA = (ratio: number) => ratio >= 4.5;

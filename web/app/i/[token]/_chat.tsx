@@ -1,15 +1,35 @@
-"use client";
+'use client';
 
-import { Fragment, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
+import {
+  Fragment,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
 
-import { confirmInPage } from "@/components/ds/ConfirmDialog";
-import { LIMITS, publicCall, type PublicInterview, type PublicMessage, type PublicProgress, type PublicTurn } from "@/lib/api/interviews";
+import { confirmInPage } from '@/components/ds/ConfirmDialog';
+import {
+  LIMITS,
+  publicCall,
+  type PublicInterview,
+  type PublicMessage,
+  type PublicProgress,
+  type PublicTurn,
+} from '@/lib/api/interviews';
 
-type Refusal = "unknown" | "used" | "expired" | "withdrawn" | "replaced" | "unreachable";
-type Phase = { at: "loading" } | { at: "intro" } | { at: "chat" } | { at: "done" } | { at: "refused"; why: Refusal };
+type Refusal = 'unknown' | 'used' | 'expired' | 'withdrawn' | 'replaced' | 'unreachable';
+type Phase =
+  | { at: 'loading' }
+  | { at: 'intro' }
+  | { at: 'chat' }
+  | { at: 'done' }
+  | { at: 'refused'; why: Refusal };
 
 const BUTTON =
-  "inline-flex h-11 items-center justify-center rounded-button px-4 text-[15px] font-semibold whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-60";
+  'inline-flex h-11 items-center justify-center rounded-button px-4 text-[15px] font-semibold whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-60';
 const PRIMARY = `${BUTTON} bg-accent text-on-accent hover:brightness-110`;
 const QUIET = `${BUTTON} border border-line-strong bg-surface text-text hover:bg-surface2`;
 /** qa4-docs-share-61: this browser finished the link; the API answers a finished link 410 "used" to anyone. */
@@ -34,12 +54,14 @@ function markDone(token: string, company: string | null) {
 
 /** qa4-docs-share-60: the send keys under the box, as the person's keyboard names them. */
 function sendHint(): string {
-  const mac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
-  return `${mac ? "Cmd" : "Ctrl"}+Enter to send`;
+  const mac =
+    typeof navigator !== 'undefined' &&
+    /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+  return `${mac ? 'Cmd' : 'Ctrl'}+Enter to send`;
 }
 
 /** The page's one column: the header, the conversation and the footer line up on it. */
-const COLUMN = "mx-auto w-full max-w-2xl min-w-0 px-4";
+const COLUMN = 'mx-auto w-full max-w-2xl min-w-0 px-4';
 
 /**
  * The refusal of a public call's status and reason. qa-onboarding-33: the API answers an
@@ -47,9 +69,9 @@ const COLUMN = "mx-auto w-full max-w-2xl min-w-0 px-4";
  * which; the 404's body tells nothing more about the link.
  */
 function refusalOf(status: number, reason: string | null): Refusal | null {
-  if (status === 404) return "unknown";
+  if (status === 404) return 'unknown';
   if (status !== 410) return null;
-  return reason === "used" || reason === "withdrawn" || reason === "replaced" ? reason : "expired";
+  return reason === 'used' || reason === 'withdrawn' || reason === 'replaced' ? reason : 'expired';
 }
 
 /**
@@ -59,11 +81,11 @@ function refusalOf(status: number, reason: string | null): Refusal | null {
  * thank-you. An unknown, used, expired or withdrawn link shows a one-line page. Phone first: the input is a sticky footer.
  */
 export function InterviewChat({ token }: { token: string }) {
-  const [phase, setPhase] = useState<Phase>({ at: "loading" });
+  const [phase, setPhase] = useState<Phase>({ at: 'loading' });
   const [info, setInfo] = useState<PublicInterview | null>(null);
   const [messages, setMessages] = useState<PublicMessage[]>([]);
   const [progress, setProgress] = useState<PublicProgress>({ asked: 0, total: 0 });
-  const [text, setText] = useState("");
+  const [text, setText] = useState('');
   const [waiting, setWaiting] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   // qa4-docs-share-59: the questions skipped here, by their message's index; each shows "Skipped".
@@ -75,19 +97,19 @@ export function InterviewChat({ token }: { token: string }) {
 
   useEffect(() => {
     let live = true;
-    publicCall<PublicInterview>("GET", token).then((res) => {
+    publicCall<PublicInterview>('GET', token).then((res) => {
       if (!live) return;
       if (res.data) {
         setInfo(res.data);
         setMessages(res.data.messages);
         setProgress(res.data.progress);
         // Back on the page mid-interview: straight to the conversation.
-        setPhase({ at: res.data.messages.some((m) => m.role === "customer") ? "chat" : "intro" });
+        setPhase({ at: res.data.messages.some((m) => m.role === 'customer') ? 'chat' : 'intro' });
         return;
       }
-      const why = refusalOf(res.status, res.reason) ?? "unreachable";
-      if (why === "used") setFinished(readDone(token));
-      setPhase({ at: "refused", why });
+      const why = refusalOf(res.status, res.reason) ?? 'unreachable';
+      if (why === 'used') setFinished(readDone(token));
+      setPhase({ at: 'refused', why });
     });
     return () => {
       live = false;
@@ -95,28 +117,33 @@ export function InterviewChat({ token }: { token: string }) {
   }, [token]);
 
   useEffect(() => {
-    if (phase.at === "done") markDone(token, info?.company ?? null);
+    if (phase.at === 'done') markDone(token, info?.company ?? null);
   }, [phase.at, token, info]);
 
   useEffect(() => {
-    if (phase.at === "chat") end.current?.scrollIntoView({ block: "end" });
+    if (phase.at === 'chat') end.current?.scrollIntoView({ block: 'end' });
   }, [messages, waiting, phase.at]);
 
   /** A refused or failed turn: a refusal page, "Please wait a moment", or the API's reason. */
   function failed(res: { status: number; reason: string | null; detail: string | null }) {
     const why = refusalOf(res.status, res.reason);
-    if (why) return setPhase({ at: "refused", why });
-    if (res.status === 429) return setNote("Please wait a moment, then send again.");
-    if (res.status === 422) return setNote(res.detail ?? "Write your answer first.");
-    setNote("That did not go through. Check your connection and try again.");
+    if (why) return setPhase({ at: 'refused', why });
+    if (res.status === 429) return setNote('Please wait a moment, then send again.');
+    if (res.status === 422) return setNote(res.detail ?? 'Write your answer first.');
+    setNote('That did not go through. Check your connection and try again.');
   }
 
-  async function turn(action: "messages" | "skip", body?: string) {
+  async function turn(action: 'messages' | 'skip', body?: string) {
     setNote(null);
     setWaiting(true);
     const before = messages;
-    if (body) setMessages([...before, { role: "customer", body, at: new Date().toISOString() }]);
-    const res = await publicCall<PublicTurn>("POST", token, action, body === undefined ? undefined : { body });
+    if (body) setMessages([...before, { role: 'customer', body, at: new Date().toISOString() }]);
+    const res = await publicCall<PublicTurn>(
+      'POST',
+      token,
+      action,
+      body === undefined ? undefined : { body },
+    );
     setWaiting(false);
     if (!res.data) {
       setMessages(before);
@@ -126,9 +153,10 @@ export function InterviewChat({ token }: { token: string }) {
     const turnOut = res.data;
     // Our own message is already on screen: the turn's first message echoes it.
     setMessages([...before, ...turnOut.messages]);
-    if (action === "skip" && before.length > 0) setSkipped((prev) => new Set(prev).add(before.length - 1));
+    if (action === 'skip' && before.length > 0)
+      setSkipped((prev) => new Set(prev).add(before.length - 1));
     setProgress(turnOut.progress);
-    if (turnOut.done) setPhase({ at: "done" });
+    if (turnOut.done) setPhase({ at: 'done' });
     else input.current?.focus();
   }
 
@@ -136,33 +164,33 @@ export function InterviewChat({ token }: { token: string }) {
     e?.preventDefault();
     const body = text.trim();
     if (!body || waiting) return;
-    setText("");
-    await turn("messages", body);
+    setText('');
+    await turn('messages', body);
   }
 
   /** qa-docs-18: ending is its own, named action, and it asks first (the link stops working). */
   async function finish() {
     const yes = await confirmInPage({
-      action: "Finish interview",
-      message: `Your answers so far go to ${company ?? "the team"}'s product team, and this link stops working. You can't add more after this.`,
+      action: 'Finish interview',
+      message: `Your answers so far go to ${company ?? 'the team'}'s product team, and this link stops working. You can't add more after this.`,
     });
     if (!yes) return input.current?.focus();
     setNote(null);
     setWaiting(true);
-    const res = await publicCall<{ done: boolean }>("POST", token, "finish");
+    const res = await publicCall<{ done: boolean }>('POST', token, 'finish');
     setWaiting(false);
-    if (res.data?.done) return setPhase({ at: "done" });
+    if (res.data?.done) return setPhase({ at: 'done' });
     failed(res);
   }
 
   function onKey(e: KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void send();
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void send();
   }
 
   const company = info?.company ?? finished?.company ?? null;
   const hintId = `interview-hint-${token}`;
 
-  if (phase.at === "loading") {
+  if (phase.at === 'loading') {
     return (
       <Frame company={null}>
         <p role="status" className="py-8 text-center text-[15px] text-text2">
@@ -171,21 +199,21 @@ export function InterviewChat({ token }: { token: string }) {
       </Frame>
     );
   }
-  if (phase.at === "refused") {
+  if (phase.at === 'refused') {
     const line =
-      phase.why === "used" && finished
+      phase.why === 'used' && finished
         ? "You've finished this interview, thank you."
-        : phase.why === "used"
-        ? `This link has already been used. ${company ? `Ask ${company} for a new one.` : "Ask the team that sent it for a new one."}`
-        : phase.why === "withdrawn"
-          ? "This link was withdrawn."
-          : phase.why === "replaced"
-            ? `This link was replaced by a newer one. ${company ? `Ask ${company} for the new link.` : "Ask the team that sent it for the new link."}`
-            : phase.why === "expired"
-              ? "This link has expired."
-              : phase.why === "unknown"
-                ? "This link isn't valid — ask for a new one."
-                : "We could not open this link. Check your connection and reload the page.";
+        : phase.why === 'used'
+          ? `This link has already been used. ${company ? `Ask ${company} for a new one.` : 'Ask the team that sent it for a new one.'}`
+          : phase.why === 'withdrawn'
+            ? 'This link was withdrawn.'
+            : phase.why === 'replaced'
+              ? `This link was replaced by a newer one. ${company ? `Ask ${company} for the new link.` : 'Ask the team that sent it for the new link.'}`
+              : phase.why === 'expired'
+                ? 'This link has expired.'
+                : phase.why === 'unknown'
+                  ? "This link isn't valid — ask for a new one."
+                  : 'We could not open this link. Check your connection and reload the page.';
     return (
       <Frame company={company}>
         <p data-testid="interview-refused" className="py-10 text-center text-lg font-semibold">
@@ -194,7 +222,7 @@ export function InterviewChat({ token }: { token: string }) {
       </Frame>
     );
   }
-  if (phase.at === "done") {
+  if (phase.at === 'done') {
     return (
       <Frame company={company}>
         <p data-testid="interview-thanks" className="py-10 text-center text-lg font-semibold">
@@ -205,20 +233,25 @@ export function InterviewChat({ token }: { token: string }) {
   }
 
   const disclosure = (
-    <p data-testid="interview-disclosure" className="rounded-panel bg-accent-soft px-4 py-3 text-[15px] text-accent-ink">
+    <p
+      data-testid="interview-disclosure"
+      className="rounded-panel bg-accent-soft px-4 py-3 text-[15px] text-accent-ink"
+    >
       {`You're talking with an AI assistant working for ${company}'s product team. What you write goes to that team.`}
     </p>
   );
 
-  if (phase.at === "intro") {
+  if (phase.at === 'intro') {
     return (
       <Frame company={company}>
         <div className="flex flex-col gap-4 py-6">
           {disclosure}
-          <h2 className="font-display text-2xl font-bold tracking-heading">Hi {info?.interviewee_name}</h2>
+          <h2 className="font-display text-2xl font-bold tracking-heading">
+            Hi {info?.interviewee_name}
+          </h2>
           {info?.intro && <p className="text-[17px] leading-7">{info.intro}</p>}
           <div>
-            <button type="button" className={PRIMARY} onClick={() => setPhase({ at: "chat" })}>
+            <button type="button" className={PRIMARY} onClick={() => setPhase({ at: 'chat' })}>
               Start
             </button>
           </div>
@@ -233,7 +266,11 @@ export function InterviewChat({ token }: { token: string }) {
       footer={
         <form onSubmit={send} className="flex flex-col gap-2" aria-label="Your answer">
           {note && (
-            <p role="status" data-testid="interview-note" className="rounded-button bg-warn-bg px-3 py-2 text-sm font-medium text-warn">
+            <p
+              role="status"
+              data-testid="interview-note"
+              className="rounded-button bg-warn-bg px-3 py-2 text-sm font-medium text-warn"
+            >
               {note}
             </p>
           )}
@@ -261,7 +298,10 @@ export function InterviewChat({ token }: { token: string }) {
             {sendHint()}
           </p>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <span data-testid="interview-progress" className="tnum text-sm font-semibold text-text2">
+            <span
+              data-testid="interview-progress"
+              className="tnum text-sm font-semibold text-text2"
+            >
               {progress.asked} of {progress.total}
             </span>
             {text.length > LIMITS.message - 200 && (
@@ -270,7 +310,7 @@ export function InterviewChat({ token }: { token: string }) {
               </span>
             )}
             <span className="flex-1" />
-            <button type="button" className={QUIET} disabled={waiting} onClick={() => turn("skip")}>
+            <button type="button" className={QUIET} disabled={waiting} onClick={() => turn('skip')}>
               Skip this question
             </button>
             <button type="button" className={QUIET} disabled={waiting} onClick={finish}>
@@ -288,29 +328,34 @@ export function InterviewChat({ token }: { token: string }) {
             const run = i > 0 && messages[i - 1].role === m.role;
             return (
               <Fragment key={`${m.at}-${i}`}>
-              <li
-                data-testid={m.role === "oracle" ? "msg-oracle" : "msg-customer"}
-                className={`flex max-w-[85%] min-w-0 flex-col gap-0.5 ${m.role === "customer" ? "self-end items-end" : "self-start"} ${run ? "-mt-2" : ""}`}
-              >
-                {!run && (
-                  <span data-testid="msg-sender" className="text-[13px] font-semibold text-text2">
-                    {m.role === "oracle" ? "Assistant" : "You"}
-                  </span>
-                )}
-                <p
-                  data-testid="msg-body"
-                  className={`rounded-panel px-3.5 py-2.5 text-[16px] leading-6 break-words whitespace-pre-wrap ${
-                    m.role === "customer" ? "bg-accent text-on-accent" : "border border-line bg-surface text-text"
-                  }`}
+                <li
+                  data-testid={m.role === 'oracle' ? 'msg-oracle' : 'msg-customer'}
+                  className={`flex max-w-[85%] min-w-0 flex-col gap-0.5 ${m.role === 'customer' ? 'self-end items-end' : 'self-start'} ${run ? '-mt-2' : ''}`}
                 >
-                  {m.body}
-                </p>
-              </li>
-              {skipped.has(i) && (
-                <li data-testid="msg-skipped" className="self-end text-[13px] font-semibold text-text2 italic">
-                  Skipped
+                  {!run && (
+                    <span data-testid="msg-sender" className="text-[13px] font-semibold text-text2">
+                      {m.role === 'oracle' ? 'Assistant' : 'You'}
+                    </span>
+                  )}
+                  <p
+                    data-testid="msg-body"
+                    className={`rounded-panel px-3.5 py-2.5 text-[16px] leading-6 break-words whitespace-pre-wrap ${
+                      m.role === 'customer'
+                        ? 'bg-accent text-on-accent'
+                        : 'border border-line bg-surface text-text'
+                    }`}
+                  >
+                    {m.body}
+                  </p>
                 </li>
-              )}
+                {skipped.has(i) && (
+                  <li
+                    data-testid="msg-skipped"
+                    className="self-end text-[13px] font-semibold text-text2 italic"
+                  >
+                    Skipped
+                  </li>
+                )}
               </Fragment>
             );
           })}
@@ -319,7 +364,11 @@ export function InterviewChat({ token }: { token: string }) {
           <p role="status" data-testid="interview-typing" className="self-start text-sm text-text2">
             <span aria-hidden className="mr-1 inline-flex gap-1 align-middle">
               {[0, 1, 2].map((d) => (
-                <span key={d} className="size-1.5 animate-pulse rounded-full bg-current" style={{ animationDelay: `${d * 150}ms` }} />
+                <span
+                  key={d}
+                  className="size-1.5 animate-pulse rounded-full bg-current"
+                  style={{ animationDelay: `${d * 150}ms` }}
+                />
               ))}
             </span>
             The assistant is typing…
@@ -336,13 +385,25 @@ export function InterviewChat({ token }: { token: string }) {
  * header, the content and the footer share one column (the same width and inner padding), so
  * their left edges line up on every screen (qa-docs-69).
  */
-function Frame({ company, footer, children }: { company: string | null; footer?: ReactNode; children: ReactNode }) {
+function Frame({
+  company,
+  footer,
+  children,
+}: {
+  company: string | null;
+  footer?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <div className="flex min-h-dvh min-w-0 flex-col bg-bg text-text">
       <header className="border-b border-line bg-surface py-3">
         <div className={COLUMN}>
-          <h1 data-testid="interview-company" title={company ?? undefined} className="truncate font-display text-xl font-bold tracking-heading">
-            {company ?? "Interview"}
+          <h1
+            data-testid="interview-company"
+            title={company ?? undefined}
+            className="truncate font-display text-xl font-bold tracking-heading"
+          >
+            {company ?? 'Interview'}
           </h1>
         </div>
       </header>
@@ -350,7 +411,10 @@ function Frame({ company, footer, children }: { company: string | null; footer?:
         {children}
       </div>
       {footer && (
-        <div data-testid="interview-footer" className="sticky bottom-0 border-t border-line bg-surface pt-3 pb-[calc(12px+env(safe-area-inset-bottom))]">
+        <div
+          data-testid="interview-footer"
+          className="sticky bottom-0 border-t border-line bg-surface pt-3 pb-[calc(12px+env(safe-area-inset-bottom))]"
+        >
           <div className={COLUMN}>{footer}</div>
         </div>
       )}

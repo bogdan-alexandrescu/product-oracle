@@ -1,149 +1,180 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { login, openSection, section } from "./helpers";
+import { login, openSection, section } from './helpers';
 
 // QA pass 4, docs lane: the version page /documents/<doc>/v/<n> (Annual billing v2 with a
 // held rewrite, Team invites v2 with a changed approved section, Referral link v2 with a
 // brief), driven as a person on the mock.
 
-const CHECKOUT = "/documents/annual-billing/v/2";
-const WORKSPACES = "/documents/team-invites/v/2";
-const CARTS = "/documents/referral-link/v/2";
+const CHECKOUT = '/documents/annual-billing/v/2';
+const WORKSPACES = '/documents/team-invites/v/2';
+const CARTS = '/documents/referral-link/v/2';
 const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
 
-const panel = (page: Page) => page.getByTestId("review-panel").filter({ visible: true });
+const panel = (page: Page) => page.getByTestId('review-panel').filter({ visible: true });
 
 async function openVersion(page: Page, url: string) {
   await login(page);
   await page.goto(url);
-  await expect(page.getByTestId("document-sections")).toBeVisible();
+  await expect(page.getByTestId('document-sections')).toBeVisible();
 }
 
 async function openHeld(page: Page) {
-  await page.getByRole("button", { name: /^Held rewrites/ }).filter({ visible: true }).click();
-  const held = page.getByTestId("held-rewrites").filter({ visible: true });
+  await page
+    .getByRole('button', { name: /^Held rewrites/ })
+    .filter({ visible: true })
+    .click();
+  const held = page.getByTestId('held-rewrites').filter({ visible: true });
   await expect(held).toBeVisible();
   return held;
 }
 
-test.describe("desktop", () => {
+test.describe('desktop', () => {
   test.use({ viewport: DESKTOP });
 
-  test("qa4-docs-7: Held rewrites says the sections were approved in an earlier version", async ({ page }) => {
+  test('qa4-docs-7: Held rewrites says the sections were approved in an earlier version', async ({
+    page,
+  }) => {
     await openVersion(page, CHECKOUT);
     const held = await openHeld(page);
-    await expect(held.getByTestId("held-intro")).toContainText("after they were approved in an earlier version");
-    await expect(held).not.toContainText("rewrote these approved sections");
+    await expect(held.getByTestId('held-intro')).toContainText(
+      'after they were approved in an earlier version',
+    );
+    await expect(held).not.toContainText('rewrote these approved sections');
   });
 
-  test("qa4-docs-22: a held rewrite names its section by its heading only, with no anchor", async ({ page }) => {
+  test('qa4-docs-22: a held rewrite names its section by its heading only, with no anchor', async ({
+    page,
+  }) => {
     await openVersion(page, CHECKOUT);
     const held = await openHeld(page);
-    const item = held.getByTestId("held-rewrite");
-    await expect(item).toContainText("1. Goal trace");
-    await expect(item).not.toContainText("#goal-trace");
+    const item = held.getByTestId('held-rewrite');
+    await expect(item).toContainText('1. Goal trace');
+    await expect(item).not.toContainText('#goal-trace');
   });
 
-  test("qa4-docs-33: Escape closes the Held rewrites panel", async ({ page }) => {
+  test('qa4-docs-33: Escape closes the Held rewrites panel', async ({ page }) => {
     await openVersion(page, CHECKOUT);
     await openHeld(page);
-    await page.keyboard.press("Escape");
-    await expect(page.getByTestId("held-rewrites").filter({ visible: true })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /^Held rewrites/ }).filter({ visible: true })).toHaveAttribute("aria-expanded", "false");
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('held-rewrites').filter({ visible: true })).toHaveCount(0);
+    await expect(
+      page.getByRole('button', { name: /^Held rewrites/ }).filter({ visible: true }),
+    ).toHaveAttribute('aria-expanded', 'false');
   });
 
-  test("qa4-docs-33: Escape closes the Discuss form, as Cancel does", async ({ page }) => {
+  test('qa4-docs-33: Escape closes the Discuss form, as Cancel does', async ({ page }) => {
     await openVersion(page, CARTS);
-    await page.getByTestId("doc-discuss").click();
-    const form = page.getByTestId("start-discussion").filter({ visible: true });
+    await page.getByTestId('doc-discuss').click();
+    const form = page.getByTestId('start-discussion').filter({ visible: true });
     await expect(form).toBeVisible();
-    await expect(form.getByLabel("Title")).toBeFocused();
-    await page.keyboard.press("Escape");
+    await expect(form.getByLabel('Title')).toBeFocused();
+    await page.keyboard.press('Escape');
     await expect(form).toHaveCount(0);
   });
 
-  test("qa4-docs-21: the changed-sections banner names the section by its heading, not its key", async ({ page }) => {
+  test('qa4-docs-21: the changed-sections banner names the section by its heading, not its key', async ({
+    page,
+  }) => {
     await openVersion(page, WORKSPACES);
     // B-09: the warning is in the header chip's tip; the body names the section in one line.
-    await expect(page.locator('[data-warning]:not([data-state="done"])').filter({ visible: true })).toHaveCount(0);
-    await page.getByTestId("version-warnings-chip").filter({ visible: true }).click();
-    const tip = page.getByRole("tooltip").filter({ visible: true });
-    await expect(tip).toContainText("Sections approved in v1 changed in this version:");
-    await expect(tip).not.toContainText(": scope");
-    const line = page.getByTestId("warned-sections").filter({ visible: true });
-    await expect(line).toContainText("Still open in");
-    await expect(line.getByRole("link", { name: "3. Scope" })).toBeVisible();
-    await expect(line).not.toContainText("scope");
+    await expect(
+      page.locator('[data-warning]:not([data-state="done"])').filter({ visible: true }),
+    ).toHaveCount(0);
+    await page.getByTestId('version-warnings-chip').filter({ visible: true }).click();
+    const tip = page.getByRole('tooltip').filter({ visible: true });
+    await expect(tip).toContainText('Sections approved in v1 changed in this version:');
+    await expect(tip).not.toContainText(': scope');
+    const line = page.getByTestId('warned-sections').filter({ visible: true });
+    await expect(line).toContainText('Still open in');
+    await expect(line.getByRole('link', { name: '3. Scope' })).toBeVisible();
+    await expect(line).not.toContainText('scope');
   });
 
-  test("qa4-docs-31: the Export menu says Markdown, not a bare MD", async ({ page }) => {
+  test('qa4-docs-31: the Export menu says Markdown, not a bare MD', async ({ page }) => {
     await openVersion(page, CHECKOUT);
-    await page.getByTestId("version-toolbar").getByRole("button", { name: "Export" }).click();
-    const full = page.getByRole("group", { name: "Export full" });
-    await expect(full.getByRole("button", { name: "Export Markdown (.md)" })).toHaveText("Markdown (.md)");
-    await expect(full.getByRole("button", { name: "MD", exact: true })).toHaveCount(0);
+    await page.getByTestId('version-toolbar').getByRole('button', { name: 'Export' }).click();
+    const full = page.getByRole('group', { name: 'Export full' });
+    await expect(full.getByRole('button', { name: 'Export Markdown (.md)' })).toHaveText(
+      'Markdown (.md)',
+    );
+    await expect(full.getByRole('button', { name: 'MD', exact: true })).toHaveCount(0);
   });
 
-  test("qa4-docs-32: the note's send button says Send request, so there is one Request changes", async ({ page }) => {
+  test("qa4-docs-32: the note's send button says Send request, so there is one Request changes", async ({
+    page,
+  }) => {
     await openVersion(page, CHECKOUT);
-    const goal = await openSection(page, "goal-trace");
-    const bar = goal.getByTestId("review-bar");
-    await bar.getByRole("group", { name: /^Verdict for/ }).getByRole("button", { name: "Request changes" }).click();
-    await expect(bar.getByTestId("verdict-submit")).toHaveText("Send request");
+    const goal = await openSection(page, 'goal-trace');
+    const bar = goal.getByTestId('review-bar');
+    await bar
+      .getByRole('group', { name: /^Verdict for/ })
+      .getByRole('button', { name: 'Request changes' })
+      .click();
+    await expect(bar.getByTestId('verdict-submit')).toHaveText('Send request');
     // #979: while the note is written the three verdicts give way to its form, so Request changes
     // shows once, as the verdict being written, never also as a button beside its send.
-    await expect(bar.getByRole("button", { name: "Request changes", exact: true })).toHaveCount(0);
-    await expect(bar.getByTestId("verdict-pending")).toHaveText("Changes requested");
-    await bar.getByLabel(/What should change/).fill("Name the goal this serves.");
-    await bar.getByTestId("verdict-submit").click();
-    await expect(bar.getByTestId("verdict-state")).toContainText("Changes requested");
+    await expect(bar.getByRole('button', { name: 'Request changes', exact: true })).toHaveCount(0);
+    await expect(bar.getByTestId('verdict-pending')).toHaveText('Changes requested');
+    await bar.getByLabel(/What should change/).fill('Name the goal this serves.');
+    await bar.getByTestId('verdict-submit').click();
+    await expect(bar.getByTestId('verdict-state')).toContainText('Changes requested');
   });
 
-  test("qa4-docs-35: review progress reads the same in Brief, Full and without a brief, on one card row", async ({ page }) => {
+  test('qa4-docs-35: review progress reads the same in Brief, Full and without a brief, on one card row', async ({
+    page,
+  }) => {
     await openVersion(page, CARTS);
     // PT1 a: a PRD has no outline rail; the panel is the one count there.
-    const stat = panel(page).getByTestId("stat-reviewed");
+    const stat = panel(page).getByTestId('stat-reviewed');
     await expect(stat).toContainText(/\d+\/8/);
-    await expect(stat.locator("dt")).toHaveText("Reviewed");
+    await expect(stat.locator('dt')).toHaveText('Reviewed');
     const sameRow = async () => {
       const a = (await stat.boundingBox())!;
-      const b = (await panel(page).getByTestId("stat-open-feedback").boundingBox())!;
+      const b = (await panel(page).getByTestId('stat-open-feedback').boundingBox())!;
       return Math.abs(a.y - b.y) < 2;
     };
     await expect.poll(sameRow).toBe(true);
 
-    await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Full" }).click();
+    await page
+      .getByRole('group', { name: 'Document view' })
+      .getByRole('button', { name: 'Full' })
+      .click();
     await expect(stat).toContainText(/\d+\/20/);
-    await expect(stat.locator("dt")).toHaveText("Reviewed");
+    await expect(stat.locator('dt')).toHaveText('Reviewed');
     await expect.poll(sameRow).toBe(true);
 
     await page.goto(CHECKOUT);
-    await expect(panel(page).getByTestId("stat-reviewed")).toContainText(/\d+\/11/);
+    await expect(panel(page).getByTestId('stat-reviewed')).toContainText(/\d+\/11/);
   });
 
-  test("qa4-docs-58: the brief Summary names the goal in words, with no goal code", async ({ page }) => {
+  test('qa4-docs-58: the brief Summary names the goal in words, with no goal code', async ({
+    page,
+  }) => {
     await openVersion(page, CARTS);
-    const summary = section(page, "summary").first();
-    await expect(summary).toContainText("It serves the growth goal.");
-    await expect(summary).not.toContainText("G2");
+    const summary = section(page, 'summary').first();
+    await expect(summary).toContainText('It serves the growth goal.');
+    await expect(summary).not.toContainText('G2');
   });
 });
 
-test.describe("phone", () => {
+test.describe('phone', () => {
   test.use({ viewport: PHONE });
 
-  test("qa4-docs-37: the bottom bar names the open section's place in words, apart from the reviewed count", async ({ page }) => {
+  test("qa4-docs-37: the bottom bar names the open section's place in words, apart from the reviewed count", async ({
+    page,
+  }) => {
     await openVersion(page, CHECKOUT);
-    const sections = page.getByTestId("phone-sections");
+    const sections = page.getByTestId('phone-sections');
     // At arrival the lead section is current and has no number, so it names itself (PT1 a).
-    await expect(sections).toHaveText("Introduction");
+    await expect(sections).toHaveText('Introduction');
     // A numbered section counts against the chapters, not every subsection (7, not 11).
-    await openSection(page, "goal-trace");
+    await openSection(page, 'goal-trace');
     await expect(sections).toHaveText(/^Section \d+ of 7$/);
-    await expect(sections).not.toContainText("/");
+    await expect(sections).not.toContainText('/');
     await sections.click();
-    const sheet = page.getByRole("dialog", { name: "Sections" });
-    await expect(sheet.getByTestId("review-progress")).toHaveText(/^\d+ of 11 sections reviewed$/);
+    const sheet = page.getByRole('dialog', { name: 'Sections' });
+    await expect(sheet.getByTestId('review-progress')).toHaveText(/^\d+ of 11 sections reviewed$/);
   });
 });

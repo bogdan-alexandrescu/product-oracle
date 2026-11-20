@@ -1,7 +1,7 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { THEME_KEY } from "../lib/theme";
-import { ADMIN, signOut } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { THEME_KEY } from '../lib/theme';
+import { ADMIN, signOut } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /*
  * Pick D+E (the owner, 2026-10-28): each goal's ONE button "Suggestions · N" (Home's goal cards,
@@ -16,59 +16,75 @@ import { expect, test, type Locator, type Page } from "./test";
  * Desktop 1366x820 and phone 390x844, light and dark.
  */
 
-const EMAILS = { owner: ADMIN.email, commenter: "commenter@example.com", viewer: "viewer@example.com" } as const;
+const EMAILS = {
+  owner: ADMIN.email,
+  commenter: 'commenter@example.com',
+  viewer: 'viewer@example.com',
+} as const;
 
-async function signIn(page: Page, email: string, path = "/simple") {
-  await page.goto("/login");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(ADMIN.password);
-  await page.getByRole("button", { name: "Sign in" }).click();
+async function signIn(page: Page, email: string, path = '/simple') {
+  await page.goto('/login');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(ADMIN.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).not.toHaveURL(/\/login/);
   await page.goto(path);
 }
 
-const toastWith = (page: Page, text: string | RegExp): Locator => page.getByRole("status").filter({ hasText: text });
-const retentionButton = (page: Page) => page.getByRole("button", { name: /^(Suggestions|Oracle is suggesting) for Grow retention(, \d+ waiting)?$/ });
+const toastWith = (page: Page, text: string | RegExp): Locator =>
+  page.getByRole('status').filter({ hasText: text });
+const retentionButton = (page: Page) =>
+  page.getByRole('button', {
+    name: /^(Suggestions|Oracle is suggesting) for Grow retention(, \d+ waiting)?$/,
+  });
 
 async function openDrawer(page: Page): Promise<Locator> {
   await retentionButton(page).click();
-  const drawer = page.getByTestId("goal-panel");
+  const drawer = page.getByTestId('goal-panel');
   await expect(drawer).toBeVisible();
   return drawer;
 }
 
 async function closeDrawer(page: Page, phone: boolean) {
-  if (phone) await page.keyboard.press("Escape");
-  else await page.getByTestId("goal-panel").getByRole("button", { name: "Close" }).click();
-  await expect(page.getByTestId("goal-panel")).toHaveCount(0);
+  if (phone) await page.keyboard.press('Escape');
+  else await page.getByTestId('goal-panel').getByRole('button', { name: 'Close' }).click();
+  await expect(page.getByTestId('goal-panel')).toHaveCount(0);
 }
 
 async function signOutHere(page: Page, phone: boolean) {
   if (!phone) return signOut(page);
-  await page.getByTestId("phone-user-menu").click();
-  await page.getByRole("dialog", { name: "Account" }).getByRole("button", { name: "Sign out" }).click();
+  await page.getByTestId('phone-user-menu').click();
+  await page
+    .getByRole('dialog', { name: 'Account' })
+    .getByRole('button', { name: 'Sign out' })
+    .click();
   await expect(page).toHaveURL(/\/login/);
 }
 
 async function noSidewaysScroll(page: Page, phone: boolean) {
-  if (phone) expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  if (phone)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      390,
+    );
 }
 
 for (const phone of [false, true]) {
-  for (const scheme of ["light", "dark"] as const) {
-    const where = `${phone ? "phone" : "desktop"}, ${scheme}`;
+  for (const scheme of ['light', 'dark'] as const) {
+    const where = `${phone ? 'phone' : 'desktop'}, ${scheme}`;
 
     test.describe(where, () => {
       test.beforeEach(async ({ page, context }) => {
         await context.addInitScript(
           ([key, themeKey, theme]) => {
-            localStorage.setItem(key, "simple-home");
+            localStorage.setItem(key, 'simple-home');
             localStorage.setItem(themeKey, theme);
           },
           [MOCK_SCENARIO_KEY, THEME_KEY, scheme],
         );
         await page.emulateMedia({ colorScheme: scheme });
-        await page.setViewportSize(phone ? { width: 390, height: 844 } : { width: 1366, height: 820 });
+        await page.setViewportSize(
+          phone ? { width: 390, height: 844 } : { width: 1366, height: 820 },
+        );
       });
 
       /**
@@ -83,54 +99,71 @@ for (const phone of [false, true]) {
        * a commenter can accept, the decider's form is not folded, or a target is a bare number;
        * no_claim = the real suggestion job's ideas, the API's role checks (api/tests).
        */
-      test(`a commenter suggests from the drawer, asks Oracle for more, the decider accepts (${where})`, async ({ page }) => {
+      test(`a commenter suggests from the drawer, asks Oracle for more, the decider accepts (${where})`, async ({
+        page,
+      }) => {
         await signIn(page, EMAILS.commenter);
-        const card = page.getByTestId("home-goal").filter({ hasText: "Grow retention" });
-        await expect(card.getByTestId("home-goal-path")).toHaveText("From 50 teams · now 100 teams · target 200 teams with weekly alerts on");
-        await expect(card.getByTestId("goal-suggestions-open")).toHaveCount(1);
-        await expect(retentionButton(page)).toHaveText("Suggestions · 1");
+        const card = page.getByTestId('home-goal').filter({ hasText: 'Grow retention' });
+        await expect(card.getByTestId('home-goal-path')).toHaveText(
+          'From 50 teams · now 100 teams · target 200 teams with weekly alerts on',
+        );
+        await expect(card.getByTestId('goal-suggestions-open')).toHaveCount(1);
+        await expect(retentionButton(page)).toHaveText('Suggestions · 1');
 
         let drawer = await openDrawer(page);
-        const form = drawer.getByTestId("suggest-form");
-        await expect(form.getByText("Goal: Grow retention")).toBeVisible();
-        await expect(drawer.getByTestId("suggest-decider")).toHaveText(/ will review your suggestion\.$/);
+        const form = drawer.getByTestId('suggest-form');
+        await expect(form.getByText('Goal: Grow retention')).toBeVisible();
+        await expect(drawer.getByTestId('suggest-decider')).toHaveText(
+          / will review your suggestion\.$/,
+        );
         // QA pass 3 (qa-simple-plan-10): the drawer opens on the tab that holds the suggestions.
-        await expect(drawer.getByRole("tab", { name: "✦ Oracle · 1" })).toHaveAttribute("aria-selected", "true");
-        await expect(drawer.getByRole("tab", { name: "People · 0" })).toBeVisible();
-        await form.getByLabel("Feature name").fill("Shared alert notes");
-        await form.getByLabel("What it does, and for whom").fill("Leads leave a note on an alert so the next person on call knows what was tried");
-        await form.getByRole("button", { name: "Send suggestion" }).click();
-        await expect(toastWith(page, "Sent: Shared alert notes")).toBeVisible();
-        await expect(drawer.getByRole("tab", { name: "People · 1" })).toBeVisible();
-        const mine = drawer.locator('[data-testid="person-suggestion"][data-title="Shared alert notes"]');
-        await expect(mine.getByTestId("suggestion-by")).toContainText("From ");
-        await expect(mine.getByRole("button", { name: "Accept" })).toHaveCount(0);
+        await expect(drawer.getByRole('tab', { name: '✦ Oracle · 1' })).toHaveAttribute(
+          'aria-selected',
+          'true',
+        );
+        await expect(drawer.getByRole('tab', { name: 'People · 0' })).toBeVisible();
+        await form.getByLabel('Feature name').fill('Shared alert notes');
+        await form
+          .getByLabel('What it does, and for whom')
+          .fill('Leads leave a note on an alert so the next person on call knows what was tried');
+        await form.getByRole('button', { name: 'Send suggestion' }).click();
+        await expect(toastWith(page, 'Sent: Shared alert notes')).toBeVisible();
+        await expect(drawer.getByRole('tab', { name: 'People · 1' })).toBeVisible();
+        const mine = drawer.locator(
+          '[data-testid="person-suggestion"][data-title="Shared alert notes"]',
+        );
+        await expect(mine.getByTestId('suggestion-by')).toContainText('From ');
+        await expect(mine.getByRole('button', { name: 'Accept' })).toHaveCount(0);
 
-        await drawer.getByRole("tab", { name: "✦ Oracle · 1" }).click();
-        const first = drawer.getByTestId("goal-suggestion").first();
-        await expect(first.getByTestId("oracle-suggested")).toHaveText("✦ Oracle suggested");
-        await expect(first.getByTestId("suggestion-why")).toContainText("Why:");
-        await expect(first.getByTestId("suggestion-evidence")).toContainText("Sources:");
-        await drawer.getByRole("button", { name: "✦ Ask Oracle to suggest" }).click();
-        await expect(drawer.getByTestId("suggest-pending")).toBeVisible();
+        await drawer.getByRole('tab', { name: '✦ Oracle · 1' }).click();
+        const first = drawer.getByTestId('goal-suggestion').first();
+        await expect(first.getByTestId('oracle-suggested')).toHaveText('✦ Oracle suggested');
+        await expect(first.getByTestId('suggestion-why')).toContainText('Why:');
+        await expect(first.getByTestId('suggestion-evidence')).toContainText('Sources:');
+        await drawer.getByRole('button', { name: '✦ Ask Oracle to suggest' }).click();
+        await expect(drawer.getByTestId('suggest-pending')).toBeVisible();
         // While Oracle suggests, the count holds and the button says why.
-        await expect(retentionButton(page)).toHaveText("Oracle is suggesting...");
-        await expect(drawer.getByRole("tab", { name: "✦ Oracle · 4" })).toBeVisible({ timeout: 10_000 });
-        await expect(retentionButton(page)).toHaveText("Suggestions · 5");
+        await expect(retentionButton(page)).toHaveText('Oracle is suggesting...');
+        await expect(drawer.getByRole('tab', { name: '✦ Oracle · 4' })).toBeVisible({
+          timeout: 10_000,
+        });
+        await expect(retentionButton(page)).toHaveText('Suggestions · 5');
         await noSidewaysScroll(page, phone);
         await closeDrawer(page, phone);
 
         await signOutHere(page, phone);
         await signIn(page, EMAILS.owner);
         drawer = await openDrawer(page);
-        await expect(drawer.getByTestId("suggest-form")).toHaveCount(0);
-        await expect(drawer.getByTestId("suggest-form-open")).toHaveText("+ Suggest a feature");
-        const theirs = drawer.locator('[data-testid="person-suggestion"][data-title="Shared alert notes"]');
-        await expect(theirs.getByRole("button", { name: "Reject" })).toBeVisible();
-        await theirs.getByRole("button", { name: "Accept" }).click();
-        await expect(toastWith(page, "Added Shared alert notes as a draft")).toBeVisible();
+        await expect(drawer.getByTestId('suggest-form')).toHaveCount(0);
+        await expect(drawer.getByTestId('suggest-form-open')).toHaveText('+ Suggest a feature');
+        const theirs = drawer.locator(
+          '[data-testid="person-suggestion"][data-title="Shared alert notes"]',
+        );
+        await expect(theirs.getByRole('button', { name: 'Reject' })).toBeVisible();
+        await theirs.getByRole('button', { name: 'Accept' }).click();
+        await expect(toastWith(page, 'Added Shared alert notes as a draft')).toBeVisible();
         await expect(theirs).toHaveCount(0);
-        await expect(drawer.getByRole("tab", { name: "People · 0" })).toBeVisible();
+        await expect(drawer.getByRole('tab', { name: 'People · 0' })).toBeVisible();
       });
 
       /**
@@ -147,30 +180,42 @@ for (const phone of [false, true]) {
       test(`a commenter suggests a feature from the chat (${where})`, async ({ page }) => {
         await signIn(page, EMAILS.commenter);
         // PR9 (owner, Nov 13): the drawer has no chat link; the person asks in Ask itself.
-        await page.getByTestId(phone ? "phone-ask" : "simple-ask").filter({ visible: true }).first().click();
-        const box = page.getByRole("textbox", { name: "Message Oracle" }).filter({ visible: true });
-        await box.fill("Suggest a feature for Grow retention: ");
-        await box.pressSequentially("weekly digest for admins so leads see what fired");
-        await box.press("Enter");
-        const chat = page.getByTestId("ask-chat-thread").filter({ visible: true });
-        await expect(chat).toContainText("I understood one change: suggest Weekly digest for admins for Grow retention.");
+        await page
+          .getByTestId(phone ? 'phone-ask' : 'simple-ask')
+          .filter({ visible: true })
+          .first()
+          .click();
+        const box = page.getByRole('textbox', { name: 'Message Oracle' }).filter({ visible: true });
+        await box.fill('Suggest a feature for Grow retention: ');
+        await box.pressSequentially('weekly digest for admins so leads see what fired');
+        await box.press('Enter');
+        const chat = page.getByTestId('ask-chat-thread').filter({ visible: true });
+        await expect(chat).toContainText(
+          'I understood one change: suggest Weekly digest for admins for Grow retention.',
+        );
         // The look-alike by its display code and name, never its key (suggest review).
-        await expect(chat).toContainText("It looks like F-79 Weekly alert digest, which has a similar name.");
-        await expect(chat).not.toContainText("alert-digest");
-        const card = chat.getByTestId("chat-card");
+        await expect(chat).toContainText(
+          'It looks like F-79 Weekly alert digest, which has a similar name.',
+        );
+        await expect(chat).not.toContainText('alert-digest');
+        const card = chat.getByTestId('chat-card');
         await expect(card).toHaveCount(1);
-        await expect(card.getByRole("button", { name: "Preview" })).toBeVisible();
-        await expect(card.getByRole("button", { name: "Discard" })).toBeVisible();
-        await card.getByRole("button", { name: "Preview" }).click();
-        await expect(card.getByTestId("chat-card-preview")).toContainText("Under People in the goal's suggestions");
-        await card.getByRole("button", { name: "Apply" }).click();
-        await expect(card).toHaveAttribute("data-status", "applied");
+        await expect(card.getByRole('button', { name: 'Preview' })).toBeVisible();
+        await expect(card.getByRole('button', { name: 'Discard' })).toBeVisible();
+        await card.getByRole('button', { name: 'Preview' }).click();
+        await expect(card.getByTestId('chat-card-preview')).toContainText(
+          "Under People in the goal's suggestions",
+        );
+        await card.getByRole('button', { name: 'Apply' }).click();
+        await expect(card).toHaveAttribute('data-status', 'applied');
         await noSidewaysScroll(page, phone);
 
-        await page.goto("/simple");
+        await page.goto('/simple');
         const again = await openDrawer(page);
-        await expect(again.getByRole("tab", { name: "People · 1" })).toBeVisible();
-        await expect(again.locator('[data-testid="person-suggestion"][data-title="Weekly digest for admins"]')).toContainText("weekly digest for admins so leads see what fired");
+        await expect(again.getByRole('tab', { name: 'People · 1' })).toBeVisible();
+        await expect(
+          again.locator('[data-testid="person-suggestion"][data-title="Weekly digest for admins"]'),
+        ).toContainText('weekly digest for admins so leads see what fired');
       });
 
       /**
@@ -183,36 +228,52 @@ for (const phone of [false, true]) {
        * drawer names the owner, the approver cannot accept, the owner cannot, or a target is a
        * bare number; no_claim = a named decider on the goal's roadmap (api/tests).
        */
-      test(`an approver who owns the goal's track decides its suggestions (${where})`, async ({ page, context }) => {
-        await context.addInitScript(([key]) => localStorage.setItem(key, "simple-suggest-deciders"), [MOCK_SCENARIO_KEY]);
+      test(`an approver who owns the goal's track decides its suggestions (${where})`, async ({
+        page,
+        context,
+      }) => {
+        await context.addInitScript(
+          ([key]) => localStorage.setItem(key, 'simple-suggest-deciders'),
+          [MOCK_SCENARIO_KEY],
+        );
         await signIn(page, EMAILS.commenter);
-        const quiet = page.getByTestId("home-goal").filter({ hasText: "Keep alerts quiet" });
-        await expect(quiet.getByTestId("home-goal-path")).toHaveText("From 12 teams muting alerts · target 10 teams muting alerts");
+        const quiet = page.getByTestId('home-goal').filter({ hasText: 'Keep alerts quiet' });
+        await expect(quiet.getByTestId('home-goal-path')).toHaveText(
+          'From 12 teams muting alerts · target 10 teams muting alerts',
+        );
         let drawer = await openDrawer(page);
-        await expect(drawer.getByTestId("suggest-decider")).toHaveText("Avery Lane will review your suggestion.");
-        const form = drawer.getByTestId("suggest-form");
-        await form.getByLabel("Feature name").fill("Shared alert notes");
-        await form.getByLabel("What it does, and for whom").fill("Leads leave a note on an alert so the next person on call knows what was tried");
-        await form.getByRole("button", { name: "Send suggestion" }).click();
-        await expect(toastWith(page, "Sent: Shared alert notes")).toBeVisible();
+        await expect(drawer.getByTestId('suggest-decider')).toHaveText(
+          'Avery Lane will review your suggestion.',
+        );
+        const form = drawer.getByTestId('suggest-form');
+        await form.getByLabel('Feature name').fill('Shared alert notes');
+        await form
+          .getByLabel('What it does, and for whom')
+          .fill('Leads leave a note on an alert so the next person on call knows what was tried');
+        await form.getByRole('button', { name: 'Send suggestion' }).click();
+        await expect(toastWith(page, 'Sent: Shared alert notes')).toBeVisible();
         await closeDrawer(page, phone);
         await signOutHere(page, phone);
 
         await signIn(page, EMAILS.owner);
         drawer = await openDrawer(page);
-        const forOwner = drawer.locator('[data-testid="person-suggestion"][data-title="Shared alert notes"]');
-        await expect(forOwner.getByRole("button", { name: "Accept" })).toBeVisible();
-        await expect(forOwner.getByRole("button", { name: "Reject" })).toBeVisible();
+        const forOwner = drawer.locator(
+          '[data-testid="person-suggestion"][data-title="Shared alert notes"]',
+        );
+        await expect(forOwner.getByRole('button', { name: 'Accept' })).toBeVisible();
+        await expect(forOwner.getByRole('button', { name: 'Reject' })).toBeVisible();
         await closeDrawer(page, phone);
         await signOutHere(page, phone);
 
-        await signIn(page, "avery.lane@example.com");
+        await signIn(page, 'avery.lane@example.com');
         drawer = await openDrawer(page);
-        await expect(drawer.getByTestId("suggest-form-open")).toHaveText("+ Suggest a feature");
-        const theirs = drawer.locator('[data-testid="person-suggestion"][data-title="Shared alert notes"]');
-        await expect(theirs.getByRole("button", { name: "Reject" })).toBeVisible();
-        await theirs.getByRole("button", { name: "Accept" }).click();
-        await expect(toastWith(page, "Added Shared alert notes as a draft")).toBeVisible();
+        await expect(drawer.getByTestId('suggest-form-open')).toHaveText('+ Suggest a feature');
+        const theirs = drawer.locator(
+          '[data-testid="person-suggestion"][data-title="Shared alert notes"]',
+        );
+        await expect(theirs.getByRole('button', { name: 'Reject' })).toBeVisible();
+        await theirs.getByRole('button', { name: 'Accept' }).click();
+        await expect(toastWith(page, 'Added Shared alert notes as a draft')).toBeVisible();
         await expect(theirs).toHaveCount(0);
         await noSidewaysScroll(page, phone);
       });
@@ -224,18 +285,20 @@ for (const phone of [false, true]) {
        * or the bucket lists suggestions inline; no_claim = the buckets' header (plan-charts lane).
        */
       test(`a viewer reads a bucket's suggestions on Priorities (${where})`, async ({ page }) => {
-        await signIn(page, EMAILS.viewer, "/simple/priorities?tab=buckets");
+        await signIn(page, EMAILS.viewer, '/simple/priorities?tab=buckets');
         const bucket = page.locator('[data-testid="goal-bucket"][data-key="grow-retention"]');
-        await expect(bucket.getByTestId("goal-suggestion")).toHaveCount(0);
-        await expect(bucket.getByTestId("goal-suggestions-open")).toHaveText("See suggestions · 1");
-        await bucket.getByTestId("goal-suggestions-open").click();
-        const drawer = page.getByTestId("goal-panel");
-        await expect(drawer.getByTestId("suggest-form")).toHaveCount(0);
-        await expect(drawer.getByRole("button", { name: "Ask in the chat" })).toHaveCount(0);
-        await drawer.getByRole("tab", { name: "✦ Oracle · 1" }).click();
-        await expect(drawer.getByTestId("goal-suggestion")).toHaveCount(1);
-        await expect(drawer.getByRole("button", { name: "✦ Ask Oracle to suggest" })).toHaveCount(0);
-        await expect(drawer.getByRole("button", { name: "Accept" })).toHaveCount(0);
+        await expect(bucket.getByTestId('goal-suggestion')).toHaveCount(0);
+        await expect(bucket.getByTestId('goal-suggestions-open')).toHaveText('See suggestions · 1');
+        await bucket.getByTestId('goal-suggestions-open').click();
+        const drawer = page.getByTestId('goal-panel');
+        await expect(drawer.getByTestId('suggest-form')).toHaveCount(0);
+        await expect(drawer.getByRole('button', { name: 'Ask in the chat' })).toHaveCount(0);
+        await drawer.getByRole('tab', { name: '✦ Oracle · 1' }).click();
+        await expect(drawer.getByTestId('goal-suggestion')).toHaveCount(1);
+        await expect(drawer.getByRole('button', { name: '✦ Ask Oracle to suggest' })).toHaveCount(
+          0,
+        );
+        await expect(drawer.getByRole('button', { name: 'Accept' })).toHaveCount(0);
       });
     });
   }

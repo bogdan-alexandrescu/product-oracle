@@ -1,29 +1,41 @@
-"use client";
+'use client';
 
-import { useState } from "react";
+import { useState } from 'react';
 
-import { Chip, DataTable, Inspector, InspectorRow, InspectorSection, Panel, Sheet, Split, type Column } from "@/components/ds";
-import { ErrorNote, Loading } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDate, plural } from "@/lib/format";
-import { useQuery } from "@/lib/use-query";
+import {
+  Chip,
+  DataTable,
+  Inspector,
+  InspectorRow,
+  InspectorSection,
+  Panel,
+  Sheet,
+  Split,
+  type Column,
+} from '@/components/ds';
+import { ErrorNote, Loading } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { formatDate, plural } from '@/lib/format';
+import { useQuery } from '@/lib/use-query';
 
-import { ORIGIN, PACK_POLICY, ROLE } from "./_lib";
+import { ORIGIN, PACK_POLICY, ROLE } from './_lib';
 
-type Entry = Schemas["CatalogModuleOut"];
+type Entry = Schemas['CatalogModuleOut'];
 
-export const COMPANY_POLICY: Record<NonNullable<Entry["company_policy"]>, string> = {
-  required: "Required",
-  optional: "Optional",
-  disabled: "Disabled",
+export const COMPANY_POLICY: Record<NonNullable<Entry['company_policy']>, string> = {
+  required: 'Required',
+  optional: 'Optional',
+  disabled: 'Disabled',
 };
 
 /** A module key's name from the catalogue, else the key in words. */
 function useNames() {
-  const catalog = useQuery("module-catalog", () => unwrap(api.GET("/v1/module-catalog")));
-  const packs = useQuery("module-packs", () => unwrap(api.GET("/v1/module-packs")));
+  const catalog = useQuery('module-catalog', () => unwrap(api.GET('/v1/module-catalog')));
+  const packs = useQuery('module-packs', () => unwrap(api.GET('/v1/module-packs')));
   return {
-    module: (key: string) => catalog.data?.find((c) => c.key === key)?.title ?? key.split(".").pop()!.replace(/[-_]/g, " "),
+    module: (key: string) =>
+      catalog.data?.find((c) => c.key === key)?.title ??
+      key.split('.').pop()!.replace(/[-_]/g, ' '),
     pack: (id: string) => packs.data?.find((p) => p.id === id)?.title ?? null,
   };
 }
@@ -37,40 +49,53 @@ export function CatalogFacts({ e }: { e: Entry }) {
     return (
       <div className="py-1.5">
         <p>{label}</p>
-        <p className="font-semibold [overflow-wrap:anywhere]">{shown.join(", ")}</p>
+        <p className="font-semibold [overflow-wrap:anywhere]">{shown.join(', ')}</p>
       </div>
     );
   };
   return (
     <>
       <InspectorSection label="Catalog facts">
-        {list("Applies to packs", e.applies_to.map(names.pack))}
-        {list("Depends on", e.depends_on.map(names.module))}
-        {list("Conflicts with", e.conflicts_with.map(names.module))}
-        <InspectorRow value={plural(e.section_ids.length, "section")}>Sections</InspectorRow>
-        <InspectorRow value={[e.brief_layer && "Brief", e.full_layer && "Full"].filter(Boolean).join(" and ") || "None"}>Layers</InspectorRow>
-        <InspectorRow value={ROLE[e.required_review_role] ?? e.required_review_role}>Review role</InspectorRow>
+        {list('Applies to packs', e.applies_to.map(names.pack))}
+        {list('Depends on', e.depends_on.map(names.module))}
+        {list('Conflicts with', e.conflicts_with.map(names.module))}
+        <InspectorRow value={plural(e.section_ids.length, 'section')}>Sections</InspectorRow>
+        <InspectorRow
+          value={
+            [e.brief_layer && 'Brief', e.full_layer && 'Full'].filter(Boolean).join(' and ') ||
+            'None'
+          }
+        >
+          Layers
+        </InspectorRow>
+        <InspectorRow value={ROLE[e.required_review_role] ?? e.required_review_role}>
+          Review role
+        </InspectorRow>
       </InspectorSection>
       <InspectorSection label="Versions">
         <ul className="space-y-1.5 text-sm">
           {e.versions.map((v, i) => (
             <li key={v.version} className="flex flex-wrap items-center gap-2">
-              <span>{ORIGIN[v.origin] ?? "Company module"}</span>
+              <span>{ORIGIN[v.origin] ?? 'Company module'}</span>
               {v.version === e.version && <Chip kind="acc">In effect</Chip>}
               <span className="text-text2">
-                {i === 0 ? "Added" : "Updated"} {formatDate(v.created_at)}
+                {i === 0 ? 'Added' : 'Updated'} {formatDate(v.created_at)}
               </span>
             </li>
           ))}
         </ul>
-        {e.upgrade_available && <p className="mt-1 text-sm text-text2">A newer version is available.</p>}
+        {e.upgrade_available && (
+          <p className="mt-1 text-sm text-text2">A newer version is available.</p>
+        )}
       </InspectorSection>
     </>
   );
 }
 
 function CatalogDetail({ entryKey, bare }: { entryKey: string; bare: boolean }) {
-  const q = useQuery(`catalog:${entryKey}`, () => unwrap(api.GET("/v1/module-catalog/{key}", { params: { path: { key: entryKey } } })));
+  const q = useQuery(`catalog:${entryKey}`, () =>
+    unwrap(api.GET('/v1/module-catalog/{key}', { params: { path: { key: entryKey } } })),
+  );
   if (q.error) return <ErrorNote>{q.error}</ErrorNote>;
   if (!q.data) return <Loading />;
   const e = q.data;
@@ -88,20 +113,28 @@ function CatalogDetail({ entryKey, bare }: { entryKey: string; bare: boolean }) 
   return (
     <Inspector
       testId="catalog-inspector"
-      eyebrow={`Catalog module · ${e.builtin ? "Built-in" : "Company module"}`}
+      eyebrow={`Catalog module · ${e.builtin ? 'Built-in' : 'Company module'}`}
       title={e.title}
       chips={
         <>
           <Chip kind="line" hero>
             Pack policy: {PACK_POLICY[e.policy] ?? e.policy}
           </Chip>
-          {e.company_policy && <Chip kind="acc" hero>Company: {COMPANY_POLICY[e.company_policy]}</Chip>}
-          {e.archived && <Chip kind="na" hero>Archived</Chip>}
+          {e.company_policy && (
+            <Chip kind="acc" hero>
+              Company: {COMPANY_POLICY[e.company_policy]}
+            </Chip>
+          )}
+          {e.archived && (
+            <Chip kind="na" hero>
+              Archived
+            </Chip>
+          )}
         </>
       }
       stats={[
-        { label: "Sections", value: e.section_ids.length },
-        { label: "Versions", value: e.versions.length },
+        { label: 'Sections', value: e.section_ids.length },
+        { label: 'Versions', value: e.versions.length },
       ]}
     >
       {body}
@@ -111,32 +144,44 @@ function CatalogDetail({ entryKey, bare }: { entryKey: string; bare: boolean }) 
 
 /** The module catalogue (GET /v1/module-catalog): read by everyone. */
 export function CatalogTab({ phone }: { phone: boolean }) {
-  const q = useQuery("module-catalog", () => unwrap(api.GET("/v1/module-catalog")));
+  const q = useQuery('module-catalog', () => unwrap(api.GET('/v1/module-catalog')));
   const [picked, setPicked] = useState<string | null>(null);
   const [sheet, setSheet] = useState(false);
   const rows = q.data ?? [];
   const selected = rows.find((r) => r.key === picked) ?? null;
   const columns: Column<Entry>[] = [
     {
-      key: "module",
-      header: "Module",
-      phone: "title",
+      key: 'module',
+      header: 'Module',
+      phone: 'title',
       wrap: true,
-      cell: (e) => (
-        <span className="min-w-0 font-medium [overflow-wrap:anywhere]">{e.title}</span>
-      ),
+      cell: (e) => <span className="min-w-0 font-medium [overflow-wrap:anywhere]">{e.title}</span>,
     },
-    { key: "policy", header: "Pack policy", width: "150px", cell: (e) => PACK_POLICY[e.policy] ?? e.policy },
     {
-      key: "company",
-      header: "Company policy",
-      width: "150px",
-      cell: (e) => (e.company_policy ? COMPANY_POLICY[e.company_policy] : <span className="text-text2">Not set</span>),
+      key: 'policy',
+      header: 'Pack policy',
+      width: '150px',
+      cell: (e) => PACK_POLICY[e.policy] ?? e.policy,
+    },
+    {
+      key: 'company',
+      header: 'Company policy',
+      width: '150px',
+      cell: (e) =>
+        e.company_policy ? (
+          COMPANY_POLICY[e.company_policy]
+        ) : (
+          <span className="text-text2">Not set</span>
+        ),
     },
   ];
   if (q.error) return <ErrorNote>{q.error}</ErrorNote>;
   return (
-    <Split inspector={!phone && selected ? <CatalogDetail entryKey={selected.key} bare={false} /> : undefined}>
+    <Split
+      inspector={
+        !phone && selected ? <CatalogDetail entryKey={selected.key} bare={false} /> : undefined
+      }
+    >
       <Panel title="Catalog" count={q.data ? rows.length : undefined}>
         <DataTable
           label="Catalog"
@@ -145,7 +190,7 @@ export function CatalogTab({ phone }: { phone: boolean }) {
           rows={q.data}
           loading={q.loading && !q.data}
           rowKey={(e) => e.key}
-          rowProps={(e) => ({ "data-module": e.key })}
+          rowProps={(e) => ({ 'data-module': e.key })}
           selected={picked}
           onSelect={(k) => {
             setPicked(k);

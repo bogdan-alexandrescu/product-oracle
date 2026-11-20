@@ -1,6 +1,6 @@
-import { expect, test, type Locator, type Page } from "./test";
+import { expect, test, type Locator, type Page } from './test';
 
-import { login } from "./helpers";
+import { login } from './helpers';
 
 /**
  * At phone width (390) a DataTable row is a stacked block: its title on line 1, never
@@ -13,15 +13,16 @@ test.describe.configure({ timeout: 60_000 });
 /** Texts of elements under `root` that cut their own content off sideways (ellipsis or clip). */
 async function clippedTexts(root: Locator): Promise<string[]> {
   return root.evaluate((el) =>
-    [el, ...el.querySelectorAll<HTMLElement>("*")]
+    [el, ...el.querySelectorAll<HTMLElement>('*')]
       .filter((e) => {
         const cs = getComputedStyle(e);
-        if (cs.display === "none" || cs.visibility === "hidden" || e.closest("[role=tooltip]")) return false;
+        if (cs.display === 'none' || cs.visibility === 'hidden' || e.closest('[role=tooltip]'))
+          return false;
         // Screen-reader-only text is clipped on purpose.
-        if (e.closest(".sr-only") || e.clientWidth <= 1) return false;
-        return cs.overflowX !== "visible" && e.scrollWidth > e.clientWidth + 1;
+        if (e.closest('.sr-only') || e.clientWidth <= 1) return false;
+        return cs.overflowX !== 'visible' && e.scrollWidth > e.clientWidth + 1;
       })
-      .map((e) => (e.textContent ?? "").trim()),
+      .map((e) => (e.textContent ?? '').trim()),
   );
 }
 
@@ -33,21 +34,23 @@ async function expectInViewport(page: Page, loc: Locator) {
 }
 
 async function expectNoSideScroll(page: Page) {
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
 }
 
 const overlaps = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
   a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
-test("phone inbox: each row shows its item, kind and context, its action, and cost on approvals and overruns", async ({
+test('phone inbox: each row shows its item, kind and context, its action, and cost on approvals and overruns', async ({
   page,
 }) => {
   await login(page);
-  await page.goto("/inbox");
-  await expect(page.getByTestId("inbox-approvals")).toBeVisible();
+  await page.goto('/inbox');
+  await expect(page.getByTestId('inbox-approvals')).toBeVisible();
 
-  for (const id of ["inbox-checkpoints", "inbox-approvals", "inbox-overruns", "inbox-feedback"]) {
-    const rows = page.getByTestId(id).locator("tr[data-row]");
+  for (const id of ['inbox-checkpoints', 'inbox-approvals', 'inbox-overruns', 'inbox-feedback']) {
+    const rows = page.getByTestId(id).locator('tr[data-row]');
     for (const row of await rows.all()) {
       const title = row.locator('td[data-phone="title"]');
       await expect(title).toBeVisible();
@@ -56,76 +59,98 @@ test("phone inbox: each row shows its item, kind and context, its action, and co
       await expectInViewport(page, title);
       // The kind and context are meta under the title, not hidden.
       await expect(row.locator('td[data-phone="meta"]').first()).toBeVisible();
-      await expect(row.locator('td[data-phone="action"]').getByRole("button").or(row.getByRole("link")).first()).toBeVisible();
+      await expect(
+        row
+          .locator('td[data-phone="action"]')
+          .getByRole('button')
+          .or(row.getByRole('link'))
+          .first(),
+      ).toBeVisible();
     }
   }
 
-  const approval = page.getByTestId("inbox-approvals").locator("tr[data-row]").first();
+  const approval = page.getByTestId('inbox-approvals').locator('tr[data-row]').first();
   await expect(approval.locator('[data-cost="prominent"]')).toBeVisible();
-  await expect(approval).toContainText("Cost approval");
-  await expect(approval).toContainText("Usage alerts v2");
-  await expect(approval.getByRole("button", { name: /^Approve \$/ })).toBeVisible();
+  await expect(approval).toContainText('Cost approval');
+  await expect(approval).toContainText('Usage alerts v2');
+  await expect(approval.getByRole('button', { name: /^Approve \$/ })).toBeVisible();
 
-  const overrun = page.getByTestId("inbox-overruns").locator("tr[data-row]").first();
+  const overrun = page.getByTestId('inbox-overruns').locator('tr[data-row]').first();
   await expect(overrun.locator('[data-cost="prominent"]')).toBeVisible();
-  await expect(overrun.getByRole("button", { name: "Resume" })).toBeVisible();
+  await expect(overrun.getByRole('button', { name: 'Resume' })).toBeVisible();
   await expectNoSideScroll(page);
 });
 
-test("phone runs: run names are whole, costs show on approvals and overruns, the action stays", async ({ page }) => {
+test('phone runs: run names are whole, costs show on approvals and overruns, the action stays', async ({
+  page,
+}) => {
   await login(page);
-  await page.goto("/runs");
-  const rows = page.getByTestId("run-row");
+  await page.goto('/runs');
+  const rows = page.getByTestId('run-row');
   await expect(rows).toHaveCount(5);
   for (const row of await rows.all()) {
     expect(await clippedTexts(row)).toEqual([]);
     await expectInViewport(page, row.locator('td[data-phone="title"]'));
   }
-  const approval = rows.filter({ hasText: "Awaiting cost approval" });
+  const approval = rows.filter({ hasText: 'Awaiting cost approval' });
   await expect(approval.locator('td[data-phone="title"]')).toHaveText(/^Usage alerts v2/);
   await expect(approval.locator('[data-cost="prominent"]')).toBeVisible();
   // qa-work-17: the row's button says what it does (it opens the run, where Approve is).
-  await expect(approval.getByRole("button", { name: "Open" })).toBeVisible();
-  const overrun = rows.filter({ hasText: "Paused" });
+  await expect(approval.getByRole('button', { name: 'Open' })).toBeVisible();
+  const overrun = rows.filter({ hasText: 'Paused' });
   await expect(overrun.locator('[data-cost="prominent"]')).toBeVisible();
   await expectNoSideScroll(page);
 
   // Keyboard selection works the same on the stacked rows.
   await rows.first().focus();
-  await page.keyboard.press("ArrowDown");
-  await expect(rows.nth(1)).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press('ArrowDown');
+  await expect(rows.nth(1)).toHaveAttribute('aria-selected', 'true');
   await expect(rows.nth(1)).toBeFocused();
 });
 
-test("phone run detail: the status chips sit under the phone header, clear of the primary action", async ({ page }) => {
+test('phone run detail: the status chips sit under the phone header, clear of the primary action', async ({
+  page,
+}) => {
   await login(page);
-  await page.goto("/runs");
-  await page.getByTestId("run-row").filter({ hasText: "Awaiting cost approval" }).getByRole("link").click();
-  const action = page.getByRole("button", { name: /^Approve \$[\d.]+ and start$/ });
+  await page.goto('/runs');
+  await page
+    .getByTestId('run-row')
+    .filter({ hasText: 'Awaiting cost approval' })
+    .getByRole('link')
+    .click();
+  const action = page.getByRole('button', { name: /^Approve \$[\d.]+ and start$/ });
   await expect(action).toBeVisible();
-  const chip = page.locator("header[data-page-header]").getByText("Awaiting cost approval", { exact: true });
+  const chip = page
+    .locator('header[data-page-header]')
+    .getByText('Awaiting cost approval', { exact: true });
   await expect(chip).toBeVisible();
   // The phone header draws the title (I3), so the chips come right under it.
-  const [a, c, h] = await Promise.all([action.boundingBox(), chip.boundingBox(), page.getByTestId("phone-header").boundingBox()]);
+  const [a, c, h] = await Promise.all([
+    action.boundingBox(),
+    chip.boundingBox(),
+    page.getByTestId('phone-header').boundingBox(),
+  ]);
   expect(overlaps(a!, c!)).toBe(false);
   expect(c!.y).toBeGreaterThanOrEqual(h!.y + h!.height - 1);
   await expectInViewport(page, action);
   await expectNoSideScroll(page);
 });
 
-test("phone Ground Truth: the feature × goal ledger is a list of whole feature names with their goal tags", async ({ page }) => {
+test('phone Ground Truth: the feature × goal ledger is a list of whole feature names with their goal tags', async ({
+  page,
+}) => {
   await login(page);
-  await page.goto("/ground-truth");
-  const feature = page.getByTestId("feature-F-01");
+  await page.goto('/ground-truth');
+  const feature = page.getByTestId('feature-F-01');
   await expect(feature).toBeVisible();
-  await expect(feature.getByRole("button", { name: "Setup checklist" })).toBeVisible();
+  await expect(feature.getByRole('button', { name: 'Setup checklist' })).toBeVisible();
   // Its two goal links by goal name, with their strength.
-  await expect(feature.getByText("Activation", { exact: true })).toBeVisible();
-  await expect(feature.getByText("Growth", { exact: true })).toBeVisible();
-  await expect(feature.getByRole("img", { name: /^Contribution \d of 3/ })).toHaveCount(2);
+  await expect(feature.getByText('Activation', { exact: true })).toBeVisible();
+  await expect(feature.getByText('Growth', { exact: true })).toBeVisible();
+  await expect(feature.getByRole('img', { name: /^Contribution \d of 3/ })).toHaveCount(2);
   // A flagged feature shows its flag as on desktop, not an unexplained dot.
-  await expect(page.getByTestId("feature-F-06").getByText("Serves no goal")).toBeVisible();
-  await expect(page.getByTestId("feature-F-12").getByText("Low confidence")).toBeVisible();
+  await expect(page.getByTestId('feature-F-06').getByText('Serves no goal')).toBeVisible();
+  await expect(page.getByTestId('feature-F-12').getByText('Low confidence')).toBeVisible();
   // Every ledger row (keys are codes now, F-01, F-02, F-05, F-06 and F-12, not f.*): at least one, so it never passes on none.
   const rows = await page.locator('tr[data-testid^="feature-"]').all();
   expect(rows.length).toBeGreaterThan(0);
@@ -136,42 +161,44 @@ test("phone Ground Truth: the feature × goal ledger is a list of whole feature 
   await expectNoSideScroll(page);
 });
 
-test("phone design kit: every DataTable sample keeps its titles whole", async ({ page }) => {
+test('phone design kit: every DataTable sample keeps its titles whole', async ({ page }) => {
   await login(page);
-  await page.goto("/design");
-  await expect(page.getByTestId("design-gallery")).toBeVisible({ timeout: 20_000 });
-  const rows = page.getByTestId("design-table").locator("tr[data-row]");
+  await page.goto('/design');
+  await expect(page.getByTestId('design-gallery')).toBeVisible({ timeout: 20_000 });
+  const rows = page.getByTestId('design-table').locator('tr[data-row]');
   for (const row of await rows.all()) {
     const title = row.locator('td[data-phone="title"]');
     expect(await clippedTexts(title)).toEqual([]);
   }
   // Clicking a stacked row still selects it.
   await rows.nth(2).click();
-  await expect(rows.nth(2)).toHaveAttribute("aria-selected", "true");
+  await expect(rows.nth(2)).toHaveAttribute('aria-selected', 'true');
 });
 
-test("phone row actions: every row action a table has on desktop stays on the phone", async ({ page }) => {
+test('phone row actions: every row action a table has on desktop stays on the phone', async ({
+  page,
+}) => {
   await login(page);
   for (const path of [
-    "/plan/documents",
-    "/runs",
-    "/inbox",
-    "/documents",
-    "/documents/annual-billing",
-    "/ground-truth",
-    "/priorities",
-    "/settings/members",
-    "/settings/claude-accounts",
-    "/settings/templates",
-    "/settings/themes",
+    '/plan/documents',
+    '/runs',
+    '/inbox',
+    '/documents',
+    '/documents/annual-billing',
+    '/ground-truth',
+    '/priorities',
+    '/settings/members',
+    '/settings/claude-accounts',
+    '/settings/templates',
+    '/settings/themes',
   ]) {
     await page.goto(path);
-    const rows = page.locator("tr[data-row]").filter({ visible: true });
+    const rows = page.locator('tr[data-row]').filter({ visible: true });
     await expect(rows.first()).toBeVisible();
     // No column a phone hides holds a button (a row's action).
     expect(await page.locator('td[data-phone="hide"] button').count(), path).toBe(0);
     for (const row of await rows.all()) {
-      for (const button of await row.getByRole("button").all()) {
+      for (const button of await row.getByRole('button').all()) {
         await expect(button, path).toBeVisible();
         await expectInViewport(page, button);
       }
@@ -180,24 +207,27 @@ test("phone row actions: every row action a table has on desktop stays on the ph
   }
 
   // Plan's Roadmap documents: the approved PRD keeps Build roadmap beside its title.
-  await page.goto("/plan/documents");
-  const prd = page.getByTestId("approved-prd");
-  const build = prd.getByRole("button", { name: "Build roadmap" });
+  await page.goto('/plan/documents');
+  const prd = page.getByTestId('approved-prd');
+  const build = prd.getByRole('button', { name: 'Build roadmap' });
   await expect(build).toBeVisible();
-  const [t, b] = await Promise.all([prd.locator('td[data-phone="title"]').boundingBox(), build.boundingBox()]);
+  const [t, b] = await Promise.all([
+    prd.locator('td[data-phone="title"]').boundingBox(),
+    build.boundingBox(),
+  ]);
   expect(b!.y).toBeLessThan(t!.y + t!.height);
 });
 
 test("phone sources: each source's actions stay on one line", async ({ page }) => {
   await login(page);
-  await page.goto("/settings/sources");
-  const cards = page.getByTestId("source-card");
+  await page.goto('/settings/sources');
+  const cards = page.getByTestId('source-card');
   // Slack, GitHub, the Slack source needing attention, the Fireflies title rule and the
   // two Google Docs sources.
   await expect(cards).toHaveCount(6);
   for (const card of await cards.all()) {
     const tops = new Set<number>();
-    for (const button of await card.locator("div").first().getByRole("button").all()) {
+    for (const button of await card.locator('div').first().getByRole('button').all()) {
       tops.add(Math.round((await button.boundingBox())!.y));
     }
     expect(tops.size).toBe(1);
@@ -205,54 +235,55 @@ test("phone sources: each source's actions stay on one line", async ({ page }) =
   await expectNoSideScroll(page);
 });
 
-test("phone settings: the page picker names the current page", async ({ page }) => {
+test('phone settings: the page picker names the current page', async ({ page }) => {
   // qa-settings-41: a phone picks the Settings page from a select, not a cut strip.
   await login(page);
   for (const [path, label] of [
-    ["/settings/members", "Members"],
-    ["/settings/connections", "Connections"],
-    ["/settings/claude-accounts", "Claude accounts"],
-    ["/settings/sources", "Sources"],
-    ["/settings/templates", "Templates"],
-    ["/settings/themes", "Themes"],
-    ["/settings/templates/oracle-default", "Templates"],
-    ["/settings/themes/clean-document", "Themes"],
+    ['/settings/members', 'Members'],
+    ['/settings/connections', 'Connections'],
+    ['/settings/claude-accounts', 'Claude accounts'],
+    ['/settings/sources', 'Sources'],
+    ['/settings/templates', 'Templates'],
+    ['/settings/themes', 'Themes'],
+    ['/settings/templates/oracle-default', 'Templates'],
+    ['/settings/themes/clean-document', 'Themes'],
   ]) {
     await page.goto(path);
-    const picker = page.getByRole("combobox", { name: "Settings page" });
+    const picker = page.getByRole('combobox', { name: 'Settings page' });
     await expect(picker, path).toBeVisible();
-    await expect(picker.locator("option:checked"), path).toHaveText(label);
+    await expect(picker.locator('option:checked'), path).toHaveText(label);
   }
 });
 
-test.describe("desktop", () => {
+test.describe('desktop', () => {
   test.use({ viewport: { width: 1366, height: 820 } });
 
-  test("DataTable rows stay one line on desktop", async ({ page }) => {
+  test('DataTable rows stay one line on desktop', async ({ page }) => {
     await login(page);
-    await page.goto("/runs");
-    const row = page.getByTestId("run-row").first();
+    await page.goto('/runs');
+    const row = page.getByTestId('run-row').first();
     await expect(row).toBeVisible();
     expect((await row.boundingBox())!.height).toBeLessThanOrEqual(48);
   });
 
-  test("settings: the tabs sit under the title; /sources lives under Settings › Sources", async ({ page }) => {
+  test('settings: the tabs sit under the title; /sources lives under Settings › Sources', async ({
+    page,
+  }) => {
     await login(page);
-    await page.goto("/settings/members");
+    await page.goto('/settings/members');
     // qa-settings-40: a Settings page is headed by its own name, the Settings tabs under it.
-    const heading = page.getByRole("heading", { level: 1, name: "Members" });
-    const nav = page.getByRole("navigation", { name: "Settings" });
+    const heading = page.getByRole('heading', { level: 1, name: 'Members' });
+    const nav = page.getByRole('navigation', { name: 'Settings' });
     await expect(heading).toBeVisible();
     await expect(nav).toBeVisible();
     const h1 = await heading.boundingBox();
     const tabs = await nav.boundingBox();
     expect(tabs!.y).toBeGreaterThanOrEqual(h1!.y + h1!.height - 1);
 
-    await page.goto("/sources");
-    await expect(nav.getByTestId("nav-sources")).toHaveAttribute("aria-current", "page");
-    await expect(page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings")).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    await page.goto('/sources');
+    await expect(nav.getByTestId('nav-sources')).toHaveAttribute('aria-current', 'page');
+    await expect(
+      page.getByRole('navigation', { name: 'Oracle' }).getByTestId('nav-settings'),
+    ).toHaveAttribute('aria-current', 'page');
   });
 });

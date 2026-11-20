@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import { useRouter } from "@/lib/nav";
+import { useRouter } from '@/lib/nav';
 
-import { SegmentedControl } from "@/components/ds";
-import type { VersionSummary } from "@/lib/api/client";
-import { formatDate } from "@/lib/format";
+import { SegmentedControl } from '@/components/ds';
+import type { VersionSummary } from '@/lib/api/client';
+import { formatDate } from '@/lib/format';
 
 /** Up to this many versions show as a segmented control; more as a select. */
 const MAX_SEGMENTS = 6;
@@ -18,19 +18,19 @@ export function VersionSwitcher({
   versions,
   current,
   hrefFor = (n) => `/documents/${doc}/v/${n}`,
-  label = "Version",
-  variant = "select",
+  label = 'Version',
+  variant = 'select',
 }: {
   doc: string;
   versions: VersionSummary[];
   current: number;
   hrefFor?: (n: number) => string;
   label?: string;
-  variant?: "select" | "segments";
+  variant?: 'select' | 'segments';
 }) {
   const router = useRouter();
   const latest = versions.at(-1)?.number;
-  if (variant === "segments" && versions.length <= MAX_SEGMENTS) {
+  if (variant === 'segments' && versions.length <= MAX_SEGMENTS) {
     return (
       <SegmentedControl
         label={label}
@@ -41,7 +41,7 @@ export function VersionSwitcher({
           label: (
             <span
               className="font-mono"
-              title={`v${v.number} · ${formatDate(v.created_at)}${v.approved_at ? " · approved" : v.number === latest ? " · latest" : ""}`}
+              title={`v${v.number} · ${formatDate(v.created_at)}${v.approved_at ? ' · approved' : v.number === latest ? ' · latest' : ''}`}
             >
               v{v.number}
             </span>
@@ -62,7 +62,7 @@ export function VersionSwitcher({
         {[...versions].reverse().map((v) => (
           <option key={v.number} value={v.number}>
             v{v.number} · {formatDate(v.created_at)}
-            {v.approved_at ? " · approved" : v.number === latest ? " · latest" : ""}
+            {v.approved_at ? ' · approved' : v.number === latest ? ' · latest' : ''}
           </option>
         ))}
       </select>

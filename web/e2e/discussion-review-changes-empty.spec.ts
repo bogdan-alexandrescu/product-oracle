@@ -1,7 +1,7 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
 
 /*
  * Inbox "Discussion · N changes proposed" rows lead to the changes they count, each with its
@@ -17,26 +17,33 @@ import { login } from "./helpers";
  * act on); no_claim=the API's rule (api/tests/test_discussion_inbox.py).
  */
 
-const APPROVER = "approver@example.com";
-const OPEN_TITLE = "F-12 Referral link: keep links for guests?";
-const CLOSED_TITLE = "Make “Weekly referral links” measurable";
+const APPROVER = 'approver@example.com';
+const OPEN_TITLE = 'F-12 Referral link: keep links for guests?';
+const CLOSED_TITLE = 'Make “Weekly referral links” measurable';
 
-const rowsOf = (page: Page) => page.getByTestId("inbox-tab-new").getByTestId("inbox-discussions").locator("tr[data-row]");
+const rowsOf = (page: Page) =>
+  page.getByTestId('inbox-tab-new').getByTestId('inbox-discussions').locator('tr[data-row]');
 
-test("every changes row leads to the changes it counts, and a closed discussion makes none", async ({ page }) => {
-  await page.addInitScript((key) => localStorage.setItem(key, "discussions"), MOCK_SCENARIO_KEY);
+test('every changes row leads to the changes it counts, and a closed discussion makes none', async ({
+  page,
+}) => {
+  await page.addInitScript((key) => localStorage.setItem(key, 'discussions'), MOCK_SCENARIO_KEY);
   await login(page, APPROVER);
-  await page.goto("/inbox");
+  await page.goto('/inbox');
   const open = rowsOf(page).filter({ hasText: `${OPEN_TITLE} · 2 changes proposed` });
   await expect(open).toBeVisible();
   // The closed interview's leftover versions are not counted: no row, nothing that cannot be cleared.
   await expect(rowsOf(page).filter({ hasText: CLOSED_TITLE })).toHaveCount(0);
   await expect(rowsOf(page).filter({ hasText: /changes? proposed/ })).toHaveCount(3);
 
-  await open.getByRole("link", { name: "Review changes" }).click();
+  await open.getByRole('link', { name: 'Review changes' }).click();
   await expect(page).toHaveURL(/\?discussion=[^&]+&changes=1/);
-  const card = page.getByTestId("discussion-thread").filter({ visible: true }).getByTestId("changes-card");
-  const changes = card.getByRole("list", { name: "Open changes" }).getByTestId("change-row");
+  const card = page
+    .getByTestId('discussion-thread')
+    .filter({ visible: true })
+    .getByTestId('changes-card');
+  const changes = card.getByRole('list', { name: 'Open changes' }).getByTestId('change-row');
   await expect(changes).toHaveCount(2);
-  for (const c of await changes.all()) await expect(c.getByTestId("change-actions").getByRole("button").first()).toBeEnabled();
+  for (const c of await changes.all())
+    await expect(c.getByTestId('change-actions').getByRole('button').first()).toBeEnabled();
 });

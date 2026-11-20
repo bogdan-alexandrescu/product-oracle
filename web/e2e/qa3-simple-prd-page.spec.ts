@@ -1,6 +1,6 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { ADMIN, login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { ADMIN, login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /*
  * QA pass 3 on the Simple PRD pages (qa-simple-prd-p3-1 ... 28), driven through the UI on the
@@ -12,240 +12,321 @@ import { expect, test, type Page } from "./test";
 const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
 
-async function plan(page: Page, scenario = "simple-plan", email: string = ADMIN.email) {
-  await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, scenario] as const);
+async function plan(page: Page, scenario = 'simple-plan', email: string = ADMIN.email) {
+  await page
+    .context()
+    .addInitScript(([key, value]) => localStorage.setItem(key, value), [
+      MOCK_SCENARIO_KEY,
+      scenario,
+    ] as const);
   await login(page, email);
-  await page.goto("/simple");
-  await page.locator('nav[aria-label="Simple"]:visible').getByRole("link", { name: "One-pagers" }).click();
-  await page.getByTestId("simple-one-pagers").getByRole("link", { name: "Guided setup" }).click();
+  await page.goto('/simple');
+  await page
+    .locator('nav[aria-label="Simple"]:visible')
+    .getByRole('link', { name: 'One-pagers' })
+    .click();
+  await page.getByTestId('simple-one-pagers').getByRole('link', { name: 'Guided setup' }).click();
   await expect(page).toHaveURL(/\/simple\/one-pagers\/guided-setup$/);
-  await expect(page.getByRole("region", { name: "Timeline" })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Timeline' })).toBeVisible();
 }
 
 async function paper(page: Page, email: string = ADMIN.email) {
   await login(page, email);
-  await page.goto("/simple/one-pagers");
-  await page.getByTestId("simple-one-pagers").getByRole("link", { name: "Referral link PRD" }).click();
-  await expect(page.getByRole("article", { name: "One-pager" })).toBeVisible();
+  await page.goto('/simple/one-pagers');
+  await page
+    .getByTestId('simple-one-pagers')
+    .getByRole('link', { name: 'Referral link PRD' })
+    .click();
+  await expect(page.getByRole('article', { name: 'One-pager' })).toBeVisible();
 }
 
 const line = (page: Page, id: string) => page.locator(`[data-line="${id}"]`);
-const afterHeight = (page: Page, sel: ReturnType<Page["locator"]>) => sel.evaluate((el) => parseFloat(getComputedStyle(el, "::after").height));
+const afterHeight = (page: Page, sel: ReturnType<Page['locator']>) =>
+  sel.evaluate((el) => parseFloat(getComputedStyle(el, '::after').height));
 
-test.describe("desktop, a plan", () => {
+test.describe('desktop, a plan', () => {
   test.use({ viewport: DESKTOP });
 
-  test("bars name their work; the picker and a bar bring the card into view, the bar's features marked (p3-3, 8, 9)", async ({ page }) => {
+  test("bars name their work; the picker and a bar bring the card into view, the bar's features marked (p3-3, 8, 9)", async ({
+    page,
+  }) => {
     await plan(page);
-    const tl = page.getByRole("region", { name: "Timeline" });
-    const bars = tl.getByTestId("timeline-bar");
+    const tl = page.getByRole('region', { name: 'Timeline' });
+    const bars = tl.getByTestId('timeline-bar');
     await expect(bars.first()).toBeVisible();
     for (const t of await bars.allTextContents()) {
-      expect(t, "a bar shows words, not only codes").not.toMatch(/^F-\d+[a-z]?( \+\d+)?$/);
+      expect(t, 'a bar shows words, not only codes').not.toMatch(/^F-\d+[a-z]?( \+\d+)?$/);
       expect(t).toMatch(/[A-Za-z]{3}/);
     }
-    const part = page.getByTestId("milestone-part");
-    await tl.getByRole("group", { name: "Milestones" }).getByRole("button", { name: /M2 Scale volume/ }).click();
-    await expect(part.getByRole("heading", { level: 2 })).toHaveText("M2 Scale volume");
-    await expect(part.getByRole("heading", { level: 2 })).toBeInViewport();
+    const part = page.getByTestId('milestone-part');
+    await tl
+      .getByRole('group', { name: 'Milestones' })
+      .getByRole('button', { name: /M2 Scale volume/ })
+      .click();
+    await expect(part.getByRole('heading', { level: 2 })).toHaveText('M2 Scale volume');
+    await expect(part.getByRole('heading', { level: 2 })).toBeInViewport();
     await page.evaluate(() => window.scrollTo(0, 0));
-    const m3 = tl.locator('[data-testid="timeline-bar"][data-milestone="M3"]').filter({ hasText: "+" }).first();
-    const held = (await m3.getAttribute("title"))!.split("\n").map((x) => x.split(" ")[0]);
+    const m3 = tl
+      .locator('[data-testid="timeline-bar"][data-milestone="M3"]')
+      .filter({ hasText: '+' })
+      .first();
+    const held = (await m3.getAttribute('title'))!.split('\n').map((x) => x.split(' ')[0]);
     await m3.click();
-    await expect(part.getByRole("heading", { level: 2 })).toHaveText("M3 Open to all");
+    await expect(part.getByRole('heading', { level: 2 })).toHaveText('M3 Open to all');
     const marked = part.locator('[data-marked="true"]');
     await expect(marked).toHaveCount(held.length);
     for (const code of held) await expect(marked.filter({ hasText: code })).toHaveCount(1);
   });
 
-  test("Q8 says whose decision it is; Q3 is late in one style everywhere (p3-10, 11)", async ({ page }) => {
+  test('Q8 says whose decision it is; Q3 is late in one style everywhere (p3-10, 11)', async ({
+    page,
+  }) => {
     await plan(page);
-    const tl = page.getByRole("region", { name: "Timeline" });
-    await expect(tl.getByTestId("timeline-decision").filter({ hasText: "Q8" })).toContainText("M2 decision, taken at the M1 review, Nov 27");
-    const q3 = tl.getByTestId("timeline-decision").filter({ hasText: "Q3" }).locator("small");
-    await expect(q3).toHaveText("was due Oct 20");
-    const card = page.getByTestId("part-decisions").getByRole("listitem").filter({ hasText: "Q3" }).getByText("was due Oct 20");
+    const tl = page.getByRole('region', { name: 'Timeline' });
+    await expect(tl.getByTestId('timeline-decision').filter({ hasText: 'Q8' })).toContainText(
+      'M2 decision, taken at the M1 review, Nov 27',
+    );
+    const q3 = tl.getByTestId('timeline-decision').filter({ hasText: 'Q3' }).locator('small');
+    await expect(q3).toHaveText('was due Oct 20');
+    const card = page
+      .getByTestId('part-decisions')
+      .getByRole('listitem')
+      .filter({ hasText: 'Q3' })
+      .getByText('was due Oct 20');
     const colour = (l: typeof q3) => l.evaluate((el) => getComputedStyle(el).color);
     expect(await colour(card)).toBe(await colour(q3));
   });
 
   test("the plan's words can be changed from the page (p3-4)", async ({ page }) => {
     await plan(page);
-    await expect(page.getByRole("button", { name: /^Edit “/ })).toHaveCount(0);
-    await page.getByRole("button", { name: "Edit the wording" }).click();
+    await expect(page.getByRole('button', { name: /^Edit “/ })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Edit the wording' }).click();
     await page.locator('[data-line="risks-1"]').hover();
-    await expect(page.getByRole("button", { name: /^Edit “Calendar access/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Edit “Calendar access/ })).toBeVisible();
   });
 
-  test("partly dated: every dated decision on the line, the plan not squeezed, and Read again names what is left (p3-5, 6, 7)", async ({ page }) => {
-    await plan(page, "simple-plan-partly-dated");
-    const tl = page.getByRole("region", { name: "Timeline" });
-    const ds = tl.getByTestId("timeline-decision");
-    await expect(ds.filter({ hasText: "Q7" })).toBeVisible();
-    await expect(ds.filter({ hasText: "Q8" })).toBeVisible();
-    const strip = (await tl.getByTestId("timeline-strip").boundingBox())!;
+  test('partly dated: every dated decision on the line, the plan not squeezed, and Read again names what is left (p3-5, 6, 7)', async ({
+    page,
+  }) => {
+    await plan(page, 'simple-plan-partly-dated');
+    const tl = page.getByRole('region', { name: 'Timeline' });
+    const ds = tl.getByTestId('timeline-decision');
+    await expect(ds.filter({ hasText: 'Q7' })).toBeVisible();
+    await expect(ds.filter({ hasText: 'Q8' })).toBeVisible();
+    const strip = (await tl.getByTestId('timeline-strip').boundingBox())!;
     const col = { x: strip.x + 300, w: strip.width - 300 };
-    const firstBar = Math.min(...(await tl.getByTestId("timeline-bar").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().x))));
+    const firstBar = Math.min(
+      ...(await tl
+        .getByTestId('timeline-bar')
+        .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().x))),
+    );
     expect((firstBar - col.x) / col.w).toBeLessThan(0.25);
-    const note = tl.getByTestId("timeline-no-dates");
-    await note.getByRole("button", { name: "Read the plan again" }).click();
-    await expect(note.getByRole("status")).toHaveText("Read again: M2 and M3 still have no dates.");
+    const note = tl.getByTestId('timeline-no-dates');
+    await note.getByRole('button', { name: 'Read the plan again' }).click();
+    await expect(note.getByRole('status')).toHaveText('Read again: M2 and M3 still have no dates.');
   });
 
-  test("no dates: no zero counts, 'No dates yet' once, the note above the list (p3-12, 13)", async ({ page }) => {
-    await plan(page, "simple-plan-undated");
-    const part = page.getByTestId("milestone-part");
-    await expect(part.getByTestId("part-builds")).not.toContainText("0 features");
+  test("no dates: no zero counts, 'No dates yet' once, the note above the list (p3-12, 13)", async ({
+    page,
+  }) => {
+    await plan(page, 'simple-plan-undated');
+    const part = page.getByTestId('milestone-part');
+    await expect(part.getByTestId('part-builds')).not.toContainText('0 features');
     expect((await part.innerText()).match(/No dates yet/g)?.length).toBe(1);
-    const tl = page.getByRole("region", { name: "Timeline" });
-    const note = (await tl.getByTestId("timeline-no-dates").boundingBox())!;
-    const list = (await tl.getByTestId("timeline-undated-milestone").first().boundingBox())!;
+    const tl = page.getByRole('region', { name: 'Timeline' });
+    const note = (await tl.getByTestId('timeline-no-dates').boundingBox())!;
+    const list = (await tl.getByTestId('timeline-undated-milestone').first().boundingBox())!;
     expect(note.y).toBeLessThan(list.y);
     // Q3 is overdue in the list as it is in the card.
-    await expect(tl.getByTestId("timeline-undated-milestone").first()).toContainText("was due Oct 20");
+    await expect(tl.getByTestId('timeline-undated-milestone').first()).toContainText(
+      'was due Oct 20',
+    );
   });
 });
 
-test.describe("phone, a plan", () => {
+test.describe('phone, a plan', () => {
   test.use({ viewport: PHONE });
 
-  test("no dates: the note first, links without zero counts, tap areas of 44 px (p3-12, 13, 21)", async ({ page }) => {
-    await plan(page, "simple-plan-undated");
-    const tl = page.getByRole("region", { name: "Timeline" });
-    const note = (await tl.getByTestId("timeline-no-dates").boundingBox())!;
-    const first = (await tl.getByTestId("timeline-step").first().boundingBox())!;
+  test('no dates: the note first, links without zero counts, tap areas of 44 px (p3-12, 13, 21)', async ({
+    page,
+  }) => {
+    await plan(page, 'simple-plan-undated');
+    const tl = page.getByRole('region', { name: 'Timeline' });
+    const note = (await tl.getByTestId('timeline-no-dates').boundingBox())!;
+    const first = (await tl.getByTestId('timeline-step').first().boundingBox())!;
     expect(note.y).toBeLessThan(first.y);
-    const link = tl.getByTestId("timeline-step").first().getByRole("link");
+    const link = tl.getByTestId('timeline-step').first().getByRole('link');
     await expect(link).not.toContainText(/\b0 (features|flows)/);
     expect(await afterHeight(page, link)).toBeGreaterThanOrEqual(44);
-    expect(await afterHeight(page, page.getByRole("link", { name: "Open in Detailed" }).first())).toBeGreaterThanOrEqual(44);
+    expect(
+      await afterHeight(page, page.getByRole('link', { name: 'Open in Detailed' }).first()),
+    ).toBeGreaterThanOrEqual(44);
   });
 
-  test("counts, dates and engineer-weeks stay together (p3-20, 21)", async ({ page }) => {
+  test('counts, dates and engineer-weeks stay together (p3-20, 21)', async ({ page }) => {
     await plan(page);
-    const part = page.getByTestId("milestone-part");
-    const pm = part.locator("h4").filter({ hasText: /Product manager/i });
-    if (await pm.count()) await expect(pm.first().getByTestId("kind-tail")).toHaveText(/^engineering · \d$/i);
-    const dates = part.getByTestId("part-dates");
-    const keep = await dates.locator("span.whitespace-nowrap").allTextContents();
+    const part = page.getByTestId('milestone-part');
+    const pm = part.locator('h4').filter({ hasText: /Product manager/i });
+    if (await pm.count())
+      await expect(pm.first().getByTestId('kind-tail')).toHaveText(/^engineering · \d$/i);
+    const dates = part.getByTestId('part-dates');
+    const keep = await dates.locator('span.whitespace-nowrap').allTextContents();
     expect(keep.some((t) => /engineer-weeks/.test(t))).toBe(true);
-    const flowBelow = part.getByRole("button", { name: "flow below" }).first();
-    if (await flowBelow.count()) expect(await afterHeight(page, flowBelow)).toBeGreaterThanOrEqual(44);
+    const flowBelow = part.getByRole('button', { name: 'flow below' }).first();
+    if (await flowBelow.count())
+      expect(await afterHeight(page, flowBelow)).toBeGreaterThanOrEqual(44);
   });
 });
 
-test.describe("desktop, no plan", () => {
+test.describe('desktop, no plan', () => {
   test.use({ viewport: DESKTOP });
 
-  test("the editor takes the cursor; Escape and Ctrl+Enter; an empty line says why (p3-2, 27)", async ({ page }) => {
+  test('the editor takes the cursor; Escape and Ctrl+Enter; an empty line says why (p3-2, 27)', async ({
+    page,
+  }) => {
     await paper(page);
-    await line(page, "not_doing-2").hover();
-    await page.getByRole("button", { name: "Edit “Paying admins for each new" }).click();
-    const box = page.getByLabel("New wording for");
+    await line(page, 'not_doing-2').hover();
+    await page.getByRole('button', { name: 'Edit “Paying admins for each new' }).click();
+    const box = page.getByLabel('New wording for');
     await expect(box).toBeFocused();
-    expect(await box.evaluate((el: HTMLTextAreaElement) => el.selectionEnd - el.selectionStart)).toBe("Paying admins for each new team.".length);
-    await page.keyboard.press("Escape");
+    expect(
+      await box.evaluate((el: HTMLTextAreaElement) => el.selectionEnd - el.selectionStart),
+    ).toBe('Paying admins for each new team.'.length);
+    await page.keyboard.press('Escape');
     await expect(box).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Edit “Paying admins for each new" })).toBeFocused();
-    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole('button', { name: 'Edit “Paying admins for each new' }),
+    ).toBeFocused();
+    await page.keyboard.press('Enter');
     await expect(box).toBeFocused();
-    await box.fill("");
-    await expect(page.getByTestId("line-edit-empty")).toContainText("A line needs words");
-    await box.fill("Paying admins for a partner team.");
-    await page.keyboard.press("Control+Enter");
-    await expect(line(page, "not_doing-2")).toHaveAttribute("data-state", "edited");
+    await box.fill('');
+    await expect(page.getByTestId('line-edit-empty')).toContainText('A line needs words');
+    await box.fill('Paying admins for a partner team.');
+    await page.keyboard.press('Control+Enter');
+    await expect(line(page, 'not_doing-2')).toHaveAttribute('data-state', 'edited');
   });
 
-  test("pointing at a line moves no words; its sources mark the line (p3-25, 26)", async ({ page }) => {
+  test('pointing at a line moves no words; its sources mark the line (p3-25, 26)', async ({
+    page,
+  }) => {
     await paper(page);
-    const text = line(page, "problem-1").getByTestId("one-pager-line-text");
+    const text = line(page, 'problem-1').getByTestId('one-pager-line-text');
     const before = (await text.boundingBox())!.width;
     await text.hover();
-    await expect(page.getByRole("button", { name: /^Edit “Admins tell other teams/ })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: /^Edit “Admins tell other teams/ }),
+    ).toBeVisible();
     expect((await text.boundingBox())!.width).toBe(before);
-    await page.getByRole("button", { name: /Too many emails: one email per new team/ }).click();
-    const sources = page.getByRole("region", { name: /Sources of “Too many emails/ });
-    await expect(sources.getByTestId("source-line")).toHaveText("Too many emails: one email per new team, never more.");
+    await page.getByRole('button', { name: /Too many emails: one email per new team/ }).click();
+    const sources = page.getByRole('region', { name: /Sources of “Too many emails/ });
+    await expect(sources.getByTestId('source-line')).toHaveText(
+      'Too many emails: one email per new team, never more.',
+    );
   });
 
-  test("the same header as a plan's, its status as the list's; the strip's legend (p3-16, 15)", async ({ page }) => {
+  test("the same header as a plan's, its status as the list's; the strip's legend (p3-16, 15)", async ({
+    page,
+  }) => {
     await login(page);
-    await page.goto("/simple/one-pagers");
-    const row = page.getByTestId("one-pager-row").filter({ hasText: "Team invites PRD" });
-    await expect(row).toContainText("In review");
-    const listed = "In review";
-    await row.getByRole("link", { name: "Team invites PRD" }).click();
-    await expect(page.getByRole("heading", { level: 1, name: "Team invites PRD" })).toBeVisible();
-    await expect(page.getByRole("article", { name: "One-pager" }).getByRole("heading", { level: 1 })).toHaveCount(0);
-    await expect(page.getByTestId("one-pager-meta")).toContainText(listed);
-    await expect(page.getByTestId("one-pager-meta").locator("b").filter({ hasText: /\S/ }).first()).toBeVisible();
+    await page.goto('/simple/one-pagers');
+    const row = page.getByTestId('one-pager-row').filter({ hasText: 'Team invites PRD' });
+    await expect(row).toContainText('In review');
+    const listed = 'In review';
+    await row.getByRole('link', { name: 'Team invites PRD' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Team invites PRD' })).toBeVisible();
+    await expect(
+      page.getByRole('article', { name: 'One-pager' }).getByRole('heading', { level: 1 }),
+    ).toHaveCount(0);
+    await expect(page.getByTestId('one-pager-meta')).toContainText(listed);
+    await expect(
+      page.getByTestId('one-pager-meta').locator('b').filter({ hasText: /\S/ }).first(),
+    ).toBeVisible();
     // C-13: Team invites has no roadmap slice of its own; Guided setup's strip has the legend.
-    await page.goto("/simple/one-pagers/guided-setup");
-    const legend = page.getByTestId("plan-strip-legend");
-    await expect(legend).toContainText("Today Oct 22");
-    await expect(legend).toContainText("hatched = not confirmed");
-    await expect(legend).toContainText("milestone end");
-    await expect(page.getByLabel("Timeline strip")).toContainText("12 roadmap items");
+    await page.goto('/simple/one-pagers/guided-setup');
+    const legend = page.getByTestId('plan-strip-legend');
+    await expect(legend).toContainText('Today Oct 22');
+    await expect(legend).toContainText('hatched = not confirmed');
+    await expect(legend).toContainText('milestone end');
+    await expect(page.getByLabel('Timeline strip')).toContainText('12 roadmap items');
   });
 
   // qa4-simple-prd-26: a viewer has no Start review, so a commenter (who may not start one) reads the reason.
-  test("a commenter's header: four actions alike, the reason under Start review (p3-28)", async ({ page }) => {
-    await paper(page, "commenter@example.com");
-    const present = page.getByRole("button", { name: "Present" });
-    const detailed = page.getByRole("link", { name: "Open in Detailed" }).first();
-    const style = (l: typeof present) => l.evaluate((el) => { const s = getComputedStyle(el); return [s.borderTopWidth, s.borderTopStyle, s.textDecorationLine, s.minHeight].join(" "); });
+  test("a commenter's header: four actions alike, the reason under Start review (p3-28)", async ({
+    page,
+  }) => {
+    await paper(page, 'commenter@example.com');
+    const present = page.getByRole('button', { name: 'Present' });
+    const detailed = page.getByRole('link', { name: 'Open in Detailed' }).first();
+    const style = (l: typeof present) =>
+      l.evaluate((el) => {
+        const s = getComputedStyle(el);
+        return [s.borderTopWidth, s.borderTopStyle, s.textDecorationLine, s.minHeight].join(' ');
+      });
     expect(await style(detailed)).toBe(await style(present));
-    const start = (await page.getByRole("button", { name: "Start a review meeting" }).boundingBox())!;
-    const why = (await page.getByTestId("start-review-why").boundingBox())!;
+    const start = (await page
+      .getByRole('button', { name: 'Start a review meeting' })
+      .boundingBox())!;
+    const why = (await page.getByTestId('start-review-why').boundingBox())!;
     expect(why.y).toBeGreaterThanOrEqual(start.y + start.height);
   });
 
   test("a commenter's own proposal is theirs, and withdrawn (p3-17)", async ({ page }) => {
-    await paper(page, "commenter@example.com");
-    await line(page, "not_doing-1").hover();
-    await page.getByRole("button", { name: "Propose wording for “Links for guests without" }).click();
-    await page.getByLabel("New wording for").fill("Links for guests, later.");
-    await page.getByRole("button", { name: "Propose", exact: true }).click();
-    const note = page.getByRole("note").filter({ hasText: "You proposed new wording for “Links for guests without" }).filter({ visible: true });
+    await paper(page, 'commenter@example.com');
+    await line(page, 'not_doing-1').hover();
+    await page
+      .getByRole('button', { name: 'Propose wording for “Links for guests without' })
+      .click();
+    await page.getByLabel('New wording for').fill('Links for guests, later.');
+    await page.getByRole('button', { name: 'Propose', exact: true }).click();
+    const note = page
+      .getByRole('note')
+      .filter({ hasText: 'You proposed new wording for “Links for guests without' })
+      .filter({ visible: true });
     await expect(note).toBeVisible();
-    await expect(note).not.toContainText("Theo Brandt proposes");
-    await note.getByRole("button", { name: "Withdraw" }).click();
-    await expect(page.getByRole("note").filter({ hasText: "Links for guests without" })).toHaveCount(0);
+    await expect(note).not.toContainText('Theo Brandt proposes');
+    await note.getByRole('button', { name: 'Withdraw' }).click();
+    await expect(
+      page.getByRole('note').filter({ hasText: 'Links for guests without' }),
+    ).toHaveCount(0);
   });
 
-  test("presenting keeps focus on the page, and Escape stops it (p3-18, 19)", async ({ page }) => {
+  test('presenting keeps focus on the page, and Escape stops it (p3-18, 19)', async ({ page }) => {
     await paper(page);
     // Where full screen is refused (an iPhone's Safari), presenting still starts and Escape ends it.
     await page.evaluate(() => {
-      document.documentElement.requestFullscreen = () => Promise.reject(new Error("refused"));
+      document.documentElement.requestFullscreen = () => Promise.reject(new Error('refused'));
     });
-    await page.getByRole("button", { name: "Present" }).click();
-    const stop = page.getByRole("button", { name: "Stop presenting" });
+    await page.getByRole('button', { name: 'Present' }).click();
+    const stop = page.getByRole('button', { name: 'Stop presenting' });
     await stop.focus();
     for (let i = 0; i < 6; i++) {
-      await page.keyboard.press("Shift+Tab");
-      expect(await page.evaluate(() => !!document.activeElement?.closest('[data-testid="one-pager"]'))).toBe(true);
+      await page.keyboard.press('Shift+Tab');
+      expect(
+        await page.evaluate(() => !!document.activeElement?.closest('[data-testid="one-pager"]')),
+      ).toBe(true);
     }
-    await expect(page.getByTestId("one-pager")).toHaveAttribute("data-presenting", "true");
-    await page.keyboard.press("Escape");
-    await expect(page.getByTestId("one-pager")).not.toHaveAttribute("data-presenting", "true");
-    await expect(page.locator("[inert]")).toHaveCount(0);
+    await expect(page.getByTestId('one-pager')).toHaveAttribute('data-presenting', 'true');
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('one-pager')).not.toHaveAttribute('data-presenting', 'true');
+    await expect(page.locator('[inert]')).toHaveCount(0);
   });
 });
 
-test.describe("phone, no plan", () => {
+test.describe('phone, no plan', () => {
   test.use({ viewport: PHONE, hasTouch: true });
 
-  test("a touch on a line's hidden Edit opens nothing; it shows the Edit (p3-1)", async ({ page }) => {
+  test("a touch on a line's hidden Edit opens nothing; it shows the Edit (p3-1)", async ({
+    page,
+  }) => {
     await paper(page);
     // A line long enough to run under its hidden Edit (a Referral link risk).
-    const row = line(page, "risks-4");
+    const row = line(page, 'risks-4');
     await row.scrollIntoViewIfNeeded();
-    const b = (await row.getByTestId("one-pager-line-text").boundingBox())!;
-    const e = (await row.locator("[data-edit-for]").boundingBox())!;
+    const b = (await row.getByTestId('one-pager-line-text').boundingBox())!;
+    const e = (await row.locator('[data-edit-for]').boundingBox())!;
     expect(e.x).toBeLessThan(b.x + b.width);
     await page.touchscreen.tap(e.x + e.width / 2, e.y + e.height / 2);
-    await expect(page.getByLabel("New wording for")).toHaveCount(0);
-    await expect(row.locator("[data-edit-for]")).toHaveCSS("opacity", "1");
+    await expect(page.getByLabel('New wording for')).toHaveCount(0);
+    await expect(row.locator('[data-edit-for]')).toHaveCSS('opacity', '1');
   });
 });

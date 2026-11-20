@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { login } from "./helpers";
+import { login } from './helpers';
 
 /**
  * Visual QA pass A (Settings, Company and failed loads), driven through the UI on the mock
@@ -11,57 +11,67 @@ import { login } from "./helpers";
  */
 
 const PHONE = { width: 390, height: 844 };
-const VIEWER = "viewer@example.com";
-const COMMENTER = "commenter@example.com";
-const APPROVER = "approver@example.com";
+const VIEWER = 'viewer@example.com';
+const COMMENTER = 'commenter@example.com';
+const APPROVER = 'approver@example.com';
 
 async function failGets(page: Page, path: string) {
-  await page.evaluate((p) => localStorage.setItem("po-mock-fail", p), path);
+  await page.evaluate((p) => localStorage.setItem('po-mock-fail', p), path);
 }
 
 async function stopFailing(page: Page) {
-  await page.evaluate(() => localStorage.removeItem("po-mock-fail"));
+  await page.evaluate(() => localStorage.removeItem('po-mock-fail'));
 }
 
 async function openSources(page: Page) {
-  await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
-  await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-sources").click();
+  await page.getByRole('navigation', { name: 'Oracle' }).getByTestId('nav-settings').click();
+  await page.getByRole('navigation', { name: 'Settings' }).getByTestId('nav-sources').click();
   await expect(page).toHaveURL(/\/settings\/sources$/);
-  await expect(page.getByRole("list", { name: "My sources" })).toBeVisible();
+  await expect(page.getByRole('list', { name: 'My sources' })).toBeVisible();
 }
 
 test("ST-1: a viewer's Sources page says View only and has no write controls", async ({ page }) => {
   await login(page, VIEWER);
   await openSources(page);
-  await expect(page.locator('main [data-testid="view-only"]:visible')).toHaveText("View only");
-  const main = page.getByRole("main");
-  for (const name of ["Add a source", "Sync now", "Pause", "Resume", "Upload files", "Map the code", "Use"]) {
-    await expect(main.getByRole("button", { name, exact: true })).toHaveCount(0);
+  await expect(page.locator('main [data-testid="view-only"]:visible')).toHaveText('View only');
+  const main = page.getByRole('main');
+  for (const name of [
+    'Add a source',
+    'Sync now',
+    'Pause',
+    'Resume',
+    'Upload files',
+    'Map the code',
+    'Use',
+  ]) {
+    await expect(main.getByRole('button', { name, exact: true })).toHaveCount(0);
   }
-  await expect(main.getByTestId("source-reconnect")).toHaveCount(0);
-  await expect(main.getByRole("form", { name: "Add a source" })).toHaveCount(0);
+  await expect(main.getByTestId('source-reconnect')).toHaveCount(0);
+  await expect(main.getByRole('form', { name: 'Add a source' })).toHaveCount(0);
   // Coverage is a read: it stays in the row's menu, without Delete or Edit.
-  await main.getByRole("button", { name: "More actions for Legacy all-hands chat" }).click();
-  await expect(page.getByRole("menuitem", { name: "Coverage" })).toBeVisible();
-  await expect(page.getByRole("menuitem", { name: "Delete" })).toHaveCount(0);
-  await expect(page.getByRole("menuitem", { name: /^Edit / })).toHaveCount(0);
+  await main.getByRole('button', { name: 'More actions for Legacy all-hands chat' }).click();
+  await expect(page.getByRole('menuitem', { name: 'Coverage' })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Delete' })).toHaveCount(0);
+  await expect(page.getByRole('menuitem', { name: /^Edit / })).toHaveCount(0);
 });
 
-test("ST-1: a commenter adds a source but changes none (owner 2026-11-10), and no View only", async ({ page }) => {
+test('ST-1: a commenter adds a source but changes none (owner 2026-11-10), and no View only', async ({
+  page,
+}) => {
   await login(page, COMMENTER);
   await openSources(page);
-  await expect(page.getByRole("button", { name: "Add a source" })).toBeVisible();
-  await expect(page.getByRole("main").getByRole("button", { name: "Sync now" })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Add a source' })).toBeVisible();
+  await expect(page.getByRole('main').getByRole('button', { name: 'Sync now' })).toHaveCount(0);
   await expect(page.locator('[data-testid="view-only"]:visible')).toHaveCount(0);
 });
 
 test("ST-5: on a phone a token's card shows its scopes under who it acts for", async ({ page }) => {
   await page.setViewportSize(PHONE);
   await login(page);
-  await page.goto("/settings/api-tokens");
-  const row = page.getByTestId("token-row").filter({ hasText: "laptop cli" });
+  await page.goto('/settings/api-tokens');
+  const row = page.getByTestId('token-row').filter({ hasText: 'laptop cli' });
   await expect(row).toBeVisible();
-  const scopes = row.getByTestId("token-scopes");
+  const scopes = row.getByTestId('token-scopes');
   await expect(scopes).toBeVisible();
   const forBox = await row.getByText(/^For /).boundingBox();
   const scopesBox = await scopes.boundingBox();
@@ -69,165 +79,198 @@ test("ST-5: on a phone a token's card shows its scopes under who it acts for", a
 });
 
 for (const [who, email] of [
-  ["a commenter", COMMENTER],
-  ["a viewer", VIEWER],
+  ['a commenter', COMMENTER],
+  ['a viewer', VIEWER],
 ] as const) {
-  test(`ST-6: on a phone the page picker names Analytics for ${who}, not Choose a page`, async ({ page }) => {
+  test(`ST-6: on a phone the page picker names Analytics for ${who}, not Choose a page`, async ({
+    page,
+  }) => {
     await page.setViewportSize(PHONE);
     await login(page, email);
-    await page.goto("/settings/analytics");
-    const picker = page.getByTestId("settings-nav-select");
-    await expect(picker.locator("option:checked")).toHaveText("Analytics");
-    await expect(picker.locator("option", { hasText: "Choose a page" })).toHaveCount(0);
+    await page.goto('/settings/analytics');
+    const picker = page.getByTestId('settings-nav-select');
+    await expect(picker.locator('option:checked')).toHaveText('Analytics');
+    await expect(picker.locator('option', { hasText: 'Choose a page' })).toHaveCount(0);
   });
 }
 
-test("ST-7: a source over the channel cap says what to do in plain words", async ({ page }) => {
+test('ST-7: a source over the channel cap says what to do in plain words', async ({ page }) => {
   await login(page);
-  await page.goto("/settings/sources");
-  const row = page.getByRole("listitem", { name: "Legacy all-hands chat" });
-  await expect(row.getByTestId("last-error")).toHaveText("Pick 100 channels or fewer, then it syncs again");
+  await page.goto('/settings/sources');
+  const row = page.getByRole('listitem', { name: 'Legacy all-hands chat' });
+  await expect(row.getByTestId('last-error')).toHaveText(
+    'Pick 100 channels or fewer, then it syncs again',
+  );
 });
 
-test("ST-7: a viewer reads the role that can fix a source over the channel cap, with no Edit", async ({ page }) => {
+test('ST-7: a viewer reads the role that can fix a source over the channel cap, with no Edit', async ({
+  page,
+}) => {
   await login(page, VIEWER);
   await openSources(page);
-  const row = page.getByRole("listitem", { name: "Legacy all-hands chat" });
+  const row = page.getByRole('listitem', { name: 'Legacy all-hands chat' });
   // Review r2 of PR 1286: a viewer edits no source, its own either; editing needs an approver or owner (owner 2026-11-10).
-  await expect(row.getByTestId("last-error")).toHaveText(
-    "Over 100 channels: your role cannot edit sources; an approver or owner can. Ask an owner to raise your role.",
+  await expect(row.getByTestId('last-error')).toHaveText(
+    'Over 100 channels: your role cannot edit sources; an approver or owner can. Ask an owner to raise your role.',
   );
-  await expect(row.getByRole("button", { name: "Edit Legacy all-hands chat" })).toHaveCount(0);
+  await expect(row.getByRole('button', { name: 'Edit Legacy all-hands chat' })).toHaveCount(0);
 });
 
-test("ST-7: a source refused for any other cause names the edit to make", async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "source-refused-order"));
+test('ST-7: a source refused for any other cause names the edit to make', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('po-mock-scenario', 'source-refused-order'));
   await login(page);
-  await page.goto("/settings/sources");
-  const row = page.getByRole("listitem", { name: "Legacy all-hands chat" });
-  await row.getByRole("button", { name: "Sync now" }).click();
+  await page.goto('/settings/sources');
+  const row = page.getByRole('listitem', { name: 'Legacy all-hands chat' });
+  await row.getByRole('button', { name: 'Sync now' }).click();
   // Review r2 of PR 1286: plain words, one sentence each, no keys.
-  await expect(row.getByTestId("last-error")).toHaveText("The end date must be on or after the start date. Edit this source to sync it again.");
+  await expect(row.getByTestId('last-error')).toHaveText(
+    'The end date must be on or after the start date. Edit this source to sync it again.',
+  );
 });
 
-test("ST-7: Map the code and the Analytics title each have an (i)", async ({ page }) => {
+test('ST-7: Map the code and the Analytics title each have an (i)', async ({ page }) => {
   await login(page);
-  await page.goto("/settings/sources");
-  const line = page.getByRole("listitem", { name: "Example repo" }).getByTestId("code-map-example-org/example-app");
-  await expect(line.getByRole("button", { name: "Map the code" })).toBeVisible();
-  const tip = line.getByRole("button", { name: "About code maps" });
+  await page.goto('/settings/sources');
+  const line = page
+    .getByRole('listitem', { name: 'Example repo' })
+    .getByTestId('code-map-example-org/example-app');
+  await expect(line.getByRole('button', { name: 'Map the code' })).toBeVisible();
+  const tip = line.getByRole('button', { name: 'About code maps' });
   await tip.click();
   // Plain words: what it is and what Oracle does with it.
-  await expect(line.getByRole("tooltip")).toHaveText(
+  await expect(line.getByRole('tooltip')).toHaveText(
     "Oracle's short guide to a repository: its parts and where things live. Oracle reads it before changing the code.",
   );
-  await page.goto("/settings/analytics");
-  await expect(page.getByRole("heading", { level: 1, name: "Analytics" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "About analytics" })).toBeVisible();
+  await page.goto('/settings/analytics');
+  await expect(page.getByRole('heading', { level: 1, name: 'Analytics' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'About analytics' })).toBeVisible();
 });
 
-test("ST-7: for a viewer on a phone the code map's (i) sits beside the repository's name", async ({ page }) => {
+test("ST-7: for a viewer on a phone the code map's (i) sits beside the repository's name", async ({
+  page,
+}) => {
   await page.setViewportSize(PHONE);
   await login(page, VIEWER);
-  await page.goto("/settings/sources");
-  const line = page.getByRole("listitem", { name: "Example repo" }).getByTestId("code-map-example-org/example-app");
-  const name = await line.getByTestId("code-map-repo").boundingBox();
-  const tip = await line.getByRole("button", { name: "About code maps" }).boundingBox();
+  await page.goto('/settings/sources');
+  const line = page
+    .getByRole('listitem', { name: 'Example repo' })
+    .getByTestId('code-map-example-org/example-app');
+  const name = await line.getByTestId('code-map-repo').boundingBox();
+  const tip = await line.getByRole('button', { name: 'About code maps' }).boundingBox();
   expect(name && tip).toBeTruthy();
   // Right after the name, on its line, not pushed to the row's far end.
   expect(tip!.x - (name!.x + name!.width)).toBeLessThan(12);
   expect(Math.abs(tip!.y + tip!.height / 2 - (name!.y + name!.height / 2))).toBeLessThan(8);
 });
 
-test("CO-1: in a large company every decision number shows whole", async ({ page }) => {
+test('CO-1: in a large company every decision number shows whole', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "large"));
+  await page.addInitScript(() => localStorage.setItem('po-mock-scenario', 'large'));
   await login(page, APPROVER);
-  await page.goto("/company/decisions");
-  await page.getByRole("group", { name: "State" }).getByRole("button", { name: /^Any state/ }).click();
-  const refs = page.getByTestId("decision-ref");
+  await page.goto('/company/decisions');
+  await page
+    .getByRole('group', { name: 'State' })
+    .getByRole('button', { name: /^Any state/ })
+    .click();
+  const refs = page.getByTestId('decision-ref');
   await expect(refs).toHaveCount(200);
   // The widest number the 84px column is sized for, whole on its line.
   const widest = refs.filter({ hasText: /^D-9999$/ });
   await expect(widest).toHaveCount(1);
   const box = await widest.boundingBox();
-  const cell = await widest.locator("xpath=..").boundingBox();
+  const cell = await widest.locator('xpath=..').boundingBox();
   expect(box && cell && box.width <= cell.width && box.height < 24).toBe(true);
-  const cut = await refs.evaluateAll((els) =>
-    els.filter((el) => el.scrollWidth > el.clientWidth + 1 || (el.parentElement?.scrollWidth ?? 0) > (el.parentElement?.clientWidth ?? 0) + 1).length,
+  const cut = await refs.evaluateAll(
+    (els) =>
+      els.filter(
+        (el) =>
+          el.scrollWidth > el.clientWidth + 1 ||
+          (el.parentElement?.scrollWidth ?? 0) > (el.parentElement?.clientWidth ?? 0) + 1,
+      ).length,
   );
   expect(cut).toBe(0);
 });
 
-test("CO-2: an empty Updates list says so in one line, with the header's New update for an owner", async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "empty"));
+test("CO-2: an empty Updates list says so in one line, with the header's New update for an owner", async ({
+  page,
+}) => {
+  await page.addInitScript(() => localStorage.setItem('po-mock-scenario', 'empty'));
   await login(page);
-  await page.goto("/company/updates");
-  const empty = page.getByTestId("updates-empty");
-  await expect(empty).toContainText("No updates yet");
+  await page.goto('/company/updates');
+  const empty = page.getByTestId('updates-empty');
+  await expect(empty).toContainText('No updates yet');
   // One action, one name: the empty state's button reads as the header's.
-  await expect(page.getByRole("button", { name: "Write an update" })).toHaveCount(0);
-  await empty.getByRole("button", { name: "New update" }).click();
-  await expect(page.getByRole("dialog", { name: "New update" })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Write an update' })).toHaveCount(0);
+  await empty.getByRole('button', { name: 'New update' }).click();
+  await expect(page.getByRole('dialog', { name: 'New update' })).toBeVisible();
 });
 
 test("CO-2: on a phone the empty Updates list's button reads as the header's", async ({ page }) => {
   await page.setViewportSize(PHONE);
-  await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "empty"));
+  await page.addInitScript(() => localStorage.setItem('po-mock-scenario', 'empty'));
   await login(page);
-  await page.goto("/company/updates");
-  const header = page.getByTestId("company-action").getByRole("button", { name: "New update" });
-  const empty = page.getByTestId("updates-empty").getByRole("button", { name: "New update" });
+  await page.goto('/company/updates');
+  const header = page.getByTestId('company-action').getByRole('button', { name: 'New update' });
+  const empty = page.getByTestId('updates-empty').getByRole('button', { name: 'New update' });
   await expect(header).toBeVisible();
   await expect(empty).toHaveText((await header.innerText()).trim(), { useInnerText: true });
 });
 
-const FAILED: { name: string; path: string; url: string; what: string; after: (p: Page) => Promise<void> }[] = [
+const FAILED: {
+  name: string;
+  path: string;
+  url: string;
+  what: string;
+  after: (p: Page) => Promise<void>;
+}[] = [
   {
-    name: "Requests",
-    path: "/v1/requests",
-    url: "/requests",
-    what: "Could not load the requests.",
-    after: (p) => expect(p.getByTestId("request-filters")).toBeVisible(),
+    name: 'Requests',
+    path: '/v1/requests',
+    url: '/requests',
+    what: 'Could not load the requests.',
+    after: (p) => expect(p.getByTestId('request-filters')).toBeVisible(),
   },
   {
-    name: "Ground Truth",
-    path: "/v1/baseline/graph",
-    url: "/ground-truth",
-    what: "Could not load the Ground Truth.",
-    after: (p) => expect(p.getByRole("tab").first()).toBeVisible(),
+    name: 'Ground Truth',
+    path: '/v1/baseline/graph',
+    url: '/ground-truth',
+    what: 'Could not load the Ground Truth.',
+    after: (p) => expect(p.getByRole('tab').first()).toBeVisible(),
   },
   {
-    name: "Company › Strategy",
-    path: "/v1/strategy/stack",
-    url: "/company/strategy",
-    what: "Could not load the strategy.",
-    after: (p) => expect(p.getByRole("heading", { name: "Strategy stack", exact: true })).toBeVisible(),
+    name: 'Company › Strategy',
+    path: '/v1/strategy/stack',
+    url: '/company/strategy',
+    what: 'Could not load the strategy.',
+    after: (p) =>
+      expect(p.getByRole('heading', { name: 'Strategy stack', exact: true })).toBeVisible(),
   },
   {
-    name: "Settings › Members",
-    path: "/v1/members",
-    url: "/settings/members",
-    what: "Could not load the members.",
-    after: (p) => expect(p.getByRole("table", { name: "Members" })).toBeVisible(),
+    name: 'Settings › Members',
+    path: '/v1/members',
+    url: '/settings/members',
+    what: 'Could not load the members.',
+    after: (p) => expect(p.getByRole('table', { name: 'Members' })).toBeVisible(),
   },
 ];
 
 for (const f of FAILED) {
-  test(`X-1: ${f.name} that fails to load says so, keeps the server's words behind an (i), and Try again loads it`, async ({ page }) => {
+  test(`X-1: ${f.name} that fails to load says so, keeps the server's words behind an (i), and Try again loads it`, async ({
+    page,
+  }) => {
     await login(page);
     await failGets(page, f.path);
     await page.goto(f.url);
-    const notice = page.getByTestId("load-error");
+    const notice = page.getByTestId('load-error');
     await expect(notice).toContainText(f.what);
     // The server's own words are behind the (i), not in the bar.
-    await expect(notice.getByText("Mock failure")).toBeHidden();
-    await notice.getByRole("button", { name: "About the error" }).click();
-    await expect(notice.getByRole("tooltip")).toContainText("Mock failure");
-    await expect(page.getByTestId("load-error")).toHaveCount(1);
+    await expect(notice.getByText('Mock failure')).toBeHidden();
+    await notice.getByRole('button', { name: 'About the error' }).click();
+    await expect(notice.getByRole('tooltip')).toContainText('Mock failure');
+    await expect(page.getByTestId('load-error')).toHaveCount(1);
     await stopFailing(page);
-    await notice.getByRole("button", { name: "Try again" }).click();
-    await expect(page.getByTestId("load-error")).toHaveCount(0);
+    await notice.getByRole('button', { name: 'Try again' }).click();
+    await expect(page.getByTestId('load-error')).toHaveCount(0);
     await f.after(page);
   });
 }

@@ -1,20 +1,20 @@
-"use client";
+'use client';
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from 'react';
 
-import { PersonPicker, type Person } from "@/components/PersonPicker";
-import { Button, Chip, SegmentedControl } from "@/components/ds";
-import { InlineError, TEXTAREA } from "@/components/review/parts";
-import { Loading } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import { PersonPicker, type Person } from '@/components/PersonPicker';
+import { Button, Chip, SegmentedControl } from '@/components/ds';
+import { InlineError, TEXTAREA } from '@/components/review/parts';
+import { Loading } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-import { DiscussionList, isHidden } from "./DiscussionList";
-import { DiscussionThread } from "./DiscussionThread";
+import { DiscussionList, isHidden } from './DiscussionList';
+import { DiscussionThread } from './DiscussionThread';
 
 /** What a discussion is about (G1 3.2), and the label its title starts from. */
 export type DiscussionSubject = {
-  kind: Schemas["DiscussionCreate"]["subject_kind"];
+  kind: Schemas['DiscussionCreate']['subject_kind'];
   subject: Record<string, unknown>;
   label: string;
   /** qa-docs-33: a whole version during its review: an open thread's first message is also whole-draft feedback. */
@@ -32,14 +32,14 @@ export function StartDiscussion({
   onCancel,
 }: {
   subject: DiscussionSubject;
-  onStarted: (id: string, visibility: "open" | "private") => void;
+  onStarted: (id: string, visibility: 'open' | 'private') => void;
   onCancel?: () => void;
 }) {
   const id = useId();
   const [title, setTitle] = useState(subject.label.slice(0, 200));
-  const [visibility, setVisibility] = useState<"open" | "private">("open");
+  const [visibility, setVisibility] = useState<'open' | 'private'>('open');
   const [people, setPeople] = useState<Person[]>([]);
-  const [first, setFirst] = useState("");
+  const [first, setFirst] = useState('');
   const [askOracle, setAskOracle] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,21 +49,21 @@ export function StartDiscussion({
   useEffect(() => titleRef.current?.focus({ preventScroll: true }), []);
 
   // G2: Oracle answers the first message while it is just the starter (#402).
-  const solo = visibility === "open" || people.length === 0;
+  const solo = visibility === 'open' || people.length === 0;
 
   const start = async () => {
     setSaving(true);
     setError(null);
     try {
       const d = await unwrap(
-        api.POST("/v1/discussions", {
+        api.POST('/v1/discussions', {
           body: {
             subject_kind: subject.kind,
             subject: subject.subject,
             title: title.trim() || null,
             visibility,
-            origin: "discuss",
-            participants: visibility === "private" ? people.map((p) => p.user_id) : [],
+            origin: 'discuss',
+            participants: visibility === 'private' ? people.map((p) => p.user_id) : [],
             message: first.trim() ? { body: first.trim(), mention_oracle: askOracle } : null,
           },
         }),
@@ -86,13 +86,16 @@ export function StartDiscussion({
       onKeyDown={(e) => {
         // qa4-docs-33: Escape cancels, as it closes every dialog and menu (a picker's own
         // Escape, which takes the key, goes first).
-        if (e.key !== "Escape" || !onCancel || e.defaultPrevented || saving) return;
+        if (e.key !== 'Escape' || !onCancel || e.defaultPrevented || saving) return;
         e.preventDefault();
         onCancel();
       }}
     >
       <h3 className="font-display text-[15px] font-bold tracking-heading">Start a discussion</h3>
-      <label className="flex flex-col gap-1 text-sm font-semibold text-text2" htmlFor={`${id}-title`}>
+      <label
+        className="flex flex-col gap-1 text-sm font-semibold text-text2"
+        htmlFor={`${id}-title`}
+      >
         Title
       </label>
       <input
@@ -108,20 +111,23 @@ export function StartDiscussion({
         <span aria-hidden className="text-sm font-semibold text-text2">
           Visible to
         </span>
-        <SegmentedControl<"open" | "private">
+        <SegmentedControl<'open' | 'private'>
           label="Visible to"
           size="sm"
           value={visibility}
           onChange={setVisibility}
           items={[
-            { value: "open", label: "Everyone" },
-            { value: "private", label: "Only people I pick" },
+            { value: 'open', label: 'Everyone' },
+            { value: 'private', label: 'Only people I pick' },
           ]}
         />
       </div>
-      {visibility === "private" ? (
+      {visibility === 'private' ? (
         <div className="flex min-w-0 flex-col gap-2">
-          <p className="text-sm leading-5 text-text2">Only the people you pick can read it. Everyone else sees that a private discussion exists.</p>
+          <p className="text-sm leading-5 text-text2">
+            Only the people you pick can read it. Everyone else sees that a private discussion
+            exists.
+          </p>
           {people.length > 0 && (
             <ul className="flex flex-wrap gap-1.5" aria-label="People in it">
               {people.map((p) => (
@@ -150,7 +156,8 @@ export function StartDiscussion({
       ) : (
         <p className="text-sm leading-5 text-text2">
           Everyone who can see this can read it.
-          {subject.review && " During the review, your first message also counts as feedback on the whole draft."}
+          {subject.review &&
+            ' During the review, your first message also counts as feedback on the whole draft.'}
         </p>
       )}
       <label className="text-sm font-semibold text-text2" htmlFor={`${id}-first`}>
@@ -175,11 +182,15 @@ export function StartDiscussion({
       ) : (
         <div className="-mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
           <label className="inline-flex items-center gap-1.5 text-sm text-text">
-            <input type="checkbox" checked={askOracle} onChange={(e) => setAskOracle(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={askOracle}
+              onChange={(e) => setAskOracle(e.target.checked)}
+            />
             Ask Oracle
           </label>
           <span className="text-[13px] text-text2" data-testid="oracle-rule">
-            {askOracle ? "Oracle will reply" : "Oracle replies when you @mention it"}
+            {askOracle ? 'Oracle will reply' : 'Oracle replies when you @mention it'}
           </span>
         </div>
       )}
@@ -202,22 +213,30 @@ export function StartDiscussion({
  * Everything about one subject in one place (the run page's Discuss sheet): its latest
  * discussion the reader can open, else the list, and Start a discussion.
  */
-export function DiscussSubject({ subject, subjectKey }: { subject: DiscussionSubject; subjectKey: string }) {
+export function DiscussSubject({
+  subject,
+  subjectKey,
+}: {
+  subject: DiscussionSubject;
+  subjectKey: string;
+}) {
   const [key, setKey] = useState(0);
-  const [view, setView] = useState<{ id: string } | "start" | "list" | null>(null);
+  const [view, setView] = useState<{ id: string } | 'start' | 'list' | null>(null);
   const rowsQ = useQuery(`discussions|${subjectKey}|${key}`, () =>
-    unwrap(api.GET("/v1/discussions", { params: { query: { subject_key: subjectKey } } })).then((r) => r.items),
+    unwrap(api.GET('/v1/discussions', { params: { query: { subject_key: subjectKey } } })).then(
+      (r) => r.items,
+    ),
   );
   const rows = rowsQ.data;
   if (rowsQ.error) return <InlineError>{rowsQ.error}</InlineError>;
   if (!rows) return <Loading />;
   const latest = rows.find((r) => !isHidden(r));
-  const shown = view ?? (latest ? { id: latest.id } : rows.length ? "list" : "start");
+  const shown = view ?? (latest ? { id: latest.id } : rows.length ? 'list' : 'start');
   const toList = () => {
-    setView("list");
+    setView('list');
     setKey((k) => k + 1);
   };
-  if (shown === "start")
+  if (shown === 'start')
     return (
       <StartDiscussion
         subject={subject}
@@ -228,16 +247,24 @@ export function DiscussSubject({ subject, subjectKey }: { subject: DiscussionSub
         onCancel={rows.length ? toList : undefined}
       />
     );
-  if (shown === "list")
+  if (shown === 'list')
     return (
       <div className="flex flex-col gap-3">
         <div>
-          <Button icon="comment" onClick={() => setView("start")}>
+          <Button icon="comment" onClick={() => setView('start')}>
             Start a discussion
           </Button>
         </div>
         <DiscussionList rows={rows} onOpen={(id) => setView({ id })} />
       </div>
     );
-  return <DiscussionThread key={shown.id} id={shown.id} onBack={toList} backLabel="All discussions" onChanged={() => setKey((k) => k + 1)} />;
+  return (
+    <DiscussionThread
+      key={shown.id}
+      id={shown.id}
+      onBack={toList}
+      backLabel="All discussions"
+      onChanged={() => setKey((k) => k + 1)}
+    />
+  );
 }

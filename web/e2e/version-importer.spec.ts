@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { login } from "./helpers";
+import { login } from './helpers';
 
 // #256: the PRD overview's version panel says who imported a version by name: a
 // member's display name, "Oracle" for a run, "An integration" for an API token (qa-docs-23). The id is only in
@@ -9,23 +9,30 @@ import { login } from "./helpers";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 async function pick(page: Page, n: number) {
-  const row = page.getByTestId("versions-table").getByRole("row").filter({ hasText: `Version ${n}` });
-  await row.getByRole("gridcell").nth(2).click();
-  await expect(row).toHaveAttribute("aria-selected", "true");
+  const row = page
+    .getByTestId('versions-table')
+    .getByRole('row')
+    .filter({ hasText: `Version ${n}` });
+  await row.getByRole('gridcell').nth(2).click();
+  await expect(row).toHaveAttribute('aria-selected', 'true');
 }
 
-test("each version names who imported it, with no id even in a tooltip (qa-docs-26)", async ({ page }) => {
+test('each version names who imported it, with no id even in a tooltip (qa-docs-26)', async ({
+  page,
+}) => {
   await login(page);
-  await page.goto("/documents/online-deposits");
-  const by = page.getByTestId("version-inspector").getByTestId("version-importer");
+  await page.goto('/documents/online-deposits');
+  const by = page.getByTestId('version-inspector').getByTestId('version-importer');
   for (const [n, name] of [
-    [1, "Priya Raman"],
-    [2, "An integration"],
-    [3, "Oracle"],
+    [1, 'Priya Raman'],
+    [2, 'An integration'],
+    [3, 'Oracle'],
   ] as const) {
     await pick(page, n);
     await expect(by).toHaveText(name);
-    await expect(by).not.toHaveAttribute("title", UUID);
-    await expect(page.getByTestId("version-inspector")).not.toContainText(/[0-9a-f]{8}-[0-9a-f]{4}-/);
+    await expect(by).not.toHaveAttribute('title', UUID);
+    await expect(page.getByTestId('version-inspector')).not.toContainText(
+      /[0-9a-f]{8}-[0-9a-f]{4}-/,
+    );
   }
 });

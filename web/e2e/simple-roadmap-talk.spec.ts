@@ -1,8 +1,8 @@
-import { expect, test, type Locator, type Page } from "./test";
+import { expect, test, type Locator, type Page } from './test';
 
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { THEME_KEY } from "../lib/theme";
-import { ADMIN } from "./helpers";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { THEME_KEY } from '../lib/theme';
+import { ADMIN } from './helpers';
 
 /*
  * roadmap-talk: the roadmap item card's "Talk to Oracle" widens the card (the owner's pick C,
@@ -16,80 +16,102 @@ import { ADMIN } from "./helpers";
  * mock's reader is deterministic. Desktop (1366x820) and phone (390x844), light and dark.
  */
 
-const EMAILS = { owner: ADMIN.email, viewer: "viewer@example.com" } as const;
+const EMAILS = { owner: ADMIN.email, viewer: 'viewer@example.com' } as const;
 
 /** Clicks `l` once it is scrolled to the middle (on a phone the tab bar covers the bottom of the screen). */
 async function tap(l: Locator) {
-  await l.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await l.evaluate((el) => el.scrollIntoView({ block: 'center' }));
   await l.click();
 }
 
 async function signIn(page: Page, email: string, to: string) {
-  await page.goto("/login");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(ADMIN.password);
-  await tap(page.getByRole("button", { name: "Sign in" }));
+  await page.goto('/login');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(ADMIN.password);
+  await tap(page.getByRole('button', { name: 'Sign in' }));
   await expect(page).not.toHaveURL(/\/login/);
   await page.goto(to);
   // A phone's Timeline (timeline-overlap B3) draws thin lanes with no bars: a phone opens the card from the Gantt's bars.
   // The Timeline (mk-qa4-roadmap QR1 A) has no SVG bars: the card opens from the Gantt's.
-  if (to === "/simple/roadmap") await tap(page.getByTestId("format-gantt"));
+  if (to === '/simple/roadmap') await tap(page.getByTestId('format-gantt'));
 }
 
 const bar = (page: Page, key: string) => page.locator(`[data-testid="bar"][data-item="${key}"]`);
 
 /** Opens the item's card from its bar, then its talk (a phone: the Talk to Oracle tab). */
-async function openTalk(page: Page, key: string, phone: boolean): Promise<{ card: Locator; talk: Locator }> {
+async function openTalk(
+  page: Page,
+  key: string,
+  phone: boolean,
+): Promise<{ card: Locator; talk: Locator }> {
   await expect(bar(page, key)).toBeVisible();
   await bar(page, key).click();
-  const card = page.getByTestId("floating-card");
+  const card = page.getByTestId('floating-card');
   await expect(card).toBeVisible();
   if (phone) {
-    await expect(card.getByRole("tablist")).toBeVisible();
-    await tap(card.getByRole("tab", { name: "Talk to Oracle" }));
-    await expect(card.getByRole("tab", { name: "Talk to Oracle" })).toHaveAttribute("aria-selected", "true");
+    await expect(card.getByRole('tablist')).toBeVisible();
+    await tap(card.getByRole('tab', { name: 'Talk to Oracle' }));
+    await expect(card.getByRole('tab', { name: 'Talk to Oracle' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
   } else {
-    await tap(card.getByRole("button", { name: "Talk to Oracle" }));
-    await expect(card).toHaveAttribute("data-talk", "true");
+    await tap(card.getByRole('button', { name: 'Talk to Oracle' }));
+    await expect(card).toHaveAttribute('data-talk', 'true');
     // Widened: the details stay on the left, the talk on the right.
-    await expect(card.getByTestId("card-dates")).toBeVisible();
+    await expect(card.getByTestId('card-dates')).toBeVisible();
     expect((await card.boundingBox())!.width).toBeGreaterThan(800);
   }
-  const talk = card.getByTestId("item-talk");
+  const talk = card.getByTestId('item-talk');
   // fix4 qa-simple-roadmap-3: the item by its title alone, no code.
-  await expect(card.getByRole("heading", { name: "Adaptive pacing", level: 2, exact: true })).toBeVisible();
+  await expect(
+    card.getByRole('heading', { name: 'Adaptive pacing', level: 2, exact: true }),
+  ).toBeVisible();
   if (phone) {
     // A phone's tab is the talk itself: no heading over it, Details goes back.
-    await expect(card.getByRole("tab", { name: "Details" })).toBeVisible();
+    await expect(card.getByRole('tab', { name: 'Details' })).toBeVisible();
   } else {
-    await expect(talk.getByRole("heading", { name: "Talk about Adaptive pacing", exact: true })).toBeVisible();
-    await expect(card.getByRole("button", { name: "Hide the talk" })).toBeVisible();
+    await expect(
+      talk.getByRole('heading', { name: 'Talk about Adaptive pacing', exact: true }),
+    ).toBeVisible();
+    await expect(card.getByRole('button', { name: 'Hide the talk' })).toBeVisible();
   }
   // A viewer asks questions only: "Ask about Adaptive pacing…".
-  await expect(talk.getByRole("textbox", { name: "Message Oracle" })).toHaveAttribute("placeholder", /^Ask about Adaptive pacing(, or ask for a change)?…$/);
-  await expect(talk.getByTestId("chat-note")).toHaveText("Just you and Oracle · kept with this item");
+  await expect(talk.getByRole('textbox', { name: 'Message Oracle' })).toHaveAttribute(
+    'placeholder',
+    /^Ask about Adaptive pacing(, or ask for a change)?…$/,
+  );
+  await expect(talk.getByTestId('chat-note')).toHaveText(
+    'Just you and Oracle · kept with this item',
+  );
   // The message box sits at the foot of the talk, under the lines.
-  const box = (await talk.getByRole("textbox", { name: "Message Oracle" }).boundingBox())!;
+  const box = (await talk.getByRole('textbox', { name: 'Message Oracle' }).boundingBox())!;
   const area = (await talk.boundingBox())!;
   expect(area.y + area.height - (box.y + box.height)).toBeLessThan(140);
   return { card, talk };
 }
 
 async function say(box: Locator, text: string) {
-  await box.getByRole("textbox", { name: "Message Oracle" }).fill(text);
-  await tap(box.getByRole("button", { name: "Send" }));
+  await box.getByRole('textbox', { name: 'Message Oracle' }).fill(text);
+  await tap(box.getByRole('button', { name: 'Send' }));
 }
 
 /** Opens Ask Oracle (the rail's button; the header's Ask on a phone): the visible panel. */
 async function openAsk(page: Page, phone: boolean) {
-  await tap(page.getByTestId(phone ? "phone-ask" : "simple-ask").filter({ visible: true }).first());
-  const panel = page.getByTestId("hop-panel").filter({ visible: true });
-  await expect(panel.getByTestId("ask-chat")).toBeVisible();
+  await tap(
+    page
+      .getByTestId(phone ? 'phone-ask' : 'simple-ask')
+      .filter({ visible: true })
+      .first(),
+  );
+  const panel = page.getByTestId('hop-panel').filter({ visible: true });
+  await expect(panel.getByTestId('ask-chat')).toBeVisible();
   return panel;
 }
 
-const last = (box: Locator) => box.getByTestId("chat-message").last();
-const card = (box: Locator, summary: string) => box.getByTestId("chat-card").filter({ hasText: summary });
+const last = (box: Locator) => box.getByTestId('chat-message').last();
+const card = (box: Locator, summary: string) =>
+  box.getByTestId('chat-card').filter({ hasText: summary });
 
 for (const [phone, dark] of [
   [false, false],
@@ -97,18 +119,20 @@ for (const [phone, dark] of [
   [false, true],
   [true, true],
 ] as const) {
-  const where = `${phone ? "phone" : "desktop"}, ${dark ? "dark" : "light"}`;
+  const where = `${phone ? 'phone' : 'desktop'}, ${dark ? 'dark' : 'light'}`;
   test.describe(where, () => {
     test.beforeEach(async ({ context, page }) => {
       await context.addInitScript(
         ([key, themeKey, theme]) => {
-          localStorage.setItem(key, "roadmap-talk");
+          localStorage.setItem(key, 'roadmap-talk');
           localStorage.setItem(themeKey, theme);
         },
-        [MOCK_SCENARIO_KEY, THEME_KEY, dark ? "dark" : "light"] as const,
+        [MOCK_SCENARIO_KEY, THEME_KEY, dark ? 'dark' : 'light'] as const,
       );
-      if (dark) await page.emulateMedia({ colorScheme: "dark" });
-      await page.setViewportSize(phone ? { width: 390, height: 844 } : { width: 1366, height: 820 });
+      if (dark) await page.emulateMedia({ colorScheme: 'dark' });
+      await page.setViewportSize(
+        phone ? { width: 390, height: 844 } : { width: 1366, height: 820 },
+      );
     });
 
     /**
@@ -118,19 +142,27 @@ for (const [phone, dark] of [
      * does not open in the card, the heading or the line under the box differ, the answer
      * has no source, or the phone's tabs are missing; no_claim = the answer's wording.
      */
-    test(`a question in the card's talk is answered with its source (${where})`, async ({ page }) => {
-      await signIn(page, EMAILS.owner, "/simple/roadmap");
-      const { talk } = await openTalk(page, "adaptive-pacing", phone);
-      await say(talk, "What is it for?");
+    test(`a question in the card's talk is answered with its source (${where})`, async ({
+      page,
+    }) => {
+      await signIn(page, EMAILS.owner, '/simple/roadmap');
+      const { talk } = await openTalk(page, 'adaptive-pacing', phone);
+      await say(talk, 'What is it for?');
       const answer = last(talk);
-      await expect(answer).toHaveAttribute("data-kind", "answer");
-      await expect(answer.getByTestId("chat-message-body")).toContainText("Adaptive pacing runs Nov 16 – Nov 27");
+      await expect(answer).toHaveAttribute('data-kind', 'answer');
+      await expect(answer.getByTestId('chat-message-body')).toContainText(
+        'Adaptive pacing runs Nov 16 – Nov 27',
+      );
       // The source is the Ask chat's link line (pick C: "From the PRD · …" in accent ink with its icon).
-      await expect(answer.getByTestId("answer-source")).toHaveText("From the PRD · Adaptive pacing");
-      await expect(talk.getByTestId("chat-card")).toHaveCount(0);
+      await expect(answer.getByTestId('answer-source')).toHaveText(
+        'From the PRD · Adaptive pacing',
+      );
+      await expect(talk.getByTestId('chat-card')).toHaveCount(0);
       // A question about its days is read from the roadmap, and says so.
-      await say(talk, "When is it?");
-      await expect(last(talk).getByTestId("answer-source")).toHaveText("From the roadmap · Adaptive pacing");
+      await say(talk, 'When is it?');
+      await expect(last(talk).getByTestId('answer-source')).toHaveText(
+        'From the roadmap · Adaptive pacing',
+      );
     });
 
     /**
@@ -142,25 +174,37 @@ for (const [phone, dark] of [
      * first, the code is missing, or the empty talk puts its box at the top; no_claim = the
      * chat lines' look (the Ask chat's).
      */
-    test(`the card follows pick C: its order, and the empty talk's box at the foot (${where})`, async ({ page }) => {
-      await signIn(page, EMAILS.owner, "/simple/roadmap");
-      await expect(bar(page, "adaptive-pacing")).toBeVisible();
-      await bar(page, "adaptive-pacing").click();
-      const floating = page.getByTestId("floating-card");
-      await expect(floating.getByRole("heading", { level: 2 })).toHaveText("Adaptive pacing");
-      await expect(floating.getByRole("heading", { level: 3 })).toHaveText(["Why", "Open decisions", "Tasks", "Flow", "Proposals on it"]);
-      await tap(floating.getByRole(phone ? "tab" : "button", { name: "Talk to Oracle" }));
+    test(`the card follows pick C: its order, and the empty talk's box at the foot (${where})`, async ({
+      page,
+    }) => {
+      await signIn(page, EMAILS.owner, '/simple/roadmap');
+      await expect(bar(page, 'adaptive-pacing')).toBeVisible();
+      await bar(page, 'adaptive-pacing').click();
+      const floating = page.getByTestId('floating-card');
+      await expect(floating.getByRole('heading', { level: 2 })).toHaveText('Adaptive pacing');
+      await expect(floating.getByRole('heading', { level: 3 })).toHaveText([
+        'Why',
+        'Open decisions',
+        'Tasks',
+        'Flow',
+        'Proposals on it',
+      ]);
+      await tap(floating.getByRole(phone ? 'tab' : 'button', { name: 'Talk to Oracle' }));
       const c = floating;
-      const talk = c.getByTestId("item-talk");
-      const box = (await talk.getByRole("textbox", { name: "Message Oracle" }).boundingBox())!;
+      const talk = c.getByTestId('item-talk');
+      const box = (await talk.getByRole('textbox', { name: 'Message Oracle' }).boundingBox())!;
       const sheet = (await c.boundingBox())!;
       expect(sheet.y + sheet.height - (box.y + box.height)).toBeLessThan(60);
       if (!phone) {
         // The details stay on the left; fix4 qa-simple-roadmap-39: the flow keeps its row and its action.
-        await expect(c.getByTestId("card-flow").getByTestId("flow-row")).toContainText("No flow yet");
-        await expect(c.getByTestId("card-flow").getByRole("button", { name: "Ask Oracle to draw it" })).toBeVisible();
-        await expect(c.getByRole("link", { name: "Open the detailed view" })).toBeVisible();
-        await expect(c.getByRole("button", { name: "Talk to Oracle" })).toHaveCount(0);
+        await expect(c.getByTestId('card-flow').getByTestId('flow-row')).toContainText(
+          'No flow yet',
+        );
+        await expect(
+          c.getByTestId('card-flow').getByRole('button', { name: 'Ask Oracle to draw it' }),
+        ).toBeVisible();
+        await expect(c.getByRole('link', { name: 'Open the detailed view' })).toBeVisible();
+        await expect(c.getByRole('button', { name: 'Talk to Oracle' })).toHaveCount(0);
       }
     });
 
@@ -173,25 +217,33 @@ for (const [phone, dark] of [
      * flash; no_claim = the flash's look (a CSS pulse).
      */
     test(`a move is restated and applied from the card's talk (${where})`, async ({ page }) => {
-      await signIn(page, EMAILS.owner, "/simple/roadmap");
-      const { card: floating, talk } = await openTalk(page, "adaptive-pacing", phone);
-      await say(talk, "move it two weeks later");
-      await expect(last(talk).getByTestId("chat-message-body")).toHaveText("I understood: move Adaptive pacing two weeks later, to Nov 30 – Dec 11.");
-      const c = talk.getByTestId("chat-card");
+      await signIn(page, EMAILS.owner, '/simple/roadmap');
+      const { card: floating, talk } = await openTalk(page, 'adaptive-pacing', phone);
+      await say(talk, 'move it two weeks later');
+      await expect(last(talk).getByTestId('chat-message-body')).toHaveText(
+        'I understood: move Adaptive pacing two weeks later, to Nov 30 – Dec 11.',
+      );
+      const c = talk.getByTestId('chat-card');
       await expect(c).toHaveCount(1);
-      await expect(c.getByTestId("chat-card-summary")).toHaveText("Move Adaptive pacing two weeks later, to Nov 30 – Dec 11");
+      await expect(c.getByTestId('chat-card-summary')).toHaveText(
+        'Move Adaptive pacing two weeks later, to Nov 30 – Dec 11',
+      );
       // qa-simple-roadmap-26: the card's own Before/After reads month-first, like the rest of the app.
-      await expect(c.getByTestId("chat-card-change")).toHaveText("Before: Nov 16 – Nov 27 → After: Nov 30 – Dec 11");
-      await expect(c.getByTestId("chat-card-flag").first()).toContainText("M1 Launch prep");
-      await expect(c.getByRole("button", { name: "Reject" })).toBeVisible();
-      await expect(c.getByRole("button", { name: "Change it…" })).toBeVisible();
-      await tap(c.getByRole("button", { name: "Apply" }));
-      await expect(c).toHaveAttribute("data-status", "applied");
-      await expect(bar(page, "adaptive-pacing")).toHaveAttribute("data-flash", "true");
-      await expect(bar(page, "adaptive-pacing")).toHaveAttribute("data-start", "2026-11-30");
-      await expect(bar(page, "adaptive-pacing")).not.toHaveAttribute("data-flash", "true", { timeout: 6000 });
-      if (phone) await tap(floating.getByRole("tab", { name: "Details" }));
-      await expect(floating.getByTestId("card-dates")).toContainText("Nov 30");
+      await expect(c.getByTestId('chat-card-change')).toHaveText(
+        'Before: Nov 16 – Nov 27 → After: Nov 30 – Dec 11',
+      );
+      await expect(c.getByTestId('chat-card-flag').first()).toContainText('M1 Launch prep');
+      await expect(c.getByRole('button', { name: 'Reject' })).toBeVisible();
+      await expect(c.getByRole('button', { name: 'Change it…' })).toBeVisible();
+      await tap(c.getByRole('button', { name: 'Apply' }));
+      await expect(c).toHaveAttribute('data-status', 'applied');
+      await expect(bar(page, 'adaptive-pacing')).toHaveAttribute('data-flash', 'true');
+      await expect(bar(page, 'adaptive-pacing')).toHaveAttribute('data-start', '2026-11-30');
+      await expect(bar(page, 'adaptive-pacing')).not.toHaveAttribute('data-flash', 'true', {
+        timeout: 6000,
+      });
+      if (phone) await tap(floating.getByRole('tab', { name: 'Details' }));
+      await expect(floating.getByTestId('card-dates')).toContainText('Nov 30');
     });
 
     /**
@@ -202,18 +254,24 @@ for (const [phone, dark] of [
      * understand months (no card) or moves by another span; no_claim = quarters and days
      * (the same rule, not driven here).
      */
-    test(`a move by months is restated and applied from the card's talk (${where})`, async ({ page }) => {
-      await signIn(page, EMAILS.owner, "/simple/roadmap");
-      const { card: floating, talk } = await openTalk(page, "adaptive-pacing", phone);
-      await say(talk, "move it two months later");
-      await expect(last(talk).getByTestId("chat-message-body")).toHaveText("I understood: move Adaptive pacing two months later, to Jan 16 – Jan 27.");
-      const c = talk.getByTestId("chat-card");
+    test(`a move by months is restated and applied from the card's talk (${where})`, async ({
+      page,
+    }) => {
+      await signIn(page, EMAILS.owner, '/simple/roadmap');
+      const { card: floating, talk } = await openTalk(page, 'adaptive-pacing', phone);
+      await say(talk, 'move it two months later');
+      await expect(last(talk).getByTestId('chat-message-body')).toHaveText(
+        'I understood: move Adaptive pacing two months later, to Jan 16 – Jan 27.',
+      );
+      const c = talk.getByTestId('chat-card');
       await expect(c).toHaveCount(1);
-      await expect(c.getByTestId("chat-card-change")).toHaveText("Before: Nov 16 – Nov 27 → After: Jan 16 – Jan 27");
-      await tap(c.getByRole("button", { name: "Apply" }));
-      await expect(c).toHaveAttribute("data-status", "applied");
-      if (phone) await tap(floating.getByRole("tab", { name: "Details" }));
-      await expect(floating.getByTestId("card-dates")).toContainText("Jan 16");
+      await expect(c.getByTestId('chat-card-change')).toHaveText(
+        'Before: Nov 16 – Nov 27 → After: Jan 16 – Jan 27',
+      );
+      await tap(c.getByRole('button', { name: 'Apply' }));
+      await expect(c).toHaveAttribute('data-status', 'applied');
+      if (phone) await tap(floating.getByRole('tab', { name: 'Details' }));
+      await expect(floating.getByTestId('card-dates')).toContainText('Jan 16');
     });
 
     /**
@@ -225,36 +283,51 @@ for (const [phone, dark] of [
      * fails_when = one card, no Correct fields, Apply ignores the corrected values or Reject
      * applies; no_claim = the reader's model (the mock's reader is keyword rules).
      */
-    test(`two changes on the Ask panel: one corrected and applied, one rejected (${where})`, async ({ page }) => {
-      await signIn(page, EMAILS.owner, "/simple/roadmap");
-      await expect(bar(page, "reliability-work")).toHaveAttribute("data-start", "2026-10-31");
+    test(`two changes on the Ask panel: one corrected and applied, one rejected (${where})`, async ({
+      page,
+    }) => {
+      await signIn(page, EMAILS.owner, '/simple/roadmap');
+      await expect(bar(page, 'reliability-work')).toHaveAttribute('data-start', '2026-10-31');
       const panel = await openAsk(page, phone);
-      await say(panel, "push the reliability work after the sign-up work and add a dashboard item to M2 under Growth");
-      await expect(panel.getByTestId("chat-message-body").filter({ hasText: "I understood two changes:" })).toBeVisible({ timeout: 10_000 });
-      await expect(panel.getByRole("button", { name: "Apply all" })).toBeVisible();
-      const move = card(panel, "Reliability work");
-      const add = card(panel, "Add Dashboard");
-      await expect(move.getByTestId("chat-card-summary")).toHaveText("Move Reliability work after Sign-up work, to Nov 11 – Dec 1");
-      await expect(add.getByTestId("chat-card-summary")).toHaveText("Add Dashboard under Growth to M2 Scale volume, Dec 5 – Dec 18");
+      await say(
+        panel,
+        'push the reliability work after the sign-up work and add a dashboard item to M2 under Growth',
+      );
+      await expect(
+        panel.getByTestId('chat-message-body').filter({ hasText: 'I understood two changes:' }),
+      ).toBeVisible({ timeout: 10_000 });
+      await expect(panel.getByRole('button', { name: 'Apply all' })).toBeVisible();
+      const move = card(panel, 'Reliability work');
+      const add = card(panel, 'Add Dashboard');
+      await expect(move.getByTestId('chat-card-summary')).toHaveText(
+        'Move Reliability work after Sign-up work, to Nov 11 – Dec 1',
+      );
+      await expect(add.getByTestId('chat-card-summary')).toHaveText(
+        'Add Dashboard under Growth to M2 Scale volume, Dec 5 – Dec 18',
+      );
 
-      await tap(add.getByRole("button", { name: "Change it…" }));
-      const fields = add.getByTestId("chat-card-correct");
-      await expect(fields.getByLabel("Title")).toHaveValue("Dashboard");
-      await expect(fields.getByLabel("Goal")).toHaveValue("Growth");
-      await expect(fields.getByLabel("Milestone")).toHaveValue("M2 Scale volume");
-      await expect(fields.getByLabel("Start")).toHaveValue("2026-12-05");
-      await expect(fields.getByLabel("End")).toHaveAttribute("type", "date");
-      await fields.getByLabel("Start").fill("2026-12-07");
-      await fields.getByLabel("End").fill("2026-12-16");
-      await tap(add.getByRole("button", { name: "Apply" }));
-      await expect(add.getByTestId("chat-card-summary")).toHaveText("Add Dashboard under Growth to M2 Scale volume, Dec 7 – Dec 16");
-      await expect(add).toHaveAttribute("data-status", "applied");
+      await tap(add.getByRole('button', { name: 'Change it…' }));
+      const fields = add.getByTestId('chat-card-correct');
+      await expect(fields.getByLabel('Title')).toHaveValue('Dashboard');
+      await expect(fields.getByLabel('Goal')).toHaveValue('Growth');
+      await expect(fields.getByLabel('Milestone')).toHaveValue('M2 Scale volume');
+      await expect(fields.getByLabel('Start')).toHaveValue('2026-12-05');
+      await expect(fields.getByLabel('End')).toHaveAttribute('type', 'date');
+      await fields.getByLabel('Start').fill('2026-12-07');
+      await fields.getByLabel('End').fill('2026-12-16');
+      await tap(add.getByRole('button', { name: 'Apply' }));
+      await expect(add.getByTestId('chat-card-summary')).toHaveText(
+        'Add Dashboard under Growth to M2 Scale volume, Dec 7 – Dec 16',
+      );
+      await expect(add).toHaveAttribute('data-status', 'applied');
 
-      await tap(move.getByRole("button", { name: "Reject" }));
-      await expect(move).toHaveAttribute("data-status", "discarded");
-      await expect(move.getByTestId("chat-card-outcome")).toContainText("Rejected: nothing changed");
-      await expect(bar(page, "reliability-work")).toHaveAttribute("data-start", "2026-10-31");
-      await expect(bar(page, "dashboard")).toHaveAttribute("data-start", "2026-12-07");
+      await tap(move.getByRole('button', { name: 'Reject' }));
+      await expect(move).toHaveAttribute('data-status', 'discarded');
+      await expect(move.getByTestId('chat-card-outcome')).toContainText(
+        'Rejected: nothing changed',
+      );
+      await expect(bar(page, 'reliability-work')).toHaveAttribute('data-start', '2026-10-31');
+      await expect(bar(page, 'dashboard')).toHaveAttribute('data-start', '2026-12-07');
     });
 
     /**
@@ -263,19 +336,21 @@ for (const [phone, dark] of [
      * Oracle's reading while other dates apply; no_claim = the card's layout.
      */
     test(`Correct in the card's talk restates the corrected move (${where})`, async ({ page }) => {
-      await signIn(page, EMAILS.owner, "/simple/roadmap");
-      const { talk } = await openTalk(page, "adaptive-pacing", phone);
-      await say(talk, "move it two weeks later");
-      const c = talk.getByTestId("chat-card");
+      await signIn(page, EMAILS.owner, '/simple/roadmap');
+      const { talk } = await openTalk(page, 'adaptive-pacing', phone);
+      await say(talk, 'move it two weeks later');
+      const c = talk.getByTestId('chat-card');
       await expect(c).toHaveCount(1);
-      await tap(c.getByRole("button", { name: "Change it…" }));
-      const fields = c.getByTestId("chat-card-correct");
-      await fields.getByLabel("Start").fill("2026-12-07");
-      await fields.getByLabel("End").fill("2026-12-16");
-      await tap(c.getByRole("button", { name: "Apply" }));
-      await expect(c).toHaveAttribute("data-status", "applied");
-      await expect(last(talk).getByTestId("chat-message-body")).toHaveText("I understood: move Adaptive pacing to Dec 7 – Dec 16.");
-      await expect(bar(page, "adaptive-pacing")).toHaveAttribute("data-start", "2026-12-07");
+      await tap(c.getByRole('button', { name: 'Change it…' }));
+      const fields = c.getByTestId('chat-card-correct');
+      await fields.getByLabel('Start').fill('2026-12-07');
+      await fields.getByLabel('End').fill('2026-12-16');
+      await tap(c.getByRole('button', { name: 'Apply' }));
+      await expect(c).toHaveAttribute('data-status', 'applied');
+      await expect(last(talk).getByTestId('chat-message-body')).toHaveText(
+        'I understood: move Adaptive pacing to Dec 7 – Dec 16.',
+      );
+      await expect(bar(page, 'adaptive-pacing')).toHaveAttribute('data-start', '2026-12-07');
     });
 
     /**
@@ -284,14 +359,14 @@ for (const [phone, dark] of [
      * the slice is named otherwise or the cut card says Discard; no_claim = the slices' dates.
      */
     test(`a split names its slices and a cut card says Reject (${where})`, async ({ page }) => {
-      await signIn(page, EMAILS.owner, "/simple/roadmap");
-      const { talk } = await openTalk(page, "adaptive-pacing", phone);
-      await say(talk, "split it into two slices");
-      await expect(card(talk, "Adaptive pacing: slice 2")).toHaveCount(1);
-      await say(talk, "cut it");
-      const cut = card(talk, "Cut Adaptive pacing");
-      await expect(cut.getByRole("button", { name: "Reject" })).toBeVisible();
-      await expect(cut.getByRole("button", { name: "Discard" })).toHaveCount(0);
+      await signIn(page, EMAILS.owner, '/simple/roadmap');
+      const { talk } = await openTalk(page, 'adaptive-pacing', phone);
+      await say(talk, 'split it into two slices');
+      await expect(card(talk, 'Adaptive pacing: slice 2')).toHaveCount(1);
+      await say(talk, 'cut it');
+      const cut = card(talk, 'Cut Adaptive pacing');
+      await expect(cut.getByRole('button', { name: 'Reject' })).toBeVisible();
+      await expect(cut.getByRole('button', { name: 'Discard' })).toHaveCount(0);
     });
 
     /**
@@ -302,23 +377,28 @@ for (const [phone, dark] of [
      * no_claim = the flash's look.
      */
     test(`Apply all applies both changes and flashes their bars (${where})`, async ({ page }) => {
-      await signIn(page, EMAILS.owner, "/simple/roadmap");
-      await expect(bar(page, "reliability-work")).toHaveAttribute("data-start", "2026-10-31");
+      await signIn(page, EMAILS.owner, '/simple/roadmap');
+      await expect(bar(page, 'reliability-work')).toHaveAttribute('data-start', '2026-10-31');
       const panel = await openAsk(page, phone);
-      await say(panel, "push the reliability work after the sign-up work and add a dashboard item to M2 under Growth");
-      await expect(panel.getByTestId("chat-message-body").filter({ hasText: "I understood two changes:" })).toBeVisible({ timeout: 10_000 });
-      const add = card(panel, "Add Dashboard");
-      await tap(add.getByRole("button", { name: "Change it…" }));
-      const fields = add.getByTestId("chat-card-correct");
-      await fields.getByLabel("Start").fill("2026-12-07");
-      await fields.getByLabel("End").fill("2026-12-16");
-      await tap(panel.getByRole("button", { name: "Apply all" }));
-      await expect(card(panel, "Reliability work")).toHaveAttribute("data-status", "applied");
-      await expect(card(panel, "Add Dashboard")).toHaveAttribute("data-status", "applied");
-      await expect(bar(page, "reliability-work")).toHaveAttribute("data-start", "2026-11-11");
-      await expect(bar(page, "reliability-work")).toHaveAttribute("data-flash", "true");
-      await expect(bar(page, "dashboard")).toHaveAttribute("data-start", "2026-12-07");
-      await expect(bar(page, "dashboard")).toHaveAttribute("data-flash", "true");
+      await say(
+        panel,
+        'push the reliability work after the sign-up work and add a dashboard item to M2 under Growth',
+      );
+      await expect(
+        panel.getByTestId('chat-message-body').filter({ hasText: 'I understood two changes:' }),
+      ).toBeVisible({ timeout: 10_000 });
+      const add = card(panel, 'Add Dashboard');
+      await tap(add.getByRole('button', { name: 'Change it…' }));
+      const fields = add.getByTestId('chat-card-correct');
+      await fields.getByLabel('Start').fill('2026-12-07');
+      await fields.getByLabel('End').fill('2026-12-16');
+      await tap(panel.getByRole('button', { name: 'Apply all' }));
+      await expect(card(panel, 'Reliability work')).toHaveAttribute('data-status', 'applied');
+      await expect(card(panel, 'Add Dashboard')).toHaveAttribute('data-status', 'applied');
+      await expect(bar(page, 'reliability-work')).toHaveAttribute('data-start', '2026-11-11');
+      await expect(bar(page, 'reliability-work')).toHaveAttribute('data-flash', 'true');
+      await expect(bar(page, 'dashboard')).toHaveAttribute('data-start', '2026-12-07');
+      await expect(bar(page, 'dashboard')).toHaveAttribute('data-flash', 'true');
     });
 
     /**
@@ -328,31 +408,41 @@ for (const [phone, dark] of [
      * narrows it back to the card in the side panel; fails_when = its edges run past the page or it
      * keeps the narrow card's offset; no_claim = a phone (a bottom sheet there).
      */
-    test(`the talk card opened near the right edge stays inside the roadmap (${where})`, async ({ page }) => {
+    test(`the talk card opened near the right edge stays inside the roadmap (${where})`, async ({
+      page,
+    }) => {
       test.skip(phone, "a phone's card is a bottom sheet");
-      await signIn(page, EMAILS.owner, "/simple/roadmap");
+      await signIn(page, EMAILS.owner, '/simple/roadmap');
       const bars = page.locator('[data-testid="bar"]');
       await expect(bars.first()).toBeVisible();
-      const rights = await bars.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().right));
+      const rights = await bars.evaluateAll((els) =>
+        els.map((el) => el.getBoundingClientRect().right),
+      );
       await bars.nth(rights.indexOf(Math.max(...rights))).click();
-      const floating = page.getByTestId("floating-card");
-      await tap(floating.getByRole("button", { name: "Talk to Oracle" }));
-      await expect(floating).toHaveAttribute("data-talk", "true");
-      await expect(floating.getByTestId("item-talk")).toBeVisible();
+      const floating = page.getByTestId('floating-card');
+      await tap(floating.getByRole('button', { name: 'Talk to Oracle' }));
+      await expect(floating).toHaveAttribute('data-talk', 'true');
+      await expect(floating.getByTestId('item-talk')).toBeVisible();
       const fit = await floating.evaluate((el) => {
         const r = el.getBoundingClientRect();
-        const main = document.querySelector("main")!.getBoundingClientRect();
-        return { left: r.left - main.left, right: main.right - r.right, top: r.top, foot: window.innerHeight - r.bottom, width: r.width };
+        const main = document.querySelector('main')!.getBoundingClientRect();
+        return {
+          left: r.left - main.left,
+          right: main.right - r.right,
+          top: r.top,
+          foot: window.innerHeight - r.bottom,
+          width: r.width,
+        };
       });
       expect(fit.left).toBeGreaterThanOrEqual(0);
       expect(Math.round(fit.right)).toBe(22);
       expect(Math.round(fit.top)).toBe(16);
       expect(Math.round(fit.foot)).toBe(16);
       expect(Math.round(fit.width)).toBe(840);
-      await tap(floating.getByRole("button", { name: "Hide the talk" }));
-      await expect(floating).toHaveAttribute("data-talk", "false");
+      await tap(floating.getByRole('button', { name: 'Hide the talk' }));
+      await expect(floating).toHaveAttribute('data-talk', 'false');
       // Side panel pick: on the Gantt the narrowed card fills the side panel beside the chart.
-      const panel = page.getByTestId("item-panel");
+      const panel = page.getByTestId('item-panel');
       const inner = await panel.evaluate((el) => el.clientWidth);
       expect(Math.round((await floating.boundingBox())!.width)).toBe(inner);
     });
@@ -363,13 +453,15 @@ for (const [phone, dark] of [
      * an Apply button; no_claim = the note's exact words.
      */
     test(`a viewer gets no cards in the card's talk (${where})`, async ({ page }) => {
-      await signIn(page, EMAILS.viewer, "/simple/roadmap");
-      const { talk } = await openTalk(page, "adaptive-pacing", phone);
-      await say(talk, "move it two weeks later");
-      await expect(last(talk)).toHaveAttribute("data-kind", "note");
-      await expect(last(talk).getByTestId("chat-message-body")).toContainText("Viewers ask questions here");
-      await expect(talk.getByTestId("chat-card")).toHaveCount(0);
-      await expect(talk.getByRole("button", { name: "Apply" })).toHaveCount(0);
+      await signIn(page, EMAILS.viewer, '/simple/roadmap');
+      const { talk } = await openTalk(page, 'adaptive-pacing', phone);
+      await say(talk, 'move it two weeks later');
+      await expect(last(talk)).toHaveAttribute('data-kind', 'note');
+      await expect(last(talk).getByTestId('chat-message-body')).toContainText(
+        'Viewers ask questions here',
+      );
+      await expect(talk.getByTestId('chat-card')).toHaveCount(0);
+      await expect(talk.getByRole('button', { name: 'Apply' })).toHaveCount(0);
     });
   });
 }

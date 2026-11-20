@@ -1,14 +1,14 @@
-"use client";
+'use client';
 
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent } from 'react';
 
-import { Button, Chip } from "@/components/ds";
-import { PersonPicker, type Person } from "@/components/PersonPicker";
-import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { errorMessage } from "@/lib/use-query";
+import { Button, Chip } from '@/components/ds';
+import { PersonPicker, type Person } from '@/components/PersonPicker';
+import { FIELD_LABEL, InlineError, TEXTAREA } from '@/components/review/parts';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { errorMessage } from '@/lib/use-query';
 
-export const QUESTIONS_CHANGED = "po:questions-changed";
+export const QUESTIONS_CHANGED = 'po:questions-changed';
 
 /** Tells every open list of questions (a section's Feedback tab) to read again. */
 export function questionsChanged() {
@@ -26,7 +26,7 @@ export function AskTeammate({
   person: suggested = null,
   onClose,
 }: {
-  subject: Schemas["QuestionCreate"]["subject"];
+  subject: Schemas['QuestionCreate']['subject'];
   /** What the question is about, in the form's title ("6. Success metrics"). */
   context: string;
   /** Who the form starts with (a Plan alert's one engineering lead); the asker may change it. */
@@ -34,22 +34,27 @@ export function AskTeammate({
   onClose: () => void;
 }) {
   const [person, setPerson] = useState<Person | null>(suggested);
-  const [prompt, setPrompt] = useState("");
-  const [why, setWhy] = useState("");
+  const [prompt, setPrompt] = useState('');
+  const [why, setWhy] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [asked, setAsked] = useState<Person | null>(null);
 
   async function submit(e?: FormEvent) {
     e?.preventDefault();
-    if (!person) return setError("Pick the person to ask");
-    if (!prompt.trim()) return setError("Write the question");
+    if (!person) return setError('Pick the person to ask');
+    if (!prompt.trim()) return setError('Write the question');
     setBusy(true);
     setError(null);
     try {
       await unwrap(
-        api.POST("/v1/questions", {
-          body: { prompt: prompt.trim(), asked_to: person.user_id, rationale: why.trim() || null, subject },
+        api.POST('/v1/questions', {
+          body: {
+            prompt: prompt.trim(),
+            asked_to: person.user_id,
+            rationale: why.trim() || null,
+            subject,
+          },
         }),
       );
       setAsked(person);
@@ -67,7 +72,9 @@ export function AskTeammate({
       aria-label={`Ask a teammate about ${context}`}
       data-testid="ask-teammate"
     >
-      <p className="mb-2 min-w-0 truncate font-semibold text-text">Ask a teammate about “{context}”</p>
+      <p className="mb-2 min-w-0 truncate font-semibold text-text">
+        Ask a teammate about “{context}”
+      </p>
       {asked ? (
         <div className="flex flex-wrap items-center gap-2">
           <Chip kind="pass">Asked {asked.name}</Chip>
@@ -93,16 +100,28 @@ export function AskTeammate({
           </div>
           <label className={FIELD_LABEL}>
             Question
-            <textarea rows={2} maxLength={1000} value={prompt} onChange={(e) => setPrompt(e.target.value)} className={TEXTAREA} />
+            <textarea
+              rows={2}
+              maxLength={1000}
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              className={TEXTAREA}
+            />
           </label>
           <label className={FIELD_LABEL}>
             Why (optional)
-            <textarea rows={2} maxLength={500} value={why} onChange={(e) => setWhy(e.target.value)} className={TEXTAREA} />
+            <textarea
+              rows={2}
+              maxLength={500}
+              value={why}
+              onChange={(e) => setWhy(e.target.value)}
+              className={TEXTAREA}
+            />
           </label>
           {error && <InlineError>{error}</InlineError>}
           <div className="flex items-center gap-2">
             <Button type="submit" variant="solid" icon="ask" disabled={busy}>
-              {busy ? "Asking…" : "Ask"}
+              {busy ? 'Asking…' : 'Ask'}
             </Button>
             <Button variant="ghost" onClick={onClose}>
               Cancel

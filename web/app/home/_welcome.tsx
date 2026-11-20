@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import { Link } from "@/lib/nav";
+import { Link } from '@/lib/nav';
 
-import { Button, Panel } from "@/components/ds";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { useMe, type Role } from "@/lib/me";
+import { Button, Panel } from '@/components/ds';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { useMe, type Role } from '@/lib/me';
 
 /** A first thing to do; `step`: the Set up step it is, when it is one. */
 export type WelcomeCopy = { role: string; steps: { label: string; href: string; step?: string }[] };
@@ -18,35 +18,35 @@ type Copy = WelcomeCopy;
  */
 const COPY: Record<Role, Copy> = {
   owner: {
-    role: "You are an owner: you set Oracle up for the company and decide who joins.",
+    role: 'You are an owner: you set Oracle up for the company and decide who joins.',
     steps: [
-      { label: "Connect your tools", href: "/settings/connections", step: "connect" },
-      { label: "Pick your sources", href: "/settings/sources", step: "sources" },
-      { label: "Invite your team", href: "/settings/members", step: "invite" },
+      { label: 'Connect your tools', href: '/settings/connections', step: 'connect' },
+      { label: 'Pick your sources', href: '/settings/sources', step: 'sources' },
+      { label: 'Invite your team', href: '/settings/members', step: 'invite' },
     ],
   },
   approver: {
-    role: "You are an approver: you approve PRDs and roadmaps before the team builds from them.",
+    role: 'You are an approver: you approve PRDs and roadmaps before the team builds from them.',
     steps: [
-      { label: "Connect your tools", href: "/settings/connections", step: "connect" },
-      { label: "Pick your sources", href: "/settings/sources", step: "sources" },
-      { label: "See what waits for you", href: "/inbox" },
+      { label: 'Connect your tools', href: '/settings/connections', step: 'connect' },
+      { label: 'Pick your sources', href: '/settings/sources', step: 'sources' },
+      { label: 'See what waits for you', href: '/inbox' },
     ],
   },
   commenter: {
-    role: "You are a commenter: you read PRDs and roadmaps, comment on them and add evidence.",
+    role: 'You are a commenter: you read PRDs and roadmaps, comment on them and add evidence.',
     steps: [
-      { label: "Connect your tools", href: "/settings/connections", step: "connect" },
-      { label: "Pick your sources", href: "/settings/sources", step: "sources" },
-      { label: "Read a PRD and comment", href: "/documents" },
+      { label: 'Connect your tools', href: '/settings/connections', step: 'connect' },
+      { label: 'Pick your sources', href: '/settings/sources', step: 'sources' },
+      { label: 'Read a PRD and comment', href: '/documents' },
     ],
   },
   viewer: {
-    role: "You are a viewer: you read the goals, PRDs and plan, and why each was chosen.",
+    role: 'You are a viewer: you read the goals, PRDs and plan, and why each was chosen.',
     steps: [
-      { label: "Read the goals", href: "/ground-truth" },
-      { label: "Open a PRD", href: "/documents" },
-      { label: "Open the plan", href: "/plan" },
+      { label: 'Read the goals', href: '/ground-truth' },
+      { label: 'Open a PRD', href: '/documents' },
+      { label: 'Open the plan', href: '/plan' },
     ],
   },
 };
@@ -56,11 +56,11 @@ const COPY: Record<Role, Copy> = {
  * exists; a Settings step carries ?from=simple-setup so its "Back to Home" returns to Simple.
  */
 const SIMPLE_HREF: Record<string, string> = {
-  "/settings/connections": "/settings/connections?from=simple-setup",
-  "/settings/sources": "/settings/sources?from=simple-setup",
-  "/settings/members": "/settings/members?from=simple-setup",
-  "/documents": "/simple/one-pagers",
-  "/plan": "/simple/roadmap",
+  '/settings/connections': '/settings/connections?from=simple-setup',
+  '/settings/sources': '/settings/sources?from=simple-setup',
+  '/settings/members': '/settings/members?from=simple-setup',
+  '/documents': '/simple/one-pagers',
+  '/plan': '/simple/roadmap',
 };
 
 /**
@@ -69,17 +69,17 @@ const SIMPLE_HREF: Record<string, string> = {
  * (an owner), approve a PRD (an approver), comment (a commenter), else read (a viewer).
  * `mode` "simple" points the steps at Simple's pages where they exist.
  */
-export function useWelcomeCopy(mode: "detailed" | "simple" = "detailed"): WelcomeCopy {
+export function useWelcomeCopy(mode: 'detailed' | 'simple' = 'detailed'): WelcomeCopy {
   const { can } = useMe();
-  const words: Role = can("put_setting")
-    ? "owner"
-    : can("approve_version", true)
-      ? "approver"
-      : can("create_comment")
-        ? "commenter"
-        : "viewer";
+  const words: Role = can('put_setting')
+    ? 'owner'
+    : can('approve_version', true)
+      ? 'approver'
+      : can('create_comment')
+        ? 'commenter'
+        : 'viewer';
   const copy = COPY[words];
-  if (mode === "detailed") return copy;
+  if (mode === 'detailed') return copy;
   return { ...copy, steps: copy.steps.map((s) => ({ ...s, href: SIMPLE_HREF[s.href] ?? s.href })) };
 }
 
@@ -88,7 +88,7 @@ export function useWelcomeCopy(mode: "detailed" | "simple" = "detailed"): Welcom
  * GET /v1/setup's `welcome`): dismissed in one mode, it is gone in both.
  */
 export function dismissWelcome(): Promise<unknown> {
-  return unwrap(api.PATCH("/v1/me/preferences", { body: { welcome_dismissed: true } }));
+  return unwrap(api.PATCH('/v1/me/preferences', { body: { welcome_dismissed: true } }));
 }
 
 /**
@@ -109,7 +109,7 @@ export function WelcomePanel({
   onDismiss: () => void;
   busy: boolean;
   /** The caller's Set up steps (/v1/setup). */
-  setup?: Schemas["SetupOut"];
+  setup?: Schemas['SetupOut'];
   /** The Set up checklist is drawn below the welcome. */
   setupShown: boolean;
 }) {
@@ -117,8 +117,11 @@ export function WelcomePanel({
   const done = new Set((setup?.steps ?? []).filter((s) => s.done).map((s) => String(s.key)));
   const inSetup = new Set((setup?.steps ?? []).map((s) => String(s.key)));
   // A step Set up lists is left to it while drawn; a finished one is never offered.
-  const steps = copy.steps.filter((s) => !s.step || (!done.has(s.step) && !(setupShown && inSetup.has(s.step))));
-  const pointsToSetup = setupShown && copy.steps.some((s) => s.step && inSetup.has(s.step) && !done.has(s.step));
+  const steps = copy.steps.filter(
+    (s) => !s.step || (!done.has(s.step) && !(setupShown && inSetup.has(s.step))),
+  );
+  const pointsToSetup =
+    setupShown && copy.steps.some((s) => s.step && inSetup.has(s.step) && !done.has(s.step));
   return (
     <Panel
       title="Welcome to Oracle"
@@ -131,7 +134,8 @@ export function WelcomePanel({
     >
       <div className="flex min-w-0 flex-col gap-3 px-4 py-3 max-[600px]:px-3">
         <p className="text-[15px] text-text">
-          Oracle keeps the company&apos;s goals, PRDs and plan in one place, each tied to the evidence behind it.
+          Oracle keeps the company&apos;s goals, PRDs and plan in one place, each tied to the
+          evidence behind it.
         </p>
         <p data-testid="welcome-role" className="text-[15px] text-text">
           {copy.role}
@@ -144,11 +148,18 @@ export function WelcomePanel({
         {steps.length > 0 && (
           <ol className="flex flex-col gap-1.5">
             {steps.map((s, i) => (
-              <li key={s.href} data-testid="welcome-step" className="flex min-w-0 items-center gap-2.5">
+              <li
+                key={s.href}
+                data-testid="welcome-step"
+                className="flex min-w-0 items-center gap-2.5"
+              >
                 <span className="tnum grid size-6 flex-none place-items-center rounded-full bg-accent-soft text-[13px] font-bold text-accent-ink">
                   {i + 1}
                 </span>
-                <Link href={s.href} className="min-w-0 truncate font-semibold text-accent-ink hover:underline">
+                <Link
+                  href={s.href}
+                  className="min-w-0 truncate font-semibold text-accent-ink hover:underline"
+                >
                   {s.label}
                 </Link>
               </li>

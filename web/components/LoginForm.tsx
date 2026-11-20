@@ -1,21 +1,24 @@
-"use client";
+'use client';
 
-import { useRouter, useSearchParams } from "@/lib/nav";
-import { useEffect, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from '@/lib/nav';
+import { useEffect, useState, type FormEvent } from 'react';
 
-import { AuthCard } from "@/app/login/_components/AuthCard";
-import { Button, Chip, InfoTip, Notice } from "@/components/ds";
-import { INPUT } from "@/components/ui";
-import { api, MOCK_MODE } from "@/lib/api/client";
-import { MOCK_LOGIN } from "@/lib/api/mock/fixtures";
-import { loadLanding } from "@/lib/experience";
-import { safeNextPath } from "@/lib/safe-next";
+import { AuthCard } from '@/app/login/_components/AuthCard';
+import { Button, Chip, InfoTip, Notice } from '@/components/ds';
+import { INPUT } from '@/components/ui';
+import { api, MOCK_MODE } from '@/lib/api/client';
+import { MOCK_LOGIN } from '@/lib/api/mock/fixtures';
+import { loadLanding } from '@/lib/experience';
+import { safeNextPath } from '@/lib/safe-next';
 
 /** Sign-in runs in the browser: without JavaScript, the card says so instead of waiting. */
 export function NoScriptNote() {
   return (
     <noscript>
-      <span className="mt-2 block text-text">Signing in needs JavaScript. Turn it on in your browser&apos;s settings, then reload this page.</span>
+      <span className="mt-2 block text-text">
+        Signing in needs JavaScript. Turn it on in your browser&apos;s settings, then reload this
+        page.
+      </span>
     </noscript>
   );
 }
@@ -25,9 +28,9 @@ const CHECK_WAIT_MS = 10_000;
 
 export function LoginForm() {
   const router = useRouter();
-  const next = useSearchParams().get("next");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const next = useSearchParams().get('next');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   // qa-shell-12: until the session check answers, no form to start typing into (a signed-in
@@ -37,8 +40,8 @@ export function LoginForm() {
   // Without one, the person's home: their saved mode's, else their role's (#723, D13).
   const target = !next
     ? null
-    : typeof window === "undefined"
-      ? "/home"
+    : typeof window === 'undefined'
+      ? '/home'
       : safeNextPath(next, window.location.origin);
 
   // Already signed in (e.g. by Google IAP in front of the app): skip the form. A5: a Google
@@ -49,21 +52,17 @@ export function LoginForm() {
     // form shows; a later answer that someone is signed in still sends them on.
     const giveUp = setTimeout(() => live && setChecking(false), CHECK_WAIT_MS);
     api
-      .GET("/v1/auth/access")
+      .GET('/v1/auth/access')
       .then(({ data }) => {
         if (!live) return false;
-        if (
-          data &&
-          data.state !== "member" &&
-          data.state !== "no_google_sign_in"
-        ) {
-          router.replace("/access");
+        if (data && data.state !== 'member' && data.state !== 'no_google_sign_in') {
+          router.replace('/access');
           return false;
         }
         return true;
       })
       .catch(() => true)
-      .then((ask) => (ask ? api.GET("/v1/me") : null))
+      .then((ask) => (ask ? api.GET('/v1/me') : null))
       .then(async (res) => {
         if (!live) return;
         if (res === null) return; // Off to /access.
@@ -88,7 +87,7 @@ export function LoginForm() {
     // Signing in still shows while the next page loads.
     let leaving = false;
     try {
-      const { error: err, response } = await api.POST("/v1/auth/login", {
+      const { error: err, response } = await api.POST('/v1/auth/login', {
         body: { email, password },
       });
       if (err || !response.ok) {
@@ -96,10 +95,10 @@ export function LoginForm() {
         const detail = (err as { detail?: unknown } | undefined)?.detail;
         setError(
           response.status === 401
-            ? "Invalid email or password."
-            : response.status === 403 && typeof detail === "string"
+            ? 'Invalid email or password.'
+            : response.status === 403 && typeof detail === 'string'
               ? detail
-              : "Login failed.",
+              : 'Login failed.',
         );
         return;
       }
@@ -110,7 +109,7 @@ export function LoginForm() {
       window.location.assign(target ?? (await loadLanding()));
       leaving = true;
     } catch {
-      setError("Cannot reach the API.");
+      setError('Cannot reach the API.');
     } finally {
       if (!leaving) setPending(false);
     }
@@ -156,13 +155,8 @@ export function LoginForm() {
             />
           </label>
           {error && <Notice tone="error">{error}</Notice>}
-          <Button
-            type="submit"
-            variant="primary"
-            disabled={pending}
-            className="mt-1 w-full"
-          >
-            {pending ? "Signing in…" : "Sign in"}
+          <Button type="submit" variant="primary" disabled={pending} className="mt-1 w-full">
+            {pending ? 'Signing in…' : 'Sign in'}
           </Button>
         </form>
       )}
@@ -176,8 +170,7 @@ export function LoginForm() {
             {MOCK_LOGIN.email} / {MOCK_LOGIN.password}
           </span>
           <InfoTip label="Mock mode" side="top">
-            To try a role, use approver@, commenter@ or viewer@example.com with
-            the same password.
+            To try a role, use approver@, commenter@ or viewer@example.com with the same password.
           </InfoTip>
         </div>
       )}

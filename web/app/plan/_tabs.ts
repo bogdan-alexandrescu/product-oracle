@@ -15,19 +15,25 @@ export type PlanTab = {
 };
 
 export const PLAN_TABS: PlanTab[] = [
-  { key: "plan", label: "Plan", href: "/plan", testId: "plan-tab-plan" },
-  { key: "documents", label: "Documents", name: "Roadmap documents", href: "/plan/documents", testId: "plan-tab-documents" },
-  { key: "dates", label: "Dates", href: "/plan/dates", testId: "plan-tab-dates" },
-  { key: "outcomes", label: "Outcomes", href: "/plan/outcomes", testId: "plan-tab-outcomes" },
+  { key: 'plan', label: 'Plan', href: '/plan', testId: 'plan-tab-plan' },
+  {
+    key: 'documents',
+    label: 'Documents',
+    name: 'Roadmap documents',
+    href: '/plan/documents',
+    testId: 'plan-tab-documents',
+  },
+  { key: 'dates', label: 'Dates', href: '/plan/dates', testId: 'plan-tab-dates' },
+  { key: 'outcomes', label: 'Outcomes', href: '/plan/outcomes', testId: 'plan-tab-outcomes' },
   // qa-plan-23: the alignment reports (/plan/reports and a report) show the strip, so they have their tab.
-  { key: "reports", label: "Reports", href: "/plan/reports", testId: "plan-tab-reports" },
+  { key: 'reports', label: 'Reports', href: '/plan/reports', testId: 'plan-tab-reports' },
 ];
 
 /** In the mock build only: tests register extra entries here (a JSON list of PlanTab). */
-export const MOCK_PLAN_TABS_KEY = "po-mock-plan-tabs";
+export const MOCK_PLAN_TABS_KEY = 'po-mock-plan-tabs';
 
 /** Whether `pathname` is inside `tab` (the Plan tab is /plan itself). */
 export function isOpen(tab: PlanTab, pathname: string): boolean {
-  if (tab.href === "/plan") return pathname === "/plan";
+  if (tab.href === '/plan') return pathname === '/plan';
   return pathname === tab.href || pathname.startsWith(`${tab.href}/`);
 }

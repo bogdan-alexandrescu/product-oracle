@@ -1,8 +1,8 @@
-import { expect, test, type Locator, type Page } from "./test";
+import { expect, test, type Locator, type Page } from './test';
 
-import { GOAL_ATTRS_SCENARIO } from "../lib/api/mock/baseline";
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/ids";
-import { login } from "./helpers";
+import { GOAL_ATTRS_SCENARIO } from '../lib/api/mock/baseline';
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/ids';
+import { login } from './helpers';
 
 /*
  * gt-goal-attr-shapes, driven through the UI on the mock API as a person would. "goal-attr-shapes" adds the proposed
@@ -27,30 +27,36 @@ import { login } from "./helpers";
  *   fails_when=the picker reads "Not in the Ground Truth" or the id changes; no_claim=whether such a parent is sensible.
  */
 
-const CLEAN = "KR 1.1 live helpers averaging 50 replied threads a day in March 2027";
+const CLEAN = 'KR 1.1 live helpers averaging 50 replied threads a day in March 2027';
 
-async function openGoal(page: Page, key = "kr-1-1", name = CLEAN) {
-  await page.addInitScript(([k, s]) => localStorage.setItem(k, s), [MOCK_SCENARIO_KEY, GOAL_ATTRS_SCENARIO] as const);
+async function openGoal(page: Page, key = 'kr-1-1', name = CLEAN) {
+  await page.addInitScript(([k, s]) => localStorage.setItem(k, s), [
+    MOCK_SCENARIO_KEY,
+    GOAL_ATTRS_SCENARIO,
+  ] as const);
   await login(page);
-  await page.goto("/ground-truth");
-  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
-  await page.getByTestId(`goal-${key}`).getByRole("button", { name }).click();
-  const panel = page.getByTestId("entity-drawer");
-  await expect(panel.getByRole("heading", { name })).toBeVisible();
+  await page.goto('/ground-truth');
+  await expect(page.getByRole('heading', { level: 1, name: 'Ground Truth' })).toBeVisible();
+  await page.getByTestId(`goal-${key}`).getByRole('button', { name }).click();
+  const panel = page.getByTestId('entity-drawer');
+  await expect(panel.getByRole('heading', { name })).toBeVisible();
   return panel;
 }
 
 /** The goal as the mock saved it, as the API keeps it: its id and stored attributes. */
-async function stored(page: Page, key: string): Promise<{ id: string; attrs: Record<string, unknown> }> {
+async function stored(
+  page: Page,
+  key: string,
+): Promise<{ id: string; attrs: Record<string, unknown> }> {
   return page.evaluate((k) => {
-    const db = JSON.parse(localStorage.getItem("po-mock-db-v2")!);
+    const db = JSON.parse(localStorage.getItem('po-mock-db-v2')!);
     return db.baseline.entities.find((e: { key: string }) => e.key === k);
   }, key);
 }
 
 /** No placeholder, underscore key, brace or bracket in `text`. */
 function plain(text: string) {
-  expect(text).not.toContain("[n]");
+  expect(text).not.toContain('[n]');
   expect(text).not.toMatch(/[a-z]_[a-z]/);
   expect(text).not.toMatch(/[{}[\]]/);
 }
@@ -59,130 +65,171 @@ async function plainAttributes(panel: Locator) {
   const attrs = panel.locator('dl[aria-label="Attributes"]');
   await expect(attrs).toBeVisible();
   plain(await attrs.innerText());
-  for (const title of await attrs.locator("[title]").evaluateAll((els) => els.map((e) => e.getAttribute("title") ?? ""))) plain(title);
+  for (const title of await attrs
+    .locator('[title]')
+    .evaluateAll((els) => els.map((e) => e.getAttribute('title') ?? '')))
+    plain(title);
 }
 
-test("panel: a list reads one entry per line, a placeholder entry as Missing; an object as its fields in words", async ({ page }) => {
+test('panel: a list reads one entry per line, a placeholder entry as Missing; an object as its fields in words', async ({
+  page,
+}) => {
   const panel = await openGoal(page);
-  const values = panel.locator('[data-attr="open_values"]').getByRole("listitem");
-  await expect(values).toHaveText(["Missing", "50 replied threads a day", "Missing"]);
-  await expect(panel.locator('[data-attr="reply_split"]').getByRole("listitem")).toHaveText([
-    "Email threads: 60",
-    "Chat threads: Missing",
-    "Review by: Mar 15, 2027",
+  const values = panel.locator('[data-attr="open_values"]').getByRole('listitem');
+  await expect(values).toHaveText(['Missing', '50 replied threads a day', 'Missing']);
+  await expect(panel.locator('[data-attr="reply_split"]').getByRole('listitem')).toHaveText([
+    'Email threads: 60',
+    'Chat threads: Missing',
+    'Review by: Mar 15, 2027',
   ]);
-  await expect(panel.getByText("Open values", { exact: true })).toBeVisible();
-  await expect(panel.getByText("Reply split", { exact: true })).toBeVisible();
+  await expect(panel.getByText('Open values', { exact: true })).toBeVisible();
+  await expect(panel.getByText('Reply split', { exact: true })).toBeVisible();
   await plainAttributes(panel);
 });
 
-test("edit: attributes read in words, the parent goal is picked by name, one list entry and one field are saved", async ({ page }) => {
+test('edit: attributes read in words, the parent goal is picked by name, one list entry and one field are saved', async ({
+  page,
+}) => {
   const panel = await openGoal(page);
-  await panel.getByRole("button", { name: "Edit", exact: true }).click();
-  const form = panel.getByRole("form", { name: "Edit" });
+  await panel.getByRole('button', { name: 'Edit', exact: true }).click();
+  const form = panel.getByRole('form', { name: 'Edit' });
 
-  await expect(form.getByRole("combobox", { name: "Parent goal" })).toHaveValue("g.paid-conversion");
-  await expect(form.getByRole("combobox", { name: "Parent goal" }).locator("option:checked")).toHaveText("Growth");
-  const open = form.getByRole("textbox", { name: "Open values" });
-  await expect(open).toHaveValue("live helpers\n50 replied threads a day\nof threads answered within an hour");
-  const split = form.getByRole("group", { name: "Reply split" });
-  await expect(split.getByLabel("Email threads", { exact: true })).toHaveValue("60");
-  await expect(split.getByLabel("Chat threads", { exact: true })).toHaveValue("");
-  await expect(split.getByLabel("Review by", { exact: true })).toHaveValue("2027-03-15");
+  await expect(form.getByRole('combobox', { name: 'Parent goal' })).toHaveValue(
+    'g.paid-conversion',
+  );
+  await expect(
+    form.getByRole('combobox', { name: 'Parent goal' }).locator('option:checked'),
+  ).toHaveText('Growth');
+  const open = form.getByRole('textbox', { name: 'Open values' });
+  await expect(open).toHaveValue(
+    'live helpers\n50 replied threads a day\nof threads answered within an hour',
+  );
+  const split = form.getByRole('group', { name: 'Reply split' });
+  await expect(split.getByLabel('Email threads', { exact: true })).toHaveValue('60');
+  await expect(split.getByLabel('Chat threads', { exact: true })).toHaveValue('');
+  await expect(split.getByLabel('Review by', { exact: true })).toHaveValue('2027-03-15');
 
   // Every attribute field, its label and its value, reads in words: no raw key, JSON or placeholder.
-  const fields = form.locator("[data-attr-field]");
+  const fields = form.locator('[data-attr-field]');
   await expect(fields).not.toHaveCount(0);
   for (const field of await fields.all()) {
     plain(await field.innerText());
     const values = await field
-      .locator("input, textarea, select")
+      .locator('input, textarea, select')
       .evaluateAll((els) =>
-        els.map((e) => (e instanceof HTMLSelectElement ? (e.selectedOptions[0]?.textContent ?? "") : (e as HTMLInputElement).value)),
+        els.map((e) =>
+          e instanceof HTMLSelectElement
+            ? (e.selectedOptions[0]?.textContent ?? '')
+            : (e as HTMLInputElement).value,
+        ),
       );
     for (const v of values) plain(v);
   }
 
-  await open.fill("live helpers\n60 replied threads a day\nof threads answered within an hour");
-  await split.getByLabel("Chat threads", { exact: true }).fill("40");
-  await form.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(panel.getByRole("status")).toContainText("Saved");
+  await open.fill('live helpers\n60 replied threads a day\nof threads answered within an hour');
+  await split.getByLabel('Chat threads', { exact: true }).fill('40');
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(panel.getByRole('status')).toContainText('Saved');
 
-  await expect(panel.locator('[data-attr="open_values"]').getByRole("listitem")).toHaveText(["Missing", "60 replied threads a day", "Missing"]);
-  await expect(panel.locator('[data-attr="reply_split"]').getByRole("listitem")).toHaveText([
-    "Email threads: 60",
-    "Chat threads: 40",
-    "Review by: Mar 15, 2027",
+  await expect(panel.locator('[data-attr="open_values"]').getByRole('listitem')).toHaveText([
+    'Missing',
+    '60 replied threads a day',
+    'Missing',
   ]);
-  await expect(panel.locator('[data-attr="parent_goal"]')).toHaveText("Growth");
+  await expect(panel.locator('[data-attr="reply_split"]').getByRole('listitem')).toHaveText([
+    'Email threads: 60',
+    'Chat threads: 40',
+    'Review by: Mar 15, 2027',
+  ]);
+  await expect(panel.locator('[data-attr="parent_goal"]')).toHaveText('Growth');
   await plainAttributes(panel);
 });
 
-test("types: each edited value is saved as its stored type; untouched values stay exactly as stored", async ({ page }) => {
+test('types: each edited value is saved as its stored type; untouched values stay exactly as stored', async ({
+  page,
+}) => {
   const panel = await openGoal(page);
-  const before = (await stored(page, "kr-1-1")).attrs;
-  await panel.getByRole("button", { name: "Edit", exact: true }).click();
-  const form = panel.getByRole("form", { name: "Edit" });
+  const before = (await stored(page, 'kr-1-1')).attrs;
+  await panel.getByRole('button', { name: 'Edit', exact: true }).click();
+  const form = panel.getByRole('form', { name: 'Edit' });
 
   // A number inside an object refuses words with the top-level error, and nothing is saved.
-  const split = form.getByRole("group", { name: "Reply split" });
-  await split.getByLabel("Email threads", { exact: true }).fill("sixty");
-  await form.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(form.getByText("Email threads must be a number.")).toBeVisible();
-  expect((await stored(page, "kr-1-1")).attrs).toEqual(before);
-  await split.getByLabel("Email threads", { exact: true }).fill("60");
+  const split = form.getByRole('group', { name: 'Reply split' });
+  await split.getByLabel('Email threads', { exact: true }).fill('sixty');
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(form.getByText('Email threads must be a number.')).toBeVisible();
+  expect((await stored(page, 'kr-1-1')).attrs).toEqual(before);
+  await split.getByLabel('Email threads', { exact: true }).fill('60');
 
-  const targets = form.getByRole("group", { name: "Reply targets" });
-  await expect(targets.getByRole("group", { name: "Chat" }).getByLabel("Low", { exact: true })).toHaveValue("1");
-  await targets.getByRole("group", { name: "Chat" }).getByLabel("Low", { exact: true }).fill("3");
-  await targets.getByLabel("Hours", { exact: true }).fill("sixty");
-  await form.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(form.getByText("Hours must be a number.")).toBeVisible();
-  expect((await stored(page, "kr-1-1")).attrs.reply_targets).toEqual(before.reply_targets);
-  await targets.getByLabel("Hours", { exact: true }).fill("5");
-  await targets.getByRole("combobox", { name: "Weekends" }).selectOption({ label: "Yes" });
+  const targets = form.getByRole('group', { name: 'Reply targets' });
+  await expect(
+    targets.getByRole('group', { name: 'Chat' }).getByLabel('Low', { exact: true }),
+  ).toHaveValue('1');
+  await targets.getByRole('group', { name: 'Chat' }).getByLabel('Low', { exact: true }).fill('3');
+  await targets.getByLabel('Hours', { exact: true }).fill('sixty');
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(form.getByText('Hours must be a number.')).toBeVisible();
+  expect((await stored(page, 'kr-1-1')).attrs.reply_targets).toEqual(before.reply_targets);
+  await targets.getByLabel('Hours', { exact: true }).fill('5');
+  await targets.getByRole('combobox', { name: 'Weekends' }).selectOption({ label: 'Yes' });
 
-  const steps = form.getByRole("group", { name: "Review steps" });
-  await expect(steps.getByRole("group", { name: "1" }).getByLabel("Step", { exact: true })).toHaveValue("Read the thread");
-  await steps.getByRole("group", { name: "2" }).getByLabel("Hours", { exact: true }).fill("3");
+  const steps = form.getByRole('group', { name: 'Review steps' });
+  await expect(
+    steps.getByRole('group', { name: '1' }).getByLabel('Step', { exact: true }),
+  ).toHaveValue('Read the thread');
+  await steps.getByRole('group', { name: '2' }).getByLabel('Hours', { exact: true }).fill('3');
 
-  const replies = form.getByRole("group", { name: "Saved replies" });
-  await expect(replies.locator('[data-attr-part="1"]').getByRole("textbox")).toHaveValue("Thanks for writing in.\nWe will reply within a day.");
-  await replies.locator('[data-attr-part="2"]').getByRole("textbox").fill("Closed after two weeks");
+  const replies = form.getByRole('group', { name: 'Saved replies' });
+  await expect(replies.locator('[data-attr-part="1"]').getByRole('textbox')).toHaveValue(
+    'Thanks for writing in.\nWe will reply within a day.',
+  );
+  await replies.locator('[data-attr-part="2"]').getByRole('textbox').fill('Closed after two weeks');
 
-  await form.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(panel.getByRole("status")).toContainText("Saved");
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(panel.getByRole('status')).toContainText('Saved');
 
-  await expect.poll(async () => (await stored(page, "kr-1-1")).attrs.reply_targets).toEqual({
-    chat: { low: 3, high: 2 },
-    email: { low: 2, high: 5 },
-    hours: 5,
-    weekends: true,
-    owner_note: null,
-    tags: [],
-  });
-  const after = (await stored(page, "kr-1-1")).attrs;
+  await expect
+    .poll(async () => (await stored(page, 'kr-1-1')).attrs.reply_targets)
+    .toEqual({
+      chat: { low: 3, high: 2 },
+      email: { low: 2, high: 5 },
+      hours: 5,
+      weekends: true,
+      owner_note: null,
+      tags: [],
+    });
+  const after = (await stored(page, 'kr-1-1')).attrs;
   expect(after.review_steps).toEqual([
-    { step: "Read the thread", hours: 1 },
-    { step: "Write the reply", hours: 3 },
+    { step: 'Read the thread', hours: 1 },
+    { step: 'Write the reply', hours: 3 },
   ]);
-  expect(after.saved_replies).toEqual(["Thanks for writing in.\nWe will reply within a day.", "Closed after two weeks"]);
+  expect(after.saved_replies).toEqual([
+    'Thanks for writing in.\nWe will reply within a day.',
+    'Closed after two weeks',
+  ]);
   // Untouched: kept exactly as stored.
-  for (const k of ["reply_split", "open_values", "parent_goal", "spare_note", "old_tags"]) expect(after[k], k).toEqual(before[k]);
-  expect(after).toHaveProperty("spare_note", null);
-  expect(after).toHaveProperty("old_tags", []);
+  for (const k of ['reply_split', 'open_values', 'parent_goal', 'spare_note', 'old_tags'])
+    expect(after[k], k).toEqual(before[k]);
+  expect(after).toHaveProperty('spare_note', null);
+  expect(after).toHaveProperty('old_tags', []);
 });
 
-test("own parent: a goal stored as its own parent is named in the picker and kept by id", async ({ page }) => {
-  const name = "Answer chat threads within an hour";
-  const panel = await openGoal(page, "kr-1-2", name);
-  const { id } = await stored(page, "kr-1-2");
-  await panel.getByRole("button", { name: "Edit", exact: true }).click();
-  const form = panel.getByRole("form", { name: "Edit" });
-  await expect(form.getByRole("combobox", { name: "Parent goal" })).toHaveValue(id);
-  await expect(form.getByRole("combobox", { name: "Parent goal" }).locator("option:checked")).toHaveText(name);
-  await form.getByLabel("Description", { exact: true }).fill("Every chat thread answered within an hour.");
-  await form.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(panel.getByRole("status")).toContainText("Saved");
-  await expect.poll(async () => (await stored(page, "kr-1-2")).attrs.parent_goal).toBe(id);
+test('own parent: a goal stored as its own parent is named in the picker and kept by id', async ({
+  page,
+}) => {
+  const name = 'Answer chat threads within an hour';
+  const panel = await openGoal(page, 'kr-1-2', name);
+  const { id } = await stored(page, 'kr-1-2');
+  await panel.getByRole('button', { name: 'Edit', exact: true }).click();
+  const form = panel.getByRole('form', { name: 'Edit' });
+  await expect(form.getByRole('combobox', { name: 'Parent goal' })).toHaveValue(id);
+  await expect(
+    form.getByRole('combobox', { name: 'Parent goal' }).locator('option:checked'),
+  ).toHaveText(name);
+  await form
+    .getByLabel('Description', { exact: true })
+    .fill('Every chat thread answered within an hour.');
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(panel.getByRole('status')).toContainText('Saved');
+  await expect.poll(async () => (await stored(page, 'kr-1-2')).attrs.parent_goal).toBe(id);
 });

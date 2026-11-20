@@ -1,47 +1,47 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react';
 
-import { Button, GoalTag, Notice } from "@/components/ds";
-import { INPUT } from "@/components/ui";
-import { api, unwrap, type EntityOut, type GraphOut } from "@/lib/api/client";
-import { named } from "@/lib/codes";
-import { errorMessage, useAuthRedirect } from "@/lib/use-query";
+import { Button, GoalTag, Notice } from '@/components/ds';
+import { INPUT } from '@/components/ui';
+import { api, unwrap, type EntityOut, type GraphOut } from '@/lib/api/client';
+import { named } from '@/lib/codes';
+import { errorMessage, useAuthRedirect } from '@/lib/use-query';
 
-import { goalCodes, sortedGoals } from "./common";
-import { byTitle } from "./order";
+import { goalCodes, sortedGoals } from './common';
+import { byTitle } from './order';
 
 /** The kinds a person adds from the Baseline screen, in the form's order. */
 export const ADD_KINDS = [
-  { value: "goal", label: "Goal" },
-  { value: "feature", label: "Feature" },
-  { value: "product", label: "Product" },
-  { value: "risk", label: "Risk" },
-  { value: "assumption", label: "Assumption" },
-  { value: "requirement", label: "Requirement" },
-  { value: "strategy_choice", label: "Strategy choice" },
-] as const satisfies readonly { value: EntityOut["type"]; label: string }[];
+  { value: 'goal', label: 'Goal' },
+  { value: 'feature', label: 'Feature' },
+  { value: 'product', label: 'Product' },
+  { value: 'risk', label: 'Risk' },
+  { value: 'assumption', label: 'Assumption' },
+  { value: 'requirement', label: 'Requirement' },
+  { value: 'strategy_choice', label: 'Strategy choice' },
+] as const satisfies readonly { value: EntityOut['type']; label: string }[];
 
-export type AddKind = (typeof ADD_KINDS)[number]["value"];
+export type AddKind = (typeof ADD_KINDS)[number]['value'];
 
 const CONTRIBUTION = [
-  { value: "", label: "No link" },
-  { value: "1", label: "Weak (1)" },
-  { value: "2", label: "Medium (2)" },
-  { value: "3", label: "Strong (3)" },
+  { value: '', label: 'No link' },
+  { value: '1', label: 'Weak (1)' },
+  { value: '2', label: 'Medium (2)' },
+  { value: '3', label: 'Strong (3)' },
 ];
 
 /** A key the API accepts (lowercase, digits, . _ -), unique enough: the title's words and a short suffix. */
 function newKey(title: string) {
   const slug = title
     .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
+    .normalize('NFKD')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
     .slice(0, 60)
-    .replace(/-+$/, "");
-  const suffix = Math.random().toString(16).slice(2, 8).padEnd(6, "0");
-  return `${slug || "item"}-${suffix}`;
+    .replace(/-+$/, '');
+  const suffix = Math.random().toString(16).slice(2, 8).padEnd(6, '0');
+  return `${slug || 'item'}-${suffix}`;
 }
 
 /**
@@ -65,9 +65,9 @@ export function AddItemSheet({
   const id = useId();
   const onAuth = useAuthRedirect();
   const [kind, setKind] = useState<AddKind>(initial);
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-  const [product, setProduct] = useState("");
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [product, setProduct] = useState('');
   const [goals, setGoals] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,22 +77,23 @@ export function AddItemSheet({
 
   // Closing after the item is made still refreshes the page, so the item shows.
   const close = useCallback(
-    () => (created ? onAdded(`Added ${created.name}, without all of the links you picked.`) : onClose()),
+    () =>
+      created ? onAdded(`Added ${created.name}, without all of the links you picked.`) : onClose(),
     [created, onAdded, onClose],
   );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+      if (e.key !== 'Escape') return;
       e.preventDefault();
       close();
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, [close]);
 
-  const live = (graph?.entities ?? []).filter((e) => e.status !== "rejected");
-  const products = live.filter((e) => e.type === "product").sort(byTitle);
+  const live = (graph?.entities ?? []).filter((e) => e.status !== 'rejected');
+  const products = live.filter((e) => e.type === 'product').sort(byTitle);
   const goalRows = sortedGoals(graph);
   // The goal's code ("G-B", a subgoal's "G-B.1"), none when its title has none: the name is shown beside it.
   const codes = goalCodes(graph);
@@ -100,7 +101,7 @@ export function AddItemSheet({
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (!title.trim()) {
-      setError("Give the item a title.");
+      setError('Give the item a title.');
       return;
     }
     setBusy(true);
@@ -109,8 +110,15 @@ export function AddItemSheet({
     try {
       if (!item) {
         const out = await unwrap(
-          api.POST("/v1/baseline/entities", {
-            body: { type: kind, key: newKey(title.trim()), title: title.trim(), body: body.trim() || null, attrs: {}, origin: "user" },
+          api.POST('/v1/baseline/entities', {
+            body: {
+              type: kind,
+              key: newKey(title.trim()),
+              title: title.trim(),
+              body: body.trim() || null,
+              attrs: {},
+              origin: 'user',
+            },
           }),
         );
         if (!out.entity) {
@@ -118,42 +126,55 @@ export function AddItemSheet({
           return;
         }
         // codes-on-join: a feature gets its code as it joins the Ground Truth; the notice says it.
-        const code = kind === "feature" ? named(out.entity.title, out.entity.key).code : null;
+        const code = kind === 'feature' ? named(out.entity.title, out.entity.key).code : null;
         item = { id: out.entity.id, name: `“${title.trim()}”`, ...(code ? { code } : {}) };
         setCreated(item);
       }
       const name = item.name;
-      if (kind === "feature") {
+      if (kind === 'feature') {
         const src_id = item.id;
         const links = [
-          ...(product ? [{ dst_id: product, type: "part_of" as const, attrs: {} }] : []),
+          ...(product ? [{ dst_id: product, type: 'part_of' as const, attrs: {} }] : []),
           ...Object.entries(goals)
             .filter(([, c]) => c)
-            .map(([goal, c]) => ({ dst_id: goal, type: "supports" as const, attrs: { contribution: Number(c) } })),
+            .map(([goal, c]) => ({
+              dst_id: goal,
+              type: 'supports' as const,
+              attrs: { contribution: Number(c) },
+            })),
         ];
         for (const link of links) {
           const done = `${link.type}:${link.dst_id}`;
           if (linked.current.has(done)) continue;
-          await unwrap(api.POST("/v1/baseline/edges", { body: { src_id, ...link, origin: "user" } }));
+          await unwrap(
+            api.POST('/v1/baseline/edges', { body: { src_id, ...link, origin: 'user' } }),
+          );
           linked.current.add(done);
         }
       }
       onAdded(
-        kind === "goal"
+        kind === 'goal'
           ? `Added ${name}. New goals start proposed: confirm it from its panel once it is agreed.`
-          : `Added ${name}${item.code ? ` as ${item.code}` : ""}. It is confirmed and locked against agent changes.`,
+          : `Added ${name}${item.code ? ` as ${item.code}` : ''}. It is confirmed and locked against agent changes.`,
       );
     } catch (err) {
       if (!onAuth(err)) {
-        setError(item ? `${item.name} was added, but a link failed (${errorMessage(err)}). Try again to make the rest.` : errorMessage(err));
+        setError(
+          item
+            ? `${item.name} was added, but a link failed (${errorMessage(err)}). Try again to make the rest.`
+            : errorMessage(err),
+        );
       }
       setBusy(false);
     }
   }
 
-  const label = "flex flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2";
+  const label = 'flex flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2';
   return (
-    <div data-backdrop="" className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:p-0">
+    <div
+      data-backdrop=""
+      className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:p-0"
+    >
       <form
         role="dialog"
         aria-modal="true"
@@ -162,7 +183,10 @@ export function AddItemSheet({
         className="flex w-full max-w-lg min-w-0 flex-col rounded-inspector border border-line bg-surface text-text shadow-tip max-[600px]:min-h-dvh max-[600px]:rounded-none max-[600px]:border-0"
       >
         <div className="flex min-h-14 items-center gap-2 border-b border-line px-5 max-[600px]:px-4">
-          <h2 id={`${id}-title`} className="min-w-0 flex-1 font-display text-xl font-bold tracking-heading">
+          <h2
+            id={`${id}-title`}
+            className="min-w-0 flex-1 font-display text-xl font-bold tracking-heading"
+          >
             Add an item
           </h2>
           <Button variant="ghost" icon="x" onClick={close} aria-label="Close" />
@@ -170,7 +194,13 @@ export function AddItemSheet({
         <div className="flex-1 space-y-4 px-5 py-4 text-[15px] max-[600px]:px-4">
           <div className={label}>
             <label htmlFor={`${id}-kind`}>Kind</label>
-            <select id={`${id}-kind`} className={INPUT} value={kind} disabled={!!created} onChange={(e) => setKind(e.target.value as AddKind)}>
+            <select
+              id={`${id}-kind`}
+              className={INPUT}
+              value={kind}
+              disabled={!!created}
+              onChange={(e) => setKind(e.target.value as AddKind)}
+            >
               {ADD_KINDS.map((k) => (
                 <option key={k.value} value={k.value}>
                   {k.label}
@@ -180,17 +210,35 @@ export function AddItemSheet({
           </div>
           <label className={label}>
             Title
-            <input className={INPUT} value={title} disabled={!!created} data-autofocus autoFocus onChange={(e) => setTitle(e.target.value)} />
+            <input
+              className={INPUT}
+              value={title}
+              disabled={!!created}
+              data-autofocus
+              autoFocus
+              onChange={(e) => setTitle(e.target.value)}
+            />
           </label>
           <label className={label}>
             Description
-            <textarea className={INPUT} rows={3} value={body} disabled={!!created} onChange={(e) => setBody(e.target.value)} />
+            <textarea
+              className={INPUT}
+              rows={3}
+              value={body}
+              disabled={!!created}
+              onChange={(e) => setBody(e.target.value)}
+            />
           </label>
-          {kind === "feature" && (
+          {kind === 'feature' && (
             <>
               <div className={label}>
                 <label htmlFor={`${id}-product`}>Product</label>
-                <select id={`${id}-product`} className={INPUT} value={product} onChange={(e) => setProduct(e.target.value)}>
+                <select
+                  id={`${id}-product`}
+                  className={INPUT}
+                  value={product}
+                  onChange={(e) => setProduct(e.target.value)}
+                >
                   <option value="">Unassigned</option>
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>
@@ -201,17 +249,23 @@ export function AddItemSheet({
               </div>
               {goalRows.length > 0 && (
                 <fieldset className="flex min-w-0 flex-col gap-2">
-                  <legend className="mb-1 text-[13px] font-semibold tracking-[0.02em] text-text2">Goals it serves</legend>
+                  <legend className="mb-1 text-[13px] font-semibold tracking-[0.02em] text-text2">
+                    Goals it serves
+                  </legend>
                   {goalRows.map((g) => (
                     <div key={g.id} className="flex min-w-0 flex-wrap items-center gap-2">
-                      <GoalTag id={codes.get(g.id)} proposed={g.status === "proposed"} />
-                      <label htmlFor={`${id}-goal-${g.id}`} className="min-w-0 flex-[1_1_10rem] truncate" title={g.title}>
+                      <GoalTag id={codes.get(g.id)} proposed={g.status === 'proposed'} />
+                      <label
+                        htmlFor={`${id}-goal-${g.id}`}
+                        className="min-w-0 flex-[1_1_10rem] truncate"
+                        title={g.title}
+                      >
                         {tags.get(g.id) ?? g.title}
                       </label>
                       <select
                         id={`${id}-goal-${g.id}`}
                         className={`${INPUT} w-auto flex-none`}
-                        value={goals[g.id] ?? ""}
+                        value={goals[g.id] ?? ''}
                         onChange={(e) => setGoals((m) => ({ ...m, [g.id]: e.target.value }))}
                       >
                         {CONTRIBUTION.map((c) => (
@@ -227,9 +281,9 @@ export function AddItemSheet({
             </>
           )}
           <p className="text-sm text-text2">
-            {kind === "goal"
-              ? "A new goal starts proposed; an approver confirms it."
-              : "Your item is confirmed and locked: agents can then only propose changes to it."}
+            {kind === 'goal'
+              ? 'A new goal starts proposed; an approver confirms it.'
+              : 'Your item is confirmed and locked: agents can then only propose changes to it.'}
           </p>
           {error && <Notice tone="error">{error}</Notice>}
         </div>
@@ -238,7 +292,7 @@ export function AddItemSheet({
             Cancel
           </Button>
           <Button type="submit" variant="primary" disabled={busy}>
-            {created ? "Try again" : "Add"}
+            {created ? 'Try again' : 'Add'}
           </Button>
         </div>
       </form>

@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import { useRef, type FormEvent, type ReactNode } from "react";
+import { useRef, type FormEvent, type ReactNode } from 'react';
 
-import { Button, useFocusTrap } from "@/components/ds";
-import { ErrorNote } from "@/components/ui";
+import { Button, useFocusTrap } from '@/components/ds';
+import { ErrorNote } from '@/components/ui';
 
 /**
  * A modal form for the launches and changelog screens (the New update dialog's shape): a
@@ -36,7 +36,10 @@ export function FormDialog({
   useFocusTrap(panel, true, onClose);
   const id = `${testId}-title`;
   return (
-    <div data-backdrop="" className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4">
+    <div
+      data-backdrop=""
+      className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4"
+    >
       <div
         ref={panel}
         role="dialog"

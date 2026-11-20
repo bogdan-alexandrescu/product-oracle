@@ -1,14 +1,23 @@
-"use client";
+'use client';
 
-import { Link } from "@/lib/nav";
-import { type FormEvent, useId, useState, useSyncExternalStore } from "react";
+import { Link } from '@/lib/nav';
+import { type FormEvent, useId, useState, useSyncExternalStore } from 'react';
 
-import { Button, Chip, confirmInPage, Icon, InfoTip, LinkButton, Notice, Panel } from "@/components/ds";
-import { api, unwrap } from "@/lib/api/client";
-import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
+import {
+  Button,
+  Chip,
+  confirmInPage,
+  Icon,
+  InfoTip,
+  LinkButton,
+  Notice,
+  Panel,
+} from '@/components/ds';
+import { api, unwrap } from '@/lib/api/client';
+import { errorMessage, useAuthRedirect, useQuery } from '@/lib/use-query';
 
-import { Field, INPUT, SELECT_FIELD } from "../_components/fields";
-import { ReconnectToChoose } from "./DriveFiles";
+import { Field, INPUT, SELECT_FIELD } from '../_components/fields';
+import { ReconnectToChoose } from './DriveFiles';
 
 /** A shared drive as the company list keeps it. */
 export interface SharedDrive {
@@ -16,37 +25,45 @@ export interface SharedDrive {
   name: string;
 }
 
-const DOMAINS_KEY = "company_email_domains";
-const DRIVES_KEY = "company_shared_drives";
+const DOMAINS_KEY = 'company_email_domains';
+const DRIVES_KEY = 'company_shared_drives';
 
 /** What a company email domain looks like: lowercase labels and a TLD, no "@". */
-const DOMAIN = /^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:[a-z]{2,63}|xn--[a-z0-9-]{1,59})$/;
+const DOMAIN =
+  /^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:[a-z]{2,63}|xn--[a-z0-9-]{1,59})$/;
 
 /** A typed domain, lowercased and without a leading "@" (or a pasted address's "user@"). */
 export function normaliseDomain(text: string): string {
   const t = text.trim().toLowerCase();
-  return t.includes("@") ? t.slice(t.lastIndexOf("@") + 1) : t;
+  return t.includes('@') ? t.slice(t.lastIndexOf('@') + 1) : t;
 }
 
 function domains(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((d): d is string => typeof d === "string") : [];
+  return Array.isArray(value) ? value.filter((d): d is string => typeof d === 'string') : [];
 }
 
 function drives(value: unknown): SharedDrive[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((d) =>
-    d && typeof d === "object" && typeof d.id === "string" ? [{ id: d.id, name: typeof d.name === "string" ? d.name : d.id }] : [],
+    d && typeof d === 'object' && typeof d.id === 'string'
+      ? [{ id: d.id, name: typeof d.name === 'string' ? d.name : d.id }]
+      : [],
   );
 }
 
-const readSetting = (key: string) => unwrap(api.GET("/v1/settings/{key}", { params: { path: { key } } })).then((s) => s.value);
+const readSetting = (key: string) =>
+  unwrap(api.GET('/v1/settings/{key}', { params: { path: { key } } })).then((s) => s.value);
 const writeSetting = (key: string, value: unknown) =>
-  unwrap(api.PUT("/v1/settings/{key}", { params: { path: { key } }, body: { value } })).then((s) => s.value);
+  unwrap(api.PUT('/v1/settings/{key}', { params: { path: { key } }, body: { value } })).then(
+    (s) => s.value,
+  );
 
 const sharedDrives = (connection_id: string) =>
-  unwrap(api.GET("/v1/connections/{connection_id}/google/shared-drives", { params: { path: { connection_id } } })).then((r) =>
-    drives(r.drives),
-  );
+  unwrap(
+    api.GET('/v1/connections/{connection_id}/google/shared-drives', {
+      params: { path: { connection_id } },
+    }),
+  ).then((r) => drives(r.drives));
 
 function useAction() {
   const onAuth = useAuthRedirect();
@@ -67,9 +84,20 @@ function useAction() {
   return { act, error, setError, busy };
 }
 
-const REMOVE = "grid size-8 flex-none place-items-center rounded-lg text-text2 hover:bg-surface2 hover:text-text disabled:opacity-70";
+const REMOVE =
+  'grid size-8 flex-none place-items-center rounded-lg text-text2 hover:bg-surface2 hover:text-text disabled:opacity-70';
 
-function Heading({ id, title, tip, children }: { id: string; title: string; tip: string; children: string }) {
+function Heading({
+  id,
+  title,
+  tip,
+  children,
+}: {
+  id: string;
+  title: string;
+  tip: string;
+  children: string;
+}) {
   return (
     <div className="flex flex-col gap-0.5">
       <span className="flex items-center gap-1.5">
@@ -86,22 +114,26 @@ function Heading({ id, title, tip, children }: { id: string; title: string; tip:
 }
 
 function subscribeHash(onChange: () => void) {
-  window.addEventListener("hashchange", onChange);
-  return () => window.removeEventListener("hashchange", onChange);
+  window.addEventListener('hashchange', onChange);
+  return () => window.removeEventListener('hashchange', onChange);
 }
 
 /** Company email domains: docs in a picked folder owned outside them are skipped. */
 function CompanyDomains() {
   const headingId = useId();
   // qa4-settings-4: opened from Set up's Company domains (#company-domains), the section is marked.
-  const targeted = useSyncExternalStore(subscribeHash, () => window.location.hash === "#company-domains", () => false);
+  const targeted = useSyncExternalStore(
+    subscribeHash,
+    () => window.location.hash === '#company-domains',
+    () => false,
+  );
   const inputId = useId();
   const q = useQuery(`setting|${DOMAINS_KEY}`, () => readSetting(DOMAINS_KEY).then(domains));
-  const [text, setText] = useState("");
+  const [text, setText] = useState('');
   const { act, error, setError, busy } = useAction();
   const list = q.data ?? [];
   // What a removal does to Google sign-in, as the API decides it (/v1/sign-in-rules).
-  const rulesQ = useQuery("sign-in-rules", () => unwrap(api.GET("/v1/sign-in-rules")));
+  const rulesQ = useQuery('sign-in-rules', () => unwrap(api.GET('/v1/sign-in-rules')));
 
   async function save(next: string[]) {
     const saved = await act(() => writeSetting(DOMAINS_KEY, next));
@@ -113,31 +145,32 @@ function CompanyDomains() {
   async function add(e: FormEvent) {
     e.preventDefault();
     const domain = normaliseDomain(text);
-    if (!DOMAIN.test(domain)) return setError(`Not a domain: ${text.trim()}. Enter it like example.com.`);
+    if (!DOMAIN.test(domain))
+      return setError(`Not a domain: ${text.trim()}. Enter it like example.com.`);
     if (list.includes(domain)) return setError(`${domain} is already on the list.`);
-    if (await save([...list, domain])) setText("");
+    if (await save([...list, domain])) setText('');
   }
 
   async function remove(domain: string) {
     // The same list decides Google sign-in (Members › Sign-in): say both, and who loses access (qa-onboarding-10).
     const drive =
       list.length === 1
-        ? "With no company domain, every doc in a picked Drive folder is skipped, and the ones already pulled in are hidden now."
+        ? 'With no company domain, every doc in a picked Drive folder is skipped, and the ones already pulled in are hidden now.'
         : `Docs in picked Drive folders owned at ${domain} are skipped, and the ones already pulled in are hidden now.`;
     // Unread rules say the loss, the safe side.
     const rules = rulesQ.data;
     const signIn =
       rules && !rules.google_sign_in
         ? "Google sign-in is off, so no one's sign-in changes."
-        : rules?.domains.some((d) => d.domain === domain && d.from === "deployment")
+        : rules?.domains.some((d) => d.domain === domain && d.from === 'deployment')
           ? `People at ${domain} can still sign in with Google: this Oracle's own setup allows that domain.`
           : `Anyone at ${domain} who is not a member yet can no longer sign in with Google, even with an invite. Members already in keep their access.`;
     if (
       !(await confirmInPage({
         destructive: true,
         title: `Remove ${domain}?`,
-        action: "Remove domain",
-        cancel: "Cancel",
+        action: 'Remove domain',
+        cancel: 'Cancel',
         message: `${drive} ${signIn}`,
       }))
     ) {
@@ -150,7 +183,7 @@ function CompanyDomains() {
     <section
       id="company-domains"
       aria-labelledby={headingId}
-      className={`flex scroll-mt-4 flex-col gap-2.5 px-4 py-3 max-[600px]:px-3${targeted ? " rounded-lg ring-2 ring-inset ring-accent" : ""}`}
+      className={`flex scroll-mt-4 flex-col gap-2.5 px-4 py-3 max-[600px]:px-3${targeted ? ' rounded-lg ring-2 ring-inset ring-accent' : ''}`}
       data-testid="company-domains"
       data-highlight={targeted || undefined}
     >
@@ -159,19 +192,24 @@ function CompanyDomains() {
         title="Company email domains"
         tip="Set here by an owner. Oracle never guesses them from members' email addresses."
       >
-        Docs in a picked folder owned outside these domains are skipped. With none set, every doc in a picked folder is
-        skipped (&ldquo;company domain not set&rdquo;). Removing a domain hides the docs it let in from every
-        member&rsquo;s sources at once.
+        Docs in a picked folder owned outside these domains are skipped. With none set, every doc in
+        a picked folder is skipped (&ldquo;company domain not set&rdquo;). Removing a domain hides
+        the docs it let in from every member&rsquo;s sources at once.
       </Heading>
       {/* The same list as Members › Sign-in, which says so too (qa-settings-17). */}
       <p className="text-sm text-text2" data-testid="company-domains-hint">
-        Same list as{" "}
-        <Link href="/settings/members" className="font-semibold text-accent-ink underline underline-offset-2">
+        Same list as{' '}
+        <Link
+          href="/settings/members"
+          className="font-semibold text-accent-ink underline underline-offset-2"
+        >
           Members › Sign-in
         </Link>
       </p>
       {q.error && <Notice tone="error">{q.error}</Notice>}
-      {!q.data && !q.error && <span aria-busy className="block h-3 w-1/2 animate-pulse rounded bg-surface2" />}
+      {!q.data && !q.error && (
+        <span aria-busy className="block h-3 w-1/2 animate-pulse rounded bg-surface2" />
+      )}
       {q.data && list.length === 0 && (
         <div>
           <Chip kind="warn" dot>
@@ -217,7 +255,13 @@ function CompanyDomains() {
               className={`${INPUT} font-mono`}
             />
           </Field>
-          <Button type="submit" variant="solid" icon="plus" className="h-9" disabled={busy || !text.trim()}>
+          <Button
+            type="submit"
+            variant="solid"
+            icon="plus"
+            className="h-9"
+            disabled={busy || !text.trim()}
+          >
             Add
           </Button>
         </form>
@@ -228,21 +272,32 @@ function CompanyDomains() {
 }
 
 /** The shared drives one of the owner's Google connections can see, to add to the list. */
-function ChooseSharedDrives({ saved, busy, onAdd }: { saved: SharedDrive[]; busy: boolean; onAdd: (d: SharedDrive) => void }) {
+function ChooseSharedDrives({
+  saved,
+  busy,
+  onAdd,
+}: {
+  saved: SharedDrive[];
+  busy: boolean;
+  onAdd: (d: SharedDrive) => void;
+}) {
   const accountId = useId();
-  const connections = useQuery("connections", () => unwrap(api.GET("/v1/connections")));
-  const google = (connections.data ?? []).filter((c) => c.provider === "google" && c.status === "active");
-  const [chosen, setChosen] = useState("");
-  const connectionId = chosen || google[0]?.id || "";
+  const connections = useQuery('connections', () => unwrap(api.GET('/v1/connections')));
+  const google = (connections.data ?? []).filter(
+    (c) => c.provider === 'google' && c.status === 'active',
+  );
+  const [chosen, setChosen] = useState('');
+  const connectionId = chosen || google[0]?.id || '';
   const connection = google.find((c) => c.id === connectionId);
   const reconnect = !!connection?.reconnect_reason;
-  const list = useQuery(`shared-drives|${reconnect ? "" : connectionId}`, () =>
+  const list = useQuery(`shared-drives|${reconnect ? '' : connectionId}`, () =>
     connectionId && !reconnect ? sharedDrives(connectionId) : Promise.resolve([]),
   );
   const onList = new Set(saved.map((d) => d.id));
 
   if (connections.error) return <Notice tone="error">{connections.error}</Notice>;
-  if (!connections.data) return <span aria-busy className="block h-3 w-1/2 animate-pulse rounded bg-surface2" />;
+  if (!connections.data)
+    return <span aria-busy className="block h-3 w-1/2 animate-pulse rounded bg-surface2" />;
   if (google.length === 0) {
     return (
       <div className="flex flex-wrap items-center gap-2">
@@ -254,9 +309,17 @@ function ChooseSharedDrives({ saved, busy, onAdd }: { saved: SharedDrive[]; busy
     );
   }
   return (
-    <div className="flex flex-col gap-2.5 rounded-button border border-line bg-surface2 p-3" data-testid="shared-drive-choices">
+    <div
+      className="flex flex-col gap-2.5 rounded-button border border-line bg-surface2 p-3"
+      data-testid="shared-drive-choices"
+    >
       <Field label="Google account" htmlFor={accountId} className="max-w-72">
-        <select id={accountId} value={connectionId} onChange={(e) => setChosen(e.target.value)} className={SELECT_FIELD}>
+        <select
+          id={accountId}
+          value={connectionId}
+          onChange={(e) => setChosen(e.target.value)}
+          className={SELECT_FIELD}
+        >
           {google.map((c) => (
             <option key={c.id} value={c.id}>
               {c.account_label ?? c.id}
@@ -274,11 +337,15 @@ function ChooseSharedDrives({ saved, busy, onAdd }: { saved: SharedDrive[]; busy
         <p className="text-sm text-text2">This account sees no shared drives.</p>
       ) : (
         <ul
-          aria-label={`Shared drives of ${connection?.account_label ?? "this account"}`}
+          aria-label={`Shared drives of ${connection?.account_label ?? 'this account'}`}
           className="flex flex-col rounded-button border border-line bg-surface"
         >
           {list.data.map((d) => (
-            <li key={d.id} aria-label={d.name} className="flex min-h-11 items-center gap-2.5 border-t border-line px-3 py-1.5 first:border-t-0">
+            <li
+              key={d.id}
+              aria-label={d.name}
+              className="flex min-h-11 items-center gap-2.5 border-t border-line px-3 py-1.5 first:border-t-0"
+            >
               <Icon name="folder" size={16} className="flex-none text-text2" />
               <span className="min-w-0 flex-1 truncate text-[15px] font-medium" title={d.name}>
                 {d.name}
@@ -286,7 +353,12 @@ function ChooseSharedDrives({ saved, busy, onAdd }: { saved: SharedDrive[]; busy
               {onList.has(d.id) ? (
                 <Chip kind="pass">Added</Chip>
               ) : (
-                <Button icon="plus" aria-label={`Add ${d.name}`} disabled={busy} onClick={() => onAdd(d)}>
+                <Button
+                  icon="plus"
+                  aria-label={`Add ${d.name}`}
+                  disabled={busy}
+                  onClick={() => onAdd(d)}
+                >
                   Add
                 </Button>
               )}
@@ -322,20 +394,33 @@ function CompanySharedDrives() {
         title="Company shared drives"
         tip="Add the shared drives that belong to the company. Docs in My Drive folders are judged by their owner's domain instead."
       >
-        A doc in a shared drive counts as the company&rsquo;s only when its drive is on this list. Docs in picked folders
-        in other shared drives are skipped. Removing a drive hides its docs from every member&rsquo;s sources at once.
+        A doc in a shared drive counts as the company&rsquo;s only when its drive is on this list.
+        Docs in picked folders in other shared drives are skipped. Removing a drive hides its docs
+        from every member&rsquo;s sources at once.
       </Heading>
       {q.error && <Notice tone="error">{q.error}</Notice>}
-      {!q.data && !q.error && <span aria-busy className="block h-3 w-1/2 animate-pulse rounded bg-surface2" />}
+      {!q.data && !q.error && (
+        <span aria-busy className="block h-3 w-1/2 animate-pulse rounded bg-surface2" />
+      )}
       {q.data && list.length === 0 && <p className="text-sm text-text2">None yet.</p>}
       {list.length > 0 && (
-        <ul aria-label="Company shared drives" className="flex flex-col rounded-button border border-line">
+        <ul
+          aria-label="Company shared drives"
+          className="flex flex-col rounded-button border border-line"
+        >
           {list.map((d) => (
-            <li key={d.id} aria-label={d.name} className="flex min-h-11 items-center gap-2.5 border-t border-line px-3 py-1.5 first:border-t-0">
+            <li
+              key={d.id}
+              aria-label={d.name}
+              className="flex min-h-11 items-center gap-2.5 border-t border-line px-3 py-1.5 first:border-t-0"
+            >
               <span className="grid size-7 flex-none place-items-center rounded-lg bg-accent-soft text-accent-ink">
                 <Icon name="folder" size={16} />
               </span>
-              <span className="min-w-0 flex-1 truncate text-[15px] font-medium" title={`${d.name} (${d.id})`}>
+              <span
+                className="min-w-0 flex-1 truncate text-[15px] font-medium"
+                title={`${d.name} (${d.id})`}
+              >
                 {d.name}
               </span>
               <button
@@ -353,12 +438,18 @@ function CompanySharedDrives() {
       )}
       {q.data && (
         <div>
-          <Button icon={choosing ? undefined : "plus"} aria-expanded={choosing} onClick={() => setChoosing((v) => !v)}>
-            {choosing ? "Done adding" : "Add shared drives"}
+          <Button
+            icon={choosing ? undefined : 'plus'}
+            aria-expanded={choosing}
+            onClick={() => setChoosing((v) => !v)}
+          >
+            {choosing ? 'Done adding' : 'Add shared drives'}
           </Button>
         </div>
       )}
-      {choosing && q.data && <ChooseSharedDrives saved={list} busy={busy} onAdd={(d) => void save([...list, d])} />}
+      {choosing && q.data && (
+        <ChooseSharedDrives saved={list} busy={busy} onAdd={(d) => void save([...list, d])} />
+      )}
       {error && <Notice tone="error">{error}</Notice>}
     </section>
   );
@@ -377,8 +468,8 @@ export function CompanyDriveSettings() {
         <>
           <Chip kind="acc">Company · owners</Chip>
           <InfoTip label="company Drive settings" align="end" side="bottom">
-            These apply to every member&rsquo;s Google Docs sources: they decide which docs in a picked folder count as
-            the company&rsquo;s and are pulled in.
+            These apply to every member&rsquo;s Google Docs sources: they decide which docs in a
+            picked folder count as the company&rsquo;s and are pulled in.
           </InfoTip>
         </>
       }

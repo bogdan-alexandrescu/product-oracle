@@ -1,8 +1,8 @@
-import { deflateSync } from "node:zlib";
+import { deflateSync } from 'node:zlib';
 
-import { expect, test } from "./test";
+import { expect, test } from './test';
 
-import { login } from "./helpers";
+import { login } from './helpers';
 
 /**
  * O5 dark logo (owner decision, 2026-10-26): exports and decks use the dark logo when the
@@ -25,7 +25,7 @@ function png(width: number, height: number, shade: number): Buffer {
   const chunk = (type: string, data: Buffer) => {
     const len = Buffer.alloc(4);
     len.writeUInt32BE(data.length);
-    const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
+    const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
     const sum = Buffer.alloc(4);
     sum.writeUInt32BE(crc(body));
     return Buffer.concat([len, body, sum]);
@@ -39,13 +39,20 @@ function png(width: number, height: number, shade: number): Buffer {
   const raw = Buffer.concat(Array.from({ length: height }, () => row));
   return Buffer.concat([
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    chunk("IHDR", ihdr),
-    chunk("IDAT", deflateSync(raw)),
-    chunk("IEND", Buffer.alloc(0)),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', deflateSync(raw)),
+    chunk('IEND', Buffer.alloc(0)),
   ]);
 }
 
-const BUILT_IN = ["Clean document", "One-page brief", "Editorial memo", "Press release", "Technical spec", "Roadmap board"];
+const BUILT_IN = [
+  'Clean document',
+  'One-page brief',
+  'Editorial memo',
+  'Press release',
+  'Technical spec',
+  'Roadmap board',
+];
 
 // protects: the Branding preview says, before a dark logo exists, that every export uses the
 // logo, and after an owner uploads one, which logo each built-in theme's exports and decks use
@@ -53,29 +60,41 @@ const BUILT_IN = ["Clean document", "One-page brief", "Editorial memo", "Press r
 // the dark logo; removing the dark logo brings the first note back.
 // fails_when: the note or the per-theme list is missing, or a theme names the wrong logo.
 // no_claim: the luminance rule and the rendered exports (pytest test_branding.py).
-test("branding: an owner uploads a dark logo and the preview says which logo each theme uses", async ({ page }) => {
+test('branding: an owner uploads a dark logo and the preview says which logo each theme uses', async ({
+  page,
+}) => {
   await login(page);
-  await page.goto("/settings/company");
-  const card = page.getByTestId("branding-panel");
-  await card.getByLabel("Logo", { exact: true }).setInputFiles({ name: "logo.png", mimeType: "image/png", buffer: png(160, 40, 0x33) });
-  await expect(card.getByTestId("brand-logo-size")).toHaveText("160 × 40 px");
+  await page.goto('/settings/company');
+  const card = page.getByTestId('branding-panel');
+  await card
+    .getByLabel('Logo', { exact: true })
+    .setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: png(160, 40, 0x33) });
+  await expect(card.getByTestId('brand-logo-size')).toHaveText('160 × 40 px');
   // F-70: which logo each theme takes is in the card's (i), not a list on the page.
-  const tip = card.getByRole("button", { name: "About branding" });
-  const note = card.getByTestId("brand-theme-note");
+  const tip = card.getByRole('button', { name: 'About branding' });
+  const note = card.getByTestId('brand-theme-note');
   await expect(note).toBeHidden();
-  await expect(tip).toHaveAccessibleDescription(/With no dark logo, every export and deck uses the logo\./);
+  await expect(tip).toHaveAccessibleDescription(
+    /With no dark logo, every export and deck uses the logo\./,
+  );
 
-  await card.getByLabel("Dark logo", { exact: true }).setInputFiles({ name: "dark.png", mimeType: "image/png", buffer: png(160, 40, 0xf0) });
-  await expect(card.getByRole("button", { name: "Remove dark logo" })).toBeVisible();
+  await card
+    .getByLabel('Dark logo', { exact: true })
+    .setInputFiles({ name: 'dark.png', mimeType: 'image/png', buffer: png(160, 40, 0xf0) });
+  await expect(card.getByRole('button', { name: 'Remove dark logo' })).toBeVisible();
   // The built-in themes all have a light background: no list of identical lines, no theme named.
-  await expect(tip).toHaveAccessibleDescription(/Every theme has a light background, so exports and decks use the logo\./);
-  await expect(card.getByText("light background, uses the logo")).toHaveCount(0);
+  await expect(tip).toHaveAccessibleDescription(
+    /Every theme has a light background, so exports and decks use the logo\./,
+  );
+  await expect(card.getByText('light background, uses the logo')).toHaveCount(0);
   for (const name of BUILT_IN) await expect(tip).not.toHaveAccessibleDescription(new RegExp(name));
 
   // It sticks after a reload.
   await page.reload();
   await expect(tip).toHaveAccessibleDescription(/Every theme has a light background/);
 
-  await card.getByRole("button", { name: "Remove dark logo" }).click();
-  await expect(tip).toHaveAccessibleDescription(/With no dark logo, every export and deck uses the logo\./);
+  await card.getByRole('button', { name: 'Remove dark logo' }).click();
+  await expect(tip).toHaveAccessibleDescription(
+    /With no dark logo, every export and deck uses the logo\./,
+  );
 });

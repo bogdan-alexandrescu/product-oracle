@@ -1,6 +1,6 @@
-import { expect, test, type Locator, type Page } from "./test";
+import { expect, test, type Locator, type Page } from './test';
 
-import { login } from "./helpers";
+import { login } from './helpers';
 
 /*
  * A DataTable's empty line spans only the columns a person can see: a table narrower than
@@ -10,20 +10,20 @@ import { login } from "./helpers";
 
 async function openEmptyPlan(page: Page) {
   await page.addInitScript(() => {
-    localStorage.setItem("po-mock-scenario", "empty");
-    if (!sessionStorage.getItem("colspan-reset")) {
-      localStorage.removeItem("po-mock-db-v2");
-      sessionStorage.setItem("colspan-reset", "1");
+    localStorage.setItem('po-mock-scenario', 'empty');
+    if (!sessionStorage.getItem('colspan-reset')) {
+      localStorage.removeItem('po-mock-db-v2');
+      sessionStorage.setItem('colspan-reset', '1');
     }
   });
   await login(page);
-  await page.goto("/plan/documents");
+  await page.goto('/plan/documents');
 }
 
 async function expectInside(table: Locator) {
-  const empty = table.getByTestId("table-empty");
+  const empty = table.getByTestId('table-empty');
   await expect(empty).toBeVisible();
-  const headers = table.locator("th").filter({ visible: true });
+  const headers = table.locator('th').filter({ visible: true });
   // Measured once the table has settled (a column can come in once the person's rights load).
   await expect(async () => {
     const n = await headers.count();
@@ -35,20 +35,24 @@ async function expectInside(table: Locator) {
     for (const h of await headers.all()) width += (await h.boundingBox())!.width;
     expect(Math.abs(width - box.width)).toBeLessThanOrEqual(1);
     expect(Math.abs(cell.width - width)).toBeLessThanOrEqual(1);
-    expect(await empty.getAttribute("colspan")).toBe(String(n));
+    expect(await empty.getAttribute('colspan')).toBe(String(n));
   }).toPass({ timeout: 5000 });
 }
 
-test.describe("a narrow window", () => {
+test.describe('a narrow window', () => {
   test.use({ viewport: { width: 880, height: 900 } });
 
-  test("an empty table that hides columns keeps its empty line inside the table", async ({ page }) => {
+  test('an empty table that hides columns keeps its empty line inside the table', async ({
+    page,
+  }) => {
     await openEmptyPlan(page);
-    const roadmaps = page.getByTestId("roadmaps-table");
-    await expect(roadmaps.getByTestId("table-empty")).toHaveText("No roadmaps yet. Build one from an approved PRD.");
+    const roadmaps = page.getByTestId('roadmaps-table');
+    await expect(roadmaps.getByTestId('table-empty')).toHaveText(
+      'No roadmaps yet. Build one from an approved PRD.',
+    );
     // The table is under 760 px wide here, so it drops its Template column: the case that spilled.
-    await expect(roadmaps.getByRole("columnheader", { name: "Roadmap" })).toBeVisible();
-    await expect(roadmaps.getByRole("columnheader", { name: "Template" })).toBeHidden();
+    await expect(roadmaps.getByRole('columnheader', { name: 'Roadmap' })).toBeVisible();
+    await expect(roadmaps.getByRole('columnheader', { name: 'Template' })).toBeHidden();
     await expectInside(roadmaps);
   });
 });
@@ -65,41 +69,54 @@ async function openFirstFrame(page: Page) {
   await login(page);
   // The page as first painted: its HTML and CSS, none of its scripts.
   await page.route(/\/_next\/static\/chunks\/.*\.js(\?|$)/, (route) => route.abort());
-  await page.goto("/runs");
-  const table = page.getByTestId("runs-table").locator("table");
-  const row = table.locator("tbody tr").first();
+  await page.goto('/runs');
+  const table = page.getByTestId('runs-table').locator('table');
+  const row = table.locator('tbody tr').first();
   await expect(row).toBeAttached();
-  await expect(row.locator("td"), "the line is one cell").toHaveCount(1);
-  return { table, line: row.locator("td") };
+  await expect(row.locator('td'), 'the line is one cell').toHaveCount(1);
+  return { table, line: row.locator('td') };
 }
 
 for (const width of [700, 840, 880, 1024, 1440]) {
   test.describe(`the first frame at ${width} px`, () => {
     test.use({ viewport: { width, height: 900 } });
 
-    test("the Runs table's lines span only the columns drawn before its scripts run", async ({ page }) => {
+    test("the Runs table's lines span only the columns drawn before its scripts run", async ({
+      page,
+    }) => {
       const { table, line } = await openFirstFrame(page);
       await expect(line).toBeVisible();
-      const headers = table.locator("th").filter({ visible: true });
+      const headers = table.locator('th').filter({ visible: true });
       const box = (await table.boundingBox())!;
       const cells = [];
       for (const h of await headers.all()) cells.push((await h.boundingBox())!);
       const sum = cells.reduce((w, c) => w + c.width, 0);
-      expect(Math.abs(sum - box.width), "the columns drawn share the table's whole width").toBeLessThanOrEqual(1);
+      expect(
+        Math.abs(sum - box.width),
+        "the columns drawn share the table's whole width",
+      ).toBeLessThanOrEqual(1);
       const cell = (await line.boundingBox())!;
-      expect(Math.abs(cell.x - cells[0].x), "the line starts at the first column drawn").toBeLessThanOrEqual(1);
-      expect(Math.abs(cell.width - sum), "the line ends at the last column drawn").toBeLessThanOrEqual(1);
+      expect(
+        Math.abs(cell.x - cells[0].x),
+        'the line starts at the first column drawn',
+      ).toBeLessThanOrEqual(1);
+      expect(
+        Math.abs(cell.width - sum),
+        'the line ends at the last column drawn',
+      ).toBeLessThanOrEqual(1);
     });
   });
 }
 
-test.describe("the first frame on a phone", () => {
+test.describe('the first frame on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test("the Runs table's lines are one block as wide as the table before its scripts run", async ({ page }) => {
+  test("the Runs table's lines are one block as wide as the table before its scripts run", async ({
+    page,
+  }) => {
     const { table, line } = await openFirstFrame(page);
     await expect(line).toBeVisible();
-    expect(await line.evaluate((td) => getComputedStyle(td).display)).toBe("block");
+    expect(await line.evaluate((td) => getComputedStyle(td).display)).toBe('block');
     const box = (await table.boundingBox())!;
     const cell = (await line.boundingBox())!;
     expect(Math.abs(cell.x - box.x)).toBeLessThanOrEqual(1);

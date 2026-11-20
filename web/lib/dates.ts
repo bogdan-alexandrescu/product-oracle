@@ -1,5 +1,5 @@
-import { useMe } from "@/lib/me";
-import { DEFAULT_ZONE, displayZone } from "@/lib/zone";
+import { useMe } from '@/lib/me';
+import { DEFAULT_ZONE, displayZone } from '@/lib/zone';
 
 export { DEFAULT_ZONE, displayZone };
 
@@ -19,7 +19,11 @@ export function useCompanyZone(): string {
 
 const cache = new Map<string, Intl.DateTimeFormat>();
 
-function fmt(locale: string, timeZone: string, opts: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+function fmt(
+  locale: string,
+  timeZone: string,
+  opts: Intl.DateTimeFormatOptions,
+): Intl.DateTimeFormat {
   const key = `${locale}|${timeZone}|${JSON.stringify(opts)}`;
   let f = cache.get(key);
   if (!f) {
@@ -40,40 +44,57 @@ function fmt(locale: string, timeZone: string, opts: Intl.DateTimeFormatOptions)
  */
 function namedZone(text: string, zone: string, at: Date): string {
   const offset = /GMT[+-]\d{1,2}(?::\d{2})?/.exec(text);
-  if (!offset || !zone.startsWith("Europe/")) return text;
-  const name = fmt("en-GB", zone, { hour: "numeric", timeZoneName: "short" })
+  if (!offset || !zone.startsWith('Europe/')) return text;
+  const name = fmt('en-GB', zone, { hour: 'numeric', timeZoneName: 'short' })
     .formatToParts(at)
-    .find((p) => p.type === "timeZoneName")?.value;
+    .find((p) => p.type === 'timeZoneName')?.value;
   return name && /^[A-Z]{3,5}$/.test(name) ? text.replace(offset[0], name) : text;
 }
 
 /** `iso` (an instant) in `zone`, with the zone's short name when the options show a time. */
-export function formatInZone(iso: string, zone: string, opts: Intl.DateTimeFormatOptions, locale = "en-US"): string {
+export function formatInZone(
+  iso: string,
+  zone: string,
+  opts: Intl.DateTimeFormatOptions,
+  locale = 'en-US',
+): string {
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return iso;
   const timed = opts.hour !== undefined || opts.minute !== undefined;
-  const out = fmt(locale, zone, timed ? { ...opts, timeZoneName: "short" } : opts).format(at);
+  const out = fmt(locale, zone, timed ? { ...opts, timeZoneName: 'short' } : opts).format(at);
   return timed ? namedZone(out, zone, at) : out;
 }
 
 /** "Oct 16": the day of an instant in `zone`. */
-export const zoneDay = (iso: string, zone: string) => formatInZone(iso, zone, { month: "short", day: "numeric" });
+export const zoneDay = (iso: string, zone: string) =>
+  formatInZone(iso, zone, { month: 'short', day: 'numeric' });
 
 /** "Fri, Oct 16". */
-export const zoneWeekday = (iso: string, zone: string) => formatInZone(iso, zone, { weekday: "short", month: "short", day: "numeric" });
+export const zoneWeekday = (iso: string, zone: string) =>
+  formatInZone(iso, zone, { weekday: 'short', month: 'short', day: 'numeric' });
 
 /** "Oct 19, 8:00 AM PDT". */
 export const zoneDateTime = (iso: string, zone: string) =>
-  formatInZone(iso, zone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).replace(/ at /, ", ");
+  formatInZone(iso, zone, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).replace(/ at /, ', ');
 
 /** "9:00 AM PDT": the one way a time is written (12-hour, the zone's short name, qa-shell-19). */
-export const zoneTime = (iso: string, zone: string) => formatInZone(iso, zone, { hour: "numeric", minute: "2-digit" });
+export const zoneTime = (iso: string, zone: string) =>
+  formatInZone(iso, zone, { hour: 'numeric', minute: '2-digit' });
 
 /** The calendar day (YYYY-MM-DD) of an instant in `zone`. */
 export function dayIn(at: Date | number | string, zone: string): string {
-  const parts = fmt("en-CA", zone, { year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(at));
-  const n = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
-  return `${n("year")}-${n("month")}-${n("day")}`;
+  const parts = fmt('en-CA', zone, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date(at));
+  const n = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
+  return `${n('year')}-${n('month')}-${n('day')}`;
 }
 
 /** Today in `zone`, as YYYY-MM-DD. */
@@ -86,9 +107,15 @@ export function plainClock(iso: string, zone: string, now: number = Date.now()):
   if (Number.isNaN(at.getTime())) return iso;
   const day = dayIn(at, zone);
   const today = todayIn(zone, now);
-  const t = fmt("en-US", zone, { hour: "numeric", minute: "2-digit" }).format(at);
+  const t = fmt('en-US', zone, { hour: 'numeric', minute: '2-digit' }).format(at);
   if (day === today) return t;
-  const d = fmt("en-US", zone, day.slice(0, 4) === today.slice(0, 4) ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" }).format(at);
+  const d = fmt(
+    'en-US',
+    zone,
+    day.slice(0, 4) === today.slice(0, 4)
+      ? { month: 'short', day: 'numeric' }
+      : { month: 'short', day: 'numeric', year: 'numeric' },
+  ).format(at);
   return `${d}, ${t}`;
 }
 
@@ -100,21 +127,21 @@ export const utcDay = (at: number): string => new Date(at).toISOString().slice(0
 
 /** `day` (YYYY-MM-DD) plus `n` days. */
 export function addDays(day: string, n: number): string {
-  const [y, m, d] = day.split("-").map(Number);
+  const [y, m, d] = day.split('-').map(Number);
   return utcDay(Date.UTC(y, m - 1, d + n));
 }
 
 /** `day` (YYYY-MM-DD) plus `n` calendar months; the month's last day when it is shorter (Aug 31 less 6 months is Feb 28). */
 export function addMonths(day: string, n: number): string {
-  const [y, m, d] = day.split("-").map(Number);
+  const [y, m, d] = day.split('-').map(Number);
   const last = new Date(Date.UTC(y, m - 1 + n + 1, 0)).getUTCDate();
   return utcDay(Date.UTC(y, m - 1 + n, Math.min(d, last)));
 }
 
 /** The ISO instant of `time` (HH:MM) on `day` (YYYY-MM-DD) in `zone`: what the API receives for a picked day. */
 export function zoneInstant(day: string, time: string, zone: string): string {
-  const [y, mo, d] = day.split("-").map(Number);
-  const [h, mi] = time.split(":").map(Number);
+  const [y, mo, d] = day.split('-').map(Number);
+  const [h, mi] = time.split(':').map(Number);
   const wall = Date.UTC(y, mo - 1, d, h, mi);
   // The zone's offset at that wall time, found by formatting the guess (twice, for DST edges).
   let at = wall;
@@ -123,26 +150,33 @@ export function zoneInstant(day: string, time: string, zone: string): string {
 }
 
 function offset(at: number, zone: string): number {
-  const parts = fmt("en-US", zone, {
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    hour: "numeric",
-    minute: "numeric",
-    second: "numeric",
-    hourCycle: "h23",
+  const parts = fmt('en-US', zone, {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hourCycle: 'h23',
   }).formatToParts(new Date(at));
   const n = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
-  return Date.UTC(n("year"), n("month") - 1, n("day"), n("hour"), n("minute"), n("second")) - Math.floor(at / 1000) * 1000;
+  return (
+    Date.UTC(n('year'), n('month') - 1, n('day'), n('hour'), n('minute'), n('second')) -
+    Math.floor(at / 1000) * 1000
+  );
 }
 
 /**
  * A calendar day (YYYY-MM-DD, no time: a milestone, a picked From) as "Sep 1": the same
  * day in every zone, so it is formatted as written.
  */
-export function calendarDay(day: string, opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" }, locale = "en-US"): string {
+export function calendarDay(
+  day: string,
+  opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' },
+  locale = 'en-US',
+): string {
   const d = new Date(`${day.slice(0, 10)}T00:00:00Z`);
-  return Number.isNaN(d.getTime()) ? day : fmt(locale, "UTC", opts).format(d);
+  return Number.isNaN(d.getTime()) ? day : fmt(locale, 'UTC', opts).format(d);
 }
 
 /** A calendar day with no zone: "2026-10-14", or a wall time such as "2026-10-14T12:00:00". */
@@ -152,23 +186,33 @@ const NAIVE = /^\d{4}-\d{2}-\d{2}(T[\d:.]+)?$/;
  * The day of `value` in the Company time zone: an instant's day there, or a calendar day
  * (no zone given) as written.
  */
-export function shownDay(value: string, opts: Intl.DateTimeFormatOptions, locale = "en-US"): string {
-  return NAIVE.test(value) ? calendarDay(value, opts, locale) : formatInZone(value, displayZone(), opts, locale);
+export function shownDay(
+  value: string,
+  opts: Intl.DateTimeFormatOptions,
+  locale = 'en-US',
+): string {
+  return NAIVE.test(value)
+    ? calendarDay(value, opts, locale)
+    : formatInZone(value, displayZone(), opts, locale);
 }
 
 /** "Sun Oct 25, 2:59 PM PDT": a moment in `zone` with its weekday, as the API words a refusal (api/oracle/company_time.py in_words). */
 export function inWords(iso: string, zone: string): string {
   try {
-    const parts = fmt("en-US", zone, {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      timeZoneName: "short",
+    const parts = fmt('en-US', zone, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZoneName: 'short',
     }).formatToParts(new Date(iso));
-    const v = (t: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === t)?.value ?? "";
-    return namedZone(`${v("weekday")} ${v("month")} ${v("day")}, ${v("hour")}:${v("minute")} ${v("dayPeriod")} ${v("timeZoneName")}`, zone, new Date(iso));
+    const v = (t: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === t)?.value ?? '';
+    return namedZone(
+      `${v('weekday')} ${v('month')} ${v('day')}, ${v('hour')}:${v('minute')} ${v('dayPeriod')} ${v('timeZoneName')}`,
+      zone,
+      new Date(iso),
+    );
   } catch {
     return zoneDateTime(iso, zone);
   }
@@ -177,10 +221,11 @@ export function inWords(iso: string, zone: string): string {
 /** A calendar day as the API writes it ("2026-11-30", or "2026-11-30T…" with a time). */
 export const ISO_DAY_SOURCE = String.raw`\d{4}-\d{2}-\d{2}(?:T[\d:.]+(?:Z|[+-]\d{2}:?\d{2})?)?`;
 /** Such a day standing alone in a sentence: never one inside a key, a slug or a path ("launch-2026-11-30"). */
-const ISO_DAY = new RegExp(String.raw`(?<![\w./-])${ISO_DAY_SOURCE}(?![\w/-])`, "g");
+const ISO_DAY = new RegExp(String.raw`(?<![\w./-])${ISO_DAY_SOURCE}(?![\w/-])`, 'g');
 /**
  * A sentence of the API's (a reason's text) with its dates in words: "… supports 2026-11-30."
  * reads "… supports Nov 30, 2026." (qa-work-19). A date inside a key stays as it is:
  * "launch-2026-11-30" is a name, not a date.
  */
-export const datesInWords = (text: string) => text.replace(ISO_DAY, (d) => shownDay(d, { month: "short", day: "numeric", year: "numeric" }));
+export const datesInWords = (text: string) =>
+  text.replace(ISO_DAY, (d) => shownDay(d, { month: 'short', day: 'numeric', year: 'numeric' }));

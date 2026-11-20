@@ -1,26 +1,26 @@
-"use client";
+'use client';
 
-import { Link } from "@/lib/nav";
-import { useState } from "react";
+import { Link } from '@/lib/nav';
+import { useState } from 'react';
 
-import { Button, Chip, Sparkline, ViewOnly } from "@/components/ds";
-import { ErrorNote, INPUT } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { named, namedText } from "@/lib/codes";
-import { addDays, calendarDay, todayIn, useCompanyZone } from "@/lib/dates";
-import { useMe } from "@/lib/me";
-import { errorMessage } from "@/lib/use-query";
-import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
+import { Button, Chip, Sparkline, ViewOnly } from '@/components/ds';
+import { ErrorNote, INPUT } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { named, namedText } from '@/lib/codes';
+import { addDays, calendarDay, todayIn, useCompanyZone } from '@/lib/dates';
+import { useMe } from '@/lib/me';
+import { errorMessage } from '@/lib/use-query';
+import { invalidateWaiting, waitingChanged } from '@/lib/waiting';
 
-type Variance = Schemas["VarianceOut"];
+type Variance = Schemas['VarianceOut'];
 
 /** A metrics_table row as oracle.metrics.review builds it. */
 export type MetricRow = {
   metric_id: string;
   title: string;
-  kind: "output" | "input";
+  kind: 'output' | 'input';
   unit: string;
-  state: "ok" | "no_value" | "pull_failed";
+  state: 'ok' | 'no_value' | 'pull_failed';
   value: number | null;
   change: number | null;
   change_pct: number | null;
@@ -30,15 +30,18 @@ export type MetricRow = {
   vs_last_year_pct: number | null;
   /** The last 12 weeks' values, oldest first (null: no value that week). */
   spark: (number | null)[];
-  variance: "better" | "worse" | null;
+  variance: 'better' | 'worse' | null;
   href: string;
 };
 
 /** A variances row: the variance as GET /v1/metric-variances returns it, under `variance_id`. */
-export type VarianceRow = Omit<Variance, "id"> & { variance_id: string; owner_name?: string | null };
+export type VarianceRow = Omit<Variance, 'id'> & {
+  variance_id: string;
+  owner_name?: string | null;
+};
 
-const DIRECTION = { better: "Better", worse: "Worse" } as const;
-const DIRECTION_KIND = { better: "pass", worse: "crit" } as const;
+const DIRECTION = { better: 'Better', worse: 'Worse' } as const;
+const DIRECTION_KIND = { better: 'pass', worse: 'crit' } as const;
 const EXPLAIN_MIN = 10;
 const EXPLAIN_MAX = 1000;
 const FIND_OUT_DAYS = 7;
@@ -46,8 +49,9 @@ const FIND_OUT_MAX = 28;
 
 const num = (v: number) => (Number.isInteger(v) ? String(v) : String(Math.round(v * 100) / 100));
 const signed = (v: number) => (v > 0 ? `+${num(v)}` : num(v));
-const valueText = (v: number, unit: string) => (unit === "%" ? `${num(v)}%` : `${num(v)} ${unit}`);
-const vs = (v: number | null, pct: number | null) => (v == null ? "—" : pct == null ? signed(v) : `${signed(v)} (${signed(pct)}%)`);
+const valueText = (v: number, unit: string) => (unit === '%' ? `${num(v)}%` : `${num(v)} ${unit}`);
+const vs = (v: number | null, pct: number | null) =>
+  v == null ? '—' : pct == null ? signed(v) : `${signed(v)} (${signed(pct)}%)`;
 
 /** The fixed format (research [62]): outputs first, each followed by its inputs, with the 12-week sparkline; wraps on a phone, never scrolls sideways. */
 export function MetricsTable({ rows }: { rows: MetricRow[] }) {
@@ -56,12 +60,18 @@ export function MetricsTable({ rows }: { rows: MetricRow[] }) {
       {rows.map((r) => {
         const known = r.spark.filter((v): v is number => v != null);
         return (
-          <li key={r.metric_id} className={`flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 ${r.kind === "input" ? "pl-9" : ""}`}>
-            <Link href={r.href} className="min-w-0 flex-[1_1_12rem] font-medium [overflow-wrap:anywhere] hover:underline">
+          <li
+            key={r.metric_id}
+            className={`flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 ${r.kind === 'input' ? 'pl-9' : ''}`}
+          >
+            <Link
+              href={r.href}
+              className="min-w-0 flex-[1_1_12rem] font-medium [overflow-wrap:anywhere] hover:underline"
+            >
               {r.title}
             </Link>
-            {known.length > 1 && <Sparkline values={known} label={`Trend ${known.join(", ")}`} />}
-            {r.state === "pull_failed" ? (
+            {known.length > 1 && <Sparkline values={known} label={`Trend ${known.join(', ')}`} />}
+            {r.state === 'pull_failed' ? (
               <span className="text-sm text-crit">Not read</span>
             ) : r.value == null ? (
               <span className="text-sm text-text2">No value this week</span>
@@ -79,7 +89,9 @@ export function MetricsTable({ rows }: { rows: MetricRow[] }) {
                     Year {vs(r.vs_last_year, r.vs_last_year_pct)}
                   </span>
                 )}
-                {r.variance && <Chip kind={DIRECTION_KIND[r.variance]}>{DIRECTION[r.variance]}</Chip>}
+                {r.variance && (
+                  <Chip kind={DIRECTION_KIND[r.variance]}>{DIRECTION[r.variance]}</Chip>
+                )}
               </>
             )}
           </li>
@@ -95,12 +107,25 @@ export function MetricsTable({ rows }: { rows: MetricRow[] }) {
  * choose Don't know yet; approvers mark Noise. Everyone else reads the cards (#370: no
  * controls, not disabled ones).
  */
-export function VarianceCards({ rows, live, onChanged }: { rows: VarianceRow[]; live: Map<string, Variance>; onChanged: () => Promise<void> }) {
+export function VarianceCards({
+  rows,
+  live,
+  onChanged,
+}: {
+  rows: VarianceRow[];
+  live: Map<string, Variance>;
+  onChanged: () => Promise<void>;
+}) {
   const { me, can } = useMe();
-  const cards = rows.map((r) => live.get(r.variance_id) ?? ({ ...r, id: r.variance_id } as Variance));
+  const cards = rows.map(
+    (r) => live.get(r.variance_id) ?? ({ ...r, id: r.variance_id } as Variance),
+  );
   const acts =
-    cards.some((v) => can("explain_metric_variance", v.owner_id === me?.user_id) || can("mark_metric_variance_unknown", v.owner_id === me?.user_id)) ||
-    can("mark_metric_variance_noise");
+    cards.some(
+      (v) =>
+        can('explain_metric_variance', v.owner_id === me?.user_id) ||
+        can('mark_metric_variance_unknown', v.owner_id === me?.user_id),
+    ) || can('mark_metric_variance_noise');
   return (
     <div className="flex flex-col gap-3 px-4 py-3">
       {!acts && (
@@ -109,29 +134,42 @@ export function VarianceCards({ rows, live, onChanged }: { rows: VarianceRow[]; 
         </div>
       )}
       {cards.map((v) => (
-        <VarianceCard key={v.id} variance={v} ownerName={rows.find((r) => r.variance_id === v.id)?.owner_name ?? null} onChanged={onChanged} />
+        <VarianceCard
+          key={v.id}
+          variance={v}
+          ownerName={rows.find((r) => r.variance_id === v.id)?.owner_name ?? null}
+          onChanged={onChanged}
+        />
       ))}
     </div>
   );
 }
 
-function VarianceCard({ variance: v, ownerName, onChanged }: { variance: Variance; ownerName: string | null; onChanged: () => Promise<void> }) {
+function VarianceCard({
+  variance: v,
+  ownerName,
+  onChanged,
+}: {
+  variance: Variance;
+  ownerName: string | null;
+  onChanged: () => Promise<void>;
+}) {
   const { me, can } = useMe();
   const zone = useCompanyZone();
   const today = todayIn(zone);
-  const explains = can("explain_metric_variance", v.owner_id === me?.user_id);
-  const unknown = can("mark_metric_variance_unknown", v.owner_id === me?.user_id);
+  const explains = can('explain_metric_variance', v.owner_id === me?.user_id);
+  const unknown = can('mark_metric_variance_unknown', v.owner_id === me?.user_id);
   const answers = explains || unknown;
-  const noise = can("mark_metric_variance_noise");
-  const draft = v.oracle_draft ?? "";
+  const noise = can('mark_metric_variance_noise');
+  const draft = v.oracle_draft ?? '';
   const [text, setText] = useState(v.explanation ?? draft);
-  const [mode, setMode] = useState<"unknown" | "noise" | null>(null);
+  const [mode, setMode] = useState<'unknown' | 'noise' | null>(null);
   const [day, setDay] = useState(addDays(today, FIND_OUT_DAYS));
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const path = { params: { path: { variance_id: v.id } } };
-  const open = v.status === "open" || v.status === "unknown";
+  const open = v.status === 'open' || v.status === 'unknown';
 
   async function run(call: () => Promise<unknown>) {
     setBusy(true);
@@ -150,18 +188,22 @@ function VarianceCard({ variance: v, ownerName, onChanged }: { variance: Varianc
   }
 
   const status =
-    v.status === "explained"
-      ? "Explained"
-      : v.status === "noise"
-        ? "Noise"
-        : v.status === "unknown"
-          ? `Finding out by ${v.find_out_by ? calendarDay(v.find_out_by) : "—"}`
-          : "Not explained yet";
-  const drafted = !!draft && text === draft && v.status !== "explained";
+    v.status === 'explained'
+      ? 'Explained'
+      : v.status === 'noise'
+        ? 'Noise'
+        : v.status === 'unknown'
+          ? `Finding out by ${v.find_out_by ? calendarDay(v.find_out_by) : '—'}`
+          : 'Not explained yet';
+  const drafted = !!draft && text === draft && v.status !== 'explained';
   const unit = (n: number) => num(n);
 
   return (
-    <article data-testid="variance-card" data-status={v.status} className="min-w-0 rounded-lg border border-line px-3 py-2.5">
+    <article
+      data-testid="variance-card"
+      data-status={v.status}
+      className="min-w-0 rounded-lg border border-line px-3 py-2.5"
+    >
       <header className="flex flex-wrap items-center gap-2">
         <h3 className="min-w-0 font-semibold [overflow-wrap:anywhere]">{v.metric_title}</h3>
         <Chip kind={DIRECTION_KIND[v.direction]} data-testid="variance-direction">
@@ -172,9 +214,15 @@ function VarianceCard({ variance: v, ownerName, onChanged }: { variance: Varianc
         </span>
       </header>
       <p className="tnum mt-1 text-sm">
-        Week of {calendarDay(v.week_start)}: {unit(v.value)} from {unit(v.previous)} ({signed(v.change)}
-        {v.change_pct != null ? `, ${signed(v.change_pct)}%` : ""})
-        {v.band && <span className="text-text2"> · normal range {unit(v.band.low)} to {unit(v.band.high)}</span>}
+        Week of {calendarDay(v.week_start)}: {unit(v.value)} from {unit(v.previous)} (
+        {signed(v.change)}
+        {v.change_pct != null ? `, ${signed(v.change_pct)}%` : ''})
+        {v.band && (
+          <span className="text-text2">
+            {' '}
+            · normal range {unit(v.band.low)} to {unit(v.band.high)}
+          </span>
+        )}
       </p>
       {ownerName && <p className="text-sm text-text2">Owner: {ownerName}</p>}
       {v.possible_causes.length > 0 && (
@@ -185,20 +233,24 @@ function VarianceCard({ variance: v, ownerName, onChanged }: { variance: Varianc
               <li key={i} data-testid="variance-cause" className="[overflow-wrap:anywhere]">
                 <Link href={c.href} className="text-accent-ink hover:underline">
                   {c.title}
-                </Link>{" "}
+                </Link>{' '}
                 <span className="text-text2">· {calendarDay(c.on)}</span>
               </li>
             ))}
           </ul>
         </div>
       )}
-      {v.status === "explained" && v.explanation && (
+      {v.status === 'explained' && v.explanation && (
         <p className="mt-2 text-[15px] whitespace-pre-wrap [overflow-wrap:anywhere]">
           {v.explanation}
-          {v.explained_by_name && <span className="block text-[13px] text-text2">Explained by {v.explained_by_name}</span>}
+          {v.explained_by_name && (
+            <span className="block text-[13px] text-text2">Explained by {v.explained_by_name}</span>
+          )}
         </p>
       )}
-      {v.status === "noise" && v.noise_reason && <p className="mt-2 text-[15px] [overflow-wrap:anywhere]">{v.noise_reason}</p>}
+      {v.status === 'noise' && v.noise_reason && (
+        <p className="mt-2 text-[15px] [overflow-wrap:anywhere]">{v.noise_reason}</p>
+      )}
       {!explains && open && draft && (
         <p className="mt-2 text-[15px] [overflow-wrap:anywhere]">
           {draft}
@@ -210,20 +262,37 @@ function VarianceCard({ variance: v, ownerName, onChanged }: { variance: Varianc
           {explains && (
             <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
               Explanation
-              <textarea className={`${INPUT} min-h-20`} maxLength={EXPLAIN_MAX} value={text} onChange={(e) => setText(e.target.value)} />
+              <textarea
+                className={`${INPUT} min-h-20`}
+                maxLength={EXPLAIN_MAX}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+              />
             </label>
           )}
           {explains && drafted && <p className="text-[13px] text-text2">Drafted by Oracle</p>}
-          {mode === "unknown" && (
+          {mode === 'unknown' && (
             <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
               Find out by
-              <input type="date" className={`${INPUT} w-auto`} min={addDays(today, 1)} max={addDays(today, FIND_OUT_MAX)} value={day} onChange={(e) => setDay(e.target.value)} />
+              <input
+                type="date"
+                className={`${INPUT} w-auto`}
+                min={addDays(today, 1)}
+                max={addDays(today, FIND_OUT_MAX)}
+                value={day}
+                onChange={(e) => setDay(e.target.value)}
+              />
             </label>
           )}
-          {mode === "noise" && (
+          {mode === 'noise' && (
             <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
               Why it is noise
-              <input className={INPUT} value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
+              <input
+                className={INPUT}
+                value={reason}
+                maxLength={500}
+                onChange={(e) => setReason(e.target.value)}
+              />
             </label>
           )}
           <div className="flex flex-wrap gap-2">
@@ -233,18 +302,27 @@ function VarianceCard({ variance: v, ownerName, onChanged }: { variance: Varianc
                   <Button
                     variant="solid"
                     disabled={busy || text.trim().length < EXPLAIN_MIN}
-                    onClick={() => run(() => unwrap(api.POST("/v1/metric-variances/{variance_id}/explain", { ...path, body: { explanation: text.trim(), lock_version: v.lock_version } })))}
+                    onClick={() =>
+                      run(() =>
+                        unwrap(
+                          api.POST('/v1/metric-variances/{variance_id}/explain', {
+                            ...path,
+                            body: { explanation: text.trim(), lock_version: v.lock_version },
+                          }),
+                        ),
+                      )
+                    }
                   >
                     Explain
                   </Button>
                 )}
                 {unknown && (
-                  <Button disabled={busy} onClick={() => setMode("unknown")}>
+                  <Button disabled={busy} onClick={() => setMode('unknown')}>
                     Don&apos;t know yet
                   </Button>
                 )}
                 {noise && (
-                  <Button variant="ghost" disabled={busy} onClick={() => setMode("noise")}>
+                  <Button variant="ghost" disabled={busy} onClick={() => setMode('noise')}>
                     Noise
                   </Button>
                 )}
@@ -253,12 +331,22 @@ function VarianceCard({ variance: v, ownerName, onChanged }: { variance: Varianc
               <>
                 <Button
                   variant="solid"
-                  disabled={busy || (mode === "noise" ? !reason.trim() : !day)}
+                  disabled={busy || (mode === 'noise' ? !reason.trim() : !day)}
                   onClick={() =>
                     run(() =>
-                      mode === "noise"
-                        ? unwrap(api.POST("/v1/metric-variances/{variance_id}/noise", { ...path, body: { reason: reason.trim(), lock_version: v.lock_version } }))
-                        : unwrap(api.POST("/v1/metric-variances/{variance_id}/unknown", { ...path, body: { find_out_by: day, lock_version: v.lock_version } })),
+                      mode === 'noise'
+                        ? unwrap(
+                            api.POST('/v1/metric-variances/{variance_id}/noise', {
+                              ...path,
+                              body: { reason: reason.trim(), lock_version: v.lock_version },
+                            }),
+                          )
+                        : unwrap(
+                            api.POST('/v1/metric-variances/{variance_id}/unknown', {
+                              ...path,
+                              body: { find_out_by: day, lock_version: v.lock_version },
+                            }),
+                          ),
                     )
                   }
                 >
@@ -278,14 +366,34 @@ function VarianceCard({ variance: v, ownerName, onChanged }: { variance: Varianc
 }
 
 /** A tracks row, as oracle.rituals.blocks.tracks builds it (detailed-b 7). */
-export type TrackRow = { track_id: string; title: string; health: string; at_risk_items: number; href: string; text: string };
+export type TrackRow = {
+  track_id: string;
+  title: string;
+  health: string;
+  at_risk_items: number;
+  href: string;
+  text: string;
+};
 
 /** A potentially-stale item row, as oracle.rituals.blocks.stale_items builds it (detailed-b 7). */
-export type StaleItemRow = { item_key: string; title: string; track_id: string | null; href: string | null; text: string };
+export type StaleItemRow = {
+  item_key: string;
+  title: string;
+  track_id: string | null;
+  href: string | null;
+  text: string;
+};
 
 /** A priority-change row, as oracle.rituals.blocks.priority_changes builds it (detailed-b 7): the
  * feature's own key, named as everywhere else a feature is shown (`web/lib/codes.ts`). */
-export type PriorityChangeRow = { key: string; title: string; from: number; to: number; href: string; text: string };
+export type PriorityChangeRow = {
+  key: string;
+  title: string;
+  from: number;
+  to: number;
+  href: string;
+  text: string;
+};
 
 /**
  * detailed-b 7: each track names its PRD or roadmap, and its "N at risk" leads to the same
@@ -299,9 +407,13 @@ export function TracksBlock({ rows }: { rows: TrackRow[] }) {
           <Link href={r.href} className="font-medium text-accent-ink hover:underline">
             {namedText(named(r.title))}
           </Link>
-          <span className="text-text2">: {r.health.replace(/_/g, " ")}, </span>
+          <span className="text-text2">: {r.health.replace(/_/g, ' ')}, </span>
           {r.at_risk_items > 0 ? (
-            <Link href={r.href} data-testid="track-at-risk" className="text-accent-ink hover:underline">
+            <Link
+              href={r.href}
+              data-testid="track-at-risk"
+              className="text-accent-ink hover:underline"
+            >
               {r.at_risk_items} at risk
             </Link>
           ) : (

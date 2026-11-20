@@ -1,47 +1,66 @@
-"use client";
+'use client';
 
-import { Link, usePathname, useRouter } from "@/lib/nav";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { Link, usePathname, useRouter } from '@/lib/nav';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
+import { createPortal } from 'react-dom';
 
-import { Mark } from "@/components/ds/Brand";
-import { Icon, type IconName } from "@/components/ds/Icon";
-import { ModeSwitch, SEGMENTED } from "@/components/ds/ModeSwitch";
-import { TAB_BAR } from "@/components/ds/rail";
-import { Sheet } from "@/components/ds/Sheet";
-import { setPanelOpen, usePanelOpen } from "@/components/hop/open-state";
-import { SIMPLE_HOME, switchTarget } from "@/lib/experience";
-import { useMe } from "@/lib/me";
-import { LINK_KINDS } from "@/lib/roadmap-links";
-import { api, unwrap } from "@/lib/api/client";
-import { onReadChanged, onReadFailed, STALE_OK } from "@/lib/api/shared-reads";
-import { inboxCounts } from "@/lib/inbox-counts";
-import { onWaitingChanged, railInbox, railInboxCounts, railQuestions, readAgainLater, retryWait, waitingCount } from "@/lib/waiting";
+import { Mark } from '@/components/ds/Brand';
+import { Icon, type IconName } from '@/components/ds/Icon';
+import { ModeSwitch, SEGMENTED } from '@/components/ds/ModeSwitch';
+import { TAB_BAR } from '@/components/ds/rail';
+import { Sheet } from '@/components/ds/Sheet';
+import { setPanelOpen, usePanelOpen } from '@/components/hop/open-state';
+import { SIMPLE_HOME, switchTarget } from '@/lib/experience';
+import { useMe } from '@/lib/me';
+import { LINK_KINDS } from '@/lib/roadmap-links';
+import { api, unwrap } from '@/lib/api/client';
+import { onReadChanged, onReadFailed, STALE_OK } from '@/lib/api/shared-reads';
+import { inboxCounts } from '@/lib/inbox-counts';
+import {
+  onWaitingChanged,
+  railInbox,
+  railInboxCounts,
+  railQuestions,
+  readAgainLater,
+  retryWait,
+  waitingCount,
+} from '@/lib/waiting';
 
 type Dest = { label: string; href: string; icon: IconName; testId: string };
 
 /** The Ask panel the rail's Ask Oracle opens (its aria-controls; SimpleAsk.tsx sets it on the docked panel). */
-export const SIMPLE_ASK_PANEL_ID = "simple-ask-panel";
+export const SIMPLE_ASK_PANEL_ID = 'simple-ask-panel';
 
 const noSubscribe = () => () => undefined;
 
-
 /** Simple's destinations (#723, D10), in rail order: nothing of Detailed's rail. */
 export const SIMPLE_DESTINATIONS: Dest[] = [
-  { label: "Home", href: SIMPLE_HOME, icon: "home", testId: "simple-nav-home" },
-  { label: "One-pagers", href: "/simple/one-pagers", icon: "doc", testId: "simple-nav-one-pagers" },
-  { label: "Roadmap", href: "/simple/roadmap", icon: "roadmap", testId: "simple-nav-roadmap" },
-  { label: "Goal map", href: "/simple/goals", icon: "target", testId: "simple-nav-goals" },
-  { label: "Priorities", href: "/simple/priorities", icon: "priorities", testId: "simple-nav-priorities" },
-  { label: "Meetings", href: "/simple/meetings", icon: "clock", testId: "simple-nav-meetings" },
-  { label: "Decisions", href: "/simple/decisions", icon: "flag", testId: "simple-nav-decisions" },
+  { label: 'Home', href: SIMPLE_HOME, icon: 'home', testId: 'simple-nav-home' },
+  { label: 'One-pagers', href: '/simple/one-pagers', icon: 'doc', testId: 'simple-nav-one-pagers' },
+  { label: 'Roadmap', href: '/simple/roadmap', icon: 'roadmap', testId: 'simple-nav-roadmap' },
+  { label: 'Goal map', href: '/simple/goals', icon: 'target', testId: 'simple-nav-goals' },
+  {
+    label: 'Priorities',
+    href: '/simple/priorities',
+    icon: 'priorities',
+    testId: 'simple-nav-priorities',
+  },
+  { label: 'Meetings', href: '/simple/meetings', icon: 'clock', testId: 'simple-nav-meetings' },
+  { label: 'Decisions', href: '/simple/decisions', icon: 'flag', testId: 'simple-nav-decisions' },
   // inbox-meeting-proposals owner: the one Inbox (Detailed's too), with every proposal waiting on me;
   // S-7: in Simple's shell, so the person stays in Simple.
-  { label: "Inbox", href: "/simple/inbox", icon: "inbox", testId: "simple-nav-inbox" },
+  { label: 'Inbox', href: '/simple/inbox', icon: 'inbox', testId: 'simple-nav-inbox' },
 ];
 
 /** Phone tab bar: Home, One-pagers, Roadmap, Decisions, More (Detailed's pattern). */
-const TABS = ["Home", "One-pagers", "Roadmap", "Decisions"];
+const TABS = ['Home', 'One-pagers', 'Roadmap', 'Decisions'];
 
 function isActive(pathname: string, d: Dest): boolean {
   if (d.href === SIMPLE_HOME) return pathname === SIMPLE_HOME;
@@ -58,7 +77,9 @@ function isActive(pathname: string, d: Dest): boolean {
  * Inbox counts what waits on me as /inbox's "N waiting" does (lib/waiting,
  * inbox-meeting-proposals), and More carries it as it is. Read when the rail mounts, on a route change and whenever something waiting changes.
  */
-function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; failed: Set<string> } | null {
+function useSimpleCounts(
+  enabled: boolean,
+): { counts: Record<string, number>; failed: Set<string> } | null {
   const pathname = usePathname();
   // Each part's last answer, or that its last read failed (counts-wait review).
   const [got, setGot] = useState<Got>({});
@@ -94,19 +115,23 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
     const { signal } = aborts.current;
     const mine = parts.map((p) => (seq.current[p] = (seq.current[p] ?? 0) + 1));
     inflight.current += 1;
-    void Promise.allSettled(parts.map((p) => PART_READS[p](signal, staleOk, path.current))).then((results) => {
-      inflight.current -= 1;
-      if (signal.aborted) return;
-      const next: Got = {};
-      results.forEach((r, i) => {
-        const p = parts[i]!;
-        if (seq.current[p] !== mine[i]) return;
-        fails.current[p] = r.status === "fulfilled" ? 0 : (fails.current[p] ?? 0) + 1;
-        Object.assign(next, { [p]: r.status === "fulfilled" ? { ok: true, value: r.value } : { ok: false } });
-      });
-      setGot((g) => ({ ...g, ...next }));
-      setSettled((n) => n + 1);
-    });
+    void Promise.allSettled(parts.map((p) => PART_READS[p](signal, staleOk, path.current))).then(
+      (results) => {
+        inflight.current -= 1;
+        if (signal.aborted) return;
+        const next: Got = {};
+        results.forEach((r, i) => {
+          const p = parts[i]!;
+          if (seq.current[p] !== mine[i]) return;
+          fails.current[p] = r.status === 'fulfilled' ? 0 : (fails.current[p] ?? 0) + 1;
+          Object.assign(next, {
+            [p]: r.status === 'fulfilled' ? { ok: true, value: r.value } : { ok: false },
+          });
+        });
+        setGot((g) => ({ ...g, ...next }));
+        setSettled((n) => n + 1);
+      },
+    );
   }, []);
   // home-waiting-one-list: Decisions counts the one list of what waits on me. The Roadmap's
   // count is its "Needs a decision" count; roadmap-decide: its broken links are those of the
@@ -116,29 +141,36 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
   // counts-wait review: each read settles on its own, so one that fails marks the counts it adds to
   // and the rest still show.
   useEffect(() => {
-    if (enabled) read(["waiting", "roadmap", "inbox", "questions", "goals"], true);
+    if (enabled) read(['waiting', 'roadmap', 'inbox', 'questions', 'goals'], true);
   }, [enabled, pathname, changes, read]);
   // simple-call-budget: a part read since (by the page, or behind the counts shown) answered
   // something new: that part reads it again (shared, so no call), the rest keep their waits.
-  useEffect(() => onReadChanged((url) => PART_BY_URL.has(url) && read([PART_BY_URL.get(url)!], false)), [read]);
+  useEffect(
+    () => onReadChanged((url) => PART_BY_URL.has(url) && read([PART_BY_URL.get(url)!], false)),
+    [read],
+  );
   // counts-failed-part: a read again of a part's list failed (the page's, or one behind the count shown):
   // that part reads it now, not stale-ok, so it shows no number rather than the last one.
-  useEffect(() => onReadFailed((url) => PART_BY_URL.has(url) && read([PART_BY_URL.get(url)!], false, false)), [read]);
-  const meetingsPath = pathname.startsWith("/simple/meetings") ? pathname : "";
+  useEffect(
+    () =>
+      onReadFailed((url) => PART_BY_URL.has(url) && read([PART_BY_URL.get(url)!], false, false)),
+    [read],
+  );
+  const meetingsPath = pathname.startsWith('/simple/meetings') ? pathname : '';
   useEffect(() => {
-    if (enabled) read(["meetings"], true);
+    if (enabled) read(['meetings'], true);
   }, [enabled, changes, meetingsPath, read]);
   // counts-failed-part: while a part failed, read that part again once the reads have finished, after
   // a wait that doubles with each of its failed reads in a row, whatever started them (15 s, 30 s,
   // 60 s, ... up to 5 min), and never while the tab is hidden.
-  const failedParts = PARTS.filter((p) => got[p]?.ok === false).join(",");
+  const failedParts = PARTS.filter((p) => got[p]?.ok === false).join(',');
   useEffect(() => {
     if (!enabled || !failedParts || inflight.current > 0) return;
     // The failed parts are read again together, after the wait of the one that failed most.
-    const tries = Math.max(...(failedParts.split(",") as Part[]).map((p) => fails.current[p] ?? 1));
+    const tries = Math.max(...(failedParts.split(',') as Part[]).map((p) => fails.current[p] ?? 1));
     const cancel = readAgainLater(retryWait(tries - 1), () => {
       pending.current = null;
-      read(failedParts.split(",") as Part[], false);
+      read(failedParts.split(',') as Part[], false);
     });
     pending.current = cancel;
     return () => {
@@ -152,22 +184,35 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
     const r = got[p];
     return r?.ok ? (r.value as Reads[P]) : null;
   };
-  const waiting = value("waiting");
-  const roadmap = value("roadmap");
-  const inbox = value("inbox");
-  const questions = value("questions");
-  const goalSuggestions = value("goals");
-  const meetings = value("meetings");
+  const waiting = value('waiting');
+  const roadmap = value('roadmap');
+  const inbox = value('inbox');
+  const questions = value('questions');
+  const goalSuggestions = value('goals');
+  const meetings = value('meetings');
   const items = waiting?.items ?? [];
   // Without the light count, the strip's own rule over the list: each link between items
   // (a dependency out of order, a cut item others depend on), not an end past its milestone.
-  const links = roadmap?.broken_links ?? items.filter((i) => i.kind === "broken_link" && LINK_KINDS.some((k) => i.key.split(":")[2] === k)).length;
-  const dates = roadmap?.dates_to_confirm ?? items.filter((i) => i.kind === "date" && !i.key.startsWith("proposal:")).length;
+  const links =
+    roadmap?.broken_links ??
+    items.filter(
+      (i) => i.kind === 'broken_link' && LINK_KINDS.some((k) => i.key.split(':')[2] === k),
+    ).length;
+  const dates =
+    roadmap?.dates_to_confirm ??
+    items.filter((i) => i.kind === 'date' && !i.key.startsWith('proposal:')).length;
   // The suggested features Needs a decision lists and counts (the same read and filter as its panel).
-  const suggested = (goalSuggestions?.suggestions ?? []).filter((s) => s.can_accept || s.can_reject).length;
+  const suggested = (goalSuggestions?.suggestions ?? []).filter(
+    (s) => s.can_accept || s.can_reject,
+  ).length;
   // PR 1320 re-review: a one-pager number fix (set_section_number) is the one-pager's, not the
   // roadmap's: it counts in the Inbox beyond the tabs, as a one-pager wording does.
-  const asks = items.filter((i) => (i.kind === "proposal" && i.op !== "set_section_number") || i.kind === "draft" || (i.kind === "date" && i.key.startsWith("proposal:"))).length;
+  const asks = items.filter(
+    (i) =>
+      (i.kind === 'proposal' && i.op !== 'set_section_number') ||
+      i.kind === 'draft' ||
+      (i.kind === 'date' && i.key.startsWith('proposal:')),
+  ).length;
   const all = inbox ? waitingCount(inbox, questions ?? []) : 0;
   // qa-simple-decide-51: "Meetings live": the yellow count only when one is on now.
   // counts-failed-part: a failed meetings read shows no number, never the last one it read.
@@ -176,19 +221,19 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
     counts: {
       Decisions: items.length,
       Roadmap: links + dates + suggested + asks,
-      "Roadmap links": links,
-      "Roadmap dates": dates,
-      "Roadmap suggested": suggested,
-      "Roadmap asks": asks,
+      'Roadmap links': links,
+      'Roadmap dates': dates,
+      'Roadmap suggested': suggested,
+      'Roadmap asks': asks,
       Inbox: all,
       Meetings: live,
-      "Meetings live": live,
+      'Meetings live': live,
     },
     failed: new Set([
-      ...(waiting ? [] : ["Decisions"]),
-      ...(waiting && goalSuggestions && roadmap ? [] : ["Roadmap"]),
-      ...(inbox && questions ? [] : ["Inbox"]),
-      ...(meetings ? [] : ["Meetings"]),
+      ...(waiting ? [] : ['Decisions']),
+      ...(waiting && goalSuggestions && roadmap ? [] : ['Roadmap']),
+      ...(inbox && questions ? [] : ['Inbox']),
+      ...(meetings ? [] : ['Meetings']),
     ]),
   };
 }
@@ -199,31 +244,43 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
  * simple-call-budget: each is stale-ok, so moving between pages shows the counts read a moment
  * ago at once instead of reading every list again; an answer that changed since reads them again.
  */
-const rail = (staleOk: boolean) => (staleOk ? { headers: { [STALE_OK]: "1" } } : {});
+const rail = (staleOk: boolean) => (staleOk ? { headers: { [STALE_OK]: '1' } } : {});
 /**
  * inbox-reads: the pages that read the whole Inbox for themselves (Home's rows, the Inbox): there
  * the rail takes its counts from that same read (shared, no call of its own); elsewhere it reads
  * the Inbox's counts alone (GET /v1/inbox/counts), never the whole Inbox.
  */
-const READS_INBOX = (path: string) => path === SIMPLE_HOME || path === "/simple/inbox";
+const READS_INBOX = (path: string) => path === SIMPLE_HOME || path === '/simple/inbox';
 const PART_READS = {
-  waiting: (signal: AbortSignal, staleOk: boolean) => unwrap(api.GET("/v1/simple/decisions/waiting", { ...rail(staleOk), signal })),
+  waiting: (signal: AbortSignal, staleOk: boolean) =>
+    unwrap(api.GET('/v1/simple/decisions/waiting', { ...rail(staleOk), signal })),
   // #1586: a failed light count is a failed part of the Roadmap count (its links and dates fall back to the one list, said so).
-  roadmap: (signal: AbortSignal, staleOk: boolean) => unwrap(api.GET("/v1/simple/roadmap/waiting", { ...rail(staleOk), signal })),
+  roadmap: (signal: AbortSignal, staleOk: boolean) =>
+    unwrap(api.GET('/v1/simple/roadmap/waiting', { ...rail(staleOk), signal })),
   inbox: (signal: AbortSignal, staleOk: boolean, path: string) =>
-    READS_INBOX(path) ? railInbox(signal, staleOk).then(inboxCounts) : railInboxCounts(signal, staleOk),
+    READS_INBOX(path)
+      ? railInbox(signal, staleOk).then(inboxCounts)
+      : railInboxCounts(signal, staleOk),
   questions: (signal: AbortSignal, staleOk: boolean) => railQuestions(signal, staleOk),
-  goals: (signal: AbortSignal, staleOk: boolean) => unwrap(api.GET("/v1/simple/goal-suggestions", { params: { query: { status: "open" } }, ...rail(staleOk), signal })),
-  meetings: (signal: AbortSignal, staleOk: boolean) => unwrap(api.GET("/v1/simple/meetings", { ...rail(staleOk), signal })),
+  goals: (signal: AbortSignal, staleOk: boolean) =>
+    unwrap(
+      api.GET('/v1/simple/goal-suggestions', {
+        params: { query: { status: 'open' } },
+        ...rail(staleOk),
+        signal,
+      }),
+    ),
+  meetings: (signal: AbortSignal, staleOk: boolean) =>
+    unwrap(api.GET('/v1/simple/meetings', { ...rail(staleOk), signal })),
 };
 const PART_BY_URL = new Map<string, Part>([
-  ["/v1/simple/decisions/waiting", "waiting"],
-  ["/v1/simple/roadmap/waiting", "roadmap"],
-  ["/v1/inbox", "inbox"],
-  ["/v1/inbox/counts", "inbox"],
-  ["/v1/inbox/questions", "questions"],
-  ["/v1/simple/goal-suggestions?status=open", "goals"],
-  ["/v1/simple/meetings", "meetings"],
+  ['/v1/simple/decisions/waiting', 'waiting'],
+  ['/v1/simple/roadmap/waiting', 'roadmap'],
+  ['/v1/inbox', 'inbox'],
+  ['/v1/inbox/counts', 'inbox'],
+  ['/v1/inbox/questions', 'questions'],
+  ['/v1/simple/goal-suggestions?status=open', 'goals'],
+  ['/v1/simple/meetings', 'meetings'],
 ]);
 type Part = keyof typeof PART_READS;
 type Reads = { [P in Part]: Awaited<ReturnType<(typeof PART_READS)[P]>> };
@@ -232,21 +289,23 @@ const PARTS = Object.keys(PART_READS) as Part[];
 
 /** A count whose part failed (counts-wait review): its words say so, or alone when no number shows. */
 function failedWords(words: string, n: number): string {
-  return n > 0 ? `${words}; a part could not load` : "Could not load";
+  return n > 0 ? `${words}; a part could not load` : 'Could not load';
 }
 
 /** What a rail count counts, said in words (its accessible name and tooltip). */
 function countWords(label: string, n: number, counts?: Record<string, number> | null): string {
-  if (label === "Meetings") return `${n} ${n === 1 ? "meeting" : "meetings"} live now`;
+  if (label === 'Meetings') return `${n} ${n === 1 ? 'meeting' : 'meetings'} live now`;
   // roadmap-decide: Roadmap counts the broken links (as the roadmap and Home count them), the
   // dates to confirm and the changes and drafts sent to you, and says each.
-  if (label === "Roadmap") {
-    const links = counts?.["Roadmap links"] ?? 0;
-    const dates = counts?.["Roadmap dates"] ?? 0;
-    const suggested = counts?.["Roadmap suggested"] ?? 0;
-    const asks = counts?.["Roadmap asks"] ?? n - links - dates - suggested;
-    const features = suggested ? `${suggested} suggested ${suggested === 1 ? "feature" : "features"}, ` : "";
-    return `${n} on the roadmap waiting on you: ${links} broken ${links === 1 ? "link" : "links"}, ${dates} ${dates === 1 ? "date" : "dates"} to confirm, ${features}${asks} ${asks === 1 ? "change or draft" : "changes or drafts"}`;
+  if (label === 'Roadmap') {
+    const links = counts?.['Roadmap links'] ?? 0;
+    const dates = counts?.['Roadmap dates'] ?? 0;
+    const suggested = counts?.['Roadmap suggested'] ?? 0;
+    const asks = counts?.['Roadmap asks'] ?? n - links - dates - suggested;
+    const features = suggested
+      ? `${suggested} suggested ${suggested === 1 ? 'feature' : 'features'}, `
+      : '';
+    return `${n} on the roadmap waiting on you: ${links} broken ${links === 1 ? 'link' : 'links'}, ${dates} ${dates === 1 ? 'date' : 'dates'} to confirm, ${features}${asks} ${asks === 1 ? 'change or draft' : 'changes or drafts'}`;
   }
   return `${n} waiting on you`;
 }
@@ -257,7 +316,13 @@ function countWords(label: string, n: number, counts?: Record<string, number> | 
  */
 export function SimplePageSkeleton() {
   return (
-    <div className="simple-page" data-testid="simple-page-skeleton" role="status" aria-label="Loading" aria-busy="true">
+    <div
+      className="simple-page"
+      data-testid="simple-page-skeleton"
+      role="status"
+      aria-label="Loading"
+      aria-busy="true"
+    >
       <header aria-hidden className="flex flex-col gap-2 max-[600px]:hidden">
         <span className="simple-h1">
           <span className="inline-block h-[1em] w-56 max-w-full animate-pulse rounded bg-surface2 align-middle" />
@@ -282,9 +347,11 @@ export function SimplePageSkeleton() {
  * have no name of their own (none, or the email again); the avatar beside it then leaves the email
  * out (AppShell's UserMenu `emailBeside`), so the block never says it twice.
  */
-export function personLine(me: { name?: string | null; email?: string | null } | null | undefined): string {
+export function personLine(
+  me: { name?: string | null; email?: string | null } | null | undefined,
+): string {
   const name = me?.name?.trim();
-  return name && name !== me?.email ? name : me?.email || "";
+  return name && name !== me?.email ? name : me?.email || '';
 }
 
 /**
@@ -305,7 +372,7 @@ export function useSimpleShown(): boolean {
  * from the rail tokens under html[data-mode="simple"] (globals.css). While Simple is off, a
  * Simple page opens its matching Detailed page instead.
  */
-export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet") => ReactNode }) {
+export function SimpleNavs({ account }: { account: (placement: 'rail' | 'sheet') => ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { me, role, capsReady, capsError, simpleMode } = useMe();
@@ -328,10 +395,14 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
   }
   // qa-simple-home-18: the tab bar (and its More sheet) come after the page in the document, so
   // Tab reaches the skip link, the header and the page first; it stays fixed at the bottom.
-  const mounted = useSyncExternalStore(noSubscribe, () => true, () => false);
+  const mounted = useSyncExternalStore(
+    noSubscribe,
+    () => true,
+    () => false,
+  );
   const off = !!me && capsReady && !simpleMode;
   useEffect(() => {
-    if (off) router.replace(switchTarget(pathname, "detailed"));
+    if (off) router.replace(switchTarget(pathname, 'detailed'));
   }, [off, pathname, router]);
 
   const shown = useSimpleShown();
@@ -347,10 +418,16 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
       >
         <span className="mb-4 flex flex-none items-center gap-2.5 rounded-xl px-2">
           <Mark size={32} tone="current" className="block text-accent-ink" />
-          <span className="font-display text-[18px] font-semibold whitespace-nowrap text-rail-active-text">Product Oracle</span>
+          <span className="font-display text-[18px] font-semibold whitespace-nowrap text-rail-active-text">
+            Product Oracle
+          </span>
         </span>
         {/* qa-shell-20: the switch's place, so the destinations never move down when it shows. */}
-        <span aria-hidden data-testid="simple-nav-skeleton-switch" className={`mb-4 grid w-full flex-none grid-cols-2 ${SEGMENTED.track}`}>
+        <span
+          aria-hidden
+          data-testid="simple-nav-skeleton-switch"
+          className={`mb-4 grid w-full flex-none grid-cols-2 ${SEGMENTED.track}`}
+        >
           <span className={`${SEGMENTED.option} animate-pulse bg-surface`} />
           <span className={SEGMENTED.option} />
         </span>
@@ -374,7 +451,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
   const moreCount = moreDests.reduce((sum, d) => sum + countOf(d), 0);
   // qa4-simple-home-22: a count that needs nothing from you (Meetings with none live) is grey on the phone as on the rail; More is
   // yellow only when something in it waits on you.
-  const quietOf = (d: Dest) => d.label === "Meetings" && !counts?.["Meetings live"];
+  const quietOf = (d: Dest) => d.label === 'Meetings' && !counts?.['Meetings live'];
   const moreQuiet = moreDests.every((d) => countOf(d) === 0 || quietOf(d));
   const moreFailed = moreDests.some((d) => failedOf(d.label));
   const shownOf = (d: Dest) => countOf(d) > 0 || failedOf(d.label);
@@ -387,7 +464,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
         role="img"
         aria-label={failed ? failedWords(words, n) : words}
         title={failed ? failedWords(words, n) : words}
-        className={`simple-count simple-count-tab tnum${quiet || n === 0 ? " simple-count-quiet" : ""}`}
+        className={`simple-count simple-count-tab tnum${quiet || n === 0 ? ' simple-count-quiet' : ''}`}
       >
         {n > 0 ? n : <Icon name="alert" size={16} />}
       </span>
@@ -396,30 +473,49 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
   return (
     <>
       {/* qa-simple-home-6: from 1200 px the open Ask panel sits beside the page (it keeps the shell's third column), not over it. */}
-      {askOpen && me && !/\/present\/?$/.test(pathname) && <span aria-hidden data-testid="simple-ask-room" className="simple-noprint col-start-3 row-start-1 hidden w-[400px] min-[1200px]:block" />}
+      {askOpen && me && !/\/present\/?$/.test(pathname) && (
+        <span
+          aria-hidden
+          data-testid="simple-ask-room"
+          className="simple-noprint col-start-3 row-start-1 hidden w-[400px] min-[1200px]:block"
+        />
+      )}
       {/* fix4 qa-simple-roadmap-46: the rail's colour runs the page's full height (the sticky rail is one
        * screen tall), and the rail sits under a page's dimmed backdrop (z-35) like the page. */}
-      <span aria-hidden data-testid="simple-nav-underlay" className="col-start-1 row-start-1 self-stretch bg-rail [border-right:var(--simple-rail-border)] max-[600px]:hidden simple-noprint" />
+      <span
+        aria-hidden
+        data-testid="simple-nav-underlay"
+        className="col-start-1 row-start-1 self-stretch bg-rail [border-right:var(--simple-rail-border)] max-[600px]:hidden simple-noprint"
+      />
       <nav
         aria-label="Simple"
         data-testid="simple-nav"
         className="sticky top-0 z-30 col-start-1 row-start-1 flex h-dvh w-[var(--simple-rail-width)] flex-col gap-1 bg-rail px-4 py-5 [--focus-ring:var(--accent)] [border-right:var(--simple-rail-border)] max-[600px]:hidden simple-noprint"
       >
-        <Link href={SIMPLE_HOME} aria-label="Product Oracle" data-testid="simple-nav-brand" className="mb-4 flex flex-none items-center gap-2.5 rounded-xl px-2">
+        <Link
+          href={SIMPLE_HOME}
+          aria-label="Product Oracle"
+          data-testid="simple-nav-brand"
+          className="mb-4 flex flex-none items-center gap-2.5 rounded-xl px-2"
+        >
           <Mark size={32} tone="current" className="block text-accent-ink" />
-          <span className="font-display text-[18px] font-semibold whitespace-nowrap text-rail-active-text">Product Oracle</span>
+          <span className="font-display text-[18px] font-semibold whitespace-nowrap text-rail-active-text">
+            Product Oracle
+          </span>
         </Link>
         <ModeSwitch placement="wide" />
         {SIMPLE_DESTINATIONS.map((d) => {
           const n = counts?.[d.label] ?? 0;
           const failed = failedOf(d.label);
-          const words = failed ? failedWords(countWords(d.label, n, counts), n) : countWords(d.label, n, counts);
+          const words = failed
+            ? failedWords(countWords(d.label, n, counts), n)
+            : countWords(d.label, n, counts);
           return (
             <Link
               key={d.href}
               href={d.href}
               data-testid={d.testId}
-              aria-current={isActive(pathname, d) ? "page" : undefined}
+              aria-current={isActive(pathname, d) ? 'page' : undefined}
               // The destination is the link's name; its count is the description (never "Meetings 3").
               aria-label={d.label}
               aria-describedby={shownOf(d) ? `${d.testId}-count` : undefined}
@@ -428,7 +524,14 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
               <Icon name={d.icon} stroke={1.7} />
               <span className="min-w-0 flex-1 truncate">{d.label}</span>
               {(n > 0 || failed) && (
-                <span id={`${d.testId}-count`} data-testid={`${d.testId}-count`} role="img" aria-label={words} title={words} className={`simple-count tnum ${(d.label === "Meetings" && !counts?.["Meetings live"]) || n === 0 ? "simple-count-quiet" : ""}`}>
+                <span
+                  id={`${d.testId}-count`}
+                  data-testid={`${d.testId}-count`}
+                  role="img"
+                  aria-label={words}
+                  title={words}
+                  className={`simple-count tnum ${(d.label === 'Meetings' && !counts?.['Meetings live']) || n === 0 ? 'simple-count-quiet' : ''}`}
+                >
                   {n > 0 ? n : <Icon name="alert" size={16} />}
                 </span>
               )}
@@ -444,14 +547,19 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
           aria-controls={SIMPLE_ASK_PANEL_ID}
           onClick={() => setPanelOpen(!askOpen)}
           className={`mb-2 flex h-12 items-center gap-3 rounded-xl border px-3 text-[length:var(--simple-rail-label)] font-semibold ${
-            askOpen ? "border-accent bg-accent-soft text-accent-ink" : "border-line text-rail-active-text hover:bg-rail-hover"
+            askOpen
+              ? 'border-accent bg-accent-soft text-accent-ink'
+              : 'border-line text-rail-active-text hover:bg-rail-hover'
           }`}
         >
           <Icon name="ask" stroke={1.7} />
           Ask Oracle
         </button>
-        <div data-testid="simple-person" className="flex items-center gap-3 border-t border-line pt-3">
-          {account("rail")}
+        <div
+          data-testid="simple-person"
+          className="flex items-center gap-3 border-t border-line pt-3"
+        >
+          {account('rail')}
           <span className="flex min-w-0 flex-col pt-2 leading-5">
             {/* qa-simple-home-25, 21, qa-simple-prd-p3-31: the name in full, or the email once when the member has no name of their own
                 (personLine); the email on one line (qa4-simple-home-20). With no name the avatar says the
@@ -460,12 +568,12 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
               data-testid="simple-person-name"
               title={me?.email || me?.name || undefined}
               aria-hidden={!!me?.email && personLine(me) === me.email ? true : undefined}
-              className={`font-semibold text-rail-active-text ${me?.email && personLine(me) === me.email ? "truncate text-[13px]" : "text-[15px] [overflow-wrap:break-word]"}`}
+              className={`font-semibold text-rail-active-text ${me?.email && personLine(me) === me.email ? 'truncate text-[13px]' : 'text-[15px] [overflow-wrap:break-word]'}`}
             >
               {/* qa4-simple-home-20: an email stays on one line, a size smaller so a short one shows whole; a long one is cut with an ellipsis (whole in its tooltip). */}
               {personLine(me)}
             </span>
-            <span className="text-[14px] text-rail-text capitalize">{role ?? ""}</span>
+            <span className="text-[14px] text-rail-text capitalize">{role ?? ''}</span>
           </span>
         </div>
       </nav>
@@ -481,70 +589,99 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
             >
               {tabDests.map((d) => {
                 const active = isActive(pathname, d) && !more;
-                const id = `simple-tab-${d.testId.slice("simple-nav-".length)}`;
+                const id = `simple-tab-${d.testId.slice('simple-nav-'.length)}`;
                 const n = countOf(d);
                 return (
                   <Link
                     key={d.href}
                     href={d.href}
                     data-testid={id}
-                    aria-current={active ? "page" : undefined}
+                    aria-current={active ? 'page' : undefined}
                     aria-label={d.label}
                     aria-describedby={shownOf(d) ? `${id}-count` : undefined}
                     className={`relative flex min-w-0 flex-col items-center justify-center gap-[3px] rounded-[10px] text-[13px] leading-4 ${
-                      active ? `bg-rail-active font-semibold text-rail-active-text ${TAB_BAR}` : "font-medium text-rail-text"
+                      active
+                        ? `bg-rail-active font-semibold text-rail-active-text ${TAB_BAR}`
+                        : 'font-medium text-rail-text'
                     }`}
                   >
                     <Icon name={d.icon} stroke={1.7} />
                     {/* fix4 review: "One-pagers" fills a 390 px phone's fifth of the bar to the pixel; a hair tighter it is whole. */}
                     <span className="max-w-full truncate tracking-[-0.02em]">{d.label}</span>
-                    {tabBadge(`${id}-count`, n, countWords(d.label, n, counts), quietOf(d), failedOf(d.label))}
+                    {tabBadge(
+                      `${id}-count`,
+                      n,
+                      countWords(d.label, n, counts),
+                      quietOf(d),
+                      failedOf(d.label),
+                    )}
                   </Link>
                 );
               })}
               <button
                 type="button"
                 aria-label="More"
-                aria-describedby={moreCount > 0 || moreFailed ? "simple-tab-more-count" : undefined}
+                aria-describedby={moreCount > 0 || moreFailed ? 'simple-tab-more-count' : undefined}
                 aria-expanded={more}
                 aria-controls="simple-more-sheet"
                 data-testid="simple-tab-more"
                 onClick={() => setMore((m) => !m)}
                 className={`relative flex flex-col items-center justify-center gap-[3px] rounded-[10px] text-[13px] leading-4 ${
-                  more || moreActive ? `bg-rail-active font-semibold text-rail-active-text ${TAB_BAR}` : "font-medium text-rail-text"
+                  more || moreActive
+                    ? `bg-rail-active font-semibold text-rail-active-text ${TAB_BAR}`
+                    : 'font-medium text-rail-text'
                 }`}
               >
                 <Icon name="more" stroke={1.7} />
                 More
-                {tabBadge("simple-tab-more-count", moreCount, `${moreCount} in More`, moreQuiet, moreFailed)}
+                {tabBadge(
+                  'simple-tab-more-count',
+                  moreCount,
+                  `${moreCount} in More`,
+                  moreQuiet,
+                  moreFailed,
+                )}
               </button>
             </nav>
             {/* qa-simple-home-19: Detailed's More sheet (its handle, title, close button and dimmed backdrop), sized to its links. */}
-            <Sheet open={more} title="More" onClose={() => setMore(false)} testId="simple-more-sheet" id="simple-more-sheet" above>
+            <Sheet
+              open={more}
+              title="More"
+              onClose={() => setMore(false)}
+              testId="simple-more-sheet"
+              id="simple-more-sheet"
+              above
+            >
               <div className="p-3">
                 <ModeSwitch placement="sheet" />
                 <ul className="grid grid-cols-2 gap-1">
                   {moreDests.map((d) => {
                     const n = countOf(d);
-                    const id = `simple-more-${d.testId.slice("simple-nav-".length)}-count`;
+                    const id = `simple-more-${d.testId.slice('simple-nav-'.length)}-count`;
                     return (
                       <li key={d.href}>
                         <Link
                           href={d.href}
-                          aria-current={isActive(pathname, d) ? "page" : undefined}
+                          aria-current={isActive(pathname, d) ? 'page' : undefined}
                           aria-label={d.label}
                           aria-describedby={shownOf(d) ? id : undefined}
                           className="relative flex flex-col items-center gap-1 rounded-xl py-2.5 text-sm font-medium text-text hover:bg-surface2 aria-[current=page]:bg-accent-soft aria-[current=page]:text-accent-ink"
                         >
                           <Icon name={d.icon} />
                           {d.label}
-                          {tabBadge(id, n, countWords(d.label, n, counts), quietOf(d), failedOf(d.label))}
+                          {tabBadge(
+                            id,
+                            n,
+                            countWords(d.label, n, counts),
+                            quietOf(d),
+                            failedOf(d.label),
+                          )}
                         </Link>
                       </li>
                     );
                   })}
                 </ul>
-                {account("sheet")}
+                {account('sheet')}
               </div>
             </Sheet>
           </>,

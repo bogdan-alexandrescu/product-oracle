@@ -1,7 +1,7 @@
-import { expect, test } from "./test";
+import { expect, test } from './test';
 
-import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login, openSection, outlineRow } from "./helpers";
+import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login, openSection, outlineRow } from './helpers';
 
 /**
  * Engineering defaults of the PRD review chain: the outline rail marks a lapsed approval
@@ -9,10 +9,12 @@ import { login, openSection, outlineRow } from "./helpers";
  * Inbox does.
  */
 
-const DB_KEY = "po-mock-db-v2";
-const DOC = "/documents/annual-billing/v/1";
+const DB_KEY = 'po-mock-db-v2';
+const DOC = '/documents/annual-billing/v/1';
 
-test("contents: a lapsed approval's dot reads Approval lapsed, never Approved, as the section view does", async ({ page }) => {
+test("contents: a lapsed approval's dot reads Approval lapsed, never Approved, as the section view does", async ({
+  page,
+}) => {
   await login(page);
   // goal-trace's approval on v1 lapses (its approver was removed). Edited as the document page
   // loads, before its first call: edited on Home, a Home call still landing could save over it.
@@ -20,39 +22,60 @@ test("contents: a lapsed approval's dot reads Approval lapsed, never Approved, a
     const raw = localStorage.getItem(key);
     if (!raw) return;
     const db = JSON.parse(raw);
-    const version = db.versions.find((v: { slug?: string; number: number; document_id: string }) => v.number === 1 && db.documents.find((d: { id: string; slug: string }) => d.id === v.document_id)?.slug === "annual-billing");
-    const review = db.reviews.find((r: { version_id: string; section_key: string }) => r.version_id === version.id && r.section_key === "goal-trace");
-    review.lapsed_at = "2026-10-19T09:00:00Z";
-    review.lapse_reason = "former.pm@example.com was removed";
+    const version = db.versions.find(
+      (v: { slug?: string; number: number; document_id: string }) =>
+        v.number === 1 &&
+        db.documents.find((d: { id: string; slug: string }) => d.id === v.document_id)?.slug ===
+          'annual-billing',
+    );
+    const review = db.reviews.find(
+      (r: { version_id: string; section_key: string }) =>
+        r.version_id === version.id && r.section_key === 'goal-trace',
+    );
+    review.lapsed_at = '2026-10-19T09:00:00Z';
+    review.lapse_reason = 'former.pm@example.com was removed';
     localStorage.setItem(key, JSON.stringify(db));
   }, DB_KEY);
   await page.goto(DOC);
-  const dot = outlineRow(page, "goal-trace").locator(".prd-dot");
-  await expect(dot).toHaveAttribute("aria-label", "Approval lapsed");
+  const dot = outlineRow(page, 'goal-trace').locator('.prd-dot');
+  await expect(dot).toHaveAttribute('aria-label', 'Approval lapsed');
   await expect(dot).not.toHaveClass(/prd-dot-pass/);
-  await expect(outlineRow(page, "goal-trace")).toHaveAccessibleName(/Approval lapsed$/);
+  await expect(outlineRow(page, 'goal-trace')).toHaveAccessibleName(/Approval lapsed$/);
   // The section view says the same.
-  const bar = (await openSection(page, "goal-trace")).getByTestId("review-bar");
-  await expect(bar.getByTestId("verdict-lapsed")).toHaveText("Lapsed");
+  const bar = (await openSection(page, 'goal-trace')).getByTestId('review-bar');
+  await expect(bar.getByTestId('verdict-lapsed')).toHaveText('Lapsed');
 });
 
-test("home: owners see the revokes a disable could not make, as in the Inbox, and act on them", async ({ page }) => {
-  await page.addInitScript((key) => localStorage.setItem(key, "revoke-failures"), MOCK_SCENARIO_KEY);
+test('home: owners see the revokes a disable could not make, as in the Inbox, and act on them', async ({
+  page,
+}) => {
+  await page.addInitScript(
+    (key) => localStorage.setItem(key, 'revoke-failures'),
+    MOCK_SCENARIO_KEY,
+  );
   await login(page);
-  await page.goto("/home");
-  const needs = page.getByTestId("home-needs-table");
-  const github = needs.getByRole("row").filter({ hasText: "GitHub" });
-  await expect(github).toContainText("Couldn't revoke former.pm@example.com's GitHub access at GitHub");
-  await expect(page.getByTestId("home-needs")).toContainText("Access");
-  await github.getByRole("button", { name: "Retry" }).click();
+  await page.goto('/home');
+  const needs = page.getByTestId('home-needs-table');
+  const github = needs.getByRole('row').filter({ hasText: 'GitHub' });
+  await expect(github).toContainText(
+    "Couldn't revoke former.pm@example.com's GitHub access at GitHub",
+  );
+  await expect(page.getByTestId('home-needs')).toContainText('Access');
+  await github.getByRole('button', { name: 'Retry' }).click();
   await expect(github).toHaveCount(0);
 });
 
-test("home: only owners see revokes a disable could not make", async ({ page }) => {
-  await page.addInitScript((key) => localStorage.setItem(key, "revoke-failures"), MOCK_SCENARIO_KEY);
-  await page.addInitScript(([key, role]) => localStorage.setItem(key, role), [MOCK_ROLE_KEY, "approver"] as const);
+test('home: only owners see revokes a disable could not make', async ({ page }) => {
+  await page.addInitScript(
+    (key) => localStorage.setItem(key, 'revoke-failures'),
+    MOCK_SCENARIO_KEY,
+  );
+  await page.addInitScript(([key, role]) => localStorage.setItem(key, role), [
+    MOCK_ROLE_KEY,
+    'approver',
+  ] as const);
   await login(page);
-  await page.goto("/home");
-  await expect(page.getByTestId("home-needs-table")).toBeVisible();
-  await expect(page.getByTestId("home-needs-table")).not.toContainText("Couldn't revoke");
+  await page.goto('/home');
+  await expect(page.getByTestId('home-needs-table')).toBeVisible();
+  await expect(page.getByTestId('home-needs-table')).not.toContainText("Couldn't revoke");
 });

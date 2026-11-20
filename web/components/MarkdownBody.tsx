@@ -1,18 +1,18 @@
-import { Link } from "@/lib/nav";
-import { Fragment, type ReactNode } from "react";
+import { Link } from '@/lib/nav';
+import { Fragment, type ReactNode } from 'react';
 
-import { CitationChip } from "@/components/CitationChip";
-import { DateMarker } from "@/components/DateMarker";
-import { withCodes } from "@/components/ds/CodeChip";
-import { IGNORE_ATTR } from "@/lib/anchor";
-import { calendarDay } from "@/lib/dates";
-import type { CitationOut, DateMarkOut } from "@/lib/api/client";
-import type { CodeIndex } from "@/lib/code-index";
-import { isSafeHref, storedImageSrc, type Block, type Inline } from "@/lib/markdown";
-import { sectionHash, sectionHref } from "@/lib/section-link";
+import { CitationChip } from '@/components/CitationChip';
+import { DateMarker } from '@/components/DateMarker';
+import { withCodes } from '@/components/ds/CodeChip';
+import { IGNORE_ATTR } from '@/lib/anchor';
+import { calendarDay } from '@/lib/dates';
+import type { CitationOut, DateMarkOut } from '@/lib/api/client';
+import type { CodeIndex } from '@/lib/code-index';
+import { isSafeHref, storedImageSrc, type Block, type Inline } from '@/lib/markdown';
+import { sectionHash, sectionHref } from '@/lib/section-link';
 
 /** A highlighted span of a section's anchorable text. */
-export type Highlight = { start: number; end: number; id: string; kind: "comment" | "pending" };
+export type Highlight = { start: number; end: number; id: string; kind: 'comment' | 'pending' };
 
 /**
  * O1f: in the brief, a link to a detail section (`[Save cart](#feature-save-cart)` in a
@@ -54,7 +54,7 @@ type Ctx = {
   inLink?: boolean;
 };
 
-const ignore = { [IGNORE_ATTR]: "" };
+const ignore = { [IGNORE_ATTR]: '' };
 
 /**
  * O4b: a cross-document link to a version's section, as a roadmap draft links each item
@@ -73,7 +73,7 @@ function remoteHost(src: string): string | null {
   if (/[\\\u0000-\x20\u007f-\u009f]/.test(src)) return null;
   try {
     const u = new URL(src);
-    return u.protocol === "https:" || u.protocol === "http:" ? u.hostname : null;
+    return u.protocol === 'https:' || u.protocol === 'http:' ? u.hostname : null;
   } catch {
     return null;
   }
@@ -81,8 +81,10 @@ function remoteHost(src: string): string | null {
 
 function label(nodes: Inline[]): string {
   return nodes
-    .map((n) => (n.t === "text" || n.t === "code" ? n.v : n.t === "cite" || n.t === "img" ? "" : label(n.c)))
-    .join("");
+    .map((n) =>
+      n.t === 'text' || n.t === 'code' ? n.v : n.t === 'cite' || n.t === 'img' ? '' : label(n.c),
+    )
+    .join('');
 }
 
 /** The detail sections opened from the links of the block just rendered. */
@@ -118,7 +120,9 @@ export function withDays(
     i % 2 === 1 ? (
       <span key={`${key}d${i}`} data-day={piece}>
         <span hidden>{piece}</span>
-        <span {...{ [IGNORE_ATTR]: "" }}>{calendarDay(piece, { month: "short", day: "numeric", year: "numeric" })}</span>
+        <span {...{ [IGNORE_ATTR]: '' }}>
+          {calendarDay(piece, { month: 'short', day: 'numeric', year: 'numeric' })}
+        </span>
       </span>
     ) : (
       <Fragment key={`${key}d${i}`}>{rest(piece, codes, `${key}d${i}`)}</Fragment>
@@ -146,18 +150,24 @@ function renderText(text: string, ctx: Ctx, key: string, prose = false): ReactNo
     const slice = text.slice(a - start, b - start);
     const covering = hits.filter((h) => h.start <= a && h.end >= b);
     if (!covering.length) {
-      out.push(<Fragment key={`${key}-${i}`}>{prose ? withDays(slice, codes, `${key}-${i}`) : withCodes(slice, codes, `${key}-${i}`)}</Fragment>);
+      out.push(
+        <Fragment key={`${key}-${i}`}>
+          {prose ? withDays(slice, codes, `${key}-${i}`) : withCodes(slice, codes, `${key}-${i}`)}
+        </Fragment>,
+      );
       continue;
     }
-    const pending = covering.some((h) => h.kind === "pending");
-    const ids = covering.filter((h) => h.kind === "comment").map((h) => h.id);
+    const pending = covering.some((h) => h.kind === 'pending');
+    const ids = covering.filter((h) => h.kind === 'comment').map((h) => h.id);
     const active = ctx.activeId != null && ids.includes(ctx.activeId);
     out.push(
       <mark
         key={`${key}-${i}`}
-        data-comment-ids={ids.join(" ") || undefined}
-        className={pending ? "hl-pending" : active ? "hl-comment hl-active" : "hl-comment"}
-        onClick={ids.length && ctx.onHighlightClick ? () => ctx.onHighlightClick!(ids[0]) : undefined}
+        data-comment-ids={ids.join(' ') || undefined}
+        className={pending ? 'hl-pending' : active ? 'hl-comment hl-active' : 'hl-comment'}
+        onClick={
+          ids.length && ctx.onHighlightClick ? () => ctx.onHighlightClick!(ids[0]) : undefined
+        }
       >
         {slice}
       </mark>,
@@ -167,7 +177,7 @@ function renderText(text: string, ctx: Ctx, key: string, prose = false): ReactNo
 }
 
 function escapeRe(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // F3: the marker opens a popover (./DateMarker).
@@ -179,10 +189,17 @@ export { DateMarker };
  * text node: SectionView lists those under the heading instead (`unplacedMarks`).
  */
 function renderMarkedText(text: string, ctx: Ctx, key: string, prose = false): ReactNode {
-  const marks = (ctx.dateMarks ?? []).filter((m) => m.label && m.where !== "heading" && text.includes(m.text));
+  const marks = (ctx.dateMarks ?? []).filter(
+    (m) => m.label && m.where !== 'heading' && text.includes(m.text),
+  );
   if (!marks.length) return renderText(text, ctx, key, prose);
   const byText = new Map(marks.map((m) => [m.text, m]));
-  const re = new RegExp(`(${[...byText.keys()].sort((a, b) => b.length - a.length).map(escapeRe).join("|")})`);
+  const re = new RegExp(
+    `(${[...byText.keys()]
+      .sort((a, b) => b.length - a.length)
+      .map(escapeRe)
+      .join('|')})`,
+  );
   return text.split(re).map((piece, i) => {
     if (!piece) return null;
     const mark = i % 2 === 1 ? byText.get(piece) : undefined;
@@ -199,15 +216,15 @@ function renderInline(nodes: Inline[], ctx: Ctx, key: string): ReactNode[] {
   return nodes.map((n, i) => {
     const k = `${key}.${i}`;
     switch (n.t) {
-      case "text":
+      case 'text':
         return <span key={k}>{renderMarkedText(n.v, ctx, k, true)}</span>;
-      case "code":
+      case 'code':
         return <code key={k}>{renderMarkedText(n.v, ctx, k)}</code>;
-      case "strong":
+      case 'strong':
         return <strong key={k}>{renderInline(n.c, ctx, k)}</strong>;
-      case "em":
+      case 'em':
         return <em key={k}>{renderInline(n.c, ctx, k)}</em>;
-      case "link": {
+      case 'link': {
         // Only http, https, mailto and relative or anchor links render as links.
         if (!isSafeHref(n.href)) return <Fragment key={k}>{renderInline(n.c, ctx, k)}</Fragment>;
         const outer = ctx.inLink;
@@ -222,7 +239,7 @@ function renderInline(nodes: Inline[], ctx: Ctx, key: string): ReactNode[] {
             </Link>
           );
         }
-        if (!n.href.startsWith("#")) {
+        if (!n.href.startsWith('#')) {
           return (
             <a key={k} href={n.href} target="_blank" rel="noopener noreferrer">
               {kids}
@@ -249,15 +266,15 @@ function renderInline(nodes: Inline[], ctx: Ctx, key: string): ReactNode[] {
               className="expand-btn"
               aria-expanded={open}
               aria-controls={open ? `x-${target}` : undefined}
-              aria-label={`${open ? "Collapse" : "Expand"} ${label(n.c)}`}
+              aria-label={`${open ? 'Collapse' : 'Expand'} ${label(n.c)}`}
               onClick={() => toggle(target, origin)}
             >
-              {open ? "Collapse" : "Expand"}
+              {open ? 'Collapse' : 'Expand'}
             </button>
           </span>
         );
       }
-      case "img": {
+      case 'img': {
         // Owner decision (2026-10-20): an image loads only when Oracle stores it (a path
         // of this app under /uploads/, storedImageSrc). A remote image is a link showing
         // its alt text and host, never an <img>: a reviewer's browser contacts no outside
@@ -277,12 +294,19 @@ function renderInline(nodes: Inline[], ctx: Ctx, key: string): ReactNode[] {
           ) : null;
         }
         return (
-          <a key={k} {...ignore} href={n.src} target="_blank" rel="noopener noreferrer" data-remote-image="">
+          <a
+            key={k}
+            {...ignore}
+            href={n.src}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-remote-image=""
+          >
             {n.alt ? `${n.alt} (${host})` : host}
           </a>
         );
       }
-      case "cite": {
+      case 'cite': {
         const c = ctx.citations.get(n.key);
         // A citation that points to nothing is dropped, not shown as "?" (raw-tokens-everywhere).
         if (!c) return null;
@@ -302,7 +326,14 @@ function Detail({ keys, expand }: { keys: string[]; expand?: ExpandCtx }) {
   return (
     <>
       {keys.map((key) => (
-        <div key={key} id={`x-${key}`} {...ignore} className="detail-inline" data-testid="detail-inline" data-detail={key}>
+        <div
+          key={key}
+          id={`x-${key}`}
+          {...ignore}
+          className="detail-inline"
+          data-testid="detail-inline"
+          data-detail={key}
+        >
           {expand.render(key)}
         </div>
       ))}
@@ -315,15 +346,15 @@ function leaves(blocks: Block[]): string[] {
   const out: string[] = [];
   const walk = (nodes: Inline[]) => {
     for (const n of nodes) {
-      if (n.t === "text" || n.t === "code") out.push(n.v);
-      else if (n.t !== "cite" && n.t !== "img") walk(n.c);
+      if (n.t === 'text' || n.t === 'code') out.push(n.v);
+      else if (n.t !== 'cite' && n.t !== 'img') walk(n.c);
     }
   };
   for (const b of blocks) {
-    if (b.t === "pre") out.push(b.v);
-    else if (b.t === "table") [b.head, ...b.rows].flat().forEach(walk);
-    else if (b.t === "ul" || b.t === "ol") b.items.forEach(walk);
-    else if (b.t === "p" || b.t === "h" || b.t === "quote") walk(b.c);
+    if (b.t === 'pre') out.push(b.v);
+    else if (b.t === 'table') [b.head, ...b.rows].flat().forEach(walk);
+    else if (b.t === 'ul' || b.t === 'ol') b.items.forEach(walk);
+    else if (b.t === 'p' || b.t === 'h' || b.t === 'quote') walk(b.c);
   }
   return out;
 }
@@ -334,7 +365,9 @@ function leaves(blocks: Block[]): string[] {
  * section so no marker is lost.
  */
 export function unplacedMarks(blocks: Block[], marks: DateMarkOut[] | undefined): DateMarkOut[] {
-  const flagged = (marks ?? []).filter((m) => m.label && m.where !== "heading" && m.where !== "title");
+  const flagged = (marks ?? []).filter(
+    (m) => m.label && m.where !== 'heading' && m.where !== 'title',
+  );
   if (!flagged.length) return [];
   const texts = leaves(blocks);
   return flagged.filter((m) => !texts.some((t) => t.includes(m.text)));
@@ -350,7 +383,7 @@ export function MarkdownBody({
   markers,
   dateMarks,
   codes,
-}: Omit<Ctx, "pos" | "found" | "shown" | "inLink"> & {
+}: Omit<Ctx, 'pos' | 'found' | 'shown' | 'inLink'> & {
   blocks: Block[];
   /** Shown before the block at each index (not part of the anchorable text). */
   markers?: Map<number, ReactNode>;
@@ -398,20 +431,20 @@ export function MarkdownBody({
 
   function block(b: Block, k: string): ReactNode {
     switch (b.t) {
-      case "p":
+      case 'p':
         return withDetail(k, <p key={k}>{renderInline(b.c, ctx, k)}</p>);
-      case "h":
+      case 'h':
         return <h4 key={k}>{renderInline(b.c, ctx, k)}</h4>;
-      case "quote":
+      case 'quote':
         return withDetail(k, <blockquote key={k}>{renderInline(b.c, ctx, k)}</blockquote>);
-      case "pre":
+      case 'pre':
         return (
           <pre key={k}>
             <code>{renderMarkedText(b.v, ctx, k)}</code>
           </pre>
         );
-      case "ul":
-      case "ol": {
+      case 'ul':
+      case 'ol': {
         const List = b.t;
         return (
           <List key={k}>
@@ -427,7 +460,7 @@ export function MarkdownBody({
           </List>
         );
       }
-      case "table":
+      case 'table':
         return (
           <div key={k} className="table-wrap">
             <table>
@@ -440,7 +473,9 @@ export function MarkdownBody({
               </thead>
               <tbody>
                 {b.rows.map((r, j) => {
-                  const cells = r.map((c, x) => <td key={x}>{renderInline(c, ctx, `${k}.${j}.${x}`)}</td>);
+                  const cells = r.map((c, x) => (
+                    <td key={x}>{renderInline(c, ctx, `${k}.${j}.${x}`)}</td>
+                  ));
                   const keys = opened(ctx);
                   return (
                     <Fragment key={j}>

@@ -1,14 +1,26 @@
-"use client";
+'use client';
 
-import { Chip, HoverCard } from "@/components/ds";
-import type { CitationOut } from "@/lib/api/client";
-import { IGNORE_ATTR } from "@/lib/anchor";
-import { citationConfidence, citationHref, citationRefText, citationSourceLabel, formatDate, SOURCE_LABEL } from "@/lib/format";
+import { Chip, HoverCard } from '@/components/ds';
+import type { CitationOut } from '@/lib/api/client';
+import { IGNORE_ATTR } from '@/lib/anchor';
+import {
+  citationConfidence,
+  citationHref,
+  citationRefText,
+  citationSourceLabel,
+  formatDate,
+  SOURCE_LABEL,
+} from '@/lib/format';
 
 /** The app's low-confidence chip, on a citation its writer marked low confidence. */
 export function LowConfidence() {
   return (
-    <Chip kind="warn" title="The writer marked this source low confidence" className="flex-none" data-testid="low-confidence">
+    <Chip
+      kind="warn"
+      title="The writer marked this source low confidence"
+      className="flex-none"
+      data-testid="low-confidence"
+    >
       Low confidence
     </Chip>
   );
@@ -18,10 +30,24 @@ export function LowConfidence() {
  * Inline citation: shows the source; the shared card (#304) shows its title, date, excerpt
  * and link on hover, focus or tap. The chip is excluded from comment anchoring text.
  */
-export function CitationChip({ citeKey, citation, number, bare = false }: { citeKey: string; citation?: CitationOut; number?: number; bare?: boolean }) {
+export function CitationChip({
+  citeKey,
+  citation,
+  number,
+  bare = false,
+}: {
+  citeKey: string;
+  citation?: CitationOut;
+  number?: number;
+  bare?: boolean;
+}) {
   if (!citation) {
     return (
-      <span {...{ [IGNORE_ATTR]: "" }} className="cite-chip cite-chip-missing" title={`Unknown citation ${citeKey}`}>
+      <span
+        {...{ [IGNORE_ATTR]: '' }}
+        className="cite-chip cite-chip-missing"
+        title={`Unknown citation ${citeKey}`}
+      >
         ?
       </span>
     );
@@ -30,18 +56,18 @@ export function CitationChip({ citeKey, citation, number, bare = false }: { cite
   const confidence = citationConfidence(citation);
 
   return (
-    <span {...{ [IGNORE_ATTR]: "" }} className="relative inline-block align-baseline">
+    <span {...{ [IGNORE_ATTR]: '' }} className="relative inline-block align-baseline">
       <HoverCard
         testId={`cite-${citeKey}`}
         className="cite-chip"
         unstyled
         label={[
-          `Citation ${number ?? ""}: ${SOURCE_LABEL[citation.source]}`,
+          `Citation ${number ?? ''}: ${SOURCE_LABEL[citation.source]}`,
           citation.title ?? citationRefText(citation.ref),
-          [citation.low_confidence && "low confidence", confidence].filter(Boolean).join(" "),
+          [citation.low_confidence && 'low confidence', confidence].filter(Boolean).join(' '),
         ]
           .filter(Boolean)
-          .join(", ")}
+          .join(', ')}
         trigger={
           <>
             {/* `bare`: the number alone in running text (a discussion reply, qa-nov17 ask 3); the card names the source. */}
@@ -50,7 +76,10 @@ export function CitationChip({ citeKey, citation, number, bare = false }: { cite
           </>
         }
       >
-        <span className="mb-1 block text-[13px] font-semibold tracking-[0.02em] text-text2" data-testid="cite-source">
+        <span
+          className="mb-1 block text-[13px] font-semibold tracking-[0.02em] text-text2"
+          data-testid="cite-source"
+        >
           {/* The writer's confidence beside the source, or its note when unscored (text). */}
           {citationSourceLabel(citation)}
           {citation.retrieved_at && ` · retrieved ${formatDate(citation.retrieved_at)}`}
@@ -60,8 +89,14 @@ export function CitationChip({ citeKey, citation, number, bare = false }: { cite
             <LowConfidence />
           </span>
         )}
-        <span className="block font-semibold">{citation.title ?? citationRefText(citation.ref)}</span>
-        {citation.excerpt && <span className="mt-2 block border-l-[3px] border-accent-mid pl-2 text-text2">“{citation.excerpt}”</span>}
+        <span className="block font-semibold">
+          {citation.title ?? citationRefText(citation.ref)}
+        </span>
+        {citation.excerpt && (
+          <span className="mt-2 block border-l-[3px] border-accent-mid pl-2 text-text2">
+            “{citation.excerpt}”
+          </span>
+        )}
         {href ? (
           <a
             href={href}

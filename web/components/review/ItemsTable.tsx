@@ -1,58 +1,82 @@
-"use client";
+'use client';
 
-import { Link } from "@/lib/nav";
-import { useMemo, type ReactNode } from "react";
+import { Link } from '@/lib/nav';
+import { useMemo, type ReactNode } from 'react';
 
-import { Chip, DataTable, Ring, type Column } from "@/components/ds";
-import { HORIZONS, horizonLabel, type ItemRow } from "@/components/roadmap/item-row";
-import { formatDate } from "@/lib/format";
+import { Chip, DataTable, Ring, type Column } from '@/components/ds';
+import { HORIZONS, horizonLabel, type ItemRow } from '@/components/roadmap/item-row';
+import { formatDate } from '@/lib/format';
 
 /** Below this a 0-1 confidence shows in the warn tone (as the API flags low confidence). */
 export const LOW_CONFIDENCE = 0.4;
 
-export type ItemColumn = "position" | "title" | "horizon" | "milestone" | "confidence" | "depends_on" | "prd" | "state";
+export type ItemColumn =
+  'position' | 'title' | 'horizon' | 'milestone' | 'confidence' | 'depends_on' | 'prd' | 'state';
 
 const HORIZON_ORDER = new Map(HORIZONS.map((h, i) => [h.value, i]));
 
-export function HorizonChip({ horizon, hero = false, plain = false }: { horizon: string; hero?: boolean; plain?: boolean }) {
+export function HorizonChip({
+  horizon,
+  hero = false,
+  plain = false,
+}: {
+  horizon: string;
+  hero?: boolean;
+  plain?: boolean;
+}) {
   return (
-    <Chip kind={horizon === "now" && !plain ? "now" : "line"} hero={hero}>
+    <Chip kind={horizon === 'now' && !plain ? 'now' : 'line'} hero={hero}>
       {horizonLabel(horizon)}
     </Chip>
   );
 }
 
 /** "Date unverified" in Now; "Not in Now" in Next or Later (the API refuses a date outside Now only for that). */
-export const refusedLabel = (horizon: string) => (horizon === "now" ? "Date unverified" : "Not in Now");
+export const refusedLabel = (horizon: string) =>
+  horizon === 'now' ? 'Date unverified' : 'Not in Now';
 
-export function Confidence({ value }: { value: ItemRow["confidence"] }) {
-  if (value == null || value === "") return <span className="text-text2">—</span>;
-  const n = typeof value === "number" ? value : Number.NaN;
+export function Confidence({ value }: { value: ItemRow['confidence'] }) {
+  if (value == null || value === '') return <span className="text-text2">—</span>;
+  const n = typeof value === 'number' ? value : Number.NaN;
   if (!Number.isNaN(n)) {
     const pct = Math.round(n * 100);
-    return <Ring value={pct} size={28} stroke={4} tone={n < LOW_CONFIDENCE ? "warn" : "accent"} label={`Confidence ${pct}%`} />;
+    return (
+      <Ring
+        value={pct}
+        size={28}
+        stroke={4}
+        tone={n < LOW_CONFIDENCE ? 'warn' : 'accent'}
+        label={`Confidence ${pct}%`}
+      />
+    );
   }
   const v = String(value).toLowerCase();
-  const kind = v === "high" ? "pass" : v === "low" ? "warn" : "na";
+  const kind = v === 'high' ? 'pass' : v === 'low' ? 'warn' : 'na';
   return <Chip kind={kind}>{v.charAt(0).toUpperCase() + v.slice(1)}</Chip>;
 }
 
-export function StateChip({ freshness }: { freshness: ItemRow["freshness"] }) {
-  if (freshness === "potentially_stale") return <Chip kind="warn">May be stale</Chip>;
-  if (freshness === "under_review") return <Chip kind="na">Under review</Chip>;
+export function StateChip({ freshness }: { freshness: ItemRow['freshness'] }) {
+  if (freshness === 'potentially_stale') return <Chip kind="warn">May be stale</Chip>;
+  if (freshness === 'under_review') return <Chip kind="na">Under review</Chip>;
   return null;
 }
 
 /** Whether a row's milestone cell wraps: a refused or unconfirmed date's chip, or a name with a date. */
-const milestoneWraps = (r: ItemRow) => Boolean(r.unbacked?.length || r.milestone?.refused_date || (r.milestone?.name && r.milestone?.date));
+const milestoneWraps = (r: ItemRow) =>
+  Boolean(
+    r.unbacked?.length || r.milestone?.refused_date || (r.milestone?.name && r.milestone?.date),
+  );
 
 export function MilestoneCell({ row }: { row: ItemRow }) {
   const m = row.milestone;
   const unbacked = row.unbacked ?? [];
-  if ((!m || (!m.name && !m.date && !m.refused_date)) && unbacked.length === 0) return <span className="text-text2">—</span>;
+  if ((!m || (!m.name && !m.date && !m.refused_date)) && unbacked.length === 0)
+    return <span className="text-text2">—</span>;
   // qa4-docs-3: dates month first; a refused date's chip wraps under it, whole, never cut.
   return (
-    <span className={`inline-flex min-w-0 max-w-full items-center gap-x-1.5 gap-y-1 ${milestoneWraps(row) ? "flex-wrap" : ""}`}>
+    <span
+      className={`inline-flex min-w-0 max-w-full items-center gap-x-1.5 gap-y-1 ${milestoneWraps(row) ? 'flex-wrap' : ''}`}
+    >
       {/* walkb-roadmap: in a narrow column the name keeps its line and the date goes under it, never a name cut to a letter. */}
       {m?.name && <span className="max-w-full flex-none break-words">{m.name}</span>}
       {m?.date &&
@@ -75,9 +99,16 @@ export function MilestoneCell({ row }: { row: ItemRow }) {
       )}
       {/* qa-docs-6: a date the item's text writes that no confirmed schedule backs. */}
       {unbacked.map((u) => (
-        <span key={u.date} data-testid="unbacked-date" className="inline-flex flex-none items-center gap-1.5">
+        <span
+          key={u.date}
+          data-testid="unbacked-date"
+          className="inline-flex flex-none items-center gap-1.5"
+        >
           <span className="tnum text-text2">{formatDate(u.date)}</span>
-          <Chip kind="warn" title={u.withdrawn ? "Its schedule was withdrawn" : "No confirmed schedule backs it"}>
+          <Chip
+            kind="warn"
+            title={u.withdrawn ? 'Its schedule was withdrawn' : 'No confirmed schedule backs it'}
+          >
             Unconfirmed
           </Chip>
         </span>
@@ -104,12 +135,12 @@ export function ItemsTable({
   hide = [],
   extraColumns = [],
   rowDecorations,
-  label = "Roadmap items",
+  label = 'Roadmap items',
   groupBy,
   groupOrder,
   groupLabel,
   detail,
-  empty = "No items match",
+  empty = 'No items match',
   widths,
   plainHorizons = false,
 }: {
@@ -136,9 +167,12 @@ export function ItemsTable({
 }) {
   const titles = useMemo(() => new Map(rows.map((r) => [r.key, r.title])), [rows]);
   const groupOf = groupBy ?? ((r: ItemRow) => r.horizon);
-  const orderOf = groupOrder ?? ((g: string) => HORIZON_ORDER.get(g as ItemRow["horizon"]) ?? 9);
+  const orderOf = groupOrder ?? ((g: string) => HORIZON_ORDER.get(g as ItemRow['horizon']) ?? 9);
   const shown = useMemo(
-    () => rows.filter((r) => !filter || filter(r)).sort((a, b) => orderOf(groupOf(a)) - orderOf(groupOf(b)) || a.position - b.position),
+    () =>
+      rows
+        .filter((r) => !filter || filter(r))
+        .sort((a, b) => orderOf(groupOf(a)) - orderOf(groupOf(b)) || a.position - b.position),
     // groupOf and orderOf are the caller's: they change with the rows.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [rows, filter, groupBy, groupOrder],
@@ -151,38 +185,80 @@ export function ItemsTable({
       for (const r of list) if (pick(r)) m.set(groupOf(r), (m.get(groupOf(r)) ?? 0) + 1);
       return m;
     };
-    return { shown: tally(shown, (r) => !r.ghost), all: tally(rows, (r) => !r.ghost), dropped: tally(shown, (r) => !!r.ghost) };
+    return {
+      shown: tally(shown, (r) => !r.ghost),
+      all: tally(rows, (r) => !r.ghost),
+      dropped: tally(shown, (r) => !!r.ghost),
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shown, rows, groupBy]);
   const countLabel = (g: string) => {
     const n = counts.shown.get(g) ?? 0;
     const all = counts.all.get(g) ?? 0;
     const dropped = counts.dropped.get(g) ?? 0;
-    return `${n}${all !== n ? ` of ${all}` : ""}${dropped ? ` · ${dropped} dropped` : ""}`;
+    return `${n}${all !== n ? ` of ${all}` : ''}${dropped ? ` · ${dropped} dropped` : ''}`;
   };
 
   const columns: Column<ItemRow>[] = [
-    { key: "position", header: "#", width: "44px", align: "right", phone: "hide", className: "tnum text-text2", cell: (r) => (r.ghost ? "" : r.position + 1) },
     {
-      key: "title",
-      header: "Item",
-      phone: "title",
-      cell: (r) =>
-        r.ghost || r.struck ? <s className="text-text2">{r.title}</s> : <span className={`font-medium ${r.muted ? "text-text2" : ""}`}>{r.title}</span>,
+      key: 'position',
+      header: '#',
+      width: '44px',
+      align: 'right',
+      phone: 'hide',
+      className: 'tnum text-text2',
+      cell: (r) => (r.ghost ? '' : r.position + 1),
     },
-    { key: "horizon", header: "Horizon", width: "84px", phone: "action", cell: (r) => (r.horizon ? <HorizonChip horizon={r.horizon} plain={plainHorizons} /> : <span className="text-text2">—</span>) },
-    // qa-docs-66: on a phone a row's "—" says what it is.
-    { key: "milestone", header: "Milestone", width: "172px", phone: "meta", phoneLabel: "Milestone", wrap: rows.some(milestoneWraps), cell: (r) => <MilestoneCell row={r} /> },
-    { key: "confidence", header: "Confidence", width: "104px", phone: "meta", phoneLabel: "Confidence", cell: (r) => <Confidence value={r.confidence} /> },
     {
-      key: "depends_on",
-      header: "Depends on",
-      width: "92px",
-      phone: "meta",
-      phoneLabel: "Depends on",
+      key: 'title',
+      header: 'Item',
+      phone: 'title',
+      cell: (r) =>
+        r.ghost || r.struck ? (
+          <s className="text-text2">{r.title}</s>
+        ) : (
+          <span className={`font-medium ${r.muted ? 'text-text2' : ''}`}>{r.title}</span>
+        ),
+    },
+    {
+      key: 'horizon',
+      header: 'Horizon',
+      width: '84px',
+      phone: 'action',
+      cell: (r) =>
+        r.horizon ? (
+          <HorizonChip horizon={r.horizon} plain={plainHorizons} />
+        ) : (
+          <span className="text-text2">—</span>
+        ),
+    },
+    // qa-docs-66: on a phone a row's "—" says what it is.
+    {
+      key: 'milestone',
+      header: 'Milestone',
+      width: '172px',
+      phone: 'meta',
+      phoneLabel: 'Milestone',
+      wrap: rows.some(milestoneWraps),
+      cell: (r) => <MilestoneCell row={r} />,
+    },
+    {
+      key: 'confidence',
+      header: 'Confidence',
+      width: '104px',
+      phone: 'meta',
+      phoneLabel: 'Confidence',
+      cell: (r) => <Confidence value={r.confidence} />,
+    },
+    {
+      key: 'depends_on',
+      header: 'Depends on',
+      width: '92px',
+      phone: 'meta',
+      phoneLabel: 'Depends on',
       cell: (r) =>
         r.depends_on.length ? (
-          <span className="tnum" title={r.depends_on.map((k) => titles.get(k) ?? k).join(", ")}>
+          <span className="tnum" title={r.depends_on.map((k) => titles.get(k) ?? k).join(', ')}>
             {r.depends_on.length}
           </span>
         ) : (
@@ -190,16 +266,21 @@ export function ItemsTable({
         ),
     },
     {
-      key: "prd",
-      header: "PRD",
+      key: 'prd',
+      header: 'PRD',
       // qa-docs-61/62: the section's full name (wrapped), and on a phone too.
-      width: "160px",
+      width: '160px',
       wrap: true,
-      phone: "meta",
-      phoneLabel: "PRD",
+      phone: 'meta',
+      phoneLabel: 'PRD',
       cell: (r) =>
         r.prd ? (
-          <Link href={r.prd.href} onClick={(e) => e.stopPropagation()} className="text-accent-ink underline-offset-2 hover:underline" title={r.prd.label}>
+          <Link
+            href={r.prd.href}
+            onClick={(e) => e.stopPropagation()}
+            className="text-accent-ink underline-offset-2 hover:underline"
+            title={r.prd.label}
+          >
             {r.prd.label}
           </Link>
         ) : (
@@ -207,14 +288,24 @@ export function ItemsTable({
         ),
     },
     ...extraColumns,
-    { key: "state", header: "State", width: "120px", phone: "meta", cell: (r) => <StateChip freshness={r.freshness} /> },
+    {
+      key: 'state',
+      header: 'State',
+      width: '120px',
+      phone: 'meta',
+      cell: (r) => <StateChip freshness={r.freshness} />,
+    },
   ];
 
   return (
     <DataTable
       label={label}
       testId="roadmap-items-table"
-      columns={columns.filter((c) => !hide.includes(c.key)).map((c) => (widths?.[c.key as ItemColumn] ? { ...c, width: widths[c.key as ItemColumn] } : c))}
+      columns={columns
+        .filter((c) => !hide.includes(c.key))
+        .map((c) =>
+          widths?.[c.key as ItemColumn] ? { ...c, width: widths[c.key as ItemColumn] } : c,
+        )}
       rows={shown}
       rowKey={(r) => r.key}
       selected={selected}
@@ -223,18 +314,27 @@ export function ItemsTable({
       group={groupOf}
       groupLabel={(g) =>
         groupLabel ? (
-          groupLabel(g, shown.filter((r) => groupOf(r) === g))
+          groupLabel(
+            g,
+            shown.filter((r) => groupOf(r) === g),
+          )
         ) : (
           <>
             {/* qa-docs-62: a phone's header is a flex row, which drops the space: the gap keeps it. */}
             <span className="inline-flex items-baseline gap-1.5">
-              {horizonLabel(g)} <span className="tnum font-sans text-sm font-semibold text-text2">{countLabel(g)}</span>
+              {horizonLabel(g)}{' '}
+              <span className="tnum font-sans text-sm font-semibold text-text2">
+                {countLabel(g)}
+              </span>
             </span>
           </>
         )
       }
-      groupProps={(g) => ({ "data-testid": "roadmap-group", ...(groupBy ? { "data-group": g } : { "data-horizon": g }) })}
-      rowProps={(r) => ({ "data-testid": "roadmap-item-row", ...rowDecorations?.(r) })}
+      groupProps={(g) => ({
+        'data-testid': 'roadmap-group',
+        ...(groupBy ? { 'data-group': g } : { 'data-horizon': g }),
+      })}
+      rowProps={(r) => ({ 'data-testid': 'roadmap-item-row', ...rowDecorations?.(r) })}
       detail={detail}
       empty={empty}
     />

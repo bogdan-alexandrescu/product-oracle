@@ -1,19 +1,26 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect, useState } from 'react';
 
-import { Button, Empty, InfoTip } from "@/components/ds";
-import { InlineError, JobStatusChip } from "@/components/review/parts";
-import { ErrorNote, LoadError, Loading } from "@/components/ui";
-import { api, unwrap, type JobSettings, type LlmJob, type LlmJobKind } from "@/lib/api/client";
-import { formatDateTime, formatUsd, jobFailure, JOB_KIND_LABEL, JOB_SETTING_LABEL, NO_ACCOUNT_REASON } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { useQuery } from "@/lib/use-query";
+import { Button, Empty, InfoTip } from '@/components/ds';
+import { InlineError, JobStatusChip } from '@/components/review/parts';
+import { ErrorNote, LoadError, Loading } from '@/components/ui';
+import { api, unwrap, type JobSettings, type LlmJob, type LlmJobKind } from '@/lib/api/client';
+import {
+  formatDateTime,
+  formatUsd,
+  jobFailure,
+  JOB_KIND_LABEL,
+  JOB_SETTING_LABEL,
+  NO_ACCOUNT_REASON,
+} from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { useQuery } from '@/lib/use-query';
 
 /** The #hash of History's fold of Oracle's work, which the overview's version inspector links to. */
-export const ORACLE_WORK = "oracle-work";
+export const ORACLE_WORK = 'oracle-work';
 
-const SETTINGS_EVENT = "po:llm-settings-changed";
+const SETTINGS_EVENT = 'po:llm-settings-changed';
 
 /** Calls `fn` after an owner saves a document's switches on this page; returns the unsubscribe. */
 export function onJobSettingsChanged(doc: string, fn: () => void): () => void {
@@ -36,7 +43,7 @@ export function usePolling(active: boolean, reload: () => Promise<void>, ms = 15
 /** The pool account a job ran on, or the company's fallback when no account was registered. */
 function accountName(job: LlmJob): string {
   if (job.account_label) return job.account_label;
-  return job.via?.startsWith("fallback") ? "Fallback (no pool account)" : "—";
+  return job.via?.startsWith('fallback') ? 'Fallback (no pool account)' : '—';
 }
 
 /**
@@ -45,86 +52,114 @@ function accountName(job: LlmJob): string {
  */
 export type SectionName = (key: string) => string;
 export const keyWords: SectionName = (key) => {
-  const words = key.replace(/[-_]+/g, " ").trim();
+  const words = key.replace(/[-_]+/g, ' ').trim();
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : key;
 };
 
 function summary(job: LlmJob, name: SectionName): string | null {
   const out = job.output as Record<string, unknown> | null;
-  if (!out || job.status !== "succeeded") return null;
-  if (job.kind === "review_comments") {
+  if (!out || job.status !== 'succeeded') return null;
+  if (job.kind === 'review_comments') {
     const n = Number(out.handled ?? 0);
-    if (!n) return String(out.note ?? "No new feedback to handle");
+    if (!n) return String(out.note ?? 'No new feedback to handle');
     const push = Number(out.pushbacks ?? 0);
-    return `${n} feedback item${n === 1 ? "" : "s"} handled${push ? ` · ${push} pushback${push === 1 ? "" : "s"}` : ""}`;
+    return `${n} feedback item${n === 1 ? '' : 's'} handled${push ? ` · ${push} pushback${push === 1 ? '' : 's'}` : ''}`;
   }
-  if (job.kind === "reporting") return `Reports for v${job.version_number}`;
+  if (job.kind === 'reporting') return `Reports for v${job.version_number}`;
   if (out.applied_version) return `Accepted as v${out.applied_version}`;
-  if (job.kind === "refinement_batch") {
-    if (out.discarded_at) return "Discarded";
+  if (job.kind === 'refinement_batch') {
+    if (out.discarded_at) return 'Discarded';
     const n = Array.isArray(out.sections) ? out.sections.length : 0;
-    return `Draft v${(job.version_number ?? 0) + 1} ready to review · ${n} section${n === 1 ? "" : "s"}`;
+    return `Draft v${(job.version_number ?? 0) + 1} ready to review · ${n} section${n === 1 ? '' : 's'}`;
   }
-  return `Revision of ${name(job.section_key ?? "")} is ready to review`;
+  return `Revision of ${name(job.section_key ?? '')} is ready to review`;
 }
 
-function JobRow({ job, onChanged, name }: { job: LlmJob; onChanged: () => void; name: SectionName }) {
+function JobRow({
+  job,
+  onChanged,
+  name,
+}: {
+  job: LlmJob;
+  onChanged: () => void;
+  name: SectionName;
+}) {
   // #370: Retry and Cancel show to whoever may call them.
   const { can } = useMe();
-  const retry = (job.status === "failed" || job.status === "cancelled") && can("retry_llm_job");
-  const cancel = (job.status === "queued" || job.status === "running") && can("cancel_llm_job");
+  const retry = (job.status === 'failed' || job.status === 'cancelled') && can('retry_llm_job');
+  const cancel = (job.status === 'queued' || job.status === 'running') && can('cancel_llm_job');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [now] = useState(() => Date.now());
-  const act = async (what: "retry" | "cancel") => {
+  const act = async (what: 'retry' | 'cancel') => {
     setBusy(true);
     setError(null);
     try {
       const params = { params: { path: { job_id: job.id } } };
       await unwrap(
-        what === "retry"
-          ? api.POST("/v1/llm-jobs/{job_id}/retry", params)
-          : api.POST("/v1/llm-jobs/{job_id}/cancel", params),
+        what === 'retry'
+          ? api.POST('/v1/llm-jobs/{job_id}/retry', params)
+          : api.POST('/v1/llm-jobs/{job_id}/cancel', params),
       );
       onChanged();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not change the job.");
+      setError(e instanceof Error ? e.message : 'Could not change the job.');
     } finally {
       setBusy(false);
     }
   };
   const note = summary(job, name);
   return (
-    <li className="border-b border-line py-3 last:border-b-0" data-testid="llm-job" data-status={job.status}>
+    <li
+      className="border-b border-line py-3 last:border-b-0"
+      data-testid="llm-job"
+      data-status={job.status}
+    >
       <div className="flex flex-wrap items-center gap-2">
         <JobStatusChip status={job.status} at={job.finished_at} />
         <span className="font-semibold text-text" data-testid="job-kind">
           {JOB_KIND_LABEL[job.kind]}
         </span>
-        {job.version_number != null && <span className="font-mono text-[13px] text-text2">v{job.version_number}</span>}
-        {job.section_key && <span className="truncate text-[13px] text-text2">{name(job.section_key)}</span>}
-        <span className="tnum ml-auto text-[13px] text-text2">{formatDateTime(job.created_at)}</span>
+        {job.version_number != null && (
+          <span className="font-mono text-[13px] text-text2">v{job.version_number}</span>
+        )}
+        {job.section_key && (
+          <span className="truncate text-[13px] text-text2">{name(job.section_key)}</span>
+        )}
+        <span className="tnum ml-auto text-[13px] text-text2">
+          {formatDateTime(job.created_at)}
+        </span>
       </div>
       {note && <p className="mt-1 text-[15px] leading-[22px] text-text">{note}</p>}
       {/* qa-docs-4: a failure in plain words; why (the Claude accounts) is under Details. */}
-      {job.status === "failed" && (
-        <p className="mt-1.5 rounded-lg bg-crit-bg px-2.5 py-2 text-sm leading-5 font-semibold text-crit" data-testid="job-failed-plain">
-          {retry ? "It could not run. Retry it below." : "It could not run."}
+      {job.status === 'failed' && (
+        <p
+          className="mt-1.5 rounded-lg bg-crit-bg px-2.5 py-2 text-sm leading-5 font-semibold text-crit"
+          data-testid="job-failed-plain"
+        >
+          {retry ? 'It could not run. Retry it below.' : 'It could not run.'}
         </p>
       )}
-      {job.status === "queued" && job.error && <p className="mt-1 text-sm font-medium text-warn">{job.error}</p>}
+      {job.status === 'queued' && job.error && (
+        <p className="mt-1 text-sm font-medium text-warn">{job.error}</p>
+      )}
       {job.attempts > 1 && (
         <p className="tnum mt-1 text-[13px] text-text2">
-          <span className="font-semibold">Attempts</span> <span className="text-text">{job.attempts}</span>
+          <span className="font-semibold">Attempts</span>{' '}
+          <span className="text-text">{job.attempts}</span>
         </p>
       )}
       {/* P3d Cost prominence: the account, tokens and cost sit behind Details. */}
       <details className="mt-1.5 text-[13px] text-text2">
-        <summary className="w-fit cursor-pointer font-semibold text-text2 hover:text-text">Details</summary>
-        {job.status === "failed" && (
+        <summary className="w-fit cursor-pointer font-semibold text-text2 hover:text-text">
+          Details
+        </summary>
+        {job.status === 'failed' && (
           <div className="mt-1 text-sm leading-5 text-text" data-testid="job-error">
             <p className="font-semibold">{jobFailure({ error: job.error, error_reason: null })}</p>
-            {job.error_reason && NO_ACCOUNT_REASON[job.error_reason] && <p className="mt-0.5">{NO_ACCOUNT_REASON[job.error_reason]}</p>}
+            {job.error_reason && NO_ACCOUNT_REASON[job.error_reason] && (
+              <p className="mt-0.5">{NO_ACCOUNT_REASON[job.error_reason]}</p>
+            )}
             {/* A reset already past says nothing about now (#556). */}
             {job.next_reset_at && Date.parse(job.next_reset_at) > now && (
               <p className="tnum mt-0.5">Next reset: {formatDateTime(job.next_reset_at)}</p>
@@ -142,14 +177,19 @@ function JobRow({ job, onChanged, name }: { job: LlmJob; onChanged: () => void; 
             <div className="flex items-center gap-1.5">
               <dt className="font-semibold">Tokens</dt>
               <dd className="tnum text-text" data-testid="job-tokens">
-                {job.input_tokens.toLocaleString("en")} in · {(job.output_tokens ?? 0).toLocaleString("en")} out
+                {job.input_tokens.toLocaleString('en')} in ·{' '}
+                {(job.output_tokens ?? 0).toLocaleString('en')} out
               </dd>
             </div>
           )}
           <div className="flex items-center gap-1.5">
             <dt className="font-semibold">Cost</dt>
             {/* CostFigure's look; formatUsd keeps sub-cent costs readable ($0.0034). */}
-            <dd data-testid="job-cost" data-cost="small" className="tnum font-mono font-medium text-text2">
+            <dd
+              data-testid="job-cost"
+              data-cost="small"
+              className="tnum font-mono font-medium text-text2"
+            >
               {formatUsd(job.cost_usd)}
             </dd>
           </div>
@@ -158,12 +198,12 @@ function JobRow({ job, onChanged, name }: { job: LlmJob; onChanged: () => void; 
       {(retry || cancel) && (
         <div className="mt-2 flex gap-2">
           {retry && (
-            <Button disabled={busy} onClick={() => act("retry")}>
+            <Button disabled={busy} onClick={() => act('retry')}>
               Retry
             </Button>
           )}
           {cancel && (
-            <Button variant="ghost" disabled={busy} onClick={() => act("cancel")}>
+            <Button variant="ghost" disabled={busy} onClick={() => act('cancel')}>
               Cancel
             </Button>
           )}
@@ -176,7 +216,7 @@ function JobRow({ job, onChanged, name }: { job: LlmJob; onChanged: () => void; 
 
 function SettingsForm({ doc }: { doc: string }) {
   const q = useQuery(`llm-settings|${doc}`, () =>
-    unwrap(api.GET("/v1/documents/{doc}/llm-jobs/settings", { params: { path: { doc } } })),
+    unwrap(api.GET('/v1/documents/{doc}/llm-jobs/settings', { params: { path: { doc } } })),
   );
   const [error, setError] = useState<string | null>(null);
   async function toggle(kind: LlmJobKind, on: boolean) {
@@ -186,18 +226,24 @@ function SettingsForm({ doc }: { doc: string }) {
     setError(null);
     q.setData(() => body);
     try {
-      const next = await unwrap(api.PUT("/v1/documents/{doc}/llm-jobs/settings", { params: { path: { doc } }, body }));
+      const next = await unwrap(
+        api.PUT('/v1/documents/{doc}/llm-jobs/settings', { params: { path: { doc } }, body }),
+      );
       q.setData(() => next);
       window.dispatchEvent(new CustomEvent(SETTINGS_EVENT, { detail: { doc } }));
     } catch (e) {
       q.setData(() => before);
-      setError(e instanceof Error ? e.message : "Could not save.");
+      setError(e instanceof Error ? e.message : 'Could not save.');
     }
   }
-  if (q.error && !q.data) return <LoadError what="Oracle's switches" error={q.error} onRetry={() => void q.reload()} />;
+  if (q.error && !q.data)
+    return <LoadError what="Oracle's switches" error={q.error} onRetry={() => void q.reload()} />;
   if (!q.data) return null;
   return (
-    <fieldset className="rounded-button border border-line px-3 pt-1 pb-2.5" data-testid="llm-job-settings">
+    <fieldset
+      className="rounded-button border border-line px-3 pt-1 pb-2.5"
+      data-testid="llm-job-settings"
+    >
       <legend className="flex items-center gap-1.5 px-1 text-[13px] font-semibold tracking-[0.02em] text-text2">
         Oracle does on its own
         <InfoTip label="Oracle does on its own" align="start">
@@ -223,27 +269,40 @@ function SettingsForm({ doc }: { doc: string }) {
 }
 
 /** Oracle's work on a document (History): its switches, run-now buttons, and each job with retry and cancel. */
-export function JobsPanel({ doc, version, refreshKey = 0, sectionName = keyWords }: { doc: string; version?: number; refreshKey?: number; sectionName?: SectionName }) {
+export function JobsPanel({
+  doc,
+  version,
+  refreshKey = 0,
+  sectionName = keyWords,
+}: {
+  doc: string;
+  version?: number;
+  refreshKey?: number;
+  sectionName?: SectionName;
+}) {
   const { can } = useMe();
   // #370: the switches show only to whoever may change them; the run-now buttons likewise.
-  const canSettings = can("put_llm_job_settings");
-  const canQueue = can("create_llm_job");
+  const canSettings = can('put_llm_job_settings');
+  const canQueue = can('create_llm_job');
   const q = useQuery(`llm-jobs|${doc}|${refreshKey}`, () =>
-    unwrap(api.GET("/v1/documents/{doc}/llm-jobs", { params: { path: { doc } } })),
+    unwrap(api.GET('/v1/documents/{doc}/llm-jobs', { params: { path: { doc } } })),
   );
-  const active = !!q.data?.some((j) => j.status === "queued" || j.status === "running");
+  const active = !!q.data?.some((j) => j.status === 'queued' || j.status === 'running');
   usePolling(active, q.reload);
   const [error, setError] = useState<string | null>(null);
 
-  async function queue(kind: "review_comments" | "reporting") {
+  async function queue(kind: 'review_comments' | 'reporting') {
     setError(null);
     try {
       await unwrap(
-        api.POST("/v1/documents/{doc}/llm-jobs", { params: { path: { doc } }, body: { kind, version: version ?? null } }),
+        api.POST('/v1/documents/{doc}/llm-jobs', {
+          params: { path: { doc } },
+          body: { kind, version: version ?? null },
+        }),
       );
       await q.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not queue the job.");
+      setError(e instanceof Error ? e.message : 'Could not queue the job.');
     }
   }
 
@@ -253,16 +312,18 @@ export function JobsPanel({ doc, version, refreshKey = 0, sectionName = keyWords
       {canQueue && (
         <div className="flex flex-wrap gap-2">
           {/* F-1: nothing to start while the list of Oracle's work did not load. */}
-          <Button disabled={!!q.error} onClick={() => queue("review_comments")}>
+          <Button disabled={!!q.error} onClick={() => queue('review_comments')}>
             Suggest changes now
           </Button>
-          <Button disabled={!!q.error} onClick={() => queue("reporting")}>
+          <Button disabled={!!q.error} onClick={() => queue('reporting')}>
             Write reports now
           </Button>
         </div>
       )}
       {error && <ErrorNote>{error}</ErrorNote>}
-      {q.error && <LoadError what="Oracle's work" error={q.error} onRetry={() => void q.reload()} />}
+      {q.error && (
+        <LoadError what="Oracle's work" error={q.error} onRetry={() => void q.reload()} />
+      )}
       {!q.data && !q.error && <Loading />}
       {!q.error && q.data && q.data.length === 0 && (
         <Empty>Oracle hasn&apos;t worked on this version yet.</Empty>

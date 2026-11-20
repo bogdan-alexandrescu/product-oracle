@@ -1,14 +1,14 @@
-"use client";
+'use client';
 
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent } from 'react';
 
-import { Button } from "@/components/ds";
-import { ErrorNote } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { errorMessage } from "@/lib/use-query";
-import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
+import { Button } from '@/components/ds';
+import { ErrorNote } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { errorMessage } from '@/lib/use-query';
+import { invalidateWaiting, waitingChanged } from '@/lib/waiting';
 
-type Item = Schemas["RoadmapItemOut"];
+type Item = Schemas['RoadmapItemOut'];
 
 /**
  * A stale roadmap item's actions: Mark under review; Still valid… with a one-line reason. The
@@ -36,18 +36,23 @@ export function StalenessActions({
   onCancel?: () => void;
 }) {
   const [asking, setAsking] = useState(open);
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function act(action: "review" | "reconcile") {
+  async function act(action: 'review' | 'reconcile') {
     setBusy(true);
     setError(null);
     try {
       const out = await unwrap(
-        api.POST("/v1/roadmaps/{doc}/items/staleness", {
+        api.POST('/v1/roadmaps/{doc}/items/staleness', {
           params: { path: { doc } },
-          body: { action, version: n ?? null, item_keys: [itemKey], reason: action === "reconcile" ? reason.trim() : null },
+          body: {
+            action,
+            version: n ?? null,
+            item_keys: [itemKey],
+            reason: action === 'reconcile' ? reason.trim() : null,
+          },
         }),
       );
       // Acting resolves the item's track alert at once: the Inbox and the rail count read again,
@@ -63,14 +68,14 @@ export function StalenessActions({
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (reason.trim()) void act("reconcile");
+    if (reason.trim()) void act('reconcile');
   };
 
   return (
     <div className="mt-3 flex flex-col gap-2" data-testid="staleness-actions">
       <div className="flex flex-wrap gap-2">
-        {freshness === "potentially_stale" && (
-          <Button onClick={() => act("review")} disabled={busy}>
+        {freshness === 'potentially_stale' && (
+          <Button onClick={() => act('review')} disabled={busy}>
             Mark under review
           </Button>
         )}

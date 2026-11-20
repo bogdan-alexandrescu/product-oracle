@@ -1,32 +1,48 @@
-"use client";
+'use client';
 
-import { useRouter } from "@/lib/nav";
-import { useState, type ReactNode } from "react";
+import { useRouter } from '@/lib/nav';
+import { useState, type ReactNode } from 'react';
 
-import { Button, Chip, Icon, Inspector, InspectorSection, Page, PageHeader, Sheet, Split, toast } from "@/components/ds";
-import { RawFileSheet } from "@/components/review/RawFileSheet";
-import { ErrorNote, INPUT } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { named, namedText } from "@/lib/codes";
-import { formatDay } from "@/lib/format";
-import { errorMessage } from "@/lib/use-query";
+import {
+  Button,
+  Chip,
+  Icon,
+  Inspector,
+  InspectorSection,
+  Page,
+  PageHeader,
+  Sheet,
+  Split,
+  toast,
+} from '@/components/ds';
+import { RawFileSheet } from '@/components/review/RawFileSheet';
+import { ErrorNote, INPUT } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { named, namedText } from '@/lib/codes';
+import { formatDay } from '@/lib/format';
+import { errorMessage } from '@/lib/use-query';
 
-import type { CheckpointOut, DatesCheck, RunOut } from "../../../_lib";
+import type { CheckpointOut, DatesCheck, RunOut } from '../../../_lib';
 
-type Review = Schemas["CheckpointReview"];
-type Action = Review["items"][number]["actions"][number];
-type Item = DatesCheck["items"][number];
-type Basis = NonNullable<Item["proposed"]>;
-type ActIn = Omit<Schemas["ActionIn"], "answers">;
-type Decision = { word: "Accepted" | "Changed" | "No date"; basis: Basis | null; reason: string | null; action: Action };
+type Review = Schemas['CheckpointReview'];
+type Action = Review['items'][number]['actions'][number];
+type Item = DatesCheck['items'][number];
+type Basis = NonNullable<Item['proposed']>;
+type ActIn = Omit<Schemas['ActionIn'], 'answers'>;
+type Decision = {
+  word: 'Accepted' | 'Changed' | 'No date';
+  basis: Basis | null;
+  reason: string | null;
+  action: Action;
+};
 
-const BASIS_KINDS: { value: Basis["kind"]; label: string }[] = [
-  { value: "estimate", label: "Estimate" },
-  { value: "capacity", label: "Capacity plan" },
-  { value: "commitment", label: "Commitment" },
+const BASIS_KINDS: { value: Basis['kind']; label: string }[] = [
+  { value: 'estimate', label: 'Estimate' },
+  { value: 'capacity', label: 'Capacity plan' },
+  { value: 'commitment', label: 'Commitment' },
 ];
-const CONFIDENCE_WORDS = { low: "Low", medium: "Medium", high: "High" } as const;
-const HORIZON_WORDS = { next: "Next", later: "Later" } as const;
+const CONFIDENCE_WORDS = { low: 'Low', medium: 'Medium', high: 'High' } as const;
+const HORIZON_WORDS = { next: 'Next', later: 'Later' } as const;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 const SLUG_RE = /^[a-z0-9]+(?:[-_][a-z0-9]+)+$/;
@@ -42,32 +58,43 @@ function referenceWords(reference: string): string {
   if (!SLUG_RE.test(ref)) return ref;
   const words = ref.split(/[-_]/);
   if (words.length > 1 && KIND_PREFIX.test(words[0])) words.shift();
-  return words.map((w) => (/^[qh]\d$/.test(w) ? w.toUpperCase() : w)).join(" ");
+  return words.map((w) => (/^[qh]\d$/.test(w) ? w.toUpperCase() : w)).join(' ');
 }
 
 /** "Nov 30 · Estimate: shipping step": a basis as the row shows it (a calendar day, no time zone). */
 const basisWords = (b: Basis) =>
-  `${DATE_RE.test(b.supports_date) ? formatDay(b.supports_date) : b.supports_date} · ${BASIS_KINDS.find((k) => k.value === b.kind)?.label ?? "Basis"}: ${referenceWords(b.reference)}`;
+  `${DATE_RE.test(b.supports_date) ? formatDay(b.supports_date) : b.supports_date} · ${BASIS_KINDS.find((k) => k.value === b.kind)?.label ?? 'Basis'}: ${referenceWords(b.reference)}`;
 
 /** qa4-work-49: a key ("shipping", "user-stories") in words: "Shipping", "User stories". */
 const keyWords = (key: string) => {
-  const w = key.trim().replace(/[-_]+/g, " ");
+  const w = key.trim().replace(/[-_]+/g, ' ');
   return w.charAt(0).toUpperCase() + w.slice(1);
 };
 
 /** A decision action of the date stop: Accept, a changed estimate, or No date. */
-const isDecision = (a: Action) => a.kind === "accept" || (a.kind === "edit" && (a.field === "estimate" || a.field === "no_date"));
+const isDecision = (a: Action) =>
+  a.kind === 'accept' || (a.kind === 'edit' && (a.field === 'estimate' || a.field === 'no_date'));
 
 /** The item's choice in `acts` (the latest), as the Decision column words it. */
 function decisionOf(item: Item, acts: Action[]): Decision | null {
-  const latest = acts.filter(isDecision).sort((a, b) => (a.updated_at ?? "").localeCompare(b.updated_at ?? "")).pop();
+  const latest = acts
+    .filter(isDecision)
+    .sort((a, b) => (a.updated_at ?? '').localeCompare(b.updated_at ?? ''))
+    .pop();
   if (!latest) return null;
-  if (latest.kind === "accept") return { word: "Accepted", basis: item.proposed, reason: null, action: latest };
-  if (latest.field === "estimate") return { word: "Changed", basis: latest.value as Basis, reason: null, action: latest };
-  return { word: "No date", basis: null, reason: (latest.value as { reason?: string } | null)?.reason ?? null, action: latest };
+  if (latest.kind === 'accept')
+    return { word: 'Accepted', basis: item.proposed, reason: null, action: latest };
+  if (latest.field === 'estimate')
+    return { word: 'Changed', basis: latest.value as Basis, reason: null, action: latest };
+  return {
+    word: 'No date',
+    basis: null,
+    reason: (latest.value as { reason?: string } | null)?.reason ?? null,
+    action: latest,
+  };
 }
 
-const DECISION_KIND = { Accepted: "pass", Changed: "acc", "No date": "na" } as const;
+const DECISION_KIND = { Accepted: 'pass', Changed: 'acc', 'No date': 'na' } as const;
 
 /**
  * F4 lane B, the Engineering dates (`eng_dates`): after the PRD review, one row per Now item of
@@ -100,13 +127,13 @@ export function EngDates({
   const [selected, setSelected] = useState(check.items[0]?.key ?? null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState(review.note ?? "");
+  const [note, setNote] = useState(review.note ?? '');
   const [sending, setSending] = useState(false);
   const [changing, setChanging] = useState<Item | null>(null);
   const [noDate, setNoDate] = useState<Item | null>(null);
   const [raw, setRaw] = useState(false);
   const [more, setMore] = useState<string | null>(null);
-  const pending = cp.status === "pending";
+  const pending = cp.status === 'pending';
   const stages = pending && review.can_stage;
   // Choices from whoever does not stage are suggestions a decider stages (AC6): the review's
   // own can_suggest says who may suggest, as the Engineering check reads it.
@@ -128,26 +155,51 @@ export function EngDates({
       setBusy(false);
     }
   }
-  const act = (body: ActIn) => write(() => unwrap(api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions", { ...path, body: { answers: [], ...body } })));
+  const act = (body: ActIn) =>
+    write(() =>
+      unwrap(
+        api.POST('/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions', {
+          ...path,
+          body: { answers: [], ...body },
+        }),
+      ),
+    );
   const stage = (id: string) =>
-    write(() => unwrap(api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}/stage", { params: { path: { ...path.params.path, action_id: id } } })));
+    write(() =>
+      unwrap(
+        api.POST('/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}/stage', {
+          params: { path: { ...path.params.path, action_id: id } },
+        }),
+      ),
+    );
 
-  async function decide(decision: "approved" | "changes_requested") {
+  async function decide(decision: 'approved' | 'changes_requested') {
     setError(null);
     setBusy(true);
     try {
-      if (decision === "changes_requested") {
-        onReview(await unwrap(api.PUT("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/note", { ...path, body: { note: note.trim() || null } })));
+      if (decision === 'changes_requested') {
+        onReview(
+          await unwrap(
+            api.PUT('/v1/runs/{run_id}/checkpoints/{checkpoint_id}/note', {
+              ...path,
+              body: { note: note.trim() || null },
+            }),
+          ),
+        );
       }
       await unwrap(
-        api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/decide", {
+        api.POST('/v1/runs/{run_id}/checkpoints/{checkpoint_id}/decide', {
           ...path,
-          body: { decision, note: decision === "changes_requested" ? note.trim() : null, expected_revision: decision === "approved" ? review.revision : null },
+          body: {
+            decision,
+            note: decision === 'changes_requested' ? note.trim() : null,
+            expected_revision: decision === 'approved' ? review.revision : null,
+          },
         }),
       );
       await onDecided();
       // inbox-eng-send-back: what happened and to whom, as the other review actions say it.
-      if (decision === "changes_requested") toast({ message: "Sent back to the architect" });
+      if (decision === 'changes_requested') toast({ message: 'Sent back to the architect' });
       router.push(`/runs/${run.id}`);
     } catch (e) {
       setError(errorMessage(e));
@@ -161,28 +213,31 @@ export function EngDates({
   };
 
   const actsOf = (key: string) => review.items.find((i) => i.key === key)?.actions ?? [];
-  const stagedOf = (key: string) => actsOf(key).filter((a) => a.state === "staged");
+  const stagedOf = (key: string) => actsOf(key).filter((a) => a.state === 'staged');
   const left = review.gate?.left ?? [];
   const reasonsOf = (key: string) => left.filter((x) => x.item === key);
-  const toDecide = left.filter((x) => x.code === "date_undecided").length;
+  const toDecide = left.filter((x) => x.code === 'date_undecided').length;
   const decidedKeys = check.items.filter((i) => decisionOf(i, stagedOf(i.key))).map((i) => i.key);
   // Only a proposed date needs a choice; an undated item counts once someone gave it one.
   const total = check.items.filter((i) => i.proposed || decidedKeys.includes(i.key)).length;
   const gateOpen = !!review.gate?.open;
-  const staged = review.items.flatMap((i) => i.actions.filter((a) => a.state === "staged"));
+  const staged = review.items.flatMap((i) => i.actions.filter((a) => a.state === 'staged'));
   const item = check.items.find((i) => i.key === selected) ?? null;
   const seq = cp.segment_seq ?? 1;
   // Only who can decide: the engineering lead once one is named, else the stop's role.
-  const waitsFor = cp.lead_stop ? "Waits for the engineering lead" : `Waits for an ${cp.approver_role}`;
-  const tally = `${decidedKeys.length} of ${total} decided${toDecide ? ` · ${toDecide} to decide` : ""}`;
+  const waitsFor = cp.lead_stop
+    ? 'Waits for the engineering lead'
+    : `Waits for an ${cp.approver_role}`;
+  const tally = `${decidedKeys.length} of ${total} decided${toDecide ? ` · ${toDecide} to decide` : ''}`;
   const approveWhy = !gateOpen
     ? check.problems.length
-      ? "The dates file could not be read: send it back to the architect"
-      : "Accept, change or mark No date on each proposed date first"
+      ? 'The dates file could not be read: send it back to the architect'
+      : 'Accept, change or mark No date on each proposed date first'
     : null;
-  const nextCount = check.others.filter((o) => o.horizon === "next").length;
-  const laterCount = check.others.filter((o) => o.horizon === "later").length;
-  const grid = "grid-cols-[minmax(0,1.6fr)_56px_minmax(0,1.3fr)_92px_minmax(0,1.5fr)_minmax(0,1.3fr)]";
+  const nextCount = check.others.filter((o) => o.horizon === 'next').length;
+  const laterCount = check.others.filter((o) => o.horizon === 'later').length;
+  const grid =
+    'grid-cols-[minmax(0,1.6fr)_56px_minmax(0,1.3fr)_92px_minmax(0,1.5fr)_minmax(0,1.3fr)]';
 
   return (
     <Page className="pb-0">
@@ -191,10 +246,12 @@ export function EngDates({
         back={back}
         status={
           <>
-            <Chip kind={pending ? "warn" : "na"}>{pending ? "Waiting" : cp.status === "approved" ? "Approved" : "Sent back"}</Chip>
+            <Chip kind={pending ? 'warn' : 'na'}>
+              {pending ? 'Waiting' : cp.status === 'approved' ? 'Approved' : 'Sent back'}
+            </Chip>
             {pending && !decides && (
               <span className="inline-flex items-center gap-2" data-testid="view-only">
-                <Chip kind="na">{suggests ? "Suggestions only" : "View only"}</Chip>
+                <Chip kind="na">{suggests ? 'Suggestions only' : 'View only'}</Chip>
                 <span className="text-sm text-text2">{waitsFor}</span>
               </span>
             )}
@@ -203,12 +260,21 @@ export function EngDates({
       />
       {check.prd && (
         <p className="mb-3 text-text2" data-testid="dates-prd">
-          The Now items of {(check.prd.document === run.document_slug && run.document_title) || keyWords(check.prd.document)} v{check.prd.version}
+          The Now items of{' '}
+          {(check.prd.document === run.document_slug && run.document_title) ||
+            keyWords(check.prd.document)}{' '}
+          v{check.prd.version}
         </p>
       )}
       {check.problems.length > 0 && (
-        <div role="alert" data-testid="dates-problem" className="mb-4 rounded-panel border border-crit bg-crit-soft px-4 py-3 text-[15px]">
-          <p className="font-semibold">The dates file could not be read: send it back to the architect.</p>
+        <div
+          role="alert"
+          data-testid="dates-problem"
+          className="mb-4 rounded-panel border border-crit bg-crit-soft px-4 py-3 text-[15px]"
+        >
+          <p className="font-semibold">
+            The dates file could not be read: send it back to the architect.
+          </p>
           <ul className="mt-1 list-disc pl-5">
             {check.problems.map((p, i) => (
               <li key={i}>{p.message}</li>
@@ -217,7 +283,13 @@ export function EngDates({
           <Button icon="doc" className="mt-2" onClick={() => setRaw(true)}>
             Raw file
           </Button>
-          <RawFileSheet open={raw ? "file" : null} onClose={() => setRaw(false)} runId={run.id} seq={seq} name="eng_dates.yaml" />
+          <RawFileSheet
+            open={raw ? 'file' : null}
+            onClose={() => setRaw(false)}
+            runId={run.id}
+            seq={seq}
+            name="eng_dates.yaml"
+          />
         </div>
       )}
       <Split
@@ -235,8 +307,13 @@ export function EngDates({
           )
         }
       >
-        <section aria-label="Now items" className="min-w-0 rounded-panel border border-line bg-surface">
-          <div className={`grid ${grid} gap-3 border-b border-line px-4 py-2 text-[13px] font-semibold tracking-[0.02em] text-text2 max-[900px]:hidden`}>
+        <section
+          aria-label="Now items"
+          className="min-w-0 rounded-panel border border-line bg-surface"
+        >
+          <div
+            className={`grid ${grid} gap-3 border-b border-line px-4 py-2 text-[13px] font-semibold tracking-[0.02em] text-text2 max-[900px]:hidden`}
+          >
             <span>Item</span>
             <span>Size</span>
             <span>Proposed date</span>
@@ -247,36 +324,55 @@ export function EngDates({
           <ul>
             {check.items.map((i) => {
               const d = decisionOf(i, stagedOf(i.key));
-              const suggested = decisionOf(i, actsOf(i.key).filter((a) => a.state === "suggested"));
+              const suggested = decisionOf(
+                i,
+                actsOf(i.key).filter((a) => a.state === 'suggested'),
+              );
               const reasons = reasonsOf(i.key);
-              const readsNoDate = d ? d.word === "No date" : !i.proposed;
+              const readsNoDate = d ? d.word === 'No date' : !i.proposed;
               return (
                 <li
                   key={i.key}
                   data-testid="date-row"
                   data-item={i.key}
-                  aria-current={i.key === selected ? "true" : undefined}
+                  aria-current={i.key === selected ? 'true' : undefined}
                   className={`grid ${grid} items-start gap-3 border-b border-line px-4 py-3 last:border-b-0 max-[900px]:grid-cols-1 max-[900px]:gap-1.5 max-[600px]:m-2 max-[600px]:rounded-panel max-[600px]:border ${
-                    i.key === selected ? "bg-accent-soft" : ""
+                    i.key === selected ? 'bg-accent-soft' : ''
                   }`}
                 >
-                  <button type="button" className="min-w-0 text-left hover:underline" onClick={() => setSelected(i.key)}>
+                  <button
+                    type="button"
+                    className="min-w-0 text-left hover:underline"
+                    onClick={() => setSelected(i.key)}
+                  >
                     {/* detailed-b 3: the item's code with its name, never a bare key. */}
                     <span className="block font-semibold">{namedText(named(i.title, i.key))}</span>
-                    {i.section && <span className="block text-sm text-text2">PRD section: {keyWords(i.section)}</span>}
+                    {i.section && (
+                      <span className="block text-sm text-text2">
+                        PRD section: {keyWords(i.section)}
+                      </span>
+                    )}
                   </button>
                   <span className="tnum font-semibold" data-testid="date-size">
                     <span className="mr-1 font-normal text-text2 min-[901px]:sr-only">Size</span>
-                    {i.size ? i.size.toUpperCase() : "—"}
+                    {i.size ? i.size.toUpperCase() : '—'}
                   </span>
                   <span className="min-w-0 text-sm" data-testid="date-proposed">
-                    {i.proposed ? basisWords(i.proposed) : <span className="text-text2">No date proposed</span>}
-                    {d?.word === "Changed" && d.basis && <span className="block font-semibold">Now {basisWords(d.basis)}</span>}
-                    {!i.proposed && i.no_date_reason && !d && <span className="block text-text2">{i.no_date_reason}</span>}
+                    {i.proposed ? (
+                      basisWords(i.proposed)
+                    ) : (
+                      <span className="text-text2">No date proposed</span>
+                    )}
+                    {d?.word === 'Changed' && d.basis && (
+                      <span className="block font-semibold">Now {basisWords(d.basis)}</span>
+                    )}
+                    {!i.proposed && i.no_date_reason && !d && (
+                      <span className="block text-text2">{i.no_date_reason}</span>
+                    )}
                   </span>
                   <span className="text-sm" data-testid="date-confidence">
                     <span className="mr-1 text-text2 min-[901px]:sr-only">Confidence</span>
-                    {i.confidence ? CONFIDENCE_WORDS[i.confidence] : "—"}
+                    {i.confidence ? CONFIDENCE_WORDS[i.confidence] : '—'}
                   </span>
                   <span className="flex min-w-0 flex-col gap-1.5">
                     <span data-testid="date-decision">
@@ -297,26 +393,37 @@ export function EngDates({
                       </span>
                     )}
                     {writes && (
-                      <span className="flex flex-wrap items-center gap-1.5" role="group" aria-label={`Date: ${i.title}`}>
+                      <span
+                        className="flex flex-wrap items-center gap-1.5"
+                        role="group"
+                        aria-label={`Date: ${i.title}`}
+                      >
                         {/* qa4-work-51: the row's own choice shows as pressed on its button. */}
                         {i.proposed && (
                           <Button
-                            variant={d?.word === "Accepted" ? "solid" : "secondary"}
-                            aria-pressed={d?.word === "Accepted"}
+                            variant={d?.word === 'Accepted' ? 'solid' : 'secondary'}
+                            aria-pressed={d?.word === 'Accepted'}
                             disabled={busy}
-                            onClick={() => void act({ item_key: i.key, kind: "accept", value: null })}
+                            onClick={() =>
+                              void act({ item_key: i.key, kind: 'accept', value: null })
+                            }
                           >
                             Accept
                           </Button>
                         )}
-                        <Button variant={d?.word === "Changed" ? "solid" : "secondary"} aria-pressed={d?.word === "Changed"} disabled={busy} onClick={() => setChanging(i)}>
+                        <Button
+                          variant={d?.word === 'Changed' ? 'solid' : 'secondary'}
+                          aria-pressed={d?.word === 'Changed'}
+                          disabled={busy}
+                          onClick={() => setChanging(i)}
+                        >
                           Change
                         </Button>
                         {/* qa4-work-50: a row that already reads No date offers to edit its reason, and the
                             More menu keeps to the same line as that last button. */}
                         <span className="inline-flex items-center gap-1.5">
                           <Button disabled={busy} onClick={() => setNoDate(i)}>
-                            {readsNoDate ? "Edit reason" : "No date"}
+                            {readsNoDate ? 'Edit reason' : 'No date'}
                           </Button>
                           {stages && (
                             <span className="relative">
@@ -331,7 +438,11 @@ export function EngDates({
                               </Button>
                               {more === i.key && (
                                 <span className="absolute top-full right-0 z-20 mt-1 rounded-button border border-line bg-surface p-1 shadow-tip">
-                                  <Button variant="ghost" className="whitespace-nowrap" onClick={() => ask(i)}>
+                                  <Button
+                                    variant="ghost"
+                                    className="whitespace-nowrap"
+                                    onClick={() => ask(i)}
+                                  >
                                     Ask the architect
                                   </Button>
                                 </span>
@@ -344,7 +455,11 @@ export function EngDates({
                   </span>
                   <span className="flex min-w-0 flex-wrap gap-1.5" data-testid="date-reasons">
                     {reasons.map((x, n) => (
-                      <Chip key={`${x.code}-${n}`} kind={x.code === "date_beyond_now" ? "warn" : "crit"} wrap>
+                      <Chip
+                        key={`${x.code}-${n}`}
+                        kind={x.code === 'date_beyond_now' ? 'warn' : 'crit'}
+                        wrap
+                      >
                         {x.label}
                       </Chip>
                     ))}
@@ -355,13 +470,23 @@ export function EngDates({
           </ul>
         </section>
         {check.others.length > 0 && (
-          <details className="mt-3 rounded-panel border border-line bg-surface" data-testid="dates-others">
+          <details
+            className="mt-3 rounded-panel border border-line bg-surface"
+            data-testid="dates-others"
+          >
             <summary className="cursor-pointer px-4 py-2.5 font-semibold">
-              {[nextCount ? `Next ${nextCount}` : null, laterCount ? `Later ${laterCount}` : null].filter(Boolean).join(" · ")} (Next and Later items have no dates)
+              {[nextCount ? `Next ${nextCount}` : null, laterCount ? `Later ${laterCount}` : null]
+                .filter(Boolean)
+                .join(' · ')}{' '}
+              (Next and Later items have no dates)
             </summary>
             <ul className="border-t border-line">
               {check.others.map((o) => (
-                <li key={o.key} className="flex items-center gap-2 border-b border-line px-4 py-2 last:border-b-0" data-testid="dates-other">
+                <li
+                  key={o.key}
+                  className="flex items-center gap-2 border-b border-line px-4 py-2 last:border-b-0"
+                  data-testid="dates-other"
+                >
                   <span className="min-w-0 flex-1">{o.title}</span>
                   <Chip kind="na">{HORIZON_WORDS[o.horizon]}</Chip>
                 </li>
@@ -378,8 +503,15 @@ export function EngDates({
         {error && <ErrorNote>{error}</ErrorNote>}
         {sending && decides && (
           <label className="mb-2 block">
-            <span className="mb-1 block text-sm font-semibold text-text2">Note to the architect</span>
-            <textarea className={`${INPUT} min-h-16`} value={note} onChange={(e) => setNote(e.target.value)} aria-label="Note to the architect" />
+            <span className="mb-1 block text-sm font-semibold text-text2">
+              Note to the architect
+            </span>
+            <textarea
+              className={`${INPUT} min-h-16`}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              aria-label="Note to the architect"
+            />
           </label>
         )}
         <div className="flex flex-wrap items-center gap-2">
@@ -389,7 +521,7 @@ export function EngDates({
           {staged.length > 0 && (
             <span className="flex min-w-0 flex-wrap gap-1.5" data-testid="staged-chips">
               <Chip kind="acc">
-                {staged.length} change{staged.length === 1 ? "" : "s"} staged
+                {staged.length} change{staged.length === 1 ? '' : 's'} staged
               </Chip>
             </span>
           )}
@@ -399,11 +531,16 @@ export function EngDates({
               <Button
                 variant="ghost"
                 disabled={busy || (sending && !note.trim())}
-                onClick={() => (sending ? void decide("changes_requested") : setSending(true))}
+                onClick={() => (sending ? void decide('changes_requested') : setSending(true))}
               >
                 Send back to architect
               </Button>
-              <Button variant="primary" disabled={busy || !gateOpen} title={approveWhy ?? undefined} onClick={() => void decide("approved")}>
+              <Button
+                variant="primary"
+                disabled={busy || !gateOpen}
+                title={approveWhy ?? undefined}
+                onClick={() => void decide('approved')}
+              >
                 Approve
               </Button>
             </>
@@ -423,7 +560,14 @@ export function EngDates({
           busy={busy}
           error={error}
           onClose={() => setChanging(null)}
-          onSave={(basis) => void act({ item_key: changing.key, kind: "edit", field: "estimate", value: basis }).then((ok) => ok && setChanging(null))}
+          onSave={(basis) =>
+            void act({
+              item_key: changing.key,
+              kind: 'edit',
+              field: 'estimate',
+              value: basis,
+            }).then((ok) => ok && setChanging(null))
+          }
         />
       )}
       {noDate && (
@@ -431,12 +575,19 @@ export function EngDates({
           item={noDate}
           initial={(() => {
             const d = decisionOf(noDate, stagedOf(noDate.key));
-            return d ? (d.reason ?? "") : (noDate.no_date_reason ?? "");
+            return d ? (d.reason ?? '') : (noDate.no_date_reason ?? '');
           })()}
           busy={busy}
           error={error}
           onClose={() => setNoDate(null)}
-          onSave={(reason) => void act({ item_key: noDate.key, kind: "edit", field: "no_date", value: { reason } }).then((ok) => ok && setNoDate(null))}
+          onSave={(reason) =>
+            void act({
+              item_key: noDate.key,
+              kind: 'edit',
+              field: 'no_date',
+              value: { reason },
+            }).then((ok) => ok && setNoDate(null))
+          }
         />
       )}
     </Page>
@@ -459,12 +610,18 @@ function ChangeSheet({
   onClose: () => void;
   onSave: (basis: Basis) => void;
 }) {
-  const [kind, setKind] = useState<Basis["kind"]>(current?.kind ?? "estimate");
-  const [reference, setReference] = useState(current?.reference ?? "");
-  const [date, setDate] = useState(current?.supports_date ?? "");
+  const [kind, setKind] = useState<Basis['kind']>(current?.kind ?? 'estimate');
+  const [reference, setReference] = useState(current?.reference ?? '');
+  const [date, setDate] = useState(current?.supports_date ?? '');
   const ready = !!reference.trim() && DATE_RE.test(date);
   return (
-    <Sheet open dialog title={`Change the date: ${item.title}`} onClose={onClose} testId="date-change">
+    <Sheet
+      open
+      dialog
+      title={`Change the date: ${item.title}`}
+      onClose={onClose}
+      testId="date-change"
+    >
       <form
         className="space-y-3 px-4 py-3 sm:w-[560px] sm:max-w-full"
         onSubmit={(e) => {
@@ -474,7 +631,12 @@ function ChangeSheet({
       >
         <label className="block">
           <span className="mb-1 block text-sm font-semibold text-text2">Kind</span>
-          <select className={`${INPUT} h-10`} aria-label="Kind" value={kind} onChange={(e) => setKind(e.target.value as Basis["kind"])}>
+          <select
+            className={`${INPUT} h-10`}
+            aria-label="Kind"
+            value={kind}
+            onChange={(e) => setKind(e.target.value as Basis['kind'])}
+          >
             {BASIS_KINDS.map((k) => (
               <option key={k.value} value={k.value}>
                 {k.label}
@@ -484,11 +646,22 @@ function ChangeSheet({
         </label>
         <label className="block">
           <span className="mb-1 block text-sm font-semibold text-text2">Reference</span>
-          <input className={`${INPUT} h-10`} aria-label="Reference" value={reference} onChange={(e) => setReference(e.target.value)} />
+          <input
+            className={`${INPUT} h-10`}
+            aria-label="Reference"
+            value={reference}
+            onChange={(e) => setReference(e.target.value)}
+          />
         </label>
         <label className="block">
           <span className="mb-1 block text-sm font-semibold text-text2">Date</span>
-          <input type="date" className={`${INPUT} h-10`} aria-label="Date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <input
+            type="date"
+            className={`${INPUT} h-10`}
+            aria-label="Date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+          />
         </label>
         {error && <ErrorNote>{error}</ErrorNote>}
         <div className="flex gap-1.5">
@@ -531,8 +704,15 @@ function NoDateSheet({
         }}
       >
         <label className="block">
-          <span className="mb-1 block text-sm font-semibold text-text2">Reason: why no date yet</span>
-          <textarea className={`${INPUT} min-h-16`} aria-label="Reason" value={reason} onChange={(e) => setReason(e.target.value)} />
+          <span className="mb-1 block text-sm font-semibold text-text2">
+            Reason: why no date yet
+          </span>
+          <textarea
+            className={`${INPUT} min-h-16`}
+            aria-label="Reason"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
         </label>
         {error && <ErrorNote>{error}</ErrorNote>}
         <div className="flex gap-1.5">
@@ -564,23 +744,30 @@ function DatesInspector({
   onStage: (id: string) => Promise<boolean>;
   onAsk?: () => void;
 }) {
-  const suggestions = acts.filter((a) => a.state === "suggested" && isDecision(a));
+  const suggestions = acts.filter((a) => a.state === 'suggested' && isDecision(a));
   const words = (a: Action) => {
     const d = decisionOf(i, [a]);
     if (!d) return a.kind;
-    if (d.word === "Changed" && d.basis) return `Change to ${basisWords(d.basis)}`;
-    if (d.word === "No date") return `No date${d.reason ? `: ${d.reason}` : ""}`;
-    return "Accept";
+    if (d.word === 'Changed' && d.basis) return `Change to ${basisWords(d.basis)}`;
+    if (d.word === 'No date') return `No date${d.reason ? `: ${d.reason}` : ''}`;
+    return 'Accept';
   };
   // detailed-b 3: the header's code with its name, never a bare key.
   const coded = named(i.title, i.key);
   return (
-    <Inspector eyebrow="Now item · selected" title={namedText(coded)} label={`Dates: ${namedText(coded)}`} testId="dates-inspector">
+    <Inspector
+      eyebrow="Now item · selected"
+      title={namedText(coded)}
+      label={`Dates: ${namedText(coded)}`}
+      testId="dates-inspector"
+    >
       <InspectorSection label="Proposed date">
         {i.proposed ? (
           <p className="font-semibold">{basisWords(i.proposed)}</p>
         ) : (
-          <p className="text-text2">No date proposed{i.no_date_reason ? `: ${i.no_date_reason}` : ""}</p>
+          <p className="text-text2">
+            No date proposed{i.no_date_reason ? `: ${i.no_date_reason}` : ''}
+          </p>
         )}
       </InspectorSection>
       <InspectorSection label={`Assumptions (${i.assumptions.length})`}>
@@ -606,7 +793,7 @@ function DatesInspector({
               <li key={a.id} className="flex items-center gap-2" data-testid="suggestion">
                 <span className="min-w-0 flex-1 truncate">
                   {words(a)}
-                  <span className="text-text2"> · {a.created_by?.name ?? "someone"}</span>
+                  <span className="text-text2"> · {a.created_by?.name ?? 'someone'}</span>
                 </span>
                 {stages && (
                   <Button disabled={busy} onClick={() => void onStage(a.id)}>

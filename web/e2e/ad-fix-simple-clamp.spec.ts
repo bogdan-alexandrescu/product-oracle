@@ -1,6 +1,6 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { ADMIN, login } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { ADMIN, login } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /*
  * BGD 2026-10-30, "Clamp above the line": on /simple/priorities with a dated plan (the mock's
@@ -22,11 +22,13 @@ const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
 
 const rowByTitle = (page: Page, title: string): Locator =>
-  page.getByTestId("prio-row").filter({ has: page.getByTestId("prio-title").getByText(title, { exact: true }) });
+  page
+    .getByTestId('prio-row')
+    .filter({ has: page.getByTestId('prio-title').getByText(title, { exact: true }) });
 
 async function dragOnto(page: Page, name: string, onto: Locator): Promise<void> {
-  const handle = page.getByRole("button", { name: `Drag ${name} to reorder` });
-  await handle.evaluate((e) => e.scrollIntoView({ block: "center" }));
+  const handle = page.getByRole('button', { name: `Drag ${name} to reorder` });
+  await handle.evaluate((e) => e.scrollIntoView({ block: 'center' }));
   const from = (await handle.boundingBox())!;
   const target = (await onto.boundingBox())!;
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
@@ -35,52 +37,78 @@ async function dragOnto(page: Page, name: string, onto: Locator): Promise<void> 
   await page.mouse.up();
 }
 
-for (const [where, size] of [["desktop", DESKTOP], ["phone", PHONE]] as const) {
-  test(`a row dragged onto the last row above the line lands at the last rank above it (${where})`, async ({ page }) => {
+for (const [where, size] of [
+  ['desktop', DESKTOP],
+  ['phone', PHONE],
+] as const) {
+  test(`a row dragged onto the last row above the line lands at the last rank above it (${where})`, async ({
+    page,
+  }) => {
     await page.setViewportSize(size);
-    await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "simple-plan"] as const);
+    await page
+      .context()
+      .addInitScript(([key, value]) => localStorage.setItem(key, value), [
+        MOCK_SCENARIO_KEY,
+        'simple-plan',
+      ] as const);
     await login(page, ADMIN.email);
-    await page.goto("/simple/priorities");
-    await expect(page.getByTestId("simple-priorities")).toBeVisible();
+    await page.goto('/simple/priorities');
+    await expect(page.getByTestId('simple-priorities')).toBeVisible();
     const above = page.locator('[data-testid="prio-row"][data-above="true"]');
     await expect(above).toHaveCount(12);
     const last = above.last();
-    await expect(last.getByTestId("prio-title")).toHaveText("Pricing page words");
-    await expect(last.getByTestId("prio-rank")).toHaveText("39");
-    const bulk = rowByTitle(page, "Bulk import");
-    await expect(bulk.getByTestId("prio-rank")).toHaveText("33");
+    await expect(last.getByTestId('prio-title')).toHaveText('Pricing page words');
+    await expect(last.getByTestId('prio-rank')).toHaveText('39');
+    const bulk = rowByTitle(page, 'Bulk import');
+    await expect(bulk.getByTestId('prio-rank')).toHaveText('33');
 
-    await dragOnto(page, "Bulk import (F-07)", last);
-    const dialog = page.getByRole("dialog");
-    await expect(dialog.getByRole("heading")).toHaveText("Move Bulk import (F-07) to rank 12");
-    await expect(dialog.getByTestId("move-lands")).toContainText("above the line");
-    await dialog.getByLabel("Reason").fill("Ship it with the first launch");
-    await dialog.getByRole("button", { name: "Move", exact: true }).click();
-    await expect(page.getByRole("status").filter({ hasText: "Moved Bulk import (F-07) to rank 12" })).toBeVisible();
-    await expect(bulk.getByTestId("prio-rank")).toHaveText("12");
-    await expect(bulk).toHaveAttribute("data-above", "true");
+    await dragOnto(page, 'Bulk import (F-07)', last);
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('heading')).toHaveText('Move Bulk import (F-07) to rank 12');
+    await expect(dialog.getByTestId('move-lands')).toContainText('above the line');
+    await dialog.getByLabel('Reason').fill('Ship it with the first launch');
+    await dialog.getByRole('button', { name: 'Move', exact: true }).click();
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Moved Bulk import (F-07) to rank 12' }),
+    ).toBeVisible();
+    await expect(bulk.getByTestId('prio-rank')).toHaveText('12');
+    await expect(bulk).toHaveAttribute('data-above', 'true');
   });
 }
 
-for (const [where, size] of [["desktop", DESKTOP], ["phone", PHONE]] as const) {
-  test(`a row dragged onto another row above the line takes that row's rank (${where})`, async ({ page }) => {
+for (const [where, size] of [
+  ['desktop', DESKTOP],
+  ['phone', PHONE],
+] as const) {
+  test(`a row dragged onto another row above the line takes that row's rank (${where})`, async ({
+    page,
+  }) => {
     await page.setViewportSize(size);
-    await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "simple-plan"] as const);
+    await page
+      .context()
+      .addInitScript(([key, value]) => localStorage.setItem(key, value), [
+        MOCK_SCENARIO_KEY,
+        'simple-plan',
+      ] as const);
     await login(page, ADMIN.email);
-    await page.goto("/simple/priorities");
-    await expect(page.getByTestId("simple-priorities")).toBeVisible();
-    const pricing = rowByTitle(page, "Pricing page words");
-    await expect(pricing.getByTestId("prio-rank")).toHaveText("39");
-    const bulk = rowByTitle(page, "Bulk import");
-    await expect(bulk.getByTestId("prio-rank")).toHaveText("33");
-    await expect(bulk).toHaveAttribute("data-above", "true");
+    await page.goto('/simple/priorities');
+    await expect(page.getByTestId('simple-priorities')).toBeVisible();
+    const pricing = rowByTitle(page, 'Pricing page words');
+    await expect(pricing.getByTestId('prio-rank')).toHaveText('39');
+    const bulk = rowByTitle(page, 'Bulk import');
+    await expect(bulk.getByTestId('prio-rank')).toHaveText('33');
+    await expect(bulk).toHaveAttribute('data-above', 'true');
 
-    await dragOnto(page, "Pricing page words (F-04)", bulk);
-    const dialog = page.getByRole("dialog");
-    await expect(dialog.getByRole("heading")).toHaveText("Move Pricing page words (F-04) to rank 33");
-    await dialog.getByLabel("Reason").fill("Ship it with the first launch");
-    await dialog.getByRole("button", { name: "Move", exact: true }).click();
-    await expect(page.getByRole("status").filter({ hasText: "Moved Pricing page words (F-04) to rank 33" })).toBeVisible();
-    await expect(pricing.getByTestId("prio-rank")).toHaveText("33");
+    await dragOnto(page, 'Pricing page words (F-04)', bulk);
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('heading')).toHaveText(
+      'Move Pricing page words (F-04) to rank 33',
+    );
+    await dialog.getByLabel('Reason').fill('Ship it with the first launch');
+    await dialog.getByRole('button', { name: 'Move', exact: true }).click();
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Moved Pricing page words (F-04) to rank 33' }),
+    ).toBeVisible();
+    await expect(pricing.getByTestId('prio-rank')).toHaveText('33');
   });
 }

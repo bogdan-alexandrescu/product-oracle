@@ -1,20 +1,28 @@
-"use client";
+'use client';
 
-import { Link } from "@/lib/nav";
+import { Link } from '@/lib/nav';
 
-import { Chip, DataTable, InfoTip, Inspector, InspectorRow, InspectorSection, type Column } from "@/components/ds";
+import {
+  Chip,
+  DataTable,
+  InfoTip,
+  Inspector,
+  InspectorRow,
+  InspectorSection,
+  type Column,
+} from '@/components/ds';
 
-import { LoadError, Loading } from "@/components/ui";
+import { LoadError, Loading } from '@/components/ui';
 
-import { CompanyEmpty } from "../../_empty";
-import { StackPending, type StackLoad } from "./Cards";
-import { FindingRow } from "./DriftList";
-import { findingsAbout, plural, type Choice, type Finding, type Stack } from "./lib";
+import { CompanyEmpty } from '../../_empty';
+import { StackPending, type StackLoad } from './Cards';
+import { FindingRow } from './DriftList';
+import { findingsAbout, plural, type Choice, type Finding, type Stack } from './lib';
 
 /** One stack-table line: a goal under its focus choice, or something not under the strategy. */
 export type StackRow = {
   key: string;
-  group: "under" | "unaligned";
+  group: 'under' | 'unaligned';
   choice: Choice | null;
   goal: { id: string; title: string } | null;
   /** An item not under the strategy (the unaligned group). */
@@ -24,17 +32,25 @@ export type StackRow = {
   findings: Finding[];
 };
 
-const UNDER = "under";
-const UNALIGNED = "unaligned";
+const UNDER = 'under';
+const UNALIGNED = 'unaligned';
 
 /** The lines: one per goal under its focus choice, then the goals and items not under it. */
 export function stackRows(stack: Stack | undefined, open: Finding[]): StackRow[] {
   if (!stack) return [];
   const rows: StackRow[] = [];
-  for (const c of stack.strategy?.choices.filter((x) => x.stance === "focus") ?? []) {
+  for (const c of stack.strategy?.choices.filter((x) => x.stance === 'focus') ?? []) {
     const about = findingsAbout(open, c.entity_id);
     if (!c.goals.length) {
-      rows.push({ key: c.entity_id, group: UNDER, choice: c, goal: null, item: null, items: c.items, findings: about });
+      rows.push({
+        key: c.entity_id,
+        group: UNDER,
+        choice: c,
+        goal: null,
+        item: null,
+        items: c.items,
+        findings: about,
+      });
       continue;
     }
     c.goals.forEach((g, i) =>
@@ -50,7 +66,15 @@ export function stackRows(stack: Stack | undefined, open: Finding[]): StackRow[]
     );
   }
   for (const g of stack.unaligned.goals) {
-    rows.push({ key: `goal|${g.id}`, group: UNALIGNED, choice: null, goal: g, item: null, items: null, findings: findingsAbout(open, g.id) });
+    rows.push({
+      key: `goal|${g.id}`,
+      group: UNALIGNED,
+      choice: null,
+      goal: g,
+      item: null,
+      items: null,
+      findings: findingsAbout(open, g.id),
+    });
   }
   for (const i of stack.unaligned.items) {
     rows.push({
@@ -73,7 +97,7 @@ const dash = (
     —
   </span>
 );
-const EMPTY_ON_PHONE = "max-[600px]:has-[[data-empty]]:hidden";
+const EMPTY_ON_PHONE = 'max-[600px]:has-[[data-empty]]:hidden';
 /** On a phone only: the cell is dropped (its value is the row's title there). */
 const phoneOnlyEmpty = <span data-empty hidden />;
 
@@ -107,9 +131,9 @@ export function StackTable({
   const vision = stack?.vision;
   const columns: Column<StackRow>[] = [
     {
-      key: "choice",
-      header: "Focus choice",
-      phone: "title",
+      key: 'choice',
+      header: 'Focus choice',
+      phone: 'title',
       wrap: true,
       cell: (r) => (
         <span data-col="choice">
@@ -129,10 +153,10 @@ export function StackTable({
       ),
     },
     {
-      key: "goal",
-      header: "Goal",
-      phone: "meta",
-      phoneLabel: "Goal",
+      key: 'goal',
+      header: 'Goal',
+      phone: 'meta',
+      phoneLabel: 'Goal',
       wrap: true,
       className: EMPTY_ON_PHONE,
       cell: (r) => (
@@ -143,11 +167,11 @@ export function StackTable({
       ),
     },
     {
-      key: "items",
-      header: "Roadmap items",
-      width: "160px",
-      phone: "meta",
-      phoneLabel: "Roadmap items",
+      key: 'items',
+      header: 'Roadmap items',
+      width: '160px',
+      phone: 'meta',
+      phoneLabel: 'Roadmap items',
       wrap: true,
       className: EMPTY_ON_PHONE,
       cell: (r) => (
@@ -159,7 +183,7 @@ export function StackTable({
               {phoneOnlyEmpty}
             </>
           ) : r.items != null ? (
-            plural(r.items, "item")
+            plural(r.items, 'item')
           ) : (
             dash
           )}
@@ -167,12 +191,20 @@ export function StackTable({
       ),
     },
     {
-      key: "findings",
-      header: "Findings",
-      width: "112px",
-      phone: "hide",
+      key: 'findings',
+      header: 'Findings',
+      width: '112px',
+      phone: 'hide',
       cell: (r) => (
-        <span data-col="findings">{r.findings.length ? <Chip kind={r.findings.some((f) => f.severity === "high") ? "crit" : "warn"}>{r.findings.length} open</Chip> : dash}</span>
+        <span data-col="findings">
+          {r.findings.length ? (
+            <Chip kind={r.findings.some((f) => f.severity === 'high') ? 'crit' : 'warn'}>
+              {r.findings.length} open
+            </Chip>
+          ) : (
+            dash
+          )}
+        </span>
       ),
     },
   ];
@@ -180,19 +212,21 @@ export function StackTable({
   // over "No approved strategy yet". qa-company-13: the confirmed goals Home shows are not
   // lost; they line up here once a product strategy is approved, and an owner starts one.
   if (stack && rows.length === 0) {
-    const goals = confirmedGoals ? `The ${plural(confirmedGoals, "confirmed goal")}` : "The confirmed goals";
+    const goals = confirmedGoals
+      ? `The ${plural(confirmedGoals, 'confirmed goal')}`
+      : 'The confirmed goals';
     const next = hasStrategy
-      ? "Open the product strategy draft to review it."
+      ? 'Open the product strategy draft to review it.'
       : canStart
-        ? "Start one on the Product strategy card above."
-        : "An owner writes it.";
+        ? 'Start one on the Product strategy card above.'
+        : 'An owner writes it.';
     // One New product strategy, on its card (qa-company-20): the empty stack points to it.
     // pass F F-45: one short line; what the stack holds sits behind the (i).
     return (
       <CompanyEmpty testId="stack-empty" title="Waiting for an approved product strategy">
         <InfoTip label="the strategy stack" align="end">
-          {next} {goals} show here under the focus choice each follows from, with the roadmap items serving it, once an owner approves a
-          product strategy.
+          {next} {goals} show here under the focus choice each follows from, with the roadmap items
+          serving it, once an owner approves a product strategy.
         </InfoTip>
       </CompanyEmpty>
     );
@@ -211,15 +245,18 @@ export function StackTable({
       group={(r) => r.group}
       groupLabel={(g) =>
         g === UNALIGNED ? (
-          "Not under the strategy"
+          'Not under the strategy'
         ) : (
           <span className="[overflow-wrap:anywhere]">
-            Under the strategy{vision?.headline ? <span className="font-normal text-text2"> · Vision: {vision.headline}</span> : null}
+            Under the strategy
+            {vision?.headline ? (
+              <span className="font-normal text-text2"> · Vision: {vision.headline}</span>
+            ) : null}
           </span>
         )
       }
-      groupProps={(g) => ({ "data-testid": `stack-group-${g}` })}
-      rowProps={() => ({ "data-testid": "stack-row" })}
+      groupProps={(g) => ({ 'data-testid': `stack-group-${g}` })}
+      rowProps={() => ({ 'data-testid': 'stack-row' })}
     />
   );
 }
@@ -238,50 +275,77 @@ export function StackInspector({
   findingsRead: { loading: boolean; error: string | null; onRetry: () => void };
 }) {
   if (!row) return null;
-  const title = row.item?.title ?? row.goal?.title ?? row.choice?.title ?? "";
+  const title = row.item?.title ?? row.goal?.title ?? row.choice?.title ?? '';
   const doc = stack?.strategy?.document;
   return (
     <Inspector
       label="Stack line"
       testId="stack-inspector"
-      eyebrow={row.group === UNALIGNED ? "Not under the strategy" : "Under the strategy"}
+      eyebrow={row.group === UNALIGNED ? 'Not under the strategy' : 'Under the strategy'}
       title={<span className="[overflow-wrap:anywhere]">{title}</span>}
     >
       <InspectorSection label="Chain">
         {/* pass F F-43: the vision line wraps (two lines at most), not cut after a few words. */}
         <div className="flex min-h-8 items-start gap-2.5 py-1">
-          <span data-testid="chain-vision" className="line-clamp-2 min-w-0 flex-1 [overflow-wrap:anywhere]">
-            {stack?.vision?.headline ?? "No approved vision"}
+          <span
+            data-testid="chain-vision"
+            className="line-clamp-2 min-w-0 flex-1 [overflow-wrap:anywhere]"
+          >
+            {stack?.vision?.headline ?? 'No approved vision'}
           </span>
-          {stack?.vision && <span className="tnum flex-none font-semibold">v{stack.vision.document.version}</span>}
+          {stack?.vision && (
+            <span className="tnum flex-none font-semibold">v{stack.vision.document.version}</span>
+          )}
         </div>
         <InspectorRow>
           {row.choice && doc ? (
-            <Link href={`/documents/${doc.slug}/v/${doc.version}#choice-${row.choice.id}`} className="text-accent-ink hover:underline">
+            <Link
+              href={`/documents/${doc.slug}/v/${doc.version}#choice-${row.choice.id}`}
+              className="text-accent-ink hover:underline"
+            >
               {row.choice.title}
             </Link>
           ) : (
-            "No focus choice"
+            'No focus choice'
           )}
         </InspectorRow>
         <InspectorRow>
           {row.goal ? (
-            <Link href={`/ground-truth?entity=${row.goal.id}`} className="text-accent-ink hover:underline">
+            <Link
+              href={`/ground-truth?entity=${row.goal.id}`}
+              className="text-accent-ink hover:underline"
+            >
               {row.goal.title}
             </Link>
           ) : (
-            "No goal"
+            'No goal'
           )}
         </InspectorRow>
-        <InspectorRow>{row.item ? row.item.title : row.items != null ? plural(row.items, "roadmap item") : "No roadmap items"}</InspectorRow>
+        <InspectorRow>
+          {row.item
+            ? row.item.title
+            : row.items != null
+              ? plural(row.items, 'roadmap item')
+              : 'No roadmap items'}
+        </InspectorRow>
       </InspectorSection>
       <InspectorSection label="Findings">
         {findingsRead.error ? (
-          <LoadError what="the findings" error={findingsRead.error} onRetry={findingsRead.onRetry} />
+          <LoadError
+            what="the findings"
+            error={findingsRead.error}
+            onRetry={findingsRead.onRetry}
+          />
         ) : row.findings.length ? (
           <ul className="-mx-4">
             {row.findings.map((f) => (
-              <FindingRow key={f.id} finding={f} stack={stack} onWaived={onWaived} testId="inspector-finding" />
+              <FindingRow
+                key={f.id}
+                finding={f}
+                stack={stack}
+                onWaived={onWaived}
+                testId="inspector-finding"
+              />
             ))}
           </ul>
         ) : findingsRead.loading ? (

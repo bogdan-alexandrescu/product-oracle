@@ -1,4 +1,4 @@
-import { MembersSettings } from "@/components/MembersSettings";
+import { MembersSettings } from '@/components/MembersSettings';
 
 export default function MembersPage() {
   return <MembersSettings />;

@@ -1,6 +1,6 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /**
  * Quality checks on generated one-pagers (oracle.simple.quality), driven through the UI on
@@ -18,39 +18,49 @@ import { expect, test, type Page } from "./test";
  * people below owner; no_claim = the API's per-role filter (its pytest).
  */
 
-const URL = "/simple/prds/guided-setup";
-const note = (page: Page) => page.getByRole("note", { name: "Needs a look" });
-const lineText = (page: Page, text: string) => page.getByTestId("one-pager-line-text").filter({ hasText: text });
+const URL = '/simple/prds/guided-setup';
+const note = (page: Page) => page.getByRole('note', { name: 'Needs a look' });
+const lineText = (page: Page, text: string) =>
+  page.getByTestId('one-pager-line-text').filter({ hasText: text });
 
 async function setUp(page: Page) {
-  await page.context().addInitScript(([key]) => localStorage.setItem(key, "one-pager-needs-look"), [MOCK_SCENARIO_KEY] as const);
+  await page
+    .context()
+    .addInitScript(([key]) => localStorage.setItem(key, 'one-pager-needs-look'), [
+      MOCK_SCENARIO_KEY,
+    ] as const);
 }
 
 for (const phone of [false, true]) {
-  test.describe(phone ? "phone" : "desktop", () => {
+  test.describe(phone ? 'phone' : 'desktop', () => {
     test.use({ viewport: phone ? { width: 390, height: 844 } : { width: 1440, height: 900 } });
 
-    test("the owner reads a quiet note naming the failed checks", async ({ page }) => {
+    test('the owner reads a quiet note naming the failed checks', async ({ page }) => {
       await setUp(page);
       await login(page);
       await page.goto(URL);
       await expect(note(page)).toBeVisible();
-      await expect(note(page)).toContainText("Needs a look");
-      await expect(note(page)).toContainText("2 bets; a one-pager has 3 to 5");
-      await expect(note(page)).toContainText("A line in “Risks and open decisions” says “TBD”");
+      await expect(note(page)).toContainText('Needs a look');
+      await expect(note(page)).toContainText('2 bets; a one-pager has 3 to 5');
+      await expect(note(page)).toContainText('A line in “Risks and open decisions” says “TBD”');
       // C-15: each failed check is one short line with its detail behind an (i), as the PRD's own looks are.
-      await expect(note(page).getByTestId("needs-look-line")).toHaveText(["2 bets; a one-pager has 3 to 5", "A line in “Risks and open decisions” says “TBD”"]);
-      await expect(note(page).getByRole("button", { name: "About 2 bets; a one-pager has 3 to 5" })).toHaveAccessibleDescription(/last good version/);
-      await expect(lineText(page, "Pricing for teams is TBD")).toBeVisible();
-      await expect(lineText(page, "A sample project created on day one")).toHaveCount(0);
+      await expect(note(page).getByTestId('needs-look-line')).toHaveText([
+        '2 bets; a one-pager has 3 to 5',
+        'A line in “Risks and open decisions” says “TBD”',
+      ]);
+      await expect(
+        note(page).getByRole('button', { name: 'About 2 bets; a one-pager has 3 to 5' }),
+      ).toHaveAccessibleDescription(/last good version/);
+      await expect(lineText(page, 'Pricing for teams is TBD')).toBeVisible();
+      await expect(lineText(page, 'A sample project created on day one')).toHaveCount(0);
     });
 
-    test("a commenter reads the last good version and no note", async ({ page }) => {
+    test('a commenter reads the last good version and no note', async ({ page }) => {
       await setUp(page);
-      await login(page, "commenter@example.com");
+      await login(page, 'commenter@example.com');
       await page.goto(URL);
-      await expect(lineText(page, "A sample project created on day one")).toBeVisible();
-      await expect(lineText(page, "Pricing for teams is TBD")).toHaveCount(0);
+      await expect(lineText(page, 'A sample project created on day one')).toBeVisible();
+      await expect(lineText(page, 'Pricing for teams is TBD')).toHaveCount(0);
       await expect(note(page)).toHaveCount(0);
     });
   });

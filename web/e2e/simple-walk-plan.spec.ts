@@ -1,7 +1,7 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { THEME_KEY } from "../lib/theme";
-import { ADMIN, login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { THEME_KEY } from '../lib/theme';
+import { ADMIN, login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /*
  * CLD's production walk (#723, 2026-10-27): how plans and one-pagers read with real data,
@@ -50,12 +50,12 @@ import { expect, test, type Page } from "./test";
  * text; no_claim = the save itself (simple-one-pager.spec.ts).
  */
 
-const EMAILS = { owner: ADMIN.email, viewer: "viewer@example.com" } as const;
+const EMAILS = { owner: ADMIN.email, viewer: 'viewer@example.com' } as const;
 
-async function setUp(page: Page, scheme: "light" | "dark", email: string) {
+async function setUp(page: Page, scheme: 'light' | 'dark', email: string) {
   await page.context().addInitScript(
     ([key, themeKey, theme]) => {
-      localStorage.setItem(key, "simple-walk");
+      localStorage.setItem(key, 'simple-walk');
       localStorage.setItem(themeKey, theme);
     },
     [MOCK_SCENARIO_KEY, THEME_KEY, scheme] as const,
@@ -65,17 +65,22 @@ async function setUp(page: Page, scheme: "light" | "dark", email: string) {
 }
 
 for (const phone of [false, true]) {
-  for (const scheme of ["light", "dark"] as const) {
-    const where = `${phone ? "phone" : "desktop"}, ${scheme}`;
+  for (const scheme of ['light', 'dark'] as const) {
+    const where = `${phone ? 'phone' : 'desktop'}, ${scheme}`;
     test.describe(where, () => {
-      test.use({ viewport: phone ? { width: 390, height: 844 } : { width: 1366, height: 820 }, colorScheme: scheme });
+      test.use({
+        viewport: phone ? { width: 390, height: 844 } : { width: 1366, height: 820 },
+        colorScheme: scheme,
+      });
 
-      for (const role of ["owner", "viewer"] as const) {
-        test(`Home's plan has one row per milestone, notes left out, as ${role} (${where})`, async ({ page }) => {
+      for (const role of ['owner', 'viewer'] as const) {
+        test(`Home's plan has one row per milestone, notes left out, as ${role} (${where})`, async ({
+          page,
+        }) => {
           await setUp(page, scheme, EMAILS[role]);
-          await page.goto("/simple");
-          const plan = page.getByTestId("home-plan");
-          const labels = plan.getByTestId("home-strip-label");
+          await page.goto('/simple');
+          const plan = page.getByTestId('home-plan');
+          const labels = plan.getByTestId('home-strip-label');
           await expect(labels.first()).toBeVisible();
           const texts = await labels.allTextContents();
           // home-waiting-one-list (PR 1235): Home's plan is the company roadmap's, every PRD's
@@ -86,64 +91,122 @@ for (const phone of [false, true]) {
           // in one, and no row is named by them. Each row is one milestone, by its code and name.
           for (const t of texts) expect(t).not.toMatch(/Measure it|Ship to beta/);
           // The goals' target dates (milestone-kinds) take M2 to M4, so the undated Beta launch is M5.
-          expect(texts.slice(0, -1)).toEqual(["M1 · Beta · 1 item", "M5 · Beta launch · 3 items"]);
-          const loose = plan.getByTestId("home-strip-row").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: /^Not in a milestone · \d+ items?$/ }) });
+          expect(texts.slice(0, -1)).toEqual(['M1 · Beta · 1 item', 'M5 · Beta launch · 3 items']);
+          const loose = plan.getByTestId('home-strip-row').filter({
+            has: page
+              .getByTestId('home-strip-label')
+              .filter({ hasText: /^Not in a milestone · \d+ items?$/ }),
+          });
           await loose.hover();
-          expect(((await loose.getAttribute("title")) ?? "").split("\n").slice(1)).toEqual(
-            expect.arrayContaining(["Usage export", "Dry run", "Setup audit", "Beta invites", "Beta feedback form"]),
+          expect(((await loose.getAttribute('title')) ?? '').split('\n').slice(1)).toEqual(
+            expect.arrayContaining([
+              'Usage export',
+              'Dry run',
+              'Setup audit',
+              'Beta invites',
+              'Beta feedback form',
+            ]),
           );
           for (const t of texts) expect(t).not.toMatch(/two teams first|after legal/);
           expect(texts.at(-1)).toMatch(/^Not in a milestone · \d+ items?$/);
           expect(new Set(texts).size).toBe(texts.length);
           for (const t of texts) expect(t).not.toMatch(/[(;]/);
-          await plan.getByTestId("home-strip-row").first().click();
+          await plan.getByTestId('home-strip-row').first().click();
           await expect(page).toHaveURL(/\/simple\/roadmap$/);
         });
 
-        test(`the one-pager's timeline and its problem line, as ${role} (${where})`, async ({ page }) => {
+        test(`the one-pager's timeline and its problem line, as ${role} (${where})`, async ({
+          page,
+        }) => {
           await setUp(page, scheme, EMAILS[role]);
-          await page.goto("/simple/prds/guided-setup");
-          const strip = page.getByLabel("Timeline strip");
+          await page.goto('/simple/prds/guided-setup');
+          const strip = page.getByLabel('Timeline strip');
           // roadmap-milestone-codes (owner Nov 10): the PRD's written M1 and M2 name no roadmap
           // milestone, so those rows read their names alone, never the PRD's own code.
-          await expect(strip.getByTestId("plan-strip-label")).toHaveText(["Measure it, make it safe · 3 roadmap items", "Ship to beta · 2 roadmap items", "Beta launch · 3 roadmap items", "No milestone · 1 roadmap item"]);
-          await expect(strip).not.toContainText("M1 · Measure it");
-          await expect(strip).not.toContainText("dry run");
+          await expect(strip.getByTestId('plan-strip-label')).toHaveText([
+            'Measure it, make it safe · 3 roadmap items',
+            'Ship to beta · 2 roadmap items',
+            'Beta launch · 3 roadmap items',
+            'No milestone · 1 roadmap item',
+          ]);
+          await expect(strip).not.toContainText('M1 · Measure it');
+          await expect(strip).not.toContainText('dry run');
 
-          const problem = page.getByRole("region", { name: "Problem and who has it" });
-          const line = problem.getByTestId("one-pager-line-text");
+          const problem = page.getByRole('region', { name: 'Problem and who has it' });
+          const line = problem.getByTestId('one-pager-line-text');
           await expect(line).toHaveText(/hides the invite step\.$/);
-          await expect(line).not.toContainText("weekend signup");
-          await problem.getByRole("button", { name: "Show all of “New workspace admins stall during" }).click();
+          await expect(line).not.toContainText('weekend signup');
+          await problem
+            .getByRole('button', { name: 'Show all of “New workspace admins stall during' })
+            .click();
           await expect(line).toHaveText(/after a weekend signup\.$/);
-          await expect(line).not.toContainText("…");
-          await problem.getByRole("button", { name: "Show less of “New workspace admins stall during" }).click();
+          await expect(line).not.toContainText('…');
+          await problem
+            .getByRole('button', { name: 'Show less of “New workspace admins stall during' })
+            .click();
           await expect(line).toHaveText(/invite step\.$/);
-          if (role === "owner") {
+          if (role === 'owner') {
             // The editor starts from the whole line, not its "…" text.
-            await problem.getByRole("button", { name: "Edit “New workspace admins stall during" }).click();
-            await expect(problem.getByLabel("New wording for")).toHaveValue(/after a weekend signup\.$/);
-            await problem.getByRole("button", { name: "Cancel" }).click();
+            await problem
+              .getByRole('button', { name: 'Edit “New workspace admins stall during' })
+              .click();
+            await expect(problem.getByLabel('New wording for')).toHaveValue(
+              /after a weekend signup\.$/,
+            );
+            await problem.getByRole('button', { name: 'Cancel' }).click();
           }
-          if (!phone) expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1366);
-          else expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+          if (!phone)
+            expect(
+              await page.evaluate(() => document.documentElement.scrollWidth),
+            ).toBeLessThanOrEqual(1366);
+          else
+            expect(
+              await page.evaluate(() => document.documentElement.scrollWidth),
+            ).toBeLessThanOrEqual(390);
 
-          await strip.getByTestId("plan-strip-row").filter({ hasText: "Measure it, make it safe · 3 roadmap items" }).click();
+          await strip
+            .getByTestId('plan-strip-row')
+            .filter({ hasText: 'Measure it, make it safe · 3 roadmap items' })
+            .click();
           await expect(page).toHaveURL(/\/simple\/roadmap\?prd=guided-setup$/);
         });
 
-        test(`a skeleton PRD's one-pager shows no template guidance, as ${role} (${where})`, async ({ page }) => {
+        test(`a skeleton PRD's one-pager shows no template guidance, as ${role} (${where})`, async ({
+          page,
+        }) => {
           await setUp(page, scheme, EMAILS[role]);
-          await page.goto("/simple/one-pagers/annual-billing");
-          await expect(page.getByRole("heading", { level: 1, name: "Annual billing PRD" })).toBeVisible();
-          const article = page.locator("article");
-          await expect(page.getByTestId("one-pager-empty-block")).toHaveCount(5);
-          await expect(page.getByTestId("one-pager-empty-block").first()).toHaveText("Not written yet");
-          await expect(article.locator("[data-line]")).toHaveCount(0);
-          for (const junk of ["<!--", "Brief:", "<Milestone>", "<Feature>", "<Risk>", "<mitigation>"]) await expect(article).not.toContainText(junk);
-          for (const title of ["Problem and who has it", "What we will build", "Outcomes and how we measure them", "Not doing", "Risks and open decisions"]) {
-            await expect(page.getByRole("region", { name: title }).getByText("Not written yet")).toBeVisible();
-            await expect(page.getByRole("region", { name: title }).locator("ul")).not.toContainText("→");
+          await page.goto('/simple/one-pagers/annual-billing');
+          await expect(
+            page.getByRole('heading', { level: 1, name: 'Annual billing PRD' }),
+          ).toBeVisible();
+          const article = page.locator('article');
+          await expect(page.getByTestId('one-pager-empty-block')).toHaveCount(5);
+          await expect(page.getByTestId('one-pager-empty-block').first()).toHaveText(
+            'Not written yet',
+          );
+          await expect(article.locator('[data-line]')).toHaveCount(0);
+          for (const junk of [
+            '<!--',
+            'Brief:',
+            '<Milestone>',
+            '<Feature>',
+            '<Risk>',
+            '<mitigation>',
+          ])
+            await expect(article).not.toContainText(junk);
+          for (const title of [
+            'Problem and who has it',
+            'What we will build',
+            'Outcomes and how we measure them',
+            'Not doing',
+            'Risks and open decisions',
+          ]) {
+            await expect(
+              page.getByRole('region', { name: title }).getByText('Not written yet'),
+            ).toBeVisible();
+            await expect(page.getByRole('region', { name: title }).locator('ul')).not.toContainText(
+              '→',
+            );
           }
         });
       }

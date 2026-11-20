@@ -20,16 +20,31 @@ const CODE = String.raw`[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+[a-z]?|[A-Z]{1,4}\d+[a-z]?`
 /** A heading that names a code: `F-28 Name`, `M1 — Name`. */
 const HEADING = new RegExp(String.raw`^(${CODE})\s*(?:[:.·–—-]\s*|\s+)(\S.*)$`);
 /** A requirement line: `R1 (F-28) Title.`, `- **R1** (F-28) Title.`. */
-const REQUIREMENT = new RegExp(String.raw`^(?:[-*+]\s+|\d+[.)]\s+)?(\*\*)?(${CODE})\1?\s*\((${CODE})\)\s*(?:[:.·–—-]\s*)?(\S.*)$`);
+const REQUIREMENT = new RegExp(
+  String.raw`^(?:[-*+]\s+|\d+[.)]\s+)?(\*\*)?(${CODE})\1?\s*\((${CODE})\)\s*(?:[:.·–—-]\s*)?(\S.*)$`,
+);
 /** A list item that names a code: `- D2 — Use one card`, `1. Q1: Who signs off?`. */
-const LISTED = new RegExp(String.raw`^(?:[-*+]|\d+[.)])\s+(\*\*)?(${CODE})\1?\s*(?:[:.·–—-]\s*|\s+)(\S.*)$`);
+const LISTED = new RegExp(
+  String.raw`^(?:[-*+]|\d+[.)])\s+(\*\*)?(${CODE})\1?\s*(?:[:.·–—-]\s*|\s+)(\S.*)$`,
+);
 /** A code (or a range of two) in running text, not inside a word, a path or a key. */
-const TOKEN = new RegExp(String.raw`(?<![\w./:#@=&?-])(${CODE})(?:\s?[–—]\s?(${CODE}))?(?![\w-]|\.\w)`, "g");
+const TOKEN = new RegExp(
+  String.raw`(?<![\w./:#@=&?-])(${CODE})(?:\s?[–—]\s?(${CODE}))?(?![\w-]|\.\w)`,
+  'g',
+);
 const URL_RE = /\b(?:https?:\/\/|www\.)\S+/g;
 const WHOLE = new RegExp(String.raw`^(?:${CODE})$`);
 const SPLIT_NUM = /^([A-Z][A-Z0-9]*?-?)(\d+)$/;
 
-export type CodeKind = "Feature" | "Milestone" | "Requirement" | "Decision" | "Open question" | "Goal" | "Risk" | "Section";
+export type CodeKind =
+  | 'Feature'
+  | 'Milestone'
+  | 'Requirement'
+  | 'Decision'
+  | 'Open question'
+  | 'Goal'
+  | 'Risk'
+  | 'Section';
 
 export type CodeEntry = {
   code: string;
@@ -51,52 +66,58 @@ export type CodeIndex = Map<string, CodeEntry>;
 
 export type CodeSection = { section_key: string; heading: string; body_md: string };
 /** A company goal or feature with its own code (`G-B Growth`, a feature keyed `F-2`). */
-export type CodeEntity = { id: string; kind: "Goal" | "Feature"; code: string; name: string; status?: string | null };
+export type CodeEntity = {
+  id: string;
+  kind: 'Goal' | 'Feature';
+  code: string;
+  name: string;
+  status?: string | null;
+};
 
 /** A code's kind from its whole prefix: `FY2026` or `SHA256` is no kind ("Section"). */
 const KINDS: [RegExp, CodeKind][] = [
-  [/^F-?\d/, "Feature"],
-  [/^M-?\d/, "Milestone"],
-  [/^R-?\d/, "Requirement"],
-  [/^(?:D|ADR)-?\d/, "Decision"],
-  [/^(?:Q|OQ)-?\d/, "Open question"],
-  [/^RISK-?\d/, "Risk"],
-  [/^G-?[A-Z0-9]/, "Goal"],
+  [/^F-?\d/, 'Feature'],
+  [/^M-?\d/, 'Milestone'],
+  [/^R-?\d/, 'Requirement'],
+  [/^(?:D|ADR)-?\d/, 'Decision'],
+  [/^(?:Q|OQ)-?\d/, 'Open question'],
+  [/^RISK-?\d/, 'Risk'],
+  [/^G-?[A-Z0-9]/, 'Goal'],
 ];
 
 function kindOf(code: string): CodeKind {
-  return KINDS.find(([re]) => re.test(code))?.[1] ?? "Section";
+  return KINDS.find(([re]) => re.test(code))?.[1] ?? 'Section';
 }
 
 /** The kinds a heading names: `F-28 Name`, `M1 Name`. */
-const HEADING_KINDS = new Set<CodeKind>(["Feature", "Milestone"]);
+const HEADING_KINDS = new Set<CodeKind>(['Feature', 'Milestone']);
 
 /** The kinds a section lists by its heading: "Decisions and open questions", "Milestones". */
 function listedKinds(heading: string): Set<CodeKind> {
   const kinds = new Set<CodeKind>();
-  if (/\bdecisions?\b/i.test(heading)) kinds.add("Decision");
-  if (/\bquestions?\b/i.test(heading)) kinds.add("Open question");
-  if (/\bmilestones?\b/i.test(heading)) kinds.add("Milestone");
-  if (/\brisks?\b/i.test(heading)) kinds.add("Risk");
+  if (/\bdecisions?\b/i.test(heading)) kinds.add('Decision');
+  if (/\bquestions?\b/i.test(heading)) kinds.add('Open question');
+  if (/\bmilestones?\b/i.test(heading)) kinds.add('Milestone');
+  if (/\brisks?\b/i.test(heading)) kinds.add('Risk');
   return kinds;
 }
 
 /** The name a line gives: its first sentence, without trailing markup. */
 function cleanName(text: string): string {
   const t = text
-    .replace(/\[c:[\w.:-]+\]/g, "")
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-    .replace(/[*_`]/g, "")
+    .replace(/\[c:[\w.:-]+\]/g, '')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/[*_`]/g, '')
     .trim();
   const first = t.match(/^(.+?[.!?])(?:\s|$)/);
-  return (first ? first[1].replace(/[.]$/, "") : t).trim().slice(0, 160);
+  return (first ? first[1].replace(/[.]$/, '') : t).trim().slice(0, 160);
 }
 
 /** The body's lines outside fenced code blocks. */
 function proseLines(md: string): string[] {
   const out: string[] = [];
   let fenced = false;
-  for (const line of md.split("\n")) {
+  for (const line of md.split('\n')) {
     if (/^\s*(```|~~~)/.test(line)) {
       fenced = !fenced;
       continue;
@@ -110,7 +131,10 @@ function proseLines(md: string): string[] {
  * The codes a document names, then the company's goals (a document's own code wins). Built
  * once per version.
  */
-export function buildCodeIndex(sections: readonly CodeSection[], entities: readonly CodeEntity[] = []): CodeIndex {
+export function buildCodeIndex(
+  sections: readonly CodeSection[],
+  entities: readonly CodeEntity[] = [],
+): CodeIndex {
   const index: CodeIndex = new Map();
   const add = (e: CodeEntry) => {
     if (!index.has(e.code)) index.set(e.code, e);
@@ -119,7 +143,13 @@ export function buildCodeIndex(sections: readonly CodeSection[], entities: reado
   const define = (s: CodeSection, code: string, rest: string, parent?: string) => {
     const name = cleanName(rest);
     if (!name || index.has(code)) return;
-    const e: CodeEntry = { code, kind: kindOf(code), name, sectionKey: s.section_key, from: "this PRD" };
+    const e: CodeEntry = {
+      code,
+      kind: kindOf(code),
+      name,
+      sectionKey: s.section_key,
+      from: 'this PRD',
+    };
     if (parent) parents.push([e, parent]);
     add(e);
   };
@@ -133,15 +163,15 @@ export function buildCodeIndex(sections: readonly CodeSection[], entities: reado
     for (const line of proseLines(s.body_md)) {
       // A requirement line names its parent: `R1 (F-28) Title.`.
       const r = line.match(REQUIREMENT);
-      if (r && kindOf(r[2]) === "Requirement") {
+      if (r && kindOf(r[2]) === 'Requirement') {
         define(s, r[2], r[4], r[3]);
         continue;
       }
       if (!listed.size) continue;
       // A section that lists decisions, questions or milestones: `- D2 — …`, `| Q1 | … |`.
-      const cells = line.startsWith("|") ? line.split("|").map((c) => c.trim()) : null;
+      const cells = line.startsWith('|') ? line.split('|').map((c) => c.trim()) : null;
       const m = cells ? null : line.match(LISTED);
-      const code = cells ? cells[1]?.replace(/\*\*/g, "") : m?.[2];
+      const code = cells ? cells[1]?.replace(/\*\*/g, '') : m?.[2];
       const rest = cells ? cells[2] : m?.[3];
       if (code && rest && WHOLE.test(code) && listed.has(kindOf(code))) define(s, code, rest);
     }
@@ -151,7 +181,14 @@ export function buildCodeIndex(sections: readonly CodeSection[], entities: reado
     e.line = parent ? `${parent.kind} ${parent.code} ${parent.name}` : `Under ${p}`;
   }
   for (const g of entities) {
-    if (g.code) add({ code: g.code, kind: g.kind, name: g.name, entityId: g.id, from: g.status ?? undefined });
+    if (g.code)
+      add({
+        code: g.code,
+        kind: g.kind,
+        name: g.name,
+        entityId: g.id,
+        from: g.status ?? undefined,
+      });
   }
   return index;
 }
@@ -161,7 +198,12 @@ function slice(code: string, index: CodeIndex): CodeEntry | undefined {
   const m = code.match(/^(.*\d)([a-z])$/);
   const parent = m ? index.get(m[1]) : undefined;
   if (!m || !parent) return undefined;
-  return { ...parent, code, line: `${parent.kind} ${parent.code}, slice ${m[2]}`, members: undefined };
+  return {
+    ...parent,
+    code,
+    line: `${parent.kind} ${parent.code}, slice ${m[2]}`,
+    members: undefined,
+  };
 }
 
 /** A range's entry (`R1–R10`, `R1-R10`): its known members, in order. */
@@ -182,7 +224,7 @@ function range(a: string, b: string, written: string, index: CodeIndex): CodeEnt
   return {
     code: written,
     kind,
-    name: `${members.length} ${kind === "Open question" ? "open questions" : `${kind.toLowerCase()}s`}`,
+    name: `${members.length} ${kind === 'Open question' ? 'open questions' : `${kind.toLowerCase()}s`}`,
     sectionKey: members[0].sectionKey,
     from: members[0].from,
     members,
@@ -237,14 +279,20 @@ export function splitCodes(text: string, index: CodeIndex): CodePiece[] {
  */
 const SOURCE_CODE = /^(?:FR|NFR|REQ|RQ|BR|UR|SR|SYS|US|UC|AC|TR|DR|IR|QR|CR)-\d+[a-z]?$/;
 /** Codes written together, `FR-08/FR-09`, `F-1, F-2 and F-3`: one group, named after its last code. */
-const GROUP = new RegExp(String.raw`(?<![\w./:#@=&?-])(?:${CODE})(?:(?:\s?[/,&]\s?|\s(?:and|or)\s)(?:${CODE}))*(?![\w-]|\.\w)`, "g");
-const ONE = new RegExp(`${CODE}`, "g");
-const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const GROUP = new RegExp(
+  String.raw`(?<![\w./:#@=&?-])(?:${CODE})(?:(?:\s?[/,&]\s?|\s(?:and|or)\s)(?:${CODE}))*(?![\w-]|\.\w)`,
+  'g',
+);
+const ONE = new RegExp(`${CODE}`, 'g');
+const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** True when `name` stands right after the code (`F-08 Name`, `F-08: Name`) or right before it (`Name (F-08)`). */
 function namedBeside(name: string, before: string, after: string): boolean {
   const n = escape(name.trim());
-  return new RegExp(`^\\s*(?:[:·–—-]\\s*|\\(\\s*)?${n}`, "i").test(after) || new RegExp(`${n}\\s*[(:·–—-]?\\s*$`, "i").test(before);
+  return (
+    new RegExp(`^\\s*(?:[:·–—-]\\s*|\\(\\s*)?${n}`, 'i').test(after) ||
+    new RegExp(`${n}\\s*[(:·–—-]?\\s*$`, 'i').test(before)
+  );
 }
 
 /**
@@ -256,18 +304,22 @@ function namedBeside(name: string, before: string, after: string): boolean {
  * code already named, a URL, and words that only look like codes (`Q4`, `UTF-8`) stay as
  * written; run twice, it changes nothing more.
  */
-export function nameCodes(text: string, index: CodeIndex, source: string | null | undefined): string {
+export function nameCodes(
+  text: string,
+  index: CodeIndex,
+  source: string | null | undefined,
+): string {
   if (!text) return text;
   const urls = [...text.matchAll(URL_RE)].map((m) => [m.index!, m.index! + m[0].length]);
   const from = ` (from ${source})`;
-  let out = "";
+  let out = '';
   let at = 0;
   for (const m of text.matchAll(GROUP)) {
     const start = m.index!;
     const end = start + m[0].length;
     if (urls.some(([a, b]) => start < b && end > a)) continue;
     const after = text.slice(end);
-    let group = "";
+    let group = '';
     let last = 0;
     let unknown = false;
     for (const c of m[0].matchAll(ONE)) {
@@ -282,7 +334,7 @@ export function nameCodes(text: string, index: CodeIndex, source: string | null 
       } else if (source && SOURCE_CODE.test(c[0])) unknown = true;
     }
     group += m[0].slice(last);
-    if (unknown && !after.startsWith(" (from ")) group += from;
+    if (unknown && !after.startsWith(' (from ')) group += from;
     out += text.slice(at, start) + group;
     at = end;
   }

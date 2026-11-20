@@ -1,8 +1,8 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { LEGACY_OVERRIDE_SCENARIO } from "../lib/api/mock/lane-f";
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
+import { LEGACY_OVERRIDE_SCENARIO } from '../lib/api/mock/lane-f';
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
 
 /*
  * Review minors on /impact and /priorities, driven through the UI as a person would:
@@ -27,23 +27,28 @@ async function openImpact(page: Page, n = 2) {
 }
 
 test("impact: the lineage names a Ground Truth item's kind, not its raw key", async ({ page }) => {
-  await scenario(page, "impact");
+  await scenario(page, 'impact');
   await login(page);
   // A version's preview reaches only that document's sections (as the API's): a Ground Truth
   // item is an upstream on its own what-if, opened from its drawer as a person would.
-  await page.goto("/ground-truth");
-  await page.getByTestId("feature-F-01").getByRole("button", { name: "Setup checklist" }).click();
-  await page.getByRole("dialog", { name: "Setup checklist" }).getByRole("link", { name: "What if it changed?" }).click();
+  await page.goto('/ground-truth');
+  await page.getByTestId('feature-F-01').getByRole('button', { name: 'Setup checklist' }).click();
+  await page
+    .getByRole('dialog', { name: 'Setup checklist' })
+    .getByRole('link', { name: 'What if it changed?' })
+    .click();
   await expect(page).toHaveURL(/\/impact\/entities\/[^/]+$/);
-  const graph = page.getByRole("region", { name: "Lineage" });
-  const upstream = graph.getByTestId("lineage-upstream").filter({ hasText: "Setup checklist" });
+  const graph = page.getByRole('region', { name: 'Lineage' });
+  const upstream = graph.getByTestId('lineage-upstream').filter({ hasText: 'Setup checklist' });
   await expect(upstream).toBeVisible();
   // The sub-line names the kind in words ("Feature", locked), never "f.setup-checklist".
-  await expect(upstream.getByTestId("lineage-upstream-sub")).toHaveText("Feature · locked");
-  await expect(upstream).not.toContainText("f.setup-checklist");
+  await expect(upstream.getByTestId('lineage-upstream-sub')).toHaveText('Feature · locked');
+  await expect(upstream).not.toContainText('f.setup-checklist');
   // The link to the what-if names the item too.
-  await expect(upstream.getByRole("link", { name: "What if Setup checklist changed?" })).toBeVisible();
-  await expect(upstream.getByRole("link", { name: /f\.setup-checklist/ })).toHaveCount(0);
+  await expect(
+    upstream.getByRole('link', { name: 'What if Setup checklist changed?' }),
+  ).toBeVisible();
+  await expect(upstream.getByRole('link', { name: /f\.setup-checklist/ })).toHaveCount(0);
 });
 
 /**
@@ -52,102 +57,135 @@ test("impact: the lineage names a Ground Truth item's kind, not its raw key", as
  * Each case is its own test: three page loads each, one 30 s budget each on a loaded runner.
  */
 async function openRecordedChange(page: Page, output: string, alone: boolean) {
-  await scenario(page, "impact");
+  await scenario(page, 'impact');
   await login(page);
-  await page.goto("/documents/annual-billing/v/2/impact");
-  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Table" }).click();
-  const table = page.getByRole("grid", { name: "Affected outputs" });
+  await page.goto('/documents/annual-billing/v/2/impact');
+  await page.getByRole('group', { name: 'View' }).getByRole('button', { name: 'Table' }).click();
+  const table = page.getByRole('grid', { name: 'Affected outputs' });
   await table.getByText(output).first().click();
-  await page.getByRole("complementary", { name: new RegExp(output) }).getByRole("link", { name: "Recorded change" }).click();
+  await page
+    .getByRole('complementary', { name: new RegExp(output) })
+    .getByRole('link', { name: 'Recorded change' })
+    .click();
   await expect(page).toHaveURL(/\/impact\/changes\/[^/]+$/);
   if (alone) await page.goto(new URL(page.url()).pathname);
-  return page.getByRole("navigation", { name: "Oracle" });
+  return page.getByRole('navigation', { name: 'Oracle' });
 }
 
-test("impact: a recorded change on a deleted Ground Truth item highlights Ground Truth in the rail, not PRDs", async ({ page }) => {
+test('impact: a recorded change on a deleted Ground Truth item highlights Ground Truth in the rail, not PRDs', async ({
+  page,
+}) => {
   // A change on a deleted Ground Truth item (a requirement) belongs with Ground Truth, never PRDs,
   // when it is opened on its own (qa-plan-12: opened from a PRD's Impact, it stays with PRDs).
-  const nav = await openRecordedChange(page, "Acceptance tests", true);
-  await expect(page.getByTestId("lineage-subject").filter({ visible: true })).toContainText("Requirement “Signup keeps the yearly price” deleted");
-  await expect(nav.getByTestId("nav-baseline")).toHaveAttribute("aria-current", "page");
-  await expect(nav.getByTestId("nav-prds")).not.toHaveAttribute("aria-current", "page");
+  const nav = await openRecordedChange(page, 'Acceptance tests', true);
+  await expect(page.getByTestId('lineage-subject').filter({ visible: true })).toContainText(
+    'Requirement “Signup keeps the yearly price” deleted',
+  );
+  await expect(nav.getByTestId('nav-baseline')).toHaveAttribute('aria-current', 'page');
+  await expect(nav.getByTestId('nav-prds')).not.toHaveAttribute('aria-current', 'page');
   // Back twice (the change opened on its own, then from the table) is the PRD's Impact again.
   await page.goBack();
   await page.goBack();
   await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/2\/impact$/);
-  await expect(page.getByRole("group", { name: "View" }).getByRole("button", { name: "Table" })).toBeVisible();
+  await expect(
+    page.getByRole('group', { name: 'View' }).getByRole('button', { name: 'Table' }),
+  ).toBeVisible();
 });
 
-test("impact: a recorded change on a source's permission leaves the rail quiet", async ({ page }) => {
+test("impact: a recorded change on a source's permission leaves the rail quiet", async ({
+  page,
+}) => {
   // A change on a source's permission belongs with neither PRDs nor Ground Truth: the rail stays quiet.
-  const nav = await openRecordedChange(page, "Early yearly price brief", true);
+  const nav = await openRecordedChange(page, 'Early yearly price brief', true);
   await expect(page.getByText(/^Impact:/).filter({ visible: true })).toBeVisible();
-  await expect(nav.getByTestId("nav-prds")).not.toHaveAttribute("aria-current", "page");
-  await expect(nav.getByTestId("nav-baseline")).not.toHaveAttribute("aria-current", "page");
+  await expect(nav.getByTestId('nav-prds')).not.toHaveAttribute('aria-current', 'page');
+  await expect(nav.getByTestId('nav-baseline')).not.toHaveAttribute('aria-current', 'page');
 });
 
-test("impact: a recorded change on a PRD section highlights PRDs in the rail", async ({ page }) => {
+test('impact: a recorded change on a PRD section highlights PRDs in the rail', async ({ page }) => {
   // A change on a PRD section still belongs with PRDs, as before.
-  const nav = await openRecordedChange(page, "Bulk import tech brief", false);
-  await expect(page.getByTestId("lineage-subject").filter({ visible: true })).toContainText("Annual billing PRD v2");
-  await expect(nav.getByTestId("nav-prds")).toHaveAttribute("aria-current", "page");
+  const nav = await openRecordedChange(page, 'Bulk import tech brief', false);
+  await expect(page.getByTestId('lineage-subject').filter({ visible: true })).toContainText(
+    'Annual billing PRD v2',
+  );
+  await expect(nav.getByTestId('nav-prds')).toHaveAttribute('aria-current', 'page');
 });
 
-test("impact: past 15 outputs, a category still finds its upstream once names are loaded", async ({ page }) => {
-  await scenario(page, "impact-large");
+test('impact: past 15 outputs, a category still finds its upstream once names are loaded', async ({
+  page,
+}) => {
+  await scenario(page, 'impact-large');
   await openImpact(page);
-  const graph = page.getByRole("region", { name: "Lineage" });
+  const graph = page.getByRole('region', { name: 'Lineage' });
   // Give the document and section names (loaded after the first paint) time to settle before
   // the grouped nodes' edges are read, so the two lists this item keeps in step are both named.
   // A version's sections read as it numbers them ("4. Scope", qa4-docs-44, #996).
   await expect(graph.getByText(/^(\d+\. )?Scope$/).first()).toBeVisible();
-  const group = graph.getByTestId("lineage-group").filter({ hasText: "Wireframe" });
+  const group = graph.getByTestId('lineage-group').filter({ hasText: 'Wireframe' });
   await expect(group).toBeVisible();
   await group.click();
-  const output = graph.getByTestId("lineage-output").first();
+  const output = graph.getByTestId('lineage-output').first();
   await expect(output).toBeVisible();
   await output.click();
   // Picking an output highlights its upstream's path: only possible when the category node's
   // edges (built without names until this fix) and the subject column's (built with them)
   // keyed the same upstream the same way.
-  await expect(graph.locator('[data-testid="lineage-upstream"][data-on-path="true"]').first()).toBeVisible();
+  await expect(
+    graph.locator('[data-testid="lineage-upstream"][data-on-path="true"]').first(),
+  ).toBeVisible();
 });
 
 // The mock's features (lib/api/mock/lane-f.ts) by key and title, as their rows name them.
 const FEATURES: [string, string][] = [
-  ["F-01", "Setup checklist"],
-  ["F-02", "Sample data import"],
-  ["F-05", "Team invites"],
-  ["F-08", "Usage dashboard"],
-  ["F-07", "Bulk import"],
-  ["F-06", "Setup error report"],
-  ["F-12", "Referral link"],
-  ["F-13", "Public signup"],
+  ['F-01', 'Setup checklist'],
+  ['F-02', 'Sample data import'],
+  ['F-05', 'Team invites'],
+  ['F-08', 'Usage dashboard'],
+  ['F-07', 'Bulk import'],
+  ['F-06', 'Setup error report'],
+  ['F-12', 'Referral link'],
+  ['F-13', 'Public signup'],
 ];
 
 /** The Score column's number style (scoreText: whole for RICE and MoSCoW, else two decimals), worked out here from the shown figures. */
 const scoreStyle = (n: number, method: string) => {
-  const places = method === "RICE" || method === "MoSCoW" ? 0 : 2;
-  return n.toLocaleString("en-US", { minimumFractionDigits: places, maximumFractionDigits: places });
+  const places = method === 'RICE' || method === 'MoSCoW' ? 0 : 2;
+  return n.toLocaleString('en-US', {
+    minimumFractionDigits: places,
+    maximumFractionDigits: places,
+  });
 };
 /** A step's shown arithmetic, as a person would key it into a calculator: "6,000 × 1 × 90% ÷ 1". */
 const worked = (expr: string) => {
-  const js = expr.replace(/,/g, "").replace(/(\d+(?:\.\d+)?)%/g, "($1/100)").replace(/×/g, "*").replace(/÷/g, "/");
+  const js = expr
+    .replace(/,/g, '')
+    .replace(/(\d+(?:\.\d+)?)%/g, '($1/100)')
+    .replace(/×/g, '*')
+    .replace(/÷/g, '/');
   expect(js, `"${expr}" is plain arithmetic`).toMatch(/^[\d.\s()+*/]+$/);
   return Function(`"use strict"; return (${js});`)() as number;
 };
 
 async function pickMethod(page: Page, name: string) {
-  await page.getByRole("radiogroup", { name: "Ranking method" }).getByRole("radio", { name, exact: true }).click();
-  await expect(page.getByRole("radio", { name, exact: true })).toHaveAttribute("aria-checked", "true");
+  await page
+    .getByRole('radiogroup', { name: 'Ranking method' })
+    .getByRole('radio', { name, exact: true })
+    .click();
+  await expect(page.getByRole('radio', { name, exact: true })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
 }
 
 async function stepsOf(page: Page, key: string, title: string) {
   // docs/ground-truth.md: a feature shows its code with its name ("F-01 Setup checklist").
-  await page.getByTestId(`priority-row-${key}`).getByRole("button", { name: `${key} ${title}`, exact: true }).click();
-  const steps = page.getByTestId(`explanation-${key}`).getByRole("list", { name: "Steps" });
+  await page
+    .getByTestId(`priority-row-${key}`)
+    .getByRole('button', { name: `${key} ${title}`, exact: true })
+    .click();
+  const steps = page.getByTestId(`explanation-${key}`).getByRole('list', { name: 'Steps' });
   await expect(steps).toBeVisible();
-  return steps.getByRole("listitem").allInnerTexts();
+  return steps.getByRole('listitem').allInnerTexts();
 }
 
 /**
@@ -156,10 +194,12 @@ async function stepsOf(page: Page, key: string, title: string) {
  * a factor ("90%"), never a fraction ("0.9") or a bare 0-100 figure ("90").
  */
 async function stepsAddUp(page: Page) {
-  for (const method of ["Goal-weighted", "RICE", "WSJF", "MoSCoW"]) {
+  for (const method of ['Goal-weighted', 'RICE', 'WSJF', 'MoSCoW']) {
     await pickMethod(page, method);
     for (const [key, title] of FEATURES) {
-      const score = (await page.getByTestId(`priority-row-${key}`).getByTestId("score").innerText()).trim();
+      const score = (
+        await page.getByTestId(`priority-row-${key}`).getByTestId('score').innerText()
+      ).trim();
       for (const step of await stepsOf(page, key, title)) {
         const s = step.trim();
         const sum = s.match(/^Score = (.+) = (\S+)$/);
@@ -172,45 +212,53 @@ async function stepsAddUp(page: Page) {
           expect(conf[1], `${method} ${key}: "${s}"`).toMatch(/^\d+(\.\d)?%$/);
           expect(conf[3], `${method} ${key}: "${s}"`).toMatch(/^\d+(\.\d)?%$/);
           // The API rounds the product to three places: true to the shown tenth of a percent.
-          expect(Math.abs(worked(`${conf[1]} × ${conf[2]}`) - worked(conf[3]!)), `${method} ${key}: "${s}"`).toBeLessThan(0.0006);
+          expect(
+            Math.abs(worked(`${conf[1]} × ${conf[2]}`) - worked(conf[3]!)),
+            `${method} ${key}: "${s}"`,
+          ).toBeLessThan(0.0006);
         }
       }
     }
   }
 }
 
-test("priorities: a score step's arithmetic is true, confidence a percent in every step", async ({ page }) => {
-  await login(page, "approver@example.com");
-  await page.goto("/priorities");
+test("priorities: a score step's arithmetic is true, confidence a percent in every step", async ({
+  page,
+}) => {
+  await login(page, 'approver@example.com');
+  await page.goto('/priorities');
   await expect(page.locator('tr[data-testid^="priority-row-"]').first()).toBeVisible();
 
-  const f2 = (m: string) => pickMethod(page, m).then(() => stepsOf(page, "F-02", "Sample data import"));
-  expect(await f2("RICE")).toEqual(["Score = 6,000 × 1 × 90% ÷ 1 = 5,400"]);
-  await expect(page.getByTestId("priority-row-F-02").getByTestId("score")).toHaveText("5,400");
-  expect(await f2("Goal-weighted")).toEqual([
-    "Goal value = 3×3 (Activation) = 9",
-    "Score = 9 × 90% ÷ 1 = 8.10",
+  const f2 = (m: string) =>
+    pickMethod(page, m).then(() => stepsOf(page, 'F-02', 'Sample data import'));
+  expect(await f2('RICE')).toEqual(['Score = 6,000 × 1 × 90% ÷ 1 = 5,400']);
+  await expect(page.getByTestId('priority-row-F-02').getByTestId('score')).toHaveText('5,400');
+  expect(await f2('Goal-weighted')).toEqual([
+    'Goal value = 3×3 (Activation) = 9',
+    'Score = 9 × 90% ÷ 1 = 8.10',
   ]);
-  expect(await f2("WSJF")).toEqual(["Cost of delay = 5 + 8 + 2 = 15", "Score = 15 ÷ 2 = 7.50"]);
-  expect(await f2("MoSCoW")).toEqual(["Should have = 3; ties broken by goal value 9"]);
+  expect(await f2('WSJF')).toEqual(['Cost of delay = 5 + 8 + 2 = 15', 'Score = 15 ÷ 2 = 7.50']);
+  expect(await f2('MoSCoW')).toEqual(['Should have = 3; ties broken by goal value 9']);
 
   await stepsAddUp(page);
 });
 
-test("priorities: with a track record, the confidence step and the formula read confidence alike", async ({ page }) => {
-  await scenario(page, "outcomes");
-  await login(page, "approver@example.com");
-  await page.goto("/priorities");
-  await expect(page.getByTestId("track-record")).toContainText("Track record ×0.77");
+test('priorities: with a track record, the confidence step and the formula read confidence alike', async ({
+  page,
+}) => {
+  await scenario(page, 'outcomes');
+  await login(page, 'approver@example.com');
+  await page.goto('/priorities');
+  await expect(page.getByTestId('track-record')).toContainText('Track record ×0.77');
 
-  await pickMethod(page, "Goal-weighted");
-  const steps = await stepsOf(page, "F-01", "Setup checklist");
-  expect(steps).toContain("Confidence = 75% × track record 0.77 = 57.8%");
-  expect(steps).toContain("Score = 6 × 57.8% ÷ 2 = 1.73");
-  await pickMethod(page, "RICE");
-  expect(await stepsOf(page, "F-01", "Setup checklist")).toEqual([
-    "Confidence = 75% × track record 0.77 = 57.8%",
-    "Score = 4,000 × 2 × 57.8% ÷ 2 = 2,312",
+  await pickMethod(page, 'Goal-weighted');
+  const steps = await stepsOf(page, 'F-01', 'Setup checklist');
+  expect(steps).toContain('Confidence = 75% × track record 0.77 = 57.8%');
+  expect(steps).toContain('Score = 6 × 57.8% ÷ 2 = 1.73');
+  await pickMethod(page, 'RICE');
+  expect(await stepsOf(page, 'F-01', 'Setup checklist')).toEqual([
+    'Confidence = 75% × track record 0.77 = 57.8%',
+    'Score = 4,000 × 2 × 57.8% ÷ 2 = 2,312',
   ]);
 
   await stepsAddUp(page);
@@ -224,61 +272,79 @@ test("priorities: with a track record, the confidence step and the formula read 
 async function confidenceReads(page: Page, key: string, title: string, shown: string) {
   const row = page.getByTestId(`priority-row-${key}`);
   // The bar's figure beside it, in the Confidence column.
-  await expect(row.getByRole("meter", { name: `Confidence ${shown}` }).locator("..")).toHaveText(shown);
+  await expect(row.getByRole('meter', { name: `Confidence ${shown}` }).locator('..')).toHaveText(
+    shown,
+  );
   // Whole, not clipped by its column ("46." for "46.2%").
-  const cell = row.getByRole("meter", { name: `Confidence ${shown}` }).locator("xpath=ancestor::td[1]");
+  const cell = row
+    .getByRole('meter', { name: `Confidence ${shown}` })
+    .locator('xpath=ancestor::td[1]');
   const fit = await cell.evaluate((td) => {
-    const figure = td.querySelector("b")!.getBoundingClientRect();
+    const figure = td.querySelector('b')!.getBoundingClientRect();
     const box = td.getBoundingClientRect();
     return figure.right <= box.right + 0.5 && td.scrollWidth <= td.clientWidth + 1;
   });
-  expect(fit, "the Confidence figure fits its column").toBe(true);
-  await row.getByRole("button", { name: `${key} ${title}`, exact: true }).click();
-  const inspector = page.getByTestId("priority-inspector");
-  const ring = inspector.getByRole("img", { name: `Confidence ${shown}` });
+  expect(fit, 'the Confidence figure fits its column').toBe(true);
+  await row.getByRole('button', { name: `${key} ${title}`, exact: true }).click();
+  const inspector = page.getByTestId('priority-inspector');
+  const ring = inspector.getByRole('img', { name: `Confidence ${shown}` });
   await expect(ring).toBeVisible();
   await expect(ring).toHaveText(shown);
   const why = page.getByTestId(`explanation-${key}`);
-  await expect(why.getByTestId("confidence-figure")).toHaveText(shown);
-  await expect(why.getByTestId("confidence-explain")).toContainText(shown);
-  await expect(why.getByRole("row", { name: /^Confidence/ }).getByRole("cell").nth(1)).toHaveText(shown);
-  const steps = (await why.getByRole("list", { name: "Steps" }).getByRole("listitem").allInnerTexts()).join("\n");
+  await expect(why.getByTestId('confidence-figure')).toHaveText(shown);
+  await expect(why.getByTestId('confidence-explain')).toContainText(shown);
+  await expect(
+    why
+      .getByRole('row', { name: /^Confidence/ })
+      .getByRole('cell')
+      .nth(1),
+  ).toHaveText(shown);
+  const steps = (
+    await why.getByRole('list', { name: 'Steps' }).getByRole('listitem').allInnerTexts()
+  ).join('\n');
   expect(steps).toContain(shown);
-  for (const ev of await why.getByTestId("evidence-confidence").allInnerTexts()) expect(ev.trim()).toMatch(/^\d+(\.\d)?%$/);
+  for (const ev of await why.getByTestId('evidence-confidence').allInnerTexts())
+    expect(ev.trim()).toMatch(/^\d+(\.\d)?%$/);
 }
 
-test("priorities: confidence reads as one percent in the ring, the section, the Inputs and the steps", async ({ page }) => {
+test('priorities: confidence reads as one percent in the ring, the section, the Inputs and the steps', async ({
+  page,
+}) => {
   // A laptop's width, where the table keeps its Confidence column beside the inspector.
   await page.setViewportSize({ width: 1512, height: 900 });
-  await login(page, "approver@example.com");
-  await page.goto("/priorities");
+  await login(page, 'approver@example.com');
+  await page.goto('/priorities');
   await expect(page.locator('tr[data-testid^="priority-row-"]').first()).toBeVisible();
-  await pickMethod(page, "Goal-weighted");
-  await confidenceReads(page, "F-02", "Sample data import", "90%");
+  await pickMethod(page, 'Goal-weighted');
+  await confidenceReads(page, 'F-02', 'Sample data import', '90%');
 });
 
-test("priorities: with a track record, confidence reads as the same percent to the tenth everywhere", async ({ page }) => {
+test('priorities: with a track record, confidence reads as the same percent to the tenth everywhere', async ({
+  page,
+}) => {
   // A laptop's width, where the table keeps its Confidence column beside the inspector.
   await page.setViewportSize({ width: 1512, height: 900 });
-  await scenario(page, "outcomes");
-  await login(page, "approver@example.com");
-  await page.goto("/priorities");
-  await expect(page.getByTestId("track-record")).toContainText("Track record ×0.77");
-  await pickMethod(page, "Goal-weighted");
-  await confidenceReads(page, "F-01", "Setup checklist", "57.8%");
+  await scenario(page, 'outcomes');
+  await login(page, 'approver@example.com');
+  await page.goto('/priorities');
+  await expect(page.getByTestId('track-record')).toContainText('Track record ×0.77');
+  await pickMethod(page, 'Goal-weighted');
+  await confidenceReads(page, 'F-01', 'Setup checklist', '57.8%');
   // The words say where the figure came from: the evidence's average, then the track record.
-  await expect(page.getByTestId("explanation-F-01").getByTestId("confidence-explain")).toHaveText(
-    "Average of 7 evidence items: 75%; after the track record ×0.77, 57.8%",
+  await expect(page.getByTestId('explanation-F-01').getByTestId('confidence-explain')).toHaveText(
+    'Average of 7 evidence items: 75%; after the track record ×0.77, 57.8%',
   );
 });
 
-test("priorities: the Changes log names a retired override's anchor by the API's title, not its key", async ({ page }) => {
+test("priorities: the Changes log names a retired override's anchor by the API's title, not its key", async ({
+  page,
+}) => {
   await scenario(page, LEGACY_OVERRIDE_SCENARIO);
-  await login(page, "approver@example.com");
-  await page.goto("/priorities");
+  await login(page, 'approver@example.com');
+  await page.goto('/priorities');
   await expect(page.locator('tr[data-testid^="priority-row-"]').first()).toBeVisible();
-  const log = page.getByTestId("change-log");
-  const row = log.getByRole("listitem").filter({ hasText: "Setup checklist" });
+  const log = page.getByTestId('change-log');
+  const row = log.getByRole('listitem').filter({ hasText: 'Setup checklist' });
   // The API's title, with its code before it as every feature reads (docs/ground-truth.md).
-  await expect(row).toContainText("Moved above F-99 Shipping carrier picker");
+  await expect(row).toContainText('Moved above F-99 Shipping carrier picker');
 });

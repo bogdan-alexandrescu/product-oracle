@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 /**
  * PT1 a "Calm document": a PRD reads as one numbered document in a 720 px column on a white
@@ -7,12 +7,12 @@
  * every other section shows only its ⋯ menu. Numbers come from the heading levels, so every
  * PRD reads so as written.
  */
-import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 
-import type { SectionOut } from "@/lib/api/client";
-import { sectionHref } from "@/lib/section-link";
+import type { SectionOut } from '@/lib/api/client';
+import { sectionHref } from '@/lib/section-link';
 
-import "./PrdLook.css";
+import './PrdLook.css';
 
 /** What the look adds to one section as SectionView draws it. */
 export type SectionLook = { num?: string; hideReview?: boolean };
@@ -34,24 +34,26 @@ export function numbersOf(sections: SectionOut[]): Map<string, string> {
     at.length = Math.min(at.length, depth);
     while (at.length < depth - 1) at.push(1);
     at[depth - 1] = (at[depth - 1] ?? 0) + 1;
-    m.set(s.section_key, ownNumber(s.heading)?.num ?? at.join("."));
+    m.set(s.section_key, ownNumber(s.heading)?.num ?? at.join('.'));
   }
   return m;
 }
 
-const STATUS: Record<string, { label: string; kind: "pass" | "warn" | "crit" | "na" }> = {
-  approved: { label: "Approved", kind: "pass" },
-  changes_requested: { label: "Changes requested", kind: "warn" },
-  rejected: { label: "Rejected", kind: "crit" },
-  none: { label: "Not reviewed", kind: "na" },
+const STATUS: Record<string, { label: string; kind: 'pass' | 'warn' | 'crit' | 'na' }> = {
+  approved: { label: 'Approved', kind: 'pass' },
+  changes_requested: { label: 'Changes requested', kind: 'warn' },
+  rejected: { label: 'Rejected', kind: 'crit' },
+  none: { label: 'Not reviewed', kind: 'na' },
 };
-const LAPSED = { label: "Approval lapsed", kind: "warn" } as const;
-const statusOf = (s: SectionOut) => (s.verdict?.lapsed_at ? LAPSED : STATUS[s.verdict ? s.verdict.verdict : "none"]);
+const LAPSED = { label: 'Approval lapsed', kind: 'warn' } as const;
+const statusOf = (s: SectionOut) =>
+  s.verdict?.lapsed_at ? LAPSED : STATUS[s.verdict ? s.verdict.verdict : 'none'];
 
 /** A plain click on a link: the page handles it (a modified click opens a tab as usual). */
-const plainClick = (e: MouseEvent) => e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
+const plainClick = (e: MouseEvent) =>
+  e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
 
-const SCROLL_KEYS = new Set(["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End", " "]);
+const SCROLL_KEYS = new Set(['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End', ' ']);
 
 /** The section whose top has passed this line from the window's top is the one being read. */
 const READ_LINE = 140;
@@ -92,13 +94,15 @@ export function PrdLook({
   useEffect(() => {
     if (!current || current === read.current) return;
     read.current = current;
-    const el = rootRef.current?.querySelector<HTMLElement>(`[data-prd-sec="${CSS.escape(current)}"]`);
+    const el = rootRef.current?.querySelector<HTMLElement>(
+      `[data-prd-sec="${CSS.escape(current)}"]`,
+    );
     if (!el) return;
     // The first section needs no jump on arrival.
-    if (el === rootRef.current?.querySelector("[data-prd-sec]") && window.scrollY === 0) return;
+    if (el === rootRef.current?.querySelector('[data-prd-sec]') && window.scrollY === 0) return;
     // Until this jump settles, scrolling does not move the lit section (the last ones cannot reach the top).
     quiet.current = performance.now() + 700;
-    el.scrollIntoView({ block: "start" });
+    el.scrollIntoView({ block: 'start' });
   }, [current, sections]);
 
   useEffect(() => {
@@ -108,7 +112,8 @@ export function PrdLook({
     const moved = () => (movedAt = performance.now());
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      if (SCROLL_KEYS.has(e.key) && !t?.closest("input, textarea, select, [contenteditable]")) moved();
+      if (SCROLL_KEYS.has(e.key) && !t?.closest('input, textarea, select, [contenteditable]'))
+        moved();
     };
     // A press on the page's scrollbar lands on the root element.
     const onPress = (e: PointerEvent) => e.target === document.documentElement && moved();
@@ -119,13 +124,15 @@ export function PrdLook({
         const root = rootRef.current;
         if (!root || root.offsetParent === null || performance.now() < quiet.current) return;
         let at: string | null = null;
-        for (const el of root.querySelectorAll<HTMLElement>("[data-prd-sec]")) {
+        for (const el of root.querySelectorAll<HTMLElement>('[data-prd-sec]')) {
           if (el.getBoundingClientRect().top <= READ_LINE) at = el.dataset.prdSec ?? at;
           else break;
         }
-        at ??= root.querySelector<HTMLElement>("[data-prd-sec]")?.dataset.prdSec ?? null;
+        at ??= root.querySelector<HTMLElement>('[data-prd-sec]')?.dataset.prdSec ?? null;
         // The last sections never reach the line: one picked below it stays lit while its top is in the upper half.
-        const kept = read.current ? root.querySelector<HTMLElement>(`[data-prd-sec="${CSS.escape(read.current)}"]`) : null;
+        const kept = read.current
+          ? root.querySelector<HTMLElement>(`[data-prd-sec="${CSS.escape(read.current)}"]`)
+          : null;
         const keptTop = kept?.getBoundingClientRect().top ?? -1;
         if (keptTop > READ_LINE && keptTop < window.innerHeight / 2) return;
         if (at && at !== read.current) {
@@ -134,18 +141,18 @@ export function PrdLook({
         }
       });
     };
-    window.addEventListener("wheel", moved, { passive: true });
-    window.addEventListener("touchmove", moved, { passive: true });
-    window.addEventListener("keydown", onKey);
-    window.addEventListener("pointerdown", onPress);
-    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener('wheel', moved, { passive: true });
+    window.addEventListener('touchmove', moved, { passive: true });
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('pointerdown', onPress);
+    window.addEventListener('scroll', onScroll, { passive: true });
     return () => {
       cancelAnimationFrame(frame);
-      window.removeEventListener("wheel", moved);
-      window.removeEventListener("touchmove", moved);
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("pointerdown", onPress);
-      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener('wheel', moved);
+      window.removeEventListener('touchmove', moved);
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('pointerdown', onPress);
+      window.removeEventListener('scroll', onScroll);
     };
   }, [onRead]);
 
@@ -154,20 +161,44 @@ export function PrdLook({
   return (
     <div ref={rootRef} className="prd-look" data-testid="prd-look">
       <aside className="prd-rail">
-        <Contents doc={doc} n={n} sections={sections} nums={nums} current={current} onPick={onPick} lead={lead} />
+        <Contents
+          doc={doc}
+          n={n}
+          sections={sections}
+          nums={nums}
+          current={current}
+          onPick={onPick}
+          lead={lead}
+        />
       </aside>
       <div className="prd-main">
-        <article aria-label="Document" className="prd-doc" data-testid="document-sections" data-view={view} data-open={current ?? undefined}>
+        <article
+          aria-label="Document"
+          className="prd-doc"
+          data-testid="document-sections"
+          data-view={view}
+          data-open={current ?? undefined}
+        >
           {sections.map((s, i) => {
             const isCurrent = s.section_key === current;
             if (s.level <= 1 && s !== lead)
               return (
-                <div key={s.id} data-prd-sec={s.section_key} className="prd-divider" id={`s-${s.section_key}`}>
+                <div
+                  key={s.id}
+                  data-prd-sec={s.section_key}
+                  className="prd-divider"
+                  id={`s-${s.section_key}`}
+                >
                   <span>{s.heading}</span>
                 </div>
               );
             return (
-              <div key={s.id} data-prd-sec={s.section_key} data-current={isCurrent ? "" : undefined} className="prd-sec">
+              <div
+                key={s.id}
+                data-prd-sec={s.section_key}
+                data-current={isCurrent ? '' : undefined}
+                className="prd-sec"
+              >
                 {nodes[i]}
               </div>
             );
@@ -200,11 +231,11 @@ function Contents({
 }) {
   const listRef = useRef<HTMLOListElement>(null);
   const [open, setOpen] = useState(false);
-  const [filter, setFilter] = useState("");
+  const [filter, setFilter] = useState('');
   // The current section's part stays open; opened, the contents show every section.
   const topOf = useMemo(() => {
     const m = new Map<string, string>();
-    let top = "";
+    let top = '';
     for (const s of sections) {
       if (s.level <= 2) top = s.section_key;
       m.set(s.section_key, top);
@@ -217,14 +248,14 @@ function Contents({
     if (s.level <= 1 && s !== lead) return !q && open;
     if (q) return s.heading.toLowerCase().includes(q);
     if (s.level <= 1) return true;
-    return open || s.level <= 2 || topOf.get(s.section_key) === (current ? topOf.get(current) : "");
+    return open || s.level <= 2 || topOf.get(s.section_key) === (current ? topOf.get(current) : '');
   });
   useEffect(() => {
-    listRef.current?.querySelector("[aria-current]")?.scrollIntoView({ block: "nearest" });
+    listRef.current?.querySelector('[aria-current]')?.scrollIntoView({ block: 'nearest' });
   }, [current, open]);
   const close = () => {
     setOpen(false);
-    setFilter("");
+    setFilter('');
   };
   return (
     <nav aria-label="Contents" className="prd-toc" data-testid="prd-contents">
@@ -236,13 +267,19 @@ function Contents({
             placeholder="Find a section"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            onKeyDown={(e) => e.key === "Escape" && close()}
+            onKeyDown={(e) => e.key === 'Escape' && close()}
             aria-label="Find a section"
           />
           <span className="prd-toc-count tnum">{sections.length} sections</span>
         </div>
       ) : (
-        <button type="button" className="prd-toc-title" onClick={() => setOpen(true)} aria-label="Contents: find a section" title="Find a section">
+        <button
+          type="button"
+          className="prd-toc-title"
+          onClick={() => setOpen(true)}
+          aria-label="Contents: find a section"
+          title="Find a section"
+        >
           Contents
         </button>
       )}
@@ -255,7 +292,7 @@ function Contents({
               <a
                 href={sectionHref(doc, n, s.section_key)}
                 data-outline-key={s.section_key}
-                aria-current={s.section_key === current ? "location" : undefined}
+                aria-current={s.section_key === current ? 'location' : undefined}
                 onClick={(e) => {
                   if (!plainClick(e)) return;
                   e.preventDefault();
@@ -265,9 +302,18 @@ function Contents({
                 className="prd-toc-row"
                 title={s.heading}
               >
-                <span className="prd-toc-n tnum">{nums.get(s.section_key) ?? ""}</span>
-                <span className="prd-toc-h">{own && nums.get(s.section_key) === own.num ? own.rest : s.heading}</span>
-                {s.level > 1 && <span className={`prd-dot prd-dot-${status.kind}`} title={status.label} aria-label={status.label} role="img" />}
+                <span className="prd-toc-n tnum">{nums.get(s.section_key) ?? ''}</span>
+                <span className="prd-toc-h">
+                  {own && nums.get(s.section_key) === own.num ? own.rest : s.heading}
+                </span>
+                {s.level > 1 && (
+                  <span
+                    className={`prd-dot prd-dot-${status.kind}`}
+                    title={status.label}
+                    aria-label={status.label}
+                    role="img"
+                  />
+                )}
               </a>
             </li>
           );

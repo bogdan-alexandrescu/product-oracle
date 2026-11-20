@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { Link, useSearchParams } from "@/lib/nav";
-import { Suspense, useEffect, useState, useSyncExternalStore } from "react";
+import { Link, useSearchParams } from '@/lib/nav';
+import { Suspense, useEffect, useState, useSyncExternalStore } from 'react';
 
 import {
   Button,
@@ -21,53 +21,93 @@ import {
   Split,
   type ChipKind,
   type Column,
-} from "@/components/ds";
-import { PlanCrumb } from "@/app/plan/_crumb";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { AutonomyNote, useAutonomyLevel } from "@/lib/autonomy";
-import { todayIn, useCompanyZone } from "@/lib/dates";
-import { formatDate, plural } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { errorMessage, useQuery } from "@/lib/use-query";
-import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
+} from '@/components/ds';
+import { PlanCrumb } from '@/app/plan/_crumb';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { AutonomyNote, useAutonomyLevel } from '@/lib/autonomy';
+import { todayIn, useCompanyZone } from '@/lib/dates';
+import { formatDate, plural } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { errorMessage, useQuery } from '@/lib/use-query';
+import { invalidateWaiting, waitingChanged } from '@/lib/waiting';
 
-import { approvedRoadmap, NewLaunchDialog, NoRoadmapReason } from "./_new-launch";
+import { approvedRoadmap, NewLaunchDialog, NoRoadmapReason } from './_new-launch';
 
-type Summary = Schemas["LaunchSummary"];
-type Task = Schemas["TaskOut"];
-type Note = Schemas["RequesterNoteOut"];
-type Filter = "ready" | "planned" | "launched" | "all";
-type Channel = NonNullable<Note["channel"]>;
-type Audience = Task["audience"];
+type Summary = Schemas['LaunchSummary'];
+type Task = Schemas['TaskOut'];
+type Note = Schemas['RequesterNoteOut'];
+type Filter = 'ready' | 'planned' | 'launched' | 'all';
+type Channel = NonNullable<Note['channel']>;
+type Audience = Task['audience'];
 
-const STATE_LABEL: Record<Summary["state"], string> = { planned: "Planned", ready: "Ready", launched: "Launched", cancelled: "Cancelled" };
-const STATE_KIND: Record<Summary["state"], ChipKind> = { planned: "na", ready: "warn", launched: "pass", cancelled: "line" };
-const TASK_LABEL: Record<Task["status"], string> = { todo: "To do", drafted: "Drafted", done: "Done", skipped: "Skipped" };
-const TASK_KIND: Record<Task["status"], ChipKind> = { todo: "na", drafted: "acc", done: "pass", skipped: "line" };
-const NOTE_LABEL: Record<Note["status"], string> = { drafted: "To send", sent: "Sent", skipped: "Skipped", notified: "Told in Oracle" };
-const NOTE_KIND: Record<Note["status"], ChipKind> = { drafted: "warn", sent: "pass", skipped: "line", notified: "pass" };
+const STATE_LABEL: Record<Summary['state'], string> = {
+  planned: 'Planned',
+  ready: 'Ready',
+  launched: 'Launched',
+  cancelled: 'Cancelled',
+};
+const STATE_KIND: Record<Summary['state'], ChipKind> = {
+  planned: 'na',
+  ready: 'warn',
+  launched: 'pass',
+  cancelled: 'line',
+};
+const TASK_LABEL: Record<Task['status'], string> = {
+  todo: 'To do',
+  drafted: 'Drafted',
+  done: 'Done',
+  skipped: 'Skipped',
+};
+const TASK_KIND: Record<Task['status'], ChipKind> = {
+  todo: 'na',
+  drafted: 'acc',
+  done: 'pass',
+  skipped: 'line',
+};
+const NOTE_LABEL: Record<Note['status'], string> = {
+  drafted: 'To send',
+  sent: 'Sent',
+  skipped: 'Skipped',
+  notified: 'Told in Oracle',
+};
+const NOTE_KIND: Record<Note['status'], ChipKind> = {
+  drafted: 'warn',
+  sent: 'pass',
+  skipped: 'line',
+  notified: 'pass',
+};
 const CHANNELS: { value: Channel; label: string }[] = [
-  { value: "email", label: "Email" },
-  { value: "slack", label: "Slack" },
-  { value: "call", label: "Call" },
-  { value: "other", label: "Other" },
+  { value: 'email', label: 'Email' },
+  { value: 'slack', label: 'Slack' },
+  { value: 'call', label: 'Call' },
+  { value: 'other', label: 'Other' },
 ];
-const PHONE = "(max-width: 600px)";
+const PHONE = '(max-width: 600px)';
 
 function subscribePhone(onChange: () => void) {
   const mq = window.matchMedia(PHONE);
-  mq.addEventListener("change", onChange);
-  return () => mq.removeEventListener("change", onChange);
+  mq.addEventListener('change', onChange);
+  return () => mq.removeEventListener('change', onChange);
 }
 
 /** True at phone width; false on the server. */
 function useIsPhone(): boolean {
-  return useSyncExternalStore(subscribePhone, () => window.matchMedia(PHONE).matches, () => false);
+  return useSyncExternalStore(
+    subscribePhone,
+    () => window.matchMedia(PHONE).matches,
+    () => false,
+  );
 }
 
-function StateChip({ state, hero = false }: { state: Summary["state"]; hero?: boolean }) {
+function StateChip({ state, hero = false }: { state: Summary['state']; hero?: boolean }) {
   return (
-    <Chip kind={STATE_KIND[state]} dot={!hero} hero={hero} data-testid="launch-state" data-state={state}>
+    <Chip
+      kind={STATE_KIND[state]}
+      dot={!hero}
+      hero={hero}
+      data-testid="launch-state"
+      data-state={state}
+    >
       {STATE_LABEL[state]}
     </Chip>
   );
@@ -77,7 +117,12 @@ function StateChip({ state, hero = false }: { state: Summary["state"]; hero?: bo
 function TierChip({ l, hero = false }: { l: Summary; hero?: boolean }) {
   const set = l.tier != null;
   return (
-    <Chip kind={set ? "acc" : "line"} hero={hero} data-testid="launch-tier-chip" title={l.tier_suggestion.reason}>
+    <Chip
+      kind={set ? 'acc' : 'line'}
+      hero={hero}
+      data-testid="launch-tier-chip"
+      title={l.tier_suggestion.reason}
+    >
       {set ? `Tier ${l.tier}` : `Tier ${l.tier_suggestion.tier} suggested`}
     </Chip>
   );
@@ -100,8 +145,8 @@ export default function LaunchesPage() {
 
 function Launches() {
   // ?launch=<id>: the Inbox's Open lands on that launch.
-  const wanted = useSearchParams().get("launch");
-  const q = useQuery("launches", () => unwrap(api.GET("/v1/launches")));
+  const wanted = useSearchParams().get('launch');
+  const q = useQuery('launches', () => unwrap(api.GET('/v1/launches')));
   const phone = useIsPhone();
   const [filter, setFilter] = useState<Filter | null>(null);
   const [picked, setSelected] = useState<string | null>(null);
@@ -111,9 +156,9 @@ function Launches() {
   const { can } = useMe();
   // fix4 qa-plan-13: New launch plans from a track's approved roadmap; with none, it is
   // disabled and the page says why and what to approve (the dialog shares this query).
-  const tracksQ = useQuery("new-launch-tracks", () => unwrap(api.GET("/v1/tracks")));
+  const tracksQ = useQuery('new-launch-tracks', () => unwrap(api.GET('/v1/tracks')));
   const tracks = tracksQ.data ?? [];
-  const canCreate = can("create_launch");
+  const canCreate = can('create_launch');
   const noRoadmap = !!tracksQ.data && !tracks.some((t) => approvedRoadmap(t));
 
   const rows = q.data ?? [];
@@ -132,39 +177,46 @@ function Launches() {
     setOpened(opening);
     setSheet(true);
   }
-  const count = (s: Summary["state"]) => rows.filter((l) => l.state === s).length;
+  const count = (s: Summary['state']) => rows.filter((l) => l.state === s).length;
   // Ready is the default while any launch is ready.
-  const current: Filter = filter ?? (count("ready") > 0 ? "ready" : "all");
-  const shown = current === "all" ? rows : rows.filter((l) => l.state === current);
-  const active = shown.find((l) => l.id === selected) ?? rows.find((l) => l.id === selected) ?? shown[0];
+  const current: Filter = filter ?? (count('ready') > 0 ? 'ready' : 'all');
+  const shown = current === 'all' ? rows : rows.filter((l) => l.state === current);
+  const active =
+    shown.find((l) => l.id === selected) ?? rows.find((l) => l.id === selected) ?? shown[0];
   // Loaded, and nothing at all (not a filter that matches nothing).
   const none = q.data != null && rows.length === 0;
 
   const columns: Column<Summary>[] = [
     {
-      key: "launch",
-      header: "Launch",
-      phone: "title",
+      key: 'launch',
+      header: 'Launch',
+      phone: 'title',
       cell: (l) => (
         <span className="truncate font-semibold" title={l.title}>
           {l.title}
         </span>
       ),
     },
-    { key: "tier", header: "Tier", width: "150px", phone: "meta", cell: (l) => <TierChip l={l} /> },
+    { key: 'tier', header: 'Tier', width: '150px', phone: 'meta', cell: (l) => <TierChip l={l} /> },
     {
-      key: "items",
-      header: "Items",
-      width: "70px",
+      key: 'items',
+      header: 'Items',
+      width: '70px',
       hideOnPhone: true,
-      align: "right",
+      align: 'right',
       cell: (l) => <span className="tnum text-text2">{l.item_keys.length}</span>,
     },
-    { key: "state", header: "State", width: "120px", phone: "meta", cell: (l) => <StateChip state={l.state} /> },
     {
-      key: "tasks",
-      header: "Tasks",
-      width: "90px",
+      key: 'state',
+      header: 'State',
+      width: '120px',
+      phone: 'meta',
+      cell: (l) => <StateChip state={l.state} />,
+    },
+    {
+      key: 'tasks',
+      header: 'Tasks',
+      width: '90px',
       hideOnPhone: true,
       cell: (l) => (
         <span className="tnum" data-testid="launch-tasks-count">
@@ -173,18 +225,20 @@ function Launches() {
       ),
     },
     {
-      key: "notes",
-      header: "Notes",
-      width: "110px",
+      key: 'notes',
+      header: 'Notes',
+      width: '110px',
       hideOnPhone: true,
       cell: (l) => (
-        <span className="tnum text-text2">{l.notes.total ? `${sentOf(l)} of ${l.notes.total} sent` : "—"}</span>
+        <span className="tnum text-text2">
+          {l.notes.total ? `${sentOf(l)} of ${l.notes.total} sent` : '—'}
+        </span>
       ),
     },
     {
-      key: "date",
-      header: "Date",
-      width: "120px",
+      key: 'date',
+      header: 'Date',
+      width: '120px',
       hideOnPhone: true,
       cell: (l) => <span className="tnum text-text2">{formatDate(dateOf(l))}</span>,
     },
@@ -200,8 +254,9 @@ function Launches() {
         title="Launches"
         info={
           <InfoTip label="Launches" align="start" side="bottom">
-            Approving a roadmap plans a launch for each item in Now. It is ready when its tracker issues or milestones
-            are done. Oracle drafts the kit; a person checks it, sends it and marks the launch launched.
+            Approving a roadmap plans a launch for each item in Now. It is ready when its tracker
+            issues or milestones are done. Oracle drafts the kit; a person checks it, sends it and
+            marks the launch launched.
           </InfoTip>
         }
         back={<PlanCrumb />}
@@ -212,7 +267,7 @@ function Launches() {
         status={
           q.data && (
             <>
-              <Chip kind="acc">{plural(rows.length, "launch", "launches")}</Chip>
+              <Chip kind="acc">{plural(rows.length, 'launch', 'launches')}</Chip>
             </>
           )
         }
@@ -226,7 +281,7 @@ function Launches() {
                 icon="plus"
                 onClick={() => setCreating(true)}
                 disabled={noRoadmap}
-                aria-describedby={noRoadmap ? "new-launch-why" : undefined}
+                aria-describedby={noRoadmap ? 'new-launch-why' : undefined}
                 data-testid="new-launch"
               >
                 New launch
@@ -257,24 +312,35 @@ function Launches() {
                   onChange={(v) => setFilter(v)}
                   items={[
                     // #1586: a list still loading or failed counts nothing, never 0.
-                    { value: "ready", label: "Ready", count: q.data ? count("ready") : null },
-                    { value: "planned", label: "Planned", count: q.data ? count("planned") : null },
-                    { value: "launched", label: "Launched", count: q.data ? count("launched") : null },
-                    { value: "all", label: "All", count: q.data ? rows.length : null },
+                    { value: 'ready', label: 'Ready', count: q.data ? count('ready') : null },
+                    { value: 'planned', label: 'Planned', count: q.data ? count('planned') : null },
+                    {
+                      value: 'launched',
+                      label: 'Launched',
+                      count: q.data ? count('launched') : null,
+                    },
+                    { value: 'all', label: 'All', count: q.data ? rows.length : null },
                   ]}
                 />
               )
             }
           >
             {none ? (
-              <div data-testid="launches-empty" className="flex flex-col items-center gap-3 px-4 py-10 text-center text-[15px] text-text2">
+              <div
+                data-testid="launches-empty"
+                className="flex flex-col items-center gap-3 px-4 py-10 text-center text-[15px] text-text2"
+              >
                 <p className="font-display text-lg font-bold text-text">No launches yet</p>
                 <p data-testid="launches-empty-text">
                   {canCreate && !noRoadmap ? (
-                    "Use New launch to plan the first, or approve a roadmap: its Now items get a launch each."
+                    'Use New launch to plan the first, or approve a roadmap: its Now items get a launch each.'
                   ) : (
                     // #1590: when launches get planned sits behind the (i).
-                    <InfoTip label="when launches are planned" align="start" testId="launches-empty-tip">
+                    <InfoTip
+                      label="when launches are planned"
+                      align="start"
+                      testId="launches-empty-tip"
+                    >
                       They are planned when a roadmap is approved.
                     </InfoTip>
                   )}
@@ -285,7 +351,7 @@ function Launches() {
                     icon="plus"
                     onClick={() => setCreating(true)}
                     disabled={noRoadmap}
-                    aria-describedby={noRoadmap ? "new-launch-why" : undefined}
+                    aria-describedby={noRoadmap ? 'new-launch-why' : undefined}
                     data-testid="launches-empty-new"
                   >
                     New launch
@@ -310,8 +376,10 @@ function Launches() {
                   if (phone) setSheet(true);
                 }}
                 loading={q.loading && !q.data}
-                empty={q.error && !q.data ? null : emptyText(current, rows.length, can("create_launch"))}
-                rowProps={(l) => ({ "data-testid": "launch-row", "data-state": l.state })}
+                empty={
+                  q.error && !q.data ? null : emptyText(current, rows.length, can('create_launch'))
+                }
+                rowProps={(l) => ({ 'data-testid': 'launch-row', 'data-state': l.state })}
               />
             )}
           </Panel>
@@ -322,7 +390,7 @@ function Launches() {
           onClose={() => setCreating(false)}
           onCreated={async (l) => {
             setCreating(false);
-            setFilter(l.state === "ready" ? "ready" : "planned");
+            setFilter(l.state === 'ready' ? 'ready' : 'planned');
             setSelected(l.id);
             // A new launch may add a Set tier row to the Inbox.
             invalidateWaiting();
@@ -333,7 +401,12 @@ function Launches() {
         />
       )}
       {phone && active && (
-        <Sheet open={sheet} title={active.title} onClose={() => setSheet(false)} testId="launch-sheet">
+        <Sheet
+          open={sheet}
+          title={active.title}
+          onClose={() => setSheet(false)}
+          testId="launch-sheet"
+        >
           {inspector}
         </Sheet>
       )}
@@ -341,28 +414,40 @@ function Launches() {
   );
 }
 
-const FILTER_WORD: Record<Exclude<Filter, "all">, string> = { ready: "ready", planned: "planned", launched: "launched" };
-const FILTER_TITLE: Record<Filter, string> = { ready: "Ready launches", planned: "Planned launches", launched: "Launched", all: "All launches" };
+const FILTER_WORD: Record<Exclude<Filter, 'all'>, string> = {
+  ready: 'ready',
+  planned: 'planned',
+  launched: 'launched',
+};
+const FILTER_TITLE: Record<Filter, string> = {
+  ready: 'Ready launches',
+  planned: 'Planned launches',
+  launched: 'Launched',
+  all: 'All launches',
+};
 
 /** What the table says with no row: why, and the next step where this role can take it. */
 function emptyText(filter: Filter, total: number, canCreate: boolean): string {
-  if (total > 0 && filter !== "all") return `No ${FILTER_WORD[filter]} launches. Pick All to see the other ${plural(total, "launch", "launches")}.`;
+  if (total > 0 && filter !== 'all')
+    return `No ${FILTER_WORD[filter]} launches. Pick All to see the other ${plural(total, 'launch', 'launches')}.`;
   return canCreate
-    ? "No launches yet. Use New launch to plan the first, or approve a roadmap: its Now items get a launch each."
-    : "No launches yet. They are planned when a roadmap is approved.";
+    ? 'No launches yet. Use New launch to plan the first, or approve a roadmap: its Now items get a launch each.'
+    : 'No launches yet. They are planned when a roadmap is approved.';
 }
 
 function LaunchInspector({ id, onChanged }: { id: string; onChanged: () => Promise<void> }) {
   const path = { params: { path: { launch_id: id } } };
-  const q = useQuery(`launch|${id}`, () => unwrap(api.GET("/v1/launches/{launch_id}", path)));
-  const notesQ = useQuery(`launch-notes|${id}`, () => unwrap(api.GET("/v1/launches/{launch_id}/notes", path)));
+  const q = useQuery(`launch|${id}`, () => unwrap(api.GET('/v1/launches/{launch_id}', path)));
+  const notesQ = useQuery(`launch-notes|${id}`, () =>
+    unwrap(api.GET('/v1/launches/{launch_id}/notes', path)),
+  );
   const { me, can } = useMe();
-  const externalObserved = useAutonomyLevel("external_messages") === "observe";
+  const externalObserved = useAutonomyLevel('external_messages') === 'observe';
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tier, setTier] = useState<"1" | "2" | "3" | null>(null);
+  const [tier, setTier] = useState<'1' | '2' | '3' | null>(null);
   const [cancelling, setCancelling] = useState(false);
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState('');
   const l = q.data;
 
   async function act(key: string, call: () => Promise<unknown>) {
@@ -389,24 +474,28 @@ function LaunchInspector({ id, onChanged }: { id: string; onChanged: () => Promi
     );
   }
 
-  const live = l.state === "planned" || l.state === "ready";
-  const open = l.tasks.filter((t) => t.status === "todo" || t.status === "drafted");
+  const live = l.state === 'planned' || l.state === 'ready';
+  const open = l.tasks.filter((t) => t.status === 'todo' || t.status === 'drafted');
   const chosen = tier ?? String(l.tier ?? l.tier_suggestion.tier);
   const myId = me?.user_id ?? me?.token_id ?? null;
 
   async function markLaunched() {
     if (open.length > 0) {
-      const preMortem = (l!.tier ?? l!.tier_suggestion.tier) === 1 && l!.tasks.some((t) => t.key === "pre_mortem" && t.status === "todo");
+      const preMortem =
+        (l!.tier ?? l!.tier_suggestion.tier) === 1 &&
+        l!.tasks.some((t) => t.key === 'pre_mortem' && t.status === 'todo');
       const yes = await confirmInPage({
-        action: "Mark launched",
+        action: 'Mark launched',
         message:
-          `${open.length} ${open.length === 1 ? "task is" : "tasks are"} still open: ${open.map((t) => t.title).join(", ")}.` +
-          (preMortem ? " The pre-mortem has not been done for this Tier 1 launch." : "") +
-          " Marking it launched blocks none of them.",
+          `${open.length} ${open.length === 1 ? 'task is' : 'tasks are'} still open: ${open.map((t) => t.title).join(', ')}.` +
+          (preMortem ? ' The pre-mortem has not been done for this Tier 1 launch.' : '') +
+          ' Marking it launched blocks none of them.',
       });
       if (!yes) return;
     }
-    await act("launched", () => unwrap(api.POST("/v1/launches/{launch_id}/launched", { ...path, body: {} })));
+    await act('launched', () =>
+      unwrap(api.POST('/v1/launches/{launch_id}/launched', { ...path, body: {} })),
+    );
   }
 
   return (
@@ -422,15 +511,25 @@ function LaunchInspector({ id, onChanged }: { id: string; onChanged: () => Promi
         </>
       }
       action={
-        can("mark_launched") && live ? (
-          <Button variant="hero" disabled={busy !== null} onClick={markLaunched} data-testid="mark-launched">
+        can('mark_launched') && live ? (
+          <Button
+            variant="hero"
+            disabled={busy !== null}
+            onClick={markLaunched}
+            data-testid="mark-launched"
+          >
             Mark launched
           </Button>
         ) : undefined
       }
       stats={[
-        { label: "Tasks", value: l.task_counts.closed, of: l.task_counts.total, testId: "launch-task-stat" },
-        { label: "Notes sent", value: sentOf(l), of: l.notes.total },
+        {
+          label: 'Tasks',
+          value: l.task_counts.closed,
+          of: l.task_counts.total,
+          testId: 'launch-task-stat',
+        },
+        { label: 'Notes sent', value: sentOf(l), of: l.notes.total },
       ]}
     >
       {error && (
@@ -447,28 +546,39 @@ function LaunchInspector({ id, onChanged }: { id: string; onChanged: () => Promi
       )}
       <InspectorSection label="Tier">
         <p className="text-[15px] leading-6" data-testid="launch-tier">
-          {l.tier == null ? `Tier ${l.tier_suggestion.tier} suggested · ${l.tier_suggestion.reason}` : `Tier ${l.tier}`}
+          {l.tier == null
+            ? `Tier ${l.tier_suggestion.tier} suggested · ${l.tier_suggestion.reason}`
+            : `Tier ${l.tier}`}
         </p>
         {l.tier != null && (
           <p className="text-sm text-text2">
             Oracle suggested Tier {l.tier_suggestion.tier}: {l.tier_suggestion.reason}.
           </p>
         )}
-        {can("update_launch") && live && (
+        {can('update_launch') && live && (
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <SegmentedControl
               label="Tier"
               size="sm"
-              value={chosen as "1" | "2" | "3"}
+              value={chosen as '1' | '2' | '3'}
               onChange={(v) => setTier(v)}
-              items={(["1", "2", "3"] as const).map((v) => ({ value: v, label: `Tier ${v}`, testId: `tier-${v}` }))}
+              items={(['1', '2', '3'] as const).map((v) => ({
+                value: v,
+                label: `Tier ${v}`,
+                testId: `tier-${v}`,
+              }))}
             />
             <Button
               disabled={busy !== null}
               data-testid="set-tier"
               onClick={() =>
-                act("tier", () =>
-                  unwrap(api.PATCH("/v1/launches/{launch_id}", { ...path, body: { tier: Number(chosen), lock_version: l.lock_version } })),
+                act('tier', () =>
+                  unwrap(
+                    api.PATCH('/v1/launches/{launch_id}', {
+                      ...path,
+                      body: { tier: Number(chosen), lock_version: l.lock_version },
+                    }),
+                  ),
                 )
               }
             >
@@ -478,7 +588,9 @@ function LaunchInspector({ id, onChanged }: { id: string; onChanged: () => Promi
         )}
       </InspectorSection>
       <InspectorSection label="Owner">
-        <span>{l.owner_id && l.owner_id === myId ? "You" : l.owner_id ? "Another member" : "Nobody yet"}</span>
+        <span>
+          {l.owner_id && l.owner_id === myId ? 'You' : l.owner_id ? 'Another member' : 'Nobody yet'}
+        </span>
       </InspectorSection>
       <InspectorSection label="Items">
         <ul className="flex flex-col gap-1" data-testid="launch-items">
@@ -486,7 +598,7 @@ function LaunchInspector({ id, onChanged }: { id: string; onChanged: () => Promi
             <li key={it.item_key}>
               {it.roadmap_slug ? (
                 <Link
-                  href={`/documents/${it.roadmap_slug}${it.roadmap_version ? `/v/${it.roadmap_version}` : ""}#${it.item_key}`}
+                  href={`/documents/${it.roadmap_slug}${it.roadmap_version ? `/v/${it.roadmap_version}` : ''}#${it.item_key}`}
                   className="font-medium underline-offset-2 hover:underline"
                 >
                   {it.title ?? it.item_key}
@@ -499,20 +611,23 @@ function LaunchInspector({ id, onChanged }: { id: string; onChanged: () => Promi
         </ul>
       </InspectorSection>
       <InspectorSection label="Checklist">
-        {can("draft_launch_kit") && l.state !== "cancelled" && (!l.kit_run_id || l.kit_error) && (
+        {can('draft_launch_kit') && l.state !== 'cancelled' && (!l.kit_run_id || l.kit_error) && (
           <Button
             disabled={busy !== null}
-            onClick={() => act("draft", () => unwrap(api.POST("/v1/launches/{launch_id}/draft", path)))}
+            onClick={() =>
+              act('draft', () => unwrap(api.POST('/v1/launches/{launch_id}/draft', path)))
+            }
             data-testid="draft-kit"
           >
             Draft with Oracle
           </Button>
         )}
-        {externalObserved && can("draft_launch_kit") && l.state !== "cancelled" && (
+        {externalObserved && can('draft_launch_kit') && l.state !== 'cancelled' && (
           // H11: at Observe for words for people outside, the kit drafts internal texts only.
           <AutonomyNote testId="launch-observing">
-            Oracle is set to observe words for people outside, so it drafts internal texts only. Release notes, help docs, the in-app message, the
-            customer email and notes to people outside stay with you. Change this in
+            Oracle is set to observe words for people outside, so it drafts internal texts only.
+            Release notes, help docs, the in-app message, the customer email and notes to people
+            outside stay with you. Change this in
           </AutonomyNote>
         )}
         <ul className="flex flex-col divide-y divide-line" data-testid="launch-tasks">
@@ -520,34 +635,46 @@ function LaunchInspector({ id, onChanged }: { id: string; onChanged: () => Promi
             <TaskRow
               key={t.id}
               task={t}
-              canEdit={can("update_launch_task", t.owner_id != null && t.owner_id === myId)}
+              canEdit={can('update_launch_task', t.owner_id != null && t.owner_id === myId)}
               mine={t.owner_id != null && t.owner_id === myId}
               busy={busy}
               act={act}
             />
           ))}
         </ul>
-        {can("add_launch_task") && <AddTask launchId={l.id} busy={busy} act={act} />}
+        {can('add_launch_task') && <AddTask launchId={l.id} busy={busy} act={act} />}
       </InspectorSection>
       <InspectorSection label="Notes to the people who asked">
         {notesQ.data && notesQ.data.length === 0 && <span className="text-text2">Nobody yet</span>}
         <ul className="flex flex-col divide-y divide-line" data-testid="launch-notes">
           {(notesQ.data ?? []).map((n) => (
-            <NoteRow key={n.id} note={n} canEdit={can("update_requester_note", l.owner_id === myId)} busy={busy} act={act} />
+            <NoteRow
+              key={n.id}
+              note={n}
+              canEdit={can('update_requester_note', l.owner_id === myId)}
+              busy={busy}
+              act={act}
+            />
           ))}
         </ul>
-        {can("add_requester") && <AddNote launchId={l.id} busy={busy} act={act} />}
-        {can("notify_requesters") && l.state === "launched" && (notesQ.data ?? []).some((n) => n.internal && n.status === "drafted") && (
-          <Button
-            className="mt-2"
-            disabled={busy !== null}
-            onClick={() => act("notify", () => unwrap(api.POST("/v1/launches/{launch_id}/notify-members", path)))}
-          >
-            Notify members
-          </Button>
-        )}
+        {can('add_requester') && <AddNote launchId={l.id} busy={busy} act={act} />}
+        {can('notify_requesters') &&
+          l.state === 'launched' &&
+          (notesQ.data ?? []).some((n) => n.internal && n.status === 'drafted') && (
+            <Button
+              className="mt-2"
+              disabled={busy !== null}
+              onClick={() =>
+                act('notify', () =>
+                  unwrap(api.POST('/v1/launches/{launch_id}/notify-members', path)),
+                )
+              }
+            >
+              Notify members
+            </Button>
+          )}
       </InspectorSection>
-      {can("cancel_launch") && live && (
+      {can('cancel_launch') && live && (
         <InspectorSection>
           {cancelling ? (
             <div className="flex flex-col gap-2">
@@ -564,7 +691,14 @@ function LaunchInspector({ id, onChanged }: { id: string; onChanged: () => Promi
                   variant="danger"
                   disabled={busy !== null || !reason.trim()}
                   onClick={() =>
-                    act("cancel", () => unwrap(api.POST("/v1/launches/{launch_id}/cancel", { ...path, body: { reason: reason.trim() } })))
+                    act('cancel', () =>
+                      unwrap(
+                        api.POST('/v1/launches/{launch_id}/cancel', {
+                          ...path,
+                          body: { reason: reason.trim() },
+                        }),
+                      ),
+                    )
                   }
                 >
                   Cancel launch
@@ -587,13 +721,13 @@ function LaunchInspector({ id, onChanged }: { id: string; onChanged: () => Promi
 
 type Act = (key: string, call: () => Promise<unknown>) => Promise<void>;
 
-const FIELD = "h-9 rounded-lg border border-line-strong bg-surface px-2.5 text-[15px]";
+const FIELD = 'h-9 rounded-lg border border-line-strong bg-surface px-2.5 text-[15px]';
 
 /** Add task: a task of the company's own at the end of the checklist (approvers). */
 function AddTask({ launchId, busy, act }: { launchId: string; busy: string | null; act: Act }) {
   const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState("");
-  const [audience, setAudience] = useState<Audience>("internal");
+  const [title, setTitle] = useState('');
+  const [audience, setAudience] = useState<Audience>('internal');
   if (!open) {
     return (
       <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -610,20 +744,35 @@ function AddTask({ launchId, busy, act }: { launchId: string; busy: string | nul
       onSubmit={(e) => {
         e.preventDefault();
         if (!title.trim()) return;
-        void act("add-task", async () => {
-          await unwrap(api.POST("/v1/launches/{launch_id}/tasks", { params: { path: { launch_id: launchId } }, body: { title: title.trim(), audience } }));
-          setTitle("");
+        void act('add-task', async () => {
+          await unwrap(
+            api.POST('/v1/launches/{launch_id}/tasks', {
+              params: { path: { launch_id: launchId } },
+              body: { title: title.trim(), audience },
+            }),
+          );
+          setTitle('');
           setOpen(false);
         });
       }}
     >
       <label className="flex min-w-48 flex-1 flex-col gap-1 text-sm font-medium">
         Task
-        <input className={FIELD} value={title} maxLength={300} onChange={(e) => setTitle(e.target.value)} autoFocus />
+        <input
+          className={FIELD}
+          value={title}
+          maxLength={300}
+          onChange={(e) => setTitle(e.target.value)}
+          autoFocus
+        />
       </label>
       <label className="flex flex-col gap-1 text-sm font-medium">
         Audience
-        <select className={FIELD} value={audience} onChange={(e) => setAudience(e.target.value as Audience)}>
+        <select
+          className={FIELD}
+          value={audience}
+          onChange={(e) => setAudience(e.target.value as Audience)}
+        >
           <option value="internal">Internal</option>
           <option value="external">External</option>
         </select>
@@ -641,9 +790,9 @@ function AddTask({ launchId, busy, act }: { launchId: string; busy: string | nul
 /** Add note: someone who asked, added by hand with how to reach them and what they asked (approvers). */
 function AddNote({ launchId, busy, act }: { launchId: string; busy: string | null; act: Act }) {
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [hint, setHint] = useState("");
-  const [asked, setAsked] = useState("");
+  const [name, setName] = useState('');
+  const [hint, setHint] = useState('');
+  const [asked, setAsked] = useState('');
   if (!open) {
     return (
       <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -660,27 +809,42 @@ function AddNote({ launchId, busy, act }: { launchId: string; busy: string | nul
       onSubmit={(e) => {
         e.preventDefault();
         if (!name.trim()) return;
-        void act("add-note", async () => {
+        void act('add-note', async () => {
           await unwrap(
-            api.POST("/v1/launches/{launch_id}/notes", {
+            api.POST('/v1/launches/{launch_id}/notes', {
               params: { path: { launch_id: launchId } },
-              body: { display_name: name.trim(), contact_hint: hint.trim() || null, asked: asked.trim() || null },
+              body: {
+                display_name: name.trim(),
+                contact_hint: hint.trim() || null,
+                asked: asked.trim() || null,
+              },
             }),
           );
-          setName("");
-          setHint("");
-          setAsked("");
+          setName('');
+          setHint('');
+          setAsked('');
           setOpen(false);
         });
       }}
     >
       <label className="flex flex-col gap-1 text-sm font-medium">
         Name
-        <input className={FIELD} value={name} maxLength={200} onChange={(e) => setName(e.target.value)} autoFocus />
+        <input
+          className={FIELD}
+          value={name}
+          maxLength={200}
+          onChange={(e) => setName(e.target.value)}
+          autoFocus
+        />
       </label>
       <label className="flex flex-col gap-1 text-sm font-medium">
         How to reach them
-        <input className={FIELD} value={hint} maxLength={300} onChange={(e) => setHint(e.target.value)} />
+        <input
+          className={FIELD}
+          value={hint}
+          maxLength={300}
+          onChange={(e) => setHint(e.target.value)}
+        />
       </label>
       <label className="flex flex-col gap-1 text-sm font-medium">
         What they asked
@@ -703,17 +867,39 @@ function AddNote({ launchId, busy, act }: { launchId: string; busy: string | nul
   );
 }
 
-function TaskRow({ task, canEdit, mine, busy, act }: { task: Task; canEdit: boolean; mine: boolean; busy: string | null; act: Act }) {
+function TaskRow({
+  task,
+  canEdit,
+  mine,
+  busy,
+  act,
+}: {
+  task: Task;
+  canEdit: boolean;
+  mine: boolean;
+  busy: string | null;
+  act: Act;
+}) {
   const [draftOpen, setDraftOpen] = useState(false);
-  const [text, setText] = useState(task.body ?? "");
+  const [text, setText] = useState(task.body ?? '');
   const [skipping, setSkipping] = useState(false);
-  const [why, setWhy] = useState("");
+  const [why, setWhy] = useState('');
   const path = { params: { path: { task_id: task.id } } };
-  const closed = task.status === "done" || task.status === "skipped";
-  const patch = (body: Omit<Schemas["TaskPatch"], "lock_version">) =>
-    unwrap(api.PATCH("/v1/launch-tasks/{task_id}", { ...path, body: { ...body, lock_version: task.lock_version } }));
+  const closed = task.status === 'done' || task.status === 'skipped';
+  const patch = (body: Omit<Schemas['TaskPatch'], 'lock_version'>) =>
+    unwrap(
+      api.PATCH('/v1/launch-tasks/{task_id}', {
+        ...path,
+        body: { ...body, lock_version: task.lock_version },
+      }),
+    );
   return (
-    <li className="flex flex-col gap-2 py-2" data-testid="launch-task" data-key={task.key ?? ""} data-status={task.status}>
+    <li
+      className="flex flex-col gap-2 py-2"
+      data-testid="launch-task"
+      data-key={task.key ?? ''}
+      data-status={task.status}
+    >
       <div className="flex flex-wrap items-center gap-2">
         <span className="min-w-0 flex-1 font-medium">
           {task.title}
@@ -727,19 +913,25 @@ function TaskRow({ task, canEdit, mine, busy, act }: { task: Task; canEdit: bool
       {task.skip_reason && <p className="text-sm text-text2">Skipped: {task.skip_reason}</p>}
       <div className="flex flex-wrap gap-1.5">
         {/* H7: the Positioning check has no draft; it opens the company's positioning inputs. */}
-        {task.key === "positioning_check" && (
-          <Link href="/company/market?tab=positioning" className="inline-flex h-9 items-center px-2 text-sm font-medium text-accent-ink hover:underline">
+        {task.key === 'positioning_check' && (
+          <Link
+            href="/company/market?tab=positioning"
+            className="inline-flex h-9 items-center px-2 text-sm font-medium text-accent-ink hover:underline"
+          >
             Open positioning
           </Link>
         )}
-        {(task.body || canEdit) && task.drafts !== "no" && (
+        {(task.body || canEdit) && task.drafts !== 'no' && (
           <Button variant="ghost" onClick={() => setDraftOpen((o) => !o)} aria-expanded={draftOpen}>
-            {draftOpen ? "Close draft" : "Open draft"}
+            {draftOpen ? 'Close draft' : 'Open draft'}
           </Button>
         )}
         {canEdit && !closed && (
           <>
-            <Button disabled={busy !== null} onClick={() => act(`done-${task.id}`, () => patch({ status: "done" }))}>
+            <Button
+              disabled={busy !== null}
+              onClick={() => act(`done-${task.id}`, () => patch({ status: 'done' }))}
+            >
               Done
             </Button>
             <Button variant="ghost" onClick={() => setSkipping((s) => !s)}>
@@ -761,7 +953,7 @@ function TaskRow({ task, canEdit, mine, busy, act }: { task: Task; canEdit: bool
           {canEdit && (
             <Button
               variant="solid"
-              disabled={busy !== null || text === (task.body ?? "")}
+              disabled={busy !== null || text === (task.body ?? '')}
               onClick={() => act(`save-${task.id}`, () => patch({ body: text }))}
             >
               Save draft
@@ -781,7 +973,9 @@ function TaskRow({ task, canEdit, mine, busy, act }: { task: Task; canEdit: bool
           </label>
           <Button
             disabled={busy !== null || !why.trim()}
-            onClick={() => act(`skip-${task.id}`, () => patch({ status: "skipped", skip_reason: why.trim() }))}
+            onClick={() =>
+              act(`skip-${task.id}`, () => patch({ status: 'skipped', skip_reason: why.trim() }))
+            }
           >
             Skip task
           </Button>
@@ -791,32 +985,49 @@ function TaskRow({ task, canEdit, mine, busy, act }: { task: Task; canEdit: bool
   );
 }
 
-function NoteRow({ note, canEdit, busy, act }: { note: Note; canEdit: boolean; busy: string | null; act: Act }) {
+function NoteRow({
+  note,
+  canEdit,
+  busy,
+  act,
+}: {
+  note: Note;
+  canEdit: boolean;
+  busy: string | null;
+  act: Act;
+}) {
   const [sending, setSending] = useState(false);
-  const [channel, setChannel] = useState<Channel>("email");
+  const [channel, setChannel] = useState<Channel>('email');
   const zone = useCompanyZone();
   const [on, setOn] = useState(() => todayIn(zone));
   const [skipping, setSkipping] = useState(false);
-  const [why, setWhy] = useState("");
+  const [why, setWhy] = useState('');
   const [copied, setCopied] = useState(false);
   const path = { params: { path: { note_id: note.id } } };
-  const open = note.status === "drafted";
-  const patch = (body: Schemas["RequesterNotePatch"]) => unwrap(api.PATCH("/v1/requester-notes/{note_id}", { ...path, body }));
+  const open = note.status === 'drafted';
+  const patch = (body: Schemas['RequesterNotePatch']) =>
+    unwrap(api.PATCH('/v1/requester-notes/{note_id}', { ...path, body }));
   return (
     <li className="flex flex-col gap-2 py-2" data-testid="launch-note" data-status={note.status}>
       <div className="flex flex-wrap items-center gap-2">
         <span className="min-w-0 flex-1">
           <span className="font-medium">{note.display_name}</span>
           <span className="ml-1.5 text-sm text-text2">
-            {note.internal ? "member" : (note.contact_hint ?? "added by hand")}
-            {note.channel ? ` · ${CHANNELS.find((c) => c.value === note.channel)?.label ?? note.channel}` : ""}
+            {note.internal ? 'member' : (note.contact_hint ?? 'added by hand')}
+            {note.channel
+              ? ` · ${CHANNELS.find((c) => c.value === note.channel)?.label ?? note.channel}`
+              : ''}
           </span>
         </span>
         <Chip kind={NOTE_KIND[note.status]} dot>
           {NOTE_LABEL[note.status]}
         </Chip>
       </div>
-      {note.asked && <blockquote className="border-l-2 border-line-strong pl-2.5 text-sm text-text2">{note.asked}</blockquote>}
+      {note.asked && (
+        <blockquote className="border-l-2 border-line-strong pl-2.5 text-sm text-text2">
+          {note.asked}
+        </blockquote>
+      )}
       {note.body ? (
         <p className="text-[15px] leading-6 whitespace-pre-line" data-testid="note-draft">
           {note.body}
@@ -830,11 +1041,11 @@ function NoteRow({ note, canEdit, busy, act }: { note: Note; canEdit: boolean; b
           <Button
             variant="ghost"
             onClick={async () => {
-              await navigator.clipboard.writeText(note.body ?? "");
+              await navigator.clipboard.writeText(note.body ?? '');
               setCopied(true);
             }}
           >
-            {copied ? "Copied" : "Copy"}
+            {copied ? 'Copied' : 'Copy'}
           </Button>
         )}
         {canEdit && open && !note.internal && (
@@ -875,7 +1086,9 @@ function NoteRow({ note, canEdit, busy, act }: { note: Note; canEdit: boolean; b
           </label>
           <Button
             disabled={busy !== null}
-            onClick={() => act(`sent-${note.id}`, () => patch({ status: "sent", channel, sent_on: on }))}
+            onClick={() =>
+              act(`sent-${note.id}`, () => patch({ status: 'sent', channel, sent_on: on }))
+            }
           >
             Save as sent
           </Button>
@@ -893,7 +1106,9 @@ function NoteRow({ note, canEdit, busy, act }: { note: Note; canEdit: boolean; b
           </label>
           <Button
             disabled={busy !== null || !why.trim()}
-            onClick={() => act(`skip-${note.id}`, () => patch({ status: "skipped", skip_reason: why.trim() }))}
+            onClick={() =>
+              act(`skip-${note.id}`, () => patch({ status: 'skipped', skip_reason: why.trim() }))
+            }
           >
             Skip note
           </Button>

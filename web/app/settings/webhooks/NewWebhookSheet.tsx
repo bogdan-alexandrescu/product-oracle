@@ -1,14 +1,22 @@
-"use client";
+'use client';
 
-import { useState } from "react";
+import { useState } from 'react';
 
-import { Button, InfoTip, Sheet } from "@/components/ds";
-import { ErrorNote } from "@/components/ui";
-import { Field, INPUT, TEXTAREA } from "@/app/settings/_components/fields";
-import { api, unwrap } from "@/lib/api/client";
-import { errorMessage } from "@/lib/use-query";
+import { Button, InfoTip, Sheet } from '@/components/ds';
+import { ErrorNote } from '@/components/ui';
+import { Field, INPUT, TEXTAREA } from '@/app/settings/_components/fields';
+import { api, unwrap } from '@/lib/api/client';
+import { errorMessage } from '@/lib/use-query';
 
-import { failureText, GROUPS, outcomeText, SecretOnce, type Delivery, type EventType, type Webhook } from "./parts";
+import {
+  failureText,
+  GROUPS,
+  outcomeText,
+  SecretOnce,
+  type Delivery,
+  type EventType,
+  type Webhook,
+} from './parts';
 
 /**
  * New webhook (I1): Name, URL, the events grouped Runs · Drafts · Approvals with "All" per
@@ -30,21 +38,21 @@ export function NewWebhookSheet({
   ownerChoices: boolean;
   onCreated: (hook: Webhook) => void;
 }) {
-  const [name, setName] = useState("");
-  const [url, setUrl] = useState("");
+  const [name, setName] = useState('');
+  const [url, setUrl] = useState('');
   const [types, setTypes] = useState<string[]>([]);
   const [approvers, setApprovers] = useState(false);
-  const [why, setWhy] = useState("");
+  const [why, setWhy] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<{ webhook: Webhook; secret: string } | null>(null);
 
   function close() {
-    setName("");
-    setUrl("");
+    setName('');
+    setUrl('');
     setTypes([]);
     setApprovers(false);
-    setWhy("");
+    setWhy('');
     setError(null);
     setCreated(null);
     onClose();
@@ -55,8 +63,14 @@ export function NewWebhookSheet({
     setError(null);
     try {
       const out = await unwrap(
-        api.POST("/v1/webhooks", {
-          body: { name, url, event_types: types, include_approvers_content: approvers, reason: approvers ? why : null },
+        api.POST('/v1/webhooks', {
+          body: {
+            name,
+            url,
+            event_types: types,
+            include_approvers_content: approvers,
+            reason: approvers ? why : null,
+          },
         }),
       );
       setCreated(out);
@@ -70,18 +84,24 @@ export function NewWebhookSheet({
 
   // qa4-settings-30: Create names what it still needs, not just greyed out.
   const missing = !name.trim()
-    ? "Add a name"
+    ? 'Add a name'
     : !url.trim()
-      ? "Add a URL"
+      ? 'Add a URL'
       : types.length === 0
-        ? "Pick at least one event"
+        ? 'Pick at least one event'
         : approvers && !why.trim()
-          ? "Say why it sends private details"
+          ? 'Say why it sends private details'
           : null;
   const ready = !missing;
 
   return (
-    <Sheet open={open} dialog title={created ? "Webhook created" : "New webhook"} onClose={close} testId="new-webhook-sheet">
+    <Sheet
+      open={open}
+      dialog
+      title={created ? 'Webhook created' : 'New webhook'}
+      onClose={close}
+      testId="new-webhook-sheet"
+    >
       {created ? (
         <div className="flex flex-col gap-4 p-4">
           <p className="text-[15px]">
@@ -122,13 +142,16 @@ export function NewWebhookSheet({
           {/* qa4-settings-30: the footer stays in view while the events scroll. */}
           <div className="sticky bottom-0 z-[2] -mx-4 -mb-4 flex flex-wrap items-center justify-end gap-2 border-t border-line bg-surface px-4 py-3">
             {missing && (
-              <span className="mr-auto text-[13px] leading-[18px] text-text2" data-testid="create-missing">
+              <span
+                className="mr-auto text-[13px] leading-[18px] text-text2"
+                data-testid="create-missing"
+              >
                 {missing}
               </span>
             )}
             <Button onClick={close}>Cancel</Button>
             <Button type="submit" variant="primary" disabled={!ready || busy}>
-              {busy ? "Creating…" : "Create"}
+              {busy ? 'Creating…' : 'Create'}
             </Button>
           </div>
         </form>
@@ -146,7 +169,9 @@ export function TestEvent({ hook, onSent }: { hook: Webhook; onSent?: (d: Delive
     setBusy(true);
     setError(null);
     try {
-      const d = await unwrap(api.POST("/v1/webhooks/{webhook_id}/test", { params: { path: { webhook_id: hook.id } } }));
+      const d = await unwrap(
+        api.POST('/v1/webhooks/{webhook_id}/test', { params: { path: { webhook_id: hook.id } } }),
+      );
       setResult(d);
       onSent?.(d);
     } catch (e) {
@@ -158,13 +183,21 @@ export function TestEvent({ hook, onSent }: { hook: Webhook; onSent?: (d: Delive
   return (
     <div className="flex flex-wrap items-center gap-3">
       <Button onClick={() => void send()} disabled={busy}>
-        {busy ? "Sending…" : result && (result.status === "failed" || result.status === "retrying") ? "Try again" : "Send test event"}
+        {busy
+          ? 'Sending…'
+          : result && (result.status === 'failed' || result.status === 'retrying')
+            ? 'Try again'
+            : 'Send test event'}
       </Button>
       {/* qa4-settings-25: a failure in words, never the raw error code. */}
       {result && (
         <span className="text-[15px] font-semibold" data-testid="test-result">
           {/* F-65: a retry still going carries no failure cross. */}
-          {result.status === "failed" ? `✕ ${failureText(result, hook.host)}` : result.status === "retrying" ? `Retrying: ${failureText(result, hook.host)}` : outcomeText(result)}
+          {result.status === 'failed'
+            ? `✕ ${failureText(result, hook.host)}`
+            : result.status === 'retrying'
+              ? `Retrying: ${failureText(result, hook.host)}`
+              : outcomeText(result)}
         </span>
       )}
       {error && <ErrorNote>{error}</ErrorNote>}
@@ -208,17 +241,32 @@ export function WebhookFields({
   askWhy: boolean;
   autoFocus?: boolean;
 }) {
-  const toggle = (t: string, on: boolean) => setTypes((prev) => (on ? [...new Set([...prev, t])] : prev.filter((x) => x !== t)));
+  const toggle = (t: string, on: boolean) =>
+    setTypes((prev) => (on ? [...new Set([...prev, t])] : prev.filter((x) => x !== t)));
   return (
     <>
       <Field label="Name">
-        <input className={INPUT} value={name} maxLength={80} onChange={(e) => setName(e.target.value)} data-autofocus={autoFocus || undefined} />
+        <input
+          className={INPUT}
+          value={name}
+          maxLength={80}
+          onChange={(e) => setName(e.target.value)}
+          data-autofocus={autoFocus || undefined}
+        />
       </Field>
       <Field label="URL">
-        <input className={INPUT} value={url} inputMode="url" placeholder="https://" onChange={(e) => setUrl(e.target.value)} />
+        <input
+          className={INPUT}
+          value={url}
+          inputMode="url"
+          placeholder="https://"
+          onChange={(e) => setUrl(e.target.value)}
+        />
       </Field>
       <fieldset className="flex flex-col gap-3">
-        <legend className="mb-1 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">Events</legend>
+        <legend className="mb-1 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
+          Events
+        </legend>
         {GROUPS.map((g) => {
           const of = eventTypes.filter((t) => t.group === g.id);
           if (!of.length) return null;
@@ -236,7 +284,11 @@ export function WebhookFields({
                 {g.label} <span className="font-normal text-text2">· All</span>
               </label>
               {of.map((t) => (
-                <label key={t.type} className="flex items-start gap-2 pl-6 text-[15px]" title={t.type}>
+                <label
+                  key={t.type}
+                  className="flex items-start gap-2 pl-6 text-[15px]"
+                  title={t.type}
+                >
                   <input
                     type="checkbox"
                     className="mt-1 size-4 flex-none accent-[var(--accent)]"
@@ -255,19 +307,34 @@ export function WebhookFields({
           {/* Owner's decision (Nov 5): the switch is "Private details", its (i) says what that is. */}
           <span className="inline-flex items-center gap-2">
             <label className="inline-flex items-center gap-2 text-[15px] font-semibold">
-              <input type="checkbox" role="switch" className="size-4 accent-[var(--accent)]" checked={approvers} onChange={(e) => setApprovers(e.target.checked)} />
+              <input
+                type="checkbox"
+                role="switch"
+                className="size-4 accent-[var(--accent)]"
+                checked={approvers}
+                onChange={(e) => setApprovers(e.target.checked)}
+              />
               Private details
             </label>
-            <InfoTip label="private details">What only owners and approvers can see in Oracle.</InfoTip>
+            <InfoTip label="private details">
+              What only owners and approvers can see in Oracle.
+            </InfoTip>
           </span>
           {/* qa4-settings-31: what is sent and who sees it, in plain words. */}
           <p className="text-[13px] leading-[18px] text-text2" data-testid="approvers-content-help">
-            Also sends events that only owners and approvers can see in Oracle: updates, pricing memos, and their runs, checkpoints and
-            approvals. Anyone who can read the receiving tool will see them. Turning it on or off needs a reason, which Oracle keeps with the change.
+            Also sends events that only owners and approvers can see in Oracle: updates, pricing
+            memos, and their runs, checkpoints and approvals. Anyone who can read the receiving tool
+            will see them. Turning it on or off needs a reason, which Oracle keeps with the change.
           </p>
           {askWhy && (
             <Field label="Why">
-              <textarea className={TEXTAREA} rows={2} maxLength={500} value={why} onChange={(e) => setWhy(e.target.value)} />
+              <textarea
+                className={TEXTAREA}
+                rows={2}
+                maxLength={500}
+                value={why}
+                onChange={(e) => setWhy(e.target.value)}
+              />
             </Field>
           )}
         </div>

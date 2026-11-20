@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useEffect, type RefObject } from "react";
+import { useEffect, type RefObject } from 'react';
 
 /**
  * Caps a sticky column at the viewport below its top: max-height = 100dvh - its top - `gap`
@@ -18,7 +18,7 @@ export function useViewportFit(ref: RefObject<HTMLElement | null>, media: string
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         if (!mq.matches) {
-          el.style.maxHeight = "";
+          el.style.maxHeight = '';
           return;
         }
         const top = Math.max(0, el.getBoundingClientRect().top);
@@ -26,18 +26,18 @@ export function useViewportFit(ref: RefObject<HTMLElement | null>, media: string
       });
     };
     fit();
-    window.addEventListener("scroll", fit, { passive: true });
-    window.addEventListener("resize", fit);
-    mq.addEventListener("change", fit);
+    window.addEventListener('scroll', fit, { passive: true });
+    window.addEventListener('resize', fit);
+    mq.addEventListener('change', fit);
     const ro = new ResizeObserver(fit);
     ro.observe(document.body);
     return () => {
       cancelAnimationFrame(frame);
-      window.removeEventListener("scroll", fit);
-      window.removeEventListener("resize", fit);
-      mq.removeEventListener("change", fit);
+      window.removeEventListener('scroll', fit);
+      window.removeEventListener('resize', fit);
+      mq.removeEventListener('change', fit);
       ro.disconnect();
-      el.style.maxHeight = "";
+      el.style.maxHeight = '';
     };
   }, [ref, media, gap]);
 }

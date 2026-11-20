@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { login } from "./helpers";
+import { login } from './helpers';
 
 /*
  * QA findings on /priorities, round qa4, driven through the UI on the mock layer as a person
@@ -9,16 +9,15 @@ import { login } from "./helpers";
  * checkout (F-01), #4 Referral link (F-12), #5 Public signup (F-13) ... #8 Setup error report (F-06).
  */
 
-const APPROVER = "approver@example.com";
+const APPROVER = 'approver@example.com';
 const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
-const rowOf = (page: Page, key: string) =>
-  page.getByTestId(`priority-row-${key}`);
+const rowOf = (page: Page, key: string) => page.getByTestId(`priority-row-${key}`);
 const rows = (page: Page) => page.locator('tr[data-testid^="priority-row-"]');
 
 async function open(page: Page, email = APPROVER) {
   await login(page, email);
-  await page.goto("/priorities");
+  await page.goto('/priorities');
   await expect(rows(page)).toHaveCount(8);
 }
 
@@ -26,174 +25,151 @@ async function open(page: Page, email = APPROVER) {
 async function moveUp(
   page: Page,
   key: string,
-  reason = "A launch partner needs it in the first release",
+  reason = 'A launch partner needs it in the first release',
 ) {
   const row = rowOf(page, key);
-  await row.evaluate((e) => e.scrollIntoView({ block: "center" }));
-  await row.getByRole("button", { name: "Move up", exact: true }).click();
-  const sheet = page.getByRole("dialog");
+  await row.evaluate((e) => e.scrollIntoView({ block: 'center' }));
+  await row.getByRole('button', { name: 'Move up', exact: true }).click();
+  const sheet = page.getByRole('dialog');
   await expect(sheet).toBeVisible();
-  await sheet.getByLabel("Why?").fill(reason);
-  await sheet.getByRole("button", { name: "Save", exact: true }).click();
+  await sheet.getByLabel('Why?').fill(reason);
+  await sheet.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(sheet).toBeHidden();
 }
 
-test.describe("desktop", () => {
+test.describe('desktop', () => {
   test.use({ viewport: DESKTOP });
 
-  test("qa4-plan-1: after a move the Oracle # column never breaks a feature name mid-word", async ({
+  test('qa4-plan-1: after a move the Oracle # column never breaks a feature name mid-word', async ({
     page,
   }) => {
     await open(page);
-    await moveUp(page, "F-01");
-    await expect(
-      page.getByRole("columnheader", { name: "Oracle #" }),
-    ).toBeVisible();
-    await expect(page.getByTestId("priority-inspector")).toBeVisible();
-    const names = rows(page).getByTestId("feature-name");
+    await moveUp(page, 'F-01');
+    await expect(page.getByRole('columnheader', { name: 'Oracle #' })).toBeVisible();
+    await expect(page.getByTestId('priority-inspector')).toBeVisible();
+    const names = rows(page).getByTestId('feature-name');
     await expect(names).toHaveCount(8);
     for (const name of await names.all()) {
       // Every word of the name sits on one line: a word split over two lines has two boxes.
       const split = await name.evaluate((e) => {
         const text = e.firstChild as Text;
         const out: string[] = [];
-        for (const m of (text.textContent ?? "").matchAll(/\S+/g)) {
+        for (const m of (text.textContent ?? '').matchAll(/\S+/g)) {
           const r = document.createRange();
           r.setStart(text, m.index!);
           r.setEnd(text, m.index! + m[0].length);
-          const lines = new Set(
-            [...r.getClientRects()].map((b) => Math.round(b.top)),
-          );
+          const lines = new Set([...r.getClientRects()].map((b) => Math.round(b.top)));
           if (lines.size > 1) out.push(m[0]);
         }
         return out;
       });
-      expect(
-        split,
-        `${await name.innerText()}: a word breaks across lines`,
-      ).toEqual([]);
+      expect(split, `${await name.innerText()}: a word breaks across lines`).toEqual([]);
     }
   });
 
-  test("qa4-plan-2: a move that leaves the order as it is says why and saves nothing", async ({
+  test('qa4-plan-2: a move that leaves the order as it is says why and saves nothing', async ({
     page,
   }) => {
     await open(page);
-    const row = rowOf(page, "F-07");
-    const sheet = page.getByRole("dialog");
+    const row = rowOf(page, 'F-07');
+    const sheet = page.getByRole('dialog');
     // docs/ground-truth.md: a feature reads its code with its name.
-    const menu = page.getByRole("menu", {
-      name: "Change F-07 Bulk import",
+    const menu = page.getByRole('menu', {
+      name: 'Change F-07 Bulk import',
     });
     await expect(async () => {
       if (!(await sheet.isVisible())) {
         if (!(await menu.isVisible())) {
-          await row.evaluate((e) => e.scrollIntoView({ block: "center" }));
-          await row
-            .getByRole("button", { name: "More actions", exact: true })
-            .click();
+          await row.evaluate((e) => e.scrollIntoView({ block: 'center' }));
+          await row.getByRole('button', { name: 'More actions', exact: true }).click();
         }
-        await menu
-          .getByRole("menuitem", { name: "Move above…" })
-          .click({ timeout: 2000 });
+        await menu.getByRole('menuitem', { name: 'Move above…' }).click({ timeout: 2000 });
       }
-      await expect(sheet.getByRole("list", { name: "Features" })).toBeVisible({
+      await expect(sheet.getByRole('list', { name: 'Features' })).toBeVisible({
         timeout: 2000,
       });
     }).toPass({ timeout: 30_000 });
     await sheet
-      .getByRole("list", { name: "Features" })
-      .getByRole("button", { name: /Setup checklist/ })
+      .getByRole('list', { name: 'Features' })
+      .getByRole('button', { name: /Setup checklist/ })
       .click();
-    await expect(sheet.getByTestId("move-target")).toHaveText(
-      "Move above F-01 Setup checklist",
-    );
-    await sheet
-      .getByLabel("Why?")
-      .fill("The address work should wait for checkout");
-    await sheet.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(sheet.getByTestId('move-target')).toHaveText('Move above F-01 Setup checklist');
+    await sheet.getByLabel('Why?').fill('The address work should wait for checkout');
+    await sheet.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(sheet).toContainText(
-      "This move leaves Bulk import where it is: Sample data import depends on it",
+      'This move leaves Bulk import where it is: Sample data import depends on it',
     );
-    await sheet.getByRole("button", { name: "Cancel" }).click();
+    await sheet.getByRole('button', { name: 'Cancel' }).click();
     await expect(sheet).toBeHidden();
     // Nothing was stored: no change logged, no Oracle # column, no Moved chip.
-    await expect(page.getByTestId("changes-empty")).toBeVisible();
-    await expect(
-      page.getByRole("columnheader", { name: "Oracle #" }),
-    ).toHaveCount(0);
-    await expect(row.getByTestId("override-chip")).toHaveCount(0);
+    await expect(page.getByTestId('changes-empty')).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Oracle #' })).toHaveCount(0);
+    await expect(row.getByTestId('override-chip')).toHaveCount(0);
   });
 
   test("qa4-plan-9: 'Ranked higher' looks the same on the selected row and the others", async ({
     page,
   }) => {
     await open(page);
-    await expect(rowOf(page, "F-07")).toHaveAttribute("aria-selected", "true");
+    await expect(rowOf(page, 'F-07')).toHaveAttribute('aria-selected', 'true');
     const chips = page
-      .getByTestId("priority-table")
-      .getByTestId("rank-reason")
-      .filter({ hasText: "Ranked higher" });
+      .getByTestId('priority-table')
+      .getByTestId('rank-reason')
+      .filter({ hasText: 'Ranked higher' });
     expect(await chips.count()).toBeGreaterThan(1);
     const looks = await chips.evaluateAll((els) =>
       els.map(
         (e) =>
-          `${e.getAttribute("data-kind")} ${getComputedStyle(e).backgroundColor} ${getComputedStyle(e).boxShadow}`,
+          `${e.getAttribute('data-kind')} ${getComputedStyle(e).backgroundColor} ${getComputedStyle(e).boxShadow}`,
       ),
     );
-    expect(new Set(looks).size, looks.join(" | ")).toBe(1);
+    expect(new Set(looks).size, looks.join(' | ')).toBe(1);
   });
 
-  test("qa4-plan-14: saving a snapshot says so in short; the list shows what was saved", async ({
+  test('qa4-plan-14: saving a snapshot says so in short; the list shows what was saved', async ({
     page,
   }) => {
     await open(page);
-    const panel = page.getByTestId("snapshots-panel");
-    await panel.getByRole("button", { name: "Save snapshot" }).click();
-    await expect(panel.getByRole("status")).toHaveText("Snapshot saved.");
-    await expect(
-      panel.getByTestId("snapshot-list").getByRole("listitem"),
-    ).toHaveCount(1);
-    await expect(panel.getByTestId("snapshot-list")).toContainText(
-      "Top: Bulk import",
-    );
-    await expect(panel.getByRole("status")).not.toContainText(
-      "Bulk import",
-    );
+    const panel = page.getByTestId('snapshots-panel');
+    await panel.getByRole('button', { name: 'Save snapshot' }).click();
+    await expect(panel.getByRole('status')).toHaveText('Snapshot saved.');
+    await expect(panel.getByTestId('snapshot-list').getByRole('listitem')).toHaveCount(1);
+    await expect(panel.getByTestId('snapshot-list')).toContainText('Top: Bulk import');
+    await expect(panel.getByRole('status')).not.toContainText('Bulk import');
   });
 
-  test("qa4-plan-15: the Changes list and Your change name the mover; the email is on hover", async ({
+  test('qa4-plan-15: the Changes list and Your change name the mover; the email is on hover', async ({
     page,
   }) => {
     await open(page);
-    await moveUp(page, "F-01");
-    const log = page.getByTestId("change-log");
-    await expect(log.getByRole("listitem")).toHaveCount(1);
-    await expect(log).toContainText("Priya Raman");
+    await moveUp(page, 'F-01');
+    const log = page.getByTestId('change-log');
+    await expect(log.getByRole('listitem')).toHaveCount(1);
+    await expect(log).toContainText('Priya Raman');
     await expect(log).not.toContainText(APPROVER);
-    await expect(log.getByTitle(APPROVER)).toHaveText("Priya Raman");
+    await expect(log.getByTitle(APPROVER)).toHaveText('Priya Raman');
 
-    await rowOf(page, "F-01").getByTestId("feature-name").click();
-    const change = page.getByTestId("your-change");
-    await expect(change).toContainText("Priya Raman");
+    await rowOf(page, 'F-01').getByTestId('feature-name').click();
+    const change = page.getByTestId('your-change');
+    await expect(change).toContainText('Priya Raman');
     await expect(change).not.toContainText(APPROVER);
-    await expect(change.getByTitle(APPROVER)).toHaveText("Priya Raman");
-    await expect(rowOf(page, "F-01").getByTestId("override-chip")).toHaveText(
-      "Moved by Priya Raman",
+    await expect(change.getByTitle(APPROVER)).toHaveText('Priya Raman');
+    await expect(rowOf(page, 'F-01').getByTestId('override-chip')).toHaveText(
+      'Moved by Priya Raman',
     );
   });
 });
 
-test.describe("phone", () => {
+test.describe('phone', () => {
   test.use({ viewport: PHONE });
 
   test("qa4-plan-17: By goal keeps each goal's ranked count beside its top rank", async ({
     page,
   }) => {
     await open(page);
-    const table = page.getByRole("table", { name: "By goal" });
+    const table = page.getByRole('table', { name: 'By goal' });
     await table.scrollIntoViewIfNeeded();
-    const counts = table.getByTestId("goal-ranked");
+    const counts = table.getByTestId('goal-ranked');
     expect(await counts.count()).toBeGreaterThan(0);
     for (const c of await counts.all()) {
       await expect(c).toBeVisible();

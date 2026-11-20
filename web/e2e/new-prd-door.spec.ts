@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { login, signOut } from "./helpers";
+import { login, signOut } from './helpers';
 
 /**
  * C4 One New PRD door (issue #153): a short brief and a template, then Oracle asks its
@@ -36,234 +36,288 @@ import { login, signOut } from "./helpers";
  *   sideways or the recommendation sits beside the form; no_claim=other phone layouts.
  */
 
-const PROBLEM = "Returning buyers retype their address at every checkout. Bulk import would make repeat checkout faster.";
+const PROBLEM =
+  'Returning buyers retype their address at every checkout. Bulk import would make repeat checkout faster.';
 
 function answer(page: Page, question: string, option: string) {
-  return page.getByRole("group", { name: question }).getByText(option, { exact: true }).click();
+  return page.getByRole('group', { name: question }).getByText(option, { exact: true }).click();
 }
 
 async function openDoor(page: Page) {
-  await page.getByTestId("nav-prds").filter({ visible: true }).first().click();
+  await page.getByTestId('nav-prds').filter({ visible: true }).first().click();
   await expect(page).toHaveURL(/\/documents$/);
-  await page.getByRole("link", { name: "New PRD" }).click();
+  await page.getByRole('link', { name: 'New PRD' }).click();
   await expect(page).toHaveURL(/\/documents\/new\?kind=prd$/);
-  await expect(page.getByRole("heading", { level: 1, name: "New PRD" })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'New PRD' })).toBeVisible();
 }
 
 async function writeBrief(page: Page, title: string) {
-  await page.getByRole("textbox", { name: "Title" }).fill(title);
-  await page.getByRole("textbox", { name: "What problem does it solve?" }).fill(PROBLEM);
+  await page.getByRole('textbox', { name: 'Title' }).fill(title);
+  await page.getByRole('textbox', { name: 'What problem does it solve?' }).fill(PROBLEM);
 }
 
 async function continueToIntake(page: Page): Promise<string> {
-  await page.getByRole("button", { name: "Continue" }).first().click();
+  await page.getByRole('button', { name: 'Continue' }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
-  return page.url().split("/intakes/")[1];
+  return page.url().split('/intakes/')[1];
 }
 
-const sheet = (page: Page) => page.getByRole("dialog", { name: "Draft with Oracle" });
-const estimate = (page: Page) => sheet(page).getByTestId("draft-estimate");
+const sheet = (page: Page) => page.getByRole('dialog', { name: 'Draft with Oracle' });
+const estimate = (page: Page) => sheet(page).getByTestId('draft-estimate');
 
-test("brief to draft: goals, out of scope and a template, then Draft with Oracle starts the run", async ({ page }) => {
-  await login(page, "approver@example.com");
+test('brief to draft: goals, out of scope and a template, then Draft with Oracle starts the run', async ({
+  page,
+}) => {
+  await login(page, 'approver@example.com');
   await openDoor(page);
-  await writeBrief(page, "Setup checklist");
+  await writeBrief(page, 'Setup checklist');
 
-  const goals = page.getByRole("group", { name: "Which goals does it serve?" });
-  await expect(goals.getByRole("checkbox")).toHaveCount(2);
-  await expect(goals).toContainText("from target");
-  await goals.getByRole("checkbox", { name: /Activation/ }).check();
+  const goals = page.getByRole('group', { name: 'Which goals does it serve?' });
+  await expect(goals.getByRole('checkbox')).toHaveCount(2);
+  await expect(goals).toContainText('from target');
+  await goals.getByRole('checkbox', { name: /Activation/ }).check();
 
-  await page.getByRole("textbox", { name: "Out of scope 1" }).fill("Address book sharing between accounts");
-  await page.getByRole("button", { name: "Add another" }).click();
-  await expect(page.getByRole("textbox", { name: "Out of scope 2" })).toBeVisible();
+  await page
+    .getByRole('textbox', { name: 'Out of scope 1' })
+    .fill('Address book sharing between accounts');
+  await page.getByRole('button', { name: 'Add another' }).click();
+  await expect(page.getByRole('textbox', { name: 'Out of scope 2' })).toBeVisible();
 
-  await expect(page.getByTestId("recommended-template")).toHaveText("Goal-traced PRD");
-  await answer(page, "What should this document decide?", "Whether to start at all");
-  await expect(page.getByTestId("recommended-template")).toHaveText("One-pager");
+  await expect(page.getByTestId('recommended-template')).toHaveText('Goal-traced PRD');
+  await answer(page, 'What should this document decide?', 'Whether to start at all');
+  await expect(page.getByTestId('recommended-template')).toHaveText('One-pager');
 
   await continueToIntake(page);
-  await expect(page.getByRole("heading", { level: 1, name: "Setup checklist" })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Setup checklist' })).toBeVisible();
   // The brief named its goal and its out-of-scope line: Oracle does not ask those again.
-  await expect(page.getByTestId("intake-thread")).toBeVisible();
-  await expect(page.getByTestId("intake-thread")).not.toContainText("Which confirmed company goal does this serve");
-  await expect(page.getByTestId("intake-thread")).not.toContainText("What is deliberately out of scope");
+  await expect(page.getByTestId('intake-thread')).toBeVisible();
+  await expect(page.getByTestId('intake-thread')).not.toContainText(
+    'Which confirmed company goal does this serve',
+  );
+  await expect(page.getByTestId('intake-thread')).not.toContainText(
+    'What is deliberately out of scope',
+  );
 
-  await page.getByRole("button", { name: "Draft with Oracle" }).click();
+  await page.getByRole('button', { name: 'Draft with Oracle' }).click();
   await expect(sheet(page)).toBeVisible();
-  await expect(sheet(page).getByTestId("draft-template")).toContainText("One-pager");
-  await expect(sheet(page).getByRole("group", { name: "Depth" }).getByRole("button", { name: "Standard" })).toHaveAttribute("aria-pressed", "true");
-  const stops = sheet(page).getByRole("switch");
+  await expect(sheet(page).getByTestId('draft-template')).toContainText('One-pager');
+  await expect(
+    sheet(page).getByRole('group', { name: 'Depth' }).getByRole('button', { name: 'Standard' }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  const stops = sheet(page).getByRole('switch');
   await expect(stops).toHaveCount(5);
-  for (const name of ["Feature set and dependencies", "Engineering check", "Priority order", "PRD review", "Engineering dates"]) {
-    await expect(sheet(page).getByRole("switch", { name })).toBeChecked();
+  for (const name of [
+    'Feature set and dependencies',
+    'Engineering check',
+    'Priority order',
+    'PRD review',
+    'Engineering dates',
+  ]) {
+    await expect(sheet(page).getByRole('switch', { name })).toBeChecked();
   }
 
-  await sheet(page).getByRole("button", { name: "Estimate" }).click();
-  await expect(estimate(page)).toContainText("$29.50 estimated");
-  await sheet(page).getByRole("button", { name: "Start drafting" }).click();
+  await sheet(page).getByRole('button', { name: 'Estimate' }).click();
+  await expect(estimate(page)).toContainText('$29.50 estimated');
+  await sheet(page).getByRole('button', { name: 'Start drafting' }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth to PRD" })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Ground Truth to PRD' })).toBeVisible();
   await expect(page.getByText(/^Template: /)).toBeVisible();
   // The current Ground Truth was reused: its segment ran no step.
-  await expect(page.getByTestId("segment-baseline").getByTestId("segment-state")).toHaveText(/^Reused \(approved [A-Z][a-z]{2} \d{1,2}\)$/);
+  await expect(page.getByTestId('segment-baseline').getByTestId('segment-state')).toHaveText(
+    /^Reused \(approved [A-Z][a-z]{2} \d{1,2}\)$/,
+  );
 });
 
-test("Ground Truth choice: reuse is preselected; Rebuild costs the Ground Truth segment and lists its stop", async ({ page }) => {
-  await login(page, "approver@example.com");
+test('Ground Truth choice: reuse is preselected; Rebuild costs the Ground Truth segment and lists its stop', async ({
+  page,
+}) => {
+  await login(page, 'approver@example.com');
   await openDoor(page);
-  await writeBrief(page, "Faster repeat checkout");
+  await writeBrief(page, 'Faster repeat checkout');
   await continueToIntake(page);
-  await page.getByRole("button", { name: "Draft with Oracle" }).click();
+  await page.getByRole('button', { name: 'Draft with Oracle' }).click();
 
-  const reuse = sheet(page).getByRole("radio", { name: /^Use the current Ground Truth \(approved .+\)$/ });
-  const rebuild = sheet(page).getByRole("radio", { name: "Rebuild it ($7.00)" });
+  const reuse = sheet(page).getByRole('radio', {
+    name: /^Use the current Ground Truth \(approved .+\)$/,
+  });
+  const rebuild = sheet(page).getByRole('radio', { name: 'Rebuild it ($7.00)' });
   await expect(reuse).toBeChecked();
   await expect(rebuild).not.toBeChecked();
-  await expect(sheet(page).getByRole("switch", { name: "Confirm the Ground Truth" })).toHaveCount(0);
+  await expect(sheet(page).getByRole('switch', { name: 'Confirm the Ground Truth' })).toHaveCount(
+    0,
+  );
 
-  await sheet(page).getByRole("button", { name: "Estimate" }).click();
-  await expect(estimate(page)).toContainText("$29.50 estimated");
+  await sheet(page).getByRole('button', { name: 'Estimate' }).click();
+  await expect(estimate(page)).toContainText('$29.50 estimated');
   await rebuild.check();
-  await expect(estimate(page)).toContainText("$36.50 estimated");
-  await expect(sheet(page).getByRole("switch", { name: "Confirm the Ground Truth" })).toBeChecked();
+  await expect(estimate(page)).toContainText('$36.50 estimated');
+  await expect(sheet(page).getByRole('switch', { name: 'Confirm the Ground Truth' })).toBeChecked();
 
   // Deep and rebuilding goes over $50: an owner approves before it starts.
-  await sheet(page).getByRole("group", { name: "Depth" }).getByRole("button", { name: "Deep" }).click();
-  await expect(estimate(page)).toContainText("$73.00 estimated");
-  await expect(estimate(page)).toContainText("an owner approves it before it starts");
-  await expect(sheet(page).getByRole("radio", { name: "Rebuild it ($14.00)" })).toBeChecked();
+  await sheet(page)
+    .getByRole('group', { name: 'Depth' })
+    .getByRole('button', { name: 'Deep' })
+    .click();
+  await expect(estimate(page)).toContainText('$73.00 estimated');
+  await expect(estimate(page)).toContainText('an owner approves it before it starts');
+  await expect(sheet(page).getByRole('radio', { name: 'Rebuild it ($14.00)' })).toBeChecked();
 
   // Three estimates, one draft run (criterion 6): once started, the Runs list has one more
   // row than seeded, and one for this brief.
-  await sheet(page).getByRole("button", { name: "Start drafting" }).click();
+  await sheet(page).getByRole('button', { name: 'Start drafting' }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
-  await page.getByTestId("nav-runs").filter({ visible: true }).first().click();
-  await expect(page.getByTestId("run-row")).toHaveCount(6);
-  await expect(page.locator('[data-testid="run-row"][data-document="faster-repeat-checkout"]')).toHaveCount(1);
+  await page.getByTestId('nav-runs').filter({ visible: true }).first().click();
+  await expect(page.getByTestId('run-row')).toHaveCount(6);
+  await expect(
+    page.locator('[data-testid="run-row"][data-document="faster-repeat-checkout"]'),
+  ).toHaveCount(1);
 });
 
-test("reopen after an estimate: the brief keeps Draft with Oracle and the sheet takes up the same draft run", async ({ page }) => {
-  await login(page, "approver@example.com");
+test('reopen after an estimate: the brief keeps Draft with Oracle and the sheet takes up the same draft run', async ({
+  page,
+}) => {
+  await login(page, 'approver@example.com');
   await openDoor(page);
-  await writeBrief(page, "Bulk import for guests");
+  await writeBrief(page, 'Bulk import for guests');
   const id = await continueToIntake(page);
-  await page.getByRole("button", { name: "Draft with Oracle" }).click();
-  await sheet(page).getByRole("button", { name: "Estimate" }).click();
-  await expect(estimate(page)).toContainText("$29.50 estimated");
-  await sheet(page).getByRole("radio", { name: "Rebuild it ($7.00)" }).check();
-  await expect(estimate(page)).toContainText("$36.50 estimated");
-  await sheet(page).getByRole("button", { name: "Close Draft with Oracle" }).click();
+  await page.getByRole('button', { name: 'Draft with Oracle' }).click();
+  await sheet(page).getByRole('button', { name: 'Estimate' }).click();
+  await expect(estimate(page)).toContainText('$29.50 estimated');
+  await sheet(page).getByRole('radio', { name: 'Rebuild it ($7.00)' }).check();
+  await expect(estimate(page)).toContainText('$36.50 estimated');
+  await sheet(page).getByRole('button', { name: 'Close Draft with Oracle' }).click();
   await expect(sheet(page)).toHaveCount(0);
 
   // Nothing started: after a reload the brief is still open, editable and in PRDs › Ideas.
   await page.reload();
-  await expect(page.getByRole("heading", { level: 1, name: "Bulk import for guests" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Draft with Oracle" })).toBeEnabled();
-  await expect(page.getByRole("button", { name: /^Actions for / })).toBeVisible();
-  await page.goto("/documents");
-  await page.getByRole("button", { name: /^Ideas\s*\d+$/ }).click();
-  const row = page.getByTestId("idea-row").filter({ hasText: "Bulk import for guests" });
-  await row.getByRole("link", { name: "Bulk import for guests" }).click();
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Bulk import for guests' }),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Draft with Oracle' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: /^Actions for / })).toBeVisible();
+  await page.goto('/documents');
+  await page.getByRole('button', { name: /^Ideas\s*\d+$/ }).click();
+  const row = page.getByTestId('idea-row').filter({ hasText: 'Bulk import for guests' });
+  await row.getByRole('link', { name: 'Bulk import for guests' }).click();
   await expect(page).toHaveURL(new RegExp(`/intakes/${id}$`));
 
   // Reopening takes up the draft run: its choices and its estimate, not a fresh sheet.
-  await page.getByRole("button", { name: "Draft with Oracle" }).click();
-  await expect(sheet(page).getByRole("radio", { name: "Rebuild it ($7.00)" })).toBeChecked();
-  await expect(estimate(page)).toContainText("$36.50 estimated");
-  await sheet(page).getByRole("button", { name: "Start drafting" }).click();
+  await page.getByRole('button', { name: 'Draft with Oracle' }).click();
+  await expect(sheet(page).getByRole('radio', { name: 'Rebuild it ($7.00)' })).toBeChecked();
+  await expect(estimate(page)).toContainText('$36.50 estimated');
+  await sheet(page).getByRole('button', { name: 'Start drafting' }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
-  await page.getByTestId("nav-runs").filter({ visible: true }).first().click();
-  await expect(page.locator('[data-testid="run-row"][data-document="bulk-import-for-guests"]')).toHaveCount(1);
+  await page.getByTestId('nav-runs').filter({ visible: true }).first().click();
+  await expect(
+    page.locator('[data-testid="run-row"][data-document="bulk-import-for-guests"]'),
+  ).toHaveCount(1);
 
   // Started: the brief is drafting, so Draft with Oracle is gone.
   await page.goto(`/intakes/${id}`);
-  await expect(page.getByRole("heading", { level: 1, name: "Bulk import for guests" })).toBeVisible();
-  await expect(page.getByTestId("intake-status-link")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Draft with Oracle" })).toHaveCount(0);
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Bulk import for guests' }),
+  ).toBeVisible();
+  await expect(page.getByTestId('intake-status-link')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Draft with Oracle' })).toHaveCount(0);
 });
 
-test("stale Ground Truth: only 'Oracle rebuilds the Ground Truth first', with the reason in its tooltip", async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "baseline-stale"));
-  await login(page, "approver@example.com");
+test("stale Ground Truth: only 'Oracle rebuilds the Ground Truth first', with the reason in its tooltip", async ({
+  page,
+}) => {
+  await page.addInitScript(() => localStorage.setItem('po-mock-scenario', 'baseline-stale'));
+  await login(page, 'approver@example.com');
   await openDoor(page);
-  await writeBrief(page, "Faster repeat checkout");
+  await writeBrief(page, 'Faster repeat checkout');
   await continueToIntake(page);
-  await page.getByRole("button", { name: "Draft with Oracle" }).click();
+  await page.getByRole('button', { name: 'Draft with Oracle' }).click();
 
-  await expect(sheet(page).getByRole("radio")).toHaveCount(0);
-  await expect(sheet(page)).toContainText("Oracle rebuilds the Ground Truth first");
-  await sheet(page).getByRole("button", { name: "About the Ground Truth" }).click();
-  await expect(sheet(page).getByRole("tooltip")).toContainText("The last Ground Truth review was approved 41 days ago");
-  await expect(sheet(page).getByRole("switch", { name: "Confirm the Ground Truth" })).toBeChecked();
-  await sheet(page).getByRole("button", { name: "Estimate" }).click();
-  await expect(estimate(page)).toContainText("$36.50 estimated");
+  await expect(sheet(page).getByRole('radio')).toHaveCount(0);
+  await expect(sheet(page)).toContainText('Oracle rebuilds the Ground Truth first');
+  await sheet(page).getByRole('button', { name: 'About the Ground Truth' }).click();
+  await expect(sheet(page).getByRole('tooltip')).toContainText(
+    'The last Ground Truth review was approved 41 days ago',
+  );
+  await expect(sheet(page).getByRole('switch', { name: 'Confirm the Ground Truth' })).toBeChecked();
+  await sheet(page).getByRole('button', { name: 'Estimate' }).click();
+  await expect(estimate(page)).toContainText('$36.50 estimated');
 });
 
-test("empty skeleton: the quiet link still creates an empty v1, and a commenter does not see it", async ({ page }) => {
-  await login(page, "approver@example.com");
+test('empty skeleton: the quiet link still creates an empty v1, and a commenter does not see it', async ({
+  page,
+}) => {
+  await login(page, 'approver@example.com');
   await openDoor(page);
-  await page.getByRole("textbox", { name: "Title" }).fill("Skeleton first PRD");
-  await page.getByTestId("template-option-prd-rfc").click();
-  await page.getByRole("button", { name: "Start from an empty skeleton instead" }).click();
+  await page.getByRole('textbox', { name: 'Title' }).fill('Skeleton first PRD');
+  await page.getByTestId('template-option-prd-rfc').click();
+  await page.getByRole('button', { name: 'Start from an empty skeleton instead' }).click();
   await expect(page).toHaveURL(/\/documents\/skeleton-first-prd$/);
-  await expect(page.getByTestId("doc-template")).toBeVisible();
-  await expect(page.getByTestId("doc-template")).not.toContainText("prd-rfc");
+  await expect(page.getByTestId('doc-template')).toBeVisible();
+  await expect(page.getByTestId('doc-template')).not.toContainText('prd-rfc');
   await signOut(page);
 
-  await login(page, "commenter@example.com");
-  await page.goto("/documents/new?kind=prd");
-  await expect(page.getByRole("heading", { level: 1, name: "New PRD" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Continue" }).first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Start from an empty skeleton instead" })).toHaveCount(0);
+  await login(page, 'commenter@example.com');
+  await page.goto('/documents/new?kind=prd');
+  await expect(page.getByRole('heading', { level: 1, name: 'New PRD' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Continue' }).first()).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Start from an empty skeleton instead' }),
+  ).toHaveCount(0);
 });
 
-test("commenter brief, approver finds it: Continue works, the draft waits for an approver, PRDs › Ideas lists it", async ({ page }) => {
-  await login(page, "commenter@example.com");
+test('commenter brief, approver finds it: Continue works, the draft waits for an approver, PRDs › Ideas lists it', async ({
+  page,
+}) => {
+  await login(page, 'commenter@example.com');
   await openDoor(page);
-  await writeBrief(page, "Gift wrapping at checkout");
+  await writeBrief(page, 'Gift wrapping at checkout');
   const id = await continueToIntake(page);
   // #370: a commenter can never start the draft, so there is no button to disable.
-  await expect(page.getByRole("button", { name: "Draft with Oracle" })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Draft with Oracle' })).toHaveCount(0);
   await signOut(page);
 
-  await login(page, "approver@example.com");
-  await page.goto("/documents");
-  await page.getByRole("button", { name: /^Ideas\s*\d+$/ }).click();
-  const row = page.getByTestId("idea-row").filter({ hasText: "Gift wrapping at checkout" });
+  await login(page, 'approver@example.com');
+  await page.goto('/documents');
+  await page.getByRole('button', { name: /^Ideas\s*\d+$/ }).click();
+  const row = page.getByTestId('idea-row').filter({ hasText: 'Gift wrapping at checkout' });
   await expect(row).toBeVisible();
   await expect(row).toContainText(/\d+ questions? open|Ready to draft/);
-  await row.getByRole("link", { name: "Gift wrapping at checkout" }).click();
+  await row.getByRole('link', { name: 'Gift wrapping at checkout' }).click();
   await expect(page).toHaveURL(new RegExp(`/intakes/${id}$`));
-  await expect(page.getByRole("button", { name: "Draft with Oracle" })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Draft with Oracle' })).toBeEnabled();
 });
 
-test("New run no longer offers Ground Truth to PRD and points at New PRD", async ({ page }) => {
+test('New run no longer offers Ground Truth to PRD and points at New PRD', async ({ page }) => {
   await login(page);
-  await page.goto("/runs");
-  await page.getByRole("button", { name: "Start a run…" }).click();
+  await page.goto('/runs');
+  await page.getByRole('button', { name: 'Start a run…' }).click();
   // With no flow left to offer, the dialog is "Where to start a run": only the pointer lines and Close (D12, qa-work-7).
-  const dialog = page.getByRole("dialog", { name: "Where to start a run" });
-  await expect(dialog.getByTestId("flow-pointers")).toBeVisible();
-  await expect(dialog.getByRole("radio", { name: "Ground Truth to PRD" })).toHaveCount(0);
-  const pointer = dialog.getByRole("link", { name: "New PRD · PRDs" });
-  await expect(pointer).toHaveAttribute("href", "/documents/new?kind=prd");
+  const dialog = page.getByRole('dialog', { name: 'Where to start a run' });
+  await expect(dialog.getByTestId('flow-pointers')).toBeVisible();
+  await expect(dialog.getByRole('radio', { name: 'Ground Truth to PRD' })).toHaveCount(0);
+  const pointer = dialog.getByRole('link', { name: 'New PRD · PRDs' });
+  await expect(pointer).toHaveAttribute('href', '/documents/new?kind=prd');
   await pointer.click();
   await expect(page).toHaveURL(/\/documents\/new\?kind=prd$/);
-  await expect(page.getByRole("heading", { level: 1, name: "New PRD" })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'New PRD' })).toBeVisible();
 });
 
-test("phone: at 390 px the New PRD form does not scroll sideways and the recommendation follows it", async ({ page }) => {
+test('phone: at 390 px the New PRD form does not scroll sideways and the recommendation follows it', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await login(page, "approver@example.com");
-  await page.goto("/documents/new?kind=prd");
-  await expect(page.getByRole("heading", { level: 1, name: "New PRD" })).toBeVisible();
-  await page.getByRole("button", { name: "Add another" }).click();
-  await expect(page.getByTestId("recommended-template")).toHaveText("Goal-traced PRD");
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  await login(page, 'approver@example.com');
+  await page.goto('/documents/new?kind=prd');
+  await expect(page.getByRole('heading', { level: 1, name: 'New PRD' })).toBeVisible();
+  await page.getByRole('button', { name: 'Add another' }).click();
+  await expect(page.getByTestId('recommended-template')).toHaveText('Goal-traced PRD');
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
   expect(overflow).toBeLessThanOrEqual(0);
-  const problem = await page.getByRole("textbox", { name: "What problem does it solve?" }).boundingBox();
-  const panel = await page.getByTestId("recommendation-panel").boundingBox();
+  const problem = await page
+    .getByRole('textbox', { name: 'What problem does it solve?' })
+    .boundingBox();
+  const panel = await page.getByTestId('recommendation-panel').boundingBox();
   expect(problem && panel && panel.y > problem.y + problem.height).toBeTruthy();
   expect(panel!.x + panel!.width).toBeLessThanOrEqual(390);
 });

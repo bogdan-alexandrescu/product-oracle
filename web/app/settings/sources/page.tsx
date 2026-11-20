@@ -1,9 +1,18 @@
-"use client";
+'use client';
 
-import { Link, useRouter } from "@/lib/nav";
-import { type ComponentType, type FormEvent, type ReactNode, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
+import { Link, useRouter } from '@/lib/nav';
+import {
+  type ComponentType,
+  type FormEvent,
+  type ReactNode,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 
-import { KIND_LABEL } from "@/app/sources/_components/confidence";
+import { KIND_LABEL } from '@/app/sources/_components/confidence';
 import {
   Button,
   Chip,
@@ -20,22 +29,29 @@ import {
   Split,
   ViewOnly,
   type ChipKind,
-} from "@/components/ds";
-import { api, ApiError, type Schemas, unwrap } from "@/lib/api/client";
-import { LoadError } from "@/components/ui";
-import { formatDateTime } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { attentionMessage, needingAttention, shownStatus } from "@/lib/source-attention";
-import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
+} from '@/components/ds';
+import { api, ApiError, type Schemas, unwrap } from '@/lib/api/client';
+import { LoadError } from '@/components/ui';
+import { formatDateTime } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { attentionMessage, needingAttention, shownStatus } from '@/lib/source-attention';
+import { errorMessage, useAuthRedirect, useQuery } from '@/lib/use-query';
 
-import { Field, INPUT, SELECT_FIELD } from "../_components/fields";
-import { labelsOf, type PickerProps } from "./_browse-list";
-import { CodeMaps } from "./_code-maps";
-import { GithubPicker, githubReads } from "./_github-picker";
-import { SlackPicker } from "./_slack-picker";
-import { CodeMapRefreshSetting } from "./_code-map-refresh";
-import { CompanyDriveSettings } from "./CompanyDrive";
-import { driveConfig, driveFiles, DriveFiles, DriveNotes, ReconnectToChoose, type DriveFile } from "./DriveFiles";
+import { Field, INPUT, SELECT_FIELD } from '../_components/fields';
+import { labelsOf, type PickerProps } from './_browse-list';
+import { CodeMaps } from './_code-maps';
+import { GithubPicker, githubReads } from './_github-picker';
+import { SlackPicker } from './_slack-picker';
+import { CodeMapRefreshSetting } from './_code-map-refresh';
+import { CompanyDriveSettings } from './CompanyDrive';
+import {
+  driveConfig,
+  driveFiles,
+  DriveFiles,
+  DriveNotes,
+  ReconnectToChoose,
+  type DriveFile,
+} from './DriveFiles';
 import {
   type FirefliesConfig,
   FirefliesPicker,
@@ -44,28 +60,28 @@ import {
   firefliesSummary,
   firefliesRange,
   readFirefliesConfig,
-} from "./FirefliesPicker";
-import { NotionPicker, notionRoots } from "./NotionPicker";
+} from './FirefliesPicker';
+import { NotionPicker, notionRoots } from './NotionPicker';
 
-type Source = Schemas["SourceOut"];
-type Kind = Source["kind"];
-type KindOption = Schemas["SourceKindOut"];
-type Choice = Schemas["ConnectionChoice"];
+type Source = Schemas['SourceOut'];
+type Kind = Source['kind'];
+type KindOption = Schemas['SourceKindOut'];
+type Choice = Schemas['ConnectionChoice'];
 
 // The config key holding each kind's picks (as its connector reads it), the row's label
 // for them and the word for them in the menu, button and notice. Every kind is picked in
 // a picker (S5); Fireflies sources in a browse panel of their own (FirefliesPicker).
-type ListKind = Exclude<Kind, "upload" | "fireflies">;
+type ListKind = Exclude<Kind, 'upload' | 'fireflies'>;
 const ALLOWLIST: Record<ListKind, { key: string; label: string; noun: string }> = {
-  github: { key: "repos", label: "Repositories", noun: "repositories" },
-  slack: { key: "channels", label: "Channels", noun: "channels" },
-  notion: { key: "roots", label: "Pages", noun: "pages" },
+  github: { key: 'repos', label: 'Repositories', noun: 'repositories' },
+  slack: { key: 'channels', label: 'Channels', noun: 'channels' },
+  notion: { key: 'roots', label: 'Pages', noun: 'pages' },
   // Picked in Google's Drive picker (DriveFiles): "docs" and "folders".
-  google_docs: { key: "docs", label: "Files", noun: "files" },
+  google_docs: { key: 'docs', label: 'Files', noun: 'files' },
 };
 
 const SAVE_TIP =
-  "Saving fewer channels (or repositories, or pages), or a shorter date range, removes what they no longer cover at once. The next sync reads only what remains, and anything new.";
+  'Saving fewer channels (or repositories, or pages), or a shorter date range, removes what they no longer cover at once. The next sync reads only what remains, and anything new.';
 
 // Kinds chosen in a picker (browse, search, tick) rather than typed ids (S5).
 const PICKER: Partial<Record<Kind, ComponentType<PickerProps>>> = {
@@ -74,55 +90,67 @@ const PICKER: Partial<Record<Kind, ComponentType<PickerProps>>> = {
   notion: NotionSourcePicker,
 };
 
-const STATUS_KIND: Record<Source["status"], ChipKind> = {
-  active: "pass",
-  paused: "na",
-  error: "crit",
-  needs_attention: "warn",
+const STATUS_KIND: Record<Source['status'], ChipKind> = {
+  active: 'pass',
+  paused: 'na',
+  error: 'crit',
+  needs_attention: 'warn',
 };
-const STATUS_LABEL: Record<Source["status"], string> = {
-  active: "Active",
-  paused: "Paused",
-  error: "Error",
-  needs_attention: "Needs attention",
+const STATUS_LABEL: Record<Source['status'], string> = {
+  active: 'Active',
+  paused: 'Paused',
+  error: 'Error',
+  needs_attention: 'Needs attention',
 };
 
 /** As oracle.sources.sync words it when the provider refused the connection's credential. */
-const REJECTED = "The connection was rejected";
+const REJECTED = 'The connection was rejected';
 
 /**
  * qa4-settings-7: the source failed because its connection's credential was refused (an
  * expired or revoked token), or its connection is no longer active: only reconnecting fixes it.
  */
-function connectionRejected(s: Source, connection: { status?: string | null } | undefined): boolean {
-  if (s.status !== "error") return false;
-  return !!s.last_error?.startsWith(REJECTED) || (!!connection?.status && connection.status !== "active");
+function connectionRejected(
+  s: Source,
+  connection: { status?: string | null } | undefined,
+): boolean {
+  if (s.status !== 'error') return false;
+  return (
+    !!s.last_error?.startsWith(REJECTED) || (!!connection?.status && connection.status !== 'active')
+  );
 }
 
-
 /** Fireflies' own API: a source reading it says nothing of where it reads. */
-const FIREFLIES_API = "https://api.fireflies.ai/graphql";
+const FIREFLIES_API = 'https://api.fireflies.ai/graphql';
 
 /** "1 item", "2 items": a count and its noun, in words (qa-settings-26). */
 function count(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
-const NEW_FIREFLIES: FirefliesConfig = { mode: "all", series: [], meetings: [], labels: {} };
+const NEW_FIREFLIES: FirefliesConfig = { mode: 'all', series: [], meetings: [], labels: {} };
 
-type RowNotice = { tone: "pass" | "warn"; text: string };
+type RowNotice = { tone: 'pass' | 'warn'; text: string };
 
 /**
  * A row's rarely used actions (Edit channels, Delete) behind one "More" button, so the
  * row's actions stay on one line on a phone.
  */
-function RowMenu({ label, items }: { label: string; items: { label: string; onSelect: () => void; danger?: boolean }[] }) {
+function RowMenu({
+  label,
+  items,
+}: {
+  label: string;
+  items: { label: string; onSelect: () => void; danger?: boolean }[];
+}) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLSpanElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLSpanElement>(null);
   const id = useId();
-  const menuItems = () => [...(menu.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
+  const menuItems = () => [
+    ...(menu.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []),
+  ];
   useEffect(() => {
     if (!open) return;
     // Opening moves focus to the first item (qa-settings-12); Escape returns it to the button.
@@ -131,16 +159,16 @@ function RowMenu({ label, items }: { label: string; items: { label: string; onSe
       if (!box.current?.contains(e.target as Node)) setOpen(false);
     };
     const esc = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+      if (e.key !== 'Escape') return;
       e.preventDefault();
       setOpen(false);
       trigger.current?.focus();
     };
-    document.addEventListener("pointerdown", away);
-    document.addEventListener("keydown", esc);
+    document.addEventListener('pointerdown', away);
+    document.addEventListener('keydown', esc);
     return () => {
-      document.removeEventListener("pointerdown", away);
-      document.removeEventListener("keydown", esc);
+      document.removeEventListener('pointerdown', away);
+      document.removeEventListener('keydown', esc);
     };
   }, [open]);
   return (
@@ -165,13 +193,18 @@ function RowMenu({ label, items }: { label: string; items: { label: string; onSe
           aria-label={label}
           onKeyDown={(e) => {
             // Arrow keys move between the items; Tab leaves the menu and closes it.
-            if (e.key === "Tab") return setOpen(false);
-            if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Home" && e.key !== "End") return;
+            if (e.key === 'Tab') return setOpen(false);
+            if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End')
+              return;
             e.preventDefault();
             const els = menuItems();
             const i = els.indexOf(document.activeElement as HTMLElement);
             const next =
-              e.key === "Home" ? 0 : e.key === "End" ? els.length - 1 : (i + (e.key === "ArrowDown" ? 1 : -1) + els.length) % els.length;
+              e.key === 'Home'
+                ? 0
+                : e.key === 'End'
+                  ? els.length - 1
+                  : (i + (e.key === 'ArrowDown' ? 1 : -1) + els.length) % els.length;
             els[next]?.focus();
           }}
           className="absolute top-full right-0 z-20 mt-1 flex min-w-40 flex-col rounded-button border border-line bg-surface p-1 shadow-panel"
@@ -187,7 +220,7 @@ function RowMenu({ label, items }: { label: string; items: { label: string; onSe
                 it.onSelect();
               }}
               className={`flex h-9 items-center rounded-lg px-3 text-left text-[15px] font-medium whitespace-nowrap hover:bg-surface2 ${
-                it.danger ? "text-crit" : "text-text"
+                it.danger ? 'text-crit' : 'text-text'
               }`}
             >
               {it.label}
@@ -203,10 +236,10 @@ function RowMenu({ label, items }: { label: string; items: { label: string; onSe
 const PICKS_SHOWN = 5;
 
 /** What a pick without a saved name reads as: "unknown channel", "3 unknown channels". */
-const UNKNOWN: Partial<Record<Kind | "folder", [string, string]>> = {
-  slack: ["unknown channel", "unknown channels"],
-  google_docs: ["unknown file", "unknown files"],
-  folder: ["unknown folder", "unknown folders"],
+const UNKNOWN: Partial<Record<Kind | 'folder', [string, string]>> = {
+  slack: ['unknown channel', 'unknown channels'],
+  google_docs: ['unknown file', 'unknown files'],
+  folder: ['unknown folder', 'unknown folders'],
 };
 
 /**
@@ -214,21 +247,35 @@ const UNKNOWN: Partial<Record<Kind | "folder", [string, string]>> = {
  * `shown`; those without a saved name are counted as unknown ("120 unknown channels",
  * qa-settings-23), never listed by id: the ids only in the title.
  */
-function pickWords(picks: { id: string; name?: string }[], unknown?: [string, string], shown = Infinity): { text: string; title: string } {
+function pickWords(
+  picks: { id: string; name?: string }[],
+  unknown?: [string, string],
+  shown = Infinity,
+): { text: string; title: string } {
   const named = picks.flatMap((p) => (p.name ? [p.name] : unknown ? [] : [p.id]));
   const unnamed = unknown ? picks.filter((p) => !p.name).map((p) => p.id) : [];
-  const title = [named.join(", "), unnamed.length ? `No name saved for ${unnamed.join(", ")}` : ""].filter(Boolean).join(". ");
+  const title = [named.join(', '), unnamed.length ? `No name saved for ${unnamed.join(', ')}` : '']
+    .filter(Boolean)
+    .join('. ');
   const extra = named.length - Math.min(named.length, shown);
-  if (extra) return { text: `${named.slice(0, shown).join(", ")} and ${extra + unnamed.length} more`, title };
+  if (extra)
+    return {
+      text: `${named.slice(0, shown).join(', ')} and ${extra + unnamed.length} more`,
+      title,
+    };
   // One unknown pick reads "Unknown channel" alone, "#product, unknown channel" after names.
-  const one = unknown?.[0] ?? "";
+  const one = unknown?.[0] ?? '';
   const rest =
-    unnamed.length === 0 ? [] : unnamed.length > 1 ? [`${unnamed.length} ${unknown![1]}`] : [named.length ? one : one.charAt(0).toUpperCase() + one.slice(1)];
-  return { text: [...named, ...rest].join(", "), title };
+    unnamed.length === 0
+      ? []
+      : unnamed.length > 1
+        ? [`${unnamed.length} ${unknown![1]}`]
+        : [named.length ? one : one.charAt(0).toUpperCase() + one.slice(1)];
+  return { text: [...named, ...rest].join(', '), title };
 }
 
 function entries(config: Record<string, unknown>, key: string): string[] {
-  if (key === "roots") return notionRoots(config);
+  if (key === 'roots') return notionRoots(config);
   const value = config[key];
   return Array.isArray(value) ? value.map(String) : [];
 }
@@ -248,7 +295,7 @@ function useAction() {
     } catch (e) {
       if (!onAuth(e)) {
         setError(errorMessage(e));
-        setStale(e instanceof ApiError && e.code === "source_changed");
+        setStale(e instanceof ApiError && e.code === 'source_changed');
       }
       return undefined;
     } finally {
@@ -288,12 +335,14 @@ function SaveError({
 
 /** Refetches a source (the Reload of a stale save). */
 function fetchSource(id: string) {
-  return unwrap(api.GET("/v1/sources/{source_id}", { params: { path: { source_id: id } } }));
+  return unwrap(api.GET('/v1/sources/{source_id}', { params: { path: { source_id: id } } }));
 }
 
 /** A one-line warning (warn tokens): a connector that is not there yet. */
 function Warn({ children }: { children: ReactNode }) {
-  return <p className="rounded-button bg-warn-bg px-3 py-2 text-sm font-medium text-warn">{children}</p>;
+  return (
+    <p className="rounded-button bg-warn-bg px-3 py-2 text-sm font-medium text-warn">{children}</p>
+  );
 }
 
 function AllowlistEditor({
@@ -309,16 +358,16 @@ function AllowlistEditor({
   const Picker = PICKER[source.kind];
   const [picked, setPicked] = useState(source.config);
   const { act, error, busy, stale } = useAction();
-  const notion = source.kind === "notion";
+  const notion = source.kind === 'notion';
   // Like Add source, a Slack source with no channel left says why Save waits.
-  const noChannels = source.kind === "slack" && entries(picked, "channels").length === 0;
+  const noChannels = source.kind === 'slack' && entries(picked, 'channels').length === 0;
 
   async function save(e: FormEvent) {
     e.preventDefault();
     // base_version: the version this form loaded; a source saved since refuses the save.
     const saved = await act(() =>
       unwrap(
-        api.PATCH("/v1/sources/{source_id}", {
+        api.PATCH('/v1/sources/{source_id}', {
           params: { path: { source_id: source.id } },
           body: { config: picked, base_version: source.config_version },
         }),
@@ -332,11 +381,20 @@ function AllowlistEditor({
   }
 
   return (
-    <form onSubmit={save} className="mt-2.5 flex flex-col gap-2.5 rounded-button border border-line bg-surface2 p-3">
-      {Picker && <Picker connectionId={source.connection_id} config={picked} onChange={setPicked} />}
+    <form
+      onSubmit={save}
+      className="mt-2.5 flex flex-col gap-2.5 rounded-button border border-line bg-surface2 p-3"
+    >
+      {Picker && (
+        <Picker connectionId={source.connection_id} config={picked} onChange={setPicked} />
+      )}
       {error && <SaveError error={error} stale={stale} busy={busy} onReload={reload} />}
       <div className="flex items-center gap-1.5">
-        <Button type="submit" variant="solid" disabled={busy || (notion && notionRoots(picked).length === 0) || noChannels}>
+        <Button
+          type="submit"
+          variant="solid"
+          disabled={busy || (notion && notionRoots(picked).length === 0) || noChannels}
+        >
           Save {spec.noun}
         </Button>
         {!notion && (
@@ -372,7 +430,7 @@ function FirefliesEditor({
     const config = firefliesConfigToSave(value);
     const saved = await act(() =>
       unwrap(
-        api.PATCH("/v1/sources/{source_id}", {
+        api.PATCH('/v1/sources/{source_id}', {
           params: { path: { source_id: source.id } },
           body: { config, base_version: source.config_version },
         }),
@@ -392,17 +450,29 @@ function FirefliesEditor({
       className="mt-2.5 flex flex-col gap-3 rounded-button border border-line bg-surface2/40 p-3 max-[600px]:p-2.5"
     >
       {source.connection_id ? (
-        <FirefliesPicker connectionId={source.connection_id} value={value} onChange={setValue} titleRule={initial.titleRule} />
+        <FirefliesPicker
+          connectionId={source.connection_id}
+          value={value}
+          onChange={setValue}
+          titleRule={initial.titleRule}
+        />
       ) : (
-        <Warn>This source has no connection. Pick one of your Fireflies connections to sync it again.</Warn>
+        <Warn>
+          This source has no connection. Pick one of your Fireflies connections to sync it again.
+        </Warn>
       )}
       {error && <SaveError error={error} stale={stale} busy={busy} onReload={reload} />}
       <div className="flex items-center gap-2.5">
-        <Button type="submit" variant="solid" disabled={busy || !firefliesReady(value) || !source.connection_id}>
+        <Button
+          type="submit"
+          variant="solid"
+          disabled={busy || !firefliesReady(value) || !source.connection_id}
+        >
           Save meetings
         </Button>
         <InfoTip label="saving meetings" align="start">
-          Saving a narrower date range, or dropping a meeting or series, removes the meetings outside your picks at once. What is already stored and still included is kept.
+          Saving a narrower date range, or dropping a meeting or series, removes the meetings
+          outside your picks at once. What is already stored and still included is kept.
         </InfoTip>
       </div>
     </form>
@@ -425,14 +495,21 @@ function DriveFilesEditor({
   const { act, error, busy, stale } = useAction();
   const reconnect = !!connection?.reconnect_reason;
   const unavailable = Object.fromEntries(
-    (source.unavailable_items ?? []).filter((u) => (u.status ?? "unavailable") === "unavailable").map((u) => [u.external_id, u.reason]),
+    (source.unavailable_items ?? [])
+      .filter((u) => (u.status ?? 'unavailable') === 'unavailable')
+      .map((u) => [u.external_id, u.reason]),
   );
 
   async function save(e: FormEvent) {
     e.preventDefault();
     const config = driveConfig(source.config, files);
     const saved = await act(() =>
-      unwrap(api.PATCH("/v1/sources/{source_id}", { params: { path: { source_id: source.id } }, body: { config, base_version: source.config_version } })),
+      unwrap(
+        api.PATCH('/v1/sources/{source_id}', {
+          params: { path: { source_id: source.id } },
+          body: { config, base_version: source.config_version },
+        }),
+      ),
     );
     if (saved) onSaved(saved);
   }
@@ -450,7 +527,7 @@ function DriveFilesEditor({
       <DriveFiles
         files={files}
         onChange={setFiles}
-        accountHint={connection?.account_label ?? ""}
+        accountHint={connection?.account_label ?? ''}
         reconnect={reconnect}
         unavailable={unavailable}
       />
@@ -460,7 +537,8 @@ function DriveFilesEditor({
           Save files
         </Button>
         <InfoTip label="saving the files" align="start">
-          Saving syncs this source again. Docs from a file or folder you removed are deleted on that sync.
+          Saving syncs this source again. Docs from a file or folder you removed are deleted on that
+          sync.
         </InfoTip>
       </div>
     </form>
@@ -468,11 +546,11 @@ function DriveFilesEditor({
 }
 
 const PROVIDER_NAME: Record<string, string> = {
-  github: "GitHub",
-  slack: "Slack",
-  notion: "Notion",
-  fireflies: "Fireflies",
-  google: "Google",
+  github: 'GitHub',
+  slack: 'Slack',
+  notion: 'Notion',
+  fireflies: 'Fireflies',
+  google: 'Google',
 };
 
 /** A source whose connection was deleted (Disconnect): the person's connections of its
@@ -489,14 +567,14 @@ function NoConnection({
 }) {
   const { act, error, busy } = useAction();
   const { can } = useMe();
-  const provider = PROVIDER_NAME[option?.provider ?? ""] ?? KIND_LABEL[source.kind];
-  const usable = (option?.connections ?? []).filter((c) => c.status === "active");
+  const provider = PROVIDER_NAME[option?.provider ?? ''] ?? KIND_LABEL[source.kind];
+  const usable = (option?.connections ?? []).filter((c) => c.status === 'active');
   const name = (c: Choice) => c.account_label ?? `your ${provider} connection`;
 
   async function use(c: Choice) {
     const saved = await act(() =>
       unwrap(
-        api.PATCH("/v1/sources/{source_id}", {
+        api.PATCH('/v1/sources/{source_id}', {
           params: { path: { source_id: source.id } },
           body: { connection_id: c.id, base_version: source.config_version },
         }),
@@ -520,7 +598,7 @@ function NoConnection({
           </span>
         ) : (
           <span className="min-w-0 break-words">
-            This source has no connection. Connect {provider} in{" "}
+            This source has no connection. Connect {provider} in{' '}
             <Link href="/settings/connections" className="underline underline-offset-2">
               Settings › Connections
             </Link>
@@ -528,7 +606,7 @@ function NoConnection({
           </span>
         )}
       </p>
-      {usable.length > 0 && can("update_source") && (
+      {usable.length > 0 && can('update_source') && (
         <span className="flex flex-wrap items-center gap-1.5">
           {usable.map((c) => (
             <Button key={c.id} variant="solid" disabled={busy} onClick={() => void use(c)}>
@@ -562,67 +640,88 @@ function SourceRow({
   const router = useRouter();
   // Visual QA ST-1: each write shows only to a role the API lets do it (a viewer reads only).
   const { can } = useMe();
-  const mayEdit = can("update_source");
+  const mayEdit = can('update_source');
   // Rows mount once the list has loaded, after the hash is read: open from the start.
-  const [editOpen, setEditing] = useState(targeted && source.status === "needs_attention");
+  const [editOpen, setEditing] = useState(targeted && source.status === 'needs_attention');
   // A role that cannot edit sources (a commenter, a viewer) reads the row with no editor open.
   const editing = editOpen && mayEdit;
   const rowRef = useRef<HTMLLIElement>(null);
   useEffect(() => {
-    if (targeted) rowRef.current?.scrollIntoView({ block: "center" });
+    if (targeted) rowRef.current?.scrollIntoView({ block: 'center' });
   }, [targeted]);
   const [notice, setNotice] = useState<RowNotice | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const { act, error, busy } = useAction();
   const path = { params: { path: { source_id: source.id } } };
-  const fireflies = source.kind === "fireflies" ? readFirefliesConfig(source.config) : null;
-  const allowlist = source.kind === "upload" || source.kind === "fireflies" ? null : ALLOWLIST[source.kind];
-  const drive = source.kind === "google_docs";
+  const fireflies = source.kind === 'fireflies' ? readFirefliesConfig(source.config) : null;
+  const allowlist =
+    source.kind === 'upload' || source.kind === 'fireflies' ? null : ALLOWLIST[source.kind];
+  const drive = source.kind === 'google_docs';
   const picked = drive ? driveFiles(source.config) : [];
   // A Drive pick without a saved name carries its id as its name (driveFiles).
   const folders = pickWords(
-    picked.filter((f) => f.kind === "folder").map((f) => ({ id: f.id, name: f.name !== f.id ? f.name : undefined })),
+    picked
+      .filter((f) => f.kind === 'folder')
+      .map((f) => ({ id: f.id, name: f.name !== f.id ? f.name : undefined })),
     UNKNOWN.folder,
   );
   const unavailable = source.unavailable_items ?? [];
   // A Disconnect deleted its connection: it says so, and offers the person's others.
-  const unlinked = source.kind !== "upload" && !source.connection_id;
+  const unlinked = source.kind !== 'upload' && !source.connection_id;
   const linked = (s: Source, label: string) => {
     onChange(s);
     setEditing(false);
-    setNotice({ tone: "pass", text: `Linked to ${label}. Sync now to read it again.` });
+    setNotice({ tone: 'pass', text: `Linked to ${label}. Sync now to read it again.` });
   };
 
   async function syncNow() {
     setNotice(null);
-    const r = await act(() => unwrap(api.POST("/v1/sources/{source_id}/sync", path)));
+    const r = await act(() => unwrap(api.POST('/v1/sources/{source_id}/sync', path)));
     if (!r) return;
     onChange(r.source);
-    if (r.outcome === "completed") {
+    if (r.outcome === 'completed') {
       setNotice({
-        tone: "pass",
+        tone: 'pass',
         text:
           r.upserted === 0 && r.deleted === 0
-            ? "Synced: nothing new."
-            : `Synced: ${count(r.upserted, "item")}, ${r.versions_written} changed, ${r.deleted} removed.`,
+            ? 'Synced: nothing new.'
+            : `Synced: ${count(r.upserted, 'item')}, ${r.versions_written} changed, ${r.deleted} removed.`,
       });
-    } else if (r.outcome === "rate_limited") {
-      setNotice({ tone: "pass", text: "Rate limited: the next sync resumes where this one stopped." });
-    } else if (r.outcome === "superseded") {
-      setNotice({ tone: "warn", text: "Not synced: this source was edited while it synced. Sync again to use the new selection." });
+    } else if (r.outcome === 'rate_limited') {
+      setNotice({
+        tone: 'pass',
+        text: 'Rate limited: the next sync resumes where this one stopped.',
+      });
+    } else if (r.outcome === 'superseded') {
+      setNotice({
+        tone: 'warn',
+        text: 'Not synced: this source was edited while it synced. Sync again to use the new selection.',
+      });
     }
     // error and needs_attention: the returned source carries the status and last_error shown below.
   }
 
   async function togglePause() {
-    const next = source.status === "paused" ? "/v1/sources/{source_id}/resume" : "/v1/sources/{source_id}/pause";
+    const next =
+      source.status === 'paused'
+        ? '/v1/sources/{source_id}/resume'
+        : '/v1/sources/{source_id}/pause';
     const s = await act(() => unwrap(api.POST(next, path)));
     if (s) onChange(s);
   }
 
   async function remove() {
-    if (!(await confirmInPage({ destructive: true, action: "Delete", message: `Delete “${source.name}” and everything it pulled in?` }))) return;
-    const ok = await act(() => unwrap(api.DELETE("/v1/sources/{source_id}", path)).then(() => true));
+    if (
+      !(await confirmInPage({
+        destructive: true,
+        action: 'Delete',
+        message: `Delete “${source.name}” and everything it pulled in?`,
+      }))
+    )
+      return;
+    const ok = await act(() =>
+      unwrap(api.DELETE('/v1/sources/{source_id}', path)).then(() => true),
+    );
     if (ok) onDelete();
   }
 
@@ -630,22 +729,25 @@ function SourceRow({
     if (!files?.length) return;
     setNotice(null);
     const form = new FormData();
-    for (const f of Array.from(files)) form.append("files", f);
+    for (const f of Array.from(files)) form.append('files', f);
     const r = await act(() =>
       unwrap(
-        api.POST("/v1/sources/{source_id}/uploads", {
+        api.POST('/v1/sources/{source_id}/uploads', {
           ...path,
           // openapi-fetch sends FormData as is; the schema types the field as strings.
-          body: form as unknown as Schemas["Body_upload_files"],
+          body: form as unknown as Schemas['Body_upload_files'],
           bodySerializer: (b) => b as unknown as FormData,
         }),
       ),
     );
-    if (fileRef.current) fileRef.current.value = "";
+    if (fileRef.current) fileRef.current.value = '';
     if (!r) return;
     const added = r.items.length - r.unchanged.length;
-    setNotice({ tone: "pass", text: `Uploaded ${count(added, "file")}${r.unchanged.length ? `, ${r.unchanged.length} unchanged` : ""}.` });
-    const fresh = await act(() => unwrap(api.GET("/v1/sources/{source_id}", path)));
+    setNotice({
+      tone: 'pass',
+      text: `Uploaded ${count(added, 'file')}${r.unchanged.length ? `, ${r.unchanged.length} unchanged` : ''}.`,
+    });
+    const fresh = await act(() => unwrap(api.GET('/v1/sources/{source_id}', path)));
     if (fresh) onChange(fresh);
   }
 
@@ -655,26 +757,31 @@ function SourceRow({
   const names = labelsOf(source.config);
   const pickIds = drive || !allowlist ? [] : entries(source.config, allowlist.key);
   // qa-work-46: Slack and Notion picks are opaque ids; one with no saved name is counted, not shown by id.
-  const opaqueIds = source.kind === "slack" || source.kind === "notion";
+  const opaqueIds = source.kind === 'slack' || source.kind === 'notion';
   const rowPicks = drive
-    ? picked.filter((f) => f.kind === "doc").map((f) => ({ id: f.id, name: f.name !== f.id ? f.name : undefined }))
+    ? picked
+        .filter((f) => f.kind === 'doc')
+        .map((f) => ({ id: f.id, name: f.name !== f.id ? f.name : undefined }))
     : pickIds.map((id) => ({ id, name: opaqueIds ? names[id] : (names[id] ?? id) }));
   const items = rowPicks.flatMap((p) => (p.name ? [p.name] : []));
   const unnamed = rowPicks.length - items.length;
   const unknown: [string, string] | undefined =
-    UNKNOWN[source.kind] ?? (allowlist ? [`unknown ${allowlist.noun.replace(/s$/, "")}`, `unknown ${allowlist.noun}`] : undefined);
-  const picks = allowlist ? pickWords(rowPicks, unknown, PICKS_SHOWN) : { text: "", title: "" };
+    UNKNOWN[source.kind] ??
+    (allowlist
+      ? [`unknown ${allowlist.noun.replace(/s$/, '')}`, `unknown ${allowlist.noun}`]
+      : undefined);
+  const picks = allowlist ? pickWords(rowPicks, unknown, PICKS_SHOWN) : { text: '', title: '' };
   // GitHub's include: what the source reads, when it reads only some kinds.
-  const reads = source.kind === "github" ? githubReads(source.config) : null;
-  const attention = source.status === "needs_attention";
+  const reads = source.kind === 'github' ? githubReads(source.config) : null;
+  const attention = source.status === 'needs_attention';
   // An Uploads source with nothing in it yet points to its own Upload files (qa-onboarding-24).
-  const emptyUpload = source.kind === "upload" && source.item_count === 0 && !source.last_synced_at;
+  const emptyUpload = source.kind === 'upload' && source.item_count === 0 && !source.last_synced_at;
   // A sync that stopped part way (a rate limit) kept what it stored: say so, never "never synced".
   const synced = source.partly_synced_at
     ? `partly synced ${formatDateTime(source.partly_synced_at)} · resumes on the next sync`
     : source.last_synced_at
-      ? `last ${source.kind === "upload" ? "upload" : "sync"} ${formatDateTime(source.last_synced_at)}`
-      : "never synced";
+      ? `last ${source.kind === 'upload' ? 'upload' : 'sync'} ${formatDateTime(source.last_synced_at)}`
+      : 'never synced';
 
   return (
     <li
@@ -694,19 +801,27 @@ function SourceRow({
             {STATUS_LABEL[shownStatus(source)]}
           </Chip>
           {!source.connector_available && (
-            <Chip kind="warn" title={`The ${KIND_LABEL[source.kind]} connector is not available yet.`}>
+            <Chip
+              kind="warn"
+              title={`The ${KIND_LABEL[source.kind]} connector is not available yet.`}
+            >
               No connector
             </Chip>
           )}
           {/* Where it reads, without the address: only when an owner set another endpoint (qa-settings-25). */}
-          {source.kind === "fireflies" && connection?.endpoint_url && connection.endpoint_url !== FIREFLIES_API && (
-            <span className="min-w-0 max-w-full truncate text-sm text-text2" title={connection.endpoint_url}>
-              Reads an endpoint an owner set
-            </span>
-          )}
+          {source.kind === 'fireflies' &&
+            connection?.endpoint_url &&
+            connection.endpoint_url !== FIREFLIES_API && (
+              <span
+                className="min-w-0 max-w-full truncate text-sm text-text2"
+                title={connection.endpoint_url}
+              >
+                Reads an endpoint an owner set
+              </span>
+            )}
         </span>
         <span className="flex flex-none items-center gap-1">
-          {source.kind === "upload" ? (
+          {source.kind === 'upload' ? (
             <>
               <input
                 ref={fileRef}
@@ -717,26 +832,30 @@ function SourceRow({
                 aria-label={`Upload files to ${source.name}`}
                 onChange={(e) => upload(e.target.files)}
               />
-              {can("upload_files") && (
-                <Button variant="solid" disabled={busy || source.status === "paused"} onClick={() => fileRef.current?.click()}>
+              {can('upload_files') && (
+                <Button
+                  variant="solid"
+                  disabled={busy || source.status === 'paused'}
+                  onClick={() => fileRef.current?.click()}
+                >
                   Upload files
                 </Button>
               )}
             </>
           ) : (
-            can("sync_source") && (
+            can('sync_source') && (
               <Button
                 variant="solid"
-                disabled={busy || source.status === "paused" || !source.connector_available}
+                disabled={busy || source.status === 'paused' || !source.connector_available}
                 onClick={syncNow}
               >
                 Sync now
               </Button>
             )
           )}
-          {can(source.status === "paused" ? "resume_source" : "pause_source") && (
+          {can(source.status === 'paused' ? 'resume_source' : 'pause_source') && (
             <Button disabled={busy} onClick={togglePause}>
-              {source.status === "paused" ? "Resume" : "Pause"}
+              {source.status === 'paused' ? 'Resume' : 'Pause'}
             </Button>
           )}
           <RowMenu
@@ -747,19 +866,26 @@ function SourceRow({
                     {
                       label: drive
                         ? editing
-                          ? "Close files and folders"
-                          : "Edit files and folders"
-                        : `${editing ? "Close" : "Edit"} ${allowlist.noun}`,
+                          ? 'Close files and folders'
+                          : 'Edit files and folders'
+                        : `${editing ? 'Close' : 'Edit'} ${allowlist.noun}`,
                       onSelect: () => setEditing((v) => !v),
                     },
                   ]
                 : []),
               ...(fireflies && mayEdit
-                ? [{ label: editing ? "Close meetings" : "Edit meetings", onSelect: () => setEditing((v) => !v) }]
+                ? [
+                    {
+                      label: editing ? 'Close meetings' : 'Edit meetings',
+                      onSelect: () => setEditing((v) => !v),
+                    },
+                  ]
                 : []),
               // What Oracle read from it, left out and uses (A2).
-              { label: "Coverage", onSelect: () => router.push(`/sources?source=${source.id}`) },
-              ...(can("delete_source") ? [{ label: "Delete", onSelect: () => void remove(), danger: true }] : []),
+              { label: 'Coverage', onSelect: () => router.push(`/sources?source=${source.id}`) },
+              ...(can('delete_source')
+                ? [{ label: 'Delete', onSelect: () => void remove(), danger: true }]
+                : []),
             ]}
           />
         </span>
@@ -769,32 +895,48 @@ function SourceRow({
           <span data-testid="source-items">No items yet — upload files to add some</span>
         ) : (
           <>
-            <span data-testid="source-items">{source.item_count ? count(source.item_count, "item") : "No items yet"}</span>
+            <span data-testid="source-items">
+              {source.item_count ? count(source.item_count, 'item') : 'No items yet'}
+            </span>
             <span data-testid="source-synced">{synced}</span>
           </>
         )}
         {fireflies && (
-          <span className="flex min-w-0 max-w-full items-center gap-1.5" data-testid="fireflies-included">
-            <Label className="flex-none">{fireflies.titleRule ? "Title rule" : "Meetings"}</Label>
+          <span
+            className="flex min-w-0 max-w-full items-center gap-1.5"
+            data-testid="fireflies-included"
+          >
+            <Label className="flex-none">{fireflies.titleRule ? 'Title rule' : 'Meetings'}</Label>
             <span className="min-w-0 truncate text-text">
               {fireflies.titleRule
-                ? [fireflies.titleRule.join(", "), firefliesRange(fireflies.value)].filter(Boolean).join(", ")
+                ? [fireflies.titleRule.join(', '), firefliesRange(fireflies.value)]
+                    .filter(Boolean)
+                    .join(', ')
                 : firefliesSummary(fireflies.value)}
             </span>
           </span>
         )}
-        {allowlist && (items.length + unnamed > 0 || folders.text === "") && !(source.kind === "github" && items.length > 0) && (
-          <span className="flex min-w-0 max-w-full items-center gap-1.5">
-            <Label className="flex-none">{allowlist.label}</Label>
-            {/* qa-nov17 runs 7: picked files wrap whole on a phone; channels stay on one line with the full list in the title (AC 14). */}
-            <span className={`min-w-0 truncate text-text${source.kind === "slack" ? "" : " max-[600px]:break-words max-[600px]:whitespace-normal"}`} title={picks.title} data-testid="source-picks">
-              {/* A Slack source reads nothing until it has a channel (qa-onboarding-4). */}
-              {picks.text || (source.kind === "slack" ? "Pick channels to read" : "none yet")}
+        {allowlist &&
+          (items.length + unnamed > 0 || folders.text === '') &&
+          !(source.kind === 'github' && items.length > 0) && (
+            <span className="flex min-w-0 max-w-full items-center gap-1.5">
+              <Label className="flex-none">{allowlist.label}</Label>
+              {/* qa-nov17 runs 7: picked files wrap whole on a phone; channels stay on one line with the full list in the title (AC 14). */}
+              <span
+                className={`min-w-0 truncate text-text${source.kind === 'slack' ? '' : ' max-[600px]:break-words max-[600px]:whitespace-normal'}`}
+                title={picks.title}
+                data-testid="source-picks"
+              >
+                {/* A Slack source reads nothing until it has a channel (qa-onboarding-4). */}
+                {picks.text || (source.kind === 'slack' ? 'Pick channels to read' : 'none yet')}
+              </span>
             </span>
-          </span>
-        )}
+          )}
         {reads && (
-          <span className="flex min-w-0 max-w-full items-center gap-1.5" data-testid="github-include">
+          <span
+            className="flex min-w-0 max-w-full items-center gap-1.5"
+            data-testid="github-include"
+          >
             <Label className="flex-none">Reads</Label>
             <span className="min-w-0 truncate text-text" title={reads}>
               {reads}
@@ -804,14 +946,18 @@ function SourceRow({
         {folders.text && (
           <span className="flex min-w-0 max-w-full items-center gap-1.5">
             <Label className="flex-none">Folders</Label>
-            <span className="min-w-0 truncate text-text" title={folders.title} data-testid="source-folders">
+            <span
+              className="min-w-0 truncate text-text"
+              title={folders.title}
+              data-testid="source-folders"
+            >
               {folders.text}
             </span>
           </span>
         )}
       </div>
       {unlinked && !editing && <NoConnection source={source} option={option} onLinked={linked} />}
-      {source.kind === "github" && <CodeMaps source={source} />}
+      {source.kind === 'github' && <CodeMaps source={source} />}
       {source.reconnect_reason && mayEdit && <ReconnectToChoose className="mt-2" />}
       {drive && (
         <DriveNotes
@@ -826,31 +972,38 @@ function SourceRow({
         <ul aria-label={`Sync notes for ${source.name}`} className="mt-2 flex flex-col gap-1">
           {unavailable.map((u) => {
             // qa-work-46: by the name the sync or the picker saved ("#partner-launch"), never its id.
-            const name = u.name ?? picked.find((f) => f.id === u.external_id)?.name ?? names[u.external_id] ?? (source.kind === "slack" ? "Unknown channel" : "Unnamed item");
-            const skipped = u.status === "skipped";
-            const why = u.reason.replace(/^Skipped:\s*/, "").replace(/^./, (c) => c.toUpperCase());
+            const name =
+              u.name ??
+              picked.find((f) => f.id === u.external_id)?.name ??
+              names[u.external_id] ??
+              (source.kind === 'slack' ? 'Unknown channel' : 'Unnamed item');
+            const skipped = u.status === 'skipped';
+            const why = u.reason.replace(/^Skipped:\s*/, '').replace(/^./, (c) => c.toUpperCase());
             return (
               <li
                 key={u.external_id}
-                aria-label={`${skipped ? "Skipped" : "No access"}: ${name}`}
+                aria-label={`${skipped ? 'Skipped' : 'No access'}: ${name}`}
                 className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm"
               >
-                <Chip kind={skipped ? "line" : "warn"}>{skipped ? "Skipped" : "No access"}</Chip>
+                <Chip kind={skipped ? 'line' : 'warn'}>{skipped ? 'Skipped' : 'No access'}</Chip>
                 <span className="min-w-0 truncate font-medium" title={name}>
                   {name}
                 </span>
                 {/* D-10: a short badge on the row; the sentence behind the (i). */}
-                <InfoTip label={`why ${name} is ${skipped ? "skipped" : "not read"}`} align="start">
+                <InfoTip label={`why ${name} is ${skipped ? 'skipped' : 'not read'}`} align="start">
                   {skipped
-                    ? source.kind === "slack"
+                    ? source.kind === 'slack'
                       ? `${why}. A channel shared in from another company is left out on purpose: only the company's own channels are read. Nothing to do.`
                       : `${why}. Nothing to do.`
                     : `${u.reason}. Oracle can’t read it with your account. ${
-                        source.kind === "slack" ? "Rejoin it in Slack" : "Ask for access again"
+                        source.kind === 'slack' ? 'Rejoin it in Slack' : 'Ask for access again'
                       }, or remove it from this source. What was already pulled in from it is kept.`}
                 </InfoTip>
                 {!skipped && allowlist && !editing && mayEdit && (
-                  <Button onClick={() => setEditing(true)} aria-label={`Edit ${allowlist.noun} of ${source.name}`}>
+                  <Button
+                    onClick={() => setEditing(true)}
+                    aria-label={`Edit ${allowlist.noun} of ${source.name}`}
+                  >
                     Edit {allowlist.noun}
                   </Button>
                 )}
@@ -889,7 +1042,12 @@ function SourceRow({
               </span>
               {/* With no connection left, the block above says what to do instead. */}
               {connectionRejected(source, connection) && !unlinked && mayEdit && (
-                <LinkButton href="/settings/connections" icon="link" data-testid="source-reconnect" aria-label={`Reconnect ${source.name}`}>
+                <LinkButton
+                  href="/settings/connections"
+                  icon="link"
+                  data-testid="source-reconnect"
+                  aria-label={`Reconnect ${source.name}`}
+                >
                   Reconnect
                 </LinkButton>
               )}
@@ -910,7 +1068,7 @@ function SourceRow({
           onSaved={(s) => {
             onChange(s);
             setEditing(false);
-            setNotice({ tone: "pass", text: "Files saved." });
+            setNotice({ tone: 'pass', text: 'Files saved.' });
           }}
         />
       )}
@@ -922,7 +1080,7 @@ function SourceRow({
           onSaved={(s) => {
             onChange(s);
             setEditing(false);
-            setNotice({ tone: "pass", text: "Meetings saved." });
+            setNotice({ tone: 'pass', text: 'Meetings saved.' });
           }}
         />
       )}
@@ -935,7 +1093,7 @@ function SourceRow({
             onChange(s);
             setEditing(false);
             const noun = ALLOWLIST[source.kind as ListKind].noun;
-            setNotice({ tone: "pass", text: `${noun[0].toUpperCase()}${noun.slice(1)} saved.` });
+            setNotice({ tone: 'pass', text: `${noun[0].toUpperCase()}${noun.slice(1)} saved.` });
           }}
         />
       )}
@@ -965,8 +1123,8 @@ function ChoosePages(props: Parameters<typeof NotionPicker>[0]) {
       <span className="flex items-center gap-1.5">
         <Label>Choose pages</Label>
         <InfoTip label="choosing pages" align="start">
-          Tick the pages and databases to pull in; their sub-pages and databases come with them. Pages no longer under
-          your picks are removed as soon as you save.
+          Tick the pages and databases to pull in; their sub-pages and databases come with them.
+          Pages no longer under your picks are removed as soon as you save.
         </InfoTip>
       </span>
       <NotionPicker {...props} />
@@ -975,31 +1133,31 @@ function ChoosePages(props: Parameters<typeof NotionPicker>[0]) {
 }
 
 function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Source) => void }) {
-  const [kind, setKind] = useState<Kind>("upload");
-  const [name, setName] = useState("");
-  const [connection, setConnection] = useState("");
+  const [kind, setKind] = useState<Kind>('upload');
+  const [name, setName] = useState('');
+  const [connection, setConnection] = useState('');
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [picked, setPicked] = useState<Record<string, unknown>>({});
   const [meetings, setMeetings] = useState<FirefliesConfig>(NEW_FIREFLIES);
   const { act, error, busy } = useAction();
   const Picker = PICKER[kind];
   const option = kinds.find((k) => k.kind === kind);
-  const usable = (option?.connections ?? []).filter((c) => c.status === "active");
-  const needsConnection = kind !== "upload";
-  const spec = kind === "upload" || kind === "fireflies" ? null : ALLOWLIST[kind];
-  const connectionId = connection || usable[0]?.id || "";
+  const usable = (option?.connections ?? []).filter((c) => c.status === 'active');
+  const needsConnection = kind !== 'upload';
+  const spec = kind === 'upload' || kind === 'fireflies' ? null : ALLOWLIST[kind];
+  const connectionId = connection || usable[0]?.id || '';
   const chosen = usable.find((c) => c.id === connectionId);
-  const drive = kind === "google_docs";
+  const drive = kind === 'google_docs';
   const reconnect = drive && !!chosen?.reconnect_reason;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    const body: Schemas["SourceCreate"] = {
+    const body: Schemas['SourceCreate'] = {
       kind,
       name: name.trim(),
       connection_id: needsConnection ? connectionId : null,
       config:
-        kind === "fireflies"
+        kind === 'fireflies'
           ? firefliesConfigToSave(meetings)
           : drive
             ? driveConfig({}, files)
@@ -1007,10 +1165,10 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
               ? picked
               : {},
     };
-    const s = await act(() => unwrap(api.POST("/v1/sources", { body })));
+    const s = await act(() => unwrap(api.POST('/v1/sources', { body })));
     if (s) {
       onAdded(s);
-      setName("");
+      setName('');
       setFiles([]);
       setPicked({});
       setMeetings(NEW_FIREFLIES);
@@ -1018,30 +1176,35 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
   }
 
   // A Slack source reads at least one channel, as the API refuses one without (qa-onboarding-5).
-  const noChannels = kind === "slack" && entries(picked, "channels").length === 0;
+  const noChannels = kind === 'slack' && entries(picked, 'channels').length === 0;
   // Why Add source is greyed out, next to it (qa-onboarding-17); other blocks say so above.
   const reason = !name.trim()
-    ? "Name the source to add it"
+    ? 'Name the source to add it'
     : drive && !reconnect && usable.length > 0 && files.length === 0
-      ? "Choose files or folders to add it"
-      : kind === "notion" && usable.length > 0 && notionRoots(picked).length === 0
-        ? "Tick pages to add it"
-        : kind === "fireflies" && usable.length > 0 && !firefliesReady(meetings)
-          ? "Pick meetings to add it"
+      ? 'Choose files or folders to add it'
+      : kind === 'notion' && usable.length > 0 && notionRoots(picked).length === 0
+        ? 'Tick pages to add it'
+        : kind === 'fireflies' && usable.length > 0 && !firefliesReady(meetings)
+          ? 'Pick meetings to add it'
           : noChannels && usable.length > 0
-            ? "Pick a channel to add it"
+            ? 'Pick a channel to add it'
             : null;
 
   const blocked =
     !option?.connector_available ||
     (needsConnection && usable.length === 0) ||
     (drive && (reconnect || files.length === 0)) ||
-    (kind === "fireflies" && !firefliesReady(meetings)) ||
-    (kind === "notion" && notionRoots(picked).length === 0) ||
+    (kind === 'fireflies' && !firefliesReady(meetings)) ||
+    (kind === 'notion' && notionRoots(picked).length === 0) ||
     noChannels;
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-3" aria-label="Add a source" id="add-source">
+    <form
+      onSubmit={submit}
+      className="flex flex-col gap-3"
+      aria-label="Add a source"
+      id="add-source"
+    >
       {/* Pass F F-59: Kind above Name, so "Google Docs" is never cut. */}
       <div className="flex flex-col gap-3">
         <Field label="Kind">
@@ -1049,7 +1212,7 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
             value={kind}
             onChange={(e) => {
               setKind(e.target.value as Kind);
-              setConnection("");
+              setConnection('');
               setPicked({});
             }}
             className={SELECT_FIELD}
@@ -1057,7 +1220,7 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
             {kinds.map((k) => (
               <option key={k.kind} value={k.kind}>
                 {KIND_LABEL[k.kind]}
-                {k.connector_available ? "" : " (not available yet)"}
+                {k.connector_available ? '' : ' (not available yet)'}
               </option>
             ))}
           </select>
@@ -1068,7 +1231,7 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
-            placeholder={kind === "upload" ? "Research notes" : `My ${KIND_LABEL[kind]}`}
+            placeholder={kind === 'upload' ? 'Research notes' : `My ${KIND_LABEL[kind]}`}
             className={INPUT}
           />
         </Field>
@@ -1080,7 +1243,11 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
             onChange={(e) => {
               setConnection(e.target.value);
               // Picks belong to the account they were listed from; the date range stays.
-              setPicked((p) => Object.fromEntries(Object.entries(p).filter(([k]) => k !== spec?.key && k !== "labels")));
+              setPicked((p) =>
+                Object.fromEntries(
+                  Object.entries(p).filter(([k]) => k !== spec?.key && k !== 'labels'),
+                ),
+              );
             }}
             className={SELECT_FIELD}
           >
@@ -1092,7 +1259,9 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
           </select>
         </Field>
       )}
-      {!option?.connector_available && <Warn>The {KIND_LABEL[kind]} connector is not available yet.</Warn>}
+      {!option?.connector_available && (
+        <Warn>The {KIND_LABEL[kind]} connector is not available yet.</Warn>
+      )}
       {option?.connector_available && needsConnection && usable.length === 0 && (
         <div className="flex flex-wrap items-center gap-2">
           <Chip kind="warn">No {KIND_LABEL[kind]} account</Chip>
@@ -1106,17 +1275,34 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
           key={connectionId}
           files={files}
           onChange={setFiles}
-          accountHint={chosen?.account_label ?? ""}
+          accountHint={chosen?.account_label ?? ''}
           reconnect={reconnect}
         />
       )}
-      {kind === "fireflies" && option?.connector_available && usable.length > 0 && connectionId && (
-        <FirefliesPicker key={connectionId} connectionId={connectionId} value={meetings} onChange={setMeetings} />
+      {kind === 'fireflies' && option?.connector_available && usable.length > 0 && connectionId && (
+        <FirefliesPicker
+          key={connectionId}
+          connectionId={connectionId}
+          value={meetings}
+          onChange={setMeetings}
+        />
       )}
-      {Picker && usable.length > 0 && <Picker key={`${kind}:${connectionId}`} connectionId={connectionId} config={picked} onChange={setPicked} />}
+      {Picker && usable.length > 0 && (
+        <Picker
+          key={`${kind}:${connectionId}`}
+          connectionId={connectionId}
+          config={picked}
+          onChange={setPicked}
+        />
+      )}
       {error && <Notice tone="error">{error}</Notice>}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <Button type="submit" variant="solid" icon="plus" disabled={busy || blocked || !name.trim()}>
+        <Button
+          type="submit"
+          variant="solid"
+          icon="plus"
+          disabled={busy || blocked || !name.trim()}
+        >
           Add source
         </Button>
         {reason && option?.connector_available && !(needsConnection && usable.length === 0) && (
@@ -1131,13 +1317,17 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
 }
 
 function subscribeHash(onChange: () => void) {
-  window.addEventListener("hashchange", onChange);
-  return () => window.removeEventListener("hashchange", onChange);
+  window.addEventListener('hashchange', onChange);
+  return () => window.removeEventListener('hashchange', onChange);
 }
 
 /** The source named by the URL's #source-<id> (the Inbox's Edit links there), or null. */
 function useTargetedSource(): string | null {
-  const hash = useSyncExternalStore(subscribeHash, () => window.location.hash, () => "");
+  const hash = useSyncExternalStore(
+    subscribeHash,
+    () => window.location.hash,
+    () => '',
+  );
   const m = /^#source-(.+)$/.exec(hash);
   return m ? decodeURIComponent(m[1]) : null;
 }
@@ -1145,26 +1335,31 @@ function useTargetedSource(): string | null {
 /** The header's Add a source, the page's one way in (qa-onboarding-18): to the form, cursor
  * in its name. On a phone the form sits below the list, so it is scrolled into view. */
 function toAddSource() {
-  document.getElementById("add-source")?.scrollIntoView({ block: "start", behavior: "smooth" });
-  document.getElementById("add-source-name")?.focus({ preventScroll: true });
+  document.getElementById('add-source')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  document.getElementById('add-source-name')?.focus({ preventScroll: true });
 }
 
 export default function SourceSettingsPage() {
-  const sources = useQuery("sources", () => unwrap(api.GET("/v1/sources")));
-  const kinds = useQuery("source-kinds", () => unwrap(api.GET("/v1/sources/kinds")));
+  const sources = useQuery('sources', () => unwrap(api.GET('/v1/sources')));
+  const kinds = useQuery('source-kinds', () => unwrap(api.GET('/v1/sources/kinds')));
   const { can, capsReady } = useMe();
   // Visual QA ST-1: a viewer reads the sources; adding one is for who may (as Members' View only).
-  const mayAdd = can("create_source");
+  const mayAdd = can('create_source');
   const list = sources.data ?? [];
-  const errors = list.filter((s) => s.status === "error").length;
+  const errors = list.filter((s) => s.status === 'error').length;
   const attention = needingAttention(list).length;
   // Pass F F-18: each count chip shows the sources it counts; pressing it again shows all.
-  const [only, setOnly] = useState<"error" | "attention" | null>(null);
+  const [only, setOnly] = useState<'error' | 'attention' | null>(null);
   const attentionIds = new Set(needingAttention(list).map((s) => s.id));
-  const shown = only === "error" ? list.filter((s) => s.status === "error") : only === "attention" ? list.filter((s) => attentionIds.has(s.id)) : list;
-  const toggleOnly = (which: "error" | "attention") => {
+  const shown =
+    only === 'error'
+      ? list.filter((s) => s.status === 'error')
+      : only === 'attention'
+        ? list.filter((s) => attentionIds.has(s.id))
+        : list;
+  const toggleOnly = (which: 'error' | 'attention') => {
     setOnly((o) => (o === which ? null : which));
-    document.getElementById("my-sources")?.scrollIntoView({ block: "start", behavior: "smooth" });
+    document.getElementById('my-sources')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
   };
   const items = list.reduce((n, s) => n + s.item_count, 0);
 
@@ -1173,7 +1368,8 @@ export default function SourceSettingsPage() {
   // which a phone would otherwise show only after the whole page.
   const fromSetup = useSyncExternalStore(
     subscribeHash,
-    () => new URLSearchParams(window.location.search).get("from") === "setup" && !window.location.hash,
+    () =>
+      new URLSearchParams(window.location.search).get('from') === 'setup' && !window.location.hash,
     () => false,
   );
   const empty = !!sources.data && list.length === 0;
@@ -1184,43 +1380,72 @@ export default function SourceSettingsPage() {
   // qa4-settings-4: Set up's Company domains opens #company-domains. The section sits below
   // the list, which mounts after the browser's own jump to the hash: once the list and the
   // section are drawn, scroll there (once), and CompanyDomains marks itself.
-  const domainsHash = useSyncExternalStore(subscribeHash, () => window.location.hash === "#company-domains", () => false);
+  const domainsHash = useSyncExternalStore(
+    subscribeHash,
+    () => window.location.hash === '#company-domains',
+    () => false,
+  );
   const scrolledToDomains = useRef(false);
   const listDrawn = !!sources.data || !!sources.error;
-  const showsDomains = can("put_setting");
+  const showsDomains = can('put_setting');
   useEffect(() => {
     if (!domainsHash || !listDrawn || !ready || !showsDomains || scrolledToDomains.current) return;
     scrolledToDomains.current = true;
-    requestAnimationFrame(() => document.getElementById("company-domains")?.scrollIntoView({ block: "start" }));
+    requestAnimationFrame(() =>
+      document.getElementById('company-domains')?.scrollIntoView({ block: 'start' }),
+    );
   }, [domainsHash, listDrawn, ready, showsDomains]);
-  const replace = (s: Source) => sources.setData((prev) => (prev ?? []).map((x) => (x.id === s.id ? s : x)));
+  const replace = (s: Source) =>
+    sources.setData((prev) => (prev ?? []).map((x) => (x.id === s.id ? s : x)));
 
   const inspector = (
     <Inspector
       eyebrow="Your sources"
-      title={mayAdd ? "New source" : "Sources"}
-      label={mayAdd ? "New source" : "Sources"}
+      title={mayAdd ? 'New source' : 'Sources'}
+      label={mayAdd ? 'New source' : 'Sources'}
       chips={
         <>
           <Chip hero>Only you</Chip>
           <InfoTip label="private sources" hero align="start" side="bottom">
-            Your sources are yours alone: what they pull in through your connections is visible only to you, and reaches
-            others only as evidence you add to the Ground Truth. Direct messages are never pulled in.
+            Your sources are yours alone: what they pull in through your connections is visible only
+            to you, and reaches others only as evidence you add to the Ground Truth. Direct messages
+            are never pulled in.
           </InfoTip>
         </>
       }
       stats={[
-        { label: list.length === 1 ? "Source" : "Sources", value: sources.data ? list.length : "—" },
-        { label: items === 1 ? "Item" : "Items", value: sources.data ? items : "—" },
-        { label: errors === 1 ? "Error" : "Errors", value: sources.data ? errors : "—", tone: errors > 0 ? "crit" : undefined, testId: "stat-errors" },
+        {
+          label: list.length === 1 ? 'Source' : 'Sources',
+          value: sources.data ? list.length : '—',
+        },
+        { label: items === 1 ? 'Item' : 'Items', value: sources.data ? items : '—' },
+        {
+          label: errors === 1 ? 'Error' : 'Errors',
+          value: sources.data ? errors : '—',
+          tone: errors > 0 ? 'crit' : undefined,
+          testId: 'stat-errors',
+        },
       ]}
     >
       {mayAdd && (
         <InspectorSection>
-          {kinds.error && <LoadError what="the kinds of source" error={kinds.error} onRetry={() => void kinds.reload()} />}
-          {!kinds.data && !kinds.error && <span className="block h-3 w-2/3 animate-pulse rounded bg-surface2" />}
+          {kinds.error && (
+            <LoadError
+              what="the kinds of source"
+              error={kinds.error}
+              onRetry={() => void kinds.reload()}
+            />
+          )}
+          {!kinds.data && !kinds.error && (
+            <span className="block h-3 w-2/3 animate-pulse rounded bg-surface2" />
+          )}
           {/* F-1: no new source under a list that did not load. */}
-          {kinds.data && !sources.error && <AddSource kinds={kinds.data} onAdded={(s) => sources.setData((prev) => [...(prev ?? []), s])} />}
+          {kinds.data && !sources.error && (
+            <AddSource
+              kinds={kinds.data}
+              onAdded={(s) => sources.setData((prev) => [...(prev ?? []), s])}
+            />
+          )}
         </InspectorSection>
       )}
     </Inspector>
@@ -1232,23 +1457,34 @@ export default function SourceSettingsPage() {
         title="Sources"
         info={
           <InfoTip label="sources" align="start" side="bottom">
-            What your connections pull in. Only you see it; it reaches others only as evidence you add to the Ground Truth.
+            What your connections pull in. Only you see it; it reaches others only as evidence you
+            add to the Ground Truth.
           </InfoTip>
         }
         status={
           <>
             {capsReady && !mayAdd && <ViewOnly />}
             {errors > 0 && (
-              <button type="button" aria-pressed={only === "error"} onClick={() => toggleOnly("error")} className="rounded-full">
+              <button
+                type="button"
+                aria-pressed={only === 'error'}
+                onClick={() => toggleOnly('error')}
+                className="rounded-full"
+              >
                 <Chip kind="crit" dot>
                   {errors} in error
                 </Chip>
               </button>
             )}
             {attention > 0 && (
-              <button type="button" aria-pressed={only === "attention"} onClick={() => toggleOnly("attention")} className="rounded-full">
+              <button
+                type="button"
+                aria-pressed={only === 'attention'}
+                onClick={() => toggleOnly('attention')}
+                className="rounded-full"
+              >
                 <Chip kind="warn" dot data-testid="sources-attention">
-                  {attention} need{attention === 1 ? "s" : ""} attention
+                  {attention} need{attention === 1 ? 's' : ''} attention
                 </Chip>
               </button>
             )}
@@ -1261,7 +1497,12 @@ export default function SourceSettingsPage() {
               Search sources
             </LinkButton>
             {mayAdd && (
-              <Button variant="primary" icon="plus" onClick={toAddSource} disabled={!!sources.error || !!kinds.error}>
+              <Button
+                variant="primary"
+                icon="plus"
+                onClick={toAddSource}
+                disabled={!!sources.error || !!kinds.error}
+              >
                 Add a source
               </Button>
             )}
@@ -1269,56 +1510,74 @@ export default function SourceSettingsPage() {
         }
       />
       <Split inspector={inspector}>
-        {sources.error && <LoadError what="your sources" error={sources.error} onRetry={() => void sources.reload()} />}
+        {sources.error && (
+          <LoadError
+            what="your sources"
+            error={sources.error}
+            onRetry={() => void sources.reload()}
+          />
+        )}
         <div id="my-sources" className="scroll-mt-4">
-        <Panel
-          title="My sources"
-          count={sources.data ? shown.length : undefined}
-          tools={
-            only && (
-              <>
-                <Chip kind={only === "error" ? "crit" : "warn"}>{only === "error" ? "In error" : "Need attention"}</Chip>
-                <Button variant="ghost" onClick={() => setOnly(null)}>
-                  Show all
-                </Button>
-              </>
-            )
-          }
-        >
-          {sources.loading && !sources.data && (
-            <div aria-busy className="flex flex-col">
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="flex h-14 items-center border-t border-line px-4 first:border-t-0">
-                  <span className="block h-3 w-2/3 animate-pulse rounded bg-surface2" />
-                </div>
-              ))}
-            </div>
-          )}
-          {sources.data && list.length === 0 && (
-            <div className="flex flex-col items-center gap-3 px-4 py-8 text-center" data-testid="sources-empty">
-              {/* Just words: the header's Add a source is the one way in (qa-onboarding-18). */}
-              <p className="text-[15px] text-text2">No sources yet</p>
-            </div>
-          )}
-          {list.length > 0 && (
-            <ul aria-label="My sources" className="flex flex-col">
-              {shown.map((s) => (
-                <SourceRow
-                  key={s.id}
-                  source={s}
-                  option={kinds.data?.find((k) => k.kind === s.kind)}
-                  connection={kinds.data?.flatMap((k) => k.connections).find((c) => c.id === s.connection_id)}
-                  onChange={replace}
-                  targeted={s.id === target}
-                  onDelete={() => sources.setData((prev) => (prev ?? []).filter((x) => x.id !== s.id))}
-                />
-              ))}
-            </ul>
-          )}
-        </Panel>
+          <Panel
+            title="My sources"
+            count={sources.data ? shown.length : undefined}
+            tools={
+              only && (
+                <>
+                  <Chip kind={only === 'error' ? 'crit' : 'warn'}>
+                    {only === 'error' ? 'In error' : 'Need attention'}
+                  </Chip>
+                  <Button variant="ghost" onClick={() => setOnly(null)}>
+                    Show all
+                  </Button>
+                </>
+              )
+            }
+          >
+            {sources.loading && !sources.data && (
+              <div aria-busy className="flex flex-col">
+                {[0, 1, 2].map((i) => (
+                  <div
+                    key={i}
+                    className="flex h-14 items-center border-t border-line px-4 first:border-t-0"
+                  >
+                    <span className="block h-3 w-2/3 animate-pulse rounded bg-surface2" />
+                  </div>
+                ))}
+              </div>
+            )}
+            {sources.data && list.length === 0 && (
+              <div
+                className="flex flex-col items-center gap-3 px-4 py-8 text-center"
+                data-testid="sources-empty"
+              >
+                {/* Just words: the header's Add a source is the one way in (qa-onboarding-18). */}
+                <p className="text-[15px] text-text2">No sources yet</p>
+              </div>
+            )}
+            {list.length > 0 && (
+              <ul aria-label="My sources" className="flex flex-col">
+                {shown.map((s) => (
+                  <SourceRow
+                    key={s.id}
+                    source={s}
+                    option={kinds.data?.find((k) => k.kind === s.kind)}
+                    connection={kinds.data
+                      ?.flatMap((k) => k.connections)
+                      .find((c) => c.id === s.connection_id)}
+                    onChange={replace}
+                    targeted={s.id === target}
+                    onDelete={() =>
+                      sources.setData((prev) => (prev ?? []).filter((x) => x.id !== s.id))
+                    }
+                  />
+                ))}
+              </ul>
+            )}
+          </Panel>
         </div>
-        {can("put_setting") && <CompanyDriveSettings />}
-        {can("put_setting") && <CodeMapRefreshSetting />}
+        {can('put_setting') && <CompanyDriveSettings />}
+        {can('put_setting') && <CodeMapRefreshSetting />}
       </Split>
     </>
   );

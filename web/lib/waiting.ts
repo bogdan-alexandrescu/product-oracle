@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { api, unwrap } from "@/lib/api/client";
-import { forgetReads, STALE_OK } from "@/lib/api/shared-reads";
+import { api, unwrap } from '@/lib/api/client';
+import { forgetReads, STALE_OK } from '@/lib/api/shared-reads';
 
 /**
  * What waits on the signed-in person: the Inbox's rows and the questions asked of them
@@ -23,7 +23,7 @@ function shared<T>(key: string, load: () => Promise<T>): Promise<T> {
   return promise;
 }
 
-export const loadInbox = () => shared("inbox", () => unwrap(api.GET("/v1/inbox")));
+export const loadInbox = () => shared('inbox', () => unwrap(api.GET('/v1/inbox')));
 
 type Inbox = Awaited<ReturnType<typeof loadInbox>>;
 
@@ -32,12 +32,15 @@ type Inbox = Awaited<ReturnType<typeof loadInbox>>;
  * (lib/api/shared-reads), so a move between pages shows the count read a moment ago at once;
  * RAIL_URLS' answers changing since reads them again (onReadChanged).
  */
-const rail = (staleOk: boolean) => (staleOk ? { headers: { [STALE_OK]: "1" } } : {});
-export const railInbox = (signal?: AbortSignal, staleOk = true) => unwrap(api.GET("/v1/inbox", { ...rail(staleOk), signal }));
-export const railQuestions = (signal?: AbortSignal, staleOk = true) => unwrap(api.GET("/v1/inbox/questions", { ...rail(staleOk), signal }));
-export const RAIL_URLS = ["/v1/inbox", "/v1/inbox/questions"];
+const rail = (staleOk: boolean) => (staleOk ? { headers: { [STALE_OK]: '1' } } : {});
+export const railInbox = (signal?: AbortSignal, staleOk = true) =>
+  unwrap(api.GET('/v1/inbox', { ...rail(staleOk), signal }));
+export const railQuestions = (signal?: AbortSignal, staleOk = true) =>
+  unwrap(api.GET('/v1/inbox/questions', { ...rail(staleOk), signal }));
+export const RAIL_URLS = ['/v1/inbox', '/v1/inbox/questions'];
 /** inbox-reads: the Inbox's counts alone (its total and Roadmap part), for a rail on a page that does not read the Inbox. */
-export const railInboxCounts = (signal?: AbortSignal, staleOk = true) => unwrap(api.GET("/v1/inbox/counts", { ...rail(staleOk), signal }));
+export const railInboxCounts = (signal?: AbortSignal, staleOk = true) =>
+  unwrap(api.GET('/v1/inbox/counts', { ...rail(staleOk), signal }));
 
 /** How long a rail waits to read again a count whose read failed: 15 s, doubling with each failure in a row, at most 5 min. */
 const RETRY_MS = 15_000;
@@ -55,14 +58,14 @@ export function readAgainLater(wait: number, again: () => void): () => void {
     if (!document.hidden) return again();
     onShow = () => {
       if (document.hidden) return;
-      document.removeEventListener("visibilitychange", onShow!);
+      document.removeEventListener('visibilitychange', onShow!);
       again();
     };
-    document.addEventListener("visibilitychange", onShow);
+    document.addEventListener('visibilitychange', onShow);
   }, wait);
   return () => {
     clearTimeout(t);
-    if (onShow) document.removeEventListener("visibilitychange", onShow);
+    if (onShow) document.removeEventListener('visibilitychange', onShow);
   };
 }
 
@@ -73,12 +76,22 @@ export function readAgainLater(wait: number, again: () => void): () => void {
  * (staged, declined and done never), and never access requests (A5: no Inbox screen shows
  * them yet); the questions asked of me are added here.
  */
-export function waitingCount(inbox: Pick<Inbox, "total">, questions: readonly unknown[]): number {
+export function waitingCount(inbox: Pick<Inbox, 'total'>, questions: readonly unknown[]): number {
   return inbox.total + questions.length;
 }
 
 /** What Home draws itself, by the Inbox kind each row is counted under there. */
-export type DrawnOnHome = Record<"stops" | "questions" | "decisions" | "drafts" | "proposals" | "dates" | "goalSuggestions" | "inboxRows", number>;
+export type DrawnOnHome = Record<
+  | 'stops'
+  | 'questions'
+  | 'decisions'
+  | 'drafts'
+  | 'proposals'
+  | 'dates'
+  | 'goalSuggestions'
+  | 'inboxRows',
+  number
+>;
 
 /**
  * Of what the rail counts (`waitingCount`), the Inbox rows Home draws itself: per kind (run stops,
@@ -87,11 +100,16 @@ export type DrawnOnHome = Record<"stops" | "questions" | "decisions" | "drafts" 
  * the Inbox counts and no more than Home draws. Home shows the rest (feedback, cost approvals,
  * discussions, reports, ...) as one row, "N more in your Inbox", so its count is the rail's.
  */
-export function drawnOnHome(inbox: Inbox, questions: readonly unknown[], here: DrawnOnHome): number {
+export function drawnOnHome(
+  inbox: Inbox,
+  questions: readonly unknown[],
+  here: DrawnOnHome,
+): number {
   const counted: DrawnOnHome = {
     stops: inbox.checkpoints.length,
     questions: questions.length,
-    decisions: (inbox.decisions ?? []).filter((d) => d.counts && d.reason === "needs_decision").length,
+    decisions: (inbox.decisions ?? []).filter((d) => d.counts && d.reason === 'needs_decision')
+      .length,
     drafts: inbox.simple_approvals.length,
     proposals: inbox.simple_proposals.length,
     dates: inbox.simple_date_suggestions.length,
@@ -99,11 +117,15 @@ export function drawnOnHome(inbox: Inbox, questions: readonly unknown[], here: D
     inboxRows:
       (inbox.outcomes ?? []).filter((o) => o.counts).length +
       (inbox.launches ?? []).filter((r) => r.counted).length +
-      (inbox.rituals ?? []).filter((r) => r.counts && (r.state === "new" || r.state === "open")).length +
+      (inbox.rituals ?? []).filter((r) => r.counts && (r.state === 'new' || r.state === 'open'))
+        .length +
       (inbox.metrics ?? []).filter((m) => m.counts).length +
       (inbox.requests ?? []).filter((r) => r.counts).length,
   };
-  return (Object.keys(counted) as (keyof DrawnOnHome)[]).reduce((n, k) => n + Math.min(counted[k], here[k]), 0);
+  return (Object.keys(counted) as (keyof DrawnOnHome)[]).reduce(
+    (n, k) => n + Math.min(counted[k], here[k]),
+    0,
+  );
 }
 
 /**
@@ -113,17 +135,18 @@ export function drawnOnHome(inbox: Inbox, questions: readonly unknown[], here: D
  * nothing (POST /v1/inbox/seen), so the Inbox page reads the Inbox once.
  */
 export const markInboxSeen = () =>
-  unwrap(api.POST("/v1/inbox/seen")).then(() => {
-    cache.delete("inbox");
+  unwrap(api.POST('/v1/inbox/seen')).then(() => {
+    cache.delete('inbox');
   });
 
 /**
  * Questions still open and asked of me (asked, or delegated to me: C2), each with who asks,
  * its subject and its answer paths; the API filters, so none is cut off by a page size.
  */
-export const loadMyQuestions = () => shared("my-questions", () => unwrap(api.GET("/v1/inbox/questions")));
+export const loadMyQuestions = () =>
+  shared('my-questions', () => unwrap(api.GET('/v1/inbox/questions')));
 
-const EVENT = "po:waiting-changed";
+const EVENT = 'po:waiting-changed';
 
 /**
  * After an action, once the page has started its own reloads: tells the rail to read its
@@ -162,24 +185,37 @@ export async function reloadWaiting(reload: () => Promise<unknown>): Promise<voi
  * up to the total; `/inbox?kind=<id>` shows that kind only.
  */
 export const NEED_KINDS = [
-  { id: "approvals", label: "Approvals", groups: ["checkpoints", "approvals", "roadmap-approvals", "overruns"] },
-  { id: "runs", label: "Runs", groups: ["lookups", "imports", "tracks", "deliveries", "revising", "searches"] },
-  { id: "access", label: "Access", groups: ["revoke-failures", "access-failures", "access-requests", "share-revocations"] },
-  { id: "reviews", label: "Reviews", groups: ["feedback", "discussions"] },
-  { id: "decisions", label: "Decisions", groups: ["decisions"] },
-  { id: "questions", label: "Questions", groups: ["questions"] },
+  {
+    id: 'approvals',
+    label: 'Approvals',
+    groups: ['checkpoints', 'approvals', 'roadmap-approvals', 'overruns'],
+  },
+  {
+    id: 'runs',
+    label: 'Runs',
+    groups: ['lookups', 'imports', 'tracks', 'deliveries', 'revising', 'searches'],
+  },
+  {
+    id: 'access',
+    label: 'Access',
+    groups: ['revoke-failures', 'access-failures', 'access-requests', 'share-revocations'],
+  },
+  { id: 'reviews', label: 'Reviews', groups: ['feedback', 'discussions'] },
+  { id: 'decisions', label: 'Decisions', groups: ['decisions'] },
+  { id: 'questions', label: 'Questions', groups: ['questions'] },
   // Proposals on my items, Oracle's dates and goal suggestions (a roadmap version waiting for my
   // approval is an approval).
-  { id: "proposals", label: "Proposals", groups: ["proposals"] },
-  { id: "other", label: "Other", groups: [] as string[] },
+  { id: 'proposals', label: 'Proposals', groups: ['proposals'] },
+  { id: 'other', label: 'Other', groups: [] as string[] },
 ] as const;
 
-export type NeedKind = (typeof NEED_KINDS)[number]["id"];
+export type NeedKind = (typeof NEED_KINDS)[number]['id'];
 
 /** The kind a row of this Inbox group is counted under. */
 export function needKind(group: string): NeedKind {
-  return NEED_KINDS.find((k) => (k.groups as readonly string[]).includes(group))?.id ?? "other";
+  return NEED_KINDS.find((k) => (k.groups as readonly string[]).includes(group))?.id ?? 'other';
 }
 
 /** A `?kind=` value, if it names a kind. */
-export const asNeedKind = (v: string | null | undefined): NeedKind | null => NEED_KINDS.find((k) => k.id === v)?.id ?? null;
+export const asNeedKind = (v: string | null | undefined): NeedKind | null =>
+  NEED_KINDS.find((k) => k.id === v)?.id ?? null;

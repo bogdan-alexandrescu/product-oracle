@@ -1,12 +1,6 @@
-import { login, signOut } from "./helpers";
-import { chartCodes } from "./vxe-counts";
-import {
-  expect,
-  test,
-  type BrowserContext,
-  type Locator,
-  type Page,
-} from "./test";
+import { login, signOut } from './helpers';
+import { chartCodes } from './vxe-counts';
+import { expect, test, type BrowserContext, type Locator, type Page } from './test';
 
 /**
  * Simple Priorities: stable item codes on Value / effort (#723; the owner's pick "Short code +
@@ -22,15 +16,13 @@ const PHONE = { width: 390, height: 844 };
 
 async function open(page: Page, email: string): Promise<Page> {
   await login(page, email);
-  await page.goto("/simple/priorities?tab=value-effort");
-  await expect(page.getByTestId("vxe-point").first()).toBeVisible();
+  await page.goto('/simple/priorities?tab=value-effort');
+  await expect(page.getByTestId('vxe-point').first()).toBeVisible();
   return page;
 }
 
 async function dark(context: BrowserContext): Promise<void> {
-  await context.addInitScript(() =>
-    localStorage.setItem("oracle-theme", "dark"),
-  );
+  await context.addInitScript(() => localStorage.setItem('oracle-theme', 'dark'));
 }
 
 const point = (tab: Page, code: string): Locator =>
@@ -41,8 +33,8 @@ const side = (tab: Page, code: string): Locator =>
 /** Drags a mark `weeks` to the left (less effort), as a person does with a mouse or a finger. */
 async function dragLeft(tab: Page, code: string, weeks: number): Promise<void> {
   const mark = point(tab, code);
-  await mark.evaluate((e) => e.scrollIntoView({ block: "center" }));
-  const plot = (await tab.getByTestId("vxe-plot").boundingBox())!;
+  await mark.evaluate((e) => e.scrollIntoView({ block: 'center' }));
+  const plot = (await tab.getByTestId('vxe-plot').boundingBox())!;
   const at = (await mark.boundingBox())!;
   // The log effort axis spans 3.8 doublings across the plot's inner 92%: `weeks` 2 from 3
   // is 1.52 doublings, 3 weeks to 1.
@@ -60,30 +52,26 @@ async function dragLeft(tab: Page, code: string, weeks: number): Promise<void> {
  * Drags a mark `weeks` to the left with a finger: real touch input (Chrome's touch events), so
  * the chart sees pointerType "touch", as on a phone.
  */
-async function fingerLeft(
-  tab: Page,
-  code: string,
-  weeks: number,
-): Promise<void> {
+async function fingerLeft(tab: Page, code: string, weeks: number): Promise<void> {
   const mark = point(tab, code);
-  await mark.evaluate((e) => e.scrollIntoView({ block: "center" }));
-  const plot = (await tab.getByTestId("vxe-plot").boundingBox())!;
+  await mark.evaluate((e) => e.scrollIntoView({ block: 'center' }));
+  const plot = (await tab.getByTestId('vxe-plot').boundingBox())!;
   const at = (await mark.boundingBox())!;
   const x = at.x + at.width / 2;
   const y = at.y + at.height / 2;
   const dx = (plot.width * 0.92 * weeks) / 5;
   const cdp = await tab.context().newCDPSession(tab);
-  await cdp.send("Input.dispatchTouchEvent", {
-    type: "touchStart",
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
     touchPoints: [{ x, y }],
   });
   for (let i = 1; i <= 10; i++)
-    await cdp.send("Input.dispatchTouchEvent", {
-      type: "touchMove",
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
       touchPoints: [{ x: x - (dx * i) / 10, y: y + (3 * i) / 10 }],
     });
-  await cdp.send("Input.dispatchTouchEvent", {
-    type: "touchEnd",
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchEnd',
     touchPoints: [],
   });
   await cdp.detach();
@@ -94,23 +82,23 @@ const markCodes = chartCodes;
 
 // PR1 (QA Nov 12): a feature with no Ground Truth code shows none on its mark (never made-up letters).
 const CODES: Record<string, string | null> = {
-  "setup-checklist": "F-01",
-  "alert-rules": null,
-  "alert-digest": "F-79",
-  "alert-mobile": null,
-  "setup-import": null,
-  "alert-export": null,
-  "alert-sso": null,
+  'setup-checklist': 'F-01',
+  'alert-rules': null,
+  'alert-digest': 'F-79',
+  'alert-mobile': null,
+  'setup-import': null,
+  'alert-export': null,
+  'alert-sso': null,
   // F-03 Health log: the Guided setup PRD's feature on the onboarding roadmap (no code of its own,
   // its section's); a live, planned roadmap item, so it is a mark too.
-  "setup-health-log": "F-03",
-  "price-tiers": null,
-  "setup-video": null,
+  'setup-health-log': 'F-03',
+  'price-tiers': null,
+  'setup-video': null,
   // P-1: the Goal map's features, roadmap items from the first load (their PRD section's code).
   ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`gm-f${i + 1}`, `F-${101 + i}`])),
 };
 
-test.describe("desktop", () => {
+test.describe('desktop', () => {
   /**
    * Card simple-priorities-codes-drag: protects = each Value / effort mark shows its short
    * stable code (F-79; none for setup-import, never ARB…), never its rank; dragging setup-import across a quadrant re-ranks
@@ -121,55 +109,38 @@ test.describe("desktop", () => {
    * the moved row is not highlighted; no_claim = the API's codes (pytest
    * test_short_codes_stay_when_the_rank_moves), the real scoring.
    */
-  test("drag a mark to another quadrant: its code stays, the list shows moved #5 → #2", async ({
+  test('drag a mark to another quadrant: its code stays, the list shows moved #5 → #2', async ({
     page,
   }) => {
-    const admin = await open(page, "admin@example.com");
+    const admin = await open(page, 'admin@example.com');
     expect(await markCodes(admin)).toEqual(CODES);
-    await expect(admin.locator("#prio-about-text")).toContainText(
+    await expect(admin.locator('#prio-about-text')).toContainText(
       "Each mark shows the feature's code when it has one (one with none is not in the Ground Truth); point at it for its name, its rank is in the list.",
     );
-    await expect(admin.getByLabel("Legend")).not.toContainText(
-      "Numbers are ranks",
-    );
-    await expect(
-      side(admin, "setup-import").getByTestId("side-rank"),
-    ).toHaveText("5");
-    await expect(
-      side(admin, "setup-import").getByTestId("side-code"),
-    ).toHaveCount(0);
+    await expect(admin.getByLabel('Legend')).not.toContainText('Numbers are ranks');
+    await expect(side(admin, 'setup-import').getByTestId('side-rank')).toHaveText('5');
+    await expect(side(admin, 'setup-import').getByTestId('side-code')).toHaveCount(0);
     // P-3: the mark's name shows on hover (with its code when it has one; Sample data import has none).
-    await point(admin, "setup-import").hover();
-    await expect(
-      point(admin, "setup-import").getByTestId("vxe-name"),
-    ).toHaveText(/^#5 Sample data import$/);
+    await point(admin, 'setup-import').hover();
+    await expect(point(admin, 'setup-import').getByTestId('vxe-name')).toHaveText(
+      /^#5 Sample data import$/,
+    );
     await admin.mouse.move(0, 0);
 
-    await dragLeft(admin, "setup-import", 2);
-    await expect(
-      admin.getByText("Re-estimated Sample data import: effort 1 week"),
-    ).toBeVisible();
-    await expect(
-      side(admin, "setup-import").getByTestId("side-rank"),
-    ).toHaveText("2");
+    await dragLeft(admin, 'setup-import', 2);
+    await expect(admin.getByText('Re-estimated Sample data import: effort 1 week')).toBeVisible();
+    await expect(side(admin, 'setup-import').getByTestId('side-rank')).toHaveText('2');
     expect(await markCodes(admin)).toEqual(CODES);
-    await expect(
-      side(admin, "setup-import").getByTestId("side-code"),
-    ).toHaveCount(0);
-    await expect(side(admin, "setup-import").getByTestId("moved")).toHaveText(
+    await expect(side(admin, 'setup-import').getByTestId('side-code')).toHaveCount(0);
+    await expect(side(admin, 'setup-import').getByTestId('moved')).toHaveText(
       /^now #2 \(effort [\d.]+ weeks?\)$/,
     );
-    await expect(side(admin, "setup-import")).toHaveAttribute(
-      "data-moved",
-      "true",
+    await expect(side(admin, 'setup-import')).toHaveAttribute('data-moved', 'true');
+    await expect(point(admin, 'setup-import')).toHaveAttribute('data-moved', 'true');
+    await expect(point(admin, 'setup-import').getByTestId('vxe-name')).toHaveText(
+      /^#2 Sample data import$/,
+      { useInnerText: false },
     );
-    await expect(point(admin, "setup-import")).toHaveAttribute(
-      "data-moved",
-      "true",
-    );
-    await expect(
-      point(admin, "setup-import").getByTestId("vxe-name"),
-    ).toHaveText(/^#2 Sample data import$/, { useInnerText: false });
     await expect(admin.locator('[data-moved="true"]')).toHaveCount(2);
   });
 
@@ -180,61 +151,45 @@ test.describe("desktop", () => {
    * move leaves the old item highlighted or none, or the other views show item keys instead
    * of the codes; no_claim = screen-reader announcements.
    */
-  test("a keyboard move highlights the moved item; the ranked list and buckets show the codes", async ({
+  test('a keyboard move highlights the moved item; the ranked list and buckets show the codes', async ({
     page,
   }) => {
-    const admin = await open(page, "admin@example.com");
-    await dragLeft(admin, "setup-import", 2);
-    await expect(side(admin, "setup-import").getByTestId("moved")).toHaveText(
+    const admin = await open(page, 'admin@example.com');
+    await dragLeft(admin, 'setup-import', 2);
+    await expect(side(admin, 'setup-import').getByTestId('moved')).toHaveText(
       /^now #2 \(effort [\d.]+ weeks?\)$/,
     );
-    await expect(
-      side(admin, "alert-mobile").getByTestId("side-rank"),
-    ).toHaveText("5");
-    await point(admin, "alert-mobile").focus();
-    await admin.keyboard.press("ArrowLeft");
-    await expect(side(admin, "alert-mobile").getByTestId("moved")).toHaveText(
+    await expect(side(admin, 'alert-mobile').getByTestId('side-rank')).toHaveText('5');
+    await point(admin, 'alert-mobile').focus();
+    await admin.keyboard.press('ArrowLeft');
+    await expect(side(admin, 'alert-mobile').getByTestId('moved')).toHaveText(
       /^now #4 \(effort [\d.]+ weeks?\)$/,
     );
-    await expect(side(admin, "setup-import").getByTestId("moved")).toHaveCount(
-      0,
-    );
-    await expect(point(admin, "alert-mobile")).toHaveAttribute(
-      "data-moved",
-      "true",
-    );
-    await expect(point(admin, "setup-import")).not.toHaveAttribute(
-      "data-moved",
-      "true",
-    );
+    await expect(side(admin, 'setup-import').getByTestId('moved')).toHaveCount(0);
+    await expect(point(admin, 'alert-mobile')).toHaveAttribute('data-moved', 'true');
+    await expect(point(admin, 'setup-import')).not.toHaveAttribute('data-moved', 'true');
     expect(await markCodes(admin)).toEqual(CODES);
 
-    await admin.getByRole("tab", { name: "Ranked list" }).click();
-    const ranked = admin.locator(
-      '[data-testid="prio-row"][data-code="setup-import"]',
-    );
-    await expect(ranked.getByTestId("prio-own-key")).toHaveCount(0);
-    await expect(ranked.getByTestId("not-in-gt")).toHaveText("Not in the Ground Truth");
-    await expect(ranked.getByTestId("prio-rank")).toHaveText("2");
+    await admin.getByRole('tab', { name: 'Ranked list' }).click();
+    const ranked = admin.locator('[data-testid="prio-row"][data-code="setup-import"]');
+    await expect(ranked.getByTestId('prio-own-key')).toHaveCount(0);
+    await expect(ranked.getByTestId('not-in-gt')).toHaveText('Not in the Ground Truth');
+    await expect(ranked.getByTestId('prio-rank')).toHaveText('2');
     await expect(
-      admin.locator('[data-testid="prio-row"][data-code="alert-digest"]').getByTestId("prio-own-key"),
-    ).toHaveText("F-79");
-    await admin.getByRole("tab", { name: "Goal buckets" }).click();
+      admin
+        .locator('[data-testid="prio-row"][data-code="alert-digest"]')
+        .getByTestId('prio-own-key'),
+    ).toHaveText('F-79');
+    await admin.getByRole('tab', { name: 'Goal buckets' }).click();
     await expect(
-      admin.locator(
-        '[data-testid="goal-bucket"][data-key="grow-retention"]',
-      ),
-    ).toContainText("F-79");
+      admin.locator('[data-testid="goal-bucket"][data-key="grow-retention"]'),
+    ).toContainText('F-79');
     await expect(
-      admin.locator(
-        '[data-testid="goal-bucket"][data-key="grow-retention"]',
-      ),
-    ).not.toContainText("alert-digest");
+      admin.locator('[data-testid="goal-bucket"][data-key="grow-retention"]'),
+    ).not.toContainText('alert-digest');
     await expect(
-      admin.locator(
-        '[data-testid="goal-bucket"][data-key="faster-activation"]',
-      ),
-    ).not.toContainText("setup-import");
+      admin.locator('[data-testid="goal-bucket"][data-key="faster-activation"]'),
+    ).not.toContainText('setup-import');
   });
 
   /**
@@ -242,15 +197,11 @@ test.describe("desktop", () => {
    * proposal: the codes show, nothing re-ranks and no item is marked moved; fails_when = a
    * proposal is shown as a move; no_claim = the decider's accept (simple-priorities.spec.ts).
    */
-  test("a commenter's move is proposed and highlights nothing", async ({
-    page,
-  }) => {
-    const cory = await open(page, "commenter@example.com");
-    await point(cory, "setup-import").focus();
-    await cory.keyboard.press("ArrowUp");
-    await expect(
-      cory.getByText(/^Proposed: .* decides$/),
-    ).toBeVisible();
+  test("a commenter's move is proposed and highlights nothing", async ({ page }) => {
+    const cory = await open(page, 'commenter@example.com');
+    await point(cory, 'setup-import').focus();
+    await cory.keyboard.press('ArrowUp');
+    await expect(cory.getByText(/^Proposed: .* decides$/)).toBeVisible();
     await expect(cory.locator('[data-moved="true"]')).toHaveCount(0);
     expect(await markCodes(cory)).toEqual(CODES);
   });
@@ -261,17 +212,13 @@ test.describe("desktop", () => {
    * viewer's marks show ranks or other codes; no_claim = the API's refusal of a viewer's
    * change (pytest test_viewer_reads_and_runs_are_refused).
    */
-  test("a viewer in dark reads the codes and the ranks in the list", async ({
-    page,
-  }) => {
+  test('a viewer in dark reads the codes and the ranks in the list', async ({ page }) => {
     await dark(page.context());
-    const viewer = await open(page, "viewer@example.com");
+    const viewer = await open(page, 'viewer@example.com');
     expect(await markCodes(viewer)).toEqual(CODES);
-    await expect(side(viewer, "alert-sso").getByTestId("side-code")).toHaveCount(0);
-    await expect(side(viewer, "alert-sso").getByTestId("side-rank")).toHaveText(
-      "7",
-    );
-    await expect(viewer.locator("#prio-about-text")).toContainText(
+    await expect(side(viewer, 'alert-sso').getByTestId('side-code')).toHaveCount(0);
+    await expect(side(viewer, 'alert-sso').getByTestId('side-rank')).toHaveText('7');
+    await expect(viewer.locator('#prio-about-text')).toContainText(
       "Each mark shows the feature's code when it has one (one with none is not in the Ground Truth); point at it for its name, its rank is in the list.",
     );
   });
@@ -283,52 +230,36 @@ test.describe("desktop", () => {
    * its tag (with a "→ #b" it was never moved to) or the accepted item is not highlighted;
    * no_claim = who may accept (simple-priorities.spec.ts).
    */
-  test("accepting a proposal moves the highlight to the accepted item", async ({
-    page,
-  }) => {
-    const cory = await open(page, "commenter@example.com");
-    await point(cory, "alert-mobile").focus();
-    await cory.keyboard.press("ArrowLeft");
-    await expect(
-      cory.getByText(/^Proposed: .* decides$/),
-    ).toBeVisible();
+  test('accepting a proposal moves the highlight to the accepted item', async ({ page }) => {
+    const cory = await open(page, 'commenter@example.com');
+    await point(cory, 'alert-mobile').focus();
+    await cory.keyboard.press('ArrowLeft');
+    await expect(cory.getByText(/^Proposed: .* decides$/)).toBeVisible();
     await signOut(cory);
 
-    const admin = await open(page, "admin@example.com");
-    await dragLeft(admin, "setup-import", 2);
-    await expect(side(admin, "setup-import").getByTestId("moved")).toHaveText(
+    const admin = await open(page, 'admin@example.com');
+    await dragLeft(admin, 'setup-import', 2);
+    await expect(side(admin, 'setup-import').getByTestId('moved')).toHaveText(
       /^now #2 \(effort [\d.]+ weeks?\)$/,
     );
-    await expect(
-      side(admin, "alert-mobile").getByTestId("side-rank"),
-    ).toHaveText("5");
-    await admin.getByRole("tab", { name: "Ranked list" }).click();
-    const ranked = (code: string) =>
-      admin.locator(`[data-testid="prio-row"][data-code="${code}"]`);
-    await ranked("alert-mobile")
-      .getByTestId("prio-proposal")
-      .getByRole("button", { name: "Accept" })
+    await expect(side(admin, 'alert-mobile').getByTestId('side-rank')).toHaveText('5');
+    await admin.getByRole('tab', { name: 'Ranked list' }).click();
+    const ranked = (code: string) => admin.locator(`[data-testid="prio-row"][data-code="${code}"]`);
+    await ranked('alert-mobile')
+      .getByTestId('prio-proposal')
+      .getByRole('button', { name: 'Accept' })
       .click();
-    await expect(
-      admin.getByText("Accepted the proposal for Mobile alert push"),
-    ).toBeVisible();
-    await expect(ranked("alert-mobile").getByTestId("prio-rank")).toHaveText(
-      "4",
-    );
-    await expect(ranked("alert-mobile").getByTestId("moved")).toHaveText(
-      "moved #5 → #4",
-    );
-    await expect(ranked("setup-import").getByTestId("moved")).toHaveCount(0);
-    await admin.getByRole("tab", { name: "Value / effort" }).click();
-    await expect(point(admin, "alert-mobile")).toHaveAttribute(
-      "data-moved",
-      "true",
-    );
+    await expect(admin.getByText('Accepted the proposal for Mobile alert push')).toBeVisible();
+    await expect(ranked('alert-mobile').getByTestId('prio-rank')).toHaveText('4');
+    await expect(ranked('alert-mobile').getByTestId('moved')).toHaveText('moved #5 → #4');
+    await expect(ranked('setup-import').getByTestId('moved')).toHaveCount(0);
+    await admin.getByRole('tab', { name: 'Value / effort' }).click();
+    await expect(point(admin, 'alert-mobile')).toHaveAttribute('data-moved', 'true');
     await expect(admin.locator('[data-moved="true"]')).toHaveCount(2);
   });
 });
 
-test.describe("phone", () => {
+test.describe('phone', () => {
   test.use({ viewport: PHONE, hasTouch: true, isMobile: true });
 
   /**
@@ -338,34 +269,24 @@ test.describe("phone", () => {
    * does not move the mark, the phone shows ranks on the marks or loses the highlight;
    * no_claim = multi-finger gestures.
    */
-  test("drag a mark on a phone, dark: code kept, moved #4 → #2", async ({
-    page,
-  }) => {
+  test('drag a mark on a phone, dark: code kept, moved #4 → #2', async ({ page }) => {
     await dark(page.context());
-    const admin = await open(page, "admin@example.com");
+    const admin = await open(page, 'admin@example.com');
     await admin.evaluate(() => {
       const w = window as unknown as { pointerTypes: string[] };
       w.pointerTypes = [];
-      document.addEventListener(
-        "pointerdown",
-        (e) => w.pointerTypes.push(e.pointerType),
-        true,
-      );
+      document.addEventListener('pointerdown', (e) => w.pointerTypes.push(e.pointerType), true);
     });
     // PV-1: on a phone Sample data import's mark is in a count; Mobile alert push is its own mark.
-    await expect(side(admin, "alert-mobile").getByTestId("side-rank")).toHaveText("4");
-    await fingerLeft(admin, "alert-mobile", 2);
+    await expect(side(admin, 'alert-mobile').getByTestId('side-rank')).toHaveText('4');
+    await fingerLeft(admin, 'alert-mobile', 2);
     expect(
-      await admin.evaluate(
-        () => (window as unknown as { pointerTypes: string[] }).pointerTypes,
-      ),
-    ).toEqual(["touch"]);
-    await expect(side(admin, "alert-mobile").getByTestId("moved")).toHaveText(
+      await admin.evaluate(() => (window as unknown as { pointerTypes: string[] }).pointerTypes),
+    ).toEqual(['touch']);
+    await expect(side(admin, 'alert-mobile').getByTestId('moved')).toHaveText(
       /^now #2 \(effort 1 week\)$/,
     );
-    await expect(
-      side(admin, "alert-mobile").getByTestId("side-code"),
-    ).toHaveCount(0);
+    await expect(side(admin, 'alert-mobile').getByTestId('side-code')).toHaveCount(0);
     expect(await markCodes(admin)).toEqual(CODES);
   });
 });

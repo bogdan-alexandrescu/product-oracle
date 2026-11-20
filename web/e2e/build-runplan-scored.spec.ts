@@ -1,8 +1,8 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { PRIORITY_RUN } from "../lib/api/mock/runs";
-import { login } from "./helpers";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { PRIORITY_RUN } from '../lib/api/mock/runs';
+import { login } from './helpers';
 
 /**
  * RP1 'Scored with the rest' (build-runplan): the run's order stop scores the features its
@@ -18,72 +18,96 @@ import { login } from "./helpers";
  *   fails_when=the chip is missing on a phone or the page scrolls sideways.
  */
 
-const ORDER = ["F-07", "F-08", "F-02", "N-1", "N-2", "N-3", "F-01", "N-4", "N-5", "F-12", "N-6"];
-const NEW = ["N-1", "N-2", "N-3", "N-4", "N-5", "N-6"];
+const ORDER = ['F-07', 'F-08', 'F-02', 'N-1', 'N-2', 'N-3', 'F-01', 'N-4', 'N-5', 'F-12', 'N-6'];
+const NEW = ['N-1', 'N-2', 'N-3', 'N-4', 'N-5', 'N-6'];
 
 async function openOrder(page: Page) {
-  await page.addInitScript((key) => localStorage.setItem(key, "priority-order"), MOCK_SCENARIO_KEY);
-  await login(page, "approver@example.com");
+  await page.addInitScript((key) => localStorage.setItem(key, 'priority-order'), MOCK_SCENARIO_KEY);
+  await login(page, 'approver@example.com');
   await page.goto(`/runs/${PRIORITY_RUN}`);
-  await page.getByTestId("checkpoint-priority_order").getByRole("link", { name: "Review the order" }).click();
+  await page
+    .getByTestId('checkpoint-priority_order')
+    .getByRole('link', { name: 'Review the order' })
+    .click();
   await expect(page).toHaveURL(/\/priorities\?snapshot=/);
 }
 
-test.describe("desktop", () => {
+test.describe('desktop', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
-  test("the new features are ranked among the rest and approving adds them", async ({ page }) => {
+  test('the new features are ranked among the rest and approving adds them', async ({ page }) => {
     await openOrder(page);
-    const note = page.getByTestId("new-features-note");
+    const note = page.getByTestId('new-features-note');
     await expect(note).toHaveText(
-      "This order ranks the 6 features Bulk import adds, scored on the same formula and goals as the rest. Approving the order adds them to the Ground Truth as proposed.",
+      'This order ranks the 6 features Bulk import adds, scored on the same formula and goals as the rest. Approving the order adds them to the Ground Truth as proposed.',
     );
     const rows = page.locator('tr[data-testid^="priority-row-"]');
     await expect(rows).toHaveCount(11);
-    expect(await rows.evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")!.replace("priority-row-", "")))).toEqual(ORDER);
+    expect(
+      await rows.evaluateAll((els) =>
+        els.map((e) => e.getAttribute('data-testid')!.replace('priority-row-', '')),
+      ),
+    ).toEqual(ORDER);
     for (const key of ORDER) {
-      const chip = page.getByTestId(`priority-row-${key}`).getByText("New in this PRD");
+      const chip = page.getByTestId(`priority-row-${key}`).getByText('New in this PRD');
       await expect(chip).toHaveCount(NEW.includes(key) ? 1 : 0);
     }
     // A new feature is scored like any other row: #4 at 4.20, no Live rank.
-    const first = page.getByTestId("priority-row-N-1");
-    await expect(first).toContainText("Address book per account");
-    await expect(first).toContainText("4.20");
-    await expect(first.getByTestId("live-rank")).toHaveText("—");
+    const first = page.getByTestId('priority-row-N-1');
+    await expect(first).toContainText('Address book per account');
+    await expect(first).toContainText('4.20');
+    await expect(first.getByTestId('live-rank')).toHaveText('—');
     // What a new feature depends on, as the run's feature set says (frames rp1-a-rest, rp1-a-open).
     // docs/ground-truth.md: a feature reads its code with its name ("N-1 Address book per account").
-    for (const key of ["N-2", "N-3", "N-4"]) await expect(page.getByTestId(`priority-row-${key}`).getByTestId("row-deps")).toHaveText("N-1 Address book per account");
-    await expect(first.getByTestId("row-deps")).toHaveText("—");
+    for (const key of ['N-2', 'N-3', 'N-4'])
+      await expect(page.getByTestId(`priority-row-${key}`).getByTestId('row-deps')).toHaveText(
+        'N-1 Address book per account',
+      );
+    await expect(first.getByTestId('row-deps')).toHaveText('—');
 
     // Opened: Import addresses is #8 at 1.80, worked out on the formula; 60% set by the run.
-    await page.getByTestId("priority-row-N-4").getByRole("button", { name: /Import addresses from a spreadsheet/ }).click();
-    const panel = page.getByTestId("priority-inspector");
-    await expect(panel).toContainText("Import addresses from a spreadsheet, with a preview before saving");
-    await expect(panel).toContainText("#8");
-    await expect(panel.getByTestId("inspector-score")).toContainText("1.80");
-    await expect(panel).toContainText("60%");
-    const steps = page.getByTestId("explanation-N-4").getByRole("list", { name: "Steps" });
-    await expect(steps).toContainText("Goal value = 3×2");
+    await page
+      .getByTestId('priority-row-N-4')
+      .getByRole('button', { name: /Import addresses from a spreadsheet/ })
+      .click();
+    const panel = page.getByTestId('priority-inspector');
+    await expect(panel).toContainText(
+      'Import addresses from a spreadsheet, with a preview before saving',
+    );
+    await expect(panel).toContainText('#8');
+    await expect(panel.getByTestId('inspector-score')).toContainText('1.80');
+    await expect(panel).toContainText('60%');
+    const steps = page.getByTestId('explanation-N-4').getByRole('list', { name: 'Steps' });
+    await expect(steps).toContainText('Goal value = 3×2');
     await expect(steps).toContainText(/Score = 6 × 60% ÷ 2 = 1\.80$/);
 
     // Approve order: saved, and the 6 new features joined the Ground Truth as proposed.
-    const band = page.getByTestId("snapshot-band");
-    await band.getByRole("button", { name: "Approve order" }).click();
-    await expect(band).toContainText("Saved for Bulk import");
-    await expect(note).toHaveText("Order approved. The 6 new features joined the Ground Truth as proposed, at the ranks you approved.");
-    await expect(page.getByTestId("priority-row-N-1").getByText("New in this PRD")).toBeVisible();
+    const band = page.getByTestId('snapshot-band');
+    await band.getByRole('button', { name: 'Approve order' }).click();
+    await expect(band).toContainText('Saved for Bulk import');
+    await expect(note).toHaveText(
+      'Order approved. The 6 new features joined the Ground Truth as proposed, at the ranks you approved.',
+    );
+    await expect(page.getByTestId('priority-row-N-1').getByText('New in this PRD')).toBeVisible();
   });
 });
 
-test.describe("phone", () => {
+test.describe('phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
-  test("at 390 px each row card carries the chip", async ({ page }) => {
+  test('at 390 px each row card carries the chip', async ({ page }) => {
     await openOrder(page);
-    await expect(page.getByTestId("new-features-note")).toContainText("This order ranks the 6 features Bulk import adds");
-    for (const key of NEW) await expect(page.getByTestId(`priority-row-${key}`).getByText("New in this PRD")).toBeVisible();
-    await expect(page.getByTestId("priority-row-F-07").getByText("New in this PRD")).toHaveCount(0);
-    const sideways = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    await expect(page.getByTestId('new-features-note')).toContainText(
+      'This order ranks the 6 features Bulk import adds',
+    );
+    for (const key of NEW)
+      await expect(
+        page.getByTestId(`priority-row-${key}`).getByText('New in this PRD'),
+      ).toBeVisible();
+    await expect(page.getByTestId('priority-row-F-07').getByText('New in this PRD')).toHaveCount(0);
+    const sideways = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth,
+    );
     expect(sideways).toBeLessThanOrEqual(0);
   });
 });

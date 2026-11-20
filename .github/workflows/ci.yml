@@ -233,6 +233,9 @@ jobs:
           make openapi
           git diff --exit-code -- web/lib/api || (echo "Run 'make openapi' and commit the result" && exit 1)
       - run: npm run lint
+      # #1584: the web is Prettier-formatted, and types are checked without a full build.
+      - run: npm run format:check
+      - run: npx next typegen && npx tsc --noEmit -p .
       # Logic and render tests beside their module (#1583); Playwright keeps the flows a person drives.
       - name: Unit tests (Vitest)
         run: npm run test:unit

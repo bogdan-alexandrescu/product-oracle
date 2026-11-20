@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import { useState } from "react";
+import { useState } from 'react';
 
-import { AnswerQuestion, askerName, type InboxQuestion } from "@/components/AnswerQuestion";
-import { Button, Chip, LinkButton, Sheet } from "@/components/ds";
-import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
+import { AnswerQuestion, askerName, type InboxQuestion } from '@/components/AnswerQuestion';
+import { Button, Chip, LinkButton, Sheet } from '@/components/ds';
+import { invalidateWaiting, waitingChanged } from '@/lib/waiting';
 
-import { CODE_LIKE, discussionHref, type Need } from "./_needs";
+import { CODE_LIKE, discussionHref, type Need } from './_needs';
 
 /** A question answered here: shown in place, with its outcome, until the tab changes; then under Done. */
 type Settled = { q: InboxQuestion; label: string; moved: boolean };
@@ -18,22 +18,26 @@ const OUTLINE_NUMBER = /^(?:\d+(?:\.\d+)*\.|\d+(?:\.\d+)+)\s+/;
  * qa4-company-46: a section question's subject reads "<document> · Risks", never with the
  * heading's outline number ("· 3. Risks"); the number is the document's, not the section's name.
  */
-function subjectTitle(subject: InboxQuestion["subject"]): string {
-  if (subject.kind !== "document_section") return subject.title;
-  const at = subject.title.lastIndexOf(" · ");
+function subjectTitle(subject: InboxQuestion['subject']): string {
+  if (subject.kind !== 'document_section') return subject.title;
+  const at = subject.title.lastIndexOf(' · ');
   if (at < 0) return subject.title;
-  return `${subject.title.slice(0, at)} · ${subject.title.slice(at + 3).replace(OUTLINE_NUMBER, "")}`;
+  return `${subject.title.slice(0, at)} · ${subject.title.slice(at + 3).replace(OUTLINE_NUMBER, '')}`;
 }
 
 /** Phone width: Answer opens a bottom sheet instead of the row (DataTable's phone layout). */
-const PHONE = "(max-width: 600px)";
+const PHONE = '(max-width: 600px)';
 
 /**
  * The questions asked of me (C2), one row each: "Oracle asks" or "<name> asks", the prompt,
  * the subject, Answer (the row expands in place; a sheet on a phone) and Open (the subject).
  * Inbox and Home draw the same rows. `reload` re-reads the questions after an answer.
  */
-export function useQuestionRows(questions: InboxQuestion[], reload: () => Promise<unknown>, onSettled?: (q: InboxQuestion, label: string) => void) {
+export function useQuestionRows(
+  questions: InboxQuestion[],
+  reload: () => Promise<unknown>,
+  onSettled?: (q: InboxQuestion, label: string) => void,
+) {
   const [open, setOpen] = useState<string | null>(null);
   const [sheet, setSheet] = useState<string | null>(null);
   const [settled, setSettled] = useState<ReadonlyMap<string, Settled>>(new Map());
@@ -62,26 +66,33 @@ export function useQuestionRows(questions: InboxQuestion[], reload: () => Promis
 
   const live = questions.filter((q) => !settled.has(q.question.id));
   // Oldest first, as the API lists them: a settled row keeps its place.
-  const all = [...live, ...[...settled.values()].map((s) => s.q)].sort((a, b) => a.question.created_at.localeCompare(b.question.created_at));
+  const all = [...live, ...[...settled.values()].map((s) => s.q)].sort((a, b) =>
+    a.question.created_at.localeCompare(b.question.created_at),
+  );
   const rows: Need[] = all.map((q) => {
     const done = settled.get(q.question.id);
     const prompt = q.question.prompt;
     const href = q.subject.href;
     // G6: a question asked from a discussion names it, and opens it.
-    const from = q.question.discussion_id && q.question.discussion_title ? q.question.discussion_title : null;
+    const from =
+      q.question.discussion_id && q.question.discussion_title ? q.question.discussion_title : null;
     const context = from ? `From discussion ${from}` : subjectTitle(q.subject);
     const opened = open === q.question.id && !done;
     return {
       key: q.question.id,
-      icon: "ask",
+      icon: 'ask',
       kind: `${askerName(q)} asks`,
       // qa-company-3 (round 3): "Show the text" only where it adds something: Oracle's text
       // names codes (each carrying its card there), as on an "Oracle did" row.
-      quote: q.asked_by.kind === "oracle" && CODE_LIKE.test(prompt) ? prompt : null,
+      quote: q.asked_by.kind === 'oracle' && CODE_LIKE.test(prompt) ? prompt : null,
       item: (
         <>
           {/* Opened to answer, the row's line is the question in full; the form does not repeat it. */}
-          <span className={opened ? "min-w-0 break-words whitespace-normal" : "min-w-0 truncate"} title={prompt} data-testid="question-prompt">
+          <span
+            className={opened ? 'min-w-0 break-words whitespace-normal' : 'min-w-0 truncate'}
+            title={prompt}
+            data-testid="question-prompt"
+          >
             {prompt}
           </span>
           {done && (
@@ -98,7 +109,7 @@ export function useQuestionRows(questions: InboxQuestion[], reload: () => Promis
       ),
       at: q.question.created_at,
       // Settled here: out of the count at once; under Done once the tab changes.
-      ...(done ? { counted: done.moved, ...(done.moved ? { state: "done" as const } : {}) } : {}),
+      ...(done ? { counted: done.moved, ...(done.moved ? { state: 'done' as const } : {}) } : {}),
       action: (
         <>
           {!done && (
@@ -120,19 +131,31 @@ export function useQuestionRows(questions: InboxQuestion[], reload: () => Promis
           )}
         </>
       ),
-      detail:
-        opened ? (
-          <AnswerQuestion question={q} showPrompt={false} onSettled={(_, label) => settle(q, label)} onCancel={() => setOpen(null)} />
-        ) : undefined,
+      detail: opened ? (
+        <AnswerQuestion
+          question={q}
+          showPrompt={false}
+          onSettled={(_, label) => settle(q, label)}
+          onCancel={() => setOpen(null)}
+        />
+      ) : undefined,
     };
   });
 
   const sheetQuestion = sheet ? questions.find((q) => q.question.id === sheet) : undefined;
   const sheetNode = (
-    <Sheet open={!!sheetQuestion} title="Answer" onClose={() => setSheet(null)} testId="answer-sheet">
+    <Sheet
+      open={!!sheetQuestion}
+      title="Answer"
+      onClose={() => setSheet(null)}
+      testId="answer-sheet"
+    >
       {sheetQuestion && (
         <div className="p-4">
-          <AnswerQuestion question={sheetQuestion} onSettled={(_, label) => settle(sheetQuestion, label)} />
+          <AnswerQuestion
+            question={sheetQuestion}
+            onSettled={(_, label) => settle(sheetQuestion, label)}
+          />
         </div>
       )}
     </Sheet>

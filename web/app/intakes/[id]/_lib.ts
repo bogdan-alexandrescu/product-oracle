@@ -1,59 +1,59 @@
-import type { ChipKind } from "@/components/ds";
-import type { Schemas } from "@/lib/api/client";
-import { formatDateTime, formatDay, plural } from "@/lib/format";
+import type { ChipKind } from '@/components/ds';
+import type { Schemas } from '@/lib/api/client';
+import { formatDateTime, formatDay, plural } from '@/lib/format';
 
-export type Summary = Schemas["IntakeSummary"];
-export type Batch = Schemas["QuestionBatch"];
-export type Card = Schemas["QuestionCard"];
-export type Gap = Schemas["KnowledgeGapOut"];
-export type Answer = Schemas["StakeholderAnswerOut"];
-export type Category = Gap["category"];
+export type Summary = Schemas['IntakeSummary'];
+export type Batch = Schemas['QuestionBatch'];
+export type Card = Schemas['QuestionCard'];
+export type Gap = Schemas['KnowledgeGapOut'];
+export type Answer = Schemas['StakeholderAnswerOut'];
+export type Category = Gap['category'];
 
 /** The seventeen question categories (build prompt §5), as Oracle names them. */
 export const CATEGORY_LABEL: Record<Category, string> = {
-  customer_user: "Customer and user",
-  pain_evidence: "Pain evidence",
-  goal_alignment: "Company-goal alignment",
-  success_metric: "Success metric and baseline",
-  differentiation: "Strategic differentiation",
-  alternatives: "Alternatives",
-  constraints: "Current and future constraints",
-  blockers: "Blockers",
-  economic_benefit: "Expected economic benefit",
-  effort_cost: "Effort and cost",
-  security_privacy: "Security and privacy",
-  ownership: "Team ownership",
-  non_goals: "Non-goals",
-  release_rollout: "Release and rollout",
-  evaluation_criteria: "Evaluation criteria",
-  third_party_policy: "Third-party policy and API limits",
-  configurability_scaling: "Configurability and scaling",
+  customer_user: 'Customer and user',
+  pain_evidence: 'Pain evidence',
+  goal_alignment: 'Company-goal alignment',
+  success_metric: 'Success metric and baseline',
+  differentiation: 'Strategic differentiation',
+  alternatives: 'Alternatives',
+  constraints: 'Current and future constraints',
+  blockers: 'Blockers',
+  economic_benefit: 'Expected economic benefit',
+  effort_cost: 'Effort and cost',
+  security_privacy: 'Security and privacy',
+  ownership: 'Team ownership',
+  non_goals: 'Non-goals',
+  release_rollout: 'Release and rollout',
+  evaluation_criteria: 'Evaluation criteria',
+  third_party_policy: 'Third-party policy and API limits',
+  configurability_scaling: 'Configurability and scaling',
 };
 
 /**
  * The category under a gap's statement, or null when the statement already starts with it
  * ("Security and privacy: not known yet." needs no "Security and privacy" below: qa-docs-65).
  */
-export function categoryNote(gap: Pick<Gap, "category" | "statement">): string | null {
+export function categoryNote(gap: Pick<Gap, 'category' | 'statement'>): string | null {
   const label = CATEGORY_LABEL[gap.category];
   return gap.statement.trim().toLowerCase().startsWith(label.toLowerCase()) ? null : label;
 }
 
 /** A critical gap in these categories is a hard blocker: an owner reviews it (B4). */
-export const HARD_BLOCKERS = new Set<Category>(["blockers", "third_party_policy"]);
+export const HARD_BLOCKERS = new Set<Category>(['blockers', 'third_party_policy']);
 
 /** Gap statuses still waiting on an answer. */
-export const OPEN_GAP = new Set<Gap["status"]>(["unknown", "asked", "under_investigation"]);
+export const OPEN_GAP = new Set<Gap['status']>(['unknown', 'asked', 'under_investigation']);
 
 /** Gap statuses that settle a critical question (the API's engine.DECIDED). */
-export const DECIDED_GAP = new Set<Gap["status"]>(["answered", "validated", "accepted_risk"]);
+export const DECIDED_GAP = new Set<Gap['status']>(['answered', 'validated', 'accepted_risk']);
 
 /**
  * The critical questions still open, as the inspector lists them: the one source the
  * "Critical open" count, the chips and each line read (production minors 24).
  */
-export function openCriticalGaps(s: Summary): Summary["gaps"] {
-  return s.gaps.filter((g) => g.importance === "critical" && !DECIDED_GAP.has(g.status));
+export function openCriticalGaps(s: Summary): Summary['gaps'] {
+  return s.gaps.filter((g) => g.importance === 'critical' && !DECIDED_GAP.has(g.status));
 }
 
 /**
@@ -66,13 +66,13 @@ export function openCriticalCount(s: Summary): number {
 }
 
 /** The intake's status, in the header's words. */
-export const STATUS: Record<Summary["intake"]["status"], { label: string; kind: ChipKind }> = {
-  draft: { label: "Oracle is reading", kind: "na" },
-  analyzing: { label: "Oracle is reading", kind: "na" },
-  awaiting_answers: { label: "Waiting for answers", kind: "warn" },
-  ready: { label: "Ready to draft", kind: "pass" },
-  converted: { label: "Drafting", kind: "acc" },
-  archived: { label: "Archived", kind: "na" },
+export const STATUS: Record<Summary['intake']['status'], { label: string; kind: ChipKind }> = {
+  draft: { label: 'Oracle is reading', kind: 'na' },
+  analyzing: { label: 'Oracle is reading', kind: 'na' },
+  awaiting_answers: { label: 'Waiting for answers', kind: 'warn' },
+  ready: { label: 'Ready to draft', kind: 'pass' },
+  converted: { label: 'Drafting', kind: 'acc' },
+  archived: { label: 'Archived', kind: 'na' },
 };
 
 /**
@@ -80,21 +80,21 @@ export const STATUS: Record<Summary["intake"]["status"], { label: string; kind: 
  * null for a non-answer ("I don't know", a hand-over): its text says it all (qa4-work-6).
  */
 export function knowledgeLabel(a: Answer, mine: boolean, name: string): string | null {
-  if (a.kind !== "answer") return null;
+  if (a.kind !== 'answer') return null;
   // Production minors 28: what a person wrote reads as their answer.
-  if (a.knowledge_state === "user_decision") return mine ? "Your answer" : `${name}'s answer`;
-  if (a.knowledge_state === "verified_fact") return "Verified fact";
-  if (a.knowledge_state === "hypothesis") return "Hypothesis";
-  if (a.knowledge_state === "ai_inference") return "Oracle's inference";
-  return "Unknown";
+  if (a.knowledge_state === 'user_decision') return mine ? 'Your answer' : `${name}'s answer`;
+  if (a.knowledge_state === 'verified_fact') return 'Verified fact';
+  if (a.knowledge_state === 'hypothesis') return 'Hypothesis';
+  if (a.knowledge_state === 'ai_inference') return "Oracle's inference";
+  return 'Unknown';
 }
 
 /** What a non-answer says in place of a body. */
-export const NON_ANSWER: Record<Exclude<Answer["kind"], "answer">, string> = {
+export const NON_ANSWER: Record<Exclude<Answer['kind'], 'answer'>, string> = {
   dont_know: "I don't know",
-  defer: "Deferred",
-  delegate: "Asked someone else",
-  research: "Research this",
+  defer: 'Deferred',
+  delegate: 'Asked someone else',
+  research: 'Research this',
 };
 
 /**
@@ -108,10 +108,10 @@ export const when = formatDateTime;
 
 /** "1 critical question" / "2 critical questions". */
 export function criticalCount(n: number): string {
-  return plural(n, "critical question");
+  return plural(n, 'critical question');
 }
 
-const WAITING = new Set<Card["question"]["status"]>(["asked", "delegated"]);
+const WAITING = new Set<Card['question']['status']>(['asked', 'delegated']);
 
 /** The answer that stands on a question: its latest. */
 const lastAnswer = (c: Card) => c.answers[c.answers.length - 1];
@@ -130,10 +130,16 @@ export type Tally = { open: number; answered: number; unknown: number; deferred?
 export function tally(s: Summary, batches: Batch[] | undefined): Tally {
   if (!batches) return { open: s.batch.asked, answered: s.batch.answered, unknown: 0 };
   const cards = batches.flatMap((b) => b.questions);
-  const answered = cards.filter((c) => c.question.status === "answered" && lastAnswer(c)?.kind !== "dont_know").length;
-  const waiting = cards.filter((c) => WAITING.has(c.question.status) || (c.question.status === "answered" && lastAnswer(c)?.kind === "dont_know"));
-  const unknown = waiting.filter((c) => lastAnswer(c)?.kind === "dont_know").length;
-  const deferred = cards.filter((c) => c.question.status === "deferred").length;
+  const answered = cards.filter(
+    (c) => c.question.status === 'answered' && lastAnswer(c)?.kind !== 'dont_know',
+  ).length;
+  const waiting = cards.filter(
+    (c) =>
+      WAITING.has(c.question.status) ||
+      (c.question.status === 'answered' && lastAnswer(c)?.kind === 'dont_know'),
+  );
+  const unknown = waiting.filter((c) => lastAnswer(c)?.kind === 'dont_know').length;
+  const deferred = cards.filter((c) => c.question.status === 'deferred').length;
   return { open: waiting.length, answered, unknown, deferred };
 }
 
@@ -142,7 +148,7 @@ export function unknownGaps(batches: Batch[] | undefined): Set<string> {
   return new Set(
     (batches ?? [])
       .flatMap((b) => b.questions)
-      .filter((c) => lastAnswer(c)?.kind === "dont_know" && c.question.gap_id)
+      .filter((c) => lastAnswer(c)?.kind === 'dont_know' && c.question.gap_id)
       .map((c) => c.question.gap_id!),
   );
 }
@@ -155,22 +161,30 @@ export function unknownGaps(batches: Batch[] | undefined): Set<string> {
  */
 export function statusChip(s: Summary, counts: Tally): { label: string; kind: ChipKind } {
   const deferred = counts.deferred ?? 0;
-  if (s.intake.status === "awaiting_answers" && counts.open === 0 && counts.answered === 0 && deferred === 0) return { label: "Nothing asked yet", kind: "warn" };
+  if (
+    s.intake.status === 'awaiting_answers' &&
+    counts.open === 0 &&
+    counts.answered === 0 &&
+    deferred === 0
+  )
+    return { label: 'Nothing asked yet', kind: 'warn' };
   // qa4-work-1: a deferred question was asked all the same; the chip says it is put off.
-  if (s.intake.status === "awaiting_answers" && counts.open === 0 && deferred > 0) return { label: `${plural(deferred, "question")} deferred`, kind: "warn" };
-  if (s.intake.status === "awaiting_answers" && counts.open === 0 && openCriticalGaps(s).length > 0) return { label: "Waiting for a decision", kind: "warn" };
+  if (s.intake.status === 'awaiting_answers' && counts.open === 0 && deferred > 0)
+    return { label: `${plural(deferred, 'question')} deferred`, kind: 'warn' };
+  if (s.intake.status === 'awaiting_answers' && counts.open === 0 && openCriticalGaps(s).length > 0)
+    return { label: 'Waiting for a decision', kind: 'warn' };
   return STATUS[s.intake.status];
 }
 
 /** Why a question answered "I don't know" still counts open (qa-work-2), or null. */
 export function unknownNote(counts: Tally): string | null {
   if (counts.unknown === 0) return null;
-  return `${counts.unknown} still open after “I don't know”: what ${counts.unknown === 1 ? "it asks stays" : "they ask stays"} a gap until someone answers or decides`;
+  return `${counts.unknown} still open after “I don't know”: what ${counts.unknown === 1 ? 'it asks stays' : 'they ask stays'} a gap until someone answers or decides`;
 }
 
 /** "1 critical question holds the draft" / "2 critical questions hold the draft". */
 export function holdCount(n: number): string {
-  return `${criticalCount(n)} ${n === 1 ? "holds" : "hold"} the draft`;
+  return `${criticalCount(n)} ${n === 1 ? 'holds' : 'hold'} the draft`;
 }
 
 /**
@@ -180,6 +194,9 @@ export function holdCount(n: number): string {
  */
 export function gateReason(blocking: number, open: number = blocking): string {
   const all = Math.max(open, blocking);
-  const lead = all > blocking ? `${criticalCount(all)} open, ${blocking} ${blocking === 1 ? "holds" : "hold"} the draft` : holdCount(blocking);
-  return `${lead}: answer ${blocking === 1 ? "it" : "them"} or record a decision`;
+  const lead =
+    all > blocking
+      ? `${criticalCount(all)} open, ${blocking} ${blocking === 1 ? 'holds' : 'hold'} the draft`
+      : holdCount(blocking);
+  return `${lead}: answer ${blocking === 1 ? 'it' : 'them'} or record a decision`;
 }

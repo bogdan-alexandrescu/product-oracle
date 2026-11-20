@@ -1,15 +1,15 @@
-"use client";
+'use client';
 
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent } from 'react';
 
-import { Button, Chip, Empty } from "@/components/ds";
-import { ErrorNote, INPUT } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { plural } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { errorMessage } from "@/lib/use-query";
+import { Button, Chip, Empty } from '@/components/ds';
+import { ErrorNote, INPUT } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { plural } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { errorMessage } from '@/lib/use-query';
 
-type Theme = Schemas["RequestThemeOut"];
+type Theme = Schemas['RequestThemeOut'];
 
 /**
  * The Themes tab (#348): every theme, archived ones last, with how many requests it holds.
@@ -18,12 +18,18 @@ type Theme = Schemas["RequestThemeOut"];
  * confirmed problem with its definition of success, which replies and agents cite.
  * Every change hands the saved theme to `onChange`.
  */
-export function Themes({ themes, onChange }: { themes: Theme[]; onChange: (theme: Theme) => void }) {
+export function Themes({
+  themes,
+  onChange,
+}: {
+  themes: Theme[];
+  onChange: (theme: Theme) => void;
+}) {
   const { can } = useMe();
   // #370: the theme routes' own role decides who creates, renames and archives.
-  const canCreate = can("create_request_theme");
-  const approver = can("update_request_theme");
-  const [title, setTitle] = useState("");
+  const canCreate = can('create_request_theme');
+  const approver = can('update_request_theme');
+  const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,17 +48,30 @@ export function Themes({ themes, onChange }: { themes: Theme[]; onChange: (theme
   }
   const create = async (e: FormEvent) => {
     e.preventDefault();
-    if (await run(() => unwrap(api.POST("/v1/request-themes", { body: { title: title.trim(), goal_ids: [] } })))) setTitle("");
+    if (
+      await run(() =>
+        unwrap(api.POST('/v1/request-themes', { body: { title: title.trim(), goal_ids: [] } })),
+      )
+    )
+      setTitle('');
   };
   const sorted = [...themes].sort((a, b) => Number(a.archived) - Number(b.archived));
 
   return (
     <div className="flex flex-col">
       {canCreate && (
-        <form className="flex flex-wrap items-end gap-2 border-b border-line px-4 py-3" onSubmit={create}>
+        <form
+          className="flex flex-wrap items-end gap-2 border-b border-line px-4 py-3"
+          onSubmit={create}
+        >
           <label className="flex min-w-0 flex-1 basis-56 flex-col gap-1 text-sm font-semibold text-text2">
             New theme
-            <input className={INPUT} value={title} maxLength={120} onChange={(e) => setTitle(e.target.value)} />
+            <input
+              className={INPUT}
+              value={title}
+              maxLength={120}
+              onChange={(e) => setTitle(e.target.value)}
+            />
           </label>
           <Button variant="solid" type="submit" disabled={busy || !title.trim()}>
             Create theme
@@ -71,7 +90,13 @@ export function Themes({ themes, onChange }: { themes: Theme[]; onChange: (theme
           {sorted.map((t) => (
             <li key={t.id} data-testid="theme-row" className="flex flex-col gap-2 px-4 py-3">
               <ThemeRow theme={t} canChange={approver} busy={busy} run={run} />
-              {(t.problem_state !== "none" || t.problem) && <ProblemBlock theme={t} canChange={can("confirm_request_theme_problem")} onChange={onChange} />}
+              {(t.problem_state !== 'none' || t.problem) && (
+                <ProblemBlock
+                  theme={t}
+                  canChange={can('confirm_request_theme_problem')}
+                  onChange={onChange}
+                />
+              )}
             </li>
           ))}
         </ul>
@@ -93,9 +118,14 @@ function ThemeRow({
 }) {
   const [renaming, setRenaming] = useState(false);
   const [title, setTitle] = useState(theme.title);
-  const patch = (body: Omit<Schemas["RequestThemePatch"], "lock_version">) =>
+  const patch = (body: Omit<Schemas['RequestThemePatch'], 'lock_version'>) =>
     run(() =>
-      unwrap(api.PATCH("/v1/request-themes/{theme_id}", { params: { path: { theme_id: theme.id } }, body: { lock_version: theme.lock_version, ...body } })),
+      unwrap(
+        api.PATCH('/v1/request-themes/{theme_id}', {
+          params: { path: { theme_id: theme.id } },
+          body: { lock_version: theme.lock_version, ...body },
+        }),
+      ),
     );
   const rename = async (e: FormEvent) => {
     e.preventDefault();
@@ -107,7 +137,12 @@ function ThemeRow({
         <form className="flex min-w-0 flex-1 basis-64 flex-wrap items-end gap-2" onSubmit={rename}>
           <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm font-semibold text-text2">
             Theme title
-            <input className={INPUT} value={title} maxLength={120} onChange={(e) => setTitle(e.target.value)} />
+            <input
+              className={INPUT}
+              value={title}
+              maxLength={120}
+              onChange={(e) => setTitle(e.target.value)}
+            />
           </label>
           <Button variant="ghost" onClick={() => setRenaming(false)}>
             Cancel
@@ -117,14 +152,16 @@ function ThemeRow({
           </Button>
         </form>
       ) : (
-        <span className={`min-w-0 flex-1 basis-64 truncate text-[15px] font-semibold ${theme.archived ? "text-text2" : ""}`}>{theme.title}</span>
+        <span
+          className={`min-w-0 flex-1 basis-64 truncate text-[15px] font-semibold ${theme.archived ? 'text-text2' : ''}`}
+        >
+          {theme.title}
+        </span>
       )}
       <span className="flex flex-wrap items-center gap-2 text-sm text-text2">
         {theme.archived && <Chip kind="na">Archived</Chip>}
-        {theme.origin === "oracle" && <Chip kind="line">From Oracle</Chip>}
-        <span className="tnum">
-          {plural(theme.request_count, "request")}
-        </span>
+        {theme.origin === 'oracle' && <Chip kind="line">From Oracle</Chip>}
+        <span className="tnum">{plural(theme.request_count, 'request')}</span>
         {canChange && !renaming && (
           <>
             {!theme.archived && (
@@ -139,8 +176,12 @@ function ThemeRow({
                 Rename
               </Button>
             )}
-            <Button variant="ghost" disabled={busy} onClick={() => patch({ archived: !theme.archived })}>
-              {theme.archived ? "Restore" : "Archive"}
+            <Button
+              variant="ghost"
+              disabled={busy}
+              onClick={() => patch({ archived: !theme.archived })}
+            >
+              {theme.archived ? 'Restore' : 'Archive'}
             </Button>
           </>
         )}
@@ -150,9 +191,14 @@ function ThemeRow({
 }
 
 const PROBLEM_FIELDS = [
-  { key: "problem", label: "The problem", hint: "Who has it, what they are trying to do, what stops them", max: 1000 },
-  { key: "success", label: "How we would know it is solved", hint: null, max: 500 },
-  { key: "constraints", label: "Limits set by others", hint: "Legal, finance, sales", max: 500 },
+  {
+    key: 'problem',
+    label: 'The problem',
+    hint: 'Who has it, what they are trying to do, what stops them',
+    max: 1000,
+  },
+  { key: 'success', label: 'How we would know it is solved', hint: null, max: 500 },
+  { key: 'constraints', label: 'Limits set by others', hint: 'Legal, finance, sales', max: 500 },
 ] as const;
 
 /**
@@ -160,11 +206,26 @@ const PROBLEM_FIELDS = [
  * the confirmed problem with Edit, for approvers and owners; others read it. Shared by the
  * Themes tab and the request inspector.
  */
-export function ProblemBlock({ theme, canChange, onChange }: { theme: Theme; canChange: boolean; onChange: (theme: Theme) => void }) {
-  const suggested = theme.problem_state === "suggested" && theme.problem_suggestion ? theme.problem_suggestion : null;
-  const shown = suggested ?? { problem: theme.problem, success: theme.success, constraints: theme.constraints };
+export function ProblemBlock({
+  theme,
+  canChange,
+  onChange,
+}: {
+  theme: Theme;
+  canChange: boolean;
+  onChange: (theme: Theme) => void;
+}) {
+  const suggested =
+    theme.problem_state === 'suggested' && theme.problem_suggestion
+      ? theme.problem_suggestion
+      : null;
+  const shown = suggested ?? {
+    problem: theme.problem,
+    success: theme.success,
+    constraints: theme.constraints,
+  };
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState({ problem: "", success: "", constraints: "" });
+  const [draft, setDraft] = useState({ problem: '', success: '', constraints: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const path = { params: { path: { theme_id: theme.id } } };
@@ -184,9 +245,14 @@ export function ProblemBlock({ theme, canChange, onChange }: { theme: Theme; can
     e.preventDefault();
     run(() =>
       unwrap(
-        api.PATCH("/v1/request-themes/{theme_id}", {
+        api.PATCH('/v1/request-themes/{theme_id}', {
           ...path,
-          body: { lock_version: theme.lock_version, problem: draft.problem.trim() || null, success: draft.success.trim() || null, constraints: draft.constraints.trim() || null },
+          body: {
+            lock_version: theme.lock_version,
+            problem: draft.problem.trim() || null,
+            success: draft.success.trim() || null,
+            constraints: draft.constraints.trim() || null,
+          },
         }),
       ),
     );
@@ -198,7 +264,13 @@ export function ProblemBlock({ theme, canChange, onChange }: { theme: Theme; can
           <label key={f.key} className="flex flex-col gap-1 text-sm font-semibold text-text2">
             {f.label}
             {f.hint && <span className="font-normal">{f.hint}</span>}
-            <textarea className={INPUT} rows={f.key === "problem" ? 3 : 2} maxLength={f.max} value={draft[f.key]} onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))} />
+            <textarea
+              className={INPUT}
+              rows={f.key === 'problem' ? 3 : 2}
+              maxLength={f.max}
+              value={draft[f.key]}
+              onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
+            />
           </label>
         ))}
         {error && <ErrorNote>{error}</ErrorNote>}
@@ -215,7 +287,9 @@ export function ProblemBlock({ theme, canChange, onChange }: { theme: Theme; can
   }
   return (
     <div data-testid="theme-problem" className="flex min-w-0 flex-col gap-1.5 text-[15px]">
-      {suggested && <p className="text-sm font-semibold text-text2">Oracle suggests this problem</p>}
+      {suggested && (
+        <p className="text-sm font-semibold text-text2">Oracle suggests this problem</p>
+      )}
       <dl className="flex min-w-0 flex-col gap-1.5">
         {PROBLEM_FIELDS.filter((f) => shown[f.key]).map((f) => (
           <div key={f.key} className="min-w-0">
@@ -231,7 +305,16 @@ export function ProblemBlock({ theme, canChange, onChange }: { theme: Theme; can
             <Button
               variant="solid"
               disabled={busy}
-              onClick={() => run(() => unwrap(api.POST("/v1/request-themes/{theme_id}/problem/confirm", { ...path, body: { lock_version: theme.lock_version } })))}
+              onClick={() =>
+                run(() =>
+                  unwrap(
+                    api.POST('/v1/request-themes/{theme_id}/problem/confirm', {
+                      ...path,
+                      body: { lock_version: theme.lock_version },
+                    }),
+                  ),
+                )
+              }
             >
               Confirm
             </Button>
@@ -240,7 +323,11 @@ export function ProblemBlock({ theme, canChange, onChange }: { theme: Theme; can
             variant="ghost"
             disabled={busy}
             onClick={() => {
-              setDraft({ problem: shown.problem ?? "", success: shown.success ?? "", constraints: shown.constraints ?? "" });
+              setDraft({
+                problem: shown.problem ?? '',
+                success: shown.success ?? '',
+                constraints: shown.constraints ?? '',
+              });
               setEditing(true);
             }}
           >
@@ -250,7 +337,16 @@ export function ProblemBlock({ theme, canChange, onChange }: { theme: Theme; can
             <Button
               variant="ghost"
               disabled={busy}
-              onClick={() => run(() => unwrap(api.POST("/v1/request-themes/{theme_id}/problem/dismiss", { ...path, body: { lock_version: theme.lock_version } })))}
+              onClick={() =>
+                run(() =>
+                  unwrap(
+                    api.POST('/v1/request-themes/{theme_id}/problem/dismiss', {
+                      ...path,
+                      body: { lock_version: theme.lock_version },
+                    }),
+                  ),
+                )
+              }
             >
               Dismiss
             </Button>

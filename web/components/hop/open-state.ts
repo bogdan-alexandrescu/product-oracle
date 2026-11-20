@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from 'react';
 
-import { useMe } from "@/lib/me";
+import { useMe } from '@/lib/me';
 
 /**
  * Whether the head-of-product panel is open: remembered per viewer in localStorage (G7 3.2,
@@ -11,7 +11,7 @@ import { useMe } from "@/lib/me";
  * so the next person signing in on this browser starts with it closed; signing out closes it;
  * a visit that starts on a Simple page starts with it closed.
  */
-export const OPEN_KEY = "oracle.hop-panel.open";
+export const OPEN_KEY = 'oracle.hop-panel.open';
 
 /** Who has it open: their id ("1": anyone, as stored before), or null when closed. */
 let stored: string | null | undefined;
@@ -22,7 +22,7 @@ let seen: string | null | undefined;
 /* qa-shell-19: opened by a person (the strip, ⌘J, Simple's Ask Oracle), not restored from storage: focus its question box. */
 let focusAsk = false;
 const listeners = new Set<() => void>();
-let draft = "";
+let draft = '';
 const draftListeners = new Set<() => void>();
 
 function readStored(): string | null {
@@ -30,7 +30,7 @@ function readStored(): string | null {
     try {
       const v = window.localStorage.getItem(OPEN_KEY);
       // Simple's Ask is a clean slate: each visit to Simple starts with it closed (qa-simple-home-21).
-      stored = v && v !== "0" && !window.location.pathname.startsWith("/simple") ? v : null;
+      stored = v && v !== '0' && !window.location.pathname.startsWith('/simple') ? v : null;
     } catch {
       stored = null;
     }
@@ -40,7 +40,7 @@ function readStored(): string | null {
 
 function openFor(who: string | null): boolean {
   const s = readStored();
-  return !!s && !!who && (s === "1" || s === who);
+  return !!s && !!who && (s === '1' || s === who);
 }
 
 /** The page a linked discussion opened the panel on (askThread): the page change that brought it there keeps it open. */
@@ -51,7 +51,7 @@ export function setPanelOpen(next: boolean, remember = true) {
   transient = next && !remember;
   openedOn = null;
   if (next && !openFor(user)) focusAsk = true;
-  stored = next ? (user ?? "1") : null;
+  stored = next ? (user ?? '1') : null;
   // A linked discussion it showed is let go with it: the next opening starts on its chats.
   if (!next && linked) {
     linked = null;
@@ -59,11 +59,11 @@ export function setPanelOpen(next: boolean, remember = true) {
   }
   // Words no box took while it was open are dropped, never shown typed in later.
   if (!next && draft) {
-    draft = "";
+    draft = '';
     draftListeners.forEach((l) => l());
   }
   try {
-    window.localStorage.setItem(OPEN_KEY, next && remember ? (stored ?? "0") : "0");
+    window.localStorage.setItem(OPEN_KEY, next && remember ? (stored ?? '0') : '0');
   } catch {
     // Not remembered; the panel still opens.
   }
@@ -79,7 +79,7 @@ function subscribe(l: () => void) {
 
 export function usePanelOpen(): boolean {
   const { me, loading } = useMe();
-  const who = me ? (me.user_id ?? me.token_id ?? "me") : null;
+  const who = me ? (me.user_id ?? me.token_id ?? 'me') : null;
   useEffect(() => {
     if (loading) return;
     user = who;
@@ -88,7 +88,11 @@ export function usePanelOpen(): boolean {
     seen = who;
     if (was && was !== who && readStored()) setPanelOpen(false);
   }, [who, loading]);
-  return useSyncExternalStore(subscribe, () => openFor(who), () => false);
+  return useSyncExternalStore(
+    subscribe,
+    () => openFor(who),
+    () => false,
+  );
 }
 
 /**
@@ -112,7 +116,7 @@ export function closeTransientPanel() {
 /** Takes the typed-in words (they are cleared). */
 export function takeAskDraft(): string {
   const t = draft;
-  draft = "";
+  draft = '';
   return t;
 }
 
@@ -125,7 +129,7 @@ export function useAskDraft(): string {
       };
     },
     () => draft,
-    () => "",
+    () => '',
   );
 }
 

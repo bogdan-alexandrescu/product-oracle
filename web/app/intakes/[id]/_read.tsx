@@ -1,51 +1,59 @@
-"use client";
+'use client';
 
-import { Link } from "@/lib/nav";
-import { useEffect, useState } from "react";
+import { Link } from '@/lib/nav';
+import { useEffect, useState } from 'react';
 
-import { Button, InfoTip } from "@/components/ds";
-import type { Schemas } from "@/lib/api/client";
+import { Button, InfoTip } from '@/components/ds';
+import type { Schemas } from '@/lib/api/client';
 
-import { plural } from "@/lib/format";
+import { plural } from '@/lib/format';
 
-import { dayMonth, when } from "./_lib";
+import { dayMonth, when } from './_lib';
 
-type AiRead = Schemas["AiReadOut"];
+type AiRead = Schemas['AiReadOut'];
 
-const LIVE = new Set<AiRead["state"]>(["queued", "running"]);
+const LIVE = new Set<AiRead['state']>(['queued', 'running']);
 const POLL_MS = 10_000;
 
 function line(read: AiRead, openGaps: number, asked: number): string {
-  if (read.state === "off") {
-    if (read.off_reason === "company") return "Oracle's read is off for this company.";
+  if (read.state === 'off') {
+    if (read.off_reason === 'company') return "Oracle's read is off for this company.";
     // qa-onboarding-22: the questions below are Oracle's, from what the brief says; only
     // the deeper read (with the sources) has not run.
     return asked > 0
-      ? `Oracle asked ${plural(asked, "question")} from what the brief says; it has not analysed it with your sources yet.`
+      ? `Oracle asked ${plural(asked, 'question')} from what the brief says; it has not analysed it with your sources yet.`
       : "Oracle hasn't read this brief.";
   }
-  if (LIVE.has(read.state)) return `Oracle is reading your brief and ${plural(read.sources, "source")}`;
-  if (read.state === "failed") return read.error?.message ?? "Oracle's read failed. The rules read stands.";
+  if (LIVE.has(read.state))
+    return `Oracle is reading your brief and ${plural(read.sources, 'source')}`;
+  if (read.state === 'failed')
+    return read.error?.message ?? "Oracle's read failed. The rules read stands.";
   // rirs-29: plain words, not "inferences" and "gaps". qa-work-3: the open gaps are the Gaps
   // tab's count (the rules read's and Oracle's), not only those this read added.
   // qa4-work-8: no "0 things"; what Oracle assumed is said to be seen by the author only.
   const added = read.added ?? { items: 0, gaps: 0 };
-  const assumed = added.items === 0 ? "Oracle assumed nothing" : `Oracle assumed ${plural(added.items, "thing")} (only you see ${added.items === 1 ? "it" : "them"})`;
-  const gaps = openGaps === 0 ? "no gaps open" : `${plural(openGaps, "gap")} still open`;
+  const assumed =
+    added.items === 0
+      ? 'Oracle assumed nothing'
+      : `Oracle assumed ${plural(added.items, 'thing')} (only you see ${added.items === 1 ? 'it' : 'them'})`;
+  const gaps = openGaps === 0 ? 'no gaps open' : `${plural(openGaps, 'gap')} still open`;
   return `${assumed}; ${gaps}`;
 }
 
 /** qa4-work-9: what a read the person just started found, said once it is done. */
 function doneNote(read: AiRead): string {
   const added = read.added ?? { items: 0, gaps: 0 };
-  if (added.items === 0 && added.gaps === 0) return "Oracle read the brief: nothing new found.";
-  const found = [added.items > 0 ? plural(added.items, "new assumption") : null, added.gaps > 0 ? plural(added.gaps, "new gap") : null].filter(Boolean);
-  return `Oracle read the brief: ${found.join(" and ")}.`;
+  if (added.items === 0 && added.gaps === 0) return 'Oracle read the brief: nothing new found.';
+  const found = [
+    added.items > 0 ? plural(added.items, 'new assumption') : null,
+    added.gaps > 0 ? plural(added.gaps, 'new gap') : null,
+  ].filter(Boolean);
+  return `Oracle read the brief: ${found.join(' and ')}.`;
 }
 
 /** The day the read started or finished, as the line ends with it (never split: qa-onboarding-40). */
 function lineDay(read: AiRead): string | null {
-  if (read.state === "off" || read.state === "failed") return null;
+  if (read.state === 'off' || read.state === 'failed') return null;
   if (LIVE.has(read.state)) return read.started_at ? `started ${dayMonth(read.started_at)}` : null;
   return read.finished_at ? dayMonth(read.finished_at) : null;
 }
@@ -93,15 +101,23 @@ export function ReadLine({
   const at = live ? read.started_at : read.finished_at;
   const day = lineDay(read);
   const left = Math.max(0, read.reads_per_day - read.reads_today);
-  const showButton = mayRead && !live && !(read.state === "off" && read.off_reason === "company");
-  const label = read.state === "off" ? "Analyse with Oracle" : read.state === "failed" ? "Try again" : "Read the brief again";
+  const showButton = mayRead && !live && !(read.state === 'off' && read.off_reason === 'company');
+  const label =
+    read.state === 'off'
+      ? 'Analyse with Oracle'
+      : read.state === 'failed'
+        ? 'Try again'
+        : 'Read the brief again';
   return (
-    <div data-testid="intake-read" className="-mt-1 mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-text2">
+    <div
+      data-testid="intake-read"
+      className="-mt-1 mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-text2"
+    >
       <span title={at ? when(at) : undefined}>
         {line(read, openGaps, asked)}
         {day && (
           <>
-            {" · "}
+            {' · '}
             <span data-testid="intake-read-day" className="whitespace-nowrap">
               {day}
             </span>
@@ -109,7 +125,7 @@ export function ReadLine({
         )}
       </span>
       {read.fallback && <span>{read.fallback.message}</span>}
-      {read.state === "done" && read.path === "swarmcloud" && read.run_id && (
+      {read.state === 'done' && read.path === 'swarmcloud' && read.run_id && (
         <Link href={`/runs/${read.run_id}`} className="font-medium text-text hover:underline">
           View run
         </Link>
@@ -124,25 +140,29 @@ export function ReadLine({
             // qa-onboarding-28: the day's cap shows before the first read, not only after it.
             <span data-testid="intake-read-count" className="whitespace-nowrap">
               {/* qa-work-31: what is counted. */}
-              {plural(left, "analysis", "analyses")} left today
+              {plural(left, 'analysis', 'analyses')} left today
             </span>
           )}
           {/* rirs-29: this reads the brief and its sources again (capped); the menu's "Rank the
               questions again" only re-orders the questions not asked yet. */}
           <Button
             disabled={busy || refused !== null}
-            title={refused ?? "Oracle reads the brief and its sources again"}
+            title={refused ?? 'Oracle reads the brief and its sources again'}
             onClick={() => {
               setStarted(true);
               onRead();
             }}
           >
-            {started && busy ? "Reading…" : label}
+            {started && busy ? 'Reading…' : label}
           </Button>
         </span>
       )}
-      {started && !busy && read.state === "done" && (
-        <p data-testid="intake-read-done" role="status" className="basis-full text-sm font-medium text-text">
+      {started && !busy && read.state === 'done' && (
+        <p
+          data-testid="intake-read-done"
+          role="status"
+          className="basis-full text-sm font-medium text-text"
+        >
           {doneNote(read)}
         </p>
       )}
@@ -150,8 +170,15 @@ export function ReadLine({
       {(showButton || mayDraft) && (
         <span data-testid="intake-oracle-help" className="inline-flex">
           <InfoTip label="the Oracle buttons" align="start" testId="intake-oracle-tip">
-            {showButton && <>{label}: Oracle reads the brief and its sources, and lists what it assumed and what is still open. </>}
-            {mayDraft && <>Draft with Oracle: Oracle writes the PRD from the brief and the answers so far.</>}
+            {showButton && (
+              <>
+                {label}: Oracle reads the brief and its sources, and lists what it assumed and what
+                is still open.{' '}
+              </>
+            )}
+            {mayDraft && (
+              <>Draft with Oracle: Oracle writes the PRD from the brief and the answers so far.</>
+            )}
           </InfoTip>
         </span>
       )}

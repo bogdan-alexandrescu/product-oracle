@@ -1,10 +1,10 @@
-import { Suspense } from "react";
+import { Suspense } from 'react';
 
-import { ThemeDetail } from "@/components/ThemeDetail";
-import type { RouteProps } from "@/lib/route-props";
-import { PageSkeleton } from "@/components/ds";
+import { ThemeDetail } from '@/components/ThemeDetail';
+import type { RouteProps } from '@/lib/route-props';
+import { PageSkeleton } from '@/components/ds';
 
-async function Detail({ params }: { params: RouteProps<{ key: string }>["params"] }) {
+async function Detail({ params }: { params: RouteProps<{ key: string }>['params'] }) {
   const { key } = await params;
   return <ThemeDetail themeKey={key} />;
 }

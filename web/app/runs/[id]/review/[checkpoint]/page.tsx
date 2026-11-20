@@ -1,13 +1,13 @@
-import { Suspense } from "react";
+import { Suspense } from 'react';
 
-import type { RouteProps } from "@/lib/route-props";
+import type { RouteProps } from '@/lib/route-props';
 
-import { ReviewShell } from "./_shell";
-import { PageSkeleton } from "@/components/ds";
+import { ReviewShell } from './_shell';
+import { PageSkeleton } from '@/components/ds';
 
 async function Shell({ params, searchParams }: RouteProps<{ id: string; checkpoint: string }>) {
   const [{ id, checkpoint }, query] = await Promise.all([params, searchParams]);
-  const item = typeof query.item === "string" ? query.item : null;
+  const item = typeof query.item === 'string' ? query.item : null;
   return <ReviewShell runId={id} checkpointId={checkpoint} item={item} />;
 }
 

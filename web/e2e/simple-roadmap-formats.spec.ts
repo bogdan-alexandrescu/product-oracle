@@ -1,6 +1,6 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login, signOut } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login, signOut } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /**
  * Simple S4 (#723), lane 2: the roadmap's Now / Next / Later board and waterfall phases,
@@ -10,22 +10,25 @@ import { expect, test, type Locator, type Page } from "./test";
  * phone, light and dark. Each test's card is in its comment.
  */
 
-const URL = "/simple/roadmap";
+const URL = '/simple/roadmap';
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
-const FORMATS = ["timeline", "gantt", "board", "waterfall"] as const;
+const FORMATS = ['timeline', 'gantt', 'board', 'waterfall'] as const;
 /** The company's name, as an owner types it in Branding (the seed's placeholder is never printed). */
-const COMPANY = "Northwind Labs";
+const COMPANY = 'Northwind Labs';
 
-const card = (page: Page, key: string): Locator => page.locator(`[data-testid="board-card"][data-item="${key}"]`);
-const column = (page: Page, h: "now" | "next" | "later"): Locator => page.locator(`[data-horizon-column="${h}"]`);
-const phase = (page: Page, key: string, p: string): Locator => page.locator(`g[data-testid="bar"][data-item="${key}"] [data-testid="phase"][data-phase="${p}"]`);
+const card = (page: Page, key: string): Locator =>
+  page.locator(`[data-testid="board-card"][data-item="${key}"]`);
+const column = (page: Page, h: 'now' | 'next' | 'later'): Locator =>
+  page.locator(`[data-horizon-column="${h}"]`);
+const phase = (page: Page, key: string, p: string): Locator =>
+  page.locator(`g[data-testid="bar"][data-item="${key}"] [data-testid="phase"][data-phase="${p}"]`);
 
 async function open(page: Page, format: (typeof FORMATS)[number], email?: string) {
   await login(page, email);
   await page.goto(URL);
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
   await page.getByTestId(`format-${format}`).click();
-  await expect(page.getByTestId(`format-${format}`)).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId(`format-${format}`)).toHaveAttribute('aria-pressed', 'true');
 }
 
 /**
@@ -33,12 +36,15 @@ async function open(page: Page, format: (typeof FORMATS)[number], email?: string
  * fold of a long column (the Goal map's features fill Next since P-1, as fix2-simple-roadmap-board
  * drags), the column at the card's own height (a desktop's columns are one grid row, as tall as the longest).
  */
-async function dragTo(page: Page, key: string, to: "now" | "next" | "later") {
+async function dragTo(page: Page, key: string, to: 'now' | 'next' | 'later') {
   await card(page, key).scrollIntoViewIfNeeded();
   const from = (await card(page, key).boundingBox())!;
-  const head = (await column(page, to).locator("header").boundingBox())!;
+  const head = (await column(page, to).locator('header').boundingBox())!;
   const col = (await column(page, to).boundingBox())!;
-  const y = head.y >= 0 ? head.y + head.height / 2 : Math.min(from.y + from.height / 2, col.y + col.height - 8);
+  const y =
+    head.y >= 0
+      ? head.y + head.height / 2
+      : Math.min(from.y + from.height / 2, col.y + col.height - 8);
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
   await page.mouse.move(head.x + head.width / 2, y, { steps: 12 });
@@ -46,19 +52,31 @@ async function dragTo(page: Page, key: string, to: "now" | "next" | "later") {
 }
 
 /** A phone's long press on a card, then a drag onto a column's header (a touch pointer). */
-async function longPressTo(page: Page, key: string, to: "now" | "next" | "later") {
+async function longPressTo(page: Page, key: string, to: 'now' | 'next' | 'later') {
   const from = (await card(page, key).boundingBox())!;
-  await column(page, to).locator("header").scrollIntoViewIfNeeded();
-  const target = (await column(page, to).locator("header").boundingBox())!;
+  await column(page, to).locator('header').scrollIntoViewIfNeeded();
+  const target = (await column(page, to).locator('header').boundingBox())!;
   const x = from.x + from.width / 2;
   const y = (await card(page, key).boundingBox())!.y + from.height / 2;
-  const ev = { pointerId: 11, pointerType: "touch", isPrimary: true, bubbles: true, button: 0, buttons: 1 };
-  await card(page, key).dispatchEvent("pointerdown", { ...ev, clientX: x, clientY: y });
-  await expect(card(page, key)).toHaveAttribute("data-picked", "true");
+  const ev = {
+    pointerId: 11,
+    pointerType: 'touch',
+    isPrimary: true,
+    bubbles: true,
+    button: 0,
+    buttons: 1,
+  };
+  await card(page, key).dispatchEvent('pointerdown', { ...ev, clientX: x, clientY: y });
+  await expect(card(page, key)).toHaveAttribute('data-picked', 'true');
   const tx = target.x + target.width / 2;
   const ty = target.y + target.height / 2;
-  for (let n = 1; n <= 8; n++) await card(page, key).dispatchEvent("pointermove", { ...ev, clientX: x + ((tx - x) * n) / 8, clientY: y + ((ty - y) * n) / 8 });
-  await card(page, key).dispatchEvent("pointerup", { ...ev, buttons: 0, clientX: tx, clientY: ty });
+  for (let n = 1; n <= 8; n++)
+    await card(page, key).dispatchEvent('pointermove', {
+      ...ev,
+      clientX: x + ((tx - x) * n) / 8,
+      clientY: y + ((ty - y) * n) / 8,
+    });
+  await card(page, key).dispatchEvent('pointerup', { ...ev, buttons: 0, clientX: tx, clientY: ty });
 }
 
 async function noSidewaysScroll(page: Page) {
@@ -67,10 +85,10 @@ async function noSidewaysScroll(page: Page) {
 }
 
 for (const [where, use] of [
-  ["desktop", {}],
-  ["phone", PHONE],
+  ['desktop', {}],
+  ['phone', PHONE],
 ] as const) {
-  for (const scheme of ["light", "dark"] as const) {
+  for (const scheme of ['light', 'dark'] as const) {
     test.describe(`${where}, ${scheme}`, () => {
       test.use({ ...use, colorScheme: scheme });
 
@@ -83,39 +101,49 @@ for (const [where, use] of [
        * wrong column, a column or group is missing, or a phone scrolls sideways; no_claim =
        * the look of the cards.
        */
-      test("the Now / Next / Later board", async ({ page }) => {
-        await open(page, "board");
-        await expect(page.getByTestId("board-column")).toHaveCount(3);
-        for (const k of ["alert-rules", "alert-digest", "setup-checklist"]) await expect(column(page, "now").locator(`[data-item="${k}"]`)).toBeVisible();
-        await expect(column(page, "next").locator('[data-item="alert-export"]')).toBeVisible();
+      test('the Now / Next / Later board', async ({ page }) => {
+        await open(page, 'board');
+        await expect(page.getByTestId('board-column')).toHaveCount(3);
+        for (const k of ['alert-rules', 'alert-digest', 'setup-checklist'])
+          await expect(column(page, 'now').locator(`[data-item="${k}"]`)).toBeVisible();
+        await expect(column(page, 'next').locator('[data-item="alert-export"]')).toBeVisible();
         // board-quarters: an item with no dates sits in Later.
-        for (const k of ["alert-sso", "setup-ideas", "setup-video"]) await expect(column(page, "later").locator(`[data-item="${k}"]`)).toBeVisible();
+        for (const k of ['alert-sso', 'setup-ideas', 'setup-video'])
+          await expect(column(page, 'later').locator(`[data-item="${k}"]`)).toBeVisible();
         // Track everywhere (owner Nov 10): the board opens on track bands; Group by Goal groups it by goal.
-        await expect(column(page, "now").getByTestId("board-group").first().locator("h3")).toHaveText(/track$/i);
-        const toggle = page.getByTestId("filters-toggle");
+        await expect(
+          column(page, 'now').getByTestId('board-group').first().locator('h3'),
+        ).toHaveText(/track$/i);
+        const toggle = page.getByTestId('filters-toggle');
         if (await toggle.isVisible()) await toggle.click();
-        await page.getByTestId("group-goal").click();
-        await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
-        await expect(column(page, "now").getByTestId("board-group").first()).toContainText(/Grow retention|Faster activation/);
-        await expect(card(page, "alert-sso")).toHaveAttribute("data-kind", "estimated");
-        await expect(card(page, "alert-sso").getByTestId("board-dates")).toHaveText(/^No dates yet · estimated [A-Z][a-z]{2} \d/);
-        await expect(card(page, "setup-ideas")).toHaveAttribute("data-kind", "draft");
-        await expect(card(page, "alert-digest")).toHaveAttribute("data-broken", "true");
-        await expect(card(page, "alert-digest").getByTestId("board-broken")).toContainText("which it depends on, ends");
-        await expect(column(page, "later").getByTestId("board-below")).toContainText("In-app tour");
+        await page.getByTestId('group-goal').click();
+        await expect(page.getByTestId('group-goal')).toHaveAttribute('aria-pressed', 'true');
+        await expect(column(page, 'now').getByTestId('board-group').first()).toContainText(
+          /Grow retention|Faster activation/,
+        );
+        await expect(card(page, 'alert-sso')).toHaveAttribute('data-kind', 'estimated');
+        await expect(card(page, 'alert-sso').getByTestId('board-dates')).toHaveText(
+          /^No dates yet · estimated [A-Z][a-z]{2} \d/,
+        );
+        await expect(card(page, 'setup-ideas')).toHaveAttribute('data-kind', 'draft');
+        await expect(card(page, 'alert-digest')).toHaveAttribute('data-broken', 'true');
+        await expect(card(page, 'alert-digest').getByTestId('board-broken')).toContainText(
+          'which it depends on, ends',
+        );
+        await expect(column(page, 'later').getByTestId('board-below')).toContainText('In-app tour');
         // board-quarters: Later reads where it starts, with its year.
-        await expect(column(page, "later").locator("header")).toContainText("Apr 1, 2027 on");
-        await expect(page.getByTestId("legend")).toContainText("Drag a card to another column");
-        if (where === "phone") {
-          const now = (await column(page, "now").boundingBox())!;
-          const next = (await column(page, "next").boundingBox())!;
+        await expect(column(page, 'later').locator('header')).toContainText('Apr 1, 2027 on');
+        await expect(page.getByTestId('legend')).toContainText('Drag a card to another column');
+        if (where === 'phone') {
+          const now = (await column(page, 'now').boundingBox())!;
+          const next = (await column(page, 'next').boundingBox())!;
           expect(next.y).toBeGreaterThanOrEqual(now.y + now.height - 1);
           await noSidewaysScroll(page);
         }
-        await card(page, "alert-rules").click();
-        const sheet = page.getByTestId("floating-card");
-        await expect(sheet.getByRole("heading", { name: "Alert rules engine" })).toBeVisible();
-        await expect(sheet).toHaveAttribute("data-sheet", where === "phone" ? "bottom" : "float");
+        await card(page, 'alert-rules').click();
+        const sheet = page.getByTestId('floating-card');
+        await expect(sheet.getByRole('heading', { name: 'Alert rules engine' })).toBeVisible();
+        await expect(sheet).toHaveAttribute('data-sheet', where === 'phone' ? 'bottom' : 'float');
       });
 
       /**
@@ -128,25 +156,44 @@ for (const [where, use] of [
        * missing, a dated phase draws hatched or an estimated one solid, or a click writes a
        * change; no_claim = the split's arithmetic (api/tests for oracle.simple.dates.phases).
        */
-      test("the waterfall phases", async ({ page }) => {
-        await open(page, "waterfall");
-        await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "waterfall");
-        for (const p of ["discover", "build", "beta", "launch"]) await expect(phase(page, "alert-rules", p)).toBeAttached();
-        await expect(phase(page, "alert-rules", "discover")).toHaveAttribute("data-estimated", "false");
-        await expect(phase(page, "alert-rules", "build")).toHaveAttribute("data-estimated", "false");
-        await expect(phase(page, "alert-rules", "beta")).toHaveAttribute("data-estimated", "true");
-        await expect(phase(page, "alert-digest", "beta")).toHaveAttribute("data-estimated", "false");
-        await expect(phase(page, "setup-checklist", "beta")).toHaveAttribute("data-estimated", "false");
-        for (const p of ["discover", "build", "beta", "launch"]) await expect(phase(page, "alert-sso", p)).toHaveAttribute("data-estimated", "true");
-        await expect(phase(page, "alert-sso", "build")).toHaveAttribute("fill", "url(#simple-hatch-build)");
-        await expect(page.getByTestId("phase-key")).toHaveCount(4);
+      test('the waterfall phases', async ({ page }) => {
+        await open(page, 'waterfall');
+        await expect(page.getByTestId('simple-chart')).toHaveAttribute('data-format', 'waterfall');
+        for (const p of ['discover', 'build', 'beta', 'launch'])
+          await expect(phase(page, 'alert-rules', p)).toBeAttached();
+        await expect(phase(page, 'alert-rules', 'discover')).toHaveAttribute(
+          'data-estimated',
+          'false',
+        );
+        await expect(phase(page, 'alert-rules', 'build')).toHaveAttribute(
+          'data-estimated',
+          'false',
+        );
+        await expect(phase(page, 'alert-rules', 'beta')).toHaveAttribute('data-estimated', 'true');
+        await expect(phase(page, 'alert-digest', 'beta')).toHaveAttribute(
+          'data-estimated',
+          'false',
+        );
+        await expect(phase(page, 'setup-checklist', 'beta')).toHaveAttribute(
+          'data-estimated',
+          'false',
+        );
+        for (const p of ['discover', 'build', 'beta', 'launch'])
+          await expect(phase(page, 'alert-sso', p)).toHaveAttribute('data-estimated', 'true');
+        await expect(phase(page, 'alert-sso', 'build')).toHaveAttribute(
+          'fill',
+          'url(#simple-hatch-build)',
+        );
+        await expect(page.getByTestId('phase-key')).toHaveCount(4);
         const bar = page.locator('g[data-testid="bar"][data-item="alert-export"]');
-        await expect(bar).toHaveAttribute("data-phased", "true");
-        const before = await bar.getAttribute("data-start");
-        await bar.locator("rect[data-body]").click();
-        await expect(page.getByTestId("floating-card").getByRole("heading", { name: "Alert history export" })).toBeVisible();
-        await expect(bar).toHaveAttribute("data-start", before!);
-        if (where === "phone") await noSidewaysScroll(page);
+        await expect(bar).toHaveAttribute('data-phased', 'true');
+        const before = await bar.getAttribute('data-start');
+        await bar.locator('rect[data-body]').click();
+        await expect(
+          page.getByTestId('floating-card').getByRole('heading', { name: 'Alert history export' }),
+        ).toBeVisible();
+        await expect(bar).toHaveAttribute('data-start', before!);
+        if (where === 'phone') await noSidewaysScroll(page);
       });
 
       /**
@@ -156,53 +203,65 @@ for (const [where, use] of [
        * it); fails_when = a format cannot export, the file is not a PNG / PDF, or the
        * header lacks the company or the filters; no_claim = the picture's pixels.
        */
-      test("every format exports as PNG and PDF, branded, with its filters", async ({ page }) => {
+      test('every format exports as PNG and PDF, branded, with its filters', async ({ page }) => {
         // e2e-pdf-export: no export prints the seed's placeholder name, so the owner names the
         // company in Branding first.
         await login(page);
-        await page.goto("/settings/company");
-        const branding = page.getByTestId("branding-panel");
-        await branding.getByLabel("Display name").fill(COMPANY);
-        await branding.getByRole("button", { name: "Save branding" }).click();
-        await expect(branding.getByRole("status")).toHaveText("Saved");
+        await page.goto('/settings/company');
+        const branding = page.getByTestId('branding-panel');
+        await branding.getByLabel('Display name').fill(COMPANY);
+        await branding.getByRole('button', { name: 'Save branding' }).click();
+        await expect(branding.getByRole('status')).toHaveText('Saved');
         await page.goto(URL);
-        await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-        await page.getByTestId("format-timeline").click();
-        await expect(page.getByTestId("format-timeline")).toHaveAttribute("aria-pressed", "true");
+        await expect(page.getByTestId('simple-roadmap')).toBeVisible();
+        await page.getByTestId('format-timeline').click();
+        await expect(page.getByTestId('format-timeline')).toHaveAttribute('aria-pressed', 'true');
         // qa-shell-24: a phone's pickers sit behind the Filters button.
-        const toggle = page.getByTestId("filters-toggle");
+        const toggle = page.getByTestId('filters-toggle');
         if (await toggle.isVisible()) await toggle.click();
-        await page.getByLabel("Goal").and(page.locator("select")).selectOption("faster-activation");
+        await page.getByLabel('Goal').and(page.locator('select')).selectOption('faster-activation');
         await expect(page.locator('g[data-testid="bar"][data-item="alert-rules"]')).toHaveCount(0);
         await page.evaluate(() => (window.__poExports = []));
         for (const f of FORMATS) {
           await page.getByTestId(`format-${f}`).click();
-          await expect(page.getByTestId(f === "board" ? "board" : "simple-chart")).toBeVisible();
-          const [png] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Export PNG" }).click()]);
+          await expect(page.getByTestId(f === 'board' ? 'board' : 'simple-chart')).toBeVisible();
+          const [png] = await Promise.all([
+            page.waitForEvent('download'),
+            page.getByRole('button', { name: 'Export PNG' }).click(),
+          ]);
           expect(png.suggestedFilename()).toBe(`roadmap-${f}.png`);
-          expect(Buffer.concat(await (await png.createReadStream()).toArray()).subarray(1, 4).toString()).toBe("PNG");
-          const [pdf] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Export PDF" }).click()]);
+          expect(
+            Buffer.concat(await (await png.createReadStream()).toArray())
+              .subarray(1, 4)
+              .toString(),
+          ).toBe('PNG');
+          const [pdf] = await Promise.all([
+            page.waitForEvent('download'),
+            page.getByRole('button', { name: 'Export PDF' }).click(),
+          ]);
           expect(pdf.suggestedFilename()).toBe(`roadmap-${f}.pdf`);
           const bytes = Buffer.concat(await (await pdf.createReadStream()).toArray());
-          expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
+          expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
           // E-2: Letter landscape pages (as many as the view needs), each numbered.
-          expect(bytes.toString("latin1")).toMatch(/\/Count [1-9]\d* >>/);
-          expect(bytes.toString("latin1")).toContain("/MediaBox [0 0 792 612]");
-          expect(bytes.toString("latin1")).toContain("(Page 1 of ");
+          expect(bytes.toString('latin1')).toMatch(/\/Count [1-9]\d* >>/);
+          expect(bytes.toString('latin1')).toContain('/MediaBox [0 0 792 612]');
+          expect(bytes.toString('latin1')).toContain('(Page 1 of ');
         }
         const drawn = await page.evaluate(() => window.__poExports ?? []);
         expect(drawn.map((d) => `${d.kind}:${d.title}`)).toEqual([
-          "png:Roadmap · Timeline",
-          "pdf:Roadmap · Timeline",
-          "png:Roadmap · Gantt (week)",
-          "pdf:Roadmap · Gantt (week)",
-          "png:Roadmap · Now / Next / Later",
-          "pdf:Roadmap · Now / Next / Later",
-          "png:Roadmap · Waterfall",
-          "pdf:Roadmap · Waterfall",
+          'png:Roadmap · Timeline',
+          'pdf:Roadmap · Timeline',
+          'png:Roadmap · Gantt (week)',
+          'pdf:Roadmap · Gantt (week)',
+          'png:Roadmap · Now / Next / Later',
+          'pdf:Roadmap · Now / Next / Later',
+          'png:Roadmap · Waterfall',
+          'pdf:Roadmap · Waterfall',
         ]);
         // Track everywhere (owner Nov 10): every format starts in track bands, and its export says so.
-        expect(drawn.map((d) => d.filters)).toEqual(Array(8).fill("Grouped by track · Goal: Faster activation"));
+        expect(drawn.map((d) => d.filters)).toEqual(
+          Array(8).fill('Grouped by track · Goal: Faster activation'),
+        );
         for (const d of drawn) expect(d.brand).toBe(COMPANY);
       });
     });
@@ -216,16 +275,18 @@ for (const [where, use] of [
  * skips the engine, or Undo leaves it in Now; no_claim = the API's engine
  * (api/tests/test_simple_changes_api.py).
  */
-test("an owner drags a board card to another horizon, with Undo", async ({ page }) => {
-  await open(page, "board");
-  await dragTo(page, "alert-export", "now");
-  await expect(page.getByText("Moved 'Alert history export' to Now in your working draft")).toBeVisible();
-  await expect(column(page, "now").locator('[data-item="alert-export"]')).toBeVisible();
-  await expect(page.getByTestId("draft-count")).toHaveText("1");
-  await page.getByTestId("draft-banner").getByRole("button", { name: "See changes" }).click();
-  await expect(page.getByTestId("draft-changes")).toContainText("horizon");
-  await page.getByRole("button", { name: "Undo" }).first().click();
-  await expect(column(page, "next").locator('[data-item="alert-export"]')).toBeVisible();
+test('an owner drags a board card to another horizon, with Undo', async ({ page }) => {
+  await open(page, 'board');
+  await dragTo(page, 'alert-export', 'now');
+  await expect(
+    page.getByText("Moved 'Alert history export' to Now in your working draft"),
+  ).toBeVisible();
+  await expect(column(page, 'now').locator('[data-item="alert-export"]')).toBeVisible();
+  await expect(page.getByTestId('draft-count')).toHaveText('1');
+  await page.getByTestId('draft-banner').getByRole('button', { name: 'See changes' }).click();
+  await expect(page.getByTestId('draft-changes')).toContainText('horizon');
+  await page.getByRole('button', { name: 'Undo' }).first().click();
+  await expect(column(page, 'next').locator('[data-item="alert-export"]')).toBeVisible();
 });
 
 /**
@@ -236,21 +297,33 @@ test("an owner drags a board card to another horizon, with Undo", async ({ page 
  * tray; no_claim = routing to a named decider (simple-deciders.spec).
  */
 test("a commenter's board move is a proposal the owner accepts", async ({ page }) => {
-  await page.context().addInitScript((key) => localStorage.setItem(key, "default"), MOCK_SCENARIO_KEY);
-  await open(page, "board", "commenter@example.com");
-  await dragTo(page, "alert-export", "now");
-  await expect(page.getByText(/^Moved 'Alert history export' to Now proposed: it waits for .+ in Needs a decision$/)).toBeVisible();
-  await expect(column(page, "next").locator('[data-item="alert-export"]')).toBeVisible();
-  await expect(card(page, "alert-export").getByTestId("board-pending")).toContainText("Proposed by Theo Brandt: move to Now");
-  await page.goto("/home");
+  await page
+    .context()
+    .addInitScript((key) => localStorage.setItem(key, 'default'), MOCK_SCENARIO_KEY);
+  await open(page, 'board', 'commenter@example.com');
+  await dragTo(page, 'alert-export', 'now');
+  await expect(
+    page.getByText(
+      /^Moved 'Alert history export' to Now proposed: it waits for .+ in Needs a decision$/,
+    ),
+  ).toBeVisible();
+  await expect(column(page, 'next').locator('[data-item="alert-export"]')).toBeVisible();
+  await expect(card(page, 'alert-export').getByTestId('board-pending')).toContainText(
+    'Proposed by Theo Brandt: move to Now',
+  );
+  await page.goto('/home');
   await signOut(page);
-  await open(page, "board");
-  await page.getByTestId("needs-decision").click();
-  const tray = page.getByTestId("decision-tray");
-  await tray.getByTestId("tray-proposal").filter({ hasText: "Alert history export" }).getByRole("button", { name: "Accept" }).click();
-  await expect(page.getByText("Accepted: it is in your working draft")).toBeVisible();
-  await tray.getByRole("button", { name: "Close" }).click();
-  await expect(column(page, "now").locator('[data-item="alert-export"]')).toBeVisible();
+  await open(page, 'board');
+  await page.getByTestId('needs-decision').click();
+  const tray = page.getByTestId('decision-tray');
+  await tray
+    .getByTestId('tray-proposal')
+    .filter({ hasText: 'Alert history export' })
+    .getByRole('button', { name: 'Accept' })
+    .click();
+  await expect(page.getByText('Accepted: it is in your working draft')).toBeVisible();
+  await tray.getByRole('button', { name: 'Close' }).click();
+  await expect(column(page, 'now').locator('[data-item="alert-export"]')).toBeVisible();
 });
 
 /**
@@ -258,13 +331,15 @@ test("a commenter's board move is a proposal the owner accepts", async ({ page }
  * floating card) but a drag moves nothing; fails_when = a viewer's drag sends a change;
  * no_claim = the API's 403 (its tests).
  */
-test("a viewer reads the board and cannot move a card", async ({ page }) => {
-  await open(page, "board", "viewer@example.com");
-  await dragTo(page, "alert-export", "now");
-  await expect(column(page, "next").locator('[data-item="alert-export"]')).toBeVisible();
-  await expect(page.getByTestId("draft-banner")).toHaveCount(0);
-  await card(page, "alert-export").click();
-  await expect(page.getByTestId("floating-card").getByRole("heading", { name: "Alert history export" })).toBeVisible();
+test('a viewer reads the board and cannot move a card', async ({ page }) => {
+  await open(page, 'board', 'viewer@example.com');
+  await dragTo(page, 'alert-export', 'now');
+  await expect(column(page, 'next').locator('[data-item="alert-export"]')).toBeVisible();
+  await expect(page.getByTestId('draft-banner')).toHaveCount(0);
+  await card(page, 'alert-export').click();
+  await expect(
+    page.getByTestId('floating-card').getByRole('heading', { name: 'Alert history export' }),
+  ).toBeVisible();
 });
 
 /**
@@ -272,12 +347,14 @@ test("a viewer reads the board and cannot move a card", async ({ page }) => {
  * column with the arrow keys, through the change engine; fails_when = the keyboard cannot
  * change a horizon; no_claim = the API's engine.
  */
-test("the keyboard moves a board card between horizons", async ({ page }) => {
-  await open(page, "board");
-  await card(page, "alert-export").focus();
-  await page.keyboard.press("ArrowRight");
-  await expect(page.getByText("Moved 'Alert history export' to Later in your working draft")).toBeVisible();
-  await expect(column(page, "later").locator('[data-item="alert-export"]')).toBeVisible();
+test('the keyboard moves a board card between horizons', async ({ page }) => {
+  await open(page, 'board');
+  await card(page, 'alert-export').focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(
+    page.getByText("Moved 'Alert history export' to Later in your working draft"),
+  ).toBeVisible();
+  await expect(column(page, 'later').locator('[data-item="alert-export"]')).toBeVisible();
 });
 
 /**
@@ -286,22 +363,24 @@ test("the keyboard moves a board card between horizons", async ({ page }) => {
  * keeps the focus in its new column so the next arrow moves it again; fails_when = ArrowDown
  * moves a card on a desktop, or the focus is lost after a move; no_claim = the engine.
  */
-test("on a desktop the up and down arrows do not move a card, and it keeps the focus", async ({ page }) => {
-  await open(page, "board");
-  await card(page, "alert-export").focus();
-  await page.keyboard.press("ArrowDown");
+test('on a desktop the up and down arrows do not move a card, and it keeps the focus', async ({
+  page,
+}) => {
+  await open(page, 'board');
+  await card(page, 'alert-export').focus();
+  await page.keyboard.press('ArrowDown');
   await page.waitForTimeout(500);
-  await expect(column(page, "next").locator('[data-item="alert-export"]')).toBeVisible();
-  await expect(page.getByTestId("draft-banner")).toHaveCount(0);
-  await page.keyboard.press("ArrowUp");
+  await expect(column(page, 'next').locator('[data-item="alert-export"]')).toBeVisible();
+  await expect(page.getByTestId('draft-banner')).toHaveCount(0);
+  await page.keyboard.press('ArrowUp');
   await page.waitForTimeout(500);
-  await expect(column(page, "next").locator('[data-item="alert-export"]')).toBeVisible();
-  await expect(page.getByTestId("draft-banner")).toHaveCount(0);
-  await page.keyboard.press("ArrowRight");
-  await expect(column(page, "later").locator('[data-item="alert-export"]')).toBeVisible();
-  await expect(card(page, "alert-export")).toBeFocused();
-  await page.keyboard.press("ArrowLeft");
-  await expect(column(page, "next").locator('[data-item="alert-export"]')).toBeVisible();
+  await expect(column(page, 'next').locator('[data-item="alert-export"]')).toBeVisible();
+  await expect(page.getByTestId('draft-banner')).toHaveCount(0);
+  await page.keyboard.press('ArrowRight');
+  await expect(column(page, 'later').locator('[data-item="alert-export"]')).toBeVisible();
+  await expect(card(page, 'alert-export')).toBeFocused();
+  await page.keyboard.press('ArrowLeft');
+  await expect(column(page, 'next').locator('[data-item="alert-export"]')).toBeVisible();
 });
 
 /**
@@ -310,18 +389,18 @@ test("on a desktop the up and down arrows do not move a card, and it keeps the f
  * = a phase's rectangle reaches past the bar; no_claim = the API's split.
  */
 test("a phase dated after the bar's end stays inside the bar", async ({ page }) => {
-  await open(page, "waterfall");
-  await expect(phase(page, "setup-import", "beta")).toHaveAttribute("data-estimated", "false");
+  await open(page, 'waterfall');
+  await expect(phase(page, 'setup-import', 'beta')).toHaveAttribute('data-estimated', 'false');
   const bar = page.locator('g[data-testid="bar"][data-item="setup-import"]');
-  const body = (await bar.locator("rect[data-body]").boundingBox())!;
-  for (const p of ["discover", "build", "beta", "launch"]) {
-    const r = (await phase(page, "setup-import", p).boundingBox())!;
+  const body = (await bar.locator('rect[data-body]').boundingBox())!;
+  for (const p of ['discover', 'build', 'beta', 'launch']) {
+    const r = (await phase(page, 'setup-import', p).boundingBox())!;
     expect(r.x).toBeGreaterThanOrEqual(body.x - 1);
     expect(r.x + r.width).toBeLessThanOrEqual(body.x + body.width + 1);
   }
 });
 
-test.describe("phone", () => {
+test.describe('phone', () => {
   test.use(PHONE);
 
   /**
@@ -329,22 +408,43 @@ test.describe("phone", () => {
    * cancels (pointercancel) moves nothing, even after the card was dragged over another
    * column; fails_when = a cancelled drag writes a change; no_claim = the browser's gestures.
    */
-  test("a cancelled touch drag moves nothing", async ({ page }) => {
-    await open(page, "board");
-    const from = (await card(page, "alert-export").boundingBox())!;
-    const target = (await column(page, "now").locator("header").boundingBox())!;
+  test('a cancelled touch drag moves nothing', async ({ page }) => {
+    await open(page, 'board');
+    const from = (await card(page, 'alert-export').boundingBox())!;
+    const target = (await column(page, 'now').locator('header').boundingBox())!;
     const x = from.x + from.width / 2;
     const y = from.y + from.height / 2;
-    const ev = { pointerId: 12, pointerType: "touch", isPrimary: true, bubbles: true, button: 0, buttons: 1 };
-    await card(page, "alert-export").dispatchEvent("pointerdown", { ...ev, clientX: x, clientY: y });
-    await expect(card(page, "alert-export")).toHaveAttribute("data-picked", "true");
-    for (let n = 1; n <= 6; n++) await card(page, "alert-export").dispatchEvent("pointermove", { ...ev, clientX: x, clientY: y + ((target.y + 10 - y) * n) / 6 });
-    await expect(column(page, "now")).toHaveAttribute("data-drop-target", "true");
-    await card(page, "alert-export").dispatchEvent("pointercancel", { ...ev, buttons: 0, clientX: x, clientY: target.y + 10 });
-    await expect(column(page, "now")).not.toHaveAttribute("data-drop-target", "true");
+    const ev = {
+      pointerId: 12,
+      pointerType: 'touch',
+      isPrimary: true,
+      bubbles: true,
+      button: 0,
+      buttons: 1,
+    };
+    await card(page, 'alert-export').dispatchEvent('pointerdown', {
+      ...ev,
+      clientX: x,
+      clientY: y,
+    });
+    await expect(card(page, 'alert-export')).toHaveAttribute('data-picked', 'true');
+    for (let n = 1; n <= 6; n++)
+      await card(page, 'alert-export').dispatchEvent('pointermove', {
+        ...ev,
+        clientX: x,
+        clientY: y + ((target.y + 10 - y) * n) / 6,
+      });
+    await expect(column(page, 'now')).toHaveAttribute('data-drop-target', 'true');
+    await card(page, 'alert-export').dispatchEvent('pointercancel', {
+      ...ev,
+      buttons: 0,
+      clientX: x,
+      clientY: target.y + 10,
+    });
+    await expect(column(page, 'now')).not.toHaveAttribute('data-drop-target', 'true');
     await page.waitForTimeout(300);
-    await expect(column(page, "next").locator('[data-item="alert-export"]')).toBeVisible();
-    await expect(page.getByTestId("draft-banner")).toHaveCount(0);
+    await expect(column(page, 'next').locator('[data-item="alert-export"]')).toBeVisible();
+    await expect(page.getByTestId('draft-banner')).toHaveCount(0);
   });
 
   /**
@@ -354,31 +454,56 @@ test.describe("phone", () => {
    * the page stays put under a held card, or the card has no horizon control; no_claim =
    * the scrolling speed.
    */
-  test("a held card scrolls the page, and the card moves a horizon", async ({ page }) => {
-    await open(page, "board");
-    await card(page, "setup-video").scrollIntoViewIfNeeded();
-    await expect(column(page, "now").locator("header")).not.toBeInViewport();
-    const from = (await card(page, "setup-video").boundingBox())!;
+  test('a held card scrolls the page, and the card moves a horizon', async ({ page }) => {
+    await open(page, 'board');
+    await card(page, 'setup-video').scrollIntoViewIfNeeded();
+    await expect(column(page, 'now').locator('header')).not.toBeInViewport();
+    const from = (await card(page, 'setup-video').boundingBox())!;
     const x = from.x + from.width / 2;
     const y = from.y + from.height / 2;
-    const ev = { pointerId: 13, pointerType: "touch", isPrimary: true, bubbles: true, button: 0, buttons: 1 };
-    await card(page, "setup-video").dispatchEvent("pointerdown", { ...ev, clientX: x, clientY: y });
-    await expect(card(page, "setup-video")).toHaveAttribute("data-picked", "true");
-    for (let n = 1; n <= 6; n++) await card(page, "setup-video").dispatchEvent("pointermove", { ...ev, clientX: x, clientY: y + ((8 - y) * n) / 6 });
-    await expect(column(page, "now").locator("header")).toBeInViewport();
+    const ev = {
+      pointerId: 13,
+      pointerType: 'touch',
+      isPrimary: true,
+      bubbles: true,
+      button: 0,
+      buttons: 1,
+    };
+    await card(page, 'setup-video').dispatchEvent('pointerdown', { ...ev, clientX: x, clientY: y });
+    await expect(card(page, 'setup-video')).toHaveAttribute('data-picked', 'true');
+    for (let n = 1; n <= 6; n++)
+      await card(page, 'setup-video').dispatchEvent('pointermove', {
+        ...ev,
+        clientX: x,
+        clientY: y + ((8 - y) * n) / 6,
+      });
+    await expect(column(page, 'now').locator('header')).toBeInViewport();
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
-    const target = (await column(page, "now").locator("header").boundingBox())!;
-    await card(page, "setup-video").dispatchEvent("pointermove", { ...ev, clientX: x, clientY: target.y + target.height / 2 });
-    await card(page, "setup-video").dispatchEvent("pointerup", { ...ev, buttons: 0, clientX: x, clientY: target.y + target.height / 2 });
-    await expect(page.getByText("Moved 'Welcome video' to Now in your working draft")).toBeVisible();
-    await expect(column(page, "now").locator('[data-item="setup-video"]')).toBeVisible();
+    const target = (await column(page, 'now').locator('header').boundingBox())!;
+    await card(page, 'setup-video').dispatchEvent('pointermove', {
+      ...ev,
+      clientX: x,
+      clientY: target.y + target.height / 2,
+    });
+    await card(page, 'setup-video').dispatchEvent('pointerup', {
+      ...ev,
+      buttons: 0,
+      clientX: x,
+      clientY: target.y + target.height / 2,
+    });
+    await expect(
+      page.getByText("Moved 'Welcome video' to Now in your working draft"),
+    ).toBeVisible();
+    await expect(column(page, 'now').locator('[data-item="setup-video"]')).toBeVisible();
 
-    await card(page, "alert-export").tap();
-    const sheet = page.getByTestId("floating-card");
-    await expect(sheet.getByTestId("card-horizon")).toBeVisible();
-    await sheet.getByTestId("card-horizon").getByRole("button", { name: "Later" }).tap();
-    await expect(page.getByText("Moved 'Alert history export' to Later in your working draft")).toBeVisible();
-    await expect(column(page, "later").locator('[data-item="alert-export"]')).toBeVisible();
+    await card(page, 'alert-export').tap();
+    const sheet = page.getByTestId('floating-card');
+    await expect(sheet.getByTestId('card-horizon')).toBeVisible();
+    await sheet.getByTestId('card-horizon').getByRole('button', { name: 'Later' }).tap();
+    await expect(
+      page.getByText("Moved 'Alert history export' to Later in your working draft"),
+    ).toBeVisible();
+    await expect(column(page, 'later').locator('[data-item="alert-export"]')).toBeVisible();
     await noSidewaysScroll(page);
   });
 
@@ -387,10 +512,10 @@ test.describe("phone", () => {
    * format switch shows all four formats without scrolling sideways; fails_when = a format
    * is cut off or the switch scrolls; no_claim = its look.
    */
-  test("the format switch fits a 320 px phone", async ({ page }) => {
+  test('the format switch fits a 320 px phone', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 640 });
-    await open(page, "timeline");
-    const group = page.getByTestId("format-switch").getByRole("group");
+    await open(page, 'timeline');
+    const group = page.getByTestId('format-switch').getByRole('group');
     const { sw, cw } = await group.evaluate((el) => ({ sw: el.scrollWidth, cw: el.clientWidth }));
     expect(sw).toBeLessThanOrEqual(cw);
     for (const f of FORMATS) {
@@ -407,11 +532,13 @@ test.describe("phone", () => {
    * through the change engine; fails_when = a touch drag does nothing; no_claim = native
    * scrolling during the press.
    */
-  test("a long press drags a board card on a phone", async ({ page }) => {
-    await open(page, "board");
-    await longPressTo(page, "alert-export", "now");
-    await expect(page.getByText("Moved 'Alert history export' to Now in your working draft")).toBeVisible();
-    await expect(column(page, "now").locator('[data-item="alert-export"]')).toBeVisible();
+  test('a long press drags a board card on a phone', async ({ page }) => {
+    await open(page, 'board');
+    await longPressTo(page, 'alert-export', 'now');
+    await expect(
+      page.getByText("Moved 'Alert history export' to Now in your working draft"),
+    ).toBeVisible();
+    await expect(column(page, 'now').locator('[data-item="alert-export"]')).toBeVisible();
     await noSidewaysScroll(page);
   });
 
@@ -422,18 +549,18 @@ test.describe("phone", () => {
    * off the screen, a format cannot be picked, or the tray covers the screen as a page;
    * no_claim = the sheets' animation.
    */
-  test("the format switch and the tray as a sheet", async ({ page }) => {
-    await open(page, "timeline");
-    const sw = (await page.getByTestId("format-switch").boundingBox())!;
+  test('the format switch and the tray as a sheet', async ({ page }) => {
+    await open(page, 'timeline');
+    const sw = (await page.getByTestId('format-switch').boundingBox())!;
     expect(sw.x).toBeGreaterThanOrEqual(0);
     expect(sw.x + sw.width).toBeLessThanOrEqual(391);
     for (const f of FORMATS) {
       await page.getByTestId(`format-${f}`).click();
-      await expect(page.getByTestId(`format-${f}`)).toHaveAttribute("aria-pressed", "true");
+      await expect(page.getByTestId(`format-${f}`)).toHaveAttribute('aria-pressed', 'true');
     }
-    await page.getByTestId("needs-decision").click();
-    const tray = page.getByTestId("decision-tray");
-    await expect(tray).toHaveAttribute("data-sheet", "bottom");
+    await page.getByTestId('needs-decision').click();
+    const tray = page.getByTestId('decision-tray');
+    await expect(tray).toHaveAttribute('data-sheet', 'bottom');
     const t = (await tray.boundingBox())!;
     expect(Math.round(t.y + t.height)).toBeGreaterThanOrEqual(843);
     expect(t.y).toBeGreaterThan(0);

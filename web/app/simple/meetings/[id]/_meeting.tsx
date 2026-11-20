@@ -1,73 +1,85 @@
-"use client";
+'use client';
 
-import { Link } from "@/lib/nav";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Link } from '@/lib/nav';
+import { Fragment, useEffect, useRef, useState } from 'react';
 
-import { Button, confirmInPage, Icon, InfoTip, toast } from "@/components/ds";
-import { usePhoneAsk } from "@/components/ds/AppShell";
-import { setToastPlace } from "@/components/ds/Toast";
-import { MeetingChat } from "@/components/simple/chat/MeetingChat";
-import { MeetingClock } from "@/components/simple/FlowVisual";
-import { OnePager } from "@/components/simple/OnePager";
-import { QuestionRow, sourceName, useQuestionActions } from "@/components/simple/questions/Questions";
-import { ErrorNote, Loading } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import type { MeetingNote } from "@/lib/api/simple-chat";
-import { calendarDay, todayIn, useCompanyZone } from "@/lib/dates";
-import { useMe } from "@/lib/me";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import { Button, confirmInPage, Icon, InfoTip, toast } from '@/components/ds';
+import { usePhoneAsk } from '@/components/ds/AppShell';
+import { setToastPlace } from '@/components/ds/Toast';
+import { MeetingChat } from '@/components/simple/chat/MeetingChat';
+import { MeetingClock } from '@/components/simple/FlowVisual';
+import { OnePager } from '@/components/simple/OnePager';
+import {
+  QuestionRow,
+  sourceName,
+  useQuestionActions,
+} from '@/components/simple/questions/Questions';
+import { ErrorNote, Loading } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import type { MeetingNote } from '@/lib/api/simple-chat';
+import { calendarDay, todayIn, useCompanyZone } from '@/lib/dates';
+import { useMe } from '@/lib/me';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-import { opWords } from "../../roadmap/_card";
-import { estimateOnly, estimateWords } from "../../roadmap/_lib";
-import { usePhone } from "../../priorities/priorities";
-import { DeliveryLine, emailWords, slackWords } from "../_delivery";
-import { DecidedItem, LINK, momentWords } from "../_flow";
-import { DraftDates } from "./_draft";
-import { CHECK, SimpleSelect } from "@/components/simple/meetings/SimpleSelect";
-import { AgendaSheet } from "@/components/simple/meetings/AgendaSheet";
-import { NotInGt } from "@/components/simple/FeatureName";
-import { OpenFeatureContext } from "@/components/simple/OpenFeature";
-import { FeaturePanel, type PanelFeature } from "../../roadmap/_panel";
+import { opWords } from '../../roadmap/_card';
+import { estimateOnly, estimateWords } from '../../roadmap/_lib';
+import { usePhone } from '../../priorities/priorities';
+import { DeliveryLine, emailWords, slackWords } from '../_delivery';
+import { DecidedItem, LINK, momentWords } from '../_flow';
+import { DraftDates } from './_draft';
+import { CHECK, SimpleSelect } from '@/components/simple/meetings/SimpleSelect';
+import { AgendaSheet } from '@/components/simple/meetings/AgendaSheet';
+import { NotInGt } from '@/components/simple/FeatureName';
+import { OpenFeatureContext } from '@/components/simple/OpenFeature';
+import { FeaturePanel, type PanelFeature } from '../../roadmap/_panel';
 
 // Chat actions (notes, open questions): optional until schema.d.ts carries them.
-type Meeting = Schemas["SimpleMeetingOut"] & { notes?: MeetingNote[] };
-type Mode = Meeting["change_mode"];
+type Meeting = Schemas['SimpleMeetingOut'] & { notes?: MeetingNote[] };
+type Mode = Meeting['change_mode'];
 
-const STEPS = ["One-pager", "Roadmap", "Decisions"] as const;
+const STEPS = ['One-pager', 'Roadmap', 'Decisions'] as const;
 // qa-simple-decide-7: one wording everywhere (the start sheet, this header, the chat's rules line).
 // qa-simple-decide-25: viewers only ask, whatever the mode.
-const MODE_WORDS: Record<Mode, string> = { everyone: "Everyone except viewers", presenter: "Only the presenter", named: "Presenter plus one or two people" };
+const MODE_WORDS: Record<Mode, string> = {
+  everyone: 'Everyone except viewers',
+  presenter: 'Only the presenter',
+  named: 'Presenter plus one or two people',
+};
 /** qa-simple-decide-48: a 44 px target on a phone. */
-const PHONE_TAP = "max-[600px]:min-h-11";
+const PHONE_TAP = 'max-[600px]:min-h-11';
 /** QA Nov 12 (#12): a checkbox row as the Start sheet draws it. */
-const CHOICE = "flex min-h-8 cursor-pointer items-center gap-2.5 has-[:disabled]:cursor-not-allowed has-[:disabled]:text-text2";
+const CHOICE =
+  'flex min-h-8 cursor-pointer items-center gap-2.5 has-[:disabled]:cursor-not-allowed has-[:disabled]:text-text2';
 const cap = (h: string) => (h ? h[0]!.toUpperCase() + h.slice(1) : h);
 /** qa-simple-decide-17: a calendar day ("2026-11-05") as "Thu Nov 5"; qa-simple-decide-9: with its year when not this one ("Fri Jan 1, 2027"). */
 // fix4 review: "this year" is the company's (its zone, the mock's clock), not the browser's.
-const dayWords = (day: string, zone: string) => `${calendarDay(day, { weekday: "short" })} ${calendarDay(day)}${day.slice(0, 4) !== todayIn(zone).slice(0, 4) ? `, ${day.slice(0, 4)}` : ""}`;
+const dayWords = (day: string, zone: string) =>
+  `${calendarDay(day, { weekday: 'short' })} ${calendarDay(day)}${day.slice(0, 4) !== todayIn(zone).slice(0, 4) ? `, ${day.slice(0, 4)}` : ''}`;
 
 function clock(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
 /** How often a live meeting's screen reads the meeting again (other screens' Approve, Undo, changes). */
 const LIVE_POLL_MS = 5_000;
 
 /** "published" only when the draft's version is; else what still holds it (the API's waiting_on and blocked_by). */
-function publishedWords(d: Meeting["drafts"][number], name: (id: string) => string): string {
-  if (d.status === "approved") return "published";
+function publishedWords(d: Meeting['drafts'][number], name: (id: string) => string): string {
+  if (d.status === 'approved') return 'published';
   const names = d.waiting_on.map(name);
-  const who = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
+  const who =
+    names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0];
   const why = [...(names.length ? [`Waiting on ${who}'s approval`] : []), ...d.blocked_by];
-  return `not yet published: ${why.join(" · ") || "its review is not complete"}`;
+  return `not yet published: ${why.join(' · ') || 'its review is not complete'}`;
 }
 
 /** While Oracle drafts the minutes, how often the end screen reads the meeting again. */
 const MINUTES_POLL_MS = 3_000;
 
 /** Names for ids, from the meeting's attendees and the people its drafts wait on (who need not be attendees). */
-const namer = (m: Meeting) => (id: string) => [...m.attendees, ...m.waiting_people].find((a) => a.id === id)?.name ?? "a reviewer";
+const namer = (m: Meeting) => (id: string) =>
+  [...m.attendees, ...m.waiting_people].find((a) => a.id === id)?.name ?? 'a reviewer';
 
 /**
  * qa4-simple-decide-11: a question decided in the meeting keeps its own code ("Q5"), never
@@ -76,29 +88,35 @@ const namer = (m: Meeting) => (id: string) => [...m.attendees, ...m.waiting_peop
  */
 const decisionCode = (m: Meeting) => {
   const codes = new Map((m.decisions_due ?? []).map((q) => [q.id, q.code] as const));
-  return (d: Meeting["meeting_decisions"][number]) => codes.get(d.id) || `D-${d.number}`;
+  return (d: Meeting['meeting_decisions'][number]) => codes.get(d.id) || `D-${d.number}`;
 };
 
 /** qa4-simple-decide-11: an open question in the minutes reads by its words, no decision code ("D-3: …" reads "…"). */
-const questionWords = (q: string) => q.replace(/^D-\d+:\s*/, "");
+const questionWords = (q: string) => q.replace(/^D-\d+:\s*/, '');
 
 /** qa4-simple-decide-15: the roadmap step's rows in the roadmap's own order. */
 const ORDER: Record<string, number> = { now: 0, next: 1, later: 2, cut: 3 };
 
 /** The meeting PRD's roadmap slice (one read, shared by the steps, the proposals and the agenda's codes). */
-const useMeetingRoadmap = (m: Meeting) => useQuery(`simple-meeting-roadmap|${m.prd.slug}`, () => unwrap(api.GET("/v1/simple/roadmap", { params: { query: { prd: m.prd.slug } } })));
+const useMeetingRoadmap = (m: Meeting) =>
+  useQuery(`simple-meeting-roadmap|${m.prd.slug}`, () =>
+    unwrap(api.GET('/v1/simple/roadmap', { params: { query: { prd: m.prd.slug } } })),
+  );
 
 /** qa-simple-decide-18: a proposal names its item ("move Sample data import to Now"). */
 function useProposalWords(m: Meeting) {
   const roadmap = useMeetingRoadmap(m);
-  return (c: Meeting["pending_proposals"][number]) => {
+  return (c: Meeting['pending_proposals'][number]) => {
     const id = (c.target as { item_id?: unknown }).item_id;
     const t = roadmap.data?.items.find((i) => i.id === id)?.title ?? null;
-    if (c.op === "change_horizon") return c.after.horizon ? `move ${t ?? "an item"} to ${cap(String(c.after.horizon))}` : `move ${t ?? "an item"}`;
-    if (c.op === "cut") return `cut ${t ?? "an item"}`;
-    if (c.op === "restore") return `restore ${t ?? "an item"}`;
+    if (c.op === 'change_horizon')
+      return c.after.horizon
+        ? `move ${t ?? 'an item'} to ${cap(String(c.after.horizon))}`
+        : `move ${t ?? 'an item'}`;
+    if (c.op === 'cut') return `cut ${t ?? 'an item'}`;
+    if (c.op === 'restore') return `restore ${t ?? 'an item'}`;
     const w = opWords(c.op);
-    return `${w[0]!.toLowerCase()}${w.slice(1)}${t ? ` (${t})` : ""}${c.op === "edit_line" ? ` “${String(c.after.line ?? "")}”` : ""}`;
+    return `${w[0]!.toLowerCase()}${w.slice(1)}${t ? ` (${t})` : ''}${c.op === 'edit_line' ? ` “${String(c.after.line ?? '')}”` : ''}`;
   };
 }
 
@@ -110,7 +128,9 @@ function useProposalWords(m: Meeting) {
  * waits on whom and the delivery (the end screen). What a person may do is the API's `can`.
  */
 export function MeetingScreen({ id }: { id: string }) {
-  const q = useQuery(`simple-meeting|${id}`, () => unwrap(api.GET("/v1/simple/meetings/{meeting_id}", { params: { path: { meeting_id: id } } })));
+  const q = useQuery(`simple-meeting|${id}`, () =>
+    unwrap(api.GET('/v1/simple/meetings/{meeting_id}', { params: { path: { meeting_id: id } } })),
+  );
   const screen = useRef<HTMLDivElement>(null);
   const shown = !!q.data;
   // qa-simple-decide-5: while the meeting covers the page, what it covers (the rail, the
@@ -118,35 +138,70 @@ export function MeetingScreen({ id }: { id: string }) {
   // inert (those after it, the dock, the confirm dialog and the toasts, stay usable).
   useEffect(() => {
     const made: Element[] = [];
-    for (let el: HTMLElement | null = screen.current; el && el !== document.body; el = el.parentElement) {
+    for (
+      let el: HTMLElement | null = screen.current;
+      el && el !== document.body;
+      el = el.parentElement
+    ) {
       for (let sib = el.previousElementSibling; sib; sib = sib.previousElementSibling) {
-        if (sib.hasAttribute("inert") || sib.tagName === "SCRIPT") continue;
-        sib.setAttribute("inert", "");
+        if (sib.hasAttribute('inert') || sib.tagName === 'SCRIPT') continue;
+        sib.setAttribute('inert', '');
         made.push(sib);
       }
     }
-    return () => made.forEach((x) => x.removeAttribute("inert"));
+    return () => made.forEach((x) => x.removeAttribute('inert'));
   }, [shown]);
-  if (q.loading && !q.data) return <div className="px-6 py-8"><Loading /></div>;
-  if (q.error || !q.data) return <div className="px-6 py-8"><ErrorNote>{q.error ?? "Not found"}</ErrorNote></div>;
+  if (q.loading && !q.data)
+    return (
+      <div className="px-6 py-8">
+        <Loading />
+      </div>
+    );
+  if (q.error || !q.data)
+    return (
+      <div className="px-6 py-8">
+        <ErrorNote>{q.error ?? 'Not found'}</ErrorNote>
+      </div>
+    );
   return (
     // QA Nov 12 (#8): no gutter of its own: the page's scrollbar is the one gutter (a stable one left an empty strip on the right).
     // qa-simple-decide-48: on a phone the page itself scrolls (no inner scrolling layer), still over the shell.
-    <div ref={screen} className="fixed inset-0 z-40 overflow-auto max-[600px]:absolute max-[600px]:bottom-auto max-[600px]:z-50 max-[600px]:min-h-dvh max-[600px]:overflow-visible bg-bg text-[length:var(--simple-body)] text-text" data-testid="meeting-screen">
-      {q.data.status === "ended" ? <EndScreen m={q.data} reload={q.reload} /> : <LiveScreen m={q.data} reload={q.reload} />}
+    <div
+      ref={screen}
+      className="fixed inset-0 z-40 overflow-auto max-[600px]:absolute max-[600px]:bottom-auto max-[600px]:z-50 max-[600px]:min-h-dvh max-[600px]:overflow-visible bg-bg text-[length:var(--simple-body)] text-text"
+      data-testid="meeting-screen"
+    >
+      {q.data.status === 'ended' ? (
+        <EndScreen m={q.data} reload={q.reload} />
+      ) : (
+        <LiveScreen m={q.data} reload={q.reload} />
+      )}
     </div>
   );
 }
 
-type DraftProblems = { message: string; problems: { what: string; where: string | null; times: number }[] };
+type DraftProblems = {
+  message: string;
+  problems: { what: string; where: string | null; times: number }[];
+};
 const PROBLEMS_SHOWN = 6;
 
 /** walkc-meeting: a refused Approve's problems ({detail: {code: "draft_problems", ...}}), else null. */
 function draftProblems(error: unknown): DraftProblems | null {
-  const detail = error && typeof error === "object" && "detail" in error ? (error as { detail: unknown }).detail : null;
-  if (!detail || typeof detail !== "object" || (detail as { code?: unknown }).code !== "draft_problems") return null;
+  const detail =
+    error && typeof error === 'object' && 'detail' in error
+      ? (error as { detail: unknown }).detail
+      : null;
+  if (
+    !detail ||
+    typeof detail !== 'object' ||
+    (detail as { code?: unknown }).code !== 'draft_problems'
+  )
+    return null;
   const d = detail as Partial<DraftProblems>;
-  return Array.isArray(d.problems) && typeof d.message === "string" ? { message: d.message, problems: d.problems } : null;
+  return Array.isArray(d.problems) && typeof d.message === 'string'
+    ? { message: d.message, problems: d.problems }
+    : null;
 }
 
 function useAct(reload: () => Promise<unknown>) {
@@ -171,7 +226,7 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
   const zone = useCompanyZone();
   const [step, setStep] = useState(0);
   const [people, setPeople] = useState(false);
-  const [notApproved, setNotApproved] = useState<Meeting["not_approved"]>([]);
+  const [notApproved, setNotApproved] = useState<Meeting['not_approved']>([]);
   const [problems, setProblems] = useState<DraftProblems | null>(null);
   const [cardTick, setCardTick] = useState(0);
   const [now, setNow] = useState(() => Date.now());
@@ -189,7 +244,8 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
     return () => window.clearInterval(t);
   }, [reload]);
   const path = { params: { path: { meeting_id: m.id } } };
-  const rules = (body: Schemas["SimpleMeetingRulesIn"]) => act(() => unwrap(api.PATCH("/v1/simple/meetings/{meeting_id}/rules", { ...path, body })));
+  const rules = (body: Schemas['SimpleMeetingRulesIn']) =>
+    act(() => unwrap(api.PATCH('/v1/simple/meetings/{meeting_id}/rules', { ...path, body })));
   const absent = m.attendees.filter((a) => !a.present).map((a) => a.id);
   const name = namer(m);
   const { me, can } = useMe();
@@ -203,8 +259,12 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
   const toApprove = m.drafts.filter((d) => !d.decider_approved && d.changes > 0);
   const edits = toApprove.reduce((n, d) => n + d.changes, 0);
   // qa4-simple-decide-2: the label says it publishes.
-  const docs = toApprove.every((d) => d.document.id === m.prd.id) ? null : toApprove.map((d) => d.document.title).join(", ");
-  const approveLabel = docs ? `Approve and publish edits to ${docs} (${edits})` : `Approve and publish one-pager edits (${edits})`;
+  const docs = toApprove.every((d) => d.document.id === m.prd.id)
+    ? null
+    : toApprove.map((d) => d.document.title).join(', ');
+  const approveLabel = docs
+    ? `Approve and publish edits to ${docs} (${edits})`
+    : `Approve and publish one-pager edits (${edits})`;
   const code = decisionCode(m);
   const proposalWords = useProposalWords(m);
   // QA Nov 12 (#2): every feature in the meeting reads its code before its name (the roadmap item's own).
@@ -212,25 +272,27 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
   // simple-home-qa-nov14 #1: "" for an item with no code (flagged), undefined while not known.
   const codeOf = (id: string) => {
     const i = roadmap.data?.items.find((x) => x.id === id);
-    return i ? (i.code ?? "") : undefined;
+    return i ? (i.code ?? '') : undefined;
   };
   // qa4-simple-decide-17: the meeting's toasts sit at the bottom, clear of the header's steps and clock.
-  useEffect(() => setToastPlace("corner"), []);
+  useEffect(() => setToastPlace('corner'), []);
   // qa4-simple-decide-2: Approve publishes: it lists the edits it takes and asks first.
   const approve = async () => {
-    const made = m.meeting_decisions.filter((d) => d.change_ids.length > 0).map((d) => `${code(d)} ${d.title}`);
+    const made = m.meeting_decisions
+      .filter((d) => d.change_ids.length > 0)
+      .map((d) => `${code(d)} ${d.title}`);
     const what = docs ?? m.prd.title;
     const yes = await confirmInPage({
-      action: "Approve and publish",
+      action: 'Approve and publish',
       title: `Publish ${what}?`,
       // walkc-meeting: the count is the draft's edits; the lines are the meeting's changes that made them (several changes can make one edit).
-      message: `This publishes ${what} with ${edits === 1 ? "1 edit" : `${edits} edits`}${made.length ? `, made by ${made.length === 1 ? "this change" : `these ${made.length} changes`} in this meeting: ${made.join("; ")}` : " made in this meeting"}. Everyone then reads the new version.`,
-      cancel: "Back",
+      message: `This publishes ${what} with ${edits === 1 ? '1 edit' : `${edits} edits`}${made.length ? `, made by ${made.length === 1 ? 'this change' : `these ${made.length} changes`} in this meeting: ${made.join('; ')}` : ' made in this meeting'}. Everyone then reads the new version.`,
+      cancel: 'Back',
     });
     if (!yes) return;
     setProblems(null);
     await act(async () => {
-      const call = await api.POST("/v1/simple/meetings/{meeting_id}/approve", path);
+      const call = await api.POST('/v1/simple/meetings/{meeting_id}/approve', path);
       // walkc-meeting: a draft the importer refuses comes back as its problems in plain
       // words (meetings.approve_problems): shown as a list, never the raw line.
       const said = draftProblems(call.error);
@@ -247,18 +309,23 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
   const end = async () => {
     const waiting = m.pending_proposals;
     const warn = waiting.length
-      ? ` ${waiting.length} ${waiting.length === 1 ? "proposal still waits" : "proposals still wait"} for a decision: ${waiting.map((c) => `${c.by_name} proposes to ${proposalWords(c)}`).join("; ")}.`
-      : "";
+      ? ` ${waiting.length} ${waiting.length === 1 ? 'proposal still waits' : 'proposals still wait'} for a decision: ${waiting.map((c) => `${c.by_name} proposes to ${proposalWords(c)}`).join('; ')}.`
+      : '';
     // walkc-meeting: ending does not approve the meeting's edits: say so first.
     const unapproved = edits
-      ? ` ${edits === 1 ? "The edit made in this meeting is" : `The ${edits} edits made in this meeting are`} not approved yet: ${edits === 1 ? "it stays" : "they stay"} in a working draft until the decider approves.`
-      : "";
-    const yes = await confirmInPage({ action: "End meeting", message: `End the review for everyone? Oracle then drafts the minutes, and no one can change things in this meeting any more.${unapproved}${warn}`, destructive: true });
-    if (yes) await act(() => unwrap(api.POST("/v1/simple/meetings/{meeting_id}/end", path)));
+      ? ` ${edits === 1 ? 'The edit made in this meeting is' : `The ${edits} edits made in this meeting are`} not approved yet: ${edits === 1 ? 'it stays' : 'they stay'} in a working draft until the decider approves.`
+      : '';
+    const yes = await confirmInPage({
+      action: 'End meeting',
+      message: `End the review for everyone? Oracle then drafts the minutes, and no one can change things in this meeting any more.${unapproved}${warn}`,
+      destructive: true,
+    });
+    if (yes) await act(() => unwrap(api.POST('/v1/simple/meetings/{meeting_id}/end', path)));
   };
   // e2e-minors-simple: past its length the clock says by how much, and the page offers to end it.
   const elapsed = now - Date.parse(m.started_at);
-  const overBy = elapsed > m.length_min * 60_000 ? Math.max(1, Math.round(elapsed / 60_000 - m.length_min)) : 0;
+  const overBy =
+    elapsed > m.length_min * 60_000 ? Math.max(1, Math.round(elapsed / 60_000 - m.length_min)) : 0;
   // qa-simple-decide-42: a change applied in the chat shows at once in the stage and All decisions (read now and once the chat has settled).
   const changed = () => {
     setCardTick((n) => n + 1);
@@ -270,12 +337,25 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
   const roadmapRefresh = `${cardTick}|${m.meeting_decisions.map((d) => d.id).join()}|${m.drafts.map((d) => `${d.status}-${d.changes}`).join()}`;
   return (
     <div className="flex min-h-full flex-col">
-      {feature && <FeaturePanel key={feature.id ?? feature.name} feature={feature} phone={phone} canChange={can("create_simple_change")} onClose={() => setFeature(null)} />}
+      {feature && (
+        <FeaturePanel
+          key={feature.id ?? feature.name}
+          feature={feature}
+          phone={phone}
+          canChange={can('create_simple_change')}
+          onClose={() => setFeature(null)}
+        />
+      )}
       {/* qa-simple-decide-48: on a phone the header scrolls away with the page (not sticky). */}
-      <header className="sticky top-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-4 py-3 max-[600px]:static max-[600px]:gap-y-1 max-[600px]:py-2" aria-label="Meeting">
+      <header
+        className="sticky top-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-4 py-3 max-[600px]:static max-[600px]:gap-y-1 max-[600px]:py-2"
+        aria-label="Meeting"
+      >
         {/* qa4-simple-decide-27: the back link and the title share one line and one baseline. */}
         <div className="flex min-w-0 items-baseline gap-x-3" data-testid="meeting-title-row">
-          <Link href="/simple/meetings" className={`text-base ${LINK} ${PHONE_TAP}`}>Meetings</Link>
+          <Link href="/simple/meetings" className={`text-base ${LINK} ${PHONE_TAP}`}>
+            Meetings
+          </Link>
           <h1 className="min-w-0 text-xl font-semibold [overflow-wrap:anywhere]">{m.title}</h1>
         </div>
         <nav aria-label="Steps" className="flex flex-wrap gap-1">
@@ -285,7 +365,7 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
               type="button"
               aria-pressed={step === i}
               onClick={() => setStep(i)}
-              className={`rounded-full border px-3 py-1 text-base max-[600px]:min-h-11 ${step === i ? "border-accent bg-accent text-white" : "border-line"}`}
+              className={`rounded-full border px-3 py-1 text-base max-[600px]:min-h-11 ${step === i ? 'border-accent bg-accent text-white' : 'border-line'}`}
             >
               {i + 1} {s}
             </button>
@@ -295,7 +375,18 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
           {overBy > 0 ? `Over by ${overBy} min` : `${clock(elapsed)} / ${m.length_min}:00`}
         </span>
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          {!joined && can("join_simple_meeting") && <Button variant="primary" className={PHONE_TAP} disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/simple/meetings/{meeting_id}/join", path)))}>Join</Button>}
+          {!joined && can('join_simple_meeting') && (
+            <Button
+              variant="primary"
+              className={PHONE_TAP}
+              disabled={busy}
+              onClick={() =>
+                act(() => unwrap(api.POST('/v1/simple/meetings/{meeting_id}/join', path)))
+              }
+            >
+              Join
+            </Button>
+          )}
           {m.can.approve && edits > 0 && (
             <Button
               variant="primary"
@@ -306,89 +397,162 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
               {approveLabel}
             </Button>
           )}
-          {m.can.end && <Button className={`h-10 ${PHONE_TAP}`} disabled={busy} onClick={() => void end()}>End meeting</Button>}
+          {m.can.end && (
+            <Button className={`h-10 ${PHONE_TAP}`} disabled={busy} onClick={() => void end()}>
+              End meeting
+            </Button>
+          )}
           {/* #1016: on a phone the meeting covers the app's header, so its Ask button sits here too. */}
           {askButton}
         </div>
       </header>
       {askSheet}
       {overBy > 0 && (
-        <p role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-4 py-2 text-base" data-testid="meeting-overrun">
+        <p
+          role="status"
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-4 py-2 text-base"
+          data-testid="meeting-overrun"
+        >
           This meeting ran past its {m.length_min} minutes.
           {m.can.end ? (
-            <Button className={`h-10 ${PHONE_TAP}`} disabled={busy} onClick={() => void end()}>End it now</Button>
+            <Button className={`h-10 ${PHONE_TAP}`} disabled={busy} onClick={() => void end()}>
+              End it now
+            </Button>
           ) : (
             <span className="text-text2">Ask the presenter to end it.</span>
           )}
         </p>
       )}
       {/* qa-simple-decide-29: on a phone the attendees and the mode fold into one row. */}
-      <button type="button" className={`hidden border-b border-line px-4 py-2 text-left text-base max-[600px]:block ${PHONE_TAP}`} aria-expanded={people} data-testid="meeting-people-toggle" onClick={() => setPeople((x) => !x)}>
-        {m.attendees.filter((a) => a.present && a.joined).length} of {m.attendees.length} here · Who changes things: {MODE_WORDS[m.change_mode]} <span aria-hidden className="inline-flex align-middle"><Icon name={people ? "chevron-up" : "chevron-down"} size={16} /></span>
+      <button
+        type="button"
+        className={`hidden border-b border-line px-4 py-2 text-left text-base max-[600px]:block ${PHONE_TAP}`}
+        aria-expanded={people}
+        data-testid="meeting-people-toggle"
+        onClick={() => setPeople((x) => !x)}
+      >
+        {m.attendees.filter((a) => a.present && a.joined).length} of {m.attendees.length} here · Who
+        changes things: {MODE_WORDS[m.change_mode]}{' '}
+        <span aria-hidden className="inline-flex align-middle">
+          <Icon name={people ? 'chevron-up' : 'chevron-down'} size={16} />
+        </span>
       </button>
-      <div className={`flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-line px-4 py-2 text-base ${people ? "" : "max-[600px]:hidden"}`} data-testid="meeting-people">
+      <div
+        className={`flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-line px-4 py-2 text-base ${people ? '' : 'max-[600px]:hidden'}`}
+        data-testid="meeting-people"
+      >
         <ul aria-label="Attendees" className="flex flex-wrap gap-2">
           {m.attendees.map((a) => {
             // qa-simple-decide-41: an absent attendee reads "away" with a grey dot, never struck through.
             // walkc-meeting r2 (5a): one invited who has not pressed Join reads "not joined yet", never here.
             const here = a.present && a.joined;
             return (
-            <li key={a.id} data-present={a.present ? "true" : "false"} data-joined={a.joined ? "true" : "false"} className={`flex items-center rounded-full border border-line px-3 py-0.5 max-[600px]:min-h-11 ${here ? "" : "text-text2"}`}>
-              <span>
-                <span aria-hidden className={`mr-1 inline-block h-2.5 w-2.5 rounded-full ${here ? "bg-accent" : "bg-text-faint"}`} />
-                {a.name}
-              </span>
-              {a.roles.length > 0 && <span className="text-sm text-text-faint">&nbsp;· {a.roles.join(", ")}</span>}
-              {!a.present && <span className="text-sm text-text-faint" data-testid="attendee-away">&nbsp;· away</span>}
-              {a.present && !a.joined && <span className="text-sm text-text-faint" data-testid="attendee-invited">&nbsp;· invited, not joined yet</span>}
-              {/* qa4-simple-decide-23: a visible control whose name follows the state. */}
-              {m.can.set_rules && a.id !== m.presenter.id && (
-                <button
-                  type="button"
-                  disabled={busy}
-                  aria-label={a.present ? `Mark ${a.name} away` : `Mark ${a.name} here`}
-                  className={`ml-2 text-sm ${LINK} max-[600px]:min-h-11`}
-                  data-testid="attendee-toggle"
-                  onClick={() => rules({ absent_ids: a.present ? [...absent, a.id] : absent.filter((x) => x !== a.id) })}
-                >
-                  {a.present ? "Mark away" : "Mark here"}
-                </button>
-              )}
-            </li>
+              <li
+                key={a.id}
+                data-present={a.present ? 'true' : 'false'}
+                data-joined={a.joined ? 'true' : 'false'}
+                className={`flex items-center rounded-full border border-line px-3 py-0.5 max-[600px]:min-h-11 ${here ? '' : 'text-text2'}`}
+              >
+                <span>
+                  <span
+                    aria-hidden
+                    className={`mr-1 inline-block h-2.5 w-2.5 rounded-full ${here ? 'bg-accent' : 'bg-text-faint'}`}
+                  />
+                  {a.name}
+                </span>
+                {a.roles.length > 0 && (
+                  <span className="text-sm text-text-faint">&nbsp;· {a.roles.join(', ')}</span>
+                )}
+                {!a.present && (
+                  <span className="text-sm text-text-faint" data-testid="attendee-away">
+                    &nbsp;· away
+                  </span>
+                )}
+                {a.present && !a.joined && (
+                  <span className="text-sm text-text-faint" data-testid="attendee-invited">
+                    &nbsp;· invited, not joined yet
+                  </span>
+                )}
+                {/* qa4-simple-decide-23: a visible control whose name follows the state. */}
+                {m.can.set_rules && a.id !== m.presenter.id && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    aria-label={a.present ? `Mark ${a.name} away` : `Mark ${a.name} here`}
+                    className={`ml-2 text-sm ${LINK} max-[600px]:min-h-11`}
+                    data-testid="attendee-toggle"
+                    onClick={() =>
+                      rules({
+                        absent_ids: a.present
+                          ? [...absent, a.id]
+                          : absent.filter((x) => x !== a.id),
+                      })
+                    }
+                  >
+                    {a.present ? 'Mark away' : 'Mark here'}
+                  </button>
+                )}
+              </li>
             );
           })}
         </ul>
         {m.can.set_rules ? (
           <ChangeMode m={m} busy={busy} onSave={rules} />
         ) : (
-          <p data-testid="change-mode">Who changes things: {MODE_WORDS[m.change_mode]}{m.change_mode === "named" ? ` (${m.change_people.map((p) => p.name).join(", ")})` : ""}</p>
+          <p data-testid="change-mode">
+            Who changes things: {MODE_WORDS[m.change_mode]}
+            {m.change_mode === 'named' ? ` (${m.change_people.map((p) => p.name).join(', ')})` : ''}
+          </p>
         )}
       </div>
-      {m.drafts.filter((d) => d.decider_approved).map((d) => (
-        <p key={d.id} role="status" data-testid="approved-banner" className="border-b border-line bg-[var(--simple-edited)] px-4 py-2 text-base">
-          Approved in {m.title} · {publishedWords(d, name)}
-        </p>
-      ))}
+      {m.drafts
+        .filter((d) => d.decider_approved)
+        .map((d) => (
+          <p
+            key={d.id}
+            role="status"
+            data-testid="approved-banner"
+            className="border-b border-line bg-[var(--simple-edited)] px-4 py-2 text-base"
+          >
+            Approved in {m.title} · {publishedWords(d, name)}
+          </p>
+        ))}
       {notApproved.map((x) => (
-        <p key={x.draft_id} role="status" data-testid="not-approved" className="border-b border-line px-4 py-2 text-base">
+        <p
+          key={x.draft_id}
+          role="status"
+          data-testid="not-approved"
+          className="border-b border-line px-4 py-2 text-base"
+        >
           {x.document.title} is not approved: {x.reason}
         </p>
       ))}
-      {error && <div className="px-4 pt-2"><ErrorNote>{error}</ErrorNote></div>}
+      {error && (
+        <div className="px-4 pt-2">
+          <ErrorNote>{error}</ErrorNote>
+        </div>
+      )}
       {problems && (
-        <div role="alert" data-testid="approve-problems" className="border-b border-line px-4 py-2 text-base">
+        <div
+          role="alert"
+          data-testid="approve-problems"
+          className="border-b border-line px-4 py-2 text-base"
+        >
           <p className="font-medium">{problems.message}</p>
           <ul className="mt-1 list-disc pl-5">
             {problems.problems.slice(0, PROBLEMS_SHOWN).map((p, i) => (
               <li key={i}>
                 {p.what}
-                {p.where ? ` In ${p.where}.` : ""}
-                {p.times > 1 ? ` (${p.times} times)` : ""}
+                {p.where ? ` In ${p.where}.` : ''}
+                {p.times > 1 ? ` (${p.times} times)` : ''}
               </li>
             ))}
           </ul>
           {problems.problems.length > PROBLEMS_SHOWN && (
-            <p className="simple-small text-text2">And {problems.problems.length - PROBLEMS_SHOWN} more like these. Fix these first, then approve again.</p>
+            <p className="simple-small text-text2">
+              And {problems.problems.length - PROBLEMS_SHOWN} more like these. Fix these first, then
+              approve again.
+            </p>
           )}
         </div>
       )}
@@ -396,7 +560,14 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
           feature names open the one feature panel (build-feature-panel). */}
       {(m.agenda.items ?? []).length > 0 && (
         <OpenFeatureContext.Provider value={setFeature}>
-          <AgendaSheet meetingId={m.id} agenda={m.agenda} can={m.can} phone={phone} reload={reload} codeOf={codeOf} />
+          <AgendaSheet
+            meetingId={m.id}
+            agenda={m.agenda}
+            can={m.can}
+            phone={phone}
+            reload={reload}
+            codeOf={codeOf}
+          />
         </OpenFeatureContext.Provider>
       )}
       <div className="grid flex-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_380px]">
@@ -416,7 +587,9 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
               />
             </MeetingClock.Provider>
           )}
-          {step === 1 && <RoadmapSlice m={m} reload={reload} refresh={roadmapRefresh} open={setFeature} />}
+          {step === 1 && (
+            <RoadmapSlice m={m} reload={reload} refresh={roadmapRefresh} open={setFeature} />
+          )}
           {/* QA Nov 12 (#2): the agenda's "Blocks" features read their codes and open the panel, as on Decisions. */}
           {step === 2 && (
             <OpenFeatureContext.Provider value={setFeature}>
@@ -428,12 +601,26 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
           {/* qa-simple-decide-7: who changes things is set once, in the attendee bar above. */}
           {/* qa-simple-decide-22: on a phone the chat grows with the page (one scroll). */}
           {/* QA Nov 12 (#11): the header states who changes things; the chat's hints sit behind its (i). */}
-          <MeetingChat meetingId={m.id} sessionId={m.session_id} onCardChanged={changed} rulesControl={false} scroll={!phone} compact />
+          <MeetingChat
+            meetingId={m.id}
+            sessionId={m.session_id}
+            onCardChanged={changed}
+            rulesControl={false}
+            scroll={!phone}
+            compact
+          />
           {/* qa-simple-decide-21: a link that looks like one. */}
-          <Link className={`self-start text-base ${LINK} ${PHONE_TAP}`} href={`/simple/meetings/${m.id}/chat?session=${m.session_id}`} data-testid="meeting-chat-page-link">
+          <Link
+            className={`self-start text-base ${LINK} ${PHONE_TAP}`}
+            href={`/simple/meetings/${m.id}/chat?session=${m.session_id}`}
+            data-testid="meeting-chat-page-link"
+          >
             Open chat on its own page
           </Link>
-          <NotesSoFar notes={(m.notes ?? []).filter((n) => n.kind !== "comment")} mayChange={m.can.change} />
+          <NotesSoFar
+            notes={(m.notes ?? []).filter((n) => n.kind !== 'comment')}
+            mayChange={m.can.change}
+          />
           {/* qa4-simple-decide-24: it lists this meeting's decisions only, and says so. */}
           <section aria-label="Decisions in this meeting" className="simple-card">
             <h2 className="simple-h2">Decisions in this meeting</h2>
@@ -445,7 +632,9 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
                   <li key={d.id} data-testid="meeting-decision">
                     <strong>{code(d)}</strong> {d.title}
                     {/* qa-simple-decide-50: the day too, as elsewhere in Simple; RP2 c: the decision stamp keeps its zone ("Wed Nov 4, 4:41 PM PST"). */}
-                    <span className="block text-sm text-text-faint" data-testid="decision-stamp">{d.approver.name} · {momentWords(d.at, zone, false, true)}</span>
+                    <span className="block text-sm text-text-faint" data-testid="decision-stamp">
+                      {d.approver.name} · {momentWords(d.at, zone, false, true)}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -462,17 +651,39 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
  * estimate reads as the Roadmap page reads it, with Oracle's suggested span when it has one,
  * never the horizon's window as if someone set it.
  */
-function spanOf(i: Schemas["SimpleRoadmapItem"], zone: string): string {
+function spanOf(i: Schemas['SimpleRoadmapItem'], zone: string): string {
   if (!estimateOnly(i)) return `${dayWords(i.start.date, zone)} – ${dayWords(i.end.date, zone)}`;
-  return i.suggestion ? estimateWords(i.suggestion.start_date, i.suggestion.end_date) : estimateWords(i.start.date, i.end.date);
+  return i.suggestion
+    ? estimateWords(i.suggestion.start_date, i.suggestion.end_date)
+    : estimateWords(i.start.date, i.end.date);
 }
 
 /** A feature's code and name that open its panel (build-feature-panel; QA Nov 12 #2: its code first). */
-function FeatureName({ id, code, title, open, strong = false }: { id: string; code?: string | null; title: string; open: (f: PanelFeature) => void; strong?: boolean }) {
+function FeatureName({
+  id,
+  code,
+  title,
+  open,
+  strong = false,
+}: {
+  id: string;
+  code?: string | null;
+  title: string;
+  open: (f: PanelFeature) => void;
+  strong?: boolean;
+}) {
   return (
     <>
-      <button type="button" className="text-left hover:underline" onClick={() => open({ id, code: code ?? "", name: title })}>
-        {code && <><code className="simple-code">{code}</code>{" "}</>}
+      <button
+        type="button"
+        className="text-left hover:underline"
+        onClick={() => open({ id, code: code ?? '', name: title })}
+      >
+        {code && (
+          <>
+            <code className="simple-code">{code}</code>{' '}
+          </>
+        )}
         {strong ? <strong>{title}</strong> : title}
       </button>
       {/* simple-home-qa-nov14 #1: a feature with no code is flagged, never hidden. */}
@@ -488,13 +699,23 @@ function NotesSoFar({ notes, mayChange }: { notes: MeetingNote[]; mayChange: boo
       <h2 className="simple-h2">Notes so far</h2>
       {notes.length === 0 ? (
         <p className="simple-small" data-testid="meeting-notes-empty">
-          {mayChange ? "None yet. Type “note: …” or “open question: …” in the chat, then press Apply on Oracle’s card." : "None yet. The presenter and attendees who change things add notes from the chat."}
+          {mayChange
+            ? 'None yet. Type “note: …” or “open question: …” in the chat, then press Apply on Oracle’s card.'
+            : 'None yet. The presenter and attendees who change things add notes from the chat.'}
         </p>
       ) : (
         <ul className="mt-2 space-y-2">
           {notes.map((n) => (
-            <li key={n.card_id} data-testid="meeting-note" data-kind={n.kind} className="[overflow-wrap:anywhere]">
-              <span className="font-semibold">{n.kind === "question" ? "Open question:" : "Note:"}</span> <span data-user-content>{n.text}</span>
+            <li
+              key={n.card_id}
+              data-testid="meeting-note"
+              data-kind={n.kind}
+              className="[overflow-wrap:anywhere]"
+            >
+              <span className="font-semibold">
+                {n.kind === 'question' ? 'Open question:' : 'Note:'}
+              </span>{' '}
+              <span data-user-content>{n.text}</span>
               <span className="block text-sm text-text-faint">{n.by_name}</span>
             </li>
           ))}
@@ -504,7 +725,15 @@ function NotesSoFar({ notes, mayChange }: { notes: MeetingNote[]; mayChange: boo
   );
 }
 
-function ChangeMode({ m, busy, onSave }: { m: Meeting; busy: boolean; onSave: (b: Schemas["SimpleMeetingRulesIn"]) => void }) {
+function ChangeMode({
+  m,
+  busy,
+  onSave,
+}: {
+  m: Meeting;
+  busy: boolean;
+  onSave: (b: Schemas['SimpleMeetingRulesIn']) => void;
+}) {
   const named = m.change_people.map((p) => p.id);
   const others = m.attendees.filter((a) => a.id !== m.presenter.id);
   return (
@@ -516,15 +745,19 @@ function ChangeMode({ m, busy, onSave }: { m: Meeting; busy: boolean; onSave: (b
           disabled={busy}
           onChange={(e) => {
             const mode = e.target.value as Mode;
-            if (mode !== "named") onSave({ change_mode: mode });
+            if (mode !== 'named') onSave({ change_mode: mode });
             else if (named.length) onSave({ change_mode: mode, change_people: named });
             else if (others[0]) onSave({ change_mode: mode, change_people: [others[0].id] });
           }}
         >
-          {(Object.keys(MODE_WORDS) as Mode[]).map((k) => <option key={k} value={k}>{MODE_WORDS[k]}</option>)}
+          {(Object.keys(MODE_WORDS) as Mode[]).map((k) => (
+            <option key={k} value={k}>
+              {MODE_WORDS[k]}
+            </option>
+          ))}
         </SimpleSelect>
       </label>
-      {m.change_mode === "named" &&
+      {m.change_mode === 'named' &&
         others.map((a) => {
           const on = named.includes(a.id);
           return (
@@ -532,9 +765,14 @@ function ChangeMode({ m, busy, onSave }: { m: Meeting; busy: boolean; onSave: (b
               key={a.id}
               type="button"
               aria-pressed={on}
-              className={`rounded-full border px-2 ${on ? "border-accent" : "border-line"}`}
+              className={`rounded-full border px-2 ${on ? 'border-accent' : 'border-line'}`}
               disabled={busy || (!on && named.length >= 2) || (on && named.length === 1)}
-              onClick={() => onSave({ change_mode: "named", change_people: on ? named.filter((x) => x !== a.id) : [...named, a.id] })}
+              onClick={() =>
+                onSave({
+                  change_mode: 'named',
+                  change_people: on ? named.filter((x) => x !== a.id) : [...named, a.id],
+                })
+              }
             >
               {a.name} changes things
             </button>
@@ -544,9 +782,19 @@ function ChangeMode({ m, busy, onSave }: { m: Meeting; busy: boolean; onSave: (b
   );
 }
 
-const HORIZONS = ["now", "next", "later"] as const;
+const HORIZONS = ['now', 'next', 'later'] as const;
 
-function RoadmapSlice({ m, reload, refresh, open }: { m: Meeting; reload: () => Promise<unknown>; refresh: string; open: (f: PanelFeature) => void }) {
+function RoadmapSlice({
+  m,
+  reload,
+  refresh,
+  open,
+}: {
+  m: Meeting;
+  reload: () => Promise<unknown>;
+  refresh: string;
+  open: (f: PanelFeature) => void;
+}) {
   const zone = useCompanyZone();
   const q = useMeetingRoadmap(m);
   // walkc-meeting r2 (5d): a card applied in the chat (or another attendee's change) shows here at once.
@@ -564,69 +812,138 @@ function RoadmapSlice({ m, reload, refresh, open }: { m: Meeting; reload: () => 
   const [said, setSaid] = useState<string | null>(null);
   const [approved, setApproved] = useState<number | null>(null);
   // qa4-simple-decide-16: the line says what moved ("Moved Sample data import to Later").
-  const change = (body: Schemas["SimpleChangeIn"], words: string) =>
+  const change = (body: Schemas['SimpleChangeIn'], words: string) =>
     act(async () => {
-      const r = await unwrap(api.POST("/v1/simple/changes", { body: { ...body, session_id: m.session_id } }));
+      const r = await unwrap(
+        api.POST('/v1/simple/changes', { body: { ...body, session_id: m.session_id } }),
+      );
       const c = r.change;
       // meeting-changes-only-its-agenda: an item on another roadmap is only sent to its owner.
-      const title = q.data?.items.find((x) => x.id === String(body.target.item_id))?.title ?? "This item";
-      if (c.off_agenda) return setSaid(`${title} is on another roadmap: sent to its owner to decide.`);
-      setSaid(c.status === "proposed" ? `Proposed: ${words[0]!.toLowerCase()}${words.slice(1)}. It waits on its decider.` : `${words}.`);
+      const title =
+        q.data?.items.find((x) => x.id === String(body.target.item_id))?.title ?? 'This item';
+      if (c.off_agenda)
+        return setSaid(`${title} is on another roadmap: sent to its owner to decide.`);
+      setSaid(
+        c.status === 'proposed'
+          ? `Proposed: ${words[0]!.toLowerCase()}${words.slice(1)}. It waits on its decider.`
+          : `${words}.`,
+      );
       // The rest of qa4-simple-decide-16: an applied move or cut is undone from its toast, like a decided question.
       // QA Nov 12 (#10): it sits bottom-left over the stage, clear of the chat column (in the corner it covered the
       // chat's box, and a toast under the pointer holds), so it times out like every other toast.
       if (c.can_undo)
         toast({
           message: words,
-          place: "rail",
+          place: 'rail',
           action: {
-            label: "Undo",
+            label: 'Undo',
             onClick: () =>
               void act(async () => {
-                await unwrap(api.POST("/v1/simple/changes/{change_id}/undo", { params: { path: { change_id: c.id } } }));
+                await unwrap(
+                  api.POST('/v1/simple/changes/{change_id}/undo', {
+                    params: { path: { change_id: c.id } },
+                  }),
+                );
                 setSaid(`Undone: ${words[0]!.toLowerCase()}${words.slice(1)}.`);
-                toast({ message: "Undone" });
+                toast({ message: 'Undone' });
               }),
           },
         });
     });
   if (q.loading && !q.data) return <Loading />;
-  if (q.error || !q.data) return <ErrorNote>{q.error ?? "Not found"}</ErrorNote>;
+  if (q.error || !q.data) return <ErrorNote>{q.error ?? 'Not found'}</ErrorNote>;
   // build-runplan RP2: the run's draft roadmap, hatched until the meeting approves its dates.
   // The meeting's own count once it approved the dates, so a reload keeps the done view.
-  if (m.draft_roadmap || approved !== null) return <DraftDates m={m} reload={reload} roadmap={q} approved={approved ?? m.draft_roadmap?.approved ?? null} onApproved={setApproved} />;
+  if (m.draft_roadmap || approved !== null)
+    return (
+      <DraftDates
+        m={m}
+        reload={reload}
+        roadmap={q}
+        approved={approved ?? m.draft_roadmap?.approved ?? null}
+        onApproved={setApproved}
+      />
+    );
   // qa4-simple-decide-15: Now, Next, Later, then Cut; the roadmap's order within each.
   const all = q.data.items;
-  const rank = (i: (typeof all)[number]) => ORDER[i.status === "cut" ? "cut" : i.horizon] ?? 4;
-  const items = all.map((i, n) => [i, n] as const).sort(([a, x], [b, y]) => rank(a) - rank(b) || x - y).map(([i]) => i);
+  const rank = (i: (typeof all)[number]) => ORDER[i.status === 'cut' ? 'cut' : i.horizon] ?? 4;
+  const items = all
+    .map((i, n) => [i, n] as const)
+    .sort(([a, x], [b, y]) => rank(a) - rank(b) || x - y)
+    .map(([i]) => i);
   return (
     <section aria-label="Roadmap slice" className="simple-card">
       <h2 className="simple-h2">{m.prd.title} on the roadmap</h2>
-      {said && <p role="status" className="simple-small" data-testid="roadmap-said">{said}</p>}
+      {said && (
+        <p role="status" className="simple-small" data-testid="roadmap-said">
+          {said}
+        </p>
+      )}
       {error && <ErrorNote>{error}</ErrorNote>}
       {items.length === 0 && <p className="simple-small">No roadmap items for this PRD yet.</p>}
       <ul className="mt-2 divide-y divide-line">
         {items.map((i) => (
-          <li key={i.id} data-item={i.key} className="flex flex-wrap items-center justify-between gap-2 py-2">
+          <li
+            key={i.id}
+            data-item={i.key}
+            className="flex flex-wrap items-center justify-between gap-2 py-2"
+          >
             {/* QA Nov 12 (#1): on a phone the name takes its own row; the buttons wrap below it. */}
             <span className="min-w-0 flex-1 max-[600px]:basis-full">
-              <FeatureName id={i.id} code={i.code} title={i.title} open={open} strong /> · {i.status === "cut" ? "Cut" : cap(i.horizon)} · <span data-testid="roadmap-span">
+              <FeatureName id={i.id} code={i.code} title={i.title} open={open} strong /> ·{' '}
+              {i.status === 'cut' ? 'Cut' : cap(i.horizon)} ·{' '}
+              <span data-testid="roadmap-span">
                 {/* qa-nov17 #1: each part stays whole, so on a phone the line breaks only at its "·". */}
-                {spanOf(i, zone).split(" · ").map((part, n) => <Fragment key={n}>{n > 0 && " · "}<span className="whitespace-nowrap">{part}</span></Fragment>)}
+                {spanOf(i, zone)
+                  .split(' · ')
+                  .map((part, n) => (
+                    <Fragment key={n}>
+                      {n > 0 && ' · '}
+                      <span className="whitespace-nowrap">{part}</span>
+                    </Fragment>
+                  ))}
               </span>
             </span>
             {/* qa-simple-decide-45: a cut item comes back with Restore. */}
-            {m.can.change && i.status === "cut" && (
-              <Button className={PHONE_TAP} disabled={busy} aria-label={`Restore ${i.title}`} onClick={() => change({ op: "restore", target: { item_id: i.id }, before: { cut: true }, after: {} }, `Restored ${i.title}`)}>Restore</Button>
+            {m.can.change && i.status === 'cut' && (
+              <Button
+                className={PHONE_TAP}
+                disabled={busy}
+                aria-label={`Restore ${i.title}`}
+                onClick={() =>
+                  change(
+                    { op: 'restore', target: { item_id: i.id }, before: { cut: true }, after: {} },
+                    `Restored ${i.title}`,
+                  )
+                }
+              >
+                Restore
+              </Button>
             )}
-            {m.can.change && i.status !== "cut" && (
+            {m.can.change && i.status !== 'cut' && (
               // qa4-simple-decide-15: one fixed column per horizon (the item's own stays empty), so the buttons line up row to row.
               <span className="flex flex-wrap gap-2" data-testid="roadmap-moves">
                 {HORIZONS.map((h) =>
                   h === i.horizon ? (
                     <span key={h} aria-hidden className="w-36 max-[600px]:hidden" />
                   ) : (
-                    <Button key={h} className={`w-36 max-[600px]:w-auto ${PHONE_TAP}`} disabled={busy} aria-label={`Move ${i.title} to ${cap(h)}`} onClick={() => change({ op: "change_horizon", target: { item_id: i.id }, before: { horizon: i.horizon }, after: { horizon: h } }, `Moved ${i.title} to ${cap(h)}`)}>
+                    <Button
+                      key={h}
+                      className={`w-36 max-[600px]:w-auto ${PHONE_TAP}`}
+                      disabled={busy}
+                      aria-label={`Move ${i.title} to ${cap(h)}`}
+                      onClick={() =>
+                        change(
+                          {
+                            op: 'change_horizon',
+                            target: { item_id: i.id },
+                            before: { horizon: i.horizon },
+                            after: { horizon: h },
+                          },
+                          `Moved ${i.title} to ${cap(h)}`,
+                        )
+                      }
+                    >
                       Move to {cap(h)}
                     </Button>
                   ),
@@ -637,8 +954,16 @@ function RoadmapSlice({ m, reload, refresh, open }: { m: Meeting; reload: () => 
                   disabled={busy}
                   aria-label={`Cut ${i.title}`}
                   onClick={async () => {
-                    const yes = await confirmInPage({ action: "Cut", message: `Cut ${i.title} from the roadmap? It leaves Now, Next and Later; Restore brings it back.`, destructive: true });
-                    if (yes) await change({ op: "cut", target: { item_id: i.id }, before: { cut: false }, after: {} }, `Cut ${i.title}`);
+                    const yes = await confirmInPage({
+                      action: 'Cut',
+                      message: `Cut ${i.title} from the roadmap? It leaves Now, Next and Later; Restore brings it back.`,
+                      destructive: true,
+                    });
+                    if (yes)
+                      await change(
+                        { op: 'cut', target: { item_id: i.id }, before: { cut: false }, after: {} },
+                        `Cut ${i.title}`,
+                      );
                   }}
                 >
                   Cut
@@ -655,11 +980,21 @@ function RoadmapSlice({ m, reload, refresh, open }: { m: Meeting; reload: () => 
 function DecisionsStep({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }) {
   const { busy, error, act } = useAct(reload);
   const proposalWords = useProposalWords(m);
-  const decide = (id: string, how: "accept" | "decline") =>
+  const decide = (id: string, how: 'accept' | 'decline') =>
     act(() =>
-      how === "accept"
-        ? unwrap(api.POST("/v1/simple/changes/{change_id}/accept", { params: { path: { change_id: id } }, body: { session_id: m.session_id } }))
-        : unwrap(api.POST("/v1/simple/changes/{change_id}/decline", { params: { path: { change_id: id } }, body: { session_id: m.session_id } })),
+      how === 'accept'
+        ? unwrap(
+            api.POST('/v1/simple/changes/{change_id}/accept', {
+              params: { path: { change_id: id } },
+              body: { session_id: m.session_id },
+            }),
+          )
+        : unwrap(
+            api.POST('/v1/simple/changes/{change_id}/decline', {
+              params: { path: { change_id: id } },
+              body: { session_id: m.session_id },
+            }),
+          ),
     );
   return (
     <div className="space-y-4">
@@ -673,7 +1008,12 @@ function DecisionsStep({ m, reload }: { m: Meeting; reload: () => Promise<unknow
             {m.open_decisions.map((d) => (
               <li key={d.id}>
                 {/* qa-simple-decide-20: an open question by its words, as on Decisions and in the minutes. */}
-                <Link className={`${LINK} ${PHONE_TAP} inline-flex items-center`} href={`/simple/decisions#d-${d.number}`}>{d.title}</Link>
+                <Link
+                  className={`${LINK} ${PHONE_TAP} inline-flex items-center`}
+                  href={`/simple/decisions#d-${d.number}`}
+                >
+                  {d.title}
+                </Link>
               </li>
             ))}
           </ul>
@@ -684,16 +1024,37 @@ function DecisionsStep({ m, reload }: { m: Meeting; reload: () => Promise<unknow
         {m.pending_proposals.length === 0 && <p className="simple-small">No proposal waits.</p>}
         <ul className="mt-2 space-y-2">
           {m.pending_proposals.map((c) => (
-            <li key={c.id} data-change={c.id} className="flex flex-wrap items-center justify-between gap-2">
+            <li
+              key={c.id}
+              data-change={c.id}
+              className="flex flex-wrap items-center justify-between gap-2"
+            >
               <span>
                 {c.by_name} proposes: {proposalWords(c)}
-                {c.off_agenda && <span className="block simple-small text-text2" data-testid="proposal-elsewhere">On another roadmap: sent to its owner to decide.</span>}
+                {c.off_agenda && (
+                  <span className="block simple-small text-text2" data-testid="proposal-elsewhere">
+                    On another roadmap: sent to its owner to decide.
+                  </span>
+                )}
               </span>
               {c.can_decide && !c.off_agenda && (
                 <span className="flex gap-2">
                   {/* qa4-simple-decide-31: one height for both. */}
-                  <Button variant="primary" className={`h-10 ${PHONE_TAP}`} disabled={busy} onClick={() => decide(c.id, "accept")}>Accept</Button>
-                  <Button className={`h-10 ${PHONE_TAP}`} disabled={busy} onClick={() => decide(c.id, "decline")}>Decline</Button>
+                  <Button
+                    variant="primary"
+                    className={`h-10 ${PHONE_TAP}`}
+                    disabled={busy}
+                    onClick={() => decide(c.id, 'accept')}
+                  >
+                    Accept
+                  </Button>
+                  <Button
+                    className={`h-10 ${PHONE_TAP}`}
+                    disabled={busy}
+                    onClick={() => decide(c.id, 'decline')}
+                  >
+                    Decline
+                  </Button>
                 </span>
               )}
             </li>
@@ -710,92 +1071,132 @@ function Comments({ m, reload }: { m: Meeting; reload: () => Promise<unknown> })
   const zone = useCompanyZone();
   const { me, can } = useMe();
   const { busy, error, act } = useAct(reload);
-  const [text, setText] = useState("");
-  const comments = (m.notes ?? []).filter((n) => n.kind === "comment");
+  const [text, setText] = useState('');
+  const comments = (m.notes ?? []).filter((n) => n.kind === 'comment');
   // The API lets an attendee or one who may change things comment (the item's own rule).
-  const may = can("comment_in_simple_meeting", m.can.change || m.attendees.some((a) => a.id === me?.user_id));
+  const may = can(
+    'comment_in_simple_meeting',
+    m.can.change || m.attendees.some((a) => a.id === me?.user_id),
+  );
   return (
-      <section aria-label="Comment in the meeting" className="simple-card" data-testid="meeting-comments">
-        {error && <ErrorNote>{error}</ErrorNote>}
-        {may ? (
+    <section
+      aria-label="Comment in the meeting"
+      className="simple-card"
+      data-testid="meeting-comments"
+    >
+      {error && <ErrorNote>{error}</ErrorNote>}
+      {may ? (
         <form
           onSubmit={(e) => {
             e.preventDefault();
             void act(async () => {
-              await unwrap(api.POST("/v1/simple/meetings/{meeting_id}/comments", { params: { path: { meeting_id: m.id } }, body: { text, subjects: [] } }));
-              setText("");
+              await unwrap(
+                api.POST('/v1/simple/meetings/{meeting_id}/comments', {
+                  params: { path: { meeting_id: m.id } },
+                  body: { text, subjects: [] },
+                }),
+              );
+              setText('');
             });
           }}
           className="space-y-2"
         >
           <label className="flex flex-col gap-1">
             <span className="simple-h2">Comment</span>
-            <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} className="rounded border border-line bg-transparent p-2" />
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              rows={2}
+              className="rounded border border-line bg-transparent p-2"
+            />
           </label>
-          <Button type="submit" disabled={busy || !text.trim()}>Add comment</Button>
+          <Button type="submit" disabled={busy || !text.trim()}>
+            Add comment
+          </Button>
         </form>
-        ) : (
-          <>
-            <h2 className="simple-h2">Comments</h2>
-            <p className="simple-small" data-testid="meeting-comment-why">Viewers read the comments; a commenter or above adds one.</p>
-          </>
-        )}
-        {comments.length === 0 ? (
-          <p className="simple-small mt-2">No comment yet.</p>
-        ) : (
-          <ul className="mt-2 space-y-2" aria-label="Comments">
-            {comments.map((c) => (
-              <li key={c.id} data-testid="meeting-comment" className="[overflow-wrap:anywhere]">
-                <span data-user-content>{c.text}</span>
-                <span className="block text-sm text-text-faint">
-                  {c.by_name}
-                  {c.at ? ` · ${momentWords(c.at, zone)}` : ""}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      ) : (
+        <>
+          <h2 className="simple-h2">Comments</h2>
+          <p className="simple-small" data-testid="meeting-comment-why">
+            Viewers read the comments; a commenter or above adds one.
+          </p>
+        </>
+      )}
+      {comments.length === 0 ? (
+        <p className="simple-small mt-2">No comment yet.</p>
+      ) : (
+        <ul className="mt-2 space-y-2" aria-label="Comments">
+          {comments.map((c) => (
+            <li key={c.id} data-testid="meeting-comment" className="[overflow-wrap:anywhere]">
+              <span data-user-content>{c.text}</span>
+              <span className="block text-sm text-text-faint">
+                {c.by_name}
+                {c.at ? ` · ${momentWords(c.at, zone)}` : ''}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
 // action_item_id: one recorded in the meeting, kept so Send does not add it again.
-type ActionRow = { title: string; owner_id: string; due_date: string; action_item_id?: string | null };
+type ActionRow = {
+  title: string;
+  owner_id: string;
+  due_date: string;
+  action_item_id?: string | null;
+};
 
 function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }) {
   const zone = useCompanyZone();
   const { busy, error, act } = useAct(reload);
   const minutes = m.minutes;
-  const editable = m.can.end && m.minutes_state !== "sent";
-  const [summary, setSummary] = useState(minutes?.summary ?? "");
-  const [questions, setQuestions] = useState((minutes?.open_questions ?? []).join("\n"));
-  const [actions, setActions] = useState<ActionRow[]>((minutes?.action_items ?? []).map((a) => ({ title: a.title, owner_id: a.owner_id ?? "", due_date: a.due_date ?? "", action_item_id: a.action_item_id ?? null })));
+  const editable = m.can.end && m.minutes_state !== 'sent';
+  const [summary, setSummary] = useState(minutes?.summary ?? '');
+  const [questions, setQuestions] = useState((minutes?.open_questions ?? []).join('\n'));
+  const [actions, setActions] = useState<ActionRow[]>(
+    (minutes?.action_items ?? []).map((a) => ({
+      title: a.title,
+      owner_id: a.owner_id ?? '',
+      due_date: a.due_date ?? '',
+      action_item_id: a.action_item_id ?? null,
+    })),
+  );
   const [dirty, setDirty] = useState(false);
   // Oracle's minutes landing (Draft again, a slow job) fill the fields a person has not touched.
-  const written = `${minutes?.written_by ?? ""}|${minutes?.summary ?? ""}`;
+  const written = `${minutes?.written_by ?? ''}|${minutes?.summary ?? ''}`;
   const [shown, setShown] = useState(written);
   if (written !== shown && !dirty) {
     setShown(written);
-    setSummary(minutes?.summary ?? "");
-    setQuestions((minutes?.open_questions ?? []).join("\n"));
-    setActions((minutes?.action_items ?? []).map((a) => ({ title: a.title, owner_id: a.owner_id ?? "", due_date: a.due_date ?? "", action_item_id: a.action_item_id ?? null })));
+    setSummary(minutes?.summary ?? '');
+    setQuestions((minutes?.open_questions ?? []).join('\n'));
+    setActions(
+      (minutes?.action_items ?? []).map((a) => ({
+        title: a.title,
+        owner_id: a.owner_id ?? '',
+        due_date: a.due_date ?? '',
+        action_item_id: a.action_item_id ?? null,
+      })),
+    );
   }
   // Until the minutes job ends, read again every few seconds and when the tab comes back
   // (a hidden tab's timers are throttled): it answers (the minutes, Send), slows down or
   // fails (Draft again), with no reload (production walk: "Drafting…" stayed until one).
-  const drafting = m.minutes_state === "drafting" && m.minutes_job !== "failed";
+  const drafting = m.minutes_state === 'drafting' && m.minutes_job !== 'failed';
   useEffect(() => {
     if (!drafting) return;
     const read = () => {
-      if (document.visibilityState === "visible") void reload();
+      if (document.visibilityState === 'visible') void reload();
     };
     const t = window.setInterval(read, MINUTES_POLL_MS);
-    document.addEventListener("visibilitychange", read);
-    window.addEventListener("focus", read);
+    document.addEventListener('visibilitychange', read);
+    window.addEventListener('focus', read);
     return () => {
       window.clearInterval(t);
-      document.removeEventListener("visibilitychange", read);
-      window.removeEventListener("focus", read);
+      document.removeEventListener('visibilitychange', read);
+      window.removeEventListener('focus', read);
     };
   }, [drafting, reload]);
   const [email, setEmail] = useState(false);
@@ -803,10 +1204,20 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
   const path = { params: { path: { meeting_id: m.id } } };
   const slackReady = m.slack.connected && !!m.slack.channel;
   const owner = (id: string | null | undefined) => m.attendees.find((a) => a.id === id)?.name;
-  const minutesIn = (): Schemas["SimpleMinutesIn"] => ({
+  const minutesIn = (): Schemas['SimpleMinutesIn'] => ({
     summary,
-    open_questions: questions.split("\n").map((x) => x.trim()).filter(Boolean),
-    action_items: actions.filter((a) => a.title.trim()).map((a) => ({ title: a.title.trim(), owner_id: a.owner_id || null, due_date: a.due_date || null, action_item_id: a.action_item_id ?? null })),
+    open_questions: questions
+      .split('\n')
+      .map((x) => x.trim())
+      .filter(Boolean),
+    action_items: actions
+      .filter((a) => a.title.trim())
+      .map((a) => ({
+        title: a.title.trim(),
+        owner_id: a.owner_id || null,
+        due_date: a.due_date || null,
+        action_item_id: a.action_item_id ?? null,
+      })),
   });
   // qa-simple-decide-46: an action item with no words is not dropped silently.
   const [emptyItem, setEmptyItem] = useState(false);
@@ -817,9 +1228,11 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
     }
     setEmptyItem(false);
     return act(async () => {
-      await unwrap(api.PUT("/v1/simple/meetings/{meeting_id}/minutes", { ...path, body: minutesIn() }));
+      await unwrap(
+        api.PUT('/v1/simple/meetings/{meeting_id}/minutes', { ...path, body: minutesIn() }),
+      );
       setDirty(false);
-      toast({ message: "Minutes saved" });
+      toast({ message: 'Minutes saved' });
     });
   };
   const send = () => {
@@ -829,40 +1242,65 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
       return;
     }
     return act(async () => {
-    if (dirty) await unwrap(api.PUT("/v1/simple/meetings/{meeting_id}/minutes", { ...path, body: minutesIn() }));
-    await unwrap(api.POST("/v1/simple/meetings/{meeting_id}/send", { ...path, body: { email, slack } }));
+      if (dirty)
+        await unwrap(
+          api.PUT('/v1/simple/meetings/{meeting_id}/minutes', { ...path, body: minutesIn() }),
+        );
+      await unwrap(
+        api.POST('/v1/simple/meetings/{meeting_id}/send', { ...path, body: { email, slack } }),
+      );
     });
   };
-  const edit = <T,>(set: (v: T) => void) => (v: T) => {
-    set(v);
-    setDirty(true);
-  };
+  const edit =
+    <T,>(set: (v: T) => void) =>
+    (v: T) => {
+      set(v);
+      setDirty(true);
+    };
   const d = m.delivery;
   const code = decisionCode(m);
   return (
     <div className="mx-auto max-w-[1180px] space-y-4 p-4" data-testid="end-screen">
       <header className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-        <Link href="/simple/meetings" className={`text-base ${LINK} ${PHONE_TAP}`}>Meetings</Link>
+        <Link href="/simple/meetings" className={`text-base ${LINK} ${PHONE_TAP}`}>
+          Meetings
+        </Link>
         <h1 className="text-2xl font-semibold">{m.title}</h1>
         {/* qa-simple-decide-31: the one day-and-time format; the zone said once. */}
         <span className="text-base text-text-faint" data-testid="meeting-ended-at">
           {/* simple-home-13: "Ended Sat Oct 24, 12:02 AM PDT", the short zone as Home and Meetings write it. */}
-          Ended {m.ended_at ? momentWords(m.ended_at, zone, false, true) : ""} · {m.attendees.map((a) => a.name).join(", ")}
+          Ended {m.ended_at ? momentWords(m.ended_at, zone, false, true) : ''} ·{' '}
+          {m.attendees.map((a) => a.name).join(', ')}
         </span>
       </header>
       {error && <ErrorNote>{error}</ErrorNote>}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
         <section aria-label="Minutes" className="simple-card space-y-3">
           <h2 className="simple-h2">Oracle&apos;s minutes</h2>
-          {m.minutes_job === "drafting" && <p role="status">Drafting…</p>}
-          {m.minutes_job === "slow" && (
-            <p role="status" data-testid="minutes-slow">Oracle is still drafting the minutes. Send what is written, or wait for its draft.</p>
+          {m.minutes_job === 'drafting' && <p role="status">Drafting…</p>}
+          {m.minutes_job === 'slow' && (
+            <p role="status" data-testid="minutes-slow">
+              Oracle is still drafting the minutes. Send what is written, or wait for its draft.
+            </p>
           )}
-          {m.minutes_job === "failed" && (
-            <div role="alert" data-testid="minutes-failed" className="flex flex-wrap items-center gap-3">
+          {m.minutes_job === 'failed' && (
+            <div
+              role="alert"
+              data-testid="minutes-failed"
+              className="flex flex-wrap items-center gap-3"
+            >
               <span>Oracle could not draft the minutes. Send what is written, or draft again.</span>
               {m.can.redraft && (
-                <Button disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/simple/meetings/{meeting_id}/minutes/redraft", path)))}>Draft again</Button>
+                <Button
+                  disabled={busy}
+                  onClick={() =>
+                    act(() =>
+                      unwrap(api.POST('/v1/simple/meetings/{meeting_id}/minutes/redraft', path)),
+                    )
+                  }
+                >
+                  Draft again
+                </Button>
               )}
             </div>
           )}
@@ -870,33 +1308,99 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
             <>
               <label className="flex flex-col gap-1">
                 <span className="font-semibold">Summary</span>
-                <textarea rows={4} value={summary} onChange={(e) => edit(setSummary)(e.target.value)} className="rounded border border-line bg-transparent p-2" />
+                <textarea
+                  rows={4}
+                  value={summary}
+                  onChange={(e) => edit(setSummary)(e.target.value)}
+                  className="rounded border border-line bg-transparent p-2"
+                />
               </label>
               <label className="flex flex-col gap-1">
                 <span className="font-semibold">Open questions</span>
-                <textarea rows={3} value={questions} onChange={(e) => edit(setQuestions)(e.target.value)} className="rounded border border-line bg-transparent p-2" />
+                <textarea
+                  rows={3}
+                  value={questions}
+                  onChange={(e) => edit(setQuestions)(e.target.value)}
+                  className="rounded border border-line bg-transparent p-2"
+                />
                 <span className="simple-small">One per line</span>
               </label>
               <fieldset className="space-y-2">
                 <legend className="font-semibold">Action items</legend>
                 {actions.map((a, i) => (
-                  <div key={i} className="flex flex-wrap items-center gap-2" data-testid="action-item">
-                    <input aria-label={`Action item ${i + 1}`} placeholder="What needs doing" value={a.title} onChange={(e) => edit(setActions)(actions.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))} className="min-w-0 flex-1 rounded border border-line bg-transparent p-2" />
-                    <SimpleSelect aria-label={`Owner of action item ${i + 1}`} value={a.owner_id} onChange={(e) => edit(setActions)(actions.map((x, j) => (j === i ? { ...x, owner_id: e.target.value } : x)))}>
+                  <div
+                    key={i}
+                    className="flex flex-wrap items-center gap-2"
+                    data-testid="action-item"
+                  >
+                    <input
+                      aria-label={`Action item ${i + 1}`}
+                      placeholder="What needs doing"
+                      value={a.title}
+                      onChange={(e) =>
+                        edit(setActions)(
+                          actions.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)),
+                        )
+                      }
+                      className="min-w-0 flex-1 rounded border border-line bg-transparent p-2"
+                    />
+                    <SimpleSelect
+                      aria-label={`Owner of action item ${i + 1}`}
+                      value={a.owner_id}
+                      onChange={(e) =>
+                        edit(setActions)(
+                          actions.map((x, j) => (j === i ? { ...x, owner_id: e.target.value } : x)),
+                        )
+                      }
+                    >
                       <option value="">Who?</option>
-                      {m.attendees.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      {m.attendees.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
                     </SimpleSelect>
-                    <input type="date" aria-label={`Due date of action item ${i + 1}`} value={a.due_date} onChange={(e) => edit(setActions)(actions.map((x, j) => (j === i ? { ...x, due_date: e.target.value } : x)))} className="h-10 rounded-button border border-line-strong bg-surface px-2 text-text [color-scheme:light_dark]" />
-                    <button type="button" className="simple-button max-[600px]:!min-h-11 max-[600px]:!min-w-11" aria-label={`Remove action item ${i + 1}`} onClick={() => edit(setActions)(actions.filter((_, j) => j !== i))}>
+                    <input
+                      type="date"
+                      aria-label={`Due date of action item ${i + 1}`}
+                      value={a.due_date}
+                      onChange={(e) =>
+                        edit(setActions)(
+                          actions.map((x, j) => (j === i ? { ...x, due_date: e.target.value } : x)),
+                        )
+                      }
+                      className="h-10 rounded-button border border-line-strong bg-surface px-2 text-text [color-scheme:light_dark]"
+                    />
+                    <button
+                      type="button"
+                      className="simple-button max-[600px]:!min-h-11 max-[600px]:!min-w-11"
+                      aria-label={`Remove action item ${i + 1}`}
+                      onClick={() => edit(setActions)(actions.filter((_, j) => j !== i))}
+                    >
                       ×
                     </button>
                   </div>
                 ))}
-                <Button onClick={() => edit(setActions)([...actions, { title: "", owner_id: "", due_date: "" }])}>Add action item</Button>
+                <Button
+                  onClick={() =>
+                    edit(setActions)([...actions, { title: '', owner_id: '', due_date: '' }])
+                  }
+                >
+                  Add action item
+                </Button>
               </fieldset>
-              {emptyItem && actions.some((a) => !a.title.trim()) && <p role="alert" className="simple-small text-crit">Type what the action item is, or remove it.</p>}
+              {emptyItem && actions.some((a) => !a.title.trim()) && (
+                <p role="alert" className="simple-small text-crit">
+                  Type what the action item is, or remove it.
+                </p>
+              )}
               <div className="flex flex-wrap items-center gap-3">
-                <button type="button" className="simple-button simple-button-primary" disabled={busy || !dirty} onClick={() => void save()}>
+                <button
+                  type="button"
+                  className="simple-button simple-button-primary"
+                  disabled={busy || !dirty}
+                  onClick={() => void save()}
+                >
                   Save minutes
                 </button>
                 {!dirty && <span className="simple-small">All changes saved</span>}
@@ -904,14 +1408,26 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
             </>
           ) : (
             <>
-              <p data-testid="minutes-summary">{minutes?.summary ? <span data-user-content>{minutes.summary}</span> : "No summary."}</p>
+              <p data-testid="minutes-summary">
+                {minutes?.summary ? (
+                  <span data-user-content>{minutes.summary}</span>
+                ) : (
+                  'No summary.'
+                )}
+              </p>
               <h3 className="font-semibold">Open questions</h3>
               {/* qa-simple-decide-52: each open question leads to where it is decided. */}
               {minutes?.open_questions.length ? (
                 <ul className="list-disc pl-5">
                   {minutes.open_questions.map((x) => (
                     <li key={x}>
-                      <Link className="text-accent-ink hover:underline" href={`/simple/decisions?meeting=${m.id}`} data-user-content>{questionWords(x)}</Link>
+                      <Link
+                        className="text-accent-ink hover:underline"
+                        href={`/simple/decisions?meeting=${m.id}`}
+                        data-user-content
+                      >
+                        {questionWords(x)}
+                      </Link>
                     </li>
                   ))}
                 </ul>
@@ -921,7 +1437,13 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
               <h3 className="font-semibold">Action items</h3>
               {minutes?.action_items.length ? (
                 <ul className="list-disc pl-5">
-                  {minutes.action_items.map((a, i) => <li key={i}><span data-user-content>{a.title}</span> · {a.owner_name ?? owner(a.owner_id) ?? "no owner"}{a.due_date ? ` · by ${dayWords(a.due_date, zone)}` : ""}</li>)}
+                  {minutes.action_items.map((a, i) => (
+                    <li key={i}>
+                      <span data-user-content>{a.title}</span> ·{' '}
+                      {a.owner_name ?? owner(a.owner_id) ?? 'no owner'}
+                      {a.due_date ? ` · by ${dayWords(a.due_date, zone)}` : ''}
+                    </li>
+                  ))}
                 </ul>
               ) : (
                 <p className="simple-small">None.</p>
@@ -929,20 +1451,35 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
             </>
           )}
           {/* qa-simple-decide-6: the meeting's notes as their own list, not in the summary. */}
-          {(m.notes ?? []).some((n) => n.kind === "note") && (
+          {(m.notes ?? []).some((n) => n.kind === 'note') && (
             <>
               <h3 className="font-semibold">Notes</h3>
               <ul className="list-disc pl-5" data-testid="minutes-notes">
-                {(m.notes ?? []).filter((n) => n.kind === "note").map((n) => <li key={n.id}><span data-user-content>{n.text}</span> · {n.by_name}</li>)}
+                {(m.notes ?? [])
+                  .filter((n) => n.kind === 'note')
+                  .map((n) => (
+                    <li key={n.id}>
+                      <span data-user-content>{n.text}</span> · {n.by_name}
+                    </li>
+                  ))}
               </ul>
             </>
           )}
           {/* fix4 review: the comments made in the meeting stay readable once it ended (still no decisions). */}
-          {(m.notes ?? []).some((n) => n.kind === "comment") && (
+          {(m.notes ?? []).some((n) => n.kind === 'comment') && (
             <>
               <h3 className="font-semibold">Comments</h3>
-              <ul className="list-disc pl-5 [overflow-wrap:anywhere]" data-testid="minutes-comments">
-                {(m.notes ?? []).filter((n) => n.kind === "comment").map((n) => <li key={n.id}><span data-user-content>{n.text}</span> · {n.by_name}</li>)}
+              <ul
+                className="list-disc pl-5 [overflow-wrap:anywhere]"
+                data-testid="minutes-comments"
+              >
+                {(m.notes ?? [])
+                  .filter((n) => n.kind === 'comment')
+                  .map((n) => (
+                    <li key={n.id}>
+                      <span data-user-content>{n.text}</span> · {n.by_name}
+                    </li>
+                  ))}
               </ul>
             </>
           )}
@@ -955,10 +1492,24 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
                       Round 3: on a phone the row is the 44 px tap: the link stays inline (the hang needs it)
                       and is stretched over its own row, so neighbouring decisions never overlap; ' · ' stays
                       with the approver's name. */}
-                  <span data-testid="decision-taken" className="relative min-w-0 pl-4 -indent-4 max-[600px]:min-h-11">
-                    <Link className={`${LINK} max-[600px]:after:absolute max-[600px]:after:inset-0`} href={code(x).startsWith("D-") ? `/simple/decisions#d-${x.number}` : `/simple/decisions?meeting=${m.id}`}>{x.title}</Link>
+                  <span
+                    data-testid="decision-taken"
+                    className="relative min-w-0 pl-4 -indent-4 max-[600px]:min-h-11"
+                  >
+                    <Link
+                      className={`${LINK} max-[600px]:after:absolute max-[600px]:after:inset-0`}
+                      href={
+                        code(x).startsWith('D-')
+                          ? `/simple/decisions#d-${x.number}`
+                          : `/simple/decisions?meeting=${m.id}`
+                      }
+                    >
+                      {x.title}
+                    </Link>
                     {/* QA Nov 12 (#12): a no-break space: "· name" never starts a line of its own. */}
-                    <span className="whitespace-nowrap" data-testid="decision-taken-by">{"\u00a0"}· {x.approver.name}</span>
+                    <span className="whitespace-nowrap" data-testid="decision-taken-by">
+                      {'\u00a0'}· {x.approver.name}
+                    </span>
                   </span>
                 </DecidedItem>
               ))}
@@ -972,18 +1523,25 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
             <h2 className="simple-h2">What still waits on whom</h2>
             {minutes?.waits.length ? (
               <ul className="mt-2 space-y-1">
-                {minutes.waits.map((w, i) => <li key={i}>{w.what}{w.on.length ? ` · on ${w.on.map((p) => p.name).join(", ")}` : ""}</li>)}
+                {minutes.waits.map((w, i) => (
+                  <li key={i}>
+                    {w.what}
+                    {w.on.length ? ` · on ${w.on.map((p) => p.name).join(', ')}` : ''}
+                  </li>
+                ))}
               </ul>
             ) : (
               // qa-simple-decide-47: no person's approval waits; the open questions still do.
               <p className="simple-small">
-                {minutes?.open_questions.length ? `No approval waits. ${minutes.open_questions.length} open ${minutes.open_questions.length === 1 ? "question waits" : "questions wait"} for a decision.` : "Nothing waits."}
+                {minutes?.open_questions.length
+                  ? `No approval waits. ${minutes.open_questions.length} open ${minutes.open_questions.length === 1 ? 'question waits' : 'questions wait'} for a decision.`
+                  : 'Nothing waits.'}
               </p>
             )}
           </section>
           <section aria-label="Delivery" className="simple-card space-y-2">
             <h2 className="simple-h2">Delivery</h2>
-            {m.minutes_state === "sent" && d ? (
+            {m.minutes_state === 'sent' && d ? (
               <div role="status" aria-label="Sent" className="space-y-1">
                 <p className="font-semibold">Sent</p>
                 <ul className="space-y-1">
@@ -991,39 +1549,126 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
                   <li>Each attendee&apos;s Inbox · posted</li>
                   {/* dod-delivery: each attendee's email and the Slack post, with Retry when one failed. */}
                   {/* Round 3: a delivery not chosen gives its reason behind an (i), not in the line. */}
-                  <li>{d.email ? <DeliveryLine meetingId={m.id} what="email" words={emailWords(d)} canRetry={!!m.can.retry_delivery} reload={reload} testId="delivery-email" /> : <span className="inline-flex items-center gap-1">Email · not sent <InfoTip label="Email not sent" align="start">Not chosen for this meeting.</InfoTip></span>}</li>
-                  <li>{d.slack ? <DeliveryLine meetingId={m.id} what="slack" words={slackWords(d)} canRetry={!!m.can.retry_delivery} reload={reload} testId="delivery-slack" /> : <span className="inline-flex items-center gap-1">Slack · not sent <InfoTip label="Slack not sent" align="start">Not chosen for this meeting.</InfoTip></span>}</li>
+                  <li>
+                    {d.email ? (
+                      <DeliveryLine
+                        meetingId={m.id}
+                        what="email"
+                        words={emailWords(d)}
+                        canRetry={!!m.can.retry_delivery}
+                        reload={reload}
+                        testId="delivery-email"
+                      />
+                    ) : (
+                      <span className="inline-flex items-center gap-1">
+                        Email · not sent{' '}
+                        <InfoTip label="Email not sent" align="start">
+                          Not chosen for this meeting.
+                        </InfoTip>
+                      </span>
+                    )}
+                  </li>
+                  <li>
+                    {d.slack ? (
+                      <DeliveryLine
+                        meetingId={m.id}
+                        what="slack"
+                        words={slackWords(d)}
+                        canRetry={!!m.can.retry_delivery}
+                        reload={reload}
+                        testId="delivery-slack"
+                      />
+                    ) : (
+                      <span className="inline-flex items-center gap-1">
+                        Slack · not sent{' '}
+                        <InfoTip label="Slack not sent" align="start">
+                          Not chosen for this meeting.
+                        </InfoTip>
+                      </span>
+                    )}
+                  </li>
                 </ul>
-                <Link className="font-semibold text-accent-ink hover:underline" href={`/simple/decisions?meeting=${m.id}`}>Open the Decisions page</Link>
+                <Link
+                  className="font-semibold text-accent-ink hover:underline"
+                  href={`/simple/decisions?meeting=${m.id}`}
+                >
+                  Open the Decisions page
+                </Link>
               </div>
             ) : m.can.end ? (
               <>
                 {/* walkc-meeting: the Decisions page shows the minutes already; Send marks them sent there. */}
                 {/* QA Nov 12 (#12): the Start sheet's checkboxes; a disabled one's reason behind its (i). */}
                 <div className="flex items-center gap-1" data-testid="delivery-decisions-page">
-                  <label className={CHOICE}><input type="checkbox" className={CHECK} checked disabled /> Decisions page</label>
-                  <InfoTip label="Decisions page" align="start">Shows them already; Send marks them sent.</InfoTip>
+                  <label className={CHOICE}>
+                    <input type="checkbox" className={CHECK} checked disabled /> Decisions page
+                  </label>
+                  <InfoTip label="Decisions page" align="start">
+                    Shows them already; Send marks them sent.
+                  </InfoTip>
                 </div>
-                <label className={CHOICE}><input type="checkbox" className={CHECK} checked disabled /> Each attendee&apos;s Inbox</label>
+                <label className={CHOICE}>
+                  <input type="checkbox" className={CHECK} checked disabled /> Each attendee&apos;s
+                  Inbox
+                </label>
                 <div className="flex items-center gap-1">
                   <label className={CHOICE}>
-                    <input type="checkbox" className={CHECK} checked={email} disabled={!m.email_available} onChange={(e) => setEmail(e.target.checked)} /> Email the attendees
+                    <input
+                      type="checkbox"
+                      className={CHECK}
+                      checked={email}
+                      disabled={!m.email_available}
+                      onChange={(e) => setEmail(e.target.checked)}
+                    />{' '}
+                    Email the attendees
                   </label>
-                  {!m.email_available && <InfoTip label="Email the attendees" align="start">Email isn&apos;t set up.</InfoTip>}
+                  {!m.email_available && (
+                    <InfoTip label="Email the attendees" align="start">
+                      Email isn&apos;t set up.
+                    </InfoTip>
+                  )}
                 </div>
                 {slackReady ? (
-                  <label className={CHOICE}><input type="checkbox" className={CHECK} checked={slack} onChange={(e) => setSlack(e.target.checked)} /> Post to {m.slack.channel}</label>
+                  <label className={CHOICE}>
+                    <input
+                      type="checkbox"
+                      className={CHECK}
+                      checked={slack}
+                      onChange={(e) => setSlack(e.target.checked)}
+                    />{' '}
+                    Post to {m.slack.channel}
+                  </label>
                 ) : (
                   <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <span className={CHOICE}>
-                      <input type="checkbox" className={CHECK} disabled checked={false} onChange={() => undefined} aria-label="Post to Slack" /> Post to Slack
+                      <input
+                        type="checkbox"
+                        className={CHECK}
+                        disabled
+                        checked={false}
+                        onChange={() => undefined}
+                        aria-label="Post to Slack"
+                      />{' '}
+                      Post to Slack
                     </span>
-                    <InfoTip label="Post to Slack" align="start">{m.slack.connected ? "Slack has no channel for minutes yet." : "Slack is not connected yet."}</InfoTip>
+                    <InfoTip label="Post to Slack" align="start">
+                      {m.slack.connected
+                        ? 'Slack has no channel for minutes yet.'
+                        : 'Slack is not connected yet.'}
+                    </InfoTip>
                     {/* qa4-simple-decide-32: drawn as a link, not grey like the note beside it. */}
-                    <Link className={`text-[length:var(--simple-small)] ${LINK}`} href="/settings/connections" data-testid="slack-connect-link">{m.slack.connected ? "Pick a channel" : "Connect Slack"}</Link>
+                    <Link
+                      className={`text-[length:var(--simple-small)] ${LINK}`}
+                      href="/settings/connections"
+                      data-testid="slack-connect-link"
+                    >
+                      {m.slack.connected ? 'Pick a channel' : 'Connect Slack'}
+                    </Link>
                   </p>
                 )}
-                <Button variant="primary" disabled={busy} onClick={send}>Send</Button>
+                <Button variant="primary" disabled={busy} onClick={send}>
+                  Send
+                </Button>
               </>
             ) : (
               <p className="simple-small">The minutes are not sent yet.</p>
@@ -1059,7 +1704,13 @@ function DecisionsDue({ m, reload }: { m: Meeting; reload: () => Promise<unknown
         <h2 className="simple-h2 min-w-0 flex-1">On the agenda</h2>
         {due.length > 0 && (
           <span className="simple-meta" data-testid="decisions-due-summary">
-            {[by && `Due by ${dayWords(by, zone)}`, `${due.length} ${due.length === 1 ? "decision" : "decisions"}`, source && `from ${source}`].filter(Boolean).join(" · ")}
+            {[
+              by && `Due by ${dayWords(by, zone)}`,
+              `${due.length} ${due.length === 1 ? 'decision' : 'decisions'}`,
+              source && `from ${source}`,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
           </span>
         )}
       </header>

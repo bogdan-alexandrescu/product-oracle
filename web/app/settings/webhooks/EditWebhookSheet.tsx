@@ -1,14 +1,14 @@
-"use client";
+'use client';
 
-import { useState } from "react";
+import { useState } from 'react';
 
-import { Button, Sheet } from "@/components/ds";
-import { ErrorNote } from "@/components/ui";
-import { api, unwrap } from "@/lib/api/client";
-import { errorMessage } from "@/lib/use-query";
+import { Button, Sheet } from '@/components/ds';
+import { ErrorNote } from '@/components/ui';
+import { api, unwrap } from '@/lib/api/client';
+import { errorMessage } from '@/lib/use-query';
 
-import { WebhookFields } from "./NewWebhookSheet";
-import type { EventType, Webhook } from "./parts";
+import { WebhookFields } from './NewWebhookSheet';
+import type { EventType, Webhook } from './parts';
 
 /**
  * Edit webhook: its Name, URL and events, sent with PATCH; for owners (`ownerChoices`), the
@@ -33,7 +33,15 @@ export function EditWebhookSheet({
   return (
     <Sheet open={open} dialog title="Edit webhook" onClose={onClose} testId="edit-webhook-sheet">
       {/* Mounted while open only, so each opening starts from the webhook as it is now. */}
-      {open && <EditForm hook={hook} eventTypes={eventTypes} ownerChoices={ownerChoices} onClose={onClose} onSaved={onSaved} />}
+      {open && (
+        <EditForm
+          hook={hook}
+          eventTypes={eventTypes}
+          ownerChoices={ownerChoices}
+          onClose={onClose}
+          onSaved={onSaved}
+        />
+      )}
     </Sheet>
   );
 }
@@ -55,7 +63,7 @@ function EditForm({
   const [url, setUrl] = useState(hook.url);
   const [types, setTypes] = useState<string[]>(hook.event_types);
   const [approvers, setApprovers] = useState(hook.include_approvers_content);
-  const [why, setWhy] = useState("");
+  const [why, setWhy] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const switched = approvers !== hook.include_approvers_content;
@@ -66,7 +74,7 @@ function EditForm({
     setError(null);
     try {
       const out = await unwrap(
-        api.PATCH("/v1/webhooks/{webhook_id}", {
+        api.PATCH('/v1/webhooks/{webhook_id}', {
           params: { path: { webhook_id: hook.id } },
           body: {
             name: name.trim(),
@@ -112,7 +120,7 @@ function EditForm({
       <div className="flex justify-end gap-2">
         <Button onClick={onClose}>Cancel</Button>
         <Button type="submit" variant="primary" disabled={!ready || busy}>
-          {busy ? "Saving…" : "Save"}
+          {busy ? 'Saving…' : 'Save'}
         </Button>
       </div>
     </form>

@@ -1,5 +1,5 @@
-import { login, signOut } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { login, signOut } from './helpers';
+import { expect, test, type Page } from './test';
 
 /**
  * Simple S8 (#723): the meeting screen (direction A), driven through the UI on the mock's
@@ -38,120 +38,180 @@ async function switchTo(page: Page, email: string) {
   await page.setViewportSize(size);
 }
 
-const allDecisions = (page: Page) => page.getByRole("region", { name: "Decisions in this meeting" });
-const steps = (page: Page) => page.getByRole("navigation", { name: "Steps" });
+const allDecisions = (page: Page) =>
+  page.getByRole('region', { name: 'Decisions in this meeting' });
+const steps = (page: Page) => page.getByRole('navigation', { name: 'Steps' });
 
 async function start(page: Page) {
   await login(page);
-  await page.goto("/simple/prds/guided-setup");
-  await page.getByRole("button", { name: "Start a review meeting" }).click();
-  const sheet = page.getByRole("dialog", { name: "Start a review" });
-  await sheet.getByRole("checkbox", { name: "Theo Brandt" }).check();
-  await sheet.getByRole("button", { name: "Start", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
+  await page.goto('/simple/prds/guided-setup');
+  await page.getByRole('button', { name: 'Start a review meeting' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Start a review' });
+  await sheet.getByRole('checkbox', { name: 'Theo Brandt' }).check();
+  await sheet.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Review: Guided setup' })).toBeVisible();
 }
 
 for (const phone of [false, true]) {
-  for (const scheme of ["light", "dark"] as const) {
-    test.describe(`${phone ? "phone" : "desktop"} · ${scheme}`, () => {
-      test.use({ viewport: phone ? { width: 390, height: 844 } : { width: 1366, height: 820 }, colorScheme: scheme });
+  for (const scheme of ['light', 'dark'] as const) {
+    test.describe(`${phone ? 'phone' : 'desktop'} · ${scheme}`, () => {
+      test.use({
+        viewport: phone ? { width: 390, height: 844 } : { width: 1366, height: 820 },
+        colorScheme: scheme,
+      });
 
-      test("the three steps, the clock and the chat column", async ({ page }) => {
+      test('the three steps, the clock and the chat column', async ({ page }) => {
         await start(page);
-        await expect(steps(page).getByRole("button", { name: "1 One-pager" })).toHaveAttribute("aria-pressed", "true");
-        const stage = page.getByRole("region", { name: "Stage" });
-        await expect(stage.getByRole("article", { name: "One-pager" })).toBeVisible();
-        const clock = page.getByRole("timer", { name: "Meeting clock" });
+        await expect(steps(page).getByRole('button', { name: '1 One-pager' })).toHaveAttribute(
+          'aria-pressed',
+          'true',
+        );
+        const stage = page.getByRole('region', { name: 'Stage' });
+        await expect(stage.getByRole('article', { name: 'One-pager' })).toBeVisible();
+        const clock = page.getByRole('timer', { name: 'Meeting clock' });
         await expect(clock).toHaveText(/^0:0\d \/ 60:00$/);
         await page.clock.runFor(65_000);
         await expect(clock).toHaveText(/^1:0\d \/ 60:00$/);
-        await steps(page).getByRole("button", { name: "2 Roadmap" }).click();
-        await expect(steps(page).getByRole("button", { name: "2 Roadmap" })).toHaveAttribute("aria-pressed", "true");
-        await expect(stage.getByRole("region", { name: "Roadmap slice" })).toContainText("Setup checklist");
-        await expect(stage.getByRole("region", { name: "Roadmap slice" })).not.toContainText("Weekly alert digest");
-        await steps(page).getByRole("button", { name: "3 Decisions" }).click();
-        await expect(stage.getByRole("region", { name: "Pending proposals" })).toContainText("Theo Brandt proposes: ");
+        await steps(page).getByRole('button', { name: '2 Roadmap' }).click();
+        await expect(steps(page).getByRole('button', { name: '2 Roadmap' })).toHaveAttribute(
+          'aria-pressed',
+          'true',
+        );
+        await expect(stage.getByRole('region', { name: 'Roadmap slice' })).toContainText(
+          'Setup checklist',
+        );
+        await expect(stage.getByRole('region', { name: 'Roadmap slice' })).not.toContainText(
+          'Weekly alert digest',
+        );
+        await steps(page).getByRole('button', { name: '3 Decisions' }).click();
+        await expect(stage.getByRole('region', { name: 'Pending proposals' })).toContainText(
+          'Theo Brandt proposes: ',
+        );
         // prd-decisions A3: the Decisions step opens on "On the agenda"; "Open decisions" shows only when some are open.
-        await expect(stage.getByRole("region", { name: "On the agenda" })).toBeVisible();
-        await expect(page.getByRole("region", { name: "Chat" })).toBeVisible();
-        await expect(allDecisions(page)).toContainText("None yet.");
+        await expect(stage.getByRole('region', { name: 'On the agenda' })).toBeVisible();
+        await expect(page.getByRole('region', { name: 'Chat' })).toBeVisible();
+        await expect(allDecisions(page)).toContainText('None yet.');
         if (phone) {
           // The stage, then the chat column under it.
           const s = (await stage.boundingBox())!;
-          const c = (await page.getByRole("complementary", { name: "Chat column" }).boundingBox())!;
+          const c = (await page.getByRole('complementary', { name: 'Chat column' }).boundingBox())!;
           expect(c.y).toBeGreaterThan(s.y + s.height - 1);
         }
       });
 
-      test("changes, an accepted proposal and a comment become the meeting's decisions", async ({ page }) => {
+      test("changes, an accepted proposal and a comment become the meeting's decisions", async ({
+        page,
+      }) => {
         await start(page);
-        await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
-        await page.getByLabel("New wording for").fill("A setup checklist with the next two steps");
-        await page.getByRole("button", { name: "Save" }).click();
-        await expect(allDecisions(page)).toContainText("New wording for a line of Guided setup: “A setup checklist with the next two steps”");
-        await expect(page.getByRole("note").filter({ hasText: "You changed “A setup checklist" }).filter({ visible: true })).toContainText(", in Review: Guided setup");
-        await steps(page).getByRole("button", { name: "2 Roadmap" }).click();
-        await page.getByRole("button", { name: "Move Setup checklist to Next" }).click();
-        await expect(allDecisions(page)).toContainText("Moved Setup checklist");
-        await steps(page).getByRole("button", { name: "3 Decisions" }).click();
-        const pending = page.getByRole("region", { name: "Pending proposals" });
-        await pending.getByRole("button", { name: "Accept" }).click();
-        await expect(allDecisions(page)).toContainText(/Accepted .+'s proposal: Moved Team invite nudges to (Now|Next|Later)/);
-        await expect(pending).toContainText("No proposal waits.");
-        await page.getByRole("textbox", { name: "Comment" }).fill("Keep the checklist to five steps");
-        await page.getByRole("button", { name: "Add comment" }).click();
+        await page.getByRole('button', { name: 'Edit “A setup checklist that shows' }).click();
+        await page.getByLabel('New wording for').fill('A setup checklist with the next two steps');
+        await page.getByRole('button', { name: 'Save' }).click();
+        await expect(allDecisions(page)).toContainText(
+          'New wording for a line of Guided setup: “A setup checklist with the next two steps”',
+        );
+        await expect(
+          page
+            .getByRole('note')
+            .filter({ hasText: 'You changed “A setup checklist' })
+            .filter({ visible: true }),
+        ).toContainText(', in Review: Guided setup');
+        await steps(page).getByRole('button', { name: '2 Roadmap' }).click();
+        await page.getByRole('button', { name: 'Move Setup checklist to Next' }).click();
+        await expect(allDecisions(page)).toContainText('Moved Setup checklist');
+        await steps(page).getByRole('button', { name: '3 Decisions' }).click();
+        const pending = page.getByRole('region', { name: 'Pending proposals' });
+        await pending.getByRole('button', { name: 'Accept' }).click();
+        await expect(allDecisions(page)).toContainText(
+          /Accepted .+'s proposal: Moved Team invite nudges to (Now|Next|Later)/,
+        );
+        await expect(pending).toContainText('No proposal waits.');
+        await page
+          .getByRole('textbox', { name: 'Comment' })
+          .fill('Keep the checklist to five steps');
+        await page.getByRole('button', { name: 'Add comment' }).click();
         // qa-simple-decide-1: the comment is the meeting's comment, not a decision.
-        await expect(page.getByTestId("meeting-comment")).toContainText("Keep the checklist to five steps");
-        const rows = allDecisions(page).getByTestId("meeting-decision");
+        await expect(page.getByTestId('meeting-comment')).toContainText(
+          'Keep the checklist to five steps',
+        );
+        const rows = allDecisions(page).getByTestId('meeting-decision');
         await expect(rows).toHaveCount(3);
-        await expect(allDecisions(page)).not.toContainText("Comment:");
+        await expect(allDecisions(page)).not.toContainText('Comment:');
         await expect(rows.first()).toContainText(/D-\d+/);
       });
 
-      test("approve with an absent reviewer waits on them; a commenter has no controls", async ({ page }) => {
+      test('approve with an absent reviewer waits on them; a commenter has no controls', async ({
+        page,
+      }) => {
         await start(page);
         // qa-simple-decide-29: on a phone the attendees fold behind one row.
-        if (await page.getByTestId("meeting-people-toggle").isVisible()) await page.getByTestId("meeting-people-toggle").click();
-        await page.getByRole("button", { name: "Mark Priya Raman away" }).click();
-        await expect(page.getByLabel("Attendees").locator('[data-present="false"]')).toContainText("Priya Raman");
-        await page.getByRole("button", { name: "Edit “Invite suggestions from the admin's" }).click();
-        await page.getByLabel("New wording for").fill("Invite suggestions from a shared calendar");
-        await page.getByRole("button", { name: "Save" }).click();
-        await expect(allDecisions(page)).toContainText("New wording for a line of Guided setup");
-        await page.getByRole("button", { name: /^Approve and publish one-pager edits/ }).click();
-        await page.getByRole("alertdialog").getByRole("button", { name: "Approve and publish" }).click();
-        await expect(page.getByRole("status").filter({ hasText: "Approved in Review: Guided setup" }).first()).toContainText("not yet published: Waiting on Priya Raman's approval");
-        await expect(allDecisions(page)).toContainText("Approved Guided setup (not yet published: Waiting on Priya Raman's approval)");
-        await expect(page.getByRole("status", { name: "Working draft" })).toContainText("Approved in Review: Guided setup · not yet published: Waiting on Priya Raman's approval");
+        if (await page.getByTestId('meeting-people-toggle').isVisible())
+          await page.getByTestId('meeting-people-toggle').click();
+        await page.getByRole('button', { name: 'Mark Priya Raman away' }).click();
+        await expect(page.getByLabel('Attendees').locator('[data-present="false"]')).toContainText(
+          'Priya Raman',
+        );
+        await page
+          .getByRole('button', { name: "Edit “Invite suggestions from the admin's" })
+          .click();
+        await page.getByLabel('New wording for').fill('Invite suggestions from a shared calendar');
+        await page.getByRole('button', { name: 'Save' }).click();
+        await expect(allDecisions(page)).toContainText('New wording for a line of Guided setup');
+        await page.getByRole('button', { name: /^Approve and publish one-pager edits/ }).click();
+        await page
+          .getByRole('alertdialog')
+          .getByRole('button', { name: 'Approve and publish' })
+          .click();
+        await expect(
+          page.getByRole('status').filter({ hasText: 'Approved in Review: Guided setup' }).first(),
+        ).toContainText("not yet published: Waiting on Priya Raman's approval");
+        await expect(allDecisions(page)).toContainText(
+          "Approved Guided setup (not yet published: Waiting on Priya Raman's approval)",
+        );
+        await expect(page.getByRole('status', { name: 'Working draft' })).toContainText(
+          "Approved in Review: Guided setup · not yet published: Waiting on Priya Raman's approval",
+        );
         const url = page.url();
-        await page.goto("/simple/meetings");
-        await switchTo(page, "commenter@example.com");
+        await page.goto('/simple/meetings');
+        await switchTo(page, 'commenter@example.com');
         await page.goto(url);
-        await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
-        await expect(page.getByRole("button", { name: /^Approve and publish one-pager edits/ })).toHaveCount(0);
-        await expect(page.getByRole("button", { name: "End meeting" })).toHaveCount(0);
-        await expect(page.getByRole("button", { name: /^Mark .* (away|here)$/ })).toHaveCount(0);
-        await expect(page.getByTestId("change-mode")).toHaveText("Who changes things: Everyone except viewers");
+        await expect(page.getByRole('heading', { name: 'Review: Guided setup' })).toBeVisible();
+        await expect(
+          page.getByRole('button', { name: /^Approve and publish one-pager edits/ }),
+        ).toHaveCount(0);
+        await expect(page.getByRole('button', { name: 'End meeting' })).toHaveCount(0);
+        await expect(page.getByRole('button', { name: /^Mark .* (away|here)$/ })).toHaveCount(0);
+        await expect(page.getByTestId('change-mode')).toHaveText(
+          'Who changes things: Everyone except viewers',
+        );
       });
 
-      test("the presenter lets only named people change things", async ({ page }) => {
+      test('the presenter lets only named people change things', async ({ page }) => {
         await start(page);
-        if (await page.getByTestId("meeting-people-toggle").isVisible()) await page.getByTestId("meeting-people-toggle").click();
-        const mode = page.getByTestId("change-mode");
-        await mode.getByRole("combobox").selectOption("named");
-        await expect(mode.getByRole("button", { name: "Priya Raman changes things" })).toHaveAttribute("aria-pressed", "true");
-        await mode.getByRole("button", { name: "Theo Brandt changes things" }).click();
-        await expect(mode.getByRole("button", { name: "Theo Brandt changes things" })).toHaveAttribute("aria-pressed", "true");
-        await mode.getByRole("combobox").selectOption("presenter");
-        await expect(mode.getByRole("combobox")).toHaveValue("presenter");
+        if (await page.getByTestId('meeting-people-toggle').isVisible())
+          await page.getByTestId('meeting-people-toggle').click();
+        const mode = page.getByTestId('change-mode');
+        await mode.getByRole('combobox').selectOption('named');
+        await expect(
+          mode.getByRole('button', { name: 'Priya Raman changes things' }),
+        ).toHaveAttribute('aria-pressed', 'true');
+        await mode.getByRole('button', { name: 'Theo Brandt changes things' }).click();
+        await expect(
+          mode.getByRole('button', { name: 'Theo Brandt changes things' }),
+        ).toHaveAttribute('aria-pressed', 'true');
+        await mode.getByRole('combobox').selectOption('presenter');
+        await expect(mode.getByRole('combobox')).toHaveValue('presenter');
         const url = page.url();
-        await page.goto("/simple/meetings");
-        await switchTo(page, "commenter@example.com");
+        await page.goto('/simple/meetings');
+        await switchTo(page, 'commenter@example.com');
         await page.goto(url);
-        await expect(page.getByTestId("change-mode")).toHaveText("Who changes things: Only the presenter");
-        await steps(page).getByRole("button", { name: "2 Roadmap" }).click();
-        await expect(page.getByRole("region", { name: "Roadmap slice" })).toContainText("Setup checklist");
-        await expect(page.getByRole("button", { name: /^Move / })).toHaveCount(0);
+        await expect(page.getByTestId('change-mode')).toHaveText(
+          'Who changes things: Only the presenter',
+        );
+        await steps(page).getByRole('button', { name: '2 Roadmap' }).click();
+        await expect(page.getByRole('region', { name: 'Roadmap slice' })).toContainText(
+          'Setup checklist',
+        );
+        await expect(page.getByRole('button', { name: /^Move / })).toHaveCount(0);
       });
     });
   }

@@ -1,13 +1,20 @@
-"use client";
+'use client';
 
-import { Link, useRouter } from "@/lib/nav";
-import { useMemo, useState, type ReactNode } from "react";
+import { Link, useRouter } from '@/lib/nav';
+import { useMemo, useState, type ReactNode } from 'react';
 
-import { Button, Chip, Inspector, InspectorRow, InspectorSection, confirmInPage } from "@/components/ds";
-import { ErrorNote, INPUT, LoadError } from "@/components/ui";
-import { api, unwrap } from "@/lib/api/client";
-import { formatMoney } from "@/lib/format";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import {
+  Button,
+  Chip,
+  Inspector,
+  InspectorRow,
+  InspectorSection,
+  confirmInPage,
+} from '@/components/ds';
+import { ErrorNote, INPUT, LoadError } from '@/components/ui';
+import { api, unwrap } from '@/lib/api/client';
+import { formatMoney } from '@/lib/format';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
 import {
   MONTHS,
@@ -33,12 +40,14 @@ import {
   type Preset,
   type Ritual,
   type Schedule,
-} from "./lib";
+} from './lib';
 
 /** A labelled input; labels sit at the top and the inputs at the bottom of their row, so a label that wraps does not push its input below its neighbour's (qa-company-26). */
 function Field({ label, wide, children }: { label: string; wide?: boolean; children: ReactNode }) {
   return (
-    <label className={`flex flex-col justify-between gap-1 text-sm font-semibold text-text2 ${wide ? "col-span-2 max-[600px]:col-span-1" : ""}`}>
+    <label
+      className={`flex flex-col justify-between gap-1 text-sm font-semibold text-text2 ${wide ? 'col-span-2 max-[600px]:col-span-1' : ''}`}
+    >
       <span>{label}</span>
       {children}
     </label>
@@ -48,15 +57,20 @@ function Field({ label, wide, children }: { label: string; wide?: boolean; child
 /** A whole number in [min, max] from a field's text, else null. */
 function wholeIn(text: string, min: number, max: number): number | null {
   const n = Number(text);
-  return text.trim() !== "" && Number.isInteger(n) && n >= min && n <= max ? n : null;
+  return text.trim() !== '' && Number.isInteger(n) && n >= min && n <= max ? n : null;
 }
 
 /** qa4-company-19: the length and lead time checks, in the app's words, shown under each field. */
-export function scheduleErrors(duration: string, prep: string, interval?: number): { duration?: string; prep?: string; interval?: string } {
+export function scheduleErrors(
+  duration: string,
+  prep: string,
+  interval?: number,
+): { duration?: string; prep?: string; interval?: string } {
   const out: { duration?: string; prep?: string; interval?: string } = {};
-  if (wholeIn(duration, 5, 480) === null) out.duration = "Use a length from 5 to 480 minutes.";
-  if (wholeIn(prep, 0, 168) === null) out.prep = "Use a lead time from 0 to 168 hours.";
-  if (interval !== undefined && wholeIn(String(interval), 2, 12) === null) out.interval = "Use 2 to 12 weeks.";
+  if (wholeIn(duration, 5, 480) === null) out.duration = 'Use a length from 5 to 480 minutes.';
+  if (wholeIn(prep, 0, 168) === null) out.prep = 'Use a lead time from 0 to 168 hours.';
+  if (interval !== undefined && wholeIn(String(interval), 2, 12) === null)
+    out.interval = 'Use 2 to 12 weeks.';
   return out;
 }
 
@@ -72,9 +86,10 @@ function FieldNote({ id, children }: { id: string; children?: string }) {
 
 /** A schedule from the picker's preset and fields. */
 function withPreset(s: Schedule, preset: Preset): Schedule {
-  if (preset === "every_2_weeks") return { ...s, freq: "every_n_weeks", interval: 2 };
-  if (preset === "every_n_weeks") return { ...s, freq: "every_n_weeks", interval: s.interval >= 2 ? s.interval : 3 };
-  if (preset === "quarterly") return { ...s, freq: preset, month: Math.min(s.month, 3) };
+  if (preset === 'every_2_weeks') return { ...s, freq: 'every_n_weeks', interval: 2 };
+  if (preset === 'every_n_weeks')
+    return { ...s, freq: 'every_n_weeks', interval: s.interval >= 2 ? s.interval : 3 };
+  if (preset === 'quarterly') return { ...s, freq: preset, month: Math.min(s.month, 3) };
   return { ...s, freq: preset };
 }
 
@@ -84,12 +99,16 @@ function withPreset(s: Schedule, preset: Preset): Schedule {
  */
 export function prepareAsk(r: Ritual): string | null {
   const usd = r.prepare_usd ?? null;
-  const paused = r.status !== "active";
+  const paused = r.status !== 'active';
   if (!usd && !paused) return null;
-  const what = r.kind === "baseline_rebuild" ? "starts the Ground Truth build" : "writes its summary";
-  const cost = usd ? `, then ${what}: one Oracle run of about ${formatMoney(usd)}` : "";
-  const still = paused ? `${r.title} is paused; it stays paused. ` : "";
-  const waits = usd && r.kind === "baseline_rebuild" && usd > 50 ? " Over $50 it waits for an owner's approval." : "";
+  const what =
+    r.kind === 'baseline_rebuild' ? 'starts the Ground Truth build' : 'writes its summary';
+  const cost = usd ? `, then ${what}: one Oracle run of about ${formatMoney(usd)}` : '';
+  const still = paused ? `${r.title} is paused; it stays paused. ` : '';
+  const waits =
+    usd && r.kind === 'baseline_rebuild' && usd > 50
+      ? " Over $50 it waits for an owner's approval."
+      : '';
   return `${still}Oracle builds the pre-read now and puts it in the attendees' Inbox${cost}.${waits}`;
 }
 
@@ -129,16 +148,27 @@ export function RitualInspector({
   // qa4-company-19: the field checks show once Save was pressed, then follow the typing.
   const [tried, setTried] = useState(false);
   const occurrencesQ = useQuery(`ritual-occurrences|${ritual.id}|${ritual.lock_version}`, () =>
-    unwrap(api.GET("/v1/rituals/{ritual_id}/occurrences", { params: { path: { ritual_id: ritual.id }, query: { limit: 20 } } })),
+    unwrap(
+      api.GET('/v1/rituals/{ritual_id}/occurrences', {
+        params: { path: { ritual_id: ritual.id }, query: { limit: 20 } },
+      }),
+    ),
   );
-  const active = (members ?? []).filter((m) => m.status !== "disabled");
+  const active = (members ?? []).filter((m) => m.status !== 'disabled');
   const preset = presetOf(schedule);
   const set = (patch: Partial<Schedule>) => setSchedule((s) => ({ ...s, ...patch }));
   // Save is offered once something changed (qa-company-30): until then it says so.
-  const edits = (sc: Schedule, d: string, p: string, o: typeof owner, a: string[]) => JSON.stringify([ruleOf(sc), d, p, o, [...a].sort()]);
+  const edits = (sc: Schedule, d: string, p: string, o: typeof owner, a: string[]) =>
+    JSON.stringify([ruleOf(sc), d, p, o, [...a].sort()]);
   const changed =
     edits(schedule, duration, prep, owner, attendees) !==
-    edits(saved, String(ritual.duration_min), String(ritual.prep_hours), ritual.owner_id, ritual.attendee_ids);
+    edits(
+      saved,
+      String(ritual.duration_min),
+      String(ritual.prep_hours),
+      ritual.owner_id,
+      ritual.attendee_ids,
+    );
 
   async function act(call: () => Promise<unknown>) {
     setBusy(true);
@@ -156,7 +186,7 @@ export function RitualInspector({
   const save = () =>
     act(async () => {
       const r = await unwrap(
-        api.PATCH("/v1/rituals/{ritual_id}", {
+        api.PATCH('/v1/rituals/{ritual_id}', {
           ...path,
           body: {
             lock_version: ritual.lock_version,
@@ -173,7 +203,13 @@ export function RitualInspector({
 
   const recent = (
     <InspectorSection label="Recent occurrences" testId="ritual-occurrences">
-      {occurrencesQ.error && <LoadError what="the occurrences" error={occurrencesQ.error} onRetry={() => void occurrencesQ.reload()} />}
+      {occurrencesQ.error && (
+        <LoadError
+          what="the occurrences"
+          error={occurrencesQ.error}
+          onRetry={() => void occurrencesQ.reload()}
+        />
+      )}
       {occurrencesQ.data?.length === 0 && <p className="text-sm text-text2">No pre-read yet</p>}
       <ul className="flex flex-col">
         {(occurrencesQ.data ?? []).map((o) => (
@@ -185,7 +221,11 @@ export function RitualInspector({
                 </Chip>
               }
             >
-              <Link href={`/company/rituals/${o.id}`} className="hover:underline" title={zoneTime(o.due_at, saved.timezone)}>
+              <Link
+                href={`/company/rituals/${o.id}`}
+                className="hover:underline"
+                title={zoneTime(o.due_at, saved.timezone)}
+              >
                 {localDate(o.due_at)}
               </Link>
             </InspectorRow>
@@ -196,10 +236,12 @@ export function RitualInspector({
   );
 
   // qa-company-33: the sheet's title names the ritual; beside the table the head does.
-  const head = inSheet ? { eyebrow: "Ritual", label: ritual.title } : { eyebrow: "Ritual · selected", title: ritual.title };
+  const head = inSheet
+    ? { eyebrow: 'Ritual', label: ritual.title }
+    : { eyebrow: 'Ritual · selected', title: ritual.title };
   const chips = (
-    <Chip hero kind={ritual.status === "active" ? "now" : "na"}>
-      {ritual.status === "active" ? "On" : "Paused"}
+    <Chip hero kind={ritual.status === 'active' ? 'now' : 'na'}>
+      {ritual.status === 'active' ? 'On' : 'Paused'}
     </Chip>
   );
 
@@ -208,17 +250,23 @@ export function RitualInspector({
       <Inspector {...head} chips={chips} testId="ritual-inspector">
         <InspectorSection label="Schedule">
           <InspectorRow value={whenText(saved)}>When</InspectorRow>
-          <InspectorRow value={<span data-testid="ritual-zone">{zoneText(saved.timezone, zoneDefault)}</span>}>Time zone</InspectorRow>
+          <InspectorRow
+            value={<span data-testid="ritual-zone">{zoneText(saved.timezone, zoneDefault)}</span>}
+          >
+            Time zone
+          </InspectorRow>
           <InspectorRow value={`${ritual.duration_min} min`}>Length</InspectorRow>
           <InspectorRow value={`${ritual.prep_hours} h before`}>Pre-read ready</InspectorRow>
           <InspectorRow
             value={
               ritual.waits_for_goal ? (
-                "Starts when the first goal is confirmed"
+                'Starts when the first goal is confirmed'
               ) : ritual.next_due_at ? (
-                <span title={zoneTime(ritual.next_due_at, saved.timezone)}>{localTime(ritual.next_due_at)}</span>
+                <span title={zoneTime(ritual.next_due_at, saved.timezone)}>
+                  {localTime(ritual.next_due_at)}
+                </span>
               ) : (
-                "—"
+                '—'
               )
             }
           >
@@ -226,7 +274,15 @@ export function RitualInspector({
           </InspectorRow>
         </InspectorSection>
         <InspectorSection label="People">
-          <InspectorRow value={<span title={personEmail(people, ritual.owner_id)}>{personName(people, ritual.owner_id)}</span>}>Owner</InspectorRow>
+          <InspectorRow
+            value={
+              <span title={personEmail(people, ritual.owner_id)}>
+                {personName(people, ritual.owner_id)}
+              </span>
+            }
+          >
+            Owner
+          </InspectorRow>
           <InspectorRow value={ritual.attendee_ids.length}>Attendees</InspectorRow>
         </InspectorSection>
         {recent}
@@ -234,8 +290,10 @@ export function RitualInspector({
     );
   }
 
-  const weekField = preset === "monthly" || preset === "quarterly" || preset === "yearly";
-  const problems = tried ? scheduleErrors(duration, prep, preset === "every_n_weeks" ? schedule.interval : undefined) : {};
+  const weekField = preset === 'monthly' || preset === 'quarterly' || preset === 'yearly';
+  const problems = tried
+    ? scheduleErrors(duration, prep, preset === 'every_n_weeks' ? schedule.interval : undefined)
+    : {};
   return (
     <Inspector
       {...head}
@@ -247,12 +305,19 @@ export function RitualInspector({
           disabled={busy}
           onClick={() =>
             act(async () => {
-              const r = await unwrap(api.POST(ritual.status === "active" ? "/v1/rituals/{ritual_id}/pause" : "/v1/rituals/{ritual_id}/resume", path));
+              const r = await unwrap(
+                api.POST(
+                  ritual.status === 'active'
+                    ? '/v1/rituals/{ritual_id}/pause'
+                    : '/v1/rituals/{ritual_id}/resume',
+                  path,
+                ),
+              );
               await onChanged(r);
             })
           }
         >
-          {ritual.status === "active" ? "Pause" : "Resume"}
+          {ritual.status === 'active' ? 'Pause' : 'Resume'}
         </Button>
       }
     >
@@ -269,13 +334,21 @@ export function RitualInspector({
           onSubmit={(e) => {
             e.preventDefault();
             setTried(true);
-            const bad = scheduleErrors(duration, prep, preset === "every_n_weeks" ? schedule.interval : undefined);
+            const bad = scheduleErrors(
+              duration,
+              prep,
+              preset === 'every_n_weeks' ? schedule.interval : undefined,
+            );
             if (Object.keys(bad).length > 0) return;
             void save();
           }}
         >
           <Field label="Repeats">
-            <select className={INPUT} value={preset} onChange={(e) => setSchedule((s) => withPreset(s, e.target.value as Preset))}>
+            <select
+              className={INPUT}
+              value={preset}
+              onChange={(e) => setSchedule((s) => withPreset(s, e.target.value as Preset))}
+            >
               {PRESETS.map((p) => (
                 <option key={p.value} value={p.value}>
                   {p.label}
@@ -283,7 +356,7 @@ export function RitualInspector({
               ))}
             </select>
           </Field>
-          {preset === "every_n_weeks" && (
+          {preset === 'every_n_weeks' && (
             <Field label="Every N weeks">
               <input
                 type="number"
@@ -292,7 +365,7 @@ export function RitualInspector({
                 className={INPUT}
                 value={schedule.interval}
                 aria-invalid={problems.interval ? true : undefined}
-                aria-describedby={problems.interval ? "ritual-error-interval" : undefined}
+                aria-describedby={problems.interval ? 'ritual-error-interval' : undefined}
                 onChange={(e) => set({ interval: Number(e.target.value) })}
               />
               <FieldNote id="ritual-error-interval">{problems.interval}</FieldNote>
@@ -300,7 +373,11 @@ export function RitualInspector({
           )}
           {weekField && (
             <Field label="Week of the month">
-              <select className={INPUT} value={schedule.week_of_month} onChange={(e) => set({ week_of_month: Number(e.target.value) })}>
+              <select
+                className={INPUT}
+                value={schedule.week_of_month}
+                onChange={(e) => set({ week_of_month: Number(e.target.value) })}
+              >
                 {WEEKS.map((w) => (
                   <option key={w.value} value={w.value}>
                     {w.label}
@@ -310,7 +387,11 @@ export function RitualInspector({
             </Field>
           )}
           <Field label="Day">
-            <select className={INPUT} value={schedule.weekday} onChange={(e) => set({ weekday: Number(e.target.value) })}>
+            <select
+              className={INPUT}
+              value={schedule.weekday}
+              onChange={(e) => set({ weekday: Number(e.target.value) })}
+            >
               {WEEKDAYS.map((d, i) => (
                 <option key={d} value={i}>
                   {d}
@@ -318,10 +399,14 @@ export function RitualInspector({
               ))}
             </select>
           </Field>
-          {preset === "quarterly" && (
+          {preset === 'quarterly' && (
             <Field label="Month of the quarter">
-              <select className={INPUT} value={schedule.month} onChange={(e) => set({ month: Number(e.target.value) })}>
-                {["First", "Second", "Third"].map((m, i) => (
+              <select
+                className={INPUT}
+                value={schedule.month}
+                onChange={(e) => set({ month: Number(e.target.value) })}
+              >
+                {['First', 'Second', 'Third'].map((m, i) => (
                   <option key={m} value={i + 1}>
                     {m}
                   </option>
@@ -329,9 +414,13 @@ export function RitualInspector({
               </select>
             </Field>
           )}
-          {preset === "yearly" && (
+          {preset === 'yearly' && (
             <Field label="Month">
-              <select className={INPUT} value={schedule.month} onChange={(e) => set({ month: Number(e.target.value) })}>
+              <select
+                className={INPUT}
+                value={schedule.month}
+                onChange={(e) => set({ month: Number(e.target.value) })}
+              >
                 {MONTHS.map((m, i) => (
                   <option key={m} value={i + 1}>
                     {m}
@@ -342,7 +431,13 @@ export function RitualInspector({
           )}
           <Field label="Time">
             {/* The page's one time format, "9:00 AM" (qa-company-25), not the browser's "09:00 AM". */}
-            <select required aria-label="Time" className={INPUT} value={schedule.time} onChange={(e) => set({ time: e.target.value })}>
+            <select
+              required
+              aria-label="Time"
+              className={INPUT}
+              value={schedule.time}
+              onChange={(e) => set({ time: e.target.value })}
+            >
               {timeOptions(schedule.time).map((t) => (
                 <option key={t.value} value={t.value}>
                   {t.label}
@@ -354,7 +449,8 @@ export function RitualInspector({
               detailed-b 16: its "Set it" notice lives once, above the table (page.tsx); here
               only the zone's name, so the notice and link are never shown twice at once. */}
           <p className="col-span-2 self-center text-sm text-text2 max-[600px]:col-span-1">
-            Company time zone: <span data-testid="ritual-zone">{zoneText(saved.timezone, zoneDefault)}</span>
+            Company time zone:{' '}
+            <span data-testid="ritual-zone">{zoneText(saved.timezone, zoneDefault)}</span>
           </p>
           <Field label="Length (minutes)">
             <input
@@ -365,7 +461,7 @@ export function RitualInspector({
               className={INPUT}
               value={duration}
               aria-invalid={problems.duration ? true : undefined}
-              aria-describedby={problems.duration ? "ritual-error-duration" : undefined}
+              aria-describedby={problems.duration ? 'ritual-error-duration' : undefined}
               onChange={(e) => setDuration(e.target.value)}
             />
             <FieldNote id="ritual-error-duration">{problems.duration}</FieldNote>
@@ -379,7 +475,7 @@ export function RitualInspector({
               className={INPUT}
               value={prep}
               aria-invalid={problems.prep ? true : undefined}
-              aria-describedby={problems.prep ? "ritual-error-prep" : undefined}
+              aria-describedby={problems.prep ? 'ritual-error-prep' : undefined}
               onChange={(e) => setPrep(e.target.value)}
             />
             <FieldNote id="ritual-error-prep">{problems.prep}</FieldNote>
@@ -402,7 +498,11 @@ export function RitualInspector({
                   <input
                     type="checkbox"
                     checked={attendees.includes(m.id)}
-                    onChange={(e) => setAttendees((a) => (e.target.checked ? [...a, m.id] : a.filter((x) => x !== m.id)))}
+                    onChange={(e) =>
+                      setAttendees((a) =>
+                        e.target.checked ? [...a, m.id] : a.filter((x) => x !== m.id),
+                      )
+                    }
                   />
                   <span className="min-w-0 break-words">
                     {memberName(m)} <span className="text-text2">· {m.email}</span>
@@ -413,7 +513,12 @@ export function RitualInspector({
           </fieldset>
           <div className="col-span-2 flex flex-wrap gap-2 max-[600px]:col-span-1">
             <span className="flex items-center gap-2">
-              <Button type="submit" variant="solid" disabled={busy || !changed} title={changed ? undefined : "No changes to save"}>
+              <Button
+                type="submit"
+                variant="solid"
+                disabled={busy || !changed}
+                title={changed ? undefined : 'No changes to save'}
+              >
                 Save
               </Button>
               {!changed && (
@@ -427,9 +532,9 @@ export function RitualInspector({
               onClick={async () => {
                 // qa-company-1: a Prepare now that spends money, or on a paused ritual, asks first.
                 const ask = prepareAsk(ritual);
-                if (ask && !(await confirmInPage({ action: "Prepare now", message: ask }))) return;
+                if (ask && !(await confirmInPage({ action: 'Prepare now', message: ask }))) return;
                 await act(async () => {
-                  const o = await unwrap(api.POST("/v1/rituals/{ritual_id}/prepare", path));
+                  const o = await unwrap(api.POST('/v1/rituals/{ritual_id}/prepare', path));
                   await onChanged();
                   router.push(`/company/rituals/${o.id}`);
                 });
@@ -444,14 +549,14 @@ export function RitualInspector({
                 onClick={async () => {
                   // qa4-company-1: Delete asks first, naming the ritual; its past pre-reads go with it.
                   const yes = await confirmInPage({
-                    action: "Delete ritual",
+                    action: 'Delete ritual',
                     title: `Delete ${ritual.title}?`,
                     message: `Delete ${ritual.title} and its past pre-reads? This cannot be undone.`,
                     destructive: true,
                   });
                   if (!yes) return;
                   await act(async () => {
-                    await unwrap(api.DELETE("/v1/rituals/{ritual_id}", path));
+                    await unwrap(api.DELETE('/v1/rituals/{ritual_id}', path));
                     await onChanged();
                   });
                 }}

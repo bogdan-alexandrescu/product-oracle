@@ -1,33 +1,70 @@
-"use client";
+'use client';
 
-import { usePathname, useRouter } from "@/lib/nav";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as KeyEvent, type ReactNode, type RefObject } from "react";
+import { usePathname, useRouter } from '@/lib/nav';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as KeyEvent,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 
-import { Button, Icon, Mark } from "@/components/ds";
-import { ShareForm } from "@/components/hop/ShareForm";
-import { SIMPLE_ASK_PANEL_ID } from "@/components/simple/SimpleShell";
-import { takeAskDraft, useAskDraft } from "@/components/hop/open-state";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { askSay, askThread, linkAsk, recentChats, type ChatMessage, type ChatSummary, type ChatThread } from "@/lib/api/simple-chat";
-import { dayIn, formatInZone, todayIn, useCompanyZone } from "@/lib/dates";
-import { useMe } from "@/lib/me";
-import { openStream } from "@/lib/stream";
-import { GENERAL, pageName, subjectWithView, useCurrentScreenSubject, type ScreenSubject } from "@/lib/screen-subject";
-import { dataChanged, errorMessage } from "@/lib/use-query";
-import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
+import { Button, Icon, Mark } from '@/components/ds';
+import { ShareForm } from '@/components/hop/ShareForm';
+import { SIMPLE_ASK_PANEL_ID } from '@/components/simple/SimpleShell';
+import { takeAskDraft, useAskDraft } from '@/components/hop/open-state';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import {
+  askSay,
+  askThread,
+  linkAsk,
+  recentChats,
+  type ChatMessage,
+  type ChatSummary,
+  type ChatThread,
+} from '@/lib/api/simple-chat';
+import { dayIn, formatInZone, todayIn, useCompanyZone } from '@/lib/dates';
+import { useMe } from '@/lib/me';
+import { openStream } from '@/lib/stream';
+import {
+  GENERAL,
+  pageName,
+  subjectWithView,
+  useCurrentScreenSubject,
+  type ScreenSubject,
+} from '@/lib/screen-subject';
+import { dataChanged, errorMessage } from '@/lib/use-query';
+import { invalidateWaiting, waitingChanged } from '@/lib/waiting';
 
-import { AnswerSources, AnswerText, Who, chatTime, type AnswerCite } from "./AskAnswer";
-import { ChatComposer, ChatLine, shownLines, useActedNow, useCorrections, usePendingPoll, type Typed } from "./ChatThread";
+import { AnswerSources, AnswerText, Who, chatTime, type AnswerCite } from './AskAnswer';
+import {
+  ChatComposer,
+  ChatLine,
+  shownLines,
+  useActedNow,
+  useCorrections,
+  usePendingPoll,
+  type Typed,
+} from './ChatThread';
 
-type AskMessage = Schemas["DiscussionMessageOut"];
+type AskMessage = Schemas['DiscussionMessageOut'];
 
 /**
  * The chat the panel shows: Oracle's plan reader's thread (`id`) and the Oracle's Ask chat it
  * handed its questions to (`askId`); `reopened`: chosen from Recent chats.
  */
-type Chat = { id: string | null; askId: string | null; page: string; general: boolean; reopened?: boolean };
+type Chat = {
+  id: string | null;
+  askId: string | null;
+  page: string;
+  general: boolean;
+  reopened?: boolean;
+};
 
-const detail = (e: unknown) => errorMessage(e).replace(/ \(\d{3}\)$/, "");
+const detail = (e: unknown) => errorMessage(e).replace(/ \(\d{3}\)$/, '');
 
 /** "Today, 7:42 PM" for today's chats, else "Oct 26": in the company's time zone (the pick's Recent menu). */
 /** fix4 qa-simple-roadmap-50: a chat titled by its first question reads as a title: trimmed,
@@ -35,38 +72,65 @@ const detail = (e: unknown) => errorMessage(e).replace(/ \(\d{3}\)$/, "");
 export function tidyTitle(q: string): string {
   const t = q
     .trim()
-    .replace(/\s+/g, " ")
-    .replace(/(^|[\s(\[])"/g, "$1“")
-    .replace(/"/g, "”")
-    .replace(/(^|[\s(\[])'/g, "$1‘")
-    .replace(/'/g, "’");
+    .replace(/\s+/g, ' ')
+    .replace(/(^|[\s(\[])"/g, '$1“')
+    .replace(/"/g, '”')
+    .replace(/(^|[\s(\[])'/g, '$1‘')
+    .replace(/'/g, '’');
   return t ? t[0].toUpperCase() + t.slice(1) : t;
 }
 
 export function chatWhen(iso: string, zone: string, now: number = Date.now()): string {
   if (dayIn(iso, zone) === todayIn(zone, now)) return `Today, ${chatTime(iso, zone)}`;
-  return formatInZone(iso, zone, { month: "short", day: "numeric" });
+  return formatInZone(iso, zone, { month: 'short', day: 'numeric' });
 }
 
 /** Starts the person's private Oracle's Ask chat on the subject with the line; Oracle's reply streams in it. */
 async function startAsk(subject: ScreenSubject, text: string): Promise<string> {
-  const d = await unwrap(api.POST("/v1/discussions", { body: { subject_kind: subject.kind, subject: subjectWithView(subject), origin: "panel", visibility: "private" } }));
+  const d = await unwrap(
+    api.POST('/v1/discussions', {
+      body: {
+        subject_kind: subject.kind,
+        subject: subjectWithView(subject),
+        origin: 'panel',
+        visibility: 'private',
+      },
+    }),
+  );
   await postAsk(d.id, text);
   return d.id;
 }
 
 async function postAsk(id: string, text: string): Promise<void> {
-  await unwrap(api.POST("/v1/discussions/{discussion_id}/messages", { params: { path: { discussion_id: id } }, body: { body: text.trim(), mention_oracle: false } }));
+  await unwrap(
+    api.POST('/v1/discussions/{discussion_id}/messages', {
+      params: { path: { discussion_id: id } },
+      body: { body: text.trim(), mention_oracle: false },
+    }),
+  );
 }
 
 async function askLines(id: string): Promise<AskMessage[]> {
-  const page = await unwrap(api.GET("/v1/discussions/{discussion_id}/messages", { params: { path: { discussion_id: id }, query: { limit: 200 } } }));
-  return page.items.filter((m) => !m.deleted && m.author_kind !== "system");
+  const page = await unwrap(
+    api.GET('/v1/discussions/{discussion_id}/messages', {
+      params: { path: { discussion_id: id }, query: { limit: 200 } },
+    }),
+  );
+  return page.items.filter((m) => !m.deleted && m.author_kind !== 'system');
 }
 
 /** What the empty chat invites: "Ask about the roadmap, or ask for a change." */
 function aboutWords(name: string): string {
-  const the: Record<string, string> = { Roadmap: "the roadmap", Priorities: "the priorities", Decisions: "the decisions", Meetings: "the meetings", "One-pagers": "the one-pagers", "Goal map": "the goal map", Inbox: "your inbox", General: "anything" };
+  const the: Record<string, string> = {
+    Roadmap: 'the roadmap',
+    Priorities: 'the priorities',
+    Decisions: 'the decisions',
+    Meetings: 'the meetings',
+    'One-pagers': 'the one-pagers',
+    'Goal map': 'the goal map',
+    Inbox: 'your inbox',
+    General: 'anything',
+  };
   return the[name] ?? name;
 }
 
@@ -77,15 +141,17 @@ function aboutWords(name: string): string {
 function useShownHeading(on: boolean): string | null {
   const [text, setText] = useState<string | null>(null);
   useEffect(() => {
-    const main = document.querySelector("main");
+    const main = document.querySelector('main');
     if (!on || !main) return;
     const update = () => {
       // Next keeps recently visited routes mounted but hidden: the shown page's H1 (on a phone,
       // the one-pager's title is a level-1 heading drawn without an <h1>: ask-phone QA row 4).
       const h1s = [...main.querySelectorAll<HTMLElement>('h1, [role="heading"][aria-level="1"]')];
-      const h1 = h1s.find((h) => h.checkVisibility?.() !== false && h.getClientRects().length > 0) ?? h1s.find((h) => h.closest("[hidden]") === null);
+      const h1 =
+        h1s.find((h) => h.checkVisibility?.() !== false && h.getClientRects().length > 0) ??
+        h1s.find((h) => h.closest('[hidden]') === null);
       const t = h1?.textContent?.trim() || null;
-      setText(t && t !== "One-pager" ? t : null);
+      setText(t && t !== 'One-pager' ? t : null);
     };
     update();
     const watch = new MutationObserver(update);
@@ -104,19 +170,21 @@ function useShownHeading(on: boolean): string | null {
  */
 function ShareAsk({ askId }: { askId: string }) {
   const router = useRouter();
-  const pathname = usePathname() ?? "/simple";
-  const [d, setD] = useState<Schemas["DiscussionOut"] | null>(null);
+  const pathname = usePathname() ?? '/simple';
+  const [d, setD] = useState<Schemas['DiscussionOut'] | null>(null);
   const [sharing, setSharing] = useState(false);
   useEffect(() => {
     let live = true;
-    unwrap(api.GET("/v1/discussions/{discussion_id}", { params: { path: { discussion_id: askId } } }))
+    unwrap(
+      api.GET('/v1/discussions/{discussion_id}', { params: { path: { discussion_id: askId } } }),
+    )
       .then((x) => live && setD(x))
       .catch(() => live && setD(null));
     return () => {
       live = false;
     };
   }, [askId]);
-  if (d?.origin !== "panel" || !d.me.can_manage) return null;
+  if (d?.origin !== 'panel' || !d.me.can_manage) return null;
   if (sharing)
     return (
       <div className="mt-3">
@@ -126,7 +194,7 @@ function ShareAsk({ askId }: { askId: string }) {
           onShared={(id) => {
             setSharing(false);
             const rest = new URLSearchParams(window.location.search);
-            rest.set("discussion", id);
+            rest.set('discussion', id);
             router.push(`${pathname}?${rest}`, { scroll: false });
           }}
         />
@@ -134,7 +202,12 @@ function ShareAsk({ askId }: { askId: string }) {
     );
   return (
     <div className="mt-3">
-      <Button variant="ghost" icon="comment" onClick={() => setSharing(true)} data-testid="ask-share">
+      <Button
+        variant="ghost"
+        icon="comment"
+        onClick={() => setSharing(true)}
+        data-testid="ask-share"
+      >
         Share as discussion
       </Button>
     </div>
@@ -144,7 +217,18 @@ function ShareAsk({ askId }: { askId: string }) {
 /** The pick's history mark beside "Recent chats" (a clock with its arrow back). */
 function History() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="flex-none">
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="flex-none"
+    >
       <path d="M4 12a8 8 0 1 0 2.4-5.7" />
       <path d="M4 4v4h4M12 8v4l3 2" />
     </svg>
@@ -163,8 +247,18 @@ function History() {
  * whose answer shows in the same chat with its sections and sources. `mark`: the header's
  * Oracle mark (the phone's sheet has none).
  */
-export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader = true, mark = true }: { onClose?: () => void; closeLabel?: string; showHeader?: boolean; mark?: boolean }) {
-  const pathname = usePathname() ?? "/simple";
+export function SimpleAskPanel({
+  onClose,
+  closeLabel = 'Close Ask Oracle',
+  showHeader = true,
+  mark = true,
+}: {
+  onClose?: () => void;
+  closeLabel?: string;
+  showHeader?: boolean;
+  mark?: boolean;
+}) {
+  const pathname = usePathname() ?? '/simple';
   const screen = useCurrentScreenSubject();
   const { can } = useMe();
   const [chat, setChat] = useState<Chat>({ id: null, askId: null, page: pathname, general: false });
@@ -181,9 +275,18 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
   // An empty chat is about the page shown; a chat started stays about its own page.
   const fresh = !chat.id && !chat.askId;
   if (fresh && chat.page !== pathname) setChat({ ...chat, page: pathname });
-  const onePager = !chat.general && chat.page === pathname && pageName(pathname) === "One-pager" && screen.kind === "screen";
+  const onePager =
+    !chat.general &&
+    chat.page === pathname &&
+    pageName(pathname) === 'One-pager' &&
+    screen.kind === 'screen';
   const heading = useShownHeading(onePager);
-  const name = chat.general ? "General" : heading ?? (chat.page === pathname && screen.label && !screen.label.startsWith("/") ? screen.label : pageName(chat.page));
+  const name = chat.general
+    ? 'General'
+    : (heading ??
+      (chat.page === pathname && screen.label && !screen.label.startsWith('/')
+        ? screen.label
+        : pageName(chat.page)));
   const begin = (general: boolean) => {
     setChat({ id: null, askId: null, page: pathname, general });
     setSession((n) => n + 1);
@@ -204,12 +307,13 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
     }
     if (load === loads.current) setRecent((r) => (r === null ? null : rows));
   };
-  const changes = can("create_simple_change");
+  const changes = can('create_simple_change');
   // qa-simple-home-20: closed, the panel gives focus back to what opened it (Ask Oracle, a decision's Ask Oracle).
   const root = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const at = document.activeElement;
-    const opener = at instanceof HTMLElement && at !== document.body && !root.current?.contains(at) ? at : null;
+    const opener =
+      at instanceof HTMLElement && at !== document.body && !root.current?.contains(at) ? at : null;
     return () => {
       if (!opener) return;
       window.setTimeout(() => {
@@ -219,7 +323,7 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
     };
   }, []);
   // qa-simple-home-19: a chat from another page says that page on the switch, not "This page".
-  const herePage = !chat.general && chat.page !== pathname ? pageName(chat.page) : "This page";
+  const herePage = !chat.general && chat.page !== pathname ? pageName(chat.page) : 'This page';
 
   return (
     <div
@@ -232,7 +336,9 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
       {showHeader && (
         <div className="flex min-h-14 flex-none items-center gap-2 border-b border-line pr-3 pl-4">
           {mark && <Mark size={22} tone="current" className="flex-none text-accent" />}
-          <h2 className="min-w-0 flex-1 font-display text-lg leading-6 font-bold tracking-[-0.01em]">Ask Oracle</h2>
+          <h2 className="min-w-0 flex-1 font-display text-lg leading-6 font-bold tracking-[-0.01em]">
+            Ask Oracle
+          </h2>
           <button
             type="button"
             data-testid="ask-new-chat"
@@ -243,20 +349,29 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
             New chat
           </button>
           {onClose && (
-            <button type="button" aria-label={closeLabel} onClick={onClose} className="grid size-9 flex-none place-items-center rounded-lg text-text hover:bg-surface2">
+            <button
+              type="button"
+              aria-label={closeLabel}
+              onClick={onClose}
+              className="grid size-9 flex-none place-items-center rounded-lg text-text hover:bg-surface2"
+            >
               <Icon name="x" size={20} stroke={1.7} />
             </button>
           )}
         </div>
       )}
       <div className="flex flex-none items-center gap-2.5 border-b border-line px-4 py-2.5">
-        <div role="group" aria-label="About" className="inline-flex flex-none gap-0.5 rounded-[10px] bg-surface2 p-[3px]">
+        <div
+          role="group"
+          aria-label="About"
+          className="inline-flex flex-none gap-0.5 rounded-[10px] bg-surface2 p-[3px]"
+        >
           {(
             [
               [false, herePage, !chat.general],
               // qa4-simple-home-24: a chat about another page keeps its page named, and "This page" starts one about the page shown.
-              ...(herePage !== "This page" ? ([[false, "This page", false]] as const) : []),
-              [true, "General", chat.general],
+              ...(herePage !== 'This page' ? ([[false, 'This page', false]] as const) : []),
+              [true, 'General', chat.general],
             ] as const
           ).map(([general, label, on]) => {
             return (
@@ -272,14 +387,17 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
                     setSession((n) => n + 1);
                   } else begin(general);
                 }}
-                className={`grid h-[30px] place-items-center rounded-lg px-3 text-sm leading-none whitespace-nowrap ${on ? "bg-surface font-semibold text-text shadow-[var(--seg-on-shadow)]" : "font-medium text-text2 hover:text-text"}`}
+                className={`grid h-[30px] place-items-center rounded-lg px-3 text-sm leading-none whitespace-nowrap ${on ? 'bg-surface font-semibold text-text shadow-[var(--seg-on-shadow)]' : 'font-medium text-text2 hover:text-text'}`}
               >
                 {label}
               </button>
             );
           })}
         </div>
-        <p className="ml-auto flex min-w-0 items-center gap-1.5 text-sm text-text2" data-testid="hop-visibility">
+        <p
+          className="ml-auto flex min-w-0 items-center gap-1.5 text-sm text-text2"
+          data-testid="hop-visibility"
+        >
           <Icon name="lock" size={16} stroke={1.7} className="size-3.5" />
           Just you and Oracle
         </p>
@@ -289,21 +407,31 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
         key={session}
         chat={chat}
         name={name}
-        draftKey={chat.general ? "general" : chat.page}
-        subject={chat.general ? GENERAL : chat.page === pathname ? screen : { kind: "screen", subject: { path: chat.page }, label: name }}
-        asks={can("create_discussion")}
+        draftKey={chat.general ? 'general' : chat.page}
+        subject={
+          chat.general
+            ? GENERAL
+            : chat.page === pathname
+              ? screen
+              : { kind: 'screen', subject: { path: chat.page }, label: name }
+        }
+        asks={can('create_discussion')}
         changes={changes}
         onChat={(c) => setChat((was) => ({ ...was, ...c }))}
         top={(question) => (
           <p className="mb-3 flex items-center gap-2 text-sm text-text2">
-            <span className="min-w-0 truncate" data-testid="ask-about" title={question ? tidyTitle(question) : undefined}>
+            <span
+              className="min-w-0 truncate"
+              data-testid="ask-about"
+              title={question ? tidyTitle(question) : undefined}
+            >
               {/* qa-simple-home-23: "New general chat", not "New chat about General". */}
               {question
                 ? tidyTitle(question)
                 : chat.general
                   ? chat.reopened
-                    ? "General chat"
-                    : "New general chat"
+                    ? 'General chat'
+                    : 'New general chat'
                   : chat.reopened
                     ? `Chat about ${name}`
                     : `New chat about ${name}`}
@@ -324,7 +452,11 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
             </button>
           </p>
         )}
-        below={chat.askId && can("create_discussion") ? <ShareAsk key={chat.askId} askId={chat.askId} /> : null}
+        below={
+          chat.askId && can('create_discussion') ? (
+            <ShareAsk key={chat.askId} askId={chat.askId} />
+          ) : null
+        }
         overlay={
           recent !== null && (
             <RecentMenu
@@ -332,7 +464,13 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
               trigger={trigger}
               onClose={() => setRecent(null)}
               onOpen={(c) => {
-                setChat({ id: c.id, askId: c.ask_id ?? null, page: c.page, general: c.general, reopened: true });
+                setChat({
+                  id: c.id,
+                  askId: c.ask_id ?? null,
+                  page: c.page,
+                  general: c.general,
+                  reopened: true,
+                });
                 setSession((n) => n + 1);
                 setRecent(null);
               }}
@@ -369,7 +507,7 @@ function RecentMenu({
   useEffect(() => {
     // Escape closes the menu only (not the panel or the phone's sheet): first, on the window.
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+      if (e.key !== 'Escape') return;
       e.preventDefault();
       e.stopPropagation();
       shut.current();
@@ -380,24 +518,29 @@ function RecentMenu({
       if (menu.current?.contains(t) || trigger.current?.contains(t)) return;
       shut.current();
     };
-    window.addEventListener("keydown", onKey, true);
-    document.addEventListener("pointerdown", onDown, true);
+    window.addEventListener('keydown', onKey, true);
+    document.addEventListener('pointerdown', onDown, true);
     return () => {
-      window.removeEventListener("keydown", onKey, true);
-      document.removeEventListener("pointerdown", onDown, true);
+      window.removeEventListener('keydown', onKey, true);
+      document.removeEventListener('pointerdown', onDown, true);
     };
   }, [trigger]);
   // The first chat is under the pointer's way in: focused, as the pick shows it.
   const count = items.length;
   useEffect(() => {
-    if (count) menu.current?.querySelector<HTMLElement>("[data-testid=ask-recent-row]")?.focus({ preventScroll: true });
+    if (count)
+      menu.current
+        ?.querySelector<HTMLElement>('[data-testid=ask-recent-row]')
+        ?.focus({ preventScroll: true });
   }, [count]);
   const move = (e: KeyEvent) => {
-    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
-    const rows = [...(menu.current?.querySelectorAll<HTMLElement>("[data-testid=ask-recent-row]") ?? [])];
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const rows = [
+      ...(menu.current?.querySelectorAll<HTMLElement>('[data-testid=ask-recent-row]') ?? []),
+    ];
     const at = rows.indexOf(document.activeElement as HTMLElement);
     e.preventDefault();
-    rows[(at + (e.key === "ArrowDown" ? 1 : -1) + rows.length) % rows.length]?.focus();
+    rows[(at + (e.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length]?.focus();
   };
   return (
     <section
@@ -407,7 +550,9 @@ function RecentMenu({
       onKeyDown={move}
       className="absolute top-[37px] right-3 z-10 flex max-h-[calc(100%-50px)] w-[340px] max-w-[calc(100%-24px)] flex-col overflow-y-auto rounded-xl border border-line bg-surface p-1.5 shadow-tip"
     >
-      <h3 className="px-2 py-1.5 text-xs leading-4 font-semibold tracking-[.06em] text-text2 uppercase">Your recent chats</h3>
+      <h3 className="px-2 py-1.5 text-xs leading-4 font-semibold tracking-[.06em] text-text2 uppercase">
+        Your recent chats
+      </h3>
       {items.length === 0 ? (
         <p className="px-2 py-2 text-[13px] leading-[18px] text-text2">No chats yet.</p>
       ) : (
@@ -428,7 +573,10 @@ function RecentMenu({
                 >
                   {(c.question && tidyTitle(c.question)) || `Chat about ${c.page_name}`}
                 </b>
-                <span className="text-[13px] leading-[18px] text-text2" data-testid="ask-recent-when">
+                <span
+                  className="text-[13px] leading-[18px] text-text2"
+                  data-testid="ask-recent-when"
+                >
                   {c.page_name} · {chatWhen(c.last_at, zone)}
                 </span>
               </button>
@@ -436,7 +584,10 @@ function RecentMenu({
           ))}
         </ul>
       )}
-      <p className="mt-1 border-t border-line p-2 text-[13px] leading-[18px] text-text2" data-testid="ask-recent-meetings">
+      <p
+        className="mt-1 border-t border-line p-2 text-[13px] leading-[18px] text-text2"
+        data-testid="ask-recent-meetings"
+      >
         Meeting chats stay in their meeting.
       </p>
     </section>
@@ -480,7 +631,10 @@ function ChatView({
   const handed = useRef(new Set<string>());
   const ids = useRef({ id: chat.id, askId: chat.askId });
   useEffect(() => {
-    ids.current = { id: chat.id ?? thread?.id ?? ids.current.id, askId: chat.askId ?? ids.current.askId };
+    ids.current = {
+      id: chat.id ?? thread?.id ?? ids.current.id,
+      askId: chat.askId ?? ids.current.askId,
+    };
   });
   const page = chat.page;
   // qa-simple-home-22: one wording for the box and the empty chat ("Ask about the roadmap").
@@ -511,7 +665,7 @@ function ChatView({
     askThread(page, chat.id)
       .then((t) => {
         if (!live) return;
-        for (const m of t.messages) if (m.kind === "ask") handed.current.add(m.id);
+        for (const m of t.messages) if (m.kind === 'ask') handed.current.add(m.id);
         setThread(t);
       })
       .catch((e) => live && setError(detail(e)));
@@ -546,7 +700,7 @@ function ChatView({
   useEffect(() => {
     if (!asks || !thread) return;
     for (const m of thread.messages) {
-      if (m.kind !== "ask" || handed.current.has(m.id)) continue;
+      if (m.kind !== 'ask' || handed.current.has(m.id)) continue;
       handed.current.add(m.id);
       const line = thread.messages.find((x) => x.id === m.reply_to);
       if (line) void handOn(line.body, thread.id).catch((e) => setError(detail(e)));
@@ -556,7 +710,12 @@ function ChatView({
   const send = async (text: string) => {
     setError(null);
     const id = ids.current.id;
-    const t = await askSay(text, page, asks, id ? { chatId: id } : { newChat: true, general: chat.general });
+    const t = await askSay(
+      text,
+      page,
+      asks,
+      id ? { chatId: id } : { newChat: true, general: chat.general },
+    );
     setThread(t);
     if (t.id && t.id !== id) {
       ids.current.id = t.id;
@@ -570,8 +729,10 @@ function ChatView({
     ...ask.map((m) => ({ at: m.created_at, ask: m })),
   ].sort((a, b) => a.at.localeCompare(b.at));
   // qa-simple-home-16: once asked, the chat is titled by its first question.
-  const firstAsked = lines.find((l) => (l.plan ? l.plan.author_kind === "person" : l.ask?.author_kind === "person"));
-  const question = (firstAsked?.plan?.body ?? firstAsked?.ask?.body ?? "").trim() || null;
+  const firstAsked = lines.find((l) =>
+    l.plan ? l.plan.author_kind === 'person' : l.ask?.author_kind === 'person',
+  );
+  const question = (firstAsked?.plan?.body ?? firstAsked?.ask?.body ?? '').trim() || null;
   // The newest question at the top of the conversation, its answer reading down from it (the
   // panel's own scroll; the page never moves). The first question leaves the chat at its top.
   const scroller = useRef<HTMLDivElement>(null);
@@ -586,7 +747,10 @@ function ChatView({
   // roadmap-talk: the chat's open Correct forms, for Apply all.
   const corrected = useCorrections();
   // chat-latest-card: a card acted on replaces the earlier lines' cards at once, until the chat reads again.
-  const acted = useActedNow(thread, lines.map((l) => l.plan?.id ?? l.ask?.id ?? ""));
+  const acted = useActedNow(
+    thread,
+    lines.map((l) => l.plan?.id ?? l.ask?.id ?? ''),
+  );
   // A card acted on here changes the page under the panel too: its data and every count read again at once.
   const cardChanged = () => {
     void load();
@@ -596,7 +760,7 @@ function ChatView({
   };
   // "Suggest from the chat": the words a goal's drawer typed in, taken once by the box a person sees.
   const waiting = useAskDraft();
-  const [typed, setTyped] = useState<Typed>({ text: "", n: 0 });
+  const [typed, setTyped] = useState<Typed>({ text: '', n: 0 });
   const here = useRef<HTMLElement>(null);
   useEffect(() => {
     // Only the box a person sees takes them (the dock's panel is hidden on a phone): a DOM check.
@@ -606,7 +770,12 @@ function ChatView({
   }, [waiting]);
 
   return (
-    <section ref={here} aria-label="Ask or change the plan" data-testid="ask-chat" className="flex min-h-0 flex-1 flex-col">
+    <section
+      ref={here}
+      aria-label="Ask or change the plan"
+      data-testid="ask-chat"
+      className="flex min-h-0 flex-1 flex-col"
+    >
       <div className="relative min-h-0 flex-1">
         <div ref={scroller} className="relative h-full overflow-x-hidden overflow-y-auto px-4 py-3">
           {top(question)}
@@ -615,12 +784,31 @@ function ChatView({
               {error}
             </p>
           )}
-          <ol ref={list} className="flex flex-col gap-3" aria-label="Messages" data-testid="ask-chat-thread">
+          <ol
+            ref={list}
+            className="flex flex-col gap-3"
+            aria-label="Messages"
+            data-testid="ask-chat-thread"
+          >
             {lines.map((l, i) =>
               l.plan ? (
-                <ChatLine key={l.plan.id} message={l.plan} onCardChanged={cardChanged} onThread={setThread} corrected={corrected} ask replaced={acted.replacedFor(i)} onActed={acted.onActed} />
+                <ChatLine
+                  key={l.plan.id}
+                  message={l.plan}
+                  onCardChanged={cardChanged}
+                  onThread={setThread}
+                  corrected={corrected}
+                  ask
+                  replaced={acted.replacedFor(i)}
+                  onActed={acted.onActed}
+                />
               ) : (
-                <AskLine key={l.ask!.id} message={l.ask!} askId={chat.askId!} onEnded={() => void loadAsk()} />
+                <AskLine
+                  key={l.ask!.id}
+                  message={l.ask!}
+                  askId={chat.askId!}
+                  onEnded={() => void loadAsk()}
+                />
               ),
             )}
           </ol>
@@ -633,7 +821,10 @@ function ChatView({
           )}
         </div>
         {/* A phone's sheet fades the conversation into the box under it. */}
-        <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 hidden h-7 bg-linear-to-b from-transparent to-surface max-[600px]:block" />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 bottom-0 hidden h-7 bg-linear-to-b from-transparent to-surface max-[600px]:block"
+        />
         {overlay}
       </div>
       <div className="flex-none border-t border-line px-4 pt-2.5 pb-3.5">
@@ -641,7 +832,11 @@ function ChatView({
           row
           send={send}
           placeholder={changes ? `Ask about ${about}, or ask for a change…` : `Ask about ${about}…`}
-          hint={changes ? undefined : "You can ask questions. To suggest a change, ask an owner for comment access."}
+          hint={
+            changes
+              ? undefined
+              : 'You can ask questions. To suggest a change, ask an owner for comment access.'
+          }
           typed={typed}
           draftKey={draftKey}
         />
@@ -651,12 +846,22 @@ function ChatView({
 }
 
 /** A line of the chat's Oracle's Ask chat: the person's question or Oracle's answer (its sections and sources), read as it streams. */
-function AskLine({ message: m, askId, onEnded }: { message: AskMessage; askId: string; onEnded: () => void }) {
+function AskLine({
+  message: m,
+  askId,
+  onEnded,
+}: {
+  message: AskMessage;
+  askId: string;
+  onEnded: () => void;
+}) {
   const zone = useCompanyZone();
-  const live = m.author_kind === "oracle" && (m.status === "pending" || m.status === "streaming");
+  const live = m.author_kind === 'oracle' && (m.status === 'pending' || m.status === 'streaming');
   const [text, setText] = useState(m.body);
   const [cites, setCites] = useState<AnswerCite[]>((m.citations ?? []) as AnswerCite[]);
-  const [failed, setFailed] = useState(m.status === "failed" ? (m.error ?? "Oracle can't reply right now.") : null);
+  const [failed, setFailed] = useState(
+    m.status === 'failed' ? (m.error ?? "Oracle can't reply right now.") : null,
+  );
   const ended = useRef(onEnded);
   useEffect(() => {
     ended.current = onEnded;
@@ -673,7 +878,7 @@ function AskLine({ message: m, askId, onEnded }: { message: AskMessage; askId: s
       onDelta: (t) => {
         const reset = first;
         first = false;
-        setText((x) => (reset ? "" : x) + t);
+        setText((x) => (reset ? '' : x) + t);
       },
       onCitations: (c) => setCites(c as AnswerCite[]),
       onDone: (out) => {
@@ -687,20 +892,30 @@ function AskLine({ message: m, askId, onEnded }: { message: AskMessage; askId: s
     }).catch(() => undefined);
     return () => abort.abort();
   }, [live, askId, m.id]);
-  const person = m.author_kind === "person";
+  const person = m.author_kind === 'person';
   return (
-    <li data-testid="chat-message" data-kind={person ? "request" : "answer"} data-author={person ? "person" : "oracle"} className={`flex flex-col gap-2 ${person ? "items-end" : "items-start"}`}>
+    <li
+      data-testid="chat-message"
+      data-kind={person ? 'request' : 'answer'}
+      data-author={person ? 'person' : 'oracle'}
+      className={`flex flex-col gap-2 ${person ? 'items-end' : 'items-start'}`}
+    >
       <div
-        className={`min-w-0 max-w-[94%] rounded-[14px] px-3 py-2 ${person ? "bg-accent-soft text-accent-ink" : "bg-surface2 text-text"}`}
-        {...(person ? {} : { "data-testid": "ask-answer", "data-status": live && !text ? "pending" : m.status })}
+        className={`min-w-0 max-w-[94%] rounded-[14px] px-3 py-2 ${person ? 'bg-accent-soft text-accent-ink' : 'bg-surface2 text-text'}`}
+        {...(person
+          ? {}
+          : { 'data-testid': 'ask-answer', 'data-status': live && !text ? 'pending' : m.status })}
       >
-        <Who name={person ? "You" : "Oracle"} at={m.created_at} zone={zone} mine={person} />
+        <Who name={person ? 'You' : 'Oracle'} at={m.created_at} zone={zone} mine={person} />
         {failed ? (
           <p role="alert" className="text-crit">
             {failed}
           </p>
         ) : person ? (
-          <p className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]" data-testid="chat-message-body">
+          <p
+            className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]"
+            data-testid="chat-message-body"
+          >
             {text}
           </p>
         ) : text ? (
@@ -710,7 +925,7 @@ function AskLine({ message: m, askId, onEnded }: { message: AskMessage; askId: s
           </>
         ) : (
           <p className="text-text2" data-testid="chat-message-body">
-            {live ? "Thinking…" : ""}
+            {live ? 'Thinking…' : ''}
           </p>
         )}
       </div>

@@ -1,7 +1,7 @@
-import { MOCK_MEETINGS_KEY } from "../lib/api/mock/simple-meetings";
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { MOCK_MEETINGS_KEY } from '../lib/api/mock/simple-meetings';
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /**
  * Simple Definition of Done, item 4 (docs/simple-dod-actions-meet.md): the review meeting's
@@ -28,111 +28,150 @@ import { expect, test, type Locator, type Page } from "./test";
  * meeting's approval; no_claim = the reviewers' Inbox rows.
  */
 
-const allDecisions = (page: Page) => page.getByRole("region", { name: "Decisions in this meeting" });
-const steps = (page: Page) => page.getByRole("navigation", { name: "Steps" });
-const WHO_WHEN = /^\S.* · (?:[A-Z][a-z]{2} )?[A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2}\s?[AP]M( [A-Z]{2,5})?$/;
+const allDecisions = (page: Page) =>
+  page.getByRole('region', { name: 'Decisions in this meeting' });
+const steps = (page: Page) => page.getByRole('navigation', { name: 'Steps' });
+const WHO_WHEN =
+  /^\S.* · (?:[A-Z][a-z]{2} )?[A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2}\s?[AP]M( [A-Z]{2,5})?$/;
 
 /** Clicks `l` once it is scrolled to the middle (on a phone the tab bar covers the bottom of the screen). */
 async function tap(l: Locator) {
-  await l.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await l.evaluate((el) => el.scrollIntoView({ block: 'center' }));
   await l.click();
 }
 
 async function startReview(page: Page, attendee?: string) {
-  await page.goto("/simple/prds/guided-setup");
-  await tap(page.getByRole("button", { name: "Start a review meeting" }));
+  await page.goto('/simple/prds/guided-setup');
+  await tap(page.getByRole('button', { name: 'Start a review meeting' }));
   // A review needs one attendee besides the presenter: the reviewer, if the PRD has one.
-  if (attendee) await tap(page.getByRole("dialog", { name: "Start a review" }).getByRole("checkbox", { name: attendee }));
-  await tap(page.getByRole("dialog", { name: "Start a review" }).getByRole("button", { name: "Start", exact: true }));
-  await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
+  if (attendee)
+    await tap(
+      page
+        .getByRole('dialog', { name: 'Start a review' })
+        .getByRole('checkbox', { name: attendee }),
+    );
+  await tap(
+    page
+      .getByRole('dialog', { name: 'Start a review' })
+      .getByRole('button', { name: 'Start', exact: true }),
+  );
+  await expect(page.getByRole('heading', { name: 'Review: Guided setup' })).toBeVisible();
 }
 
 async function editLine(page: Page, from: string, to: string) {
-  await tap(page.getByRole("button", { name: `Edit “${from}` }));
-  await page.getByLabel("New wording for").fill(to);
-  await tap(page.getByRole("button", { name: "Save" }));
+  await tap(page.getByRole('button', { name: `Edit “${from}` }));
+  await page.getByLabel('New wording for').fill(to);
+  await tap(page.getByRole('button', { name: 'Save' }));
 }
 
 for (const phone of [false, true]) {
-  const where = phone ? "phone" : "desktop";
+  const where = phone ? 'phone' : 'desktop';
   test.describe(where, () => {
     test.use({ viewport: phone ? { width: 390, height: 844 } : { width: 1440, height: 900 } });
 
     // card: dod-meet-decisions
-    test(`approve, move and cut in a meeting are decisions with who and when; a comment too (${where})`, async ({ page }) => {
+    test(`approve, move and cut in a meeting are decisions with who and when; a comment too (${where})`, async ({
+      page,
+    }) => {
       await login(page);
       await startReview(page);
-      await editLine(page, "A setup checklist that shows", "A setup checklist with the next two steps");
-      await expect(allDecisions(page)).toContainText("New wording for a line of Guided setup");
-      await tap(page.getByRole("button", { name: /^Approve and publish one-pager edits/ }));
-      await tap(page.getByRole("alertdialog").getByRole("button", { name: "Approve and publish" }));
-      await expect(allDecisions(page)).toContainText("Approved Guided setup");
+      await editLine(
+        page,
+        'A setup checklist that shows',
+        'A setup checklist with the next two steps',
+      );
+      await expect(allDecisions(page)).toContainText('New wording for a line of Guided setup');
+      await tap(page.getByRole('button', { name: /^Approve and publish one-pager edits/ }));
+      await tap(page.getByRole('alertdialog').getByRole('button', { name: 'Approve and publish' }));
+      await expect(allDecisions(page)).toContainText('Approved Guided setup');
 
-      await tap(steps(page).getByRole("button", { name: "2 Roadmap" }));
-      await tap(page.getByRole("button", { name: "Move Setup checklist to Next" }));
-      await expect(allDecisions(page)).toContainText("Moved Setup checklist");
-      const slice = page.getByRole("region", { name: "Roadmap slice" });
-      const title = "Welcome video";
-      await tap(slice.getByRole("button", { name: `Cut ${title}`, exact: true }));
-      await tap(page.getByRole("alertdialog").getByRole("button", { name: "Cut", exact: true }));
-      await expect(slice.getByRole("button", { name: `Restore ${title}` })).toBeVisible();
+      await tap(steps(page).getByRole('button', { name: '2 Roadmap' }));
+      await tap(page.getByRole('button', { name: 'Move Setup checklist to Next' }));
+      await expect(allDecisions(page)).toContainText('Moved Setup checklist');
+      const slice = page.getByRole('region', { name: 'Roadmap slice' });
+      const title = 'Welcome video';
+      await tap(slice.getByRole('button', { name: `Cut ${title}`, exact: true }));
+      await tap(page.getByRole('alertdialog').getByRole('button', { name: 'Cut', exact: true }));
+      await expect(slice.getByRole('button', { name: `Restore ${title}` })).toBeVisible();
       await expect(allDecisions(page)).toContainText(`Cut ${title}`);
 
-      await tap(steps(page).getByRole("button", { name: "3 Decisions" }));
-      await page.getByRole("textbox", { name: "Comment" }).fill("Keep the checklist to five steps");
-      await tap(page.getByRole("button", { name: "Add comment" }));
-      const comment = page.getByTestId("meeting-comment");
-      await expect(comment).toContainText("Keep the checklist to five steps");
-      await expect(comment.locator("span:not([data-user-content])")).toHaveText(/^\S.* · /);
+      await tap(steps(page).getByRole('button', { name: '3 Decisions' }));
+      await page.getByRole('textbox', { name: 'Comment' }).fill('Keep the checklist to five steps');
+      await tap(page.getByRole('button', { name: 'Add comment' }));
+      const comment = page.getByTestId('meeting-comment');
+      await expect(comment).toContainText('Keep the checklist to five steps');
+      await expect(comment.locator('span:not([data-user-content])')).toHaveText(/^\S.* · /);
 
-      const rows = allDecisions(page).getByTestId("meeting-decision");
+      const rows = allDecisions(page).getByTestId('meeting-decision');
       await expect(rows).toHaveCount(4);
-      for (const row of await rows.all()) await expect(row.locator("span")).toHaveText(WHO_WHEN);
+      for (const row of await rows.all()) await expect(row.locator('span')).toHaveText(WHO_WHEN);
     });
 
     // card: dod-meet-cut-draft
     test(`a draft item cut in the meeting reads Cut with Restore (${where})`, async ({ page }) => {
       await login(page);
       await startReview(page);
-      await tap(steps(page).getByRole("button", { name: "2 Roadmap" }));
-      const slice = page.getByRole("region", { name: "Roadmap slice" });
-      await tap(slice.getByRole("button", { name: "Cut Team invite nudges", exact: true }));
-      await tap(page.getByRole("alertdialog").getByRole("button", { name: "Cut", exact: true }));
-      await expect(allDecisions(page)).toContainText("Cut Team invite nudges");
-      await expect(slice.getByRole("listitem").filter({ hasText: "Team invite nudges" })).toContainText("· Cut ·");
-      await tap(slice.getByRole("button", { name: "Restore Team invite nudges" }));
-      await expect(slice.getByRole("button", { name: "Cut Team invite nudges", exact: true })).toBeVisible();
-      await expect(slice.getByRole("listitem").filter({ hasText: "Team invite nudges" })).not.toContainText("· Cut ·");
+      await tap(steps(page).getByRole('button', { name: '2 Roadmap' }));
+      const slice = page.getByRole('region', { name: 'Roadmap slice' });
+      await tap(slice.getByRole('button', { name: 'Cut Team invite nudges', exact: true }));
+      await tap(page.getByRole('alertdialog').getByRole('button', { name: 'Cut', exact: true }));
+      await expect(allDecisions(page)).toContainText('Cut Team invite nudges');
+      await expect(
+        slice.getByRole('listitem').filter({ hasText: 'Team invite nudges' }),
+      ).toContainText('· Cut ·');
+      await tap(slice.getByRole('button', { name: 'Restore Team invite nudges' }));
+      await expect(
+        slice.getByRole('button', { name: 'Cut Team invite nudges', exact: true }),
+      ).toBeVisible();
+      await expect(
+        slice.getByRole('listitem').filter({ hasText: 'Team invite nudges' }),
+      ).not.toContainText('· Cut ·');
     });
   });
 }
 
 test.describe("the PRD's decider", () => {
   test.beforeEach(async ({ context }) => {
-    await context.addInitScript((key) => localStorage.setItem(key, "simple-deciders"), MOCK_SCENARIO_KEY);
+    await context.addInitScript(
+      (key) => localStorage.setItem(key, 'simple-deciders'),
+      MOCK_SCENARIO_KEY,
+    );
   });
 
   for (const phone of [false, true]) {
-    const where = phone ? "phone" : "desktop";
+    const where = phone ? 'phone' : 'desktop';
     // card: dod-meet-decider-approve
-    test(`the decider's Approve in the meeting is the working draft's approval (${where})`, async ({ page, context }) => {
+    test(`the decider's Approve in the meeting is the working draft's approval (${where})`, async ({
+      page,
+      context,
+    }) => {
       // Guided setup has no required reviewer here: nobody else's approval is waited on.
-      await context.addInitScript(([key, v]) => localStorage.setItem(key, v), [MOCK_MEETINGS_KEY, "no-reviewers"] as const);
-      await login(page, "dana.decider@example.com");
-      await page.setViewportSize(phone ? { width: 390, height: 844 } : { width: 1440, height: 900 });
-      await startReview(page, "Theo Brandt");
-      await editLine(page, "A setup checklist that shows", "A setup checklist with the next two steps");
-      await tap(page.getByRole("button", { name: /^Approve and publish one-pager edits/ }));
-      await tap(page.getByRole("alertdialog").getByRole("button", { name: "Approve and publish" }));
-      await expect(page.getByRole("status").filter({ hasText: "Approved in Review: Guided setup" }).first()).toBeVisible();
-      await expect(allDecisions(page)).toContainText("Approved Guided setup");
+      await context.addInitScript(([key, v]) => localStorage.setItem(key, v), [
+        MOCK_MEETINGS_KEY,
+        'no-reviewers',
+      ] as const);
+      await login(page, 'dana.decider@example.com');
+      await page.setViewportSize(
+        phone ? { width: 390, height: 844 } : { width: 1440, height: 900 },
+      );
+      await startReview(page, 'Theo Brandt');
+      await editLine(
+        page,
+        'A setup checklist that shows',
+        'A setup checklist with the next two steps',
+      );
+      await tap(page.getByRole('button', { name: /^Approve and publish one-pager edits/ }));
+      await tap(page.getByRole('alertdialog').getByRole('button', { name: 'Approve and publish' }));
+      await expect(
+        page.getByRole('status').filter({ hasText: 'Approved in Review: Guided setup' }).first(),
+      ).toBeVisible();
+      await expect(allDecisions(page)).toContainText('Approved Guided setup');
       // So the approved working draft is the one-pager's new version.
-      await page.goto("/simple/prds/guided-setup");
-      const pager = page.getByTestId("one-pager");
-      await expect(pager).toContainText("Version 4");
-      await expect(pager).toContainText("A setup checklist with the next two steps");
-      await expect(page.getByRole("status", { name: "Working draft" })).toHaveCount(0);
+      await page.goto('/simple/prds/guided-setup');
+      const pager = page.getByTestId('one-pager');
+      await expect(pager).toContainText('Version 4');
+      await expect(pager).toContainText('A setup checklist with the next two steps');
+      await expect(page.getByRole('status', { name: 'Working draft' })).toHaveCount(0);
     });
   }
 });
-

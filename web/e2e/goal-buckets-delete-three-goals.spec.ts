@@ -1,6 +1,6 @@
-import { GOAL_BUCKETS_THREE_GOALS_SCENARIO, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { GOAL_BUCKETS_THREE_GOALS_SCENARIO, MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /*
  * goal-delete-r3: on Priorities with "goal-buckets-three-goals" (invented: the draft Team alert digest
@@ -42,173 +42,206 @@ import { expect, test, type Locator, type Page } from "./test";
 test.use({ viewport: { width: 1440, height: 900 } });
 
 /** The key result of Faster activation Alert tone picker serves (server.ts, invented). */
-const KR = "KR 1 Teams get a first alert in a day";
-const goal = (page: Page, title: string) => page.locator(`[data-testid="plan-goal"][data-goal="${title}"]`);
-const draft = (page: Page, title: string) => page.getByTestId("prio-draft").filter({ hasText: title });
+const KR = 'KR 1 Teams get a first alert in a day';
+const goal = (page: Page, title: string) =>
+  page.locator(`[data-testid="plan-goal"][data-goal="${title}"]`);
+const draft = (page: Page, title: string) =>
+  page.getByTestId('prio-draft').filter({ hasText: title });
 
 async function tap(l: Locator) {
-  await l.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await l.evaluate((el) => el.scrollIntoView({ block: 'center' }));
   await l.click();
 }
 
 async function openPage(page: Page) {
-  await page.context().addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, GOAL_BUCKETS_THREE_GOALS_SCENARIO] as const);
+  await page
+    .context()
+    .addInitScript(([k, v]) => localStorage.setItem(k, v), [
+      MOCK_SCENARIO_KEY,
+      GOAL_BUCKETS_THREE_GOALS_SCENARIO,
+    ] as const);
   await login(page);
-  await page.goto("/simple/priorities?tab=buckets");
-  await expect(goal(page, "Grow retention")).toBeVisible();
+  await page.goto('/simple/priorities?tab=buckets');
+  await expect(goal(page, 'Grow retention')).toBeVisible();
 }
 
-async function goalDialog(page: Page, verb: "Archive" | "Delete", title = "Grow retention") {
-  await tap(goal(page, title).getByRole("button", { name: `More for ${title}` }));
-  await tap(page.getByRole("menuitem", { name: `${verb} goal` }));
-  const dialog = page.getByRole("dialog", { name: `${verb} ${title}` });
+async function goalDialog(page: Page, verb: 'Archive' | 'Delete', title = 'Grow retention') {
+  await tap(goal(page, title).getByRole('button', { name: `More for ${title}` }));
+  await tap(page.getByRole('menuitem', { name: `${verb} goal` }));
+  const dialog = page.getByRole('dialog', { name: `${verb} ${title}` });
   await expect(dialog).toBeVisible();
   return dialog;
 }
 
 async function ranked(page: Page) {
-  await page.goto("/simple/priorities");
-  await tap(page.locator("#prio-tab-ranked"));
+  await page.goto('/simple/priorities');
+  await tap(page.locator('#prio-tab-ranked'));
 }
 
-test("Restore of a deleted goal gives an item its three goals back in their order", async ({ page }) => {
+test('Restore of a deleted goal gives an item its three goals back in their order', async ({
+  page,
+}) => {
   await openPage(page);
-  const dialog = await goalDialog(page, "Delete");
-  const pick = dialog.getByLabel("Goal", { exact: true });
-  const label = (await pick.locator("option").allTextContents()).find((o) => o.endsWith("Growth"))!;
+  const dialog = await goalDialog(page, 'Delete');
+  const pick = dialog.getByLabel('Goal', { exact: true });
+  const label = (await pick.locator('option').allTextContents()).find((o) => o.endsWith('Growth'))!;
   await pick.selectOption({ label });
-  await tap(dialog.getByRole("button", { name: "Delete goal" }));
-  await expect(goal(page, "Grow retention")).toHaveCount(0);
+  await tap(dialog.getByRole('button', { name: 'Delete goal' }));
+  await expect(goal(page, 'Grow retention')).toHaveCount(0);
 
   await ranked(page);
-  await expect(draft(page, "Team alert digest")).toContainText("Faster activation");
+  await expect(draft(page, 'Team alert digest')).toContainText('Faster activation');
 
-  await page.goto("/settings/trash");
-  await tap(page.getByRole("button", { name: "Restore Grow retention" }));
-  await expect(page.getByTestId("trash-entry").filter({ hasText: "Grow retention" })).toHaveCount(0);
+  await page.goto('/settings/trash');
+  await tap(page.getByRole('button', { name: 'Restore Grow retention' }));
+  await expect(page.getByTestId('trash-entry').filter({ hasText: 'Grow retention' })).toHaveCount(
+    0,
+  );
 
   await ranked(page);
-  await expect(draft(page, "Team alert digest")).toContainText("Grow retention");
-  await expect(draft(page, "Team alert digest")).not.toContainText("Faster activation");
+  await expect(draft(page, 'Team alert digest')).toContainText('Grow retention');
+  await expect(draft(page, 'Team alert digest')).not.toContainText('Faster activation');
 });
 
-test("An item left with only an archived goal reads No goal", async ({ page }) => {
+test('An item left with only an archived goal reads No goal', async ({ page }) => {
   await openPage(page);
-  const dialog = await goalDialog(page, "Archive");
-  await tap(dialog.getByRole("radio", { name: "Leave them with no goal (they show under No goal)" }));
-  await tap(dialog.getByRole("button", { name: "Archive goal" }));
-  await expect(goal(page, "Grow retention")).toHaveCount(0);
+  const dialog = await goalDialog(page, 'Archive');
+  await tap(
+    dialog.getByRole('radio', { name: 'Leave them with no goal (they show under No goal)' }),
+  );
+  await tap(dialog.getByRole('button', { name: 'Archive goal' }));
+  await expect(goal(page, 'Grow retention')).toHaveCount(0);
 
   await ranked(page);
-  await expect(draft(page, "Snooze for a day")).toContainText("No goal");
-  await expect(draft(page, "Snooze for a day")).not.toContainText("Cut support tickets in half");
+  await expect(draft(page, 'Snooze for a day')).toContainText('No goal');
+  await expect(draft(page, 'Snooze for a day')).not.toContainText('Cut support tickets in half');
 });
 
-test("Archive goal names the key result an item stays on", async ({ page }) => {
+test('Archive goal names the key result an item stays on', async ({ page }) => {
   await openPage(page);
-  const dialog = await goalDialog(page, "Archive");
+  const dialog = await goalDialog(page, 'Archive');
   await expect(dialog).toContainText(`Alert tone picker stays on ${KR}`);
-  await expect(dialog).not.toContainText("Alert tone picker → Faster activation");
+  await expect(dialog).not.toContainText('Alert tone picker → Faster activation');
 });
 
-test("An item left on a key result reads that key result as its goal", async ({ page }) => {
+test('An item left on a key result reads that key result as its goal', async ({ page }) => {
   await openPage(page);
-  const dialog = await goalDialog(page, "Archive");
-  await tap(dialog.getByRole("radio", { name: "Leave them with no goal (they show under No goal)" }));
-  await tap(dialog.getByRole("button", { name: "Archive goal" }));
-  await expect(goal(page, "Grow retention")).toHaveCount(0);
+  const dialog = await goalDialog(page, 'Archive');
+  await tap(
+    dialog.getByRole('radio', { name: 'Leave them with no goal (they show under No goal)' }),
+  );
+  await tap(dialog.getByRole('button', { name: 'Archive goal' }));
+  await expect(goal(page, 'Grow retention')).toHaveCount(0);
 
   await ranked(page);
-  await tap(draft(page, "Alert tone picker").getByText("Alert tone picker", { exact: true }));
-  const panel = page.getByRole("dialog").filter({ hasText: "Serves the goal" });
+  await tap(draft(page, 'Alert tone picker').getByText('Alert tone picker', { exact: true }));
+  const panel = page.getByRole('dialog').filter({ hasText: 'Serves the goal' });
   await expect(panel).toContainText(`Serves the goal ${KR}`);
-  await expect(panel).not.toContainText("undefined");
+  await expect(panel).not.toContainText('undefined');
 });
 
-test("An item on the archived goal and its own key result moves to the goal picked", async ({ page }) => {
+test('An item on the archived goal and its own key result moves to the goal picked', async ({
+  page,
+}) => {
   await openPage(page);
-  const dialog = await goalDialog(page, "Archive");
-  await expect(dialog).not.toContainText("Alert log download →");
-  const pick = dialog.getByLabel("Goal", { exact: true });
-  const label = (await pick.locator("option").allTextContents()).find((o) => o.endsWith("Growth"))!;
+  const dialog = await goalDialog(page, 'Archive');
+  await expect(dialog).not.toContainText('Alert log download →');
+  const pick = dialog.getByLabel('Goal', { exact: true });
+  const label = (await pick.locator('option').allTextContents()).find((o) => o.endsWith('Growth'))!;
   await pick.selectOption({ label });
-  await tap(dialog.getByRole("button", { name: "Archive goal" }));
-  await expect(goal(page, "Grow retention")).toHaveCount(0);
+  await tap(dialog.getByRole('button', { name: 'Archive goal' }));
+  await expect(goal(page, 'Grow retention')).toHaveCount(0);
 
   await ranked(page);
-  await expect(draft(page, "Alert log download")).toContainText("Growth");
-  await expect(draft(page, "Alert log download")).not.toContainText("Teams come back in week two");
+  await expect(draft(page, 'Alert log download')).toContainText('Growth');
+  await expect(draft(page, 'Alert log download')).not.toContainText('Teams come back in week two');
 });
 
-test("An item on the archived goal and a key result of its key result moves to the goal picked", async ({ page }) => {
+test('An item on the archived goal and a key result of its key result moves to the goal picked', async ({
+  page,
+}) => {
   await openPage(page);
-  const dialog = await goalDialog(page, "Archive");
-  await expect(dialog.getByTestId("goal-feature").filter({ hasText: "Alert quiet hours" })).toBeVisible();
-  await expect(dialog).not.toContainText("Alert quiet hours stays on");
-  const pick = dialog.getByLabel("Goal", { exact: true });
-  const label = (await pick.locator("option").allTextContents()).find((o) => o.endsWith("Growth"))!;
+  const dialog = await goalDialog(page, 'Archive');
+  await expect(
+    dialog.getByTestId('goal-feature').filter({ hasText: 'Alert quiet hours' }),
+  ).toBeVisible();
+  await expect(dialog).not.toContainText('Alert quiet hours stays on');
+  const pick = dialog.getByLabel('Goal', { exact: true });
+  const label = (await pick.locator('option').allTextContents()).find((o) => o.endsWith('Growth'))!;
   await pick.selectOption({ label });
-  await tap(dialog.getByRole("button", { name: "Archive goal" }));
-  await expect(goal(page, "Grow retention")).toHaveCount(0);
+  await tap(dialog.getByRole('button', { name: 'Archive goal' }));
+  await expect(goal(page, 'Grow retention')).toHaveCount(0);
 
   await ranked(page);
-  await expect(draft(page, "Alert quiet hours")).toContainText("Growth");
-  await expect(draft(page, "Alert quiet hours")).not.toContainText("Teams set quiet hours in week two");
+  await expect(draft(page, 'Alert quiet hours')).toContainText('Growth');
+  await expect(draft(page, 'Alert quiet hours')).not.toContainText(
+    'Teams set quiet hours in week two',
+  );
 });
 
-test("Archive says an item left on a key result keeps another goal", async ({ page }) => {
+test('Archive says an item left on a key result keeps another goal', async ({ page }) => {
   await openPage(page);
   await ranked(page);
   // The two drafts Archive moves to another goal of their own go to Trash first.
-  for (const name of ["Team alert digest", "Alert summary for leads"]) {
+  for (const name of ['Team alert digest', 'Alert summary for leads']) {
     await tap(draft(page, name).getByText(name, { exact: true }));
-    const panel = page.getByTestId("floating-card");
-    await tap(panel.getByRole("button", { name: "More actions" }));
-    await tap(panel.getByRole("menuitem", { name: "Move to Trash…" }));
-    await tap(page.getByRole("alertdialog").getByRole("button", { name: "Move to Trash" }));
+    const panel = page.getByTestId('floating-card');
+    await tap(panel.getByRole('button', { name: 'More actions' }));
+    await tap(panel.getByRole('menuitem', { name: 'Move to Trash…' }));
+    await tap(page.getByRole('alertdialog').getByRole('button', { name: 'Move to Trash' }));
     await expect(draft(page, name)).toHaveCount(0);
   }
 
-  await page.goto("/simple/priorities?tab=buckets");
-  const dialog = await goalDialog(page, "Archive");
+  await page.goto('/simple/priorities?tab=buckets');
+  const dialog = await goalDialog(page, 'Archive');
   await expect(dialog).toContainText(`1 keeps another goal: Alert tone picker stays on ${KR}`);
-  await expect(dialog).not.toContainText("goes there");
+  await expect(dialog).not.toContainText('goes there');
 });
 
-test("An item on the archived goal and a key result of a goal in Trash moves to the goal picked", async ({ page }) => {
+test('An item on the archived goal and a key result of a goal in Trash moves to the goal picked', async ({
+  page,
+}) => {
   await openPage(page);
-  const del = await goalDialog(page, "Delete", "Faster activation");
-  await tap(del.getByLabel("Leave them with no goal"));
-  await tap(del.getByRole("button", { name: "Delete goal" }));
-  await expect(goal(page, "Faster activation")).toHaveCount(0);
+  const del = await goalDialog(page, 'Delete', 'Faster activation');
+  await tap(del.getByLabel('Leave them with no goal'));
+  await tap(del.getByRole('button', { name: 'Delete goal' }));
+  await expect(goal(page, 'Faster activation')).toHaveCount(0);
 
-  const dialog = await goalDialog(page, "Archive");
-  await expect(dialog.getByTestId("goal-feature").filter({ hasText: "Alert tone picker" })).toBeVisible();
-  await expect(dialog).not.toContainText("Alert tone picker stays on");
-  const pick = dialog.getByLabel("Goal", { exact: true });
-  const label = (await pick.locator("option").allTextContents()).find((o) => o.endsWith("Growth"))!;
+  const dialog = await goalDialog(page, 'Archive');
+  await expect(
+    dialog.getByTestId('goal-feature').filter({ hasText: 'Alert tone picker' }),
+  ).toBeVisible();
+  await expect(dialog).not.toContainText('Alert tone picker stays on');
+  const pick = dialog.getByLabel('Goal', { exact: true });
+  const label = (await pick.locator('option').allTextContents()).find((o) => o.endsWith('Growth'))!;
   await pick.selectOption({ label });
-  await tap(dialog.getByRole("button", { name: "Archive goal" }));
-  await expect(goal(page, "Grow retention")).toHaveCount(0);
+  await tap(dialog.getByRole('button', { name: 'Archive goal' }));
+  await expect(goal(page, 'Grow retention')).toHaveCount(0);
 
   await ranked(page);
-  await expect(draft(page, "Alert tone picker")).toContainText("Growth");
-  await expect(draft(page, "Alert tone picker")).not.toContainText(KR);
+  await expect(draft(page, 'Alert tone picker')).toContainText('Growth');
+  await expect(draft(page, 'Alert tone picker')).not.toContainText(KR);
 });
 
-test("An item on the archived goal and a key result under its proposed key result moves to the goal picked", async ({ page }) => {
+test('An item on the archived goal and a key result under its proposed key result moves to the goal picked', async ({
+  page,
+}) => {
   await openPage(page);
-  const dialog = await goalDialog(page, "Archive");
-  await expect(dialog.getByTestId("goal-feature").filter({ hasText: "Alert sound pack" })).toBeVisible();
-  await expect(dialog).not.toContainText("Alert sound pack →");
-  await expect(dialog).not.toContainText("Alert sound pack stays on");
-  const pick = dialog.getByLabel("Goal", { exact: true });
-  const label = (await pick.locator("option").allTextContents()).find((o) => o.endsWith("Growth"))!;
+  const dialog = await goalDialog(page, 'Archive');
+  await expect(
+    dialog.getByTestId('goal-feature').filter({ hasText: 'Alert sound pack' }),
+  ).toBeVisible();
+  await expect(dialog).not.toContainText('Alert sound pack →');
+  await expect(dialog).not.toContainText('Alert sound pack stays on');
+  const pick = dialog.getByLabel('Goal', { exact: true });
+  const label = (await pick.locator('option').allTextContents()).find((o) => o.endsWith('Growth'))!;
   await pick.selectOption({ label });
-  await tap(dialog.getByRole("button", { name: "Archive goal" }));
-  await expect(goal(page, "Grow retention")).toHaveCount(0);
+  await tap(dialog.getByRole('button', { name: 'Archive goal' }));
+  await expect(goal(page, 'Grow retention')).toHaveCount(0);
 
   await ranked(page);
-  await expect(draft(page, "Alert sound pack")).toContainText("Growth");
-  await expect(draft(page, "Alert sound pack")).not.toContainText("Teams pick an alert sound in week two");
+  await expect(draft(page, 'Alert sound pack')).toContainText('Growth');
+  await expect(draft(page, 'Alert sound pack')).not.toContainText(
+    'Teams pick an alert sound in week two',
+  );
 });

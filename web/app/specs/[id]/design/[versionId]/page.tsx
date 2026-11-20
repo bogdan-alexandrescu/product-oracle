@@ -1,7 +1,7 @@
-import { Suspense } from "react";
+import { Suspense } from 'react';
 
-import { DesignReview } from "@/components/DesignReview";
-import { PageSkeleton } from "@/components/ds";
+import { DesignReview } from '@/components/DesignReview';
+import { PageSkeleton } from '@/components/ds';
 
 /** Spelled out rather than Next's generated PageProps, so tsc passes without a build first. */
 type Params = { params: Promise<{ id: string; versionId: string }> };

@@ -1,10 +1,10 @@
-import { Suspense } from "react";
+import { Suspense } from 'react';
 
-import { PublicCheck } from "@/components/share/PublicCheck";
-import type { RouteProps } from "@/lib/route-props";
-import { PageSkeleton } from "@/components/ds";
+import { PublicCheck } from '@/components/share/PublicCheck';
+import type { RouteProps } from '@/lib/route-props';
+import { PageSkeleton } from '@/components/ds';
 
-async function Check({ params }: { params: RouteProps<{ doc: string }>["params"] }) {
+async function Check({ params }: { params: RouteProps<{ doc: string }>['params'] }) {
   const { doc } = await params;
   return <PublicCheck doc={doc} />;
 }

@@ -1,42 +1,62 @@
-"use client";
+'use client';
 
-import { Link } from "@/lib/nav";
-import { useCallback, useEffect, useState } from "react";
+import { Link } from '@/lib/nav';
+import { useCallback, useEffect, useState } from 'react';
 
-import { toast } from "@/components/ds/Toast";
-import { ChatCard } from "@/components/simple/chat/ChatCard";
-import { LoadError } from "@/components/ui";
-import { recommendsLine, type Answer, type Question } from "@/components/simple/questions/Questions";
-import { useItemCode } from "@/components/simple/WaitingItems";
-import { api, unwrap } from "@/lib/api/client";
-import { askSay, askThread, PENDING_POLL_MS, undoCard, walk, type ChatCard as Card, type ChatMessage, type WalkStep } from "@/lib/api/simple-chat";
-import { formatInZone, useCompanyZone } from "@/lib/dates";
-import { beforeAfter, OP_WORDS } from "@/lib/simple-home";
-import { errorMessage } from "@/lib/use-query";
-import { invalidateWaiting, loadInbox, waitingChanged } from "@/lib/waiting";
+import { toast } from '@/components/ds/Toast';
+import { ChatCard } from '@/components/simple/chat/ChatCard';
+import { LoadError } from '@/components/ui';
+import {
+  recommendsLine,
+  type Answer,
+  type Question,
+} from '@/components/simple/questions/Questions';
+import { useItemCode } from '@/components/simple/WaitingItems';
+import { api, unwrap } from '@/lib/api/client';
+import {
+  askSay,
+  askThread,
+  PENDING_POLL_MS,
+  undoCard,
+  walk,
+  type ChatCard as Card,
+  type ChatMessage,
+  type WalkStep,
+} from '@/lib/api/simple-chat';
+import { formatInZone, useCompanyZone } from '@/lib/dates';
+import { beforeAfter, OP_WORDS } from '@/lib/simple-home';
+import { errorMessage } from '@/lib/use-query';
+import { invalidateWaiting, loadInbox, waitingChanged } from '@/lib/waiting';
 
 /** What a step did, for Undo: an applied card or accepted proposal is undone; anything else goes back a step. `skipped`: Skip moved on. */
 type Done = { step: number; card?: string; change?: string; skipped?: boolean };
 
 /** A decision waiting for the reader (GET /v1/simple/decisions/waiting): a PRD's question, or another judgement call. */
-type DecisionStep = { id: string; kind: "decision"; title: string; why: string; question: Question | null; url: string };
+type DecisionStep = {
+  id: string;
+  kind: 'decision';
+  title: string;
+  why: string;
+  question: Question | null;
+  url: string;
+};
 type Step = WalkStep | DecisionStep;
 
-const detail = (e: unknown) => errorMessage(e).replace(/ \(\d{3}\)$/, "");
+const detail = (e: unknown) => errorMessage(e).replace(/ \(\d{3}\)$/, '');
 
-const KIND_WORDS: Record<Step["kind"], string> = {
-  broken_link: "Broken link",
-  decision: "Decision waiting for you",
+const KIND_WORDS: Record<Step['kind'], string> = {
+  broken_link: 'Broken link',
+  decision: 'Decision waiting for you',
   agenda_decision: "On a meeting's agenda",
-  proposal: "Proposal waiting for you",
+  proposal: 'Proposal waiting for you',
 };
 
 /** qa-simple-home-8: the type box's hint, short enough for a phone, as the step asks. */
-const TYPE_HINT: Record<Step["kind"], string> = {
-  broken_link: "Or type the fix",
-  decision: "Or type your answer",
-  agenda_decision: "Or type a note",
-  proposal: "Or type what to do",
+const TYPE_HINT: Record<Step['kind'], string> = {
+  broken_link: 'Or type the fix',
+  decision: 'Or type your answer',
+  agenda_decision: 'Or type a note',
+  proposal: 'Or type what to do',
 };
 
 /** Home's "Next review meeting" (GET /v1/simple/meetings: Upcoming's first row). */
@@ -45,7 +65,8 @@ type NextMeeting = { ritual_title: string; due_at: string };
 /** "1 decision", "5 broken links". */
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 /** "a, b and c". */
-const joinAnd = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
+const joinAnd = (xs: string[]) =>
+  xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}`;
 
 /**
  * The walk's steps: the broken links (GET /v1/simple/walk), then the decisions waiting for the
@@ -56,7 +77,11 @@ const joinAnd = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, 
 /** A read that failed: what it was ("the decisions waiting for you") and the reason it gave. */
 type Failed = [what: string, reason: string];
 
-async function loadSteps(): Promise<{ steps: Step[]; meeting: NextMeeting | null; failed: Failed[] }> {
+async function loadSteps(): Promise<{
+  steps: Step[];
+  meeting: NextMeeting | null;
+  failed: Failed[];
+}> {
   // The walk's own steps are the pass; a decisions read that fails leaves its steps out, never the
   // whole walk, and is carried out (failed) to say so with its reason, never read as none (#1586).
   const failed: Failed[] = [];
@@ -68,42 +93,71 @@ async function loadSteps(): Promise<{ steps: Step[]; meeting: NextMeeting | null
     });
   const [w, waitingR, inboxR, meetingsR] = await Promise.all([
     walk(),
-    settle(unwrap(api.GET("/v1/simple/decisions/waiting")), "the decisions waiting for you"),
-    settle(loadInbox(), "the inbox"),
-    settle(unwrap(api.GET("/v1/simple/meetings")), "the meetings"),
+    settle(unwrap(api.GET('/v1/simple/decisions/waiting')), 'the decisions waiting for you'),
+    settle(loadInbox(), 'the inbox'),
+    settle(unwrap(api.GET('/v1/simple/meetings')), 'the meetings'),
   ]);
   const waiting = waitingR ?? { questions: [] as Question[] };
-  const inbox = inboxR ?? { decisions: [] as Awaited<ReturnType<typeof loadInbox>>["decisions"] };
-  const agenda = new Set(w.steps.flatMap((s) => (s.kind === "agenda_decision" && s.decision ? [s.decision.id] : [])));
-  const questions = [...waiting.questions.filter((q) => q.late), ...waiting.questions.filter((q) => !q.late)].filter((q) => !agenda.has(q.id));
+  const inbox = inboxR ?? { decisions: [] as Awaited<ReturnType<typeof loadInbox>>['decisions'] };
+  const agenda = new Set(
+    w.steps.flatMap((s) => (s.kind === 'agenda_decision' && s.decision ? [s.decision.id] : [])),
+  );
+  const questions = [
+    ...waiting.questions.filter((q) => q.late),
+    ...waiting.questions.filter((q) => !q.late),
+  ].filter((q) => !agenda.has(q.id));
   const asked = new Set(waiting.questions.map((q) => q.id));
-  const rows = inbox.decisions.filter((d) => d.counts && d.reason === "needs_decision" && !agenda.has(d.id) && !asked.has(d.id));
+  const rows = inbox.decisions.filter(
+    (d) => d.counts && d.reason === 'needs_decision' && !agenda.has(d.id) && !asked.has(d.id),
+  );
   // As Home's card: Oracle's run approvals are never product decisions, nor a PRD's question read twice.
-  const others = (await Promise.all(rows.map((d) => settle(unwrap(api.GET("/v1/decisions/{decision}", { params: { path: { decision: String(d.number) } } })), `the decision ${d.title}`))))
+  const others = (
+    await Promise.all(
+      rows.map((d) =>
+        settle(
+          unwrap(
+            api.GET('/v1/decisions/{decision}', {
+              params: { path: { decision: String(d.number) } },
+            }),
+          ),
+          `the decision ${d.title}`,
+        ),
+      ),
+    )
+  )
     .filter((d): d is NonNullable<typeof d> => !!d)
-    .filter((d) => d.class !== "checkpoint" && d.origin !== "checkpoint" && (d.origin as string) !== "prd");
+    .filter(
+      (d) =>
+        d.class !== 'checkpoint' && d.origin !== 'checkpoint' && (d.origin as string) !== 'prd',
+    );
   const decisions: DecisionStep[] = [
     ...questions.map((q) => ({
       id: `decision:${q.id}`,
-      kind: "decision" as const,
+      kind: 'decision' as const,
       title: `${q.code} ${q.title}`,
-      why: [q.due_label, q.blocks?.label, recommendsLine(q)].filter(Boolean).join(" · ") || `From ${q.prd.title}`,
+      why:
+        [q.due_label, q.blocks?.label, recommendsLine(q)].filter(Boolean).join(' · ') ||
+        `From ${q.prd.title}`,
       question: q,
-      url: "/simple/decisions",
+      url: '/simple/decisions',
     })),
     ...others.map((d) => ({
       id: `decision:${d.id}`,
-      kind: "decision" as const,
+      kind: 'decision' as const,
       title: d.title,
-      why: d.question || "It waits for your decision.",
+      why: d.question || 'It waits for your decision.',
       question: null,
       // Where it can be decided, as Home's card for it opens: Simple's Decisions page only lists
       // a judgement call that is not a PRD's question (no Decide there).
       url: `/company/decisions?d=${d.number}`,
     })),
   ];
-  const broken = w.steps.filter((s) => s.kind === "broken_link");
-  return { steps: [...broken, ...decisions, ...w.steps.filter((s) => s.kind !== "broken_link")], meeting: meetingsR?.upcoming[0] ?? null, failed };
+  const broken = w.steps.filter((s) => s.kind === 'broken_link');
+  return {
+    steps: [...broken, ...decisions, ...w.steps.filter((s) => s.kind !== 'broken_link')],
+    meeting: meetingsR?.upcoming[0] ?? null,
+    failed,
+  };
 }
 
 /**
@@ -160,10 +214,14 @@ export function Walk({ onDone }: { onDone: () => void }) {
     try {
       if (last.card) {
         await undoCard(last.card);
-        toast({ message: "Undone" });
+        toast({ message: 'Undone' });
       } else if (last.change) {
-        await unwrap(api.POST("/v1/simple/changes/{change_id}/undo", { params: { path: { change_id: last.change } } }));
-        toast({ message: "Undone" });
+        await unwrap(
+          api.POST('/v1/simple/changes/{change_id}/undo', {
+            params: { path: { change_id: last.change } },
+          }),
+        );
+        toast({ message: 'Undone' });
       }
       if (last.card || last.change) {
         invalidateWaiting();
@@ -179,12 +237,17 @@ export function Walk({ onDone }: { onDone: () => void }) {
     }
   }
 
-  async function decide(step: WalkStep, action: "accept" | "decline") {
+  async function decide(step: WalkStep, action: 'accept' | 'decline') {
     setBusy(true);
     try {
-      await unwrap(api.POST(`/v1/simple/changes/{change_id}/${action}`, { params: { path: { change_id: step.change!.id } }, body: {} }));
-      toast({ message: action === "accept" ? "Accepted" : "Declined" });
-      next({ step: at, change: action === "accept" ? step.change!.id : undefined });
+      await unwrap(
+        api.POST(`/v1/simple/changes/{change_id}/${action}`, {
+          params: { path: { change_id: step.change!.id } },
+          body: {},
+        }),
+      );
+      toast({ message: action === 'accept' ? 'Accepted' : 'Declined' });
+      next({ step: at, change: action === 'accept' ? step.change!.id : undefined });
     } catch (e) {
       toast({ message: detail(e) });
     } finally {
@@ -196,18 +259,30 @@ export function Walk({ onDone }: { onDone: () => void }) {
    * A PRD's question decided (decide_question) as recommended, or (qa4-simple-home-1) in the
    * person's own typed words: applied with Undo, or proposed to its decider. Never a chat.
    */
-  async function answer(q: Question, a: Answer = { option: "recommended" }): Promise<boolean> {
+  async function answer(q: Question, a: Answer = { option: 'recommended' }): Promise<boolean> {
     setBusy(true);
     try {
       const r = await unwrap(
-        api.POST("/v1/simple/changes", { body: { op: "decide_question", target: { decision_id: q.id }, before: { status: "proposed" }, after: a } }),
+        api.POST('/v1/simple/changes', {
+          body: {
+            op: 'decide_question',
+            target: { decision_id: q.id },
+            before: { status: 'proposed' },
+            after: a,
+          },
+        }),
       );
       const c = r.change;
-      const words = "answer" in a ? a.answer : q.recommendation;
-      toast({ message: c.status === "proposed" ? `Sent to ${q.decider?.name ?? "the owners"} to decide` : `Decided ${q.title}: ${words}` });
+      const words = 'answer' in a ? a.answer : q.recommendation;
+      toast({
+        message:
+          c.status === 'proposed'
+            ? `Sent to ${q.decider?.name ?? 'the owners'} to decide`
+            : `Decided ${q.title}: ${words}`,
+      });
       invalidateWaiting();
       waitingChanged();
-      next({ step: at, change: c.status === "applied" && c.can_undo ? c.id : undefined });
+      next({ step: at, change: c.status === 'applied' && c.can_undo ? c.id : undefined });
       return true;
     } catch (e) {
       toast({ message: detail(e) });
@@ -231,25 +306,36 @@ export function Walk({ onDone }: { onDone: () => void }) {
   // The steps whose last answer was Skip (Undo takes an answer back).
   const lastOf = new Map<number, Done>();
   for (const d of done) lastOf.set(d.step, d);
-  const skipped = [...lastOf.values()].filter((d) => d.skipped).map((d) => steps?.[d.step]).filter((s): s is Step => !!s);
+  const skipped = [...lastOf.values()]
+    .filter((d) => d.skipped)
+    .map((d) => steps?.[d.step])
+    .filter((s): s is Step => !!s);
   const left = joinAnd(
     [
       // qa4-simple-home-9: a meeting's agenda item is not one of Home's decisions: counted apart.
-      count(skipped.filter((s) => s.kind === "decision").length, "decision", "decisions"),
-      count(skipped.filter((s) => s.kind === "agenda_decision").length, "meeting agenda item", "meeting agenda items"),
-      count(skipped.filter((s) => s.kind === "broken_link").length, "broken link", "broken links"),
-      count(skipped.filter((s) => s.kind === "proposal").length, "proposal", "proposals"),
-    ].filter((x) => !x.startsWith("0 ")),
+      count(skipped.filter((s) => s.kind === 'decision').length, 'decision', 'decisions'),
+      count(
+        skipped.filter((s) => s.kind === 'agenda_decision').length,
+        'meeting agenda item',
+        'meeting agenda items',
+      ),
+      count(skipped.filter((s) => s.kind === 'broken_link').length, 'broken link', 'broken links'),
+      count(skipped.filter((s) => s.kind === 'proposal').length, 'proposal', 'proposals'),
+    ].filter((x) => !x.startsWith('0 ')),
   );
   // qa-simple-home-5: an agenda step names Home's "Next review meeting" (the same read, with its date) only when it is that meeting's.
   const agendaWords = (s: Step) =>
     meeting && s.why.includes(meeting.ritual_title)
-      ? `On the agenda of the next review meeting, ${meeting.ritual_title}, ${formatInZone(meeting.due_at, zone, { weekday: "short", month: "short", day: "numeric" })}`
+      ? `On the agenda of the next review meeting, ${meeting.ritual_title}, ${formatInZone(meeting.due_at, zone, { weekday: 'short', month: 'short', day: 'numeric' })}`
       : KIND_WORDS[s.kind];
   // Nothing to undo before a step was answered or skipped (the walk's first step).
   const canUndo = !busy && done.length > 0;
   return (
-    <section aria-label="Walk me through it" data-testid="walk" className="simple-card flex flex-col gap-4 max-[600px]:mb-[76px]">
+    <section
+      aria-label="Walk me through it"
+      data-testid="walk"
+      className="simple-card flex flex-col gap-4 max-[600px]:mb-[76px]"
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="simple-h2">Walk me through it</h2>
         {step && (
@@ -259,15 +345,29 @@ export function Walk({ onDone }: { onDone: () => void }) {
         )}
       </div>
       <div className="flex flex-wrap gap-2 border-b border-line pb-3">
-        <button type="button" className="simple-button disabled:cursor-not-allowed disabled:opacity-50" disabled={!canUndo} onClick={() => void undo()}>
+        <button
+          type="button"
+          className="simple-button disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={!canUndo}
+          onClick={() => void undo()}
+        >
           Undo
         </button>
         {step && (
-          <button type="button" className="simple-button disabled:cursor-not-allowed disabled:opacity-50" disabled={busy} onClick={() => next({ step: at, skipped: true })}>
+          <button
+            type="button"
+            className="simple-button disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={busy}
+            onClick={() => next({ step: at, skipped: true })}
+          >
             Skip
           </button>
         )}
-        <button type="button" className="simple-button simple-button-primary ml-auto" onClick={onDone}>
+        <button
+          type="button"
+          className="simple-button simple-button-primary ml-auto"
+          onClick={onDone}
+        >
           Done
         </button>
       </div>
@@ -293,10 +393,16 @@ export function Walk({ onDone }: { onDone: () => void }) {
           ) : (
             <>
               <p data-testid="walk-left">
-                You skipped {skipped.length}. {left} still {skipped.length === 1 ? "waits" : "wait"}.
+                You skipped {skipped.length}. {left} still {skipped.length === 1 ? 'waits' : 'wait'}
+                .
               </p>
               <div className="flex flex-wrap gap-2">
-                <button type="button" className="simple-button" disabled={busy} onClick={() => void again()}>
+                <button
+                  type="button"
+                  className="simple-button"
+                  disabled={busy}
+                  onClick={() => void again()}
+                >
                   Start again from the first skipped
                 </button>
               </div>
@@ -305,9 +411,14 @@ export function Walk({ onDone }: { onDone: () => void }) {
         </div>
       )}
       {step && (
-        <div key={`${step.id}-${at}`} data-testid="walk-step" data-kind={step.kind} className="flex flex-col gap-3">
+        <div
+          key={`${step.id}-${at}`}
+          data-testid="walk-step"
+          data-kind={step.kind}
+          className="flex flex-col gap-3"
+        >
           <p className="simple-small text-text2" data-testid="walk-step-kind">
-            {step.kind === "agenda_decision" ? agendaWords(step) : KIND_WORDS[step.kind]}
+            {step.kind === 'agenda_decision' ? agendaWords(step) : KIND_WORDS[step.kind]}
           </p>
           <p className="font-semibold" data-testid="walk-step-title">
             <StepCode step={step} />
@@ -316,62 +427,86 @@ export function Walk({ onDone }: { onDone: () => void }) {
           <p className="simple-small" data-testid="walk-step-why">
             {step.why}
           </p>
-          {step.kind === "broken_link" && step.card && (
+          {step.kind === 'broken_link' && step.card && (
             <ChatCard
               card={step.card}
               actionsOnly
               onChanged={(c: Card) => {
-                if (c.status === "applied" || c.status === "proposed") {
-                  toast({ message: `${c.status === "applied" ? "Applied" : "Proposed"}: ${step.title}` });
-                  next({ step: at, card: c.status === "applied" ? c.id : undefined });
+                if (c.status === 'applied' || c.status === 'proposed') {
+                  toast({
+                    message: `${c.status === 'applied' ? 'Applied' : 'Proposed'}: ${step.title}`,
+                  });
+                  next({ step: at, card: c.status === 'applied' ? c.id : undefined });
                 }
               }}
             />
           )}
-          {step.kind === "decision" && (
+          {step.kind === 'decision' && (
             <div className="flex flex-wrap gap-2">
-              {step.question?.recommendation && (step.question.can.decide || step.question.can.propose) && (
-                <button type="button" className="simple-button simple-button-primary" disabled={busy} onClick={() => void answer(step.question!)}>
-                  {step.question.can.decide ? "Decide" : "Propose"}: {step.question.recommendation}
-                </button>
-              )}
+              {step.question?.recommendation &&
+                (step.question.can.decide || step.question.can.propose) && (
+                  <button
+                    type="button"
+                    className="simple-button simple-button-primary"
+                    disabled={busy}
+                    onClick={() => void answer(step.question!)}
+                  >
+                    {step.question.can.decide ? 'Decide' : 'Propose'}:{' '}
+                    {step.question.recommendation}
+                  </button>
+                )}
               <Link href={step.url} className="simple-button">
                 Open the decision
               </Link>
             </div>
           )}
-          {step.kind === "agenda_decision" && step.decision && (
+          {step.kind === 'agenda_decision' && step.decision && (
             <div className="flex flex-wrap gap-2">
               <Link href={step.decision.url} className="simple-button">
                 Open the decision
               </Link>
             </div>
           )}
-          {step.kind === "proposal" && step.change && (
+          {step.kind === 'proposal' && step.change && (
             <div className="flex flex-col gap-2">
               <p className="simple-small">
-                {OP_WORDS[step.change.op] ?? "A change"}
+                {OP_WORDS[step.change.op] ?? 'A change'}
                 {(() => {
                   const ba = beforeAfter(step.change);
-                  return ba ? `: ${ba.before} → ${ba.after}` : "";
+                  return ba ? `: ${ba.before} → ${ba.after}` : '';
                 })()}
               </p>
               <div className="flex flex-wrap gap-2">
-                <button type="button" className="simple-button simple-button-primary" disabled={busy} onClick={() => void decide(step, "accept")}>
+                <button
+                  type="button"
+                  className="simple-button simple-button-primary"
+                  disabled={busy}
+                  onClick={() => void decide(step, 'accept')}
+                >
                   Accept
                 </button>
-                <button type="button" className="simple-button" disabled={busy} onClick={() => void decide(step, "decline")}>
+                <button
+                  type="button"
+                  className="simple-button"
+                  disabled={busy}
+                  onClick={() => void decide(step, 'decline')}
+                >
                   Decline
                 </button>
               </div>
             </div>
           )}
-          {step.kind === "decision" ? (
+          {step.kind === 'decision' ? (
             // qa4-simple-home-1, -33: a typed answer is the decision's answer, recorded on it (no chat);
             // a decision the reader cannot answer here has only "Open the decision".
             step.question &&
             (step.question.can.decide || step.question.can.propose) && (
-              <TypeAnswer hint={TYPE_HINT.decision} verb={step.question.can.decide ? "Decide" : "Propose"} busy={busy} onAnswer={(t) => answer(step.question!, { answer: t })} />
+              <TypeAnswer
+                hint={TYPE_HINT.decision}
+                verb={step.question.can.decide ? 'Decide' : 'Propose'}
+                busy={busy}
+                onAnswer={(t) => answer(step.question!, { answer: t })}
+              />
             )
           ) : (
             <TypeInstead hint={TYPE_HINT[step.kind]} />
@@ -383,8 +518,18 @@ export function Walk({ onDone }: { onDone: () => void }) {
 }
 
 /** qa4-simple-home-1: a decision answered in the person's own words, recorded as its answer. */
-function TypeAnswer({ hint, verb, busy, onAnswer }: { hint: string; verb: string; busy: boolean; onAnswer: (text: string) => Promise<boolean> }) {
-  const [text, setText] = useState("");
+function TypeAnswer({
+  hint,
+  verb,
+  busy,
+  onAnswer,
+}: {
+  hint: string;
+  verb: string;
+  busy: boolean;
+  onAnswer: (text: string) => Promise<boolean>;
+}) {
+  const [text, setText] = useState('');
   return (
     <div className="flex flex-col gap-2" data-testid="walk-type">
       <form
@@ -392,7 +537,7 @@ function TypeAnswer({ hint, verb, busy, onAnswer }: { hint: string; verb: string
         onSubmit={(e) => {
           e.preventDefault();
           const t = text.trim();
-          if (t) void onAnswer(t).then((ok) => ok && setText(""));
+          if (t) void onAnswer(t).then((ok) => ok && setText(''));
         }}
       >
         <input
@@ -413,7 +558,7 @@ function TypeAnswer({ hint, verb, busy, onAnswer }: { hint: string; verb: string
 
 /** Answer by typing: the line goes to Oracle (the Ask thread); its reply and cards show here. */
 function TypeInstead({ hint }: { hint: string }) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState('');
   const [reply, setReply] = useState<ChatMessage | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -423,12 +568,12 @@ function TypeInstead({ hint }: { hint: string }) {
     setBusy(true);
     setError(null);
     try {
-      const thread = await askSay(t, "/simple");
-      let last = [...thread.messages].reverse().find((m) => m.author_kind === "oracle") ?? null;
+      const thread = await askSay(t, '/simple');
+      let last = [...thread.messages].reverse().find((m) => m.author_kind === 'oracle') ?? null;
       setReply(last);
-      setText("");
+      setText('');
       // chat-reader: a line Oracle's reader is still reading shows "Reading that…" until it is read.
-      for (let n = 0; last?.kind === "pending" && n < 40; n++) {
+      for (let n = 0; last?.kind === 'pending' && n < 40; n++) {
         await new Promise((r) => window.setTimeout(r, PENDING_POLL_MS));
         const id = last.id;
         last = (await askThread()).messages.find((m) => m.id === id) ?? null;
@@ -480,6 +625,10 @@ function TypeInstead({ hint }: { hint: string }) {
 
 /** simple-home-qa-nov12 #4: a broken link step's item code (its id is "link:<item id>:…"), as Home's rows show it. */
 function StepCode({ step }: { step: Step }) {
-  const code = useItemCode(step.kind === "broken_link" ? step.id.split(":")[1] : null);
-  return code ? <><code className="simple-code">{code}</code>{" "}</> : null;
+  const code = useItemCode(step.kind === 'broken_link' ? step.id.split(':')[1] : null);
+  return code ? (
+    <>
+      <code className="simple-code">{code}</code>{' '}
+    </>
+  ) : null;
 }

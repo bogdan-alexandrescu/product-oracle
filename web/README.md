@@ -15,7 +15,7 @@ npm run dev:mock   # no backend: in-browser mock API with fixtures
 
 `NEXT_PUBLIC_API_MOCKS=1` (inlined at build time) swaps the client's transport for
 `lib/api/mock/server.ts`, a fake of the `/v1` API backed by the fictional PRDs in
-`lib/api/mock/fixtures.ts`. State persists in `localStorage`; the header's *Reset*
+`lib/api/mock/fixtures.ts`. State persists in `localStorage`; the header's _Reset_
 link reseeds it. Sign in with `admin@example.com` / `demo`.
 
 ## Tests

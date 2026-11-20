@@ -1,24 +1,35 @@
-"use client";
+'use client';
 
-import { Link } from "@/lib/nav";
-import { useState } from "react";
+import { Link } from '@/lib/nav';
+import { useState } from 'react';
 
-import { entrySummary, entryText, itemKind, itemTitle } from "@/components/ArtifactMenu";
-import { Button, Chip, confirmInPage, Empty, InfoTip, Notice, PageHeader, Panel, toast } from "@/components/ds";
-import { LoadError } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { artifactsChanged } from "@/lib/artifacts";
-import { formatDateTime } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import { entrySummary, entryText, itemKind, itemTitle } from '@/components/ArtifactMenu';
+import {
+  Button,
+  Chip,
+  confirmInPage,
+  Empty,
+  InfoTip,
+  Notice,
+  PageHeader,
+  Panel,
+  toast,
+} from '@/components/ds';
+import { LoadError } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { artifactsChanged } from '@/lib/artifacts';
+import { formatDateTime } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-type Entry = Schemas["TrashEntryOut"];
+type Entry = Schemas['TrashEntryOut'];
 
 /** F-68: deletes an entry for good now (owners; DELETE /v1/trash/{entry_id}). */
 /** G-4: what an entry holds beyond its name, in a few words: a goal's features, an agenda item's meeting. */
-function holds(root: Entry["root"]): string | null {
-  if (root.type === "goal" && root.features != null) return `with ${root.features} ${root.features === 1 ? "feature" : "features"}`;
-  if (root.type === "agenda_item" && root.meeting) return `from ${root.meeting}`;
+function holds(root: Entry['root']): string | null {
+  if (root.type === 'goal' && root.features != null)
+    return `with ${root.features} ${root.features === 1 ? 'feature' : 'features'}`;
+  if (root.type === 'agenda_item' && root.meeting) return `from ${root.meeting}`;
   return null;
 }
 
@@ -26,14 +37,16 @@ function holds(root: Entry["root"]): string | null {
 function restoreText(e: Entry): string {
   const name = e.root.code ? `${e.root.code} ${e.root.title}` : itemTitle(e.root, e.root.title);
   const what = `${itemKind(e.root)} ${name}`;
-  if (e.root.type === "agenda_item" && e.root.meeting) return `Restore brings back ${what} to the agenda of ${e.root.meeting}.`;
+  if (e.root.type === 'agenda_item' && e.root.meeting)
+    return `Restore brings back ${what} to the agenda of ${e.root.meeting}.`;
   const held = holds(e.root);
   if (held) return `Restore brings back ${what} ${held}, as they were.`;
   if (e.items.length) return `Restore brings back ${entryText(e.root, e.items)}, together.`;
   return `Restore brings back ${what} as it was.`;
 }
 
-const purge = (e: Entry) => unwrap(api.DELETE("/v1/trash/{entry_id}", { params: { path: { entry_id: e.id } } }));
+const purge = (e: Entry) =>
+  unwrap(api.DELETE('/v1/trash/{entry_id}', { params: { path: { entry_id: e.id } } }));
 
 function Row({ e, mayPurge, onGone }: { e: Entry; mayPurge: boolean; onGone: () => void }) {
   const [busy, setBusy] = useState(false);
@@ -42,10 +55,12 @@ function Row({ e, mayPurge, onGone }: { e: Entry; mayPurge: boolean; onGone: () 
     setBusy(true);
     setError(null);
     try {
-      const out = await unwrap(api.POST("/v1/trash/{entry_id}/restore", { params: { path: { entry_id: e.id } } }));
+      const out = await unwrap(
+        api.POST('/v1/trash/{entry_id}/restore', { params: { path: { entry_id: e.id } } }),
+      );
       artifactsChanged();
       // A task whose feature is still in Trash: "Restored Task Spec; it shows when F-3 Ledger is restored".
-      const held = out.not_restored.map((n) => `; ${n.reason}`).join("");
+      const held = out.not_restored.map((n) => `; ${n.reason}`).join('');
       toast({ message: `Restored ${entrySummary(e.root, e.items)}${held}` });
       onGone();
     } catch (err) {
@@ -56,8 +71,10 @@ function Row({ e, mayPurge, onGone }: { e: Entry; mayPurge: boolean; onGone: () 
   async function deleteForGood() {
     const ok = await confirmInPage({
       title: `Delete ${itemTitle(e.root, e.root.title)} for good?`,
-      message: e.items.length ? `${entryText(e.root, e.items)} go for good. This cannot be undone.` : "It goes for good. This cannot be undone.",
-      action: "Delete for good",
+      message: e.items.length
+        ? `${entryText(e.root, e.items)} go for good. This cannot be undone.`
+        : 'It goes for good. This cannot be undone.',
+      action: 'Delete for good',
       destructive: true,
     });
     if (!ok) return;
@@ -74,7 +91,10 @@ function Row({ e, mayPurge, onGone }: { e: Entry; mayPurge: boolean; onGone: () 
     }
   }
   return (
-    <li data-testid="trash-entry" className="flex flex-wrap items-start gap-x-4 gap-y-2 px-4 py-3 max-[600px]:px-3">
+    <li
+      data-testid="trash-entry"
+      className="flex flex-wrap items-start gap-x-4 gap-y-2 px-4 py-3 max-[600px]:px-3"
+    >
       {/* Below 600px the buttons take their own line under the text, so a name never squeezes. */}
       <div className="min-w-0 flex-1 max-[600px]:basis-full">
         <p className="flex flex-wrap items-baseline gap-x-2">
@@ -83,7 +103,9 @@ function Row({ e, mayPurge, onGone }: { e: Entry; mayPurge: boolean; onGone: () 
             {itemKind(e.root)}
           </Chip>
           {/* A feature's code before its name ("F-26 Alert rules engine"), as the roadmap reads it. */}
-          <span className="min-w-0 font-semibold break-words">{e.root.code ? `${e.root.code} ${e.root.title}` : itemTitle(e.root, e.root.title)}</span>
+          <span className="min-w-0 font-semibold break-words">
+            {e.root.code ? `${e.root.code} ${e.root.title}` : itemTitle(e.root, e.root.title)}
+          </span>
           {e.published && <Chip kind="warn">Was published</Chip>}
         </p>
         {holds(e.root) && (
@@ -92,11 +114,16 @@ function Row({ e, mayPurge, onGone }: { e: Entry; mayPurge: boolean; onGone: () 
           </p>
         )}
         {e.items.length > 0 && (
-          <ul aria-label={`Went with ${e.root.title}`} className="mt-1 flex flex-col gap-0.5 text-sm">
+          <ul
+            aria-label={`Went with ${e.root.title}`}
+            className="mt-1 flex flex-col gap-0.5 text-sm"
+          >
             {e.items.map((i) => (
               <li key={i.id} className="flex min-w-0 items-baseline gap-2">
                 {/* A run's title says it is a run ("The run of Oct 17 that wrote …"). */}
-                {i.type !== "run" && <span className="flex-none text-[13px] text-text2">{itemKind(i)}</span>}
+                {i.type !== 'run' && (
+                  <span className="flex-none text-[13px] text-text2">{itemKind(i)}</span>
+                )}
                 {/* F-69: a run by the same title the delete dialog gave it. */}
                 <span className="min-w-0 break-words">{itemTitle(i, e.root.title)}</span>
               </li>
@@ -104,14 +131,14 @@ function Row({ e, mayPurge, onGone }: { e: Entry; mayPurge: boolean; onGone: () 
           </ul>
         )}
         <p className="mt-1 text-sm text-text2">
-          Deleted by {e.deleted_by_name ?? "someone"} on {formatDateTime(e.deleted_at)}
-          {e.reason ? `: ${e.reason}` : ""}
+          Deleted by {e.deleted_by_name ?? 'someone'} on {formatDateTime(e.deleted_at)}
+          {e.reason ? `: ${e.reason}` : ''}
         </p>
         {error && <Notice tone="error">{error}</Notice>}
       </div>
       <div className="flex flex-none items-center gap-2">
-        <Chip kind={e.days_left <= 3 ? "warn" : "line"}>
-          {e.days_left} {e.days_left === 1 ? "day" : "days"} left
+        <Chip kind={e.days_left <= 3 ? 'warn' : 'line'}>
+          {e.days_left} {e.days_left === 1 ? 'day' : 'days'} left
         </Chip>
         {e.can_restore && (
           <>
@@ -124,7 +151,12 @@ function Row({ e, mayPurge, onGone }: { e: Entry; mayPurge: boolean; onGone: () 
           </>
         )}
         {mayPurge && (
-          <Button variant="ghost" aria-label={`Delete ${e.root.title} for good`} disabled={busy} onClick={() => void deleteForGood()}>
+          <Button
+            variant="ghost"
+            aria-label={`Delete ${e.root.title} for good`}
+            disabled={busy}
+            onClick={() => void deleteForGood()}
+          >
             Delete for good
           </Button>
         )}
@@ -139,21 +171,30 @@ function Row({ e, mayPurge, onGone }: { e: Entry; mayPurge: boolean; onGone: () 
  * can_restore). */
 export default function TrashPage() {
   const { can, loading } = useMe();
-  const sees = can("list_trash");
-  const q = useQuery(sees ? "trash" : "trash|none", () => (sees ? unwrap(api.GET("/v1/trash")) : Promise.resolve([] as Entry[])));
-  const mayPurge = can("purge_trash_entry");
+  const sees = can('list_trash');
+  const q = useQuery(sees ? 'trash' : 'trash|none', () =>
+    sees ? unwrap(api.GET('/v1/trash')) : Promise.resolve([] as Entry[]),
+  );
+  const mayPurge = can('purge_trash_entry');
   const [emptying, setEmptying] = useState(false);
   const [emptyError, setEmptyError] = useState<string | null>(null);
   // F-68: every entry for good, at once (owners).
   async function emptyTrash() {
     const rows = q.data ?? [];
-    const names = rows.map((e) => (e.root.code ? `${e.root.code} ${e.root.title}` : itemTitle(e.root, e.root.title)));
-    const what = names.length > 3 ? `${names.length} deleted items` : names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
+    const names = rows.map((e) =>
+      e.root.code ? `${e.root.code} ${e.root.title}` : itemTitle(e.root, e.root.title),
+    );
+    const what =
+      names.length > 3
+        ? `${names.length} deleted items`
+        : names.length > 1
+          ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+          : names[0];
     const along = rows.reduce((n, e) => n + e.items.length, 0);
     const ok = await confirmInPage({
-      title: "Empty Trash?",
-      message: `Everything here goes for good: ${what}${along ? `, and the ${along} ${along === 1 ? "item" : "items"} that went with ${rows.length === 1 ? "it" : "them"}` : ""}. This cannot be undone.`,
-      action: "Empty Trash",
+      title: 'Empty Trash?',
+      message: `Everything here goes for good: ${what}${along ? `, and the ${along} ${along === 1 ? 'item' : 'items'} that went with ${rows.length === 1 ? 'it' : 'them'}` : ''}. This cannot be undone.`,
+      action: 'Empty Trash',
       destructive: true,
     });
     if (!ok) return;
@@ -164,7 +205,7 @@ export default function TrashPage() {
         await purge(e);
         q.setData((all) => all?.filter((r) => r.id !== e.id));
       }
-      toast({ message: "Trash is empty" });
+      toast({ message: 'Trash is empty' });
     } catch (err) {
       setEmptyError(errorMessage(err));
     } finally {
@@ -179,8 +220,8 @@ export default function TrashPage() {
         title="Trash"
         info={
           <InfoTip label="Trash" align="start" side="bottom">
-            Deleted artifacts wait here for 30 days, with everything that went with them. Restore brings them back
-            together; Delete for good, or 30 days, ends them.
+            Deleted artifacts wait here for 30 days, with everything that went with them. Restore
+            brings them back together; Delete for good, or 30 days, ends them.
           </InfoTip>
         }
       />
@@ -212,19 +253,22 @@ export default function TrashPage() {
               <span className="inline-flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
                 Trash is empty.
                 {/* Where they delete: owners documents, everyone else the roadmap's features and goals. */}
-                {can("delete_document") ? (
+                {can('delete_document') ? (
                   <Link href="/documents" className="font-semibold text-accent-ink hover:underline">
                     Open PRDs
                   </Link>
                 ) : (
-                  <Link href="/simple/roadmap" className="font-semibold text-accent-ink hover:underline">
+                  <Link
+                    href="/simple/roadmap"
+                    className="font-semibold text-accent-ink hover:underline"
+                  >
                     Open the roadmap
                   </Link>
                 )}
                 <InfoTip label="deleted items" side="bottom">
-                  What you delete waits here for 30 days, with everything that went with it. Until then an owner, or
-                  whoever deleted a feature, goal, decision or agenda item, can restore it; after that it is gone for
-                  good.
+                  What you delete waits here for 30 days, with everything that went with it. Until
+                  then an owner, or whoever deleted a feature, goal, decision or agenda item, can
+                  restore it; after that it is gone for good.
                 </InfoTip>
               </span>
             </Empty>
@@ -232,7 +276,12 @@ export default function TrashPage() {
           {!q.error && q.data && q.data.length > 0 && (
             <ul className="divide-y divide-line">
               {q.data.map((e) => (
-                <Row key={e.id} e={e} mayPurge={mayPurge} onGone={() => q.setData((rows) => rows?.filter((r) => r.id !== e.id))} />
+                <Row
+                  key={e.id}
+                  e={e}
+                  mayPurge={mayPurge}
+                  onGone={() => q.setData((rows) => rows?.filter((r) => r.id !== e.id))}
+                />
               ))}
             </ul>
           )}

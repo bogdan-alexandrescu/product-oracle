@@ -1,5 +1,5 @@
-import { login, openRoadmapItem } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { login, openRoadmapItem } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /**
  * Simple roadmap-plus (#723): the waterfall's drag (the whole item moves through the change
@@ -15,32 +15,48 @@ import { expect, test, type Locator, type Page } from "./test";
  * roadmap's "Board meeting" Dec 15. Each test's card is in its comment.
  */
 
-const ROADMAP = "/simple/roadmap";
-const PRIORITIES = "/simple/priorities";
+const ROADMAP = '/simple/roadmap';
+const PRIORITIES = '/simple/priorities';
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
-const COMMENTER = "commenter@example.com";
-const VIEWER = "viewer@example.com";
+const COMMENTER = 'commenter@example.com';
+const VIEWER = 'viewer@example.com';
 
-const bar = (page: Page, key: string): Locator => page.locator(`g[data-testid="bar"][data-item="${key}"]`);
-const body = (page: Page, key: string): Locator => bar(page, key).locator("rect[data-body]");
-const phase = (page: Page, key: string, p: string): Locator => bar(page, key).locator(`[data-testid="phase"][data-phase="${p}"]`);
-const marker = (page: Page, name: string): Locator => page.locator(`g[data-testid="key-date-marker"][data-name="${name}"]`);
-const editor = (page: Page): Locator => page.getByTestId("key-dates-editor");
+const bar = (page: Page, key: string): Locator =>
+  page.locator(`g[data-testid="bar"][data-item="${key}"]`);
+const body = (page: Page, key: string): Locator => bar(page, key).locator('rect[data-body]');
+const phase = (page: Page, key: string, p: string): Locator =>
+  bar(page, key).locator(`[data-testid="phase"][data-phase="${p}"]`);
+const marker = (page: Page, name: string): Locator =>
+  page.locator(`g[data-testid="key-date-marker"][data-name="${name}"]`);
+const editor = (page: Page): Locator => page.getByTestId('key-dates-editor');
 
-async function openRoadmap(page: Page, format: "timeline" | "gantt" | "waterfall", email?: string, again = false) {
+async function openRoadmap(
+  page: Page,
+  format: 'timeline' | 'gantt' | 'waterfall',
+  email?: string,
+  again = false,
+) {
   if (again) {
     // Another person in the same browser (the mock's data stays): sign out first, from the
     // rail's account menu on a desktop, the top bar's on a phone.
-    await page.goto("/home");
-    await page.getByTestId("user-menu").or(page.getByTestId("phone-user-menu")).filter({ visible: true }).first().click();
-    await page.getByRole("dialog", { name: "Account" }).getByRole("button", { name: "Sign out" }).click();
+    await page.goto('/home');
+    await page
+      .getByTestId('user-menu')
+      .or(page.getByTestId('phone-user-menu'))
+      .filter({ visible: true })
+      .first()
+      .click();
+    await page
+      .getByRole('dialog', { name: 'Account' })
+      .getByRole('button', { name: 'Sign out' })
+      .click();
     await expect(page).toHaveURL(/\/login/);
   }
   await login(page, email);
   await page.goto(ROADMAP);
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
   await page.getByTestId(`format-${format}`).click();
-  await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", format);
+  await expect(page.getByTestId('simple-chart')).toHaveAttribute('data-format', format);
 }
 
 /** A mouse drag of a bar by `dx` pixels from its middle. */
@@ -63,22 +79,26 @@ async function longPressDrag(page: Page, key: string, dx: number) {
   const x = box.x + Math.min(box.width / 2, 20);
   const y = box.y + box.height / 2;
   const cdp = await page.context().newCDPSession(page);
-  const touch = (type: "touchStart" | "touchMove" | "touchEnd", at: number) =>
-    cdp.send("Input.dispatchTouchEvent", { type, touchPoints: type === "touchEnd" ? [] : [{ x: at, y, id: 1 }] });
-  await touch("touchStart", x);
-  await expect(bar(page, key)).toHaveAttribute("data-picked", "true");
-  for (let n = 1; n <= 8; n++) await touch("touchMove", x + (dx * n) / 8);
-  await touch("touchEnd", x + dx);
+  const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', at: number) =>
+    cdp.send('Input.dispatchTouchEvent', {
+      type,
+      touchPoints: type === 'touchEnd' ? [] : [{ x: at, y, id: 1 }],
+    });
+  await touch('touchStart', x);
+  await expect(bar(page, key)).toHaveAttribute('data-picked', 'true');
+  for (let n = 1; n <= 8; n++) await touch('touchMove', x + (dx * n) / 8);
+  await touch('touchEnd', x + dx);
   await cdp.detach();
 }
 
-const days = (a: string, b: string): number => Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000);
+const days = (a: string, b: string): number =>
+  Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000);
 
 for (const [where, use] of [
-  ["desktop", {}],
-  ["phone", PHONE],
+  ['desktop', {}],
+  ['phone', PHONE],
 ] as const) {
-  for (const scheme of ["light", "dark"] as const) {
+  for (const scheme of ['light', 'dark'] as const) {
     test.describe(`${where}, ${scheme}`, () => {
       test.use({ ...use, colorScheme: scheme });
 
@@ -93,31 +113,35 @@ for (const [where, use] of [
        * the phase split's arithmetic (api/tests/test_simple_key_dates_api.py and
        * test_simple_dates.py).
        */
-      test("an owner drags a phased bar on the waterfall, with Undo", async ({ page }) => {
-        await openRoadmap(page, "waterfall");
-        await expect(page.getByTestId("legend")).toContainText("a dated gate stays on its day");
-        await expect(page.getByTestId("legend")).toContainText(where === "phone" ? "press and hold first" : "Drag a bar");
-        const start = (await bar(page, "alert-rules").getAttribute("data-start"))!;
-        const end = (await bar(page, "alert-rules").getAttribute("data-end"))!;
-        const discover = await phase(page, "alert-rules", "discover").getAttribute("data-end");
-        const build = await phase(page, "alert-rules", "build").getAttribute("data-end");
-        const launch = await phase(page, "alert-rules", "launch").getAttribute("data-end");
-        if (where === "phone") await longPressDrag(page, "alert-rules", 40);
-        else await mouseDrag(page, "alert-rules", 60);
-        await expect(page.getByText(/Moved 'Alert rules engine' to .* in your working draft/)).toBeVisible();
-        await expect(bar(page, "alert-rules")).not.toHaveAttribute("data-start", start);
-        const start2 = (await bar(page, "alert-rules").getAttribute("data-start"))!;
-        const end2 = (await bar(page, "alert-rules").getAttribute("data-end"))!;
+      test('an owner drags a phased bar on the waterfall, with Undo', async ({ page }) => {
+        await openRoadmap(page, 'waterfall');
+        await expect(page.getByTestId('legend')).toContainText('a dated gate stays on its day');
+        await expect(page.getByTestId('legend')).toContainText(
+          where === 'phone' ? 'press and hold first' : 'Drag a bar',
+        );
+        const start = (await bar(page, 'alert-rules').getAttribute('data-start'))!;
+        const end = (await bar(page, 'alert-rules').getAttribute('data-end'))!;
+        const discover = await phase(page, 'alert-rules', 'discover').getAttribute('data-end');
+        const build = await phase(page, 'alert-rules', 'build').getAttribute('data-end');
+        const launch = await phase(page, 'alert-rules', 'launch').getAttribute('data-end');
+        if (where === 'phone') await longPressDrag(page, 'alert-rules', 40);
+        else await mouseDrag(page, 'alert-rules', 60);
+        await expect(
+          page.getByText(/Moved 'Alert rules engine' to .* in your working draft/),
+        ).toBeVisible();
+        await expect(bar(page, 'alert-rules')).not.toHaveAttribute('data-start', start);
+        const start2 = (await bar(page, 'alert-rules').getAttribute('data-start'))!;
+        const end2 = (await bar(page, 'alert-rules').getAttribute('data-end'))!;
         expect(days(start, start2)).toBeGreaterThan(0);
         expect(days(end, end2)).toBe(days(start, start2));
         // Dated gates stay; the estimated launch phase is worked out again (it ends with the bar).
-        await expect(phase(page, "alert-rules", "discover")).toHaveAttribute("data-end", discover!);
-        await expect(phase(page, "alert-rules", "build")).toHaveAttribute("data-end", build!);
-        await expect(phase(page, "alert-rules", "launch")).toHaveAttribute("data-end", end2);
+        await expect(phase(page, 'alert-rules', 'discover')).toHaveAttribute('data-end', discover!);
+        await expect(phase(page, 'alert-rules', 'build')).toHaveAttribute('data-end', build!);
+        await expect(phase(page, 'alert-rules', 'launch')).toHaveAttribute('data-end', end2);
         expect(end2).not.toBe(launch);
-        await page.getByRole("button", { name: "Undo" }).first().click();
-        await expect(bar(page, "alert-rules")).toHaveAttribute("data-start", start);
-        await expect(bar(page, "alert-rules")).toHaveAttribute("data-end", end);
+        await page.getByRole('button', { name: 'Undo' }).first().click();
+        await expect(bar(page, 'alert-rules')).toHaveAttribute('data-start', start);
+        await expect(bar(page, 'alert-rules')).toHaveAttribute('data-end', end);
       });
 
       /**
@@ -127,21 +151,29 @@ for (const [where, use] of [
        * bar stays; fails_when = the keyboard cannot move a phased bar, Shift stretches it,
        * or a commenter's move applies; no_claim = the Gantt's day step.
        */
-      test("the keyboard moves the whole item; a commenter proposes", async ({ page }) => {
-        await openRoadmap(page, "waterfall");
-        const start = (await bar(page, "alert-rules").getAttribute("data-start"))!;
-        const end = (await bar(page, "alert-rules").getAttribute("data-end"))!;
-        await bar(page, "alert-rules").focus();
-        await page.keyboard.press("Shift+ArrowRight");
-        await expect(page.getByText(/Moved 'Alert rules engine'.* in your working draft/)).toBeVisible();
-        await expect(bar(page, "alert-rules")).toHaveAttribute("data-start", new Date(Date.parse(start) + 7 * 86_400_000).toISOString().slice(0, 10));
-        await expect(bar(page, "alert-rules")).toHaveAttribute("data-end", new Date(Date.parse(end) + 7 * 86_400_000).toISOString().slice(0, 10));
-        await openRoadmap(page, "waterfall", COMMENTER, true);
-        const c0 = (await bar(page, "alert-export").getAttribute("data-start"))!;
-        await bar(page, "alert-export").focus();
-        await page.keyboard.press("ArrowRight");
+      test('the keyboard moves the whole item; a commenter proposes', async ({ page }) => {
+        await openRoadmap(page, 'waterfall');
+        const start = (await bar(page, 'alert-rules').getAttribute('data-start'))!;
+        const end = (await bar(page, 'alert-rules').getAttribute('data-end'))!;
+        await bar(page, 'alert-rules').focus();
+        await page.keyboard.press('Shift+ArrowRight');
+        await expect(
+          page.getByText(/Moved 'Alert rules engine'.* in your working draft/),
+        ).toBeVisible();
+        await expect(bar(page, 'alert-rules')).toHaveAttribute(
+          'data-start',
+          new Date(Date.parse(start) + 7 * 86_400_000).toISOString().slice(0, 10),
+        );
+        await expect(bar(page, 'alert-rules')).toHaveAttribute(
+          'data-end',
+          new Date(Date.parse(end) + 7 * 86_400_000).toISOString().slice(0, 10),
+        );
+        await openRoadmap(page, 'waterfall', COMMENTER, true);
+        const c0 = (await bar(page, 'alert-export').getAttribute('data-start'))!;
+        await bar(page, 'alert-export').focus();
+        await page.keyboard.press('ArrowRight');
         await expect(page.getByText(/proposed: it waits for .+ in Needs a decision/)).toBeVisible();
-        await expect(bar(page, "alert-export")).toHaveAttribute("data-start", c0);
+        await expect(bar(page, 'alert-export')).toHaveAttribute('data-start', c0);
       });
 
       /**
@@ -154,24 +186,31 @@ for (const [where, use] of [
        * wrong or shown for a far item; no_claim = the markers' pixels.
        */
       test("key dates draw on every dated format and in the card's near line", async ({ page }) => {
-        await openRoadmap(page, "timeline", VIEWER);
-        await expect(page.getByTestId("key-dates-open")).toContainText("2");
-        for (const f of ["gantt", "waterfall"] as const) {
+        await openRoadmap(page, 'timeline', VIEWER);
+        await expect(page.getByTestId('key-dates-open')).toContainText('2');
+        for (const f of ['gantt', 'waterfall'] as const) {
           await page.getByTestId(`format-${f}`).click();
-          await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", f);
-          await expect(marker(page, "Customer conference")).toHaveAttribute("data-date", "2026-11-14");
-          await expect(marker(page, "Board meeting")).toHaveAttribute("data-date", "2026-12-15");
-          await expect(marker(page, "Customer conference").getByTestId("key-date-label")).toHaveText("Customer conference");
-          await expect(marker(page, "Customer conference").locator("line")).toHaveCount(1);
+          await expect(page.getByTestId('simple-chart')).toHaveAttribute('data-format', f);
+          await expect(marker(page, 'Customer conference')).toHaveAttribute(
+            'data-date',
+            '2026-11-14',
+          );
+          await expect(marker(page, 'Board meeting')).toHaveAttribute('data-date', '2026-12-15');
+          await expect(
+            marker(page, 'Customer conference').getByTestId('key-date-label'),
+          ).toHaveText('Customer conference');
+          await expect(marker(page, 'Customer conference').locator('line')).toHaveCount(1);
         }
-        await expect(page.getByTestId("legend")).toContainText("Key date");
-        await page.getByTestId("format-timeline").click();
-        await openRoadmapItem(page, "alert-rules");
-        await expect(page.getByTestId("card-near")).toHaveText("Customer conference (Nov 14): ends 4 days before");
-        await page.getByTestId("floating-card").getByRole("button", { name: "Close" }).click();
-        await openRoadmapItem(page, "alert-sso");
-        await expect(page.getByTestId("floating-card")).toBeVisible();
-        await expect(page.getByTestId("card-near")).toHaveCount(0);
+        await expect(page.getByTestId('legend')).toContainText('Key date');
+        await page.getByTestId('format-timeline').click();
+        await openRoadmapItem(page, 'alert-rules');
+        await expect(page.getByTestId('card-near')).toHaveText(
+          'Customer conference (Nov 14): ends 4 days before',
+        );
+        await page.getByTestId('floating-card').getByRole('button', { name: 'Close' }).click();
+        await openRoadmapItem(page, 'alert-sso');
+        await expect(page.getByTestId('floating-card')).toBeVisible();
+        await expect(page.getByTestId('card-near')).toHaveCount(0);
       });
 
       /**
@@ -181,35 +220,57 @@ for (const [where, use] of [
        * fails_when = the editor writes without the engine, a change does not reach the chart,
        * or Undo does not put the key date back; no_claim = publishing on approval (API tests).
        */
-      test("an owner adds, edits and removes key dates, with Undo", async ({ page }) => {
+      test('an owner adds, edits and removes key dates, with Undo', async ({ page }) => {
         // The Gantt draws the markers (the picked Timeline draws none).
-        await openRoadmap(page, "gantt");
-        await page.getByTestId("key-dates-open").click();
-        await expect(editor(page)).toHaveAttribute("data-sheet", where === "phone" ? "bottom" : "float");
+        await openRoadmap(page, 'gantt');
+        await page.getByTestId('key-dates-open').click();
+        await expect(editor(page)).toHaveAttribute(
+          'data-sheet',
+          where === 'phone' ? 'bottom' : 'float',
+        );
         // QA Nov 12 #13: where a change goes is behind the title's (i), not a line of prose.
-        await expect(editor(page).getByTestId("key-dates-tip")).toHaveAccessibleName("About Key dates");
-        await expect(editor(page).getByTestId("key-dates-tip")).toHaveAccessibleDescription(/working draft/);
-        await expect(page.getByTestId("key-dates-hint")).toHaveCount(0);
-        await editor(page).getByLabel("Roadmap", { exact: true }).selectOption({ label: "Alerts roadmap" });
-        await editor(page).getByLabel("New key date's name").fill("Partner summit");
-        await editor(page).getByLabel("New key date's day").fill("2026-12-02");
-        await editor(page).getByLabel("New key date's note").fill("Booth for alerts");
-        await editor(page).getByRole("button", { name: "Add" }).click();
-        await expect(page.getByText("Added the key date 'Partner summit' in your working draft")).toBeVisible();
-        await expect(marker(page, "Partner summit")).toHaveAttribute("data-draft", "true");
-        await expect(editor(page).locator('[data-testid="key-date-row"][data-name="Partner summit"]').getByTestId("key-date-in-draft")).toBeVisible();
-        await editor(page).getByRole("button", { name: "Edit Customer conference" }).click();
-        await editor(page).getByLabel("Date", { exact: true }).fill("2026-11-18");
-        await editor(page).getByRole("button", { name: "Save" }).click();
-        await expect(page.getByText(/Changed the key date 'Customer conference' in your working draft/)).toBeVisible();
-        await expect(marker(page, "Customer conference")).toHaveAttribute("data-date", "2026-11-18");
-        await editor(page).getByRole("button", { name: "Remove Partner summit" }).click();
-        const toastLine = page.getByRole("status").filter({ hasText: "Removed the key date 'Partner summit'" });
+        await expect(editor(page).getByTestId('key-dates-tip')).toHaveAccessibleName(
+          'About Key dates',
+        );
+        await expect(editor(page).getByTestId('key-dates-tip')).toHaveAccessibleDescription(
+          /working draft/,
+        );
+        await expect(page.getByTestId('key-dates-hint')).toHaveCount(0);
+        await editor(page)
+          .getByLabel('Roadmap', { exact: true })
+          .selectOption({ label: 'Alerts roadmap' });
+        await editor(page).getByLabel("New key date's name").fill('Partner summit');
+        await editor(page).getByLabel("New key date's day").fill('2026-12-02');
+        await editor(page).getByLabel("New key date's note").fill('Booth for alerts');
+        await editor(page).getByRole('button', { name: 'Add' }).click();
+        await expect(
+          page.getByText("Added the key date 'Partner summit' in your working draft"),
+        ).toBeVisible();
+        await expect(marker(page, 'Partner summit')).toHaveAttribute('data-draft', 'true');
+        await expect(
+          editor(page)
+            .locator('[data-testid="key-date-row"][data-name="Partner summit"]')
+            .getByTestId('key-date-in-draft'),
+        ).toBeVisible();
+        await editor(page).getByRole('button', { name: 'Edit Customer conference' }).click();
+        await editor(page).getByLabel('Date', { exact: true }).fill('2026-11-18');
+        await editor(page).getByRole('button', { name: 'Save' }).click();
+        await expect(
+          page.getByText(/Changed the key date 'Customer conference' in your working draft/),
+        ).toBeVisible();
+        await expect(marker(page, 'Customer conference')).toHaveAttribute(
+          'data-date',
+          '2026-11-18',
+        );
+        await editor(page).getByRole('button', { name: 'Remove Partner summit' }).click();
+        const toastLine = page
+          .getByRole('status')
+          .filter({ hasText: "Removed the key date 'Partner summit'" });
         await expect(toastLine).toBeVisible();
-        await expect(marker(page, "Partner summit")).toHaveCount(0);
-        await toastLine.getByRole("button", { name: "Undo" }).click();
-        await expect(marker(page, "Partner summit")).toHaveCount(1);
-        await expect(page.getByTestId("key-dates-open")).toContainText("3");
+        await expect(marker(page, 'Partner summit')).toHaveCount(0);
+        await toastLine.getByRole('button', { name: 'Undo' }).click();
+        await expect(marker(page, 'Partner summit')).toHaveCount(1);
+        await expect(page.getByTestId('key-dates-open')).toContainText('3');
       });
 
       /**
@@ -220,33 +281,43 @@ for (const [where, use] of [
        * viewer can edit, or an accepted proposal does not reach the chart; no_claim = the
        * routing to a named decider (API tests).
        */
-      test("a commenter proposes a key date, the owner accepts; a viewer reads", async ({ page }) => {
+      test('a commenter proposes a key date, the owner accepts; a viewer reads', async ({
+        page,
+      }) => {
         // Three people sign in one after another: more than the default 30 s on a loaded run.
         test.slow();
-        await openRoadmap(page, "gantt", COMMENTER);
-        await page.getByTestId("key-dates-open").click();
-        await expect(page.getByTestId("key-dates-hint")).toHaveText(
+        await openRoadmap(page, 'gantt', COMMENTER);
+        await page.getByTestId('key-dates-open').click();
+        await expect(page.getByTestId('key-dates-hint')).toHaveText(
           "Owners and the roadmap's decider change key dates; yours are proposals they accept or decline.",
         );
-        await editor(page).getByLabel("Roadmap", { exact: true }).selectOption({ label: "Onboarding roadmap" });
-        await editor(page).getByLabel("New key date's name").fill("Product launch");
-        await editor(page).getByLabel("New key date's day").fill("2026-12-08");
-        await editor(page).getByRole("button", { name: "Propose" }).click();
-        await expect(page.getByText(/Added the key date 'Product launch' proposed: it waits for .+ in Needs a decision/)).toBeVisible();
-        await expect(marker(page, "Product launch")).toHaveCount(0);
-        await openRoadmap(page, "gantt", undefined, true);
-        await page.getByTestId("needs-decision").click();
-        const row = page.getByTestId("tray-proposal").filter({ hasText: "Key date 'Product launch'" });
-        await row.getByRole("button", { name: "Accept" }).click();
-        await expect(page.getByText("Accepted: it is in your working draft")).toBeVisible();
-        await expect(marker(page, "Product launch")).toHaveAttribute("data-date", "2026-12-08");
-        await openRoadmap(page, "waterfall", VIEWER, true);
-        await page.getByTestId("key-dates-open").click();
-        await expect(page.getByTestId("key-dates-hint")).toContainText("you read them");
-        await expect(editor(page).getByTestId("key-date-add")).toHaveCount(0);
-        await expect(editor(page).getByRole("button", { name: /^(Edit|Remove) / })).toHaveCount(0);
-        await expect(editor(page).getByTestId("key-date-row").first()).toBeVisible();
-        await page.keyboard.press("Escape");
+        await editor(page)
+          .getByLabel('Roadmap', { exact: true })
+          .selectOption({ label: 'Onboarding roadmap' });
+        await editor(page).getByLabel("New key date's name").fill('Product launch');
+        await editor(page).getByLabel("New key date's day").fill('2026-12-08');
+        await editor(page).getByRole('button', { name: 'Propose' }).click();
+        await expect(
+          page.getByText(
+            /Added the key date 'Product launch' proposed: it waits for .+ in Needs a decision/,
+          ),
+        ).toBeVisible();
+        await expect(marker(page, 'Product launch')).toHaveCount(0);
+        await openRoadmap(page, 'gantt', undefined, true);
+        await page.getByTestId('needs-decision').click();
+        const row = page
+          .getByTestId('tray-proposal')
+          .filter({ hasText: "Key date 'Product launch'" });
+        await row.getByRole('button', { name: 'Accept' }).click();
+        await expect(page.getByText('Accepted: it is in your working draft')).toBeVisible();
+        await expect(marker(page, 'Product launch')).toHaveAttribute('data-date', '2026-12-08');
+        await openRoadmap(page, 'waterfall', VIEWER, true);
+        await page.getByTestId('key-dates-open').click();
+        await expect(page.getByTestId('key-dates-hint')).toContainText('you read them');
+        await expect(editor(page).getByTestId('key-date-add')).toHaveCount(0);
+        await expect(editor(page).getByRole('button', { name: /^(Edit|Remove) / })).toHaveCount(0);
+        await expect(editor(page).getByTestId('key-date-row').first()).toBeVisible();
+        await page.keyboard.press('Escape');
         await expect(editor(page)).toHaveCount(0);
       });
 
@@ -260,56 +331,82 @@ for (const [where, use] of [
        * Now, a pick does not redraw, the URL or the preference loses it, or a row's mark
        * disagrees with its end; no_claim = the ranking itself (API tests).
        */
-      test("the line picker on the ranked list and the 2x2", async ({ page }) => {
+      test('the line picker on the ranked list and the 2x2', async ({ page }) => {
         await login(page, VIEWER);
         await page.goto(PRIORITIES);
-        await expect(page.getByTestId("simple-priorities")).toBeVisible();
-        const select = page.getByTestId("line-picker").getByLabel("Line", { exact: true });
-        await expect(select).toHaveValue("now");
-        await expect(page.getByTestId("line-caption").first()).toContainText("miss this quarter");
-        const options = await select.locator("option").allTextContents();
-        expect(options).toEqual(expect.arrayContaining([expect.stringMatching(/^Key date: Customer conference · Nov 14, 2026$/), expect.stringMatching(/^Milestone: (M\d+ )?Beta · /), "Pick a date…"]));
-        const kd = (await select.locator("option", { hasText: "Customer conference" }).getAttribute("value"))!;
+        await expect(page.getByTestId('simple-priorities')).toBeVisible();
+        const select = page.getByTestId('line-picker').getByLabel('Line', { exact: true });
+        await expect(select).toHaveValue('now');
+        await expect(page.getByTestId('line-caption').first()).toContainText('miss this quarter');
+        const options = await select.locator('option').allTextContents();
+        expect(options).toEqual(
+          expect.arrayContaining([
+            expect.stringMatching(/^Key date: Customer conference · Nov 14, 2026$/),
+            expect.stringMatching(/^Milestone: (M\d+ )?Beta · /),
+            'Pick a date…',
+          ]),
+        );
+        const kd = (await select
+          .locator('option', { hasText: 'Customer conference' })
+          .getAttribute('value'))!;
         await select.selectOption(kd);
-        await expect(page).toHaveURL(new RegExp(`line=${encodeURIComponent(kd).replace(/%3A/i, "(:|%3A)")}`));
+        await expect(page).toHaveURL(
+          new RegExp(`line=${encodeURIComponent(kd).replace(/%3A/i, '(:|%3A)')}`),
+        );
         // build-plan QP1: a line the plan's dates regroup the list at heads its two parts in place of the caption.
-        await expect(page.getByTestId("line-caption").or(page.getByTestId("prio-part-head").filter({ hasText: /^Misses / })).first()).toContainText(/[Mm]iss(es)? Customer conference · Nov 14, 2026/);
+        await expect(
+          page
+            .getByTestId('line-caption')
+            .or(page.getByTestId('prio-part-head').filter({ hasText: /^Misses / }))
+            .first(),
+        ).toContainText(/[Mm]iss(es)? Customer conference · Nov 14, 2026/);
         const rows = page.locator('[data-testid="prio-row"]');
         await expect(rows.first()).toBeVisible();
         for (const r of await rows.all()) {
-          const end = await r.getAttribute("data-end");
-          const above = await r.getAttribute("data-above");
-          expect(above, `${await r.getAttribute("data-code")} ends ${end}`).toBe(end && end <= "2026-11-14" ? "true" : "false");
+          const end = await r.getAttribute('data-end');
+          const above = await r.getAttribute('data-above');
+          expect(above, `${await r.getAttribute('data-code')} ends ${end}`).toBe(
+            end && end <= '2026-11-14' ? 'true' : 'false',
+          );
         }
         // Remembered: Priorities opened again without the URL's line brings it back.
-        await page.goto("/home");
+        await page.goto('/home');
         await page.goto(PRIORITIES);
         await expect(page).toHaveURL(/line=key_date/);
         await expect(select).toHaveValue(kd);
-        await select.selectOption("pick");
-        await page.getByLabel("The line's date").fill("2026-12-31");
+        await select.selectOption('pick');
+        await page.getByLabel("The line's date").fill('2026-12-31');
         // qa-simple-plan-1: a typed date applies with Apply (or Enter), never while typing.
-        await page.getByRole("button", { name: "Apply" }).click();
+        await page.getByRole('button', { name: 'Apply' }).click();
         await expect(page).toHaveURL(/line=date(:|%3A)2026-12-31/);
         // build-plan QP1: a line the plan's dates regroup the list at heads its two parts in place of the caption.
-        await expect(page.getByTestId("line-caption").or(page.getByTestId("prio-part-head").filter({ hasText: /^Misses / })).first()).toContainText(/[Mm]iss(es)? Dec 31, 2026/);
-        await page.getByRole("tab", { name: "Value / effort" }).click();
-        const points = page.getByTestId("vxe-point");
+        await expect(
+          page
+            .getByTestId('line-caption')
+            .or(page.getByTestId('prio-part-head').filter({ hasText: /^Misses / }))
+            .first(),
+        ).toContainText(/[Mm]iss(es)? Dec 31, 2026/);
+        await page.getByRole('tab', { name: 'Value / effort' }).click();
+        const points = page.getByTestId('vxe-point');
         await expect(points.first()).toBeVisible();
-        expect(await page.locator('[data-testid="vxe-point"][data-above="false"]').count()).toBeGreaterThan(0);
+        expect(
+          await page.locator('[data-testid="vxe-point"][data-above="false"]').count(),
+        ).toBeGreaterThan(0);
         // The words for the line sit behind the heading's (i), not in the Legend.
-        await page.getByTestId("prio-about").click();
-        await expect(page.locator("#prio-about-text")).toContainText("not planned to finish by Dec 31, 2026");
-        await expect(page.getByLabel("Legend")).not.toContainText("not planned to finish by");
-        await expect(page.getByTestId("line-caption")).toHaveCount(1);
-        await select.selectOption("now");
+        await page.getByTestId('prio-about').click();
+        await expect(page.locator('#prio-about-text')).toContainText(
+          'not planned to finish by Dec 31, 2026',
+        );
+        await expect(page.getByLabel('Legend')).not.toContainText('not planned to finish by');
+        await expect(page.getByTestId('line-caption')).toHaveCount(1);
+        await select.selectOption('now');
         await expect(page).not.toHaveURL(/line=/);
       });
     });
   }
 }
 
-for (const scheme of ["light", "dark"] as const) {
+for (const scheme of ['light', 'dark'] as const) {
   test.describe(`phone, ${scheme}, a real touch`, () => {
     test.use({ ...PHONE, colorScheme: scheme });
 
@@ -321,13 +418,17 @@ for (const scheme of ["light", "dark"] as const) {
      * tab and the bar is never picked up) or the drag sends more than one change; no_claim =
      * native scrolling and the tab bar's look.
      */
-    test("a long press on the Gantt reaches a bar the tab bar would cover: one change", async ({ page }) => {
-      await openRoadmap(page, "gantt");
-      const start = (await bar(page, "alert-rules").getAttribute("data-start"))!;
-      await longPressDrag(page, "alert-rules", 40);
-      await expect(page.getByText(/Moved 'Alert rules engine' to .* in your working draft/)).toBeVisible();
-      await expect(page.getByTestId("draft-count")).toHaveText("1");
-      await expect(bar(page, "alert-rules")).not.toHaveAttribute("data-start", start);
+    test('a long press on the Gantt reaches a bar the tab bar would cover: one change', async ({
+      page,
+    }) => {
+      await openRoadmap(page, 'gantt');
+      const start = (await bar(page, 'alert-rules').getAttribute('data-start'))!;
+      await longPressDrag(page, 'alert-rules', 40);
+      await expect(
+        page.getByText(/Moved 'Alert rules engine' to .* in your working draft/),
+      ).toBeVisible();
+      await expect(page.getByTestId('draft-count')).toHaveText('1');
+      await expect(bar(page, 'alert-rules')).not.toHaveAttribute('data-start', start);
     });
   });
 }

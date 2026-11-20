@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { createPortal } from "react-dom";
+import { useState } from 'react';
+import { createPortal } from 'react-dom';
 
-import { Button } from "@/components/ds";
-import { InlineError, Kbd, Quote, TEXTAREA } from "@/components/review/parts";
-import type { TextQuoteSelector } from "@/lib/anchor";
+import { Button } from '@/components/ds';
+import { InlineError, Kbd, Quote, TEXTAREA } from '@/components/review/parts';
+import type { TextQuoteSelector } from '@/lib/anchor';
 
 export type PageRect = { top: number; left: number; bottom: number };
 
@@ -21,7 +21,10 @@ export function SelectionButton({ rect, onOpen }: { rect: PageRect; onOpen: () =
         onMouseDown={(e) => e.preventDefault()}
         onClick={onOpen}
       >
-        Comment <kbd className="rounded border border-on-accent/40 px-1 font-mono text-[13px] leading-none">c</kbd>
+        Comment{' '}
+        <kbd className="rounded border border-on-accent/40 px-1 font-mono text-[13px] leading-none">
+          c
+        </kbd>
       </Button>
     </div>,
     document.body,
@@ -40,7 +43,7 @@ export function CommentPopover({
   onCancel: () => void;
   onSubmit: (body: string) => Promise<void>;
 }) {
-  const [body, setBody] = useState("");
+  const [body, setBody] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,7 +54,7 @@ export function CommentPopover({
     try {
       await onSubmit(body.trim());
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save the comment.");
+      setError(e instanceof Error ? e.message : 'Could not save the comment.');
       setSaving(false);
     }
   }
@@ -64,7 +67,7 @@ export function CommentPopover({
       aria-label="New comment"
       className="absolute z-40 w-[22rem] max-w-[calc(100vw-16px)] rounded-panel border border-line bg-surface p-3 text-text shadow-tip"
       style={{ top: rect.bottom + 6, left }}
-      onKeyDown={(e) => e.key === "Escape" && onCancel()}
+      onKeyDown={(e) => e.key === 'Escape' && onCancel()}
     >
       <p className="mb-2">
         <Quote>{anchor.exact}</Quote>
@@ -83,7 +86,7 @@ export function CommentPopover({
           value={body}
           onChange={(e) => setBody(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
               e.preventDefault();
               submit();
             }
@@ -100,7 +103,7 @@ export function CommentPopover({
             Cancel
           </Button>
           <Button type="submit" variant="solid" disabled={!body.trim() || saving}>
-            {saving ? "Saving…" : "Comment"}
+            {saving ? 'Saving…' : 'Comment'}
           </Button>
         </div>
       </form>

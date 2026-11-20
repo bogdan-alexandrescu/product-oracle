@@ -1,60 +1,73 @@
-"use client";
+'use client';
 
-import { Link, useRouter } from "@/lib/nav";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { Link, useRouter } from '@/lib/nav';
+import { useState, type FormEvent, type ReactNode } from 'react';
 
-import { DeleteMenu } from "@/components/ArtifactMenu";
-import { Button, Chip, Inspector, InspectorSection, LinkButton } from "@/components/ds";
-import { free, startPrdHref } from "@/components/RequestsBehind";
-import { ErrorNote, INPUT, LoadError } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { named, namedText } from "@/lib/codes";
-import { formatDate, formatDay, plural } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import { DeleteMenu } from '@/components/ArtifactMenu';
+import { Button, Chip, Inspector, InspectorSection, LinkButton } from '@/components/ds';
+import { free, startPrdHref } from '@/components/RequestsBehind';
+import { ErrorNote, INPUT, LoadError } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { named, namedText } from '@/lib/codes';
+import { formatDate, formatDay, plural } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-import { CHANNEL_LABEL, STATE } from "./RequestList";
-import { ProblemBlock } from "./Themes";
-import { WhyNot } from "./WhyNot";
+import { CHANNEL_LABEL, STATE } from './RequestList';
+import { ProblemBlock } from './Themes';
+import { WhyNot } from './WhyNot';
 
-type Request = Schemas["RequestOut"];
-type Theme = Schemas["RequestThemeOut"];
-type Reason = NonNullable<Request["disqualify_reason"]>;
-type Part = Schemas["AcceptSuggestionIn"]["parts"][number];
+type Request = Schemas['RequestOut'];
+type Theme = Schemas['RequestThemeOut'];
+type Reason = NonNullable<Request['disqualify_reason']>;
+type Part = Schemas['AcceptSuggestionIn']['parts'][number];
 
 export const REASON_LABEL: Record<Reason, string> = {
-  no_goal: "No goal",
-  out_of_scope: "Out of scope",
-  duplicate: "Duplicate",
-  not_a_request: "Not a request",
+  no_goal: 'No goal',
+  out_of_scope: 'Out of scope',
+  duplicate: 'Duplicate',
+  not_a_request: 'Not a request',
   wont_do: "Won't do",
-  other: "Other",
-  strategy_stop: "On the stop list",
-  already_exists: "Already possible",
-  few_customers: "Too few would use it",
+  other: 'Other',
+  strategy_stop: 'On the stop list',
+  already_exists: 'Already possible',
+  few_customers: 'Too few would use it',
 };
 
 // The Disqualify form's order: the reasons that answer the asker, then housekeeping (H10).
-const REASONS: Reason[] = ["no_goal", "out_of_scope", "strategy_stop", "already_exists", "few_customers", "wont_do", "other", "duplicate", "not_a_request"];
-const HOUSEKEEPING: Reason[] = ["duplicate", "not_a_request"];
+const REASONS: Reason[] = [
+  'no_goal',
+  'out_of_scope',
+  'strategy_stop',
+  'already_exists',
+  'few_customers',
+  'wont_do',
+  'other',
+  'duplicate',
+  'not_a_request',
+];
+const HOUSEKEEPING: Reason[] = ['duplicate', 'not_a_request'];
 // The reasons whose basis the form asks for (H10): the record the reply cites.
-const BASIS_PICKER: Partial<Record<Reason, { label: string; kind: "strategy_choice" | "feature" }>> = {
-  strategy_stop: { label: "Stop choice", kind: "strategy_choice" },
-  already_exists: { label: "Feature", kind: "feature" },
+const BASIS_PICKER: Partial<
+  Record<Reason, { label: string; kind: 'strategy_choice' | 'feature' }>
+> = {
+  strategy_stop: { label: 'Stop choice', kind: 'strategy_choice' },
+  already_exists: { label: 'Feature', kind: 'feature' },
 };
 
 /** A decline that answers the asker: a decision is logged and replies are drafted (H10). */
-const isNo = (reason: Reason, note: string) => !HOUSEKEEPING.includes(reason) && (reason !== "wont_do" || !!note.trim());
+const isNo = (reason: Reason, note: string) =>
+  !HOUSEKEEPING.includes(reason) && (reason !== 'wont_do' || !!note.trim());
 
 /** "Said no on Oct 3 · D-31 Say no to bulk export": a declined request in the merge picker. */
 function declinedLabel(r: Request): string {
-  const day = r.decided_at ? ` · Said no on ${formatDay(r.decided_at)}` : " · Said no";
-  return `${r.title}${day}${r.decision_number ? ` · D-${r.decision_number} ${r.decision_title ?? ""}`.trimEnd() : ""}`;
+  const day = r.decided_at ? ` · Said no on ${formatDay(r.decided_at)}` : ' · Said no';
+  return `${r.title}${day}${r.decision_number ? ` · D-${r.decision_number} ${r.decision_title ?? ''}`.trimEnd() : ''}`;
 }
 
 type Prefill = { reason: Reason; basisId: string | null };
 
-const LABEL = "flex flex-col gap-1 text-sm font-semibold text-text2";
+const LABEL = 'flex flex-col gap-1 text-sm font-semibold text-text2';
 
 /**
  * The selected request (#348): its words (the filer edits them while New), its links to
@@ -88,8 +101,8 @@ export function RequestInspector({
 }) {
   const { me, can } = useMe();
   // #370: links and decisions are an approver's (the decision routes' role), the suggestion's buttons its routes'.
-  const approver = can("qualify_request");
-  const canSuggest = can("accept_request_suggestion");
+  const approver = can('qualify_request');
+  const canSuggest = can('accept_request_suggestion');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -109,21 +122,27 @@ export function RequestInspector({
   const path = { params: { path: { request_id: request.id } } };
   const lock = { lock_version: request.lock_version };
   const s = request.suggestion;
-  const offered = request.state === "new" && s && !s.declined_at && suggestedParts(s).length > 0;
+  const offered = request.state === 'new' && s && !s.declined_at && suggestedParts(s).length > 0;
   const declined = s?.declined_at ? s : null;
-  const features = useQuery("request-features", () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "feature" } } })));
+  const features = useQuery('request-features', () =>
+    unwrap(api.GET('/v1/baseline/entities', { params: { query: { type: 'feature' } } })),
+  );
   const featureTitle = (id: string) => {
     const f = (features.data ?? []).find((x) => x.id === id);
     return f ? namedText(named(f.title, f.key)) : undefined;
   };
-  const canEdit = request.origin !== "interview" && !!me?.user_id && request.filed_by === me.user_id;
+  const canEdit =
+    request.origin !== 'interview' && !!me?.user_id && request.filed_by === me.user_id;
   // H10: Oracle's decline suggestion; Use this opens the Disqualify form prefilled.
-  const decline = request.state === "new" && s && !s.declined_at ? s.decline : null;
+  const decline = request.state === 'new' && s && !s.declined_at ? s.decline : null;
   const [prefill, setPrefill] = useState<{ n: number; value: Prefill } | null>(null);
   const theme = request.theme ? themes.find((t) => t.id === request.theme!.id) : undefined;
   // A decline with no note or for housekeeping has no Why not panel, whatever an earlier no left.
   const showWhyNot =
-    request.state === "disqualified" ? request.no_reply_reason == null && (request.replies.total > 0 || request.decision_number != null) : request.replies.total > 0;
+    request.state === 'disqualified'
+      ? request.no_reply_reason == null &&
+        (request.replies.total > 0 || request.decision_number != null)
+      : request.replies.total > 0;
 
   return (
     <Inspector
@@ -137,14 +156,20 @@ export function RequestInspector({
           title={request.title}
           op="delete_request"
           dependents={async () => ({
-            root: { type: "request", id: request.id, title: request.title, kind: "request" },
+            root: { type: 'request', id: request.id, title: request.title, kind: 'request' },
             items: [],
             published: false,
             working_runs: [],
             feeds: [],
             feeds_going: [],
           })}
-          remove={(query) => unwrap(api.DELETE("/v1/requests/{request_id}", { params: { path: { request_id: request.id }, query: { reason: query.reason } } }))}
+          remove={(query) =>
+            unwrap(
+              api.DELETE('/v1/requests/{request_id}', {
+                params: { path: { request_id: request.id }, query: { reason: query.reason } },
+              }),
+            )
+          }
           onDeleted={onDeleted}
         />
       }
@@ -166,16 +191,32 @@ export function RequestInspector({
           <div data-testid="request-suggestion" className="flex flex-col gap-2 text-[15px]">
             {s.rationale && <p>{s.rationale}</p>}
             <ul className="flex flex-col gap-1 text-sm text-text2">
-              {(s.theme_title || s.theme_id) && <li>Theme: {s.theme_title ?? themes.find((t) => t.id === s.theme_id)?.title}</li>}
-              {s.goal_ids.length > 0 && <li>Goals: {s.goal_ids.map((id) => goalTitles.get(id) ?? "A goal").join(", ")}</li>}
-              {s.duplicate_of && <li>Same as: {requests.find((r) => r.id === s.duplicate_of)?.title ?? "another request"}</li>}
+              {(s.theme_title || s.theme_id) && (
+                <li>Theme: {s.theme_title ?? themes.find((t) => t.id === s.theme_id)?.title}</li>
+              )}
+              {s.goal_ids.length > 0 && (
+                <li>Goals: {s.goal_ids.map((id) => goalTitles.get(id) ?? 'A goal').join(', ')}</li>
+              )}
+              {s.duplicate_of && (
+                <li>
+                  Same as:{' '}
+                  {requests.find((r) => r.id === s.duplicate_of)?.title ?? 'another request'}
+                </li>
+              )}
               {s.feature_id &&
                 (features.error ? (
                   <li data-testid="suggested-feature">
-                    <LoadError what="the features" error={features.error} onRetry={() => void features.reload()} />
+                    <LoadError
+                      what="the features"
+                      error={features.error}
+                      onRetry={() => void features.reload()}
+                    />
                   </li>
                 ) : (
-                  <li data-testid="suggested-feature">Feature: {featureTitle(s.feature_id) ?? (features.loading ? "Loading…" : "A feature")}</li>
+                  <li data-testid="suggested-feature">
+                    Feature:{' '}
+                    {featureTitle(s.feature_id) ?? (features.loading ? 'Loading…' : 'A feature')}
+                  </li>
                 ))}
             </ul>
             {canSuggest && (
@@ -185,7 +226,12 @@ export function RequestInspector({
                   disabled={busy}
                   onClick={() =>
                     run(() =>
-                      unwrap(api.POST("/v1/requests/{request_id}/suggestion/accept", { ...path, body: { ...lock, parts: suggestedParts(s) } })),
+                      unwrap(
+                        api.POST('/v1/requests/{request_id}/suggestion/accept', {
+                          ...path,
+                          body: { ...lock, parts: suggestedParts(s) },
+                        }),
+                      ),
                     )
                   }
                 >
@@ -194,7 +240,16 @@ export function RequestInspector({
                 <Button
                   variant="ghost"
                   disabled={busy}
-                  onClick={() => run(() => unwrap(api.POST("/v1/requests/{request_id}/suggestion/decline", { ...path, body: lock })))}
+                  onClick={() =>
+                    run(() =>
+                      unwrap(
+                        api.POST('/v1/requests/{request_id}/suggestion/decline', {
+                          ...path,
+                          body: lock,
+                        }),
+                      ),
+                    )
+                  }
                 >
                   Decline
                 </Button>
@@ -208,12 +263,17 @@ export function RequestInspector({
           <div className="flex flex-col gap-2 text-[15px]">
             <p data-testid="decline-suggestion">
               Oracle suggests saying no: {REASON_LABEL[decline.reason]}
-              {decline.why ? ` · ${decline.why}` : ""}
+              {decline.why ? ` · ${decline.why}` : ''}
             </p>
             {approver && (
               <Button
                 className="self-start"
-                onClick={() => setPrefill((p) => ({ n: (p?.n ?? 0) + 1, value: { reason: decline.reason, basisId: decline.basis?.id ?? null } }))}
+                onClick={() =>
+                  setPrefill((p) => ({
+                    n: (p?.n ?? 0) + 1,
+                    value: { reason: decline.reason, basisId: decline.basis?.id ?? null },
+                  }))
+                }
               >
                 Use this
               </Button>
@@ -224,7 +284,8 @@ export function RequestInspector({
       {declined && (
         <InspectorSection label="Oracle's suggestion">
           <p data-testid="request-suggestion" className="text-sm text-text2">
-            Declined by {declined.declined_by_name ?? "an approver"}, {formatDate(declined.declined_at!)}
+            Declined by {declined.declined_by_name ?? 'an approver'},{' '}
+            {formatDate(declined.declined_at!)}
           </p>
         </InspectorSection>
       )}
@@ -235,20 +296,27 @@ export function RequestInspector({
           goalTitles={goalTitles}
           features={features.data ?? []}
           // The API refuses link changes on a Merged or Disqualified request: shown read-only.
-          canLink={approver && request.state !== "merged" && request.state !== "disqualified"}
+          canLink={approver && request.state !== 'merged' && request.state !== 'disqualified'}
           busy={busy}
           run={run}
         />
       </InspectorSection>
-      {(request.intake || request.document || (free(request) && can("create_intake", true))) && (
+      {(request.intake || request.document || (free(request) && can('create_intake', true))) && (
         // qa-work-38: not "PRD" twice: Links holds the Linked PRD; this one starts a new PRD, or shows where it went.
-        <InspectorSection label={request.intake || request.document ? "Brief and PRD" : "New PRD"} testId="request-prd-section">
-          <PrdLink request={request} canStart={free(request) && can("create_intake", true)} />
+        <InspectorSection
+          label={request.intake || request.document ? 'Brief and PRD' : 'New PRD'}
+          testId="request-prd-section"
+        >
+          <PrdLink request={request} canStart={free(request) && can('create_intake', true)} />
         </InspectorSection>
       )}
-      {theme && (theme.problem_state !== "none" || theme.problem) && (
+      {theme && (theme.problem_state !== 'none' || theme.problem) && (
         <InspectorSection label={`Problem · ${theme.title}`}>
-          <ProblemBlock theme={theme} canChange={can("confirm_request_theme_problem")} onChange={(t) => onTheme?.(t)} />
+          <ProblemBlock
+            theme={theme}
+            canChange={can('confirm_request_theme_problem')}
+            onChange={(t) => onTheme?.(t)}
+          />
         </InspectorSection>
       )}
       <InspectorSection label="Decision">
@@ -278,13 +346,13 @@ export function RequestInspector({
 }
 
 /** Oracle's suggested parts not yet accepted; the duplicate (a merge) only when nothing else is left. */
-function suggestedParts(s: Schemas["Suggestion"]): Part[] {
+function suggestedParts(s: Schemas['Suggestion']): Part[] {
   const parts: Part[] = [];
-  if (s.theme_id || s.theme_title) parts.push("theme");
-  if (s.goal_ids.length) parts.push("goals");
-  if (s.feature_id) parts.push("feature");
+  if (s.theme_id || s.theme_title) parts.push('theme');
+  if (s.goal_ids.length) parts.push('goals');
+  if (s.feature_id) parts.push('feature');
   const left = parts.filter((p) => !s.accepted.includes(p));
-  return left.length || !s.duplicate_of ? left : ["duplicate"];
+  return left.length || !s.duplicate_of ? left : ['duplicate'];
 }
 
 type Run = (call: () => Promise<Request>) => Promise<boolean>;
@@ -296,7 +364,8 @@ type Run = (call: () => Promise<Request>) => Promise<boolean>;
  */
 function PrdLink({ request, canStart }: { request: Request; canStart: boolean }) {
   const router = useRouter();
-  const link = "font-semibold text-accent-ink underline-offset-2 hover:underline [overflow-wrap:anywhere]";
+  const link =
+    'font-semibold text-accent-ink underline-offset-2 hover:underline [overflow-wrap:anywhere]';
   return (
     <div className="flex flex-col gap-2 text-sm">
       {(request.intake || request.document) && (
@@ -326,18 +395,32 @@ function PrdLink({ request, canStart }: { request: Request; canStart: boolean })
   );
 }
 
-function Words({ request, canEdit, busy, run }: { request: Request; canEdit: boolean; busy: boolean; run: Run }) {
+function Words({
+  request,
+  canEdit,
+  busy,
+  run,
+}: {
+  request: Request;
+  canEdit: boolean;
+  busy: boolean;
+  run: Run;
+}) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(request.title);
-  const [body, setBody] = useState(request.body ?? "");
-  const isNew = request.state === "new";
+  const [body, setBody] = useState(request.body ?? '');
+  const isNew = request.state === 'new';
   async function save(e: FormEvent) {
     e.preventDefault();
     const ok = await run(() =>
       unwrap(
-        api.PATCH("/v1/requests/{request_id}", {
+        api.PATCH('/v1/requests/{request_id}', {
           params: { path: { request_id: request.id } },
-          body: { lock_version: request.lock_version, title: title.trim(), body: body.trim() || null },
+          body: {
+            lock_version: request.lock_version,
+            title: title.trim(),
+            body: body.trim() || null,
+          },
         }),
       ),
     );
@@ -348,11 +431,22 @@ function Words({ request, canEdit, busy, run }: { request: Request; canEdit: boo
       <form className="flex flex-col gap-2" onSubmit={save}>
         <label className={LABEL}>
           Title
-          <input className={INPUT} value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} />
+          <input
+            className={INPUT}
+            value={title}
+            maxLength={200}
+            onChange={(e) => setTitle(e.target.value)}
+          />
         </label>
         <label className={LABEL}>
           What it is and why
-          <textarea className={INPUT} rows={4} value={body} maxLength={4000} onChange={(e) => setBody(e.target.value)} />
+          <textarea
+            className={INPUT}
+            rows={4}
+            value={body}
+            maxLength={4000}
+            onChange={(e) => setBody(e.target.value)}
+          />
         </label>
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={() => setEditing(false)}>
@@ -367,17 +461,21 @@ function Words({ request, canEdit, busy, run }: { request: Request; canEdit: boo
   }
   return (
     <div className="flex flex-col gap-2 text-[15px]">
-      <p className="whitespace-pre-wrap">{request.body ?? "No description"}</p>
+      <p className="whitespace-pre-wrap">{request.body ?? 'No description'}</p>
       {/* qa4-work-19: the queue's and the form's word for the person who asked. */}
-      {request.requester_name && <p data-testid="request-asked-by" className="text-sm text-text2">Asked by {request.requester_name}</p>}
+      {request.requester_name && (
+        <p data-testid="request-asked-by" className="text-sm text-text2">
+          Asked by {request.requester_name}
+        </p>
+      )}
       {canEdit && (
         <span className="flex flex-wrap items-center gap-2">
           <Button
             disabled={!isNew}
-            title={isNew ? undefined : "Words change only while it is New"}
+            title={isNew ? undefined : 'Words change only while it is New'}
             onClick={() => {
               setTitle(request.title);
-              setBody(request.body ?? "");
+              setBody(request.body ?? '');
               setEditing(true);
             }}
           >
@@ -402,28 +500,36 @@ function Links({
   request: Request;
   themes: Theme[];
   goalTitles: Map<string, string>;
-  features: Schemas["EntityOut"][];
+  features: Schemas['EntityOut'][];
   canLink: boolean;
   busy: boolean;
   run: Run;
 }) {
-  const goals = useQuery("request-confirmed-goals", () =>
-    unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal", status: "confirmed" } } })),
+  const goals = useQuery('request-confirmed-goals', () =>
+    unwrap(
+      api.GET('/v1/baseline/entities', {
+        params: { query: { type: 'goal', status: 'confirmed' } },
+      }),
+    ),
   );
-  const prds = useQuery("request-prds", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
+  const prds = useQuery('request-prds', () =>
+    unwrap(api.GET('/v1/documents', { params: { query: { kind: 'prd' } } })),
+  );
   const [goalIds, setGoalIds] = useState(request.goal_ids);
-  const [themeId, setThemeId] = useState(request.theme?.id ?? "");
-  const [featureId, setFeatureId] = useState(request.feature_id ?? "");
-  const [documentId, setDocumentId] = useState(request.document?.id ?? "");
+  const [themeId, setThemeId] = useState(request.theme?.id ?? '');
+  const [featureId, setFeatureId] = useState(request.feature_id ?? '');
+  const [documentId, setDocumentId] = useState(request.document?.id ?? '');
   const linked = features.find((f) => f.id === request.feature_id);
   const featureTitle = linked ? namedText(named(linked.title, linked.key)) : undefined;
 
   if (!canLink) {
     return (
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
-        <Row label="Goals">{request.goal_ids.map((id) => goalTitles.get(id) ?? "A goal").join(", ") || "None"}</Row>
-        <Row label="Theme">{request.theme?.title ?? "None"}</Row>
-        <Row label="Feature">{featureTitle ?? (request.feature_id ? "A feature" : "None")}</Row>
+        <Row label="Goals">
+          {request.goal_ids.map((id) => goalTitles.get(id) ?? 'A goal').join(', ') || 'None'}
+        </Row>
+        <Row label="Theme">{request.theme?.title ?? 'None'}</Row>
+        <Row label="Feature">{featureTitle ?? (request.feature_id ? 'A feature' : 'None')}</Row>
       </dl>
     );
   }
@@ -431,7 +537,7 @@ function Links({
     e.preventDefault();
     run(() =>
       unwrap(
-        api.PATCH("/v1/requests/{request_id}", {
+        api.PATCH('/v1/requests/{request_id}', {
           params: { path: { request_id: request.id } },
           body: {
             lock_version: request.lock_version,
@@ -449,9 +555,9 @@ function Links({
   const same = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
   const changed =
     !same(goalIds, request.goal_ids) ||
-    themeId !== (request.theme?.id ?? "") ||
-    featureId !== (request.feature_id ?? "") ||
-    documentId !== (request.document?.id ?? "");
+    themeId !== (request.theme?.id ?? '') ||
+    featureId !== (request.feature_id ?? '') ||
+    documentId !== (request.document?.id ?? '');
   return (
     <form className="flex flex-col gap-2" onSubmit={save}>
       <fieldset className="flex flex-col gap-1">
@@ -460,14 +566,22 @@ function Links({
         {goals.error ? (
           <LoadError what="the goals" error={goals.error} onRetry={() => void goals.reload()} />
         ) : (
-          (goals.data ?? []).length === 0 && <p className="text-sm text-text2">{goals.loading ? "Loading goals…" : "No confirmed goals yet"}</p>
+          (goals.data ?? []).length === 0 && (
+            <p className="text-sm text-text2">
+              {goals.loading ? 'Loading goals…' : 'No confirmed goals yet'}
+            </p>
+          )
         )}
         {(goals.data ?? []).map((g) => (
           <label key={g.id} className="flex items-center gap-2 text-[15px]">
             <input
               type="checkbox"
               checked={goalIds.includes(g.id)}
-              onChange={(e) => setGoalIds((ids) => (e.target.checked ? [...ids, g.id] : ids.filter((x) => x !== g.id)))}
+              onChange={(e) =>
+                setGoalIds((ids) =>
+                  e.target.checked ? [...ids, g.id] : ids.filter((x) => x !== g.id),
+                )
+              }
             />
             {g.title}
           </label>
@@ -497,7 +611,11 @@ function Links({
       </label>
       <label className={LABEL}>
         Linked PRD
-        <select className={INPUT} value={documentId} onChange={(e) => setDocumentId(e.target.value)}>
+        <select
+          className={INPUT}
+          value={documentId}
+          onChange={(e) => setDocumentId(e.target.value)}
+        >
           <option value="">None</option>
           {(prds.data ?? []).map((d) => (
             <option key={d.id} value={d.id}>
@@ -507,7 +625,12 @@ function Links({
         </select>
       </label>
       <div className="flex justify-end">
-        <Button variant="solid" type="submit" disabled={busy || !changed} title={changed ? undefined : "Change a link first"}>
+        <Button
+          variant="solid"
+          type="submit"
+          disabled={busy || !changed}
+          title={changed ? undefined : 'Change a link first'}
+        >
           Save links
         </Button>
       </div>
@@ -524,7 +647,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-type Action = "qualify" | "merge" | "disqualify";
+type Action = 'qualify' | 'merge' | 'disqualify';
 
 function Decision({
   request,
@@ -537,73 +660,106 @@ function Decision({
 }: {
   request: Request;
   requests: Request[];
-  features: Schemas["EntityOut"][];
+  features: Schemas['EntityOut'][];
   prefill: Prefill | null;
   canDecide: boolean;
   busy: boolean;
   run: Run;
 }) {
-  const basisFeature = request.basis?.kind === "feature" ? features.find((f) => f.id === request.basis?.id) : undefined;
-  const basisTitle = basisFeature ? namedText(named(basisFeature.title, basisFeature.key)) : request.basis?.title;
-  const [open, setOpen] = useState<Action | null>(prefill ? "disqualify" : null);
-  const [note, setNote] = useState("");
-  const [into, setInto] = useState("");
-  const [reason, setReason] = useState<Reason>(prefill?.reason ?? "no_goal");
+  const basisFeature =
+    request.basis?.kind === 'feature'
+      ? features.find((f) => f.id === request.basis?.id)
+      : undefined;
+  const basisTitle = basisFeature
+    ? namedText(named(basisFeature.title, basisFeature.key))
+    : request.basis?.title;
+  const [open, setOpen] = useState<Action | null>(prefill ? 'disqualify' : null);
+  const [note, setNote] = useState('');
+  const [into, setInto] = useState('');
+  const [reason, setReason] = useState<Reason>(prefill?.reason ?? 'no_goal');
   // The basis picked per reason; Oracle's preselection (the request's feature, the stop choice on it) until a person picks.
-  const [picked, setPicked] = useState<Partial<Record<Reason, string>>>(prefill?.basisId ? { [prefill.reason]: prefill.basisId } : {});
-  const detail = useQuery(open === "disqualify" ? `request-detail:${request.id}:${request.lock_version}` : "request-detail:none", () =>
-    open === "disqualify" ? unwrap(api.GET("/v1/requests/{request_id}", { params: { path: { request_id: request.id } } })) : Promise.resolve(null),
+  const [picked, setPicked] = useState<Partial<Record<Reason, string>>>(
+    prefill?.basisId ? { [prefill.reason]: prefill.basisId } : {},
   );
-  const stops = useQuery(open === "disqualify" ? "request-stop-choices" : "request-stop-choices:none", () =>
-    open === "disqualify"
-      ? unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "strategy_choice", status: "confirmed" } } })).then((list) =>
-          list.filter((e) => (e.attrs as Record<string, unknown> | null)?.stance === "stop"),
-        )
-      : Promise.resolve([]),
+  const detail = useQuery(
+    open === 'disqualify'
+      ? `request-detail:${request.id}:${request.lock_version}`
+      : 'request-detail:none',
+    () =>
+      open === 'disqualify'
+        ? unwrap(
+            api.GET('/v1/requests/{request_id}', { params: { path: { request_id: request.id } } }),
+          )
+        : Promise.resolve(null),
+  );
+  const stops = useQuery(
+    open === 'disqualify' ? 'request-stop-choices' : 'request-stop-choices:none',
+    () =>
+      open === 'disqualify'
+        ? unwrap(
+            api.GET('/v1/baseline/entities', {
+              params: { query: { type: 'strategy_choice', status: 'confirmed' } },
+            }),
+          ).then((list) =>
+            list.filter((e) => (e.attrs as Record<string, unknown> | null)?.stance === 'stop'),
+          )
+        : Promise.resolve([]),
   );
   // qa-onboarding-12: a request is qualified under a confirmed goal; the Qualify form says how to get one.
   const { can } = useMe();
-  const confirmed = useQuery(open === "qualify" ? `request-qualify-goals:${request.goal_ids.join(",")}` : "request-qualify-goals:none", () =>
-    open === "qualify"
-      ? unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal", status: "confirmed" } } }))
-      : Promise.resolve(undefined),
+  const confirmed = useQuery(
+    open === 'qualify'
+      ? `request-qualify-goals:${request.goal_ids.join(',')}`
+      : 'request-qualify-goals:none',
+    () =>
+      open === 'qualify'
+        ? unwrap(
+            api.GET('/v1/baseline/entities', {
+              params: { query: { type: 'goal', status: 'confirmed' } },
+            }),
+          )
+        : Promise.resolve(undefined),
   );
   const noGoals = confirmed.data !== undefined && confirmed.data.length === 0;
-  const unlinked = confirmed.data !== undefined && !request.goal_ids.some((id) => confirmed.data!.some((g) => g.id === id));
+  const unlinked =
+    confirmed.data !== undefined &&
+    !request.goal_ids.some((id) => confirmed.data!.some((g) => g.id === id));
   const picker = BASIS_PICKER[reason];
-  const basisId = picked[reason] ?? detail.data?.suggested_basis?.[reason]?.id ?? "";
-  const options = picker?.kind === "strategy_choice" ? (stops.data ?? []) : picker ? features : [];
+  const basisId = picked[reason] ?? detail.data?.suggested_basis?.[reason]?.id ?? '';
+  const options = picker?.kind === 'strategy_choice' ? (stops.data ?? []) : picker ? features : [];
   const askers = request.mentions;
   const path = { params: { path: { request_id: request.id } } };
   const lock = { lock_version: request.lock_version };
-  const live = request.state === "new" || request.state === "qualified";
-  const blocked: Record<Action | "reopen", string | null> = {
-    qualify: request.state !== "new" ? "Only a New request can be qualified" : null,
-    merge: live ? null : "Only a New or Qualified request can be merged",
-    disqualify: live ? null : "Only a New or Qualified request can be disqualified",
-    reopen: live ? "Only a Merged or Disqualified request can be reopened" : null,
+  const live = request.state === 'new' || request.state === 'qualified';
+  const blocked: Record<Action | 'reopen', string | null> = {
+    qualify: request.state !== 'new' ? 'Only a New request can be qualified' : null,
+    merge: live ? null : 'Only a New or Qualified request can be merged',
+    disqualify: live ? null : 'Only a New or Qualified request can be disqualified',
+    reopen: live ? 'Only a Merged or Disqualified request can be reopened' : null,
   };
   const reasonShown = blocked.qualify ?? (live ? null : blocked.merge);
-  const mergedInto = request.merged_into_id ? requests.find((r) => r.id === request.merged_into_id) : undefined;
+  const mergedInto = request.merged_into_id
+    ? requests.find((r) => r.id === request.merged_into_id)
+    : undefined;
   const done = async (call: () => Promise<Request>) => {
     if (await run(call)) {
       setOpen(null);
-      setNote("");
+      setNote('');
     }
   };
   const toggle = (a: Action) => {
     setOpen((o) => (o === a ? null : a));
-    setNote("");
+    setNote('');
   };
 
   return (
     <div className="flex flex-col gap-2 text-[15px]">
-      {request.state === "merged" && <p>Merged into {mergedInto?.title ?? "another request"}</p>}
+      {request.state === 'merged' && <p>Merged into {mergedInto?.title ?? 'another request'}</p>}
       {request.decision_number != null && (
         <Link
           href={`/company/decisions?d=${request.decision_number}`}
           data-testid="decision-chip"
-          title={request.decision_status === "reversed" ? "Reversed on Reopen" : undefined}
+          title={request.decision_status === 'reversed' ? 'Reversed on Reopen' : undefined}
           className="self-start rounded-full bg-accent-soft px-2.5 py-0.5 text-sm font-semibold text-accent-ink hover:underline"
         >
           D-{request.decision_number} {request.decision_title}
@@ -611,8 +767,10 @@ function Decision({
       )}
       {request.disqualify_reason && <p>{REASON_LABEL[request.disqualify_reason]}</p>}
       {request.basis?.title && <p className="text-sm text-text2">Basis: {basisTitle}</p>}
-      {request.decision_note && <p className="whitespace-pre-wrap text-text2">{request.decision_note}</p>}
-      {request.no_reply_reason === "no_note" && (
+      {request.decision_note && (
+        <p className="whitespace-pre-wrap text-text2">{request.decision_note}</p>
+      )}
+      {request.no_reply_reason === 'no_note' && (
         <p data-testid="no-reply-reason" className="text-sm text-text2">
           No note: no decision was logged and no replies were drafted
         </p>
@@ -624,25 +782,34 @@ function Decision({
           </Chip>
         </span>
       )}
-      {!canDecide && request.state === "new" && <p className="text-sm text-text2">Waiting for an approver</p>}
+      {!canDecide && request.state === 'new' && (
+        <p className="text-sm text-text2">Waiting for an approver</p>
+      )}
       {canDecide && (
         <>
           <div className="flex flex-wrap gap-2">
-            {(["qualify", "merge", "disqualify"] as const).map((a) => (
+            {(['qualify', 'merge', 'disqualify'] as const).map((a) => (
               <Button
                 key={a}
-                variant={a === "disqualify" ? "danger" : "secondary"}
+                variant={a === 'disqualify' ? 'danger' : 'secondary'}
                 aria-expanded={open === a}
                 disabled={busy || !!blocked[a]}
                 title={blocked[a] ?? undefined}
                 onClick={() => toggle(a)}
               >
-                {a === "qualify" ? "Qualify" : a === "merge" ? "Merge" : "Disqualify"}
+                {a === 'qualify' ? 'Qualify' : a === 'merge' ? 'Merge' : 'Disqualify'}
               </Button>
             ))}
             {/* qa4-work-20: Reopen only where it can act, on a Merged or Disqualified request. */}
             {!blocked.reopen && (
-              <Button disabled={busy} onClick={() => done(() => unwrap(api.POST("/v1/requests/{request_id}/reopen", { ...path, body: lock })))}>
+              <Button
+                disabled={busy}
+                onClick={() =>
+                  done(() =>
+                    unwrap(api.POST('/v1/requests/{request_id}/reopen', { ...path, body: lock })),
+                  )
+                }
+              >
                 Reopen
               </Button>
             )}
@@ -652,55 +819,88 @@ function Decision({
               {reasonShown}
             </p>
           )}
-          {open === "qualify" && (
+          {open === 'qualify' && (
             <form
               className="flex flex-col gap-2"
               onSubmit={(e) => {
                 e.preventDefault();
-                done(() => unwrap(api.POST("/v1/requests/{request_id}/qualify", { ...path, body: { ...lock, note: note.trim() } })));
+                done(() =>
+                  unwrap(
+                    api.POST('/v1/requests/{request_id}/qualify', {
+                      ...path,
+                      body: { ...lock, note: note.trim() },
+                    }),
+                  ),
+                );
               }}
             >
               {unlinked && (
-                <div data-testid="qualify-needs-goal" className="flex flex-col gap-2 rounded-lg bg-surface2 px-3 py-2 text-sm">
+                <div
+                  data-testid="qualify-needs-goal"
+                  className="flex flex-col gap-2 rounded-lg bg-surface2 px-3 py-2 text-sm"
+                >
                   {noGoals ? (
                     <>
                       <p>
-                        A request is qualified under a confirmed goal, and there are no goals yet. Oracle proposes your goals when it
-                        builds the Ground Truth from your sources; confirm one, then link it here. Or disqualify this request as No goal.
+                        A request is qualified under a confirmed goal, and there are no goals yet.
+                        Oracle proposes your goals when it builds the Ground Truth from your
+                        sources; confirm one, then link it here. Or disqualify this request as No
+                        goal.
                       </p>
-                      {can("confirm_entity") ? (
+                      {can('confirm_entity') ? (
                         <LinkButton href="/ground-truth?build=1" className="self-start">
                           Build the Ground Truth
                         </LinkButton>
                       ) : (
-                        <Link href="/ground-truth" className="self-start font-semibold text-accent-ink underline-offset-2 hover:underline">
+                        <Link
+                          href="/ground-truth"
+                          className="self-start font-semibold text-accent-ink underline-offset-2 hover:underline"
+                        >
                           See the Ground Truth
                         </Link>
                       )}
                     </>
                   ) : (
                     <p>
-                      A request is qualified under a confirmed goal. Tick one under Links and save, or disqualify this request as
-                      No goal.
+                      A request is qualified under a confirmed goal. Tick one under Links and save,
+                      or disqualify this request as No goal.
                     </p>
                   )}
                 </div>
               )}
               <label className={LABEL}>
                 Reason
-                <textarea className={INPUT} rows={2} value={note} maxLength={2000} onChange={(e) => setNote(e.target.value)} />
+                <textarea
+                  className={INPUT}
+                  rows={2}
+                  value={note}
+                  maxLength={2000}
+                  onChange={(e) => setNote(e.target.value)}
+                />
               </label>
-              <Button variant="solid" type="submit" disabled={busy || !note.trim() || unlinked} className="self-end">
+              <Button
+                variant="solid"
+                type="submit"
+                disabled={busy || !note.trim() || unlinked}
+                className="self-end"
+              >
                 Qualify request
               </Button>
             </form>
           )}
-          {open === "merge" && (
+          {open === 'merge' && (
             <form
               className="flex flex-col gap-2"
               onSubmit={(e) => {
                 e.preventDefault();
-                done(() => unwrap(api.POST("/v1/requests/{request_id}/merge", { ...path, body: { ...lock, into_id: into } })));
+                done(() =>
+                  unwrap(
+                    api.POST('/v1/requests/{request_id}/merge', {
+                      ...path,
+                      body: { ...lock, into_id: into },
+                    }),
+                  ),
+                );
               }}
             >
               <label className={LABEL}>
@@ -709,10 +909,10 @@ function Decision({
                   <option value="">Pick a request</option>
                   {/* H10: a request said no to is listed too; joining it gives the asker the same reply. */}
                   {requests
-                    .filter((r) => r.id !== request.id && r.state !== "merged")
+                    .filter((r) => r.id !== request.id && r.state !== 'merged')
                     .map((r) => (
                       <option key={r.id} value={r.id}>
-                        {r.state === "disqualified" ? declinedLabel(r) : r.title}
+                        {r.state === 'disqualified' ? declinedLabel(r) : r.title}
                       </option>
                     ))}
                 </select>
@@ -722,20 +922,29 @@ function Decision({
               </Button>
             </form>
           )}
-          {open === "disqualify" && (
+          {open === 'disqualify' && (
             <form
               className="flex flex-col gap-2"
               onSubmit={(e) => {
                 e.preventDefault();
                 const basis = picker && basisId ? { kind: picker.kind, id: basisId } : null;
                 done(() =>
-                  unwrap(api.POST("/v1/requests/{request_id}/disqualify", { ...path, body: { ...lock, reason, note: note.trim() || null, basis } })),
+                  unwrap(
+                    api.POST('/v1/requests/{request_id}/disqualify', {
+                      ...path,
+                      body: { ...lock, reason, note: note.trim() || null, basis },
+                    }),
+                  ),
                 );
               }}
             >
               <label className={LABEL}>
                 Reason
-                <select className={INPUT} value={reason} onChange={(e) => setReason(e.target.value as Reason)}>
+                <select
+                  className={INPUT}
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value as Reason)}
+                >
                   {REASONS.map((r) => (
                     <option key={r} value={r}>
                       {REASON_LABEL[r]}
@@ -746,11 +955,17 @@ function Decision({
               {picker && (
                 <label className={LABEL}>
                   {picker.label}
-                  <select className={INPUT} value={basisId} onChange={(e) => setPicked((p) => ({ ...p, [reason]: e.target.value }))}>
-                    <option value="">{picker.kind === "feature" ? "Pick the feature" : "Pick the stop choice"}</option>
+                  <select
+                    className={INPUT}
+                    value={basisId}
+                    onChange={(e) => setPicked((p) => ({ ...p, [reason]: e.target.value }))}
+                  >
+                    <option value="">
+                      {picker.kind === 'feature' ? 'Pick the feature' : 'Pick the stop choice'}
+                    </option>
                     {options.map((o) => (
                       <option key={o.id} value={o.id}>
-                        {picker.kind === "feature" ? namedText(named(o.title, o.key)) : o.title}
+                        {picker.kind === 'feature' ? namedText(named(o.title, o.key)) : o.title}
                       </option>
                     ))}
                   </select>
@@ -758,16 +973,27 @@ function Decision({
               )}
               <label className={LABEL}>
                 Note
-                <textarea className={INPUT} rows={2} value={note} maxLength={2000} onChange={(e) => setNote(e.target.value)} />
+                <textarea
+                  className={INPUT}
+                  rows={2}
+                  value={note}
+                  maxLength={2000}
+                  onChange={(e) => setNote(e.target.value)}
+                />
               </label>
               {!HOUSEKEEPING.includes(reason) && (
                 <p data-testid="disqualify-line" className="text-sm text-text2">
                   {isNo(reason, note)
-                    ? `A decision is logged and Oracle will draft a reply to the ${plural(askers, "person", "people")} who asked`
-                    : "No note: no decision is logged and no replies are drafted"}
+                    ? `A decision is logged and Oracle will draft a reply to the ${plural(askers, 'person', 'people')} who asked`
+                    : 'No note: no decision is logged and no replies are drafted'}
                 </p>
               )}
-              <Button variant="danger" type="submit" disabled={busy || (reason === "other" && !note.trim()) || (!!picker && !basisId)} className="self-end">
+              <Button
+                variant="danger"
+                type="submit"
+                disabled={busy || (reason === 'other' && !note.trim()) || (!!picker && !basisId)}
+                className="self-end"
+              >
                 Disqualify request
               </Button>
             </form>

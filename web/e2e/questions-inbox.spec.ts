@@ -1,6 +1,6 @@
-import { expect, test, type Locator, type Page } from "./test";
+import { expect, test, type Locator, type Page } from './test';
 
-import { login, openSection, openTab } from "./helpers";
+import { login, openSection, openTab } from './helpers';
 
 /*
  * C2 Questions to people: every open question reaches a named person, who answers it from
@@ -26,242 +26,286 @@ import { login, openSection, openTab } from "./helpers";
  *   page scrolls sideways; no_claim=other phone layouts.
  */
 
-const CLINIC = "Which clinics join the waitlist first?";
-const TIERS = "Which plan tiers get hard caps?";
-const METRIC = "Which metric shows repeat checkout got faster?";
-const REFUND = "Same-day cancellation refund?";
-const DELEGATED = "Who signs off the refund rule?";
+const CLINIC = 'Which clinics join the waitlist first?';
+const TIERS = 'Which plan tiers get hard caps?';
+const METRIC = 'Which metric shows repeat checkout got faster?';
+const REFUND = 'Same-day cancellation refund?';
+const DELEGATED = 'Who signs off the refund rule?';
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
-    if (!localStorage.getItem("po-mock-scenario")) localStorage.setItem("po-mock-scenario", "questions");
+    if (!localStorage.getItem('po-mock-scenario'))
+      localStorage.setItem('po-mock-scenario', 'questions');
   });
 });
 
-const tabs = (page: Page) => page.getByTestId("inbox-state-tabs");
-const tab = (page: Page, name: string) => tabs(page).getByRole("tab", { name: new RegExp(`^${name}`) });
-const badge = (page: Page) => page.getByTestId("nav-inbox-badge");
+const tabs = (page: Page) => page.getByTestId('inbox-state-tabs');
+const tab = (page: Page, name: string) =>
+  tabs(page).getByRole('tab', { name: new RegExp(`^${name}`) });
+const badge = (page: Page) => page.getByTestId('nav-inbox-badge');
 
 function questionRow(page: Page, text: string): Locator {
-  return page.locator("[role=tabpanel]").getByTestId("inbox-questions").locator("tr[data-row]").filter({ hasText: text });
+  return page
+    .locator('[role=tabpanel]')
+    .getByTestId('inbox-questions')
+    .locator('tr[data-row]')
+    .filter({ hasText: text });
 }
 
 async function signOut(page: Page) {
-  await page.getByTestId("user-menu").click();
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await page.getByTestId('user-menu').click();
+  await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page).toHaveURL(/\/login/);
 }
 
 async function openInbox(page: Page) {
-  await page.goto("/inbox");
-  await expect(page.getByTestId("inbox-needs")).toBeVisible();
+  await page.goto('/inbox');
+  await expect(page.getByTestId('inbox-needs')).toBeVisible();
 }
 
-test("answer from the Inbox: Oracle asks, Answer in place, the badge drops, then Done", async ({ page }) => {
+test('answer from the Inbox: Oracle asks, Answer in place, the badge drops, then Done', async ({
+  page,
+}) => {
   await login(page);
   await openInbox(page);
   const row = questionRow(page, CLINIC);
-  await expect(row).toContainText("Oracle asks");
-  await expect(row).toContainText("Before drafting · Clinic waitlist");
-  await expect(questionRow(page, TIERS)).toContainText("Priya Raman asks");
-  await expect(questionRow(page, TIERS)).toContainText("Annual billing PRD · Success metrics");
+  await expect(row).toContainText('Oracle asks');
+  await expect(row).toContainText('Before drafting · Clinic waitlist');
+  await expect(questionRow(page, TIERS)).toContainText('Priya Raman asks');
+  await expect(questionRow(page, TIERS)).toContainText('Annual billing PRD · Success metrics');
   // The pending access request (A5, #203 part 3) counts too.
-  await expect(badge(page)).toHaveText("13");
+  await expect(badge(page)).toHaveText('13');
 
-  await row.getByRole("button", { name: "Answer" }).click();
-  const form = page.getByTestId("answer-question");
+  await row.getByRole('button', { name: 'Answer' }).click();
+  const form = page.getByTestId('answer-question');
   // qa-company-3 (round 3): the question once, in the row, not again above the form.
-  await expect(row.getByTestId("question-prompt")).toHaveText(CLINIC);
-  await expect(form.getByTestId("answer-prompt")).toHaveCount(0);
-  await expect(form).toContainText("Why Oracle asks");
-  for (const name of ["Send answer", "I don't know", "Defer", "Ask someone", "Research this"]) {
-    await expect(form.getByRole("button", { name: new RegExp(`^${name}`) })).toBeVisible();
+  await expect(row.getByTestId('question-prompt')).toHaveText(CLINIC);
+  await expect(form.getByTestId('answer-prompt')).toHaveCount(0);
+  await expect(form).toContainText('Why Oracle asks');
+  for (const name of ['Send answer', "I don't know", 'Defer', 'Ask someone', 'Research this']) {
+    await expect(form.getByRole('button', { name: new RegExp(`^${name}`) })).toBeVisible();
   }
-  await form.getByLabel("Your answer").fill("The two downtown clinics, in November.");
-  await form.getByRole("button", { name: "Send answer" }).click();
+  await form.getByLabel('Your answer').fill('The two downtown clinics, in November.');
+  await form.getByRole('button', { name: 'Send answer' }).click();
 
   // In place until the tab changes; the badge counts it no more.
-  await expect(row).toContainText("Answered ✓");
-  await expect(page.getByTestId("answer-question")).toHaveCount(0);
-  await expect(badge(page)).toHaveText("12");
-  await expect(page.getByText("12 waiting")).toBeVisible();
+  await expect(row).toContainText('Answered ✓');
+  await expect(page.getByTestId('answer-question')).toHaveCount(0);
+  await expect(badge(page)).toHaveText('12');
+  await expect(page.getByText('12 waiting')).toBeVisible();
 
-  await tab(page, "Done").click();
-  await expect(questionRow(page, CLINIC)).toContainText("Answered ✓");
-  await tab(page, "New").click();
+  await tab(page, 'Done').click();
+  await expect(questionRow(page, CLINIC)).toContainText('Answered ✓');
+  await tab(page, 'New').click();
   await expect(questionRow(page, CLINIC)).toHaveCount(0);
 });
 
-test("the other paths: I don't know, Defer and Ask someone leave Open; the delegate sees it", async ({ page }) => {
+test("the other paths: I don't know, Defer and Ask someone leave Open; the delegate sees it", async ({
+  page,
+}) => {
   await login(page);
   await openInbox(page);
-  await tab(page, "Seen").click();
-  await tab(page, "New").click();
+  await tab(page, 'Seen').click();
+  await tab(page, 'New').click();
 
   // The seeded metric question already has this person's "I don't know": not offered again.
-  await questionRow(page, METRIC).getByRole("button", { name: "Answer" }).click();
-  await expect(page.getByTestId("answer-question").getByRole("button", { name: "Send answer" })).toBeVisible();
-  await expect(page.getByTestId("answer-question").getByRole("button", { name: "I don't know" })).toHaveCount(0);
-  await page.getByTestId("answer-question").getByRole("button", { name: "Cancel" }).click();
+  await questionRow(page, METRIC).getByRole('button', { name: 'Answer' }).click();
+  await expect(
+    page.getByTestId('answer-question').getByRole('button', { name: 'Send answer' }),
+  ).toBeVisible();
+  await expect(
+    page.getByTestId('answer-question').getByRole('button', { name: "I don't know" }),
+  ).toHaveCount(0);
+  await page.getByTestId('answer-question').getByRole('button', { name: 'Cancel' }).click();
 
-  await questionRow(page, CLINIC).getByRole("button", { name: "Answer" }).click();
-  await page.getByTestId("answer-question").getByRole("button", { name: "I don't know" }).click();
+  await questionRow(page, CLINIC).getByRole('button', { name: 'Answer' }).click();
+  await page.getByTestId('answer-question').getByRole('button', { name: "I don't know" }).click();
   await expect(questionRow(page, CLINIC)).toContainText("I don't know ✓");
 
-  await questionRow(page, REFUND).getByRole("button", { name: "Answer" }).click();
-  await page.getByTestId("answer-question").getByRole("button", { name: "Defer" }).click();
-  await expect(questionRow(page, REFUND)).toContainText("Deferred ✓");
+  await questionRow(page, REFUND).getByRole('button', { name: 'Answer' }).click();
+  await page.getByTestId('answer-question').getByRole('button', { name: 'Defer' }).click();
+  await expect(questionRow(page, REFUND)).toContainText('Deferred ✓');
 
-  await questionRow(page, TIERS).getByRole("button", { name: "Answer" }).click();
-  const form = page.getByTestId("answer-question");
-  await form.getByRole("button", { name: /^Ask someone/ }).click();
-  await form.getByLabel("Find a person").fill("appr");
-  await form.getByRole("option", { name: /Priya/ }).click();
-  await expect(questionRow(page, TIERS)).toContainText("Asked Priya Raman ✓");
+  await questionRow(page, TIERS).getByRole('button', { name: 'Answer' }).click();
+  const form = page.getByTestId('answer-question');
+  await form.getByRole('button', { name: /^Ask someone/ }).click();
+  await form.getByLabel('Find a person').fill('appr');
+  await form.getByRole('option', { name: /Priya/ }).click();
+  await expect(questionRow(page, TIERS)).toContainText('Asked Priya Raman ✓');
   // The "I don't know" question still counts in Needs you (owner 2026-10-29): open until a real answer.
-  await expect(badge(page)).toHaveText("11");
+  await expect(badge(page)).toHaveText('11');
 
   // Neither under New nor under Open any more: all three are Done.
-  for (const name of ["New", "Seen"]) {
+  for (const name of ['New', 'Seen']) {
     await tab(page, name).click();
-    for (const text of [CLINIC, REFUND, TIERS]) await expect(questionRow(page, text)).toHaveCount(0);
+    for (const text of [CLINIC, REFUND, TIERS])
+      await expect(questionRow(page, text)).toHaveCount(0);
   }
-  await tab(page, "Done").click();
+  await tab(page, 'Done').click();
   for (const text of [CLINIC, REFUND, TIERS]) await expect(questionRow(page, text)).toHaveCount(1);
 
   // The delegate's Inbox has it, and the question delegated to them before.
   await signOut(page);
-  await login(page, "approver@example.com");
+  await login(page, 'approver@example.com');
   await openInbox(page);
-  await expect(questionRow(page, TIERS)).toContainText("Priya Raman asks");
+  await expect(questionRow(page, TIERS)).toContainText('Priya Raman asks');
   await expect(questionRow(page, DELEGATED)).toHaveCount(1);
 });
 
-test("ask a teammate on a section: Waiting on them, then their answer on the Feedback tab", async ({ page }) => {
-  const question = "Do pilots keep their imported rows after the trial?";
-  const reply = "Yes, for 90 days after the trial ends.";
+test('ask a teammate on a section: Waiting on them, then their answer on the Feedback tab', async ({
+  page,
+}) => {
+  const question = 'Do pilots keep their imported rows after the trial?';
+  const reply = 'Yes, for 90 days after the trial ends.';
   await login(page);
-  await page.goto("/documents/annual-billing/v/2");
-  const s = await openSection(page, "metrics");
-  await s.getByRole("button", { name: "Actions for 7. Success metrics" }).click();
-  await page.getByRole("menuitem", { name: /Ask a teammate/ }).click();
-  const ask = page.getByTestId("ask-teammate");
-  await ask.getByLabel("Find a person").fill("comm");
-  await ask.getByRole("option", { name: /Theo/ }).click();
-  await ask.getByLabel("Question").fill(question);
-  await ask.getByLabel("Why (optional)").fill("The rollout plan depends on it");
-  await ask.getByRole("button", { name: "Ask" }).click();
-  await expect(ask).toContainText("Asked Theo Brandt");
+  await page.goto('/documents/annual-billing/v/2');
+  const s = await openSection(page, 'metrics');
+  await s.getByRole('button', { name: 'Actions for 7. Success metrics' }).click();
+  await page.getByRole('menuitem', { name: /Ask a teammate/ }).click();
+  const ask = page.getByTestId('ask-teammate');
+  await ask.getByLabel('Find a person').fill('comm');
+  await ask.getByRole('option', { name: /Theo/ }).click();
+  await ask.getByLabel('Question').fill(question);
+  await ask.getByLabel('Why (optional)').fill('The rollout plan depends on it');
+  await ask.getByRole('button', { name: 'Ask' }).click();
+  await expect(ask).toContainText('Asked Theo Brandt');
 
-  await openTab(page, "Feedback");
-  const asked = page.getByTestId("section-questions").filter({ visible: true }).getByTestId("section-question").filter({ hasText: question });
-  await expect(asked).toContainText("Waiting on Theo Brandt");
+  await openTab(page, 'Feedback');
+  const asked = page
+    .getByTestId('section-questions')
+    .filter({ visible: true })
+    .getByTestId('section-question')
+    .filter({ hasText: question });
+  await expect(asked).toContainText('Waiting on Theo Brandt');
 
   await signOut(page);
-  await login(page, "commenter@example.com");
+  await login(page, 'commenter@example.com');
   await openInbox(page);
   const row = questionRow(page, question);
-  await expect(row).toContainText("Avery Stone asks");
-  await row.getByRole("button", { name: "Answer" }).click();
-  await page.getByTestId("answer-question").getByLabel("Your answer").fill(reply);
-  await page.getByTestId("answer-question").getByRole("button", { name: "Send answer" }).click();
-  await expect(row).toContainText("Answered ✓");
+  await expect(row).toContainText('Avery Stone asks');
+  await row.getByRole('button', { name: 'Answer' }).click();
+  await page.getByTestId('answer-question').getByLabel('Your answer').fill(reply);
+  await page.getByTestId('answer-question').getByRole('button', { name: 'Send answer' }).click();
+  await expect(row).toContainText('Answered ✓');
 
   await signOut(page);
   await login(page);
-  await page.goto("/documents/annual-billing/v/2");
-  await openSection(page, "metrics");
-  await openTab(page, "Feedback");
-  const answered = page.getByTestId("section-questions").filter({ visible: true }).getByTestId("section-question").filter({ hasText: question });
+  await page.goto('/documents/annual-billing/v/2');
+  await openSection(page, 'metrics');
+  await openTab(page, 'Feedback');
+  const answered = page
+    .getByTestId('section-questions')
+    .filter({ visible: true })
+    .getByTestId('section-question')
+    .filter({ hasText: question });
   await expect(answered).toContainText(reply);
-  await expect(answered).toContainText("Theo Brandt");
-  await expect(answered).not.toContainText("Waiting on");
+  await expect(answered).toContainText('Theo Brandt');
+  await expect(answered).not.toContainText('Waiting on');
 });
 
-test("Home: Needs you shows the same question row; answered, it leaves with its count (qa4-company-47)", async ({ page }) => {
+test('Home: Needs you shows the same question row; answered, it leaves with its count (qa4-company-47)', async ({
+  page,
+}) => {
   await login(page);
-  await page.goto("/home");
-  const row = page.getByTestId("home-needs-table").locator("tr[data-row]").filter({ hasText: CLINIC });
-  await expect(row).toContainText("Oracle asks");
-  await expect(row).toContainText("Before drafting · Clinic waitlist");
-  await row.getByRole("button", { name: "Answer" }).click();
-  const form = page.getByTestId("answer-question");
-  await form.getByLabel("Your answer").fill("The two downtown clinics.");
-  await form.getByRole("button", { name: "Send answer" }).click();
-  await expect(page.getByTestId("home-needs").getByTestId("inbox-acted")).toContainText(`Answered: ${CLINIC}`);
+  await page.goto('/home');
+  const row = page
+    .getByTestId('home-needs-table')
+    .locator('tr[data-row]')
+    .filter({ hasText: CLINIC });
+  await expect(row).toContainText('Oracle asks');
+  await expect(row).toContainText('Before drafting · Clinic waitlist');
+  await row.getByRole('button', { name: 'Answer' }).click();
+  const form = page.getByTestId('answer-question');
+  await form.getByLabel('Your answer').fill('The two downtown clinics.');
+  await form.getByRole('button', { name: 'Send answer' }).click();
+  await expect(page.getByTestId('home-needs').getByTestId('inbox-acted')).toContainText(
+    `Answered: ${CLINIC}`,
+  );
   await expect(row).toHaveCount(0);
-  await expect(badge(page)).toHaveText("12");
+  await expect(badge(page)).toHaveText('12');
 });
 
-test("private finding: Ask someone is refused until it is shared, and the question stays mine", async ({ page }) => {
-  const hidden = "Is the pilot limited to two clinics?";
+test('private finding: Ask someone is refused until it is shared, and the question stays mine', async ({
+  page,
+}) => {
+  const hidden = 'Is the pilot limited to two clinics?';
   // Read when the mock first seeds its data; the questions scenario's init script runs first.
-  await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "private-finding"));
+  await page.addInitScript(() => localStorage.setItem('po-mock-scenario', 'private-finding'));
   await login(page);
   await openInbox(page);
   const row = questionRow(page, hidden);
-  await expect(row).toContainText("Oracle asks");
+  await expect(row).toContainText('Oracle asks');
   const before = await badge(page).textContent();
 
-  await row.getByRole("button", { name: "Answer" }).click();
-  const form = page.getByTestId("answer-question");
-  await form.getByRole("button", { name: /^Ask someone/ }).click();
-  await form.getByLabel("Find a person").fill("appr");
-  await form.getByRole("option", { name: /Priya/ }).click();
-  await expect(form).toContainText("Share this finding first to ask someone else");
-  await expect(row).not.toContainText("Asked Priya Raman ✓");
+  await row.getByRole('button', { name: 'Answer' }).click();
+  const form = page.getByTestId('answer-question');
+  await form.getByRole('button', { name: /^Ask someone/ }).click();
+  await form.getByLabel('Find a person').fill('appr');
+  await form.getByRole('option', { name: /Priya/ }).click();
+  await expect(form).toContainText('Share this finding first to ask someone else');
+  await expect(row).not.toContainText('Asked Priya Raman ✓');
   await expect(badge(page)).toHaveText(before!);
 
   // Still mine after a reload (under Open, as a question already opened); the approver is
   // never asked it.
   await page.reload();
-  await tab(page, "Seen").click();
-  await expect(questionRow(page, hidden)).toContainText("Oracle asks");
+  await tab(page, 'Seen').click();
+  await expect(questionRow(page, hidden)).toContainText('Oracle asks');
   await signOut(page);
-  await login(page, "approver@example.com");
+  await login(page, 'approver@example.com');
   await openInbox(page);
-  await expect(page.getByTestId("inbox-needs")).not.toContainText(hidden);
+  await expect(page.getByTestId('inbox-needs')).not.toContainText(hidden);
 });
 
-test.describe("phone", () => {
+test.describe('phone', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test("at 390 px Answer opens a sheet with the five paths and no sideways scroll", async ({ page }) => {
+  test('at 390 px Answer opens a sheet with the five paths and no sideways scroll', async ({
+    page,
+  }) => {
     await login(page);
     await openInbox(page);
-    await questionRow(page, CLINIC).getByRole("button", { name: "Answer" }).click();
-    const sheet = page.getByTestId("answer-sheet");
+    await questionRow(page, CLINIC).getByRole('button', { name: 'Answer' }).click();
+    const sheet = page.getByTestId('answer-sheet');
     await expect(sheet).toBeVisible();
-    for (const name of ["Send answer", "I don't know", "Defer", "Ask someone", "Research this"]) {
-      await expect(sheet.getByRole("button", { name: new RegExp(`^${name}`) })).toBeVisible();
+    for (const name of ['Send answer', "I don't know", 'Defer', 'Ask someone', 'Research this']) {
+      await expect(sheet.getByRole('button', { name: new RegExp(`^${name}`) })).toBeVisible();
     }
-    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
     expect(overflow).toBeLessThanOrEqual(0);
-    await sheet.getByLabel("Your answer").fill("Downtown first.");
-    await sheet.getByRole("button", { name: "Send answer" }).click();
+    await sheet.getByLabel('Your answer').fill('Downtown first.');
+    await sheet.getByRole('button', { name: 'Send answer' }).click();
     await expect(sheet).toHaveCount(0);
-    await expect(questionRow(page, CLINIC)).toContainText("Answered ✓");
+    await expect(questionRow(page, CLINIC)).toContainText('Answered ✓');
   });
 });
 
-test("many people: a teammate past the picker's first 20 is named on the Feedback tab", async ({ page }) => {
+test("many people: a teammate past the picker's first 20 is named on the Feedback tab", async ({
+  page,
+}) => {
   // protects="Waiting on <name>" in a company of 25; fails_when=the 25th member reads
   // "Waiting on someone"; no_claim=the real API (tests/test_questions_people.py covers it).
-  const question = "Which carriers ship to the islands?";
-  await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "many-people"));
+  const question = 'Which carriers ship to the islands?';
+  await page.addInitScript(() => localStorage.setItem('po-mock-scenario', 'many-people'));
   await login(page);
-  await page.goto("/documents/annual-billing/v/2");
-  const s = await openSection(page, "metrics");
-  await s.getByRole("button", { name: "Actions for 7. Success metrics" }).click();
-  await page.getByRole("menuitem", { name: /Ask a teammate/ }).click();
-  const ask = page.getByTestId("ask-teammate");
-  await ask.getByLabel("Find a person").fill("zoe");
-  await ask.getByRole("option", { name: /Zoe Zimmer/ }).click();
-  await ask.getByLabel("Question").fill(question);
-  await ask.getByRole("button", { name: "Ask" }).click();
-  await expect(ask).toContainText("Asked Zoe Zimmer");
+  await page.goto('/documents/annual-billing/v/2');
+  const s = await openSection(page, 'metrics');
+  await s.getByRole('button', { name: 'Actions for 7. Success metrics' }).click();
+  await page.getByRole('menuitem', { name: /Ask a teammate/ }).click();
+  const ask = page.getByTestId('ask-teammate');
+  await ask.getByLabel('Find a person').fill('zoe');
+  await ask.getByRole('option', { name: /Zoe Zimmer/ }).click();
+  await ask.getByLabel('Question').fill(question);
+  await ask.getByRole('button', { name: 'Ask' }).click();
+  await expect(ask).toContainText('Asked Zoe Zimmer');
 
-  await openTab(page, "Feedback");
-  const asked = page.getByTestId("section-questions").filter({ visible: true }).getByTestId("section-question").filter({ hasText: question });
-  await expect(asked).toContainText("Waiting on Zoe Zimmer");
+  await openTab(page, 'Feedback');
+  const asked = page
+    .getByTestId('section-questions')
+    .filter({ visible: true })
+    .getByTestId('section-question')
+    .filter({ hasText: question });
+  await expect(asked).toContainText('Waiting on Zoe Zimmer');
 });

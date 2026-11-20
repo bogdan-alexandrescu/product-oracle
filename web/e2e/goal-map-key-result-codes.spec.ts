@@ -1,7 +1,7 @@
-import { LADDER_KR_CODES, LADDER_KR_CODES_SCENARIO } from "../lib/api/mock/goal-ladder";
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { LADDER_KR_CODES, LADDER_KR_CODES_SCENARIO } from '../lib/api/mock/goal-ladder';
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /*
  * kr-in-goal-map, key results' codes, on the mock's "goal-ladder-key-result-codes" scenario
@@ -15,23 +15,30 @@ import { expect, test, type Page } from "./test";
  */
 
 async function open(page: Page) {
-  await page.addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, LADDER_KR_CODES_SCENARIO] as const);
+  await page.addInitScript(([k, v]) => localStorage.setItem(k, v), [
+    MOCK_SCENARIO_KEY,
+    LADDER_KR_CODES_SCENARIO,
+  ] as const);
   await login(page);
-  await page.goto("/simple/goals");
-  await expect(page.getByTestId("gm-page")).toBeVisible();
-  await expect(page.getByTestId("gm-goal").first()).toBeVisible();
+  await page.goto('/simple/goals');
+  await expect(page.getByTestId('gm-page')).toBeVisible();
+  await expect(page.getByTestId('gm-goal').first()).toBeVisible();
 }
 
 const C = LADDER_KR_CODES;
-const goal = (page: Page) => page.getByTestId("gm-goal").filter({ hasText: C.goal });
+const goal = (page: Page) => page.getByTestId('gm-goal').filter({ hasText: C.goal });
 
 test.describe("Goal map: key results' codes", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
-  test("a key result's own key result is numbered among every sibling, a proposed one too", async ({ page }) => {
+  test("a key result's own key result is numbered among every sibling, a proposed one too", async ({
+    page,
+  }) => {
     await open(page);
-    await goal(page).getByRole("button", { name: `About ${C.goal}` }).hover();
-    const tip = goal(page).getByRole("tooltip");
+    await goal(page)
+      .getByRole('button', { name: `About ${C.goal}` })
+      .hover();
+    const tip = goal(page).getByRole('tooltip');
     await expect(tip).toContainText(`G-B.1 ${C.first}`);
     await expect(tip).toContainText(`G-B.2 ${C.second}`);
     // The older proposed key result under G-B.1 is not listed, but keeps its number.

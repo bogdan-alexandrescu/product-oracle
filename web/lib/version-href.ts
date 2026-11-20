@@ -6,12 +6,12 @@
  */
 
 /** The pane a roadmap version opens on from Oracle's links. */
-export const ROADMAP_DEFAULT_PANE = "items";
+export const ROADMAP_DEFAULT_PANE = 'items';
 
-export type DocumentKind = "prd" | "roadmap" | string | null | undefined;
+export type DocumentKind = 'prd' | 'roadmap' | string | null | undefined;
 
 /** `/documents/{doc}/v/{n}`, plus `/items` for a roadmap. */
 export function versionHref(doc: string, kind: DocumentKind, n: number | string): string {
   const base = `/documents/${doc}/v/${n}`;
-  return kind === "roadmap" ? `${base}/${ROADMAP_DEFAULT_PANE}` : base;
+  return kind === 'roadmap' ? `${base}/${ROADMAP_DEFAULT_PANE}` : base;
 }

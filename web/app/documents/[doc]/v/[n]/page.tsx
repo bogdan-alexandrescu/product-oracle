@@ -1,10 +1,10 @@
-import { Suspense } from "react";
+import { Suspense } from 'react';
 
-import { VersionView } from "@/components/VersionView";
-import type { RouteProps } from "@/lib/route-props";
-import { PageSkeleton } from "@/components/ds";
+import { VersionView } from '@/components/VersionView';
+import type { RouteProps } from '@/lib/route-props';
+import { PageSkeleton } from '@/components/ds';
 
-async function Version({ params }: { params: RouteProps<{ doc: string; n: string }>["params"] }) {
+async function Version({ params }: { params: RouteProps<{ doc: string; n: string }>['params'] }) {
   const { doc, n } = await params;
   return <VersionView key={`${doc}/${n}`} doc={doc} n={Number(n)} />;
 }

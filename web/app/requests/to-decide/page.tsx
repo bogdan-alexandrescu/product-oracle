@@ -1,4 +1,4 @@
-import { RequestsScreen } from "../_components/RequestsScreen";
+import { RequestsScreen } from '../_components/RequestsScreen';
 
 /**
  * Requests' To decide tab (C1): the requests nobody has decided yet, newest first, in the

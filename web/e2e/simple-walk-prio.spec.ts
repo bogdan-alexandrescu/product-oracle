@@ -1,7 +1,13 @@
-import { login, signOut } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { login, signOut } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
-import { MOCK_FAIL_ONCE_KEY, MOCK_SCENARIO_KEY, MOCK_SIMPLE_MODE_KEY, MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from "../lib/api/mock/server";
+import {
+  MOCK_FAIL_ONCE_KEY,
+  MOCK_SCENARIO_KEY,
+  MOCK_SIMPLE_MODE_KEY,
+  MOCK_SLOW_KEY,
+  MOCK_SLOW_MS_KEY,
+} from '../lib/api/mock/server';
 
 /**
  * Simple production walk (#723): the line on Priorities marks each row that misses it (a
@@ -14,24 +20,30 @@ import { MOCK_FAIL_ONCE_KEY, MOCK_SCENARIO_KEY, MOCK_SIMPLE_MODE_KEY, MOCK_SLOW_
  * comment.
  */
 
-const PRIORITIES = "/simple/priorities";
+const PRIORITIES = '/simple/priorities';
 const DESKTOP = { viewport: { width: 1366, height: 820 } };
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
-const ROLES = { owner: undefined, viewer: "viewer@example.com" } as const;
+const ROLES = { owner: undefined, viewer: 'viewer@example.com' } as const;
 
-type Marks = { above: boolean; misses: boolean; tag: string | null; tagTitle: string | null; title: string }[];
+type Marks = {
+  above: boolean;
+  misses: boolean;
+  tag: string | null;
+  tagTitle: string | null;
+  title: string;
+}[];
 
 async function marks(rows: Locator, titleOf: (row: Locator) => Locator): Promise<Marks> {
   const out: Marks = [];
   for (const r of await rows.all()) {
-    const tag = r.getByTestId("prio-misses");
+    const tag = r.getByTestId('prio-misses');
     const has = (await tag.count()) > 0;
     out.push({
-      above: (await r.getAttribute("data-above")) === "true",
-      misses: (await r.getAttribute("data-misses")) === "true",
+      above: (await r.getAttribute('data-above')) === 'true',
+      misses: (await r.getAttribute('data-misses')) === 'true',
       tag: has ? await tag.textContent() : null,
-      tagTitle: has ? await tag.getAttribute("title") : null,
-      title: ((await titleOf(r).textContent()) ?? "").trim(),
+      tagTitle: has ? await tag.getAttribute('title') : null,
+      title: ((await titleOf(r).textContent()) ?? '').trim(),
     });
   }
   return out;
@@ -42,7 +54,14 @@ async function marks(rows: Locator, titleOf: (row: Locator) => Locator): Promise
  * divider shows only when everything below it misses. `compact`: Value/effort's side list (the
  * owner's pick B), whose tag is a small "Misses" chip with the line in its title.
  */
-async function checkLine(page: Page, scope: Locator, rows: Locator, titleOf: (row: Locator) => Locator, label: string, compact = false): Promise<boolean> {
+async function checkLine(
+  page: Page,
+  scope: Locator,
+  rows: Locator,
+  titleOf: (row: Locator) => Locator,
+  label: string,
+  compact = false,
+): Promise<boolean> {
   await expect(rows.first()).toBeVisible();
   const m = await marks(rows, titleOf);
   const missing = m.filter((r) => !r.above);
@@ -52,40 +71,45 @@ async function checkLine(page: Page, scope: Locator, rows: Locator, titleOf: (ro
     const own = `Misses its own milestone, ${label}`;
     // build-plan QP1: the ranked list's rows carry no Misses pill; its parts or caption say what misses.
     if (r.above || !compact) expect(r.tag, r.title).toBe(null);
-    else expect(["Misses", own], r.title).toContain(r.tag);
+    else expect(['Misses', own], r.title).toContain(r.tag);
     if (compact) expect([r.above ? null : `Misses ${label}`, own], r.title).toContain(r.tagTitle);
   }
-  const heads = scope.getByTestId("prio-part-head");
+  const heads = scope.getByTestId('prio-part-head');
   if (!compact && (await heads.count()) > 0) {
     // Split at a line the plan's dates regroup the list at: "Makes <line>" over what makes it, "Misses <line>" over the rest, each counted.
     await expect(heads).toHaveCount(2);
     await expect(heads.nth(0)).toHaveAccessibleName(`Makes ${label}`);
     await expect(heads.nth(1)).toHaveAccessibleName(`Misses ${label}`);
-    const n = (k: number) => `${k} ${k === 1 ? "feature" : "features"}, in rank order`;
-    await expect(scope.getByTestId("prio-part-count").nth(0)).toHaveText(n(m.length - missing.length));
-    await expect(scope.getByTestId("prio-part-count").nth(1)).toHaveText(n(missing.length));
-    await expect(scope.getByTestId("line-caption")).toHaveCount(0);
-    await expect(scope.getByTestId("line-divider")).toHaveCount(0);
-    return m.findIndex((r) => !r.above) >= 0 && m.slice(m.findIndex((r) => !r.above)).some((r) => r.above);
+    const n = (k: number) => `${k} ${k === 1 ? 'feature' : 'features'}, in rank order`;
+    await expect(scope.getByTestId('prio-part-count').nth(0)).toHaveText(
+      n(m.length - missing.length),
+    );
+    await expect(scope.getByTestId('prio-part-count').nth(1)).toHaveText(n(missing.length));
+    await expect(scope.getByTestId('line-caption')).toHaveCount(0);
+    await expect(scope.getByTestId('line-divider')).toHaveCount(0);
+    return (
+      m.findIndex((r) => !r.above) >= 0 &&
+      m.slice(m.findIndex((r) => !r.above)).some((r) => r.above)
+    );
   }
-  const caption = scope.getByTestId("line-caption");
+  const caption = scope.getByTestId('line-caption');
   await expect(caption).toContainText(`${missing.length} of ${m.length} miss ${label}`);
   // A short caption (Value/effort's side list) opens the rest with "and n more" (QA pass 3, qa-simple-plan-19).
-  const more = caption.getByTestId("line-caption-more");
+  const more = caption.getByTestId('line-caption-more');
   if (await more.count()) await more.click();
-  const named = (await caption.textContent()) ?? "";
+  const named = (await caption.textContent()) ?? '';
   for (const r of missing) expect(named, r.title).toContain(r.title);
   const first = m.findIndex((r) => !r.above);
   const interleaved = first >= 0 && m.slice(first).some((r) => r.above);
-  await expect(scope.getByTestId("line-divider")).toHaveCount(first >= 0 && !interleaved ? 1 : 0);
+  await expect(scope.getByTestId('line-divider')).toHaveCount(first >= 0 && !interleaved ? 1 : 0);
   return interleaved;
 }
 
 for (const [where, size] of [
-  ["desktop", DESKTOP],
-  ["phone", PHONE],
+  ['desktop', DESKTOP],
+  ['phone', PHONE],
 ] as const) {
-  for (const scheme of ["light", "dark"] as const) {
+  for (const scheme of ['light', 'dark'] as const) {
     test.describe(`${where}, ${scheme}`, () => {
       test.use({ ...size, colorScheme: scheme });
 
@@ -101,50 +125,83 @@ for (const [where, size] of [
          * (or a making row has one), or the caption miscounts or leaves a name out; no_claim =
          * which rows miss (API and roadmap-plus tests), the ranking itself.
          */
-        test(`each row that misses the line is marked, no divider over rows that make it (${role})`, async ({ page }) => {
+        test(`each row that misses the line is marked, no divider over rows that make it (${role})`, async ({
+          page,
+        }) => {
           await login(page, email);
           await page.goto(PRIORITIES);
-          await expect(page.getByTestId("simple-priorities")).toBeVisible();
-          const select = page.getByTestId("line-picker").getByLabel("Line", { exact: true });
+          await expect(page.getByTestId('simple-priorities')).toBeVisible();
+          const select = page.getByTestId('line-picker').getByLabel('Line', { exact: true });
           // The picker can paint before its options on a cold page: read them once Now is offered.
           await expect(select.locator('option[value="now"]')).toHaveCount(1);
           // qa-nov17 G8: a milestone's option reads its code once the roadmap's read is in: read the options then.
-          await expect(select.locator("option").filter({ hasText: /Beta · / }).first()).toHaveText(/^Milestone: M\d+ Beta · /);
-          const list = page.getByRole("list", { name: "Ranked list" }).locator("..");
-          const rows = page.getByTestId("prio-row");
-          const title = (r: Locator) => r.getByTestId("prio-title");
-          const picks = (await select.locator("option").evaluateAll((os) => os.map((o) => [(o as HTMLOptionElement).value, o.textContent ?? ""]))).filter(([v]) => v !== "pick");
+          await expect(
+            select
+              .locator('option')
+              .filter({ hasText: /Beta · / })
+              .first(),
+          ).toHaveText(/^Milestone: M\d+ Beta · /);
+          const list = page.getByRole('list', { name: 'Ranked list' }).locator('..');
+          const rows = page.getByTestId('prio-row');
+          const title = (r: Locator) => r.getByTestId('prio-title');
+          const picks = (
+            await select
+              .locator('option')
+              .evaluateAll((os) =>
+                os.map((o) => [(o as HTMLOptionElement).value, o.textContent ?? '']),
+              )
+          ).filter(([v]) => v !== 'pick');
           let sawInterleaved = false;
           for (const [value, text] of picks) {
             await select.selectOption(value);
             // The caption reads the line plainly: "this quarter", a key date's or milestone's name, a day without "By".
-            const label = value === "now" ? "this quarter" : text.replace(/^(Key date|Milestone): /, "").replace(/^By /, "");
-            await expect(page.getByTestId("line-caption").or(page.getByTestId("prio-part-head").filter({ hasText: /^Misses / }))).toContainText(new RegExp(`[Mm]iss(es)? ${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+            const label =
+              value === 'now'
+                ? 'this quarter'
+                : text.replace(/^(Key date|Milestone): /, '').replace(/^By /, '');
+            await expect(
+              page
+                .getByTestId('line-caption')
+                .or(page.getByTestId('prio-part-head').filter({ hasText: /^Misses / })),
+            ).toContainText(
+              new RegExp(`[Mm]iss(es)? ${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
+            );
             sawInterleaved = (await checkLine(page, list, rows, title, label)) || sawInterleaved;
           }
-          await select.selectOption("pick");
-          await page.getByLabel("The line's date").fill("2026-12-31");
-          await page.getByRole("button", { name: "Apply" }).click();
-          await expect(page.getByTestId("line-caption").or(page.getByTestId("prio-part-head").filter({ hasText: /^Misses / }))).toContainText(/[Mm]iss(es)? Dec 31, 2026/);
-          sawInterleaved = (await checkLine(page, list, rows, title, "Dec 31, 2026")) || sawInterleaved;
+          await select.selectOption('pick');
+          await page.getByLabel("The line's date").fill('2026-12-31');
+          await page.getByRole('button', { name: 'Apply' }).click();
+          await expect(
+            page
+              .getByTestId('line-caption')
+              .or(page.getByTestId('prio-part-head').filter({ hasText: /^Misses / })),
+          ).toContainText(/[Mm]iss(es)? Dec 31, 2026/);
+          sawInterleaved =
+            (await checkLine(page, list, rows, title, 'Dec 31, 2026')) || sawInterleaved;
           // QA pass 3 (qa-simple-plan-2): every line splits the list, makers first; no row that makes it sits under one that misses it.
           expect(sawInterleaved).toBe(false);
 
-          await page.getByRole("tab", { name: "Value / effort" }).click();
-          const side = page.getByRole("region", { name: "Ranked side list" });
-          await checkLine(page, side, side.getByTestId("side-row"), (r) => r.getByTestId("prio-title"), "Dec 31, 2026", true);
-          await select.selectOption("now");
+          await page.getByRole('tab', { name: 'Value / effort' }).click();
+          const side = page.getByRole('region', { name: 'Ranked side list' });
+          await checkLine(
+            page,
+            side,
+            side.getByTestId('side-row'),
+            (r) => r.getByTestId('prio-title'),
+            'Dec 31, 2026',
+            true,
+          );
+          await select.selectOption('now');
           await expect(page).not.toHaveURL(/line=/);
         });
       }
-
     });
   }
 }
 
 /** The empty space under the greeting's sentence, in lines: its box's foot less its last line's foot. */
 async function spareLines(page: Page): Promise<number> {
-  return page.getByTestId("home-sentence").evaluate((span) => {
+  return page.getByTestId('home-sentence').evaluate((span) => {
     const p = span.parentElement!;
     const range = document.createRange();
     range.selectNodeContents(p);
@@ -162,7 +219,11 @@ const SPARE_LINE = new Set([800]);
 for (const width of [375, 390, 601, 610, 685, 800, 1024, 1366, 1512]) {
   const phone = width < 600;
   test.describe(`${width} px`, () => {
-    test.use(phone ? { viewport: { width, height: 844 }, hasTouch: true, isMobile: true } : { viewport: { width, height: 820 } });
+    test.use(
+      phone
+        ? { viewport: { width, height: 844 }, hasTouch: true, isMobile: true }
+        : { viewport: { width, height: 820 } },
+    );
 
     for (const [role, email] of Object.entries(ROLES)) {
       /**
@@ -186,74 +247,123 @@ for (const width of [375, 390, 601, 610, 685, 800, 1024, 1366, 1512]) {
        * wraps to two rows where the skeleton kept one, or a short greeting leaves empty lines;
        * no_claim = how fast the real API answers, the cards' contents (simple-home specs).
        */
-      test(`Home paints its frame and skeleton at once, then fills in place (${role})`, async ({ page, context }) => {
-        await context.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "every-wait-one"] as const);
+      test(`Home paints its frame and skeleton at once, then fills in place (${role})`, async ({
+        page,
+        context,
+      }) => {
+        await context.addInitScript(([key, s]) => localStorage.setItem(key, s), [
+          MOCK_SCENARIO_KEY,
+          'every-wait-one',
+        ] as const);
         // The afternoon: "Good afternoon", the longest greeting word (2:30 PM in the owner's zone).
-        await page.clock.setSystemTime(new Date("2026-10-22T21:30:00Z"));
+        await page.clock.setSystemTime(new Date('2026-10-22T21:30:00Z'));
         await login(page, email);
-        await page.goto("/home");
+        await page.goto('/home');
         await context.addInitScript(
           ([slow, ms]) => {
-            if (!sessionStorage.getItem("walk-prio-slow")) {
-              localStorage.setItem(slow, "/v1/me/capabilities");
-              localStorage.setItem(ms, "4000");
-              sessionStorage.setItem("walk-prio-slow", "1");
+            if (!sessionStorage.getItem('walk-prio-slow')) {
+              localStorage.setItem(slow, '/v1/me/capabilities');
+              localStorage.setItem(ms, '4000');
+              sessionStorage.setItem('walk-prio-slow', '1');
             }
           },
           [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY],
         );
-        await page.goto("/simple");
-        const goals = page.getByTestId("home-goals");
-        const cards = page.getByTestId("simple-page").locator("section.simple-card");
-        await expect(page.getByTestId("home-greeting")).toHaveAttribute("data-skeleton", "true", { timeout: 2500 });
-        await expect(page.getByTestId("home-goals-skeleton")).toBeVisible();
-        await expect(page.getByTestId("home-skeleton-rows").first()).toBeVisible();
-        if (!phone) await expect(page.getByTestId("simple-nav-skeleton")).toBeVisible();
+        await page.goto('/simple');
+        const goals = page.getByTestId('home-goals');
+        const cards = page.getByTestId('simple-page').locator('section.simple-card');
+        await expect(page.getByTestId('home-greeting')).toHaveAttribute('data-skeleton', 'true', {
+          timeout: 2500,
+        });
+        await expect(page.getByTestId('home-goals-skeleton')).toBeVisible();
+        await expect(page.getByTestId('home-skeleton-rows').first()).toBeVisible();
+        if (!phone) await expect(page.getByTestId('simple-nav-skeleton')).toBeVisible();
         const before = (await goals.boundingBox())!;
         // Cards are measured from the band's foot: the band itself grows with the goals there are.
-        const foot = async () => (await goals.boundingBox())!.y + (await goals.boundingBox())!.height;
+        const foot = async () =>
+          (await goals.boundingBox())!.y + (await goals.boundingBox())!.height;
         const firstCard = (await cards.first().boundingBox())!.y - (await foot());
-        const named = await cards.evaluateAll((els) => els.filter((e) => e.getAttribute("aria-label")).map((e) => [e.getAttribute("aria-label")!, e.getBoundingClientRect().top] as const));
+        const named = await cards.evaluateAll((els) =>
+          els
+            .filter((e) => e.getAttribute('aria-label'))
+            .map((e) => [e.getAttribute('aria-label')!, e.getBoundingClientRect().top] as const),
+        );
         const skeletonFoot = await foot();
-        await expect(page.getByTestId("home-sentence")).toBeVisible({ timeout: 8000 });
-        await expect(page.getByTestId("home-goal").first()).toBeVisible();
-        await expect(page.getByTestId("simple-nav-skeleton")).toHaveCount(0);
-        const sentence = page.getByTestId("home-sentence");
-        if (role === "owner") {
+        await expect(page.getByTestId('home-sentence')).toBeVisible({ timeout: 8000 });
+        await expect(page.getByTestId('home-goal').first()).toBeVisible();
+        await expect(page.getByTestId('simple-nav-skeleton')).toHaveCount(0);
+        const sentence = page.getByTestId('home-sentence');
+        if (role === 'owner') {
           // The longest form: three kinds by importance, each in the singular, then "and more", then the Inbox.
-          await expect(page.getByTestId("home-greeting").getByText("Good afternoon, Mohammadreza.")).toBeVisible();
-          await expect(sentence).toHaveText("A decision, a proposal, a broken link and more wait on you. More waits in your Inbox.");
-          await expect(page.getByRole("button", { name: "Walk me through it" })).toBeVisible();
-          await expect(page.getByRole("button", { name: "New PRD" })).toBeVisible();
-        } else await expect(sentence).toHaveText("Here is where the plan stands.");
+          await expect(
+            page.getByTestId('home-greeting').getByText('Good afternoon, Mohammadreza.'),
+          ).toBeVisible();
+          await expect(sentence).toHaveText(
+            'A decision, a proposal, a broken link and more wait on you. More waits in your Inbox.',
+          );
+          await expect(page.getByRole('button', { name: 'Walk me through it' })).toBeVisible();
+          await expect(page.getByRole('button', { name: 'New PRD' })).toBeVisible();
+        } else await expect(sentence).toHaveText('Here is where the plan stands.');
         const after = (await goals.boundingBox())!;
         // The owner's longest greeting fills the lines the skeleton kept: the band stays (up exactly
         // the spare line, at a SPARE_LINE width). A viewer's short greeting and no action row: the
         // band moves up once, never down.
-        const spare = SPARE_LINE.has(width) ? await sentence.evaluate((e) => parseFloat(getComputedStyle(e.parentElement!).lineHeight)) : 0;
-        if (role === "owner") expect(Math.abs(after.y - (before.y - spare)), `band moved from ${before.y} to ${after.y}`).toBeLessThanOrEqual(1);
-        else expect(after.y, `band moved from ${before.y} to ${after.y}`).toBeLessThanOrEqual(before.y + 1);
+        const spare = SPARE_LINE.has(width)
+          ? await sentence.evaluate((e) =>
+              parseFloat(getComputedStyle(e.parentElement!).lineHeight),
+            )
+          : 0;
+        if (role === 'owner')
+          expect(
+            Math.abs(after.y - (before.y - spare)),
+            `band moved from ${before.y} to ${after.y}`,
+          ).toBeLessThanOrEqual(1);
+        else
+          expect(after.y, `band moved from ${before.y} to ${after.y}`).toBeLessThanOrEqual(
+            before.y + 1,
+          );
         expect(Math.abs(after.x - before.x)).toBeLessThanOrEqual(1);
         expect(await spareLines(page)).toBeLessThanOrEqual(0.5);
         const filledFoot = await foot();
         for (const [name, top] of named) {
-          const now = await page.getByRole("region", { name, exact: true }).evaluate((e) => e.getBoundingClientRect().top);
+          const now = await page
+            .getByRole('region', { name, exact: true })
+            .evaluate((e) => e.getBoundingClientRect().top);
           expect(Math.abs(now - filledFoot - (top - skeletonFoot)), name).toBeLessThanOrEqual(1);
         }
-        expect(Math.abs((await cards.first().boundingBox())!.y - filledFoot - firstCard)).toBeLessThanOrEqual(1);
-        if (role === "owner") {
+        expect(
+          Math.abs((await cards.first().boundingBox())!.y - filledFoot - firstCard),
+        ).toBeLessThanOrEqual(1);
+        if (role === 'owner') {
           // Home again with what waits held: the page's own line, "Checking what waits on you…",
           // keeps the skeleton's lines, so the band stands where the skeleton and the filled page put it.
-          await page.evaluate(([slow, ms]) => (localStorage.setItem(slow, "/v1/simple/decisions/waiting"), localStorage.setItem(ms, "4000")), [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY]);
+          await page.evaluate(
+            ([slow, ms]) => (
+              localStorage.setItem(slow, '/v1/simple/decisions/waiting'),
+              localStorage.setItem(ms, '4000')
+            ),
+            [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY],
+          );
           await page.reload();
-          await expect(sentence).toHaveText("Checking what waits on you…", { timeout: 3000 });
+          await expect(sentence).toHaveText('Checking what waits on you…', { timeout: 3000 });
           const checking = (await goals.boundingBox())!;
-          expect(Math.abs(checking.y - before.y), `band moved from ${before.y} to ${checking.y} while checking`).toBeLessThanOrEqual(1);
-          expect(Math.abs(checking.y - spare - after.y), `band at ${checking.y} while checking, ${after.y} filled`).toBeLessThanOrEqual(1);
-          await expect(sentence).toHaveText(/^A decision, a proposal, a broken link and more/, { timeout: 8000 });
+          expect(
+            Math.abs(checking.y - before.y),
+            `band moved from ${before.y} to ${checking.y} while checking`,
+          ).toBeLessThanOrEqual(1);
+          expect(
+            Math.abs(checking.y - spare - after.y),
+            `band at ${checking.y} while checking, ${after.y} filled`,
+          ).toBeLessThanOrEqual(1);
+          await expect(sentence).toHaveText(/^A decision, a proposal, a broken link and more/, {
+            timeout: 8000,
+          });
           expect(Math.abs((await goals.boundingBox())!.y - after.y)).toBeLessThanOrEqual(1);
         }
-        await page.evaluate(([slow, ms]) => [slow, ms].forEach((k) => localStorage.removeItem(k)), [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY]);
+        await page.evaluate(
+          ([slow, ms]) => [slow, ms].forEach((k) => localStorage.removeItem(k)),
+          [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY],
+        );
       });
     }
   });
@@ -262,7 +372,11 @@ for (const width of [375, 390, 601, 610, 685, 800, 1024, 1366, 1512]) {
 for (const width of [390, 601, 800, 970, 1024, 1366]) {
   const phone = width < 600;
   test.describe(`${width} px, from the first frame`, () => {
-    test.use(phone ? { viewport: { width, height: 844 }, hasTouch: true, isMobile: true } : { viewport: { width, height: 820 } });
+    test.use(
+      phone
+        ? { viewport: { width, height: 844 }, hasTouch: true, isMobile: true }
+        : { viewport: { width, height: 820 } },
+    );
 
     /**
      * Card walk-prio-home-first-frame: protects = Simple's Home's goal band is drawn, from the
@@ -275,10 +389,13 @@ for (const width of [390, 601, 800, 970, 1024, 1366]) {
      * greeting is known (walk-prio-home-first-paint).
      */
     test("Home's goal band never moves down from its first frame", async ({ page, context }) => {
-      await context.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "every-wait-one"] as const);
-      await page.clock.setSystemTime(new Date("2026-10-22T21:30:00Z"));
+      await context.addInitScript(([key, s]) => localStorage.setItem(key, s), [
+        MOCK_SCENARIO_KEY,
+        'every-wait-one',
+      ] as const);
+      await page.clock.setSystemTime(new Date('2026-10-22T21:30:00Z'));
       await login(page);
-      await page.goto("/home");
+      await page.goto('/home');
       // Every frame from the first, the band's top on the page (none before it is drawn).
       await context.addInitScript(() => {
         const w = window as unknown as { bandTops: number[] };
@@ -290,16 +407,35 @@ for (const width of [390, 601, 800, 970, 1024, 1366]) {
         };
         requestAnimationFrame(frame);
       });
-      await page.evaluate(([slow, ms]) => (localStorage.setItem(slow, "/v1/me/capabilities"), localStorage.setItem(ms, "1500")), [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY]);
-      await page.goto("/simple");
-      await expect(page.getByTestId("home-sentence")).toHaveText(/^A decision, a proposal, a broken link and more/, { timeout: 8000 });
-      await expect(page.getByTestId("home-goal").first()).toBeVisible();
+      await page.evaluate(
+        ([slow, ms]) => (
+          localStorage.setItem(slow, '/v1/me/capabilities'),
+          localStorage.setItem(ms, '1500')
+        ),
+        [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY],
+      );
+      await page.goto('/simple');
+      await expect(page.getByTestId('home-sentence')).toHaveText(
+        /^A decision, a proposal, a broken link and more/,
+        { timeout: 8000 },
+      );
+      await expect(page.getByTestId('home-goal').first()).toBeVisible();
       await page.waitForTimeout(300);
-      const tops = await page.evaluate(() => (window as unknown as { bandTops: number[] }).bandTops);
+      const tops = await page.evaluate(
+        () => (window as unknown as { bandTops: number[] }).bandTops,
+      );
       expect(tops.length).toBeGreaterThan(1);
-      const drops = tops.flatMap((top, i) => (i > 0 && top > tops[i - 1] + 1 ? [`${tops[i - 1]} to ${top}`] : []));
-      expect(drops, `the band moved down between its first frame (${tops[0]}) and the filled page (${tops.at(-1)})`).toEqual([]);
-      await page.evaluate(([slow, ms]) => [slow, ms].forEach((k) => localStorage.removeItem(k)), [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY]);
+      const drops = tops.flatMap((top, i) =>
+        i > 0 && top > tops[i - 1] + 1 ? [`${tops[i - 1]} to ${top}`] : [],
+      );
+      expect(
+        drops,
+        `the band moved down between its first frame (${tops[0]}) and the filled page (${tops.at(-1)})`,
+      ).toEqual([]);
+      await page.evaluate(
+        ([slow, ms]) => [slow, ms].forEach((k) => localStorage.removeItem(k)),
+        [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY],
+      );
     });
   });
 }
@@ -310,23 +446,30 @@ for (const width of [390, 601, 800, 970, 1024, 1366]) {
  * fails_when = Home's queries (its working drafts among them) run while Simple is off;
  * no_claim = Detailed's Home, the switch (simple-mode spec).
  */
-test("with Simple off, Simple's Home starts none of its queries before Detailed opens", async ({ page }) => {
+test("with Simple off, Simple's Home starts none of its queries before Detailed opens", async ({
+  page,
+}) => {
   await login(page);
-  await page.goto("/home");
+  await page.goto('/home');
   await page.evaluate(
     ([mode, once]) => {
-      localStorage.setItem(mode, "off");
+      localStorage.setItem(mode, 'off');
       // Home's working drafts are read on Simple's Home alone: a call would use this up.
-      localStorage.setItem(once, "GET /v1/simple/drafts");
+      localStorage.setItem(once, 'GET /v1/simple/drafts');
     },
     [MOCK_SIMPLE_MODE_KEY, MOCK_FAIL_ONCE_KEY],
   );
-  await page.goto("/simple");
+  await page.goto('/simple');
   await expect(page).toHaveURL(/localhost:\d+\/home$/);
   await expect(page.locator('[data-mode="detailed"]')).toHaveCount(1);
-  await expect(page.getByRole("heading", { level: 1, name: "Home", exact: true })).toBeVisible();
-  expect(await page.evaluate((once) => localStorage.getItem(once), MOCK_FAIL_ONCE_KEY)).toBe("GET /v1/simple/drafts");
-  await page.evaluate(([mode, once]) => [mode, once].forEach((k) => localStorage.removeItem(k)), [MOCK_SIMPLE_MODE_KEY, MOCK_FAIL_ONCE_KEY]);
+  await expect(page.getByRole('heading', { level: 1, name: 'Home', exact: true })).toBeVisible();
+  expect(await page.evaluate((once) => localStorage.getItem(once), MOCK_FAIL_ONCE_KEY)).toBe(
+    'GET /v1/simple/drafts',
+  );
+  await page.evaluate(
+    ([mode, once]) => [mode, once].forEach((k) => localStorage.removeItem(k)),
+    [MOCK_SIMPLE_MODE_KEY, MOCK_FAIL_ONCE_KEY],
+  );
 });
 
 /**
@@ -335,35 +478,48 @@ test("with Simple off, Simple's Home starts none of its queries before Detailed 
  * misses never runs on; the ranked list's caption still names them all; fails_when = the side
  * list's caption lists every missing title in one line; no_claim = which rows miss.
  */
-test("Value/effort's side caption names three that miss the line and counts the rest", async ({ page }) => {
+test("Value/effort's side caption names three that miss the line and counts the rest", async ({
+  page,
+}) => {
   await login(page);
   await page.goto(PRIORITIES);
-  await expect(page.getByTestId("simple-priorities")).toBeVisible();
-  const select = page.getByTestId("line-picker").getByLabel("Line", { exact: true });
-  await select.selectOption("pick");
-  await page.getByLabel("The line's date").fill("2026-10-28");
-  await page.getByRole("button", { name: "Apply" }).click();
-  const label = "Oct 28, 2026";
-  await expect(page.getByTestId("line-caption")).toContainText(` miss ${label}`);
-  const titles = async (rows: Locator) => (await rows.evaluateAll((rs) => rs.filter((r) => r.getAttribute("data-misses") === "true").map((r) => r.querySelector('[data-testid="prio-title"]')!.textContent!.trim())));
-  const all = await titles(page.getByTestId("prio-row"));
+  await expect(page.getByTestId('simple-priorities')).toBeVisible();
+  const select = page.getByTestId('line-picker').getByLabel('Line', { exact: true });
+  await select.selectOption('pick');
+  await page.getByLabel("The line's date").fill('2026-10-28');
+  await page.getByRole('button', { name: 'Apply' }).click();
+  const label = 'Oct 28, 2026';
+  await expect(page.getByTestId('line-caption')).toContainText(` miss ${label}`);
+  const titles = async (rows: Locator) =>
+    await rows.evaluateAll((rs) =>
+      rs
+        .filter((r) => r.getAttribute('data-misses') === 'true')
+        .map((r) => r.querySelector('[data-testid="prio-title"]')!.textContent!.trim()),
+    );
+  const all = await titles(page.getByTestId('prio-row'));
   expect(all.length).toBeGreaterThan(3);
   // prio-company (the owner, Nov 4): a count, then "Show them" lists each on its own line.
-  for (const t of all) await expect(page.getByTestId("line-caption")).not.toContainText(t);
-  await page.getByTestId("line-caption").getByRole("button", { name: "Show them" }).click();
-  for (const t of all) await expect(page.getByTestId("line-caption").getByTestId("line-miss").filter({ hasText: t })).toHaveCount(1);
+  for (const t of all) await expect(page.getByTestId('line-caption')).not.toContainText(t);
+  await page.getByTestId('line-caption').getByRole('button', { name: 'Show them' }).click();
+  for (const t of all)
+    await expect(
+      page.getByTestId('line-caption').getByTestId('line-miss').filter({ hasText: t }),
+    ).toHaveCount(1);
 
-  await page.getByRole("tab", { name: "Value / effort" }).click();
-  const side = page.getByRole("region", { name: "Ranked side list" });
-  const caption = side.getByTestId("line-caption");
-  await expect(side.getByTestId("side-row").first()).toBeVisible();
-  const missing = await titles(side.getByTestId("side-row"));
-  await expect(caption).toContainText(`${missing.length} of ${await side.getByTestId("side-row").count()} miss ${label}`);
+  await page.getByRole('tab', { name: 'Value / effort' }).click();
+  const side = page.getByRole('region', { name: 'Ranked side list' });
+  const caption = side.getByTestId('line-caption');
+  await expect(side.getByTestId('side-row').first()).toBeVisible();
+  const missing = await titles(side.getByTestId('side-row'));
+  await expect(caption).toContainText(
+    `${missing.length} of ${await side.getByTestId('side-row').count()} miss ${label}`,
+  );
   // prio-company: the side list's caption is the count too; "Show them" opens the names, one per line.
   for (const t of missing) await expect(caption).not.toContainText(t);
-  await caption.getByTestId("line-caption-more").click();
-  for (const t of missing) await expect(caption.getByTestId("line-miss").filter({ hasText: t })).toHaveCount(1);
-  await select.selectOption("now");
+  await caption.getByTestId('line-caption-more').click();
+  for (const t of missing)
+    await expect(caption.getByTestId('line-miss').filter({ hasText: t })).toHaveCount(1);
+  await select.selectOption('now');
 });
 
 /**
@@ -372,33 +528,41 @@ test("Value/effort's side caption names three that miss the line and counts the 
  * answers after the goals; fails_when = the goal band moves when the roadmap answers;
  * no_claim = which changes a reader counts as in review (simple-roadmap mock and API tests).
  */
-test("the changes-in-review notice never pushes the goal band down", async ({ page, context }) => {
+test('the changes-in-review notice never pushes the goal band down', async ({ page, context }) => {
   // A commenter proposes a fix on the plan: a viewer reads the published plan, the change in review.
-  await login(page, "commenter@example.com");
-  await page.goto("/simple");
-  const broken = page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: /^Weekly alert digest: [^]*which it depends on/ });
-  await broken.getByRole("button", { name: "Propose: move the dependents" }).click();
+  await login(page, 'commenter@example.com');
+  await page.goto('/simple');
+  const broken = page
+    .getByTestId('home-plan')
+    .getByTestId('home-broken')
+    .filter({ hasText: /^Weekly alert digest: [^]*which it depends on/ });
+  await broken.getByRole('button', { name: 'Propose: move the dependents' }).click();
   await expect(page.getByText(/^Proposed: .+ decides?$/)).toBeVisible();
   await signOut(page);
   await login(page, ROLES.viewer);
-  await page.goto("/home");
+  await page.goto('/home');
   await context.addInitScript(
     ([slow, ms]) => {
-      if (!sessionStorage.getItem("walk-prio-slow")) {
-        localStorage.setItem(slow, "/v1/simple/roadmap");
-        localStorage.setItem(ms, "3000");
-        sessionStorage.setItem("walk-prio-slow", "1");
+      if (!sessionStorage.getItem('walk-prio-slow')) {
+        localStorage.setItem(slow, '/v1/simple/roadmap');
+        localStorage.setItem(ms, '3000');
+        sessionStorage.setItem('walk-prio-slow', '1');
       }
     },
     [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY],
   );
-  await page.goto("/simple");
-  const goals = page.getByTestId("home-goals");
-  await expect(page.getByTestId("home-goal").first()).toBeVisible();
-  await expect(page.getByTestId("home-in-review")).toHaveCount(0);
+  await page.goto('/simple');
+  const goals = page.getByTestId('home-goals');
+  await expect(page.getByTestId('home-goal').first()).toBeVisible();
+  await expect(page.getByTestId('home-in-review')).toHaveCount(0);
   const before = (await goals.boundingBox())!;
-  await expect(page.getByTestId("home-in-review")).toBeVisible({ timeout: 8000 });
-  await expect(page.getByTestId("home-in-review")).toHaveText(/^(1 change is not approved yet\. You see the published plan until it is\.|\d+ changes are not approved yet\. You see the published plan until they are\.)$/);
+  await expect(page.getByTestId('home-in-review')).toBeVisible({ timeout: 8000 });
+  await expect(page.getByTestId('home-in-review')).toHaveText(
+    /^(1 change is not approved yet\. You see the published plan until it is\.|\d+ changes are not approved yet\. You see the published plan until they are\.)$/,
+  );
   expect(Math.abs((await goals.boundingBox())!.y - before.y)).toBeLessThanOrEqual(1);
-  await page.evaluate(([slow, ms]) => [slow, ms].forEach((k) => localStorage.removeItem(k)), [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY]);
+  await page.evaluate(
+    ([slow, ms]) => [slow, ms].forEach((k) => localStorage.removeItem(k)),
+    [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY],
+  );
 });

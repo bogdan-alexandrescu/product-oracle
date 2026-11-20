@@ -1,7 +1,7 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { MOCK_SCENARIO_KEY, MOCK_SIMPLE_MODE_KEY } from "../lib/api/mock/server";
-import { ADMIN, signOut } from "./helpers";
+import { MOCK_SCENARIO_KEY, MOCK_SIMPLE_MODE_KEY } from '../lib/api/mock/server';
+import { ADMIN, signOut } from './helpers';
 
 /*
  * #723 S1: the [Simple | Detailed] switch, Simple's shell and routes, and the remembered mode.
@@ -13,33 +13,34 @@ import { ADMIN, signOut } from "./helpers";
 
 const EMAILS = {
   owner: ADMIN.email,
-  approver: "approver@example.com",
-  commenter: "commenter@example.com",
-  viewer: "viewer@example.com",
+  approver: 'approver@example.com',
+  commenter: 'commenter@example.com',
+  viewer: 'viewer@example.com',
 } as const;
 
 /** Signs in from the bare sign-in page (no `next`): Oracle picks where to land. */
 async function signIn(page: Page, email: string) {
-  await page.goto("/login");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(ADMIN.password);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.goto('/login');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(ADMIN.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).not.toHaveURL(/\/login/);
 }
 
-const simpleRail = (page: Page) => page.getByRole("navigation", { name: "Simple" });
-const detailedRail = (page: Page) => page.getByRole("navigation", { name: "Oracle" });
-const modeSwitch = (page: Page) => page.getByRole("radiogroup", { name: "Mode" }).filter({ visible: true });
+const simpleRail = (page: Page) => page.getByRole('navigation', { name: 'Simple' });
+const detailedRail = (page: Page) => page.getByRole('navigation', { name: 'Oracle' });
+const modeSwitch = (page: Page) =>
+  page.getByRole('radiogroup', { name: 'Mode' }).filter({ visible: true });
 
 async function expectSimple(page: Page, path: string) {
-  await expect(page).toHaveURL(new RegExp(`localhost:\\d+${path.replace(/\//g, "\\/")}$`));
+  await expect(page).toHaveURL(new RegExp(`localhost:\\d+${path.replace(/\//g, '\\/')}$`));
   await expect(page.locator('[data-mode="simple"]')).toHaveCount(1);
   await expect(simpleRail(page)).toBeVisible();
   await expect(detailedRail(page)).toHaveCount(0);
 }
 
 async function expectDetailed(page: Page, path: string) {
-  await expect(page).toHaveURL(new RegExp(`localhost:\\d+${path.replace(/\//g, "\\/")}$`));
+  await expect(page).toHaveURL(new RegExp(`localhost:\\d+${path.replace(/\//g, '\\/')}$`));
   await expect(page.locator('[data-mode="detailed"]')).toHaveCount(1);
   await expect(detailedRail(page)).toBeVisible();
 }
@@ -47,305 +48,363 @@ async function expectDetailed(page: Page, path: string) {
 /** The person's saved mode, as the landing reads it. */
 function savedMode(page: Page) {
   return page.evaluate(async () => {
-    const mock = (globalThis as { __poMockFetch?: (r: Request) => Promise<Response> }).__poMockFetch!;
-    const res = await mock(new Request(new URL("/v1/me/preferences", location.origin)));
+    const mock = (globalThis as { __poMockFetch?: (r: Request) => Promise<Response> })
+      .__poMockFetch!;
+    const res = await mock(new Request(new URL('/v1/me/preferences', location.origin)));
     return ((await res.json()) as { experience?: string | null }).experience ?? null;
   });
 }
 
-async function switchTo(page: Page, mode: "Simple" | "Detailed") {
-  await modeSwitch(page).getByRole("radio", { name: mode }).click();
+async function switchTo(page: Page, mode: 'Simple' | 'Detailed') {
+  await modeSwitch(page).getByRole('radio', { name: mode }).click();
 }
 
-test("the switch is hidden while Simple is off, and everyone stays in Detailed", async ({ page }) => {
-  await page.addInitScript((key) => localStorage.setItem(key, "off"), MOCK_SIMPLE_MODE_KEY);
+test('the switch is hidden while Simple is off, and everyone stays in Detailed', async ({
+  page,
+}) => {
+  await page.addInitScript((key) => localStorage.setItem(key, 'off'), MOCK_SIMPLE_MODE_KEY);
   await signIn(page, EMAILS.viewer);
   // A viewer would land in Simple; with Simple off they land on Detailed's Home.
-  await expectDetailed(page, "/home");
-  await expect(page.getByRole("heading", { level: 1, name: "Home", exact: true })).toBeVisible();
-  await expect(page.getByRole("radiogroup", { name: "Mode" })).toHaveCount(0);
+  await expectDetailed(page, '/home');
+  await expect(page.getByRole('heading', { level: 1, name: 'Home', exact: true })).toBeVisible();
+  await expect(page.getByRole('radiogroup', { name: 'Mode' })).toHaveCount(0);
   // A Simple link opens Detailed's matching page instead.
-  await page.goto("/simple/decisions");
-  await expectDetailed(page, "/company/decisions");
+  await page.goto('/simple/decisions');
+  await expectDetailed(page, '/company/decisions');
 });
 
-test("while Simple is off, a Simple link never shows Simple's page before it opens Detailed's", async ({ page }) => {
+test("while Simple is off, a Simple link never shows Simple's page before it opens Detailed's", async ({
+  page,
+}) => {
   await page.addInitScript((key) => {
-    localStorage.setItem(key, "off");
+    localStorage.setItem(key, 'off');
     // Records whether Simple's page or rail was ever drawn, however briefly.
     new MutationObserver(() => {
-      if (document.querySelector('[data-testid="simple-page"], [data-testid="simple-nav"]')) localStorage.setItem("e2e-saw-simple", "yes");
+      if (document.querySelector('[data-testid="simple-page"], [data-testid="simple-nav"]'))
+        localStorage.setItem('e2e-saw-simple', 'yes');
     }).observe(document, { childList: true, subtree: true });
   }, MOCK_SIMPLE_MODE_KEY);
   await signIn(page, EMAILS.owner);
-  await expectDetailed(page, "/home");
-  await page.goto("/simple/decisions");
-  await expectDetailed(page, "/company/decisions");
-  expect(await page.evaluate(() => localStorage.getItem("e2e-saw-simple"))).toBeNull();
+  await expectDetailed(page, '/home');
+  await page.goto('/simple/decisions');
+  await expectDetailed(page, '/company/decisions');
+  expect(await page.evaluate(() => localStorage.getItem('e2e-saw-simple'))).toBeNull();
 });
 
 for (const [role, landing] of [
-  ["viewer", "/simple"],
-  ["owner", "/home"],
+  ['viewer', '/simple'],
+  ['owner', '/home'],
 ] as const) {
-  test(`signed out, the bare site URL signs a${role === "owner" ? "n" : ""} ${role} in to their role's home`, async ({ page }) => {
-    await page.goto("/");
+  test(`signed out, the bare site URL signs a${role === 'owner' ? 'n' : ''} ${role} in to their role's home`, async ({
+    page,
+  }) => {
+    await page.goto('/');
     // Plain sign-in, no `next`: the landing rule decides where they go.
     await expect(page).toHaveURL(/localhost:\d+\/login$/);
-    await page.getByLabel("Email").fill(EMAILS[role]);
-    await page.getByLabel("Password").fill(ADMIN.password);
-    await page.getByRole("button", { name: "Sign in" }).click();
-    if (landing === "/simple") await expectSimple(page, landing);
+    await page.getByLabel('Email').fill(EMAILS[role]);
+    await page.getByLabel('Password').fill(ADMIN.password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    if (landing === '/simple') await expectSimple(page, landing);
     else await expectDetailed(page, landing);
   });
 }
 
-test("signed out, a deep link signs in and returns to it, in either mode", async ({ page }) => {
-  await page.goto("/simple/one-pagers/annual-billing");
+test('signed out, a deep link signs in and returns to it, in either mode', async ({ page }) => {
+  await page.goto('/simple/one-pagers/annual-billing');
   await expect(page).toHaveURL(/\/login\?next=/);
-  await page.getByLabel("Email").fill(EMAILS.owner);
-  await page.getByLabel("Password").fill(ADMIN.password);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expectSimple(page, "/simple/one-pagers/annual-billing");
+  await page.getByLabel('Email').fill(EMAILS.owner);
+  await page.getByLabel('Password').fill(ADMIN.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expectSimple(page, '/simple/one-pagers/annual-billing');
 
   await signOut(page);
-  await page.goto("/plan");
+  await page.goto('/plan');
   await expect(page).toHaveURL(/\/login\?next=/);
-  await page.getByLabel("Email").fill(EMAILS.viewer);
-  await page.getByLabel("Password").fill(ADMIN.password);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expectDetailed(page, "/plan");
+  await page.getByLabel('Email').fill(EMAILS.viewer);
+  await page.getByLabel('Password').fill(ADMIN.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expectDetailed(page, '/plan');
 });
 
-test("a one-pager link to a document that is not a PRD says so and links it in Detailed", async ({ page }) => {
+test('a one-pager link to a document that is not a PRD says so and links it in Detailed', async ({
+  page,
+}) => {
   await signIn(page, EMAILS.owner);
-  await page.goto("/simple/one-pagers/usage-alerts-roadmap");
-  await expectSimple(page, "/simple/one-pagers/usage-alerts-roadmap");
-  const missing = page.getByTestId("one-pager-not-found");
-  await expect(missing).toContainText("No one-pager here");
-  await expect(page.getByTestId("one-pager-placeholder")).toHaveCount(0);
-  await missing.getByRole("link", { name: "Open the detailed view", exact: true }).click();
-  await expectDetailed(page, "/documents/usage-alerts-roadmap");
+  await page.goto('/simple/one-pagers/usage-alerts-roadmap');
+  await expectSimple(page, '/simple/one-pagers/usage-alerts-roadmap');
+  const missing = page.getByTestId('one-pager-not-found');
+  await expect(missing).toContainText('No one-pager here');
+  await expect(page.getByTestId('one-pager-placeholder')).toHaveCount(0);
+  await missing.getByRole('link', { name: 'Open the detailed view', exact: true }).click();
+  await expectDetailed(page, '/documents/usage-alerts-roadmap');
 });
 
-test("the switch shows at the top of the rail while Simple is on", async ({ page }) => {
+test('the switch shows at the top of the rail while Simple is on', async ({ page }) => {
   await signIn(page, EMAILS.owner);
-  await expectDetailed(page, "/home");
+  await expectDetailed(page, '/home');
   const rail = detailedRail(page);
-  const sw = rail.getByRole("radiogroup", { name: "Mode" });
+  const sw = rail.getByRole('radiogroup', { name: 'Mode' });
   await expect(sw).toBeVisible();
   // The owner's decision on #723: the full mode is named Detailed.
-  await expect(sw.getByRole("radio")).toHaveText(["Simple", "Detailed"]);
-  await expect(sw.getByRole("radio", { name: "Detailed" })).toHaveAttribute("aria-checked", "true");
-  await expect(sw.getByRole("radio", { name: "Simple" })).toHaveAttribute("aria-checked", "false");
+  await expect(sw.getByRole('radio')).toHaveText(['Simple', 'Detailed']);
+  await expect(sw.getByRole('radio', { name: 'Detailed' })).toHaveAttribute('aria-checked', 'true');
+  await expect(sw.getByRole('radio', { name: 'Simple' })).toHaveAttribute('aria-checked', 'false');
   // At the top: above the first destination.
   const swBox = (await sw.boundingBox())!;
-  const homeBox = (await rail.getByTestId("nav-home").boundingBox())!;
+  const homeBox = (await rail.getByTestId('nav-home').boundingBox())!;
   expect(swBox.y).toBeLessThan(homeBox.y);
 
-  await switchTo(page, "Simple");
-  await expectSimple(page, "/simple");
-  const simpleSw = simpleRail(page).getByRole("radiogroup", { name: "Mode" });
-  await expect(simpleSw.getByRole("radio", { name: "Simple" })).toHaveAttribute("aria-checked", "true");
+  await switchTo(page, 'Simple');
+  await expectSimple(page, '/simple');
+  const simpleSw = simpleRail(page).getByRole('radiogroup', { name: 'Mode' });
+  await expect(simpleSw.getByRole('radio', { name: 'Simple' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
 });
 
 for (const [role, landing] of [
-  ["viewer", "simple"],
-  ["commenter", "simple"],
-  ["approver", "detailed"],
-  ["owner", "detailed"],
+  ['viewer', 'simple'],
+  ['commenter', 'simple'],
+  ['approver', 'detailed'],
+  ['owner', 'detailed'],
 ] as const) {
-  test(`with no saved mode, a${role === "owner" || role === "approver" ? "n" : ""} ${role} lands in ${landing === "simple" ? "Simple" : "Detailed"}`, async ({ page }) => {
+  test(`with no saved mode, a${role === 'owner' || role === 'approver' ? 'n' : ''} ${role} lands in ${landing === 'simple' ? 'Simple' : 'Detailed'}`, async ({
+    page,
+  }) => {
     await signIn(page, EMAILS[role]);
-    if (landing === "simple") {
-      await expectSimple(page, "/simple");
-      await expect(page.getByRole("heading", { level: 1, name: "Home", exact: true })).toBeVisible();
+    if (landing === 'simple') {
+      await expectSimple(page, '/simple');
+      await expect(
+        page.getByRole('heading', { level: 1, name: 'Home', exact: true }),
+      ).toBeVisible();
     } else {
-      await expectDetailed(page, "/home");
+      await expectDetailed(page, '/home');
     }
     // The bare site URL lands in the same place.
-    await page.goto("/");
-    if (landing === "simple") await expectSimple(page, "/simple");
-    else await expectDetailed(page, "/home");
+    await page.goto('/');
+    if (landing === 'simple') await expectSimple(page, '/simple');
+    else await expectDetailed(page, '/home');
   });
 }
 
-test("the chosen mode is remembered across a reload and the next sign-in", async ({ page }) => {
+test('the chosen mode is remembered across a reload and the next sign-in', async ({ page }) => {
   await signIn(page, EMAILS.owner);
-  await expectDetailed(page, "/home");
-  await switchTo(page, "Simple");
-  await expectSimple(page, "/simple");
+  await expectDetailed(page, '/home');
+  await switchTo(page, 'Simple');
+  await expectSimple(page, '/simple');
 
   await page.reload();
-  await expectSimple(page, "/simple");
-  await page.goto("/");
-  await expectSimple(page, "/simple");
+  await expectSimple(page, '/simple');
+  await page.goto('/');
+  await expectSimple(page, '/simple');
 
   await signOut(page);
   await signIn(page, EMAILS.owner);
-  await expectSimple(page, "/simple");
+  await expectSimple(page, '/simple');
 
   // A viewer's own choice of Detailed beats their role's default.
   await signOut(page);
   await signIn(page, EMAILS.viewer);
-  await expectSimple(page, "/simple");
-  await switchTo(page, "Detailed");
-  await expectDetailed(page, "/home");
+  await expectSimple(page, '/simple');
+  await switchTo(page, 'Detailed');
+  await expectDetailed(page, '/home');
   await signOut(page);
   await signIn(page, EMAILS.viewer);
-  await expectDetailed(page, "/home");
-  await page.goto("/");
-  await expectDetailed(page, "/home");
+  await expectDetailed(page, '/home');
+  await page.goto('/');
+  await expectDetailed(page, '/home');
 });
 
 const PAIRS: [detailed: string, simple: string][] = [
-  ["/home", "/simple"],
-  ["/documents/annual-billing", "/simple/one-pagers/annual-billing"],
+  ['/home', '/simple'],
+  ['/documents/annual-billing', '/simple/one-pagers/annual-billing'],
   // qa-shell-5: the PRDs list and the One-pagers list match both ways.
-  ["/documents", "/simple/one-pagers"],
-  ["/plan", "/simple/roadmap"],
-  ["/priorities", "/simple/priorities"],
-  ["/company/rituals", "/simple/meetings"],
-  ["/company/decisions", "/simple/decisions"],
+  ['/documents', '/simple/one-pagers'],
+  ['/plan', '/simple/roadmap'],
+  ['/priorities', '/simple/priorities'],
+  ['/company/rituals', '/simple/meetings'],
+  ['/company/decisions', '/simple/decisions'],
 ];
 
-test("the switch lands on the matching page, Detailed to Simple", async ({ page }) => {
+test('the switch lands on the matching page, Detailed to Simple', async ({ page }) => {
   await signIn(page, EMAILS.owner);
   for (const [detailed, simple] of PAIRS) {
     await page.goto(detailed);
     await expectDetailed(page, detailed);
-    await switchTo(page, "Simple");
+    await switchTo(page, 'Simple');
     await expectSimple(page, simple);
   }
   // Anything else: Simple's Home.
-  await page.goto("/runs");
-  await expectDetailed(page, "/runs");
-  await switchTo(page, "Simple");
-  await expectSimple(page, "/simple");
+  await page.goto('/runs');
+  await expectDetailed(page, '/runs');
+  await switchTo(page, 'Simple');
+  await expectSimple(page, '/simple');
 });
 
-test("the switch lands on the matching page, Simple to Detailed", async ({ page }) => {
+test('the switch lands on the matching page, Simple to Detailed', async ({ page }) => {
   await signIn(page, EMAILS.owner);
   for (const [detailed, simple] of PAIRS) {
     await page.goto(simple);
     await expectSimple(page, simple);
-    await switchTo(page, "Detailed");
+    await switchTo(page, 'Detailed');
     await expectDetailed(page, detailed);
   }
 });
 
-test("a /simple link opens in Simple for an owner whose saved mode is Detailed", async ({ page }) => {
+test('a /simple link opens in Simple for an owner whose saved mode is Detailed', async ({
+  page,
+}) => {
   await signIn(page, EMAILS.owner);
   // Saved as Detailed through the switch.
-  await switchTo(page, "Simple");
-  await expectSimple(page, "/simple");
-  await switchTo(page, "Detailed");
-  await expectDetailed(page, "/home");
+  await switchTo(page, 'Simple');
+  await expectSimple(page, '/simple');
+  await switchTo(page, 'Detailed');
+  await expectDetailed(page, '/home');
   // The switch opens Detailed at once and saves the choice meanwhile; the mock runs in the page,
   // so leaving before its save lands would drop it. Wait for the saved Detailed.
-  await expect.poll(() => savedMode(page)).toBe("detailed");
+  await expect.poll(() => savedMode(page)).toBe('detailed');
 
-  await page.goto("/simple/one-pagers");
-  await expectSimple(page, "/simple/one-pagers");
-  await expect(page.getByRole("heading", { level: 1, name: "One-pagers" })).toBeVisible();
-  await page.getByRole("link", { name: "Annual billing PRD" }).click();
-  await expectSimple(page, "/simple/one-pagers/annual-billing");
+  await page.goto('/simple/one-pagers');
+  await expectSimple(page, '/simple/one-pagers');
+  await expect(page.getByRole('heading', { level: 1, name: 'One-pagers' })).toBeVisible();
+  await page.getByRole('link', { name: 'Annual billing PRD' }).click();
+  await expectSimple(page, '/simple/one-pagers/annual-billing');
   // S5's one-pager is the page the list opens.
-  await expect(page.getByTestId("one-pager")).toBeVisible();
-  await page.getByTestId("one-pager").getByRole("link", { name: "Open in Detailed", exact: true }).first().click();
-  await expectDetailed(page, "/documents/annual-billing");
+  await expect(page.getByTestId('one-pager')).toBeVisible();
+  await page
+    .getByTestId('one-pager')
+    .getByRole('link', { name: 'Open in Detailed', exact: true })
+    .first()
+    .click();
+  await expectDetailed(page, '/documents/annual-billing');
 
   // The saved mode is still Detailed: the next landing is Detailed's Home.
-  await page.goto("/");
-  await expectDetailed(page, "/home");
+  await page.goto('/');
+  await expectDetailed(page, '/home');
 });
 
-test("Simple's rail has its seven destinations, the one Inbox among them, and none of Detailed's others", async ({ page }) => {
+test("Simple's rail has its seven destinations, the one Inbox among them, and none of Detailed's others", async ({
+  page,
+}) => {
   await signIn(page, EMAILS.viewer);
-  await expectSimple(page, "/simple");
+  await expectSimple(page, '/simple');
   const rail = simpleRail(page);
-  const links = rail.getByRole("link", { name: /^(Home|One-pagers|Roadmap|Priorities|Meetings|Decisions|Inbox)$/ });
+  const links = rail.getByRole('link', {
+    name: /^(Home|One-pagers|Roadmap|Priorities|Meetings|Decisions|Inbox)$/,
+  });
   // Names, not text: a destination may carry a count ("Meetings" described as "1 review live or coming up").
-  const names = ["Home", "One-pagers", "Roadmap", "Priorities", "Meetings", "Decisions", "Inbox"];
+  const names = ['Home', 'One-pagers', 'Roadmap', 'Priorities', 'Meetings', 'Decisions', 'Inbox'];
   await expect(links).toHaveCount(names.length);
   for (const [i, name] of names.entries()) await expect(links.nth(i)).toHaveAccessibleName(name);
-  for (const detailed of ["Requests", "Ground Truth", "PRDs", "Plan", "Runs", "Company", "Settings"]) {
-    await expect(rail.getByRole("link", { name: detailed, exact: true })).toHaveCount(0);
+  for (const detailed of [
+    'Requests',
+    'Ground Truth',
+    'PRDs',
+    'Plan',
+    'Runs',
+    'Company',
+    'Settings',
+  ]) {
+    await expect(rail.getByRole('link', { name: detailed, exact: true })).toHaveCount(0);
   }
   // qa-shell-16: one Ask control, the rail's Ask Oracle; no Ask strip beside it.
-  await expect(page.getByTestId("simple-ask")).toBeVisible();
-  await expect(page.getByTestId("hop-strip")).toHaveCount(0);
+  await expect(page.getByTestId('simple-ask')).toBeVisible();
+  await expect(page.getByTestId('hop-strip')).toHaveCount(0);
 
   for (const [name, path, heading] of [
-    ["One-pagers", "/simple/one-pagers", "One-pagers"],
-    ["Roadmap", "/simple/roadmap", "Roadmap"],
-    ["Priorities", "/simple/priorities", "Priorities"],
-    ["Meetings", "/simple/meetings", "Meetings"],
-    ["Decisions", "/simple/decisions", "Decisions"],
-    ["Home", "/simple", "Home"],
+    ['One-pagers', '/simple/one-pagers', 'One-pagers'],
+    ['Roadmap', '/simple/roadmap', 'Roadmap'],
+    ['Priorities', '/simple/priorities', 'Priorities'],
+    ['Meetings', '/simple/meetings', 'Meetings'],
+    ['Decisions', '/simple/decisions', 'Decisions'],
+    ['Home', '/simple', 'Home'],
   ]) {
-    await rail.getByRole("link", { name, exact: true }).click();
+    await rail.getByRole('link', { name, exact: true }).click();
     await expectSimple(page, path);
-    await expect(page.getByRole("heading", { level: 1, name: heading, exact: true })).toBeVisible();
-    await expect(rail.getByRole("link", { name, exact: true })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole('heading', { level: 1, name: heading, exact: true })).toBeVisible();
+    await expect(rail.getByRole('link', { name, exact: true })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
   }
 });
 
-test("every Simple destination shows its own screen, no placeholder left (S8)", async ({ page }) => {
+test('every Simple destination shows its own screen, no placeholder left (S8)', async ({
+  page,
+}) => {
   await signIn(page, EMAILS.owner);
   for (const [path, heading] of [
-    ["/simple/meetings", "Meetings"],
-    ["/simple/decisions", "Decisions"],
+    ['/simple/meetings', 'Meetings'],
+    ['/simple/decisions', 'Decisions'],
   ]) {
     await page.goto(path);
     await expectSimple(page, path);
-    await expect(page.getByRole("heading", { level: 1, name: heading, exact: true })).toBeAttached();
-    await expect(page.getByTestId("simple-placeholder")).toHaveCount(0);
+    await expect(
+      page.getByRole('heading', { level: 1, name: heading, exact: true }),
+    ).toBeAttached();
+    await expect(page.getByTestId('simple-placeholder')).toHaveCount(0);
   }
 });
 
-test("Simple's Home: what waits on me, the next meeting and the plan this quarter", async ({ page }) => {
+test("Simple's Home: what waits on me, the next meeting and the plan this quarter", async ({
+  page,
+}) => {
   await signIn(page, EMAILS.owner);
-  await page.goto("/simple");
-  await expectSimple(page, "/simple");
+  await page.goto('/simple');
+  await expectSimple(page, '/simple');
   // build-rundecide RD3 a: the questions of a PRD the owner owns wait in that PRD's own card;
   // the Decisions card keeps the other judgement calls and, with none, is not drawn empty.
-  const waits = page.getByRole("region", { name: "Waiting for you: Guided setup", exact: true });
-  await expect(waits.getByRole("heading", { level: 2, name: "Waiting for you: Guided setup" })).toBeVisible();
-  await expect(waits.getByTestId("home-question").first()).toBeVisible();
-  await expect(page.getByRole("heading", { level: 2, name: "Decisions waiting for you" })).toHaveCount(0);
-  await expect(page.getByRole("heading", { level: 2, name: "Next review meeting" })).toBeVisible();
-  await expect(page.getByRole("heading", { level: 2, name: "The plan this quarter" })).toBeVisible();
-  await expect(page.getByTestId("home-plan").getByTestId("home-strip-row").first()).toBeVisible();
+  const waits = page.getByRole('region', { name: 'Waiting for you: Guided setup', exact: true });
+  await expect(
+    waits.getByRole('heading', { level: 2, name: 'Waiting for you: Guided setup' }),
+  ).toBeVisible();
+  await expect(waits.getByTestId('home-question').first()).toBeVisible();
+  await expect(
+    page.getByRole('heading', { level: 2, name: 'Decisions waiting for you' }),
+  ).toHaveCount(0);
+  await expect(page.getByRole('heading', { level: 2, name: 'Next review meeting' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { level: 2, name: 'The plan this quarter' }),
+  ).toBeVisible();
+  await expect(page.getByTestId('home-plan').getByTestId('home-strip-row').first()).toBeVisible();
 });
 
 test("Simple's Home: each part says when it has nothing", async ({ page }) => {
-  await page.addInitScript((key) => localStorage.setItem(key, "empty"), MOCK_SCENARIO_KEY);
+  await page.addInitScript((key) => localStorage.setItem(key, 'empty'), MOCK_SCENARIO_KEY);
   await signIn(page, EMAILS.owner);
   // A new company's built-in rituals wait paused: nothing is scheduled for review yet.
-  await page.goto("/company/rituals");
-  for (const title of ["Weekly goals check-in", "Monthly roadmap refresh", "Quarterly goals review"]) {
-    await expect(page.getByTestId("ritual-row").filter({ hasText: title })).toContainText("Paused");
+  await page.goto('/company/rituals');
+  for (const title of [
+    'Weekly goals check-in',
+    'Monthly roadmap refresh',
+    'Quarterly goals review',
+  ]) {
+    await expect(page.getByTestId('ritual-row').filter({ hasText: title })).toContainText('Paused');
   }
-  await page.goto("/simple");
-  await expectSimple(page, "/simple");
+  await page.goto('/simple');
+  await expectSimple(page, '/simple');
   // fix4 (qa-simple-home-16): nothing waiting is one line, not two empty cards.
   // F-30: the one line is "Nothing waiting"; what comes here is in its (i).
-  const waits = page.getByTestId("home-nothing-waits");
-  await expect(waits).toContainText("Nothing waiting");
-  await waits.getByRole("button", { name: "About what waits for you" }).click();
-  await expect(waits.getByRole("tooltip")).toHaveText("Decisions and proposals on your items show here when they come.");
-  await expect(page.getByTestId("home-meeting-empty")).toContainText("No review meeting scheduled");
+  const waits = page.getByTestId('home-nothing-waits');
+  await expect(waits).toContainText('Nothing waiting');
+  await waits.getByRole('button', { name: 'About what waits for you' }).click();
+  await expect(waits.getByRole('tooltip')).toHaveText(
+    'Decisions and proposals on your items show here when they come.',
+  );
+  await expect(page.getByTestId('home-meeting-empty')).toContainText('No review meeting scheduled');
 });
 
-test("phone: Simple's rail is a tab bar and a More drawer, every page fits 390 px", async ({ page }) => {
+test("phone: Simple's rail is a tab bar and a More drawer, every page fits 390 px", async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page, EMAILS.viewer);
   // On a phone Simple's rail is its tab bar: the desktop rail is hidden.
-  await expectSimple(page, "/simple");
-  const bar = page.getByTestId("simple-tab-bar");
+  await expectSimple(page, '/simple');
+  const bar = page.getByTestId('simple-tab-bar');
   await expect(bar).toBeVisible();
-  await expect(page.getByTestId("simple-nav")).toBeHidden();
+  await expect(page.getByTestId('simple-nav')).toBeHidden();
 
   const fits = async () => {
     const width = await page.evaluate(() => document.documentElement.scrollWidth);
@@ -353,37 +412,39 @@ test("phone: Simple's rail is a tab bar and a More drawer, every page fits 390 p
   };
   await fits();
   for (const [name, path] of [
-    ["One-pagers", "/simple/one-pagers"],
-    ["Roadmap", "/simple/roadmap"],
-    ["Decisions", "/simple/decisions"],
+    ['One-pagers', '/simple/one-pagers'],
+    ['Roadmap', '/simple/roadmap'],
+    ['Decisions', '/simple/decisions'],
   ]) {
-    await bar.getByRole("link", { name, exact: true }).click();
+    await bar.getByRole('link', { name, exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`${path}$`));
-    await expect(page.getByTestId("phone-title")).toHaveText(name);
+    await expect(page.getByTestId('phone-title')).toHaveText(name);
     await fits();
   }
   for (const [name, path] of [
-    ["Priorities", "/simple/priorities"],
-    ["Meetings", "/simple/meetings"],
+    ['Priorities', '/simple/priorities'],
+    ['Meetings', '/simple/meetings'],
   ]) {
-    await bar.getByRole("button", { name: "More" }).click();
-    const sheet = page.getByRole("dialog", { name: "More" });
-    await sheet.getByRole("link", { name, exact: true }).click();
+    await bar.getByRole('button', { name: 'More' }).click();
+    const sheet = page.getByRole('dialog', { name: 'More' });
+    await sheet.getByRole('link', { name, exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`${path}$`));
     await fits();
   }
-  await page.goto("/simple/one-pagers/annual-billing");
-  await expect(page.getByTestId("one-pager")).toBeVisible();
+  await page.goto('/simple/one-pagers/annual-billing');
+  await expect(page.getByTestId('one-pager')).toBeVisible();
   await fits();
 
   // The switch lives in the More drawer on a phone, and works there.
-  await bar.getByRole("button", { name: "More" }).click();
-  await page.getByRole("dialog", { name: "More" }).getByRole("radio", { name: "Detailed" }).click();
+  await bar.getByRole('button', { name: 'More' }).click();
+  await page.getByRole('dialog', { name: 'More' }).getByRole('radio', { name: 'Detailed' }).click();
   await expect(page).toHaveURL(/\/documents\/annual-billing$/);
-  await expect(page.getByTestId("tab-bar")).toBeVisible();
-  await page.getByTestId("tab-more").click();
-  await expect(page.getByRole("dialog", { name: "More" }).getByRole("radio", { name: "Detailed" })).toHaveAttribute("aria-checked", "true");
-  await expect(page.getByRole("dialog", { name: "More" })).not.toContainText("Studio");
-  await page.getByRole("dialog", { name: "More" }).getByRole("radio", { name: "Simple" }).click();
+  await expect(page.getByTestId('tab-bar')).toBeVisible();
+  await page.getByTestId('tab-more').click();
+  await expect(
+    page.getByRole('dialog', { name: 'More' }).getByRole('radio', { name: 'Detailed' }),
+  ).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByRole('dialog', { name: 'More' })).not.toContainText('Studio');
+  await page.getByRole('dialog', { name: 'More' }).getByRole('radio', { name: 'Simple' }).click();
   await expect(page).toHaveURL(/\/simple\/one-pagers\/annual-billing$/);
 });

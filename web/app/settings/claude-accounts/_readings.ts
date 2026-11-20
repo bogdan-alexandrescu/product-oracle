@@ -7,41 +7,42 @@
  * current one, and a window that has reset describes a window that no longer exists.
  * An unmeasured figure prints an em dash; a projected one carries `~`.
  */
-import type { Schemas } from "@/lib/api/client";
+import type { Schemas } from '@/lib/api/client';
 
-export type Account = Schemas["AccountOut"];
-export type AccountWindow = Schemas["WindowOut"];
+export type Account = Schemas['AccountOut'];
+export type AccountWindow = Schemas['WindowOut'];
 
-export const FIVE_HOUR = "five_hour";
-export const SEVEN_DAY = "seven_day";
+export const FIVE_HOUR = 'five_hour';
+export const SEVEN_DAY = 'seven_day';
 
 export type AccountReading =
   /** No reading has EVER arrived for this account. Not zero: unmeasured. */
-  | { kind: "never" }
+  | { kind: 'never' }
   /** Readings exist, but not for this window. */
-  | { kind: "absent" }
+  | { kind: 'absent' }
   /** The window passed its reset, so the figure describes a window that refilled. */
-  | { kind: "reset"; pct: number; resetsAt: string }
+  | { kind: 'reset'; pct: number; resetsAt: string }
   /** A real figure, too old to trust. Shown, marked, never presented as current. */
-  | { kind: "stale"; pct: number; resetsAt: string; observedAt: string }
+  | { kind: 'stale'; pct: number; resetsAt: string; observedAt: string }
   /** Measured, recent, and safe to read as a fact. */
-  | { kind: "live"; pct: number; resetsAt: string; observedAt: string };
+  | { kind: 'live'; pct: number; resetsAt: string; observedAt: string };
 
 export function readingOf(a: Account, key: string): AccountReading {
-  if (a.observed_at === null) return { kind: "never" };
+  if (a.observed_at === null) return { kind: 'never' };
   const w = a.windows[key];
-  if (!w || typeof w.utilization !== "number" || !Number.isFinite(w.utilization)) return { kind: "absent" };
+  if (!w || typeof w.utilization !== 'number' || !Number.isFinite(w.utilization))
+    return { kind: 'absent' };
   const pct = Math.max(0, Math.min(100, w.utilization * 100));
   // `reset` outranks `stale`: a fresh reading of a window that has since refilled is
   // still describing the window before it.
-  if (w.reset) return { kind: "reset", pct, resetsAt: w.resets_at };
-  if (a.stale) return { kind: "stale", pct, resetsAt: w.resets_at, observedAt: a.observed_at };
-  return { kind: "live", pct, resetsAt: w.resets_at, observedAt: a.observed_at };
+  if (w.reset) return { kind: 'reset', pct, resetsAt: w.resets_at };
+  if (a.stale) return { kind: 'stale', pct, resetsAt: w.resets_at, observedAt: a.observed_at };
+  return { kind: 'live', pct, resetsAt: w.resets_at, observedAt: a.observed_at };
 }
 
 /** True for the two cases `cs status` prefixes with `~`. */
 export function isProjected(r: AccountReading): boolean {
-  return r.kind === "stale" || r.kind === "reset";
+  return r.kind === 'stale' || r.kind === 'reset';
 }
 
 /** The window that will refuse first: least remaining, a reset window counted as full. */
@@ -49,7 +50,7 @@ export function bindingWindow(a: Account): { key: string; window: AccountWindow 
   let best: { key: string; window: AccountWindow } | null = null;
   let leastRemaining = Infinity;
   for (const [key, w] of Object.entries(a.windows)) {
-    if (!w || typeof w.utilization !== "number" || !Number.isFinite(w.utilization)) continue;
+    if (!w || typeof w.utilization !== 'number' || !Number.isFinite(w.utilization)) continue;
     const remaining = w.reset ? 1 : Math.max(0, 1 - w.utilization);
     if (remaining < leastRemaining) {
       leastRemaining = remaining;
@@ -61,39 +62,39 @@ export function bindingWindow(a: Account): { key: string; window: AccountWindow 
 
 /** A duration the way somebody reads a clock: `3d 10h`, `1h 05m`, `40m`. */
 export function humaniseUntil(ms: number): string {
-  if (!Number.isFinite(ms)) return "—";
-  if (ms <= 0) return "now";
+  if (!Number.isFinite(ms)) return '—';
+  if (ms <= 0) return 'now';
   const s = Math.floor(ms / 1000);
   const m = Math.floor(s / 60);
   const h = Math.floor(m / 60);
   if (h >= 48) return `${Math.floor(h / 24)}d ${h % 24}h`;
-  if (h >= 1) return `${h}h ${String(m % 60).padStart(2, "0")}m`;
+  if (h >= 1) return `${h}h ${String(m % 60).padStart(2, '0')}m`;
   if (m >= 1) return `${m}m`;
   return `${s}s`;
 }
 
 export function clearsIn(iso: string | null | undefined, now: number): string {
-  if (!iso) return "—";
+  if (!iso) return '—';
   const t = new Date(iso).getTime();
-  if (!Number.isFinite(t)) return "—";
+  if (!Number.isFinite(t)) return '—';
   return humaniseUntil(t - now);
 }
 
 /** "3 hours", "1 day": a count with its unit in words. */
-const units = (n: number, unit: string) => `${n} ${unit}${n === 1 ? "" : "s"}`;
+const units = (n: number, unit: string) => `${n} ${unit}${n === 1 ? '' : 's'}`;
 
 /**
  * Time SINCE an instant, in the screen's one relative style (qa-settings-19): `just now`,
  * `4 min ago`, `3 hours ago`, `9 days ago`. Never point it at a future instant: that is `clearsIn`.
  */
 export function timeAgo(when: string | number, now: number = Date.now()): string {
-  const t = typeof when === "number" ? when : new Date(when).getTime();
-  if (!Number.isFinite(t)) return "at an unknown time";
+  const t = typeof when === 'number' ? when : new Date(when).getTime();
+  if (!Number.isFinite(t)) return 'at an unknown time';
   const s = Math.max(0, Math.round((now - t) / 1000));
-  if (s < 60) return "just now";
+  if (s < 60) return 'just now';
   if (s < 3600) return `${Math.round(s / 60)} min ago`;
-  if (s < 48 * 3600) return `${units(Math.round(s / 3600), "hour")} ago`;
-  return `${units(Math.round(s / 86400), "day")} ago`;
+  if (s < 48 * 3600) return `${units(Math.round(s / 3600), 'hour')} ago`;
+  return `${units(Math.round(s / 86400), 'day')} ago`;
 }
 
 /** An age past a day in days AND hours: `1 day 20 hours ago`, not `44 hours ago`. */
@@ -104,14 +105,14 @@ export function agoPastDay(when: string, now: number = Date.now()): string {
   if (h < 24) return timeAgo(t, now);
   const d = Math.floor(h / 24);
   const r = h % 24;
-  return r === 0 ? `${units(d, "day")} ago` : `${units(d, "day")} ${units(r, "hour")} ago`;
+  return r === 0 ? `${units(d, 'day')} ago` : `${units(d, 'day')} ${units(r, 'hour')} ago`;
 }
 
 /** `five_hour` -> `5-hour`, `seven_day` -> `7-day`; any other window by its name. */
 export function windowWord(key: string): string {
-  if (key === FIVE_HOUR) return "5-hour";
-  if (key === SEVEN_DAY) return "7-day";
-  return key.replace(/_/g, "-");
+  if (key === FIVE_HOUR) return '5-hour';
+  if (key === SEVEN_DAY) return '7-day';
+  return key.replace(/_/g, '-');
 }
 
 export interface Clears {
@@ -129,10 +130,10 @@ export function clearsOf(account: Account, now: number): Clears {
   const binding = bindingWindow(account);
   if (binding === null) {
     return {
-      text: "—",
+      text: '—',
       tilde: false,
       unmeasured: true,
-      title: "No window reading, so there is no reset instant to count down to.",
+      title: 'No window reading, so there is no reset instant to count down to.',
       win: null,
     };
   }
@@ -140,7 +141,7 @@ export function clearsOf(account: Account, now: number): Clears {
   const win = windowWord(binding.key);
   if (binding.window.reset) {
     return {
-      text: "cleared",
+      text: 'cleared',
       tilde: false,
       unmeasured: false,
       title: `The ${win} window, the binding one, has passed its reset; no reading taken since has arrived.`,
@@ -150,7 +151,7 @@ export function clearsOf(account: Account, now: number): Clears {
   const resetsAt = new Date(binding.window.resets_at).getTime();
   if (Number.isFinite(resetsAt) && resetsAt <= now) {
     return {
-      text: "now",
+      text: 'now',
       tilde: true,
       unmeasured: false,
       title: `The ${win} window's reset instant is already in the past; reload and the server answers.`,
@@ -172,7 +173,8 @@ export function clearsOf(account: Account, now: number): Clears {
 /** Whether any `~` is on screen, so the legend is drawn only where a tilde is. */
 export function anyProjected(accounts: Account[], now: number): boolean {
   return accounts.some((a) => {
-    if (readingOf(a, FIVE_HOUR).kind === "stale" || readingOf(a, SEVEN_DAY).kind === "stale") return true;
+    if (readingOf(a, FIVE_HOUR).kind === 'stale' || readingOf(a, SEVEN_DAY).kind === 'stale')
+      return true;
     const binding = bindingWindow(a);
     if (binding === null || binding.window.reset) return false;
     const at = new Date(binding.window.resets_at).getTime();
@@ -183,7 +185,7 @@ export function anyProjected(accounts: Account[], now: number): boolean {
 
 /** The one state only a person can clear. The sweep stops trying on it. */
 export function needsAHuman(a: Account): boolean {
-  return a.state === "REAUTH_REQUIRED";
+  return a.state === 'REAUTH_REQUIRED';
 }
 
 /**
@@ -196,7 +198,7 @@ export function attentionRank(a: Account): number | null {
   const binding = bindingWindow(a);
   if (binding !== null) {
     const r = readingOf(a, binding.key);
-    if ((r.kind === "live" || r.kind === "stale") && r.pct >= 100) return 2;
+    if ((r.kind === 'live' || r.kind === 'stale') && r.pct >= 100) return 2;
   }
   return null;
 }
@@ -213,7 +215,9 @@ export function defaultAccount(accounts: readonly Account[]): Account | null {
     .filter((x): x is { a: Account; rank: number } => x.rank !== null)
     .sort((x, y) => x.rank - y.rank || byName(x.a, y.a));
   if (ranked[0] !== undefined) return ranked[0].a;
-  const used = accounts.filter((a) => a.assigned > 0).sort((x, y) => y.assigned - x.assigned || byName(x, y));
+  const used = accounts
+    .filter((a) => a.assigned > 0)
+    .sort((x, y) => y.assigned - x.assigned || byName(x, y));
   return used[0] ?? [...accounts].sort(byName)[0] ?? null;
 }
 
@@ -229,5 +233,5 @@ export function readingAges(accounts: Account[], now: number): string | null {
   // One unit said once: "2–50 min ago"; mixed units each keep theirs.
   const m = /^(\d+) min ago$/;
   const [y, o] = [m.exec(youngest), m.exec(oldest)];
-  return `Usage read ${y && o ? `${y[1]}–${o[1]} min ago` : `${youngest.replace(/ ago$/, "")} – ${oldest}`}`;
+  return `Usage read ${y && o ? `${y[1]}–${o[1]} min ago` : `${youngest.replace(/ ago$/, '')} – ${oldest}`}`;
 }

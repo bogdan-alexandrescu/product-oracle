@@ -1,22 +1,22 @@
-"use client";
+'use client';
 
-import { useState } from "react";
+import { useState } from 'react';
 
-import { Button, confirmInPage, InfoTip, PageHeader, Panel } from "@/components/ds";
-import { ErrorNote, INPUT, Loading } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { useCompanyZone, zoneDateTime } from "@/lib/dates";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import { Button, confirmInPage, InfoTip, PageHeader, Panel } from '@/components/ds';
+import { ErrorNote, INPUT, Loading } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { useCompanyZone, zoneDateTime } from '@/lib/dates';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-type Analytics = Schemas["AnalyticsOut"];
+type Analytics = Schemas['AnalyticsOut'];
 
-const CLOUD: Record<string, string> = { us: "US cloud", eu: "EU cloud" };
+const CLOUD: Record<string, string> = { us: 'US cloud', eu: 'EU cloud' };
 
 /** "Connected to PostHog · project 12345 · EU cloud", or "Not connected". */
 export function connectionText(a: Analytics): string {
-  if (a.status === "disconnected" || !a.project_id) return "Not connected";
-  const host = a.host ? (CLOUD[a.host] ?? a.host) : "";
-  return `Connected to PostHog · project ${a.project_id}${host ? ` · ${host}` : ""}`;
+  if (a.status === 'disconnected' || !a.project_id) return 'Not connected';
+  const host = a.host ? (CLOUD[a.host] ?? a.host) : '';
+  return `Connected to PostHog · project ${a.project_id}${host ? ` · ${host}` : ''}`;
 }
 
 /**
@@ -26,45 +26,47 @@ export function connectionText(a: Analytics): string {
  */
 export function AnalyticsSettings() {
   const zone = useCompanyZone();
-  const q = useQuery("analytics-integration", () => unwrap(api.GET("/v1/company-integrations/analytics")));
+  const q = useQuery('analytics-integration', () =>
+    unwrap(api.GET('/v1/company-integrations/analytics')),
+  );
   const a = q.data;
   const [host, setHost] = useState<string | null>(null);
   const [ownHost, setOwnHost] = useState<string | null>(null);
   const [project, setProject] = useState<string | null>(null);
-  const [key, setKey] = useState("");
+  const [key, setKey] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (q.error) return <ErrorNote>{q.error}</ErrorNote>;
   if (!a) return <Loading />;
-  const connected = a.status !== "disconnected";
+  const connected = a.status !== 'disconnected';
   // Owner's decision (Nov 5): with nothing saved no host is picked for them ("Pick a host").
-  const storedHost = a.host ?? "";
-  const hostChoice = host ?? (!storedHost || storedHost in CLOUD ? storedHost : "own");
-  const ownValue = ownHost ?? (!storedHost || storedHost in CLOUD ? "" : storedHost);
-  const projectValue = project ?? a.project_id ?? "";
-  const hostValue = hostChoice === "own" ? ownValue.trim() : hostChoice;
+  const storedHost = a.host ?? '';
+  const hostChoice = host ?? (!storedHost || storedHost in CLOUD ? storedHost : 'own');
+  const ownValue = ownHost ?? (!storedHost || storedHost in CLOUD ? '' : storedHost);
+  const projectValue = project ?? a.project_id ?? '';
+  const hostValue = hostChoice === 'own' ? ownValue.trim() : hostChoice;
   // Why Save waits, in a few words, until a host, the project and a key are there.
   const missing = !hostChoice
-    ? "Pick a host to save."
+    ? 'Pick a host to save.'
     : !hostValue
-      ? "Add the server address to save."
+      ? 'Add the server address to save.'
       : !projectValue.trim()
-    ? key.trim()
-      ? "Add the project ID to save."
-      : "Add the project ID and a key to save."
-    : !key.trim()
-      ? connected
-        ? "Paste a new key to save a change."
-        : "Paste a key to save."
-      : null;
+        ? key.trim()
+          ? 'Add the project ID to save.'
+          : 'Add the project ID and a key to save.'
+        : !key.trim()
+          ? connected
+            ? 'Paste a new key to save a change.'
+            : 'Paste a key to save.'
+          : null;
 
   async function run(call: () => Promise<unknown>) {
     setBusy(true);
     setError(null);
     try {
       await call();
-      setKey("");
+      setKey('');
       setHost(null);
       setOwnHost(null);
       setProject(null);
@@ -79,19 +81,24 @@ export function AnalyticsSettings() {
   const save = () =>
     run(() =>
       unwrap(
-        api.PUT("/v1/company-integrations/analytics", {
-          body: { provider: "posthog", host: hostValue, project_id: projectValue.trim(), api_key: key.trim() },
+        api.PUT('/v1/company-integrations/analytics', {
+          body: {
+            provider: 'posthog',
+            host: hostValue,
+            project_id: projectValue.trim(),
+            api_key: key.trim(),
+          },
         }),
       ),
     );
   const disconnect = async () => {
     const n = a.metrics;
     const ok = await confirmInPage({
-      action: "Disconnect",
-      message: `Disconnect PostHog? The key is deleted and ${n} PostHog ${n === 1 ? "metric pauses" : "metrics pause"} until it is connected again. Their values stay.`,
+      action: 'Disconnect',
+      message: `Disconnect PostHog? The key is deleted and ${n} PostHog ${n === 1 ? 'metric pauses' : 'metrics pause'} until it is connected again. Their values stay.`,
       destructive: true,
     });
-    if (ok) await run(() => unwrap(api.DELETE("/v1/company-integrations/analytics")));
+    if (ok) await run(() => unwrap(api.DELETE('/v1/company-integrations/analytics')));
   };
 
   return (
@@ -101,7 +108,8 @@ export function AnalyticsSettings() {
         info={
           // Visual QA ST-7: what the page is for, behind an (i).
           <InfoTip label="analytics" align="start" side="bottom">
-            Connect PostHog here so Oracle reads your product numbers each week for the metrics on Company › Metrics.
+            Connect PostHog here so Oracle reads your product numbers each week for the metrics on
+            Company › Metrics.
           </InfoTip>
         }
       />
@@ -111,7 +119,8 @@ export function AnalyticsSettings() {
         tools={
           // qa-f-72: the page's own explanation sits behind the panel's (i), not loose text.
           <InfoTip label="PostHog">
-            Oracle reads each metric&apos;s weekly value with a query in your PostHog project. Use a personal API key that may only read queries.
+            Oracle reads each metric&apos;s weekly value with a query in your PostHog project. Use a
+            personal API key that may only read queries.
           </InfoTip>
         }
       >
@@ -121,14 +130,24 @@ export function AnalyticsSettings() {
           </p>
           {connected && (
             <p className="text-sm text-text2">
-              {[a.connected_by_name && `Connected by ${a.connected_by_name}`, a.connected_at && zoneDateTime(a.connected_at, zone)].filter(Boolean).join(", ")}
-              {` · ${a.metrics} PostHog ${a.metrics === 1 ? "metric" : "metrics"}`}
+              {[
+                a.connected_by_name && `Connected by ${a.connected_by_name}`,
+                a.connected_at && zoneDateTime(a.connected_at, zone),
+              ]
+                .filter(Boolean)
+                .join(', ')}
+              {` · ${a.metrics} PostHog ${a.metrics === 1 ? 'metric' : 'metrics'}`}
             </p>
           )}
           {a.last_error && <ErrorNote>{a.last_error}</ErrorNote>}
           <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
             Host
-            <select aria-label="Host" className={INPUT} value={hostChoice} onChange={(e) => setHost(e.target.value)}>
+            <select
+              aria-label="Host"
+              className={INPUT}
+              value={hostChoice}
+              onChange={(e) => setHost(e.target.value)}
+            >
               <option value="" disabled>
                 Pick a host
               </option>
@@ -137,10 +156,15 @@ export function AnalyticsSettings() {
               <option value="own">Your own server</option>
             </select>
           </label>
-          {hostChoice === "own" && (
+          {hostChoice === 'own' && (
             <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
               Server address
-              <input className={INPUT} value={ownValue} placeholder="https://posthog.example.com" onChange={(e) => setOwnHost(e.target.value)} />
+              <input
+                className={INPUT}
+                value={ownValue}
+                placeholder="https://posthog.example.com"
+                onChange={(e) => setOwnHost(e.target.value)}
+              />
             </label>
           )}
           {/* qa-f-72: each field's own hint behind its (i), the tip outside the <label> so
@@ -148,14 +172,24 @@ export function AnalyticsSettings() {
           <div className="flex flex-col gap-1">
             <span className="flex items-center gap-1.5 text-sm font-semibold text-text2">
               <label htmlFor="posthog-project">Project ID</label>
-              <InfoTip label="where to find the project">Find it in PostHog › Project settings.</InfoTip>
+              <InfoTip label="where to find the project">
+                Find it in PostHog › Project settings.
+              </InfoTip>
             </span>
-            <input id="posthog-project" className={INPUT} value={projectValue} inputMode="numeric" onChange={(e) => setProject(e.target.value)} />
+            <input
+              id="posthog-project"
+              className={INPUT}
+              value={projectValue}
+              inputMode="numeric"
+              onChange={(e) => setProject(e.target.value)}
+            />
           </div>
           <div className="flex flex-col gap-1">
             <span className="flex items-center gap-1.5 text-sm font-semibold text-text2">
               <label htmlFor="posthog-key">Personal API key</label>
-              <InfoTip label="making a key">Make one in PostHog › Account settings › Personal API keys.</InfoTip>
+              <InfoTip label="making a key">
+                Make one in PostHog › Account settings › Personal API keys.
+              </InfoTip>
             </span>
             <input
               id="posthog-key"
@@ -163,7 +197,7 @@ export function AnalyticsSettings() {
               type="password"
               autoComplete="off"
               value={key}
-              placeholder={connected ? "Replace key" : ""}
+              placeholder={connected ? 'Replace key' : ''}
               onChange={(e) => setKey(e.target.value)}
             />
           </div>
@@ -172,7 +206,7 @@ export function AnalyticsSettings() {
             <Button
               variant="primary"
               disabled={busy || !!missing}
-              aria-describedby={missing ? "posthog-save-why" : undefined}
+              aria-describedby={missing ? 'posthog-save-why' : undefined}
               onClick={save}
             >
               Save
@@ -183,7 +217,11 @@ export function AnalyticsSettings() {
               </Button>
             )}
             {missing && (
-              <span id="posthog-save-why" data-testid="analytics-save-why" className="text-sm text-text2">
+              <span
+                id="posthog-save-why"
+                data-testid="analytics-save-why"
+                className="text-sm text-text2"
+              >
                 {missing}
               </span>
             )}

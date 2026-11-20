@@ -1,5 +1,5 @@
-import { ADMIN, login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { ADMIN, login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /*
  * QA pass 4 on the Simple PRD pages (qa4-simple-prd-N), driven through the UI on the mock's
@@ -9,167 +9,225 @@ import { expect, test, type Page } from "./test";
 
 const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
-const VIEWER = "viewer@example.com";
-const COMMENTER = "commenter@example.com";
+const VIEWER = 'viewer@example.com';
+const COMMENTER = 'commenter@example.com';
 
 async function openFromList(page: Page, title: string, email: string = ADMIN.email) {
   await login(page, email);
-  await page.goto("/simple/one-pagers");
-  await page.getByTestId("simple-one-pagers").getByRole("link", { name: title, exact: true }).click();
-  await expect(page.getByRole("article", { name: "One-pager" })).toBeVisible();
+  await page.goto('/simple/one-pagers');
+  await page
+    .getByTestId('simple-one-pagers')
+    .getByRole('link', { name: title, exact: true })
+    .click();
+  await expect(page.getByRole('article', { name: 'One-pager' })).toBeVisible();
 }
 
 const overlaps = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
   a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
-test.describe("desktop", () => {
+test.describe('desktop', () => {
   test.use({ viewport: DESKTOP });
 
-  test("Start review opens the form for any PRD, named by its title (qa4-simple-prd-1, 28)", async ({ page }) => {
-    await openFromList(page, "Referral link PRD");
-    await page.getByRole("button", { name: "Start a review meeting" }).click();
-    const sheet = page.getByRole("dialog", { name: "Start a review" });
-    await expect(sheet.getByRole("button", { name: "Start", exact: true })).toBeVisible();
-    await expect(sheet).toContainText("Referral link PRD");
-    await expect(sheet).not.toContainText("No such PRD");
-    await sheet.getByRole("button", { name: "Close" }).click();
+  test('Start review opens the form for any PRD, named by its title (qa4-simple-prd-1, 28)', async ({
+    page,
+  }) => {
+    await openFromList(page, 'Referral link PRD');
+    await page.getByRole('button', { name: 'Start a review meeting' }).click();
+    const sheet = page.getByRole('dialog', { name: 'Start a review' });
+    await expect(sheet.getByRole('button', { name: 'Start', exact: true })).toBeVisible();
+    await expect(sheet).toContainText('Referral link PRD');
+    await expect(sheet).not.toContainText('No such PRD');
+    await sheet.getByRole('button', { name: 'Close' }).click();
 
-    await page.goto("/simple/one-pagers/usage-alerts");
-    await page.getByRole("button", { name: "Start a review meeting" }).click();
-    await expect(page.getByRole("dialog", { name: "Start a review" })).toContainText("Usage alerts PRD");
+    await page.goto('/simple/one-pagers/usage-alerts');
+    await page.getByRole('button', { name: 'Start a review meeting' }).click();
+    await expect(page.getByRole('dialog', { name: 'Start a review' })).toContainText(
+      'Usage alerts PRD',
+    );
   });
 
-  test("a never-published PRD is not called published, and its dates agree with the list (qa4-simple-prd-3, 9, 25, 34)", async ({ page }) => {
+  test('a never-published PRD is not called published, and its dates agree with the list (qa4-simple-prd-3, 9, 25, 34)', async ({
+    page,
+  }) => {
     await login(page);
-    await page.goto("/simple/one-pagers");
-    await page.getByRole("button", { name: "About One-pagers" }).focus();
-    await expect(page.getByRole("tooltip").filter({ hasText: "Open a PRD to read it on one page, change its wording or start a review." })).toBeVisible();
-    const row = page.getByTestId("one-pager-row").filter({ hasText: "Referral link PRD" });
-    await expect(row).toContainText("Updated Oct 18, 2026");
-    await row.getByRole("link", { name: "Referral link PRD" }).click();
-    const meta = page.getByTestId("one-pager-meta");
-    await expect(meta).toContainText("Version 2");
-    await expect(meta).not.toContainText("Oct 20");
-    await expect(page.getByRole("link", { name: "Open in Detailed" })).toHaveAttribute("href", "/documents/referral-link");
+    await page.goto('/simple/one-pagers');
+    await page.getByRole('button', { name: 'About One-pagers' }).focus();
+    await expect(
+      page.getByRole('tooltip').filter({
+        hasText: 'Open a PRD to read it on one page, change its wording or start a review.',
+      }),
+    ).toBeVisible();
+    const row = page.getByTestId('one-pager-row').filter({ hasText: 'Referral link PRD' });
+    await expect(row).toContainText('Updated Oct 18, 2026');
+    await row.getByRole('link', { name: 'Referral link PRD' }).click();
+    const meta = page.getByTestId('one-pager-meta');
+    await expect(meta).toContainText('Version 2');
+    await expect(meta).not.toContainText('Oct 20');
+    await expect(page.getByRole('link', { name: 'Open in Detailed' })).toHaveAttribute(
+      'href',
+      '/documents/referral-link',
+    );
 
-    await page.getByRole("button", { name: "Edit “Links for guests without" }).click();
+    await page.getByRole('button', { name: 'Edit “Links for guests without' }).click();
     // qa4-simple-prd-16: the editor and its Save come into view.
-    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeInViewport();
-    await page.getByLabel("New wording for").fill("Links for guests without an account, for now");
-    await page.getByRole("button", { name: "Save", exact: true }).click();
-    const banner = page.getByRole("status", { name: "Working draft" });
-    await expect(banner).toContainText("nothing is published until approved");
-    await expect(banner).not.toContainText("published v");
+    await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeInViewport();
+    await page.getByLabel('New wording for').fill('Links for guests without an account, for now');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    const banner = page.getByRole('status', { name: 'Working draft' });
+    await expect(banner).toContainText('nothing is published until approved');
+    await expect(banner).not.toContainText('published v');
   });
 
-  test("the change card says You, once a before/after, and Hide closes it (qa4-simple-prd-17, 18, 23)", async ({ page }) => {
-    await openFromList(page, "Referral link PRD");
-    await page.getByRole("button", { name: "Edit “Links for guests without" }).click();
-    await page.getByLabel("New wording for").fill("Links for guests without an account, for now");
-    await page.getByRole("button", { name: "Save", exact: true }).click();
-    const note = page.getByRole("note").filter({ visible: true }).filter({ hasText: "changed “Links for guests without" });
-    await expect(note).toContainText("You changed");
-    await note.getByRole("button", { name: "See before/after" }).click();
-    const diff = note.getByTestId("note-diff");
-    await expect(diff).toContainText("Before:");
-    await expect(diff).not.toContainText("In “");
-    await note.getByRole("button", { name: "Hide before/after" }).click();
+  test('the change card says You, once a before/after, and Hide closes it (qa4-simple-prd-17, 18, 23)', async ({
+    page,
+  }) => {
+    await openFromList(page, 'Referral link PRD');
+    await page.getByRole('button', { name: 'Edit “Links for guests without' }).click();
+    await page.getByLabel('New wording for').fill('Links for guests without an account, for now');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    const note = page
+      .getByRole('note')
+      .filter({ visible: true })
+      .filter({ hasText: 'changed “Links for guests without' });
+    await expect(note).toContainText('You changed');
+    await note.getByRole('button', { name: 'See before/after' }).click();
+    const diff = note.getByTestId('note-diff');
+    await expect(diff).toContainText('Before:');
+    await expect(diff).not.toContainText('In “');
+    await note.getByRole('button', { name: 'Hide before/after' }).click();
     await expect(diff).toHaveCount(0);
 
     await page.reload();
-    await expect(page.getByRole("note").filter({ visible: true }).filter({ hasText: "changed “Links for guests without" })).toContainText("You changed");
+    await expect(
+      page
+        .getByRole('note')
+        .filter({ visible: true })
+        .filter({ hasText: 'changed “Links for guests without' }),
+    ).toContainText('You changed');
 
     // qa4-simple-prd-23: the file and the note say which text was exported.
-    const download = page.waitForEvent("download");
-    await page.getByRole("button", { name: "Export PDF" }).click();
-    expect((await download).suggestedFilename()).toBe("Referral link PRD v2 last version one-pager.pdf");
-    await expect(page.getByRole("status").filter({ hasText: "PDF downloaded" })).toContainText("without the working draft's changes");
+    const download = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Export PDF' }).click();
+    expect((await download).suggestedFilename()).toBe(
+      'Referral link PRD v2 last version one-pager.pdf',
+    );
+    await expect(page.getByRole('status').filter({ hasText: 'PDF downloaded' })).toContainText(
+      "without the working draft's changes",
+    );
   });
 
-  test("Present centres each slide (qa4-simple-prd-5, C-8)", async ({ page }) => {
-    await openFromList(page, "Referral link PRD");
-    await page.getByRole("button", { name: "Present" }).click();
-    await expect(page.getByTestId("one-pager")).toHaveAttribute("data-presenting", "true");
-    const slide = (await page.getByTestId("slide").boundingBox())!;
+  test('Present centres each slide (qa4-simple-prd-5, C-8)', async ({ page }) => {
+    await openFromList(page, 'Referral link PRD');
+    await page.getByRole('button', { name: 'Present' }).click();
+    await expect(page.getByTestId('one-pager')).toHaveAttribute('data-presenting', 'true');
+    const slide = (await page.getByTestId('slide').boundingBox())!;
     expect(Math.abs(slide.x + slide.width / 2 - DESKTOP.width / 2)).toBeLessThan(24);
-    const stop = (await page.getByRole("button", { name: "Stop presenting" }).boundingBox())!;
+    const stop = (await page.getByRole('button', { name: 'Stop presenting' }).boundingBox())!;
     expect(stop.x + stop.width).toBeLessThanOrEqual(DESKTOP.width);
   });
 
-  test("the timeline's labels keep their phrases whole and its words agree (qa4-simple-prd-14, 15)", async ({ page }) => {
+  test("the timeline's labels keep their phrases whole and its words agree (qa4-simple-prd-14, 15)", async ({
+    page,
+  }) => {
     // C-13: Referral link has no roadmap slice of its own now; Guided setup's strip is the one with milestones.
     await login(page);
-    await page.goto("/simple/one-pagers/guided-setup");
-    const strip = page.getByLabel("Timeline strip");
-    const parts = strip.getByTestId("plan-strip-label").locator("span");
+    await page.goto('/simple/one-pagers/guided-setup');
+    const strip = page.getByLabel('Timeline strip');
+    const parts = strip.getByTestId('plan-strip-label').locator('span');
     await expect(parts.first()).toBeVisible();
     // Each part (the name, the count) on one line: one line's height, never two.
-    for (const h of await parts.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height))) expect(h).toBeLessThan(30);
+    for (const h of await parts.evaluateAll((els) =>
+      els.map((el) => el.getBoundingClientRect().height),
+    ))
+      expect(h).toBeLessThan(30);
     // vqa B-14: the footnote and the row count the row's own items.
-    await expect(strip.getByTestId("plan-strip-edge")).toHaveText("1 of the 2 roadmap items with no milestone ends after Jan");
-    await expect(strip.getByTestId("plan-strip-row").filter({ hasText: "No milestone" }).getByTestId("plan-strip-ends")).toHaveText("1 of 2 ends after Jan");
+    await expect(strip.getByTestId('plan-strip-edge')).toHaveText(
+      '1 of the 2 roadmap items with no milestone ends after Jan',
+    );
+    await expect(
+      strip
+        .getByTestId('plan-strip-row')
+        .filter({ hasText: 'No milestone' })
+        .getByTestId('plan-strip-ends'),
+    ).toHaveText('1 of 2 ends after Jan');
   });
 
-  test("today is the company's day, as the change times read (qa4-simple-prd-10)", async ({ page }) => {
+  test("today is the company's day, as the change times read (qa4-simple-prd-10)", async ({
+    page,
+  }) => {
     // 03:11 UTC on Oct 31 is the evening of Oct 30 in the company's zone (Los Angeles).
-    await page.clock.setSystemTime(new Date("2026-10-31T03:11:00Z"));
+    await page.clock.setSystemTime(new Date('2026-10-31T03:11:00Z'));
     await login(page);
-    await page.goto("/simple/one-pagers/guided-setup");
-    await expect(page.getByLabel("Timeline strip").getByTestId("plan-strip-legend")).toContainText("Today Oct 30");
+    await page.goto('/simple/one-pagers/guided-setup');
+    await expect(page.getByLabel('Timeline strip').getByTestId('plan-strip-legend')).toContainText(
+      'Today Oct 30',
+    );
   });
 
   test("a commenter's card starts at its own padding (qa4-simple-prd-21)", async ({ page }) => {
-    await openFromList(page, "Referral link PRD", COMMENTER);
+    await openFromList(page, 'Referral link PRD', COMMENTER);
     // The contents row grows when the whole PRD's tabs arrive: measure once the page is whole.
-    await expect(page.getByTestId("prd-whole")).toBeVisible();
-    const card = (await page.getByRole("article", { name: "One-pager" }).boundingBox())!;
-    const first = (await page.getByRole("region", { name: "Problem and who has it" }).boundingBox())!;
+    await expect(page.getByTestId('prd-whole')).toBeVisible();
+    const card = (await page.getByRole('article', { name: 'One-pager' }).boundingBox())!;
+    const first = (await page
+      .getByRole('region', { name: 'Problem and who has it' })
+      .boundingBox())!;
     expect(first.y - card.y).toBeLessThan(36);
   });
 
   test("a viewer's flow offers no Comment (qa4-simple-prd-33)", async ({ page }) => {
     await login(page, VIEWER);
-    await page.goto("/simple/one-pagers/guided-setup");
-    await page.getByRole("button", { name: "Open the flow" }).first().click();
-    const opened = page.getByTestId("flow-detail");
+    await page.goto('/simple/one-pagers/guided-setup');
+    await page.getByRole('button', { name: 'Open the flow' }).first().click();
+    const opened = page.getByTestId('flow-detail');
     await expect(opened).toBeVisible();
-    await expect(opened.getByRole("button", { name: "See comments" })).toBeVisible();
-    await expect(opened.getByRole("button", { name: "Comment", exact: true })).toHaveCount(0);
+    await expect(opened.getByRole('button', { name: 'See comments' })).toBeVisible();
+    await expect(opened.getByRole('button', { name: 'Comment', exact: true })).toHaveCount(0);
   });
 
-  test("the flow's notes cite the section in words, and its comment submit reads Post comment (qa4-simple-prd-31, 32)", async ({ page }) => {
+  test("the flow's notes cite the section in words, and its comment submit reads Post comment (qa4-simple-prd-31, 32)", async ({
+    page,
+  }) => {
     await login(page, COMMENTER);
-    await page.goto("/simple/one-pagers/guided-setup");
-    await page.getByRole("button", { name: "Flow for “A setup checklist that shows" }).click();
-    const opened = page.getByTestId("flow-detail");
-    await opened.getByRole("button", { name: "Full screen" }).click();
-    const full = page.getByTestId("flow-fullscreen");
-    await full.getByRole("button", { name: "Comment" }).click();
-    await expect(full.getByTestId("flow-annotations")).toContainText("The checklist shows the next step · From “What we will build”");
-    await expect(full.getByTestId("flow-annotations")).not.toContainText("Requirement");
-    const panel = full.getByTestId("flow-comments-panel");
-    await panel.getByLabel("Comment on the flow").fill("Name the invite step after the calendar");
-    await expect(panel.getByRole("button", { name: "Comment", exact: true })).toHaveCount(0);
-    await panel.getByRole("button", { name: "Post comment" }).click();
-    await expect(panel.getByTestId("flow-comments")).toContainText("Name the invite step after the calendar · open");
+    await page.goto('/simple/one-pagers/guided-setup');
+    await page.getByRole('button', { name: 'Flow for “A setup checklist that shows' }).click();
+    const opened = page.getByTestId('flow-detail');
+    await opened.getByRole('button', { name: 'Full screen' }).click();
+    const full = page.getByTestId('flow-fullscreen');
+    await full.getByRole('button', { name: 'Comment' }).click();
+    await expect(full.getByTestId('flow-annotations')).toContainText(
+      'The checklist shows the next step · From “What we will build”',
+    );
+    await expect(full.getByTestId('flow-annotations')).not.toContainText('Requirement');
+    const panel = full.getByTestId('flow-comments-panel');
+    await panel.getByLabel('Comment on the flow').fill('Name the invite step after the calendar');
+    await expect(panel.getByRole('button', { name: 'Comment', exact: true })).toHaveCount(0);
+    await panel.getByRole('button', { name: 'Post comment' }).click();
+    await expect(panel.getByTestId('flow-comments')).toContainText(
+      'Name the invite step after the calendar · open',
+    );
   });
 
-  test("Start review on Meetings lists every PRD in the company PRD order, as the API does", async ({ page }) => {
+  test('Start review on Meetings lists every PRD in the company PRD order, as the API does', async ({
+    page,
+  }) => {
     // prd-order fails_when: the picker sorts PRDs its own way (by title) instead of the order the PRDs list keeps
     await login(page);
     // The company order, as the PRDs list draws it by default.
-    await page.goto("/documents");
-    const rows = page.getByTestId("document-row");
+    await page.goto('/documents');
+    const rows = page.getByTestId('document-row');
     await expect(rows.first()).toBeVisible();
-    const company = await rows.evaluateAll((trs) => trs.map((tr) => (tr.querySelector("td a")?.textContent ?? "").trim()));
+    const company = await rows.evaluateAll((trs) =>
+      trs.map((tr) => (tr.querySelector('td a')?.textContent ?? '').trim()),
+    );
     expect(company.length).toBeGreaterThan(1);
-    await page.goto("/simple/meetings");
-    await page.getByRole("button", { name: "Start review" }).first().click();
-    const sheet = page.getByRole("dialog", { name: "Start a review" });
-    await expect(sheet.getByLabel("PRD")).toContainText("Referral link PRD");
-    const titles = await sheet.getByLabel("PRD").locator("option").allTextContents();
-    expect(titles).toContain("Guided setup");
-    expect(titles).toContain("Referral link PRD");
+    await page.goto('/simple/meetings');
+    await page.getByRole('button', { name: 'Start review' }).first().click();
+    const sheet = page.getByRole('dialog', { name: 'Start a review' });
+    await expect(sheet.getByLabel('PRD')).toContainText('Referral link PRD');
+    const titles = await sheet.getByLabel('PRD').locator('option').allTextContents();
+    expect(titles).toContain('Guided setup');
+    expect(titles).toContain('Referral link PRD');
     // Each PRD the list ranks keeps its place; one it does not rank comes after them.
     const ranked = titles.filter((t) => company.includes(t));
     expect(ranked.length).toBeGreaterThan(1);
@@ -177,117 +235,139 @@ test.describe("desktop", () => {
     expect(titles.slice(0, ranked.length)).toEqual(ranked);
   });
 
-  test("each line is one Tab stop, and the keyboard edits it from the line (qa4-simple-prd-35)", async ({ page }) => {
+  test('each line is one Tab stop, and the keyboard edits it from the line (qa4-simple-prd-35)', async ({
+    page,
+  }) => {
     await login(page);
-    await page.goto("/simple/one-pagers/guided-setup");
-    const lines = page.getByTestId("one-pager-line-text");
+    await page.goto('/simple/one-pagers/guided-setup');
+    const lines = page.getByTestId('one-pager-line-text');
     await lines.first().focus();
-    await page.keyboard.press("Tab");
+    await page.keyboard.press('Tab');
     // The next stop is the next line's words, not the first line's Edit.
     await expect(lines.nth(1)).toBeFocused();
-    await page.keyboard.press("Enter");
-    await expect(page.getByRole("region", { name: /^Sources of/ })).toBeVisible();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('region', { name: /^Sources of/ })).toBeVisible();
     // OP4 (QA Nov 12): the line's own Edit is the one control; with its sources open it is a Tab stop.
-    const edit = lines.nth(1).locator("xpath=ancestor::li[1]").locator("[data-edit-for]");
-    for (let i = 0; i < 4 && !(await edit.evaluate((el) => el === document.activeElement)); i++) await page.keyboard.press("Tab");
+    const edit = lines.nth(1).locator('xpath=ancestor::li[1]').locator('[data-edit-for]');
+    for (let i = 0; i < 4 && !(await edit.evaluate((el) => el === document.activeElement)); i++)
+      await page.keyboard.press('Tab');
     await expect(edit).toBeFocused();
-    await page.keyboard.press("Enter");
-    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeVisible();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeVisible();
   });
 
-  test("a bet's first flow is titled after its line, as Version 1 (qa4-simple-prd-22)", async ({ page }) => {
+  test("a bet's first flow is titled after its line, as Version 1 (qa4-simple-prd-22)", async ({
+    page,
+  }) => {
     // A bet drawn on Guided setup first: its flow is that PRD's own, never Referral link's.
     await login(page);
-    await page.goto("/simple/one-pagers/guided-setup");
-    const first = page.locator("li", { hasText: "Invite suggestions from the admin" }).first();
-    await first.getByRole("button", { name: "Draw the flow" }).click();
-    await expect(page.getByRole("button", { name: /^Flow for “Invite suggestions/ })).toBeVisible();
+    await page.goto('/simple/one-pagers/guided-setup');
+    const first = page.locator('li', { hasText: 'Invite suggestions from the admin' }).first();
+    await first.getByRole('button', { name: 'Draw the flow' }).click();
+    await expect(page.getByRole('button', { name: /^Flow for “Invite suggestions/ })).toBeVisible();
 
-    await page.goto("/simple/one-pagers");
-    await page.getByTestId("simple-one-pagers").getByRole("link", { name: "Referral link PRD", exact: true }).click();
-    await expect(page.getByRole("article", { name: "One-pager" })).toBeVisible();
+    await page.goto('/simple/one-pagers');
+    await page
+      .getByTestId('simple-one-pagers')
+      .getByRole('link', { name: 'Referral link PRD', exact: true })
+      .click();
+    await expect(page.getByRole('article', { name: 'One-pager' })).toBeVisible();
     // vqa B-13: Referral link's one-pager has its own lines; its first flow is its own Version 1.
-    const line = page.locator("li", { hasText: "Beta: Copy link" }).first();
-    await line.getByRole("button", { name: "Draw the flow" }).click();
-    await page.getByRole("button", { name: /^Flow for “Beta: Copy link/ }).click();
-    const opened = page.getByTestId("flow-detail");
-    await expect(opened).toContainText("Copy link · flow");
-    await expect(opened).not.toContainText("Invite suggestions");
-    await expect(opened.getByTestId("flow-drawn")).toContainText("Version 1 · drawn");
-    await expect(opened).not.toContainText("(revised)");
+    const line = page.locator('li', { hasText: 'Beta: Copy link' }).first();
+    await line.getByRole('button', { name: 'Draw the flow' }).click();
+    await page.getByRole('button', { name: /^Flow for “Beta: Copy link/ }).click();
+    const opened = page.getByTestId('flow-detail');
+    await expect(opened).toContainText('Copy link · flow');
+    await expect(opened).not.toContainText('Invite suggestions');
+    await expect(opened.getByTestId('flow-drawn')).toContainText('Version 1 · drawn');
+    await expect(opened).not.toContainText('(revised)');
   });
 });
 
-test.describe("phone", () => {
+test.describe('phone', () => {
   test.use({ viewport: PHONE });
 
-  test("the flow's sheet has one scroll bar, and the storyboard is as tall as its card (qa4-simple-prd-30)", async ({ page }) => {
+  test("the flow's sheet has one scroll bar, and the storyboard is as tall as its card (qa4-simple-prd-30)", async ({
+    page,
+  }) => {
     await login(page);
-    await page.goto("/simple/one-pagers/guided-setup");
-    const pageScrolls = () => page.evaluate(() => getComputedStyle(document.documentElement).overflowY !== "hidden" && document.documentElement.scrollHeight > innerHeight);
-    await expect(page.getByRole("button", { name: "Open the flow" }).first()).toBeVisible();
+    await page.goto('/simple/one-pagers/guided-setup');
+    const pageScrolls = () =>
+      page.evaluate(
+        () =>
+          getComputedStyle(document.documentElement).overflowY !== 'hidden' &&
+          document.documentElement.scrollHeight > innerHeight,
+      );
+    await expect(page.getByRole('button', { name: 'Open the flow' }).first()).toBeVisible();
     expect(await pageScrolls()).toBe(true);
 
-    await page.getByRole("button", { name: "Open the flow" }).first().click();
-    const opened = page.getByTestId("flow-detail");
+    await page.getByRole('button', { name: 'Open the flow' }).first().click();
+    const opened = page.getByTestId('flow-detail');
     await expect(opened).toBeVisible();
     // Only the sheet scrolls: the page behind it shows no second scroll bar.
     expect(await pageScrolls()).toBe(false);
-    await opened.getByRole("button", { name: "Close" }).click();
+    await opened.getByRole('button', { name: 'Close' }).click();
     expect(await pageScrolls()).toBe(true);
 
-    await page.getByRole("button", { name: "Open the storyboard" }).first().click();
-    const story = page.getByRole("dialog", { name: /storyboard$/ });
-    await expect(story.getByRole("button", { name: "Step 2" })).toBeVisible();
+    await page.getByRole('button', { name: 'Open the storyboard' }).first().click();
+    const story = page.getByRole('dialog', { name: /storyboard$/ });
+    await expect(story.getByRole('button', { name: 'Step 2' })).toBeVisible();
     expect(await pageScrolls()).toBe(false);
     const sheet = (await story.boundingBox())!;
-    const next = (await story.getByRole("button", { name: "Step 2" }).boundingBox())!;
+    const next = (await story.getByRole('button', { name: 'Step 2' }).boundingBox())!;
     // No blank height under the card and its button.
     expect(sheet.y + sheet.height - (next.y + next.height)).toBeLessThan(48);
     expect(sheet.height).toBeLessThan(PHONE.height - 100);
   });
 
-  test("a viewer sees no Start review (qa4-simple-prd-26)", async ({ page }) => {
-    await openFromList(page, "Referral link PRD", VIEWER);
-    await expect(page.getByRole("link", { name: "Open in Detailed" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Start a review meeting" })).toHaveCount(0);
-    await expect(page.getByTestId("start-review-why")).toHaveCount(0);
+  test('a viewer sees no Start review (qa4-simple-prd-26)', async ({ page }) => {
+    await openFromList(page, 'Referral link PRD', VIEWER);
+    await expect(page.getByRole('link', { name: 'Open in Detailed' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Start a review meeting' })).toHaveCount(0);
+    await expect(page.getByTestId('start-review-why')).toHaveCount(0);
   });
 
-  test("a commenter's reason to ask an owner sits on its own line, over nothing (qa4-simple-prd-2)", async ({ page }) => {
-    await openFromList(page, "Referral link PRD", COMMENTER);
-    const why = page.getByTestId("start-review-why");
-    await expect(why).toHaveText("Ask an owner to start a review");
+  test("a commenter's reason to ask an owner sits on its own line, over nothing (qa4-simple-prd-2)", async ({
+    page,
+  }) => {
+    await openFromList(page, 'Referral link PRD', COMMENTER);
+    const why = page.getByTestId('start-review-why');
+    await expect(why).toHaveText('Ask an owner to start a review');
     const box = (await why.boundingBox())!;
-    for (const name of ["Present", "Export PDF", "Start a review meeting"]) expect(overlaps(box, (await page.getByRole("button", { name }).boundingBox())!)).toBe(false);
-    expect(overlaps(box, (await page.getByRole("link", { name: "Open in Detailed" }).boundingBox())!)).toBe(false);
+    for (const name of ['Present', 'Export PDF', 'Start a review meeting'])
+      expect(overlaps(box, (await page.getByRole('button', { name }).boundingBox())!)).toBe(false);
+    expect(
+      overlaps(box, (await page.getByRole('link', { name: 'Open in Detailed' }).boundingBox())!),
+    ).toBe(false);
   });
 });
 
 for (const width of [1024, 1280, 390]) {
-  test(`a jumped-to heading sits below the sticky contents row at ${width} px`, async ({ page }) => {
+  test(`a jumped-to heading sits below the sticky contents row at ${width} px`, async ({
+    page,
+  }) => {
     // fails_when: the jump offset is a fixed 64 px while the wrapped row is taller, leaving the heading under the row
     await page.setViewportSize({ width, height: 800 });
     await login(page);
-    await page.goto("/simple/one-pagers/guided-setup");
-    await expect(page.getByRole("article", { name: "One-pager" })).toBeVisible();
-    const nav = page.getByRole("navigation", { name: "Contents" });
+    await page.goto('/simple/one-pagers/guided-setup');
+    await expect(page.getByRole('article', { name: 'One-pager' })).toBeVisible();
+    const nav = page.getByRole('navigation', { name: 'Contents' });
     if (width < 768) {
       // No contents row on a phone: a jump by link lands on the heading with nothing over it.
       await expect(nav).toBeHidden();
       return;
     }
-    const tabs = nav.getByRole("link");
+    const tabs = nav.getByRole('link');
     const count = await tabs.count();
     expect(count).toBeGreaterThan(2);
     for (const i of [1, count - 1]) {
       const tab = tabs.nth(i);
-      const target = (await tab.getAttribute("href"))!.slice(1);
+      const target = (await tab.getAttribute('href'))!.slice(1);
       await tab.click();
       await page.waitForTimeout(600);
       const gap = await page.evaluate((id) => {
         const el = document.getElementById(id)!;
-        const h = (el.querySelector("h1,h2,h3,h4") ?? el) as HTMLElement;
+        const h = (el.querySelector('h1,h2,h3,h4') ?? el) as HTMLElement;
         const n = document.querySelector('nav[aria-label="Contents"]')!.getBoundingClientRect();
         return Math.round(h.getBoundingClientRect().top - n.bottom);
       }, target);

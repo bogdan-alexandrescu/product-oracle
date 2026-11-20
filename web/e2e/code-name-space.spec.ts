@@ -1,5 +1,5 @@
-import { login, openRoadmapItem } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { login, openRoadmapItem } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /*
  * BR (PR 1517 review): a feature's code and its name read as code, space, name ("F-79 Weekly
@@ -13,107 +13,132 @@ import { expect, test, type Locator, type Page } from "./test";
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
-const DIGEST = "F-79 Weekly alert digest";
+const DIGEST = 'F-79 Weekly alert digest';
 
 async function tap(l: Locator) {
-  await l.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await l.evaluate((el) => el.scrollIntoView({ block: 'center' }));
   await l.click();
 }
 
 /** The words the code chip sits in (its parent's textContent), spaces folded. */
 async function reads(chipIn: Locator, code: string): Promise<string> {
-  const chip = chipIn.locator(".simple-code", { hasText: code }).first();
+  const chip = chipIn.locator('.simple-code', { hasText: code }).first();
   await expect(chip).toBeVisible();
-  return chip.locator("xpath=..").evaluate((el) => (el.textContent ?? "").replace(/\s+/g, " ").trim());
+  return chip
+    .locator('xpath=..')
+    .evaluate((el) => (el.textContent ?? '').replace(/\s+/g, ' ').trim());
 }
 
-const panel = (page: Page) => page.getByTestId("floating-card");
+const panel = (page: Page) => page.getByTestId('floating-card');
 
 test("Decisions' Waiting for you reads 'F-79 Weekly alert digest'", async ({ page }) => {
   await login(page);
-  await page.goto("/simple/decisions");
-  const row = page.getByTestId("simple-page").getByTestId("waiting-item").and(page.locator('[data-kind="broken_link"]')).filter({ hasText: "Weekly alert digest" });
-  expect.soft(await reads(row.first(), "F-79")).toContain(DIGEST);
+  await page.goto('/simple/decisions');
+  const row = page
+    .getByTestId('simple-page')
+    .getByTestId('waiting-item')
+    .and(page.locator('[data-kind="broken_link"]'))
+    .filter({ hasText: 'Weekly alert digest' });
+  expect.soft(await reads(row.first(), 'F-79')).toContain(DIGEST);
 });
 
-test("Home's broken link and Walk me through it read 'F-79 Weekly alert digest'", async ({ page }) => {
+test("Home's broken link and Walk me through it read 'F-79 Weekly alert digest'", async ({
+  page,
+}) => {
   await login(page);
-  await page.goto("/simple");
-  const name = page.getByTestId("simple-page").getByRole("button", { name: /Weekly alert digest/ }).filter({ has: page.locator(".simple-code") });
-  expect.soft(await reads(name.first(), "F-79")).toBe(DIGEST);
-  await tap(page.getByRole("button", { name: "Walk me through it" }));
+  await page.goto('/simple');
+  const name = page
+    .getByTestId('simple-page')
+    .getByRole('button', { name: /Weekly alert digest/ })
+    .filter({ has: page.locator('.simple-code') });
+  expect.soft(await reads(name.first(), 'F-79')).toBe(DIGEST);
+  await tap(page.getByRole('button', { name: 'Walk me through it' }));
   const step = page.locator('[data-testid="walk-step"][data-kind="broken_link"]');
   await expect(step).toBeVisible();
-  expect.soft(await reads(step.getByTestId("walk-step-title"), "F-79")).toBe(DIGEST);
+  expect.soft(await reads(step.getByTestId('walk-step-title'), 'F-79')).toBe(DIGEST);
 });
 
 test("the Inbox's Dates rows read 'F-03 Health log'", async ({ page }) => {
   await login(page);
-  await page.goto("/simple/inbox");
-  const name = page.getByTestId("feature-name").filter({ hasText: "Health log" });
-  expect.soft(await reads(name.first(), "F-03")).toBe("F-03 Health log");
+  await page.goto('/simple/inbox');
+  const name = page.getByTestId('feature-name').filter({ hasText: 'Health log' });
+  expect.soft(await reads(name.first(), 'F-03')).toBe('F-03 Health log');
 });
 
-test("the feature panel's name, a dependency and Part of read code, space, name", async ({ page }) => {
+test("the feature panel's name, a dependency and Part of read code, space, name", async ({
+  page,
+}) => {
   await login(page);
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  await openRoadmapItem(page, "alert-digest");
-  expect.soft(await reads(panel(page).getByTestId("card-name"), "F-79")).toBe(DIGEST);
-  await page.keyboard.press("Escape");
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
+  await openRoadmapItem(page, 'alert-digest');
+  expect.soft(await reads(panel(page).getByTestId('card-name'), 'F-79')).toBe(DIGEST);
+  await page.keyboard.press('Escape');
   await expect(panel(page)).toHaveCount(0);
 
   // A dependency on F-79 (_fields Named).
-  await openRoadmapItem(page, "setup-checklist");
-  await tap(panel(page).getByRole("button", { name: "Add a dependency" }));
-  await panel(page).getByLabel("Feature it depends on").selectOption({ label: DIGEST });
-  await tap(panel(page).getByRole("button", { name: "Save" }));
-  expect.soft(await reads(panel(page).getByTestId("card-depends-row"), "F-79")).toBe(DIGEST);
+  await openRoadmapItem(page, 'setup-checklist');
+  await tap(panel(page).getByRole('button', { name: 'Add a dependency' }));
+  await panel(page).getByLabel('Feature it depends on').selectOption({ label: DIGEST });
+  await tap(panel(page).getByRole('button', { name: 'Save' }));
+  expect.soft(await reads(panel(page).getByTestId('card-depends-row'), 'F-79')).toBe(DIGEST);
 
-  await page.keyboard.press("Escape");
+  await page.keyboard.press('Escape');
   await expect(panel(page)).toHaveCount(0);
 
   // Mobile alert push made a part of F-79 (the card's FeatureLink).
-  await openRoadmapItem(page, "alert-mobile");
-  await tap(panel(page).getByRole("button", { name: "More actions" }));
-  await tap(panel(page).getByRole("menuitem", { name: "Part of…" }));
-  const form = panel(page).getByTestId("card-parent-edit");
-  const option = form.getByLabel("Part of").locator("option").filter({ hasText: "Weekly alert digest" });
-  await form.getByLabel("Part of").selectOption({ label: (await option.first().textContent())!.trim() });
-  await tap(form.getByRole("button", { name: "Save", exact: true }));
-  expect.soft(await reads(panel(page).getByTestId("card-part-of"), "F-79")).toBe(DIGEST);
+  await openRoadmapItem(page, 'alert-mobile');
+  await tap(panel(page).getByRole('button', { name: 'More actions' }));
+  await tap(panel(page).getByRole('menuitem', { name: 'Part of…' }));
+  const form = panel(page).getByTestId('card-parent-edit');
+  const option = form
+    .getByLabel('Part of')
+    .locator('option')
+    .filter({ hasText: 'Weekly alert digest' });
+  await form
+    .getByLabel('Part of')
+    .selectOption({ label: (await option.first().textContent())!.trim() });
+  await tap(form.getByRole('button', { name: 'Save', exact: true }));
+  expect.soft(await reads(panel(page).getByTestId('card-part-of'), 'F-79')).toBe(DIGEST);
 });
 
-test("the Usage alerts one-pager's Timeline strip reads 'F-79 Weekly alert digest'", async ({ page }) => {
+test("the Usage alerts one-pager's Timeline strip reads 'F-79 Weekly alert digest'", async ({
+  page,
+}) => {
   await login(page);
-  await page.goto("/simple/prds/usage-alerts");
-  const item = page.getByTestId("plan-strip-item-open").filter({ hasText: "Weekly alert digest" });
-  expect.soft(await reads(item.first(), "F-79")).toBe(DIGEST);
+  await page.goto('/simple/prds/usage-alerts');
+  const item = page.getByTestId('plan-strip-item-open').filter({ hasText: 'Weekly alert digest' });
+  expect.soft(await reads(item.first(), 'F-79')).toBe(DIGEST);
 });
 
 test("a review's Roadmap step reads 'F-79 Weekly alert digest'", async ({ page }) => {
   await login(page);
-  await page.goto("/simple/meetings");
-  await expect(page.getByRole("region", { name: "Upcoming" })).toBeVisible();
-  await tap(page.getByRole("button", { name: /^Start review/ }).first());
-  const s = page.getByRole("dialog", { name: "Start a review" });
-  await s.getByLabel("PRD").selectOption({ label: "Usage alerts PRD" });
-  await s.getByRole("checkbox", { name: "Theo Brandt" }).check();
-  await tap(s.getByRole("button", { name: "Start", exact: true }));
-  await expect(page.getByRole("heading", { name: "Review: Usage alerts PRD" })).toBeVisible();
-  await tap(page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "2 Roadmap" }));
-  expect.soft(await reads(page.locator('li[data-item="alert-digest"]'), "F-79")).toBe(DIGEST);
+  await page.goto('/simple/meetings');
+  await expect(page.getByRole('region', { name: 'Upcoming' })).toBeVisible();
+  await tap(page.getByRole('button', { name: /^Start review/ }).first());
+  const s = page.getByRole('dialog', { name: 'Start a review' });
+  await s.getByLabel('PRD').selectOption({ label: 'Usage alerts PRD' });
+  await s.getByRole('checkbox', { name: 'Theo Brandt' }).check();
+  await tap(s.getByRole('button', { name: 'Start', exact: true }));
+  await expect(page.getByRole('heading', { name: 'Review: Usage alerts PRD' })).toBeVisible();
+  await tap(
+    page.getByRole('navigation', { name: 'Steps' }).getByRole('button', { name: '2 Roadmap' }),
+  );
+  expect.soft(await reads(page.locator('li[data-item="alert-digest"]'), 'F-79')).toBe(DIGEST);
 });
 
 test("the Goal map's Add a feature list reads 'F-79 Weekly alert digest'", async ({ page }) => {
   await login(page);
-  await page.goto("/simple/goals");
-  const gate = page.getByTestId("gm-strip-milestone").first();
+  await page.goto('/simple/goals');
+  const gate = page.getByTestId('gm-strip-milestone').first();
   await gate.hover();
-  await gate.getByRole("button", { name: /^More for / }).click();
-  await page.getByRole("menuitem", { name: "Add a feature" }).click();
-  const ed = page.getByTestId("gm-editor");
-  await ed.getByLabel("Feature").fill("F-79");
-  const pick = ed.getByTestId("gm-attach-list").getByRole("button").filter({ hasText: "Weekly alert digest" });
-  expect.soft(await reads(pick.first(), "F-79")).toBe(DIGEST);
+  await gate.getByRole('button', { name: /^More for / }).click();
+  await page.getByRole('menuitem', { name: 'Add a feature' }).click();
+  const ed = page.getByTestId('gm-editor');
+  await ed.getByLabel('Feature').fill('F-79');
+  const pick = ed
+    .getByTestId('gm-attach-list')
+    .getByRole('button')
+    .filter({ hasText: 'Weekly alert digest' });
+  expect.soft(await reads(pick.first(), 'F-79')).toBe(DIGEST);
 });

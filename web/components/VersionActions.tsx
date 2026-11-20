@@ -1,51 +1,59 @@
-"use client";
+'use client';
 
-import { Link } from "@/lib/nav";
-import { useState } from "react";
+import { Link } from '@/lib/nav';
+import { useState } from 'react';
 
-import { InlineError, Menu } from "@/components/review/parts";
-import { Button, Chip } from "@/components/ds";
-import { DownloadNote, useDownloadNote } from "@/components/DownloadNote";
-import { api, unwrap } from "@/lib/api/client";
-import { downloadedNote } from "@/lib/export-note";
-import { formatDate } from "@/lib/format";
+import { InlineError, Menu } from '@/components/review/parts';
+import { Button, Chip } from '@/components/ds';
+import { DownloadNote, useDownloadNote } from '@/components/DownloadNote';
+import { api, unwrap } from '@/lib/api/client';
+import { downloadedNote } from '@/lib/export-note';
+import { formatDate } from '@/lib/format';
 
 // O1f: Full (as before), Brief and Deck. Full keeps its labels ("Export PDF").
 // qa-docs-53: one order on every row: PDF, then HTML, then the row's own (MD, PPTX).
 const GROUPS = [
   {
-    layer: "full",
-    label: "Full",
+    layer: 'full',
+    label: 'Full',
     formats: [
-      { format: "pdf", label: "PDF" },
-      { format: "html", label: "HTML" },
+      { format: 'pdf', label: 'PDF' },
+      { format: 'html', label: 'HTML' },
       // qa4-docs-31: the format by its name, not a bare "MD".
-      { format: "md", label: "Markdown (.md)" },
+      { format: 'md', label: 'Markdown (.md)' },
     ],
   },
   {
-    layer: "brief",
-    label: "Brief",
+    layer: 'brief',
+    label: 'Brief',
     formats: [
-      { format: "pdf", label: "PDF" },
-      { format: "html", label: "HTML" },
+      { format: 'pdf', label: 'PDF' },
+      { format: 'html', label: 'HTML' },
     ],
   },
   {
-    layer: "deck",
-    label: "Deck",
+    layer: 'deck',
+    label: 'Deck',
     formats: [
-      { format: "pdf", label: "PDF" },
-      { format: "pptx", label: "PPTX" },
+      { format: 'pdf', label: 'PDF' },
+      { format: 'pptx', label: 'PPTX' },
     ],
   },
 ] as const;
 
-type Layer = (typeof GROUPS)[number]["layer"];
-type Format = "html" | "pdf" | "md" | "pptx";
+type Layer = (typeof GROUPS)[number]['layer'];
+type Format = 'html' | 'pdf' | 'md' | 'pptx';
 
 /** Downloads an export (with version banner) through the typed client. */
-export function ExportButtons({ doc, n, hasBrief = false }: { doc: string; n: number; hasBrief?: boolean }) {
+export function ExportButtons({
+  doc,
+  n,
+  hasBrief = false,
+}: {
+  doc: string;
+  n: number;
+  hasBrief?: boolean;
+}) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // e2e-pdf-export: a download closes the menu and says so a few seconds, as the one-pager's.
@@ -55,32 +63,43 @@ export function ExportButtons({ doc, n, hasBrief = false }: { doc: string; n: nu
     setBusy(`${layer}.${format}`);
     setError(null);
     try {
-      const call = api.GET("/v1/documents/{doc}/versions/{n}/export", {
+      const call = api.GET('/v1/documents/{doc}/versions/{n}/export', {
         params: { path: { doc, n }, query: { format, layer } },
-        parseAs: "blob",
+        parseAs: 'blob',
       });
       const blob = await unwrap<Blob>(call);
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
+      const a = document.createElement('a');
       a.href = url;
-      a.download = `${doc}-v${n}${layer === "full" ? "" : `-${layer}`}.${format}`;
+      a.download = `${doc}-v${n}${layer === 'full' ? '' : `-${layer}`}.${format}`;
       document.body.appendChild(a);
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
       close();
-      setSaved(downloadedNote(label, (await call).response, "shorten it, or pick a theme without a page limit"));
+      setSaved(
+        downloadedNote(
+          label,
+          (await call).response,
+          'shorten it, or pick a theme without a page limit',
+        ),
+      );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Export failed.");
+      setError(e instanceof Error ? e.message : 'Export failed.');
     } finally {
       setBusy(null);
     }
   }
 
-  const groups = GROUPS.filter((g) => hasBrief || g.layer === "full");
+  const groups = GROUPS.filter((g) => hasBrief || g.layer === 'full');
   // qa-docs-75: a grid, so a format sits in the same column on every row: PDF, HTML, then the
   // row's own (MD, PPTX). The panel opens clear of the review panel's totals.
-  const COLUMN: Record<Format, string> = { pdf: "col-start-2", html: "col-start-3", md: "col-start-4", pptx: "col-start-4" };
+  const COLUMN: Record<Format, string> = {
+    pdf: 'col-start-2',
+    html: 'col-start-3',
+    md: 'col-start-4',
+    pptx: 'col-start-4',
+  };
   return (
     <>
       <Menu label="Export" avoid='[data-testid="review-panel"]'>
@@ -88,17 +107,26 @@ export function ExportButtons({ doc, n, hasBrief = false }: { doc: string; n: nu
           <div className="flex flex-col gap-2.5">
             <div className="grid grid-cols-[auto_repeat(3,minmax(3.5rem,auto))] items-center gap-x-1.5 gap-y-2.5">
               {groups.map((g) => (
-                <div key={g.layer} role="group" aria-label={`Export ${g.label.toLowerCase()}`} className="contents">
-                  <span className="col-start-1 pr-2.5 text-[13px] font-semibold tracking-[0.02em] text-text2">{g.label}</span>
+                <div
+                  key={g.layer}
+                  role="group"
+                  aria-label={`Export ${g.label.toLowerCase()}`}
+                  className="contents"
+                >
+                  <span className="col-start-1 pr-2.5 text-[13px] font-semibold tracking-[0.02em] text-text2">
+                    {g.label}
+                  </span>
                   {g.formats.map((f) => (
                     <Button
                       key={f.format}
                       disabled={busy !== null}
                       onClick={() => download(g.layer, f.format, f.label, close)}
-                      aria-label={g.layer === "full" ? `Export ${f.label}` : `Export ${g.layer} ${f.label}`}
+                      aria-label={
+                        g.layer === 'full' ? `Export ${f.label}` : `Export ${g.layer} ${f.label}`
+                      }
                       className={`${COLUMN[f.format]} min-w-14`}
                     >
-                      {busy === `${g.layer}.${f.format}` ? "…" : f.label}
+                      {busy === `${g.layer}.${f.format}` ? '…' : f.label}
                     </Button>
                   ))}
                 </div>
@@ -142,7 +170,11 @@ export function ApproveButton({
 
   if (approvedAt) {
     return (
-      <Chip kind="pass" title={`Approved ${formatDate(approvedAt)}`} className="h-10 px-4 text-[15px]">
+      <Chip
+        kind="pass"
+        title={`Approved ${formatDate(approvedAt)}`}
+        className="h-10 px-4 text-[15px]"
+      >
         ✓ Approved {formatDate(approvedAt)}
       </Chip>
     );
@@ -152,11 +184,13 @@ export function ApproveButton({
     setSaving(true);
     setError(null);
     try {
-      await unwrap(api.POST("/v1/documents/{doc}/versions/{n}/approve", { params: { path: { doc, n } } }));
+      await unwrap(
+        api.POST('/v1/documents/{doc}/versions/{n}/approve', { params: { path: { doc, n } } }),
+      );
       setConfirming(false);
       onApproved();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not approve.");
+      setError(e instanceof Error ? e.message : 'Could not approve.');
     } finally {
       setSaving(false);
     }
@@ -185,8 +219,12 @@ export function ApproveButton({
             {blockedReason}
             {blockedFix && (
               <>
-                {" "}
-                <Link href={blockedFix.href} data-testid="approve-blocked-fix" className="font-semibold underline underline-offset-2">
+                {' '}
+                <Link
+                  href={blockedFix.href}
+                  data-testid="approve-blocked-fix"
+                  className="font-semibold underline underline-offset-2"
+                >
                   {blockedFix.label}
                 </Link>
               </>
@@ -201,7 +239,7 @@ export function ApproveButton({
     // qa-docs-66: an earlier version does not push its approval: a quiet button, saying which.
     return (
       <Button
-        variant={isLatest ? "primary" : "secondary"}
+        variant={isLatest ? 'primary' : 'secondary'}
         icon="check"
         data-testid="approve-version"
         aria-description={isLatest ? undefined : `v${n} is an earlier version`}
@@ -212,18 +250,25 @@ export function ApproveButton({
     );
   }
   return (
-    <div className="flex flex-wrap items-center justify-end gap-2" role="group" aria-label="Confirm approval">
+    <div
+      className="flex flex-wrap items-center justify-end gap-2"
+      role="group"
+      aria-label="Confirm approval"
+    >
       {unreviewed && unreviewed.count > 0 && (
         <span data-testid="unreviewed-sections" className="text-sm font-semibold text-warn">
-          {unreviewed.count} of {unreviewed.total} sections {unreviewed.count === 1 ? "is" : "are"} not reviewed.
+          {unreviewed.count} of {unreviewed.total} sections {unreviewed.count === 1 ? 'is' : 'are'}{' '}
+          not reviewed.
         </span>
       )}
-      <span className="text-sm font-semibold text-text2">{isLatest ? `Approve v${n}?` : `v${n} is not the latest. Approve?`}</span>
+      <span className="text-sm font-semibold text-text2">
+        {isLatest ? `Approve v${n}?` : `v${n} is not the latest. Approve?`}
+      </span>
       <Button variant="ghost" onClick={() => setConfirming(false)}>
         Cancel
       </Button>
       <Button variant="primary" icon="check" disabled={saving} onClick={approve} autoFocus>
-        {saving ? "Approving…" : "Confirm"}
+        {saving ? 'Approving…' : 'Confirm'}
       </Button>
       {error && (
         <span role="alert" className="basis-full text-right text-sm font-medium text-crit">

@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import { useRouter } from "@/lib/nav";
-import { useEffect } from "react";
+import { useRouter } from '@/lib/nav';
+import { useEffect } from 'react';
 
-import { loadLanding } from "@/lib/experience";
+import { loadLanding } from '@/lib/experience';
 
 /**
  * The bare site URL opens the person's home (UI test finding E1): Detailed's Home, or Simple's

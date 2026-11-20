@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect, useState } from 'react';
 
 /**
  * Whole words in narrow table columns (priorities-words): a name wraps between its words, and a
@@ -9,20 +9,20 @@ import { useEffect, useState } from "react";
  * from the names it shows rather than a guess.
  */
 
-const SOFT_HYPHEN = "­";
+const SOFT_HYPHEN = '­';
 
 let ctx: CanvasRenderingContext2D | null | undefined;
 const families = new Map<string, string>();
 
 /** The resolved font family a class gives ("font-mono"), read once from a probe element. */
 function family(className: string): string | null {
-  if (typeof document === "undefined" || !document.body) return null;
+  if (typeof document === 'undefined' || !document.body) return null;
   const hit = families.get(className);
   if (hit) return hit;
-  const probe = document.createElement("span");
+  const probe = document.createElement('span');
   probe.className = className;
-  probe.style.position = "absolute";
-  probe.style.visibility = "hidden";
+  probe.style.position = 'absolute';
+  probe.style.visibility = 'hidden';
   document.body.appendChild(probe);
   const f = getComputedStyle(probe).fontFamily;
   probe.remove();
@@ -31,10 +31,15 @@ function family(className: string): string | null {
 }
 
 /** A text's width in px at a weight and size in the family a class gives; null before the page is in a browser. */
-export function textWidth(text: string, weight: number, size: number, className = "font-sans"): number | null {
+export function textWidth(
+  text: string,
+  weight: number,
+  size: number,
+  className = 'font-sans',
+): number | null {
   const f = family(className);
   if (!f) return null;
-  if (ctx === undefined) ctx = document.createElement("canvas").getContext("2d");
+  if (ctx === undefined) ctx = document.createElement('canvas').getContext('2d');
   if (!ctx) return null;
   ctx.font = `${weight} ${size}px ${f}`;
   return ctx.measureText(text).width;
@@ -58,7 +63,7 @@ export function hyphenate(word: string): string {
   const cons = c.map((_, i) => letters[i] && !vowel[i]);
   const before = (i: number) => letters.slice(0, i).filter(Boolean).length;
   const after = (i: number) => letters.slice(i).filter(Boolean).length;
-  let out = "";
+  let out = '';
   for (let i = 0; i < c.length; i++) {
     // A consonant followed by a vowel starts a syllable after a vowel (V|CV) or after a
     // consonant that itself follows a vowel (VC|CV).
@@ -78,7 +83,7 @@ export function fitWords(text: string, room: number, weight: number, size: numbe
       const width = textWidth(w, weight, size);
       return width != null && width > room ? hyphenate(w) : w;
     })
-    .join("");
+    .join('');
 }
 
 /**
@@ -95,17 +100,19 @@ export function useFontsReady(): number {
       if (live) setReady((n) => n + 1);
     };
     bump();
-    const fonts = typeof document !== "undefined" ? document.fonts : undefined;
-    const sans = family("font-sans");
-    const mono = family("font-mono");
+    const fonts = typeof document !== 'undefined' ? document.fonts : undefined;
+    const sans = family('font-sans');
+    const mono = family('font-mono');
     const loads: Promise<unknown>[] = fonts ? [fonts.ready] : [];
     if (fonts && sans) loads.push(fonts.load(`500 15px ${sans}`), fonts.load(`400 13px ${sans}`));
     if (fonts && mono) loads.push(fonts.load(`500 13px ${mono}`));
-    void Promise.all(loads).catch(() => undefined).then(bump);
-    fonts?.addEventListener("loadingdone", bump);
+    void Promise.all(loads)
+      .catch(() => undefined)
+      .then(bump);
+    fonts?.addEventListener('loadingdone', bump);
     return () => {
       live = false;
-      fonts?.removeEventListener("loadingdone", bump);
+      fonts?.removeEventListener('loadingdone', bump);
     };
   }, []);
   return ready;
@@ -116,7 +123,7 @@ export function useWidth(): [(el: HTMLElement | null) => void, number | null] {
   const [el, setEl] = useState<HTMLElement | null>(null);
   const [width, setWidth] = useState<number | null>(null);
   useEffect(() => {
-    if (!el || typeof ResizeObserver === "undefined") return;
+    if (!el || typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(([e]) => setWidth(Math.floor(e.contentRect.width)));
     ro.observe(el);
     return () => ro.disconnect();

@@ -1,7 +1,7 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login, signOut } from "./helpers";
+import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login, signOut } from './helpers';
 
 /**
  * F4 Engineering review stop, lane A (issue #181, review fix 1): the Engineering check of
@@ -41,213 +41,299 @@ import { login, signOut } from "./helpers";
  *   bar is off screen, or the page scrolls sideways; no_claim=other phone layouts.
  */
 
-const withScenario = (page: Page, scenario: string) => page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, scenario]);
-const row = (page: Page, key: string) => page.locator(`[data-testid="brief-row"][data-feature="${key}"]`);
-const inspector = (page: Page) => page.getByTestId("brief-inspector");
-const bar = (page: Page) => page.getByTestId("decision-bar");
-const sheet = (page: Page) => page.getByRole("dialog", { name: "Draft with Oracle" });
+const withScenario = (page: Page, scenario: string) =>
+  page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, scenario]);
+const row = (page: Page, key: string) =>
+  page.locator(`[data-testid="brief-row"][data-feature="${key}"]`);
+const inspector = (page: Page) => page.getByTestId('brief-inspector');
+const bar = (page: Page) => page.getByTestId('decision-bar');
+const sheet = (page: Page) => page.getByRole('dialog', { name: 'Draft with Oracle' });
 
 async function briefToSheet(page: Page, title: string) {
-  await page.getByTestId("nav-prds").filter({ visible: true }).first().click();
+  await page.getByTestId('nav-prds').filter({ visible: true }).first().click();
   await expect(page).toHaveURL(/\/documents$/);
-  await page.getByRole("link", { name: "New PRD" }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "New PRD" })).toBeVisible();
-  await page.getByRole("textbox", { name: "Title" }).fill(title);
-  await page.getByRole("textbox", { name: "What problem does it solve?" }).fill("Buyers drop off when the total shows up late in checkout.");
-  await page.getByRole("button", { name: "Continue" }).first().click();
+  await page.getByRole('link', { name: 'New PRD' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'New PRD' })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Title' }).fill(title);
+  await page
+    .getByRole('textbox', { name: 'What problem does it solve?' })
+    .fill('Buyers drop off when the total shows up late in checkout.');
+  await page.getByRole('button', { name: 'Continue' }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
-  await page.getByRole("button", { name: "Draft with Oracle" }).click();
+  await page.getByRole('button', { name: 'Draft with Oracle' }).click();
   await expect(sheet(page)).toBeVisible();
 }
 
 async function verdict(page: Page, key: string, choice: string, note?: string) {
-  await row(page, key).getByRole("button").first().click();
-  await inspector(page).getByRole("group", { name: "Verdict" }).getByRole("button", { name: choice, exact: true }).click();
+  await row(page, key).getByRole('button').first().click();
+  await inspector(page)
+    .getByRole('group', { name: 'Verdict' })
+    .getByRole('button', { name: choice, exact: true })
+    .click();
   if (note != null) {
-    const save = inspector(page).getByRole("button", { name: "Save verdict" });
+    const save = inspector(page).getByRole('button', { name: 'Save verdict' });
     await expect(save).toBeDisabled();
-    await inspector(page).getByRole("textbox").first().fill(note);
+    await inspector(page).getByRole('textbox').first().fill(note);
     await save.click();
   }
-  await expect(row(page, key).getByTestId("brief-verdict")).toHaveText(choice);
+  await expect(row(page, key).getByTestId('brief-verdict')).toHaveText(choice);
 }
 
 async function openCheckAsLead(page: Page) {
-  await withScenario(page, "eng-check");
-  await login(page, "commenter@example.com");
-  await page.goto("/inbox");
-  const inboxRow = page.getByTestId("inbox-checkpoints").locator("tr[data-row]").filter({ hasText: "Engineering check" });
-  await expect(inboxRow.getByTestId("checkpoint-label")).toHaveText("Engineering check · Guided onboarding · 3 features · 1 blocking");
-  await inboxRow.getByRole("link", { name: "Review" }).click();
+  await withScenario(page, 'eng-check');
+  await login(page, 'commenter@example.com');
+  await page.goto('/inbox');
+  const inboxRow = page
+    .getByTestId('inbox-checkpoints')
+    .locator('tr[data-row]')
+    .filter({ hasText: 'Engineering check' });
+  await expect(inboxRow.getByTestId('checkpoint-label')).toHaveText(
+    'Engineering check · Guided onboarding · 3 features · 1 blocking',
+  );
+  await inboxRow.getByRole('link', { name: 'Review' }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+\/review\/[0-9a-f-]+$/);
-  await expect(page.getByTestId("brief-row")).toHaveCount(3);
+  await expect(page.getByTestId('brief-row')).toHaveCount(3);
 }
 
-test("sheet toggle: Engineering check is on with its help, and unchecking it lowers the estimate by $5.00", async ({ page }) => {
-  await login(page, "approver@example.com");
-  await briefToSheet(page, "Price shown early");
-  const toggle = sheet(page).getByRole("switch", { name: "Engineering check" });
+test('sheet toggle: Engineering check is on with its help, and unchecking it lowers the estimate by $5.00', async ({
+  page,
+}) => {
+  await login(page, 'approver@example.com');
+  await briefToSheet(page, 'Price shown early');
+  const toggle = sheet(page).getByRole('switch', { name: 'Engineering check' });
   await expect(toggle).toBeChecked();
-  await expect(sheet(page).getByTestId("stop-help").filter({ hasText: "feasibility" })).toHaveText("The engineering lead checks feasibility and sizes before the priority order.");
-  await sheet(page).getByRole("button", { name: "Estimate" }).click();
-  await expect(sheet(page).getByTestId("draft-estimate")).toContainText("$29.50 estimated");
+  await expect(sheet(page).getByTestId('stop-help').filter({ hasText: 'feasibility' })).toHaveText(
+    'The engineering lead checks feasibility and sizes before the priority order.',
+  );
+  await sheet(page).getByRole('button', { name: 'Estimate' }).click();
+  await expect(sheet(page).getByTestId('draft-estimate')).toContainText('$29.50 estimated');
   await toggle.uncheck();
-  await expect(sheet(page).getByTestId("draft-estimate")).toContainText("$24.50 estimated");
+  await expect(sheet(page).getByTestId('draft-estimate')).toContainText('$24.50 estimated');
 });
 
-test("lead decides: Approve waits for every verdict and the blocking answer, then the run moves on with the new size", async ({ page }) => {
+test('lead decides: Approve waits for every verdict and the blocking answer, then the run moves on with the new size', async ({
+  page,
+}) => {
   await openCheckAsLead(page);
-  const approve = bar(page).getByRole("button", { name: "Approve" });
+  const approve = bar(page).getByRole('button', { name: 'Approve' });
   await expect(approve).toBeDisabled();
-  await expect(bar(page).getByTestId("eng-tally")).toHaveText("0 of 3 decided · 1 blocking question");
-  await expect(row(page, "f.setup-checklist").getByTestId("brief-questions")).toHaveText("1 blocking0 of 2 answered");
+  await expect(bar(page).getByTestId('eng-tally')).toHaveText(
+    '0 of 3 decided · 1 blocking question',
+  );
+  await expect(row(page, 'f.setup-checklist').getByTestId('brief-questions')).toHaveText(
+    '1 blocking0 of 2 answered',
+  );
 
-  await verdict(page, "f.setup-checklist", "Feasible");
-  await expect(bar(page).getByTestId("eng-tally")).toHaveText("1 of 3 decided · 1 blocking question");
-  await verdict(page, "f.sample-data", "Feasible with changes", "Ship a smaller catalogue first");
-  await verdict(page, "f.referral-link", "Not feasible as scoped", "Needs a server-side cart store we do not have");
-  await expect(bar(page).getByTestId("eng-tally")).toHaveText("3 of 3 decided · 1 blocking question");
+  await verdict(page, 'f.setup-checklist', 'Feasible');
+  await expect(bar(page).getByTestId('eng-tally')).toHaveText(
+    '1 of 3 decided · 1 blocking question',
+  );
+  await verdict(page, 'f.sample-data', 'Feasible with changes', 'Ship a smaller catalogue first');
+  await verdict(
+    page,
+    'f.referral-link',
+    'Not feasible as scoped',
+    'Needs a server-side cart store we do not have',
+  );
+  await expect(bar(page).getByTestId('eng-tally')).toHaveText(
+    '3 of 3 decided · 1 blocking question',
+  );
   await expect(approve).toBeDisabled();
 
-  await row(page, "f.setup-checklist").getByRole("button").first().click();
-  await inspector(page).getByRole("textbox", { name: /^Answer: Does the payment sandbox/ }).fill("Yes, the sandbox takes test orders.");
-  await inspector(page).getByRole("button", { name: "Answer" }).first().click();
-  await expect(inspector(page).getByTestId("answer")).toContainText("Yes, the sandbox takes test orders. · ");
-  await expect(bar(page).getByTestId("eng-tally")).toHaveText("3 of 3 decided");
+  await row(page, 'f.setup-checklist').getByRole('button').first().click();
+  await inspector(page)
+    .getByRole('textbox', { name: /^Answer: Does the payment sandbox/ })
+    .fill('Yes, the sandbox takes test orders.');
+  await inspector(page).getByRole('button', { name: 'Answer' }).first().click();
+  await expect(inspector(page).getByTestId('answer')).toContainText(
+    'Yes, the sandbox takes test orders. · ',
+  );
+  await expect(bar(page).getByTestId('eng-tally')).toHaveText('3 of 3 decided');
 
-  await row(page, "f.referral-link").getByRole("button").first().click();
-  await inspector(page).getByRole("group", { name: "Size" }).getByRole("button", { name: "XL" }).click();
-  await expect(row(page, "f.referral-link").getByTestId("brief-size")).toContainText("XL");
+  await row(page, 'f.referral-link').getByRole('button').first().click();
+  await inspector(page)
+    .getByRole('group', { name: 'Size' })
+    .getByRole('button', { name: 'XL' })
+    .click();
+  await expect(row(page, 'f.referral-link').getByTestId('brief-size')).toContainText('XL');
   // Nothing is lost on refresh: the choices are the shared draft's.
   await page.reload();
-  await expect(row(page, "f.referral-link").getByTestId("brief-verdict")).toHaveText("Not feasible as scoped");
+  await expect(row(page, 'f.referral-link').getByTestId('brief-verdict')).toHaveText(
+    'Not feasible as scoped',
+  );
   await expect(approve).toBeEnabled();
   await approve.click();
 
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
-  await expect(page.getByTestId("segment-priority").getByTestId("segment-state")).toHaveText("Running");
-  await page.goto("/ground-truth");
-  await page.getByTestId("feature-F-12").getByRole("button", { name: "Referral link" }).click();
-  await expect(page.getByRole("dialog", { name: "Referral link" }).locator('[data-attr="effort"]')).toHaveText("XL");
+  await expect(page.getByTestId('segment-priority').getByTestId('segment-state')).toHaveText(
+    'Running',
+  );
+  await page.goto('/ground-truth');
+  await page.getByTestId('feature-F-12').getByRole('button', { name: 'Referral link' }).click();
+  await expect(
+    page.getByRole('dialog', { name: 'Referral link' }).locator('[data-attr="effort"]'),
+  ).toHaveText('XL');
 });
 
-test("started from the UI: a run from the sheet waits at its Engineering check and is approved there", async ({ page }) => {
+test('started from the UI: a run from the sheet waits at its Engineering check and is approved there', async ({
+  page,
+}) => {
   await login(page);
-  await briefToSheet(page, "Faster checkout total");
-  await sheet(page).getByRole("button", { name: "Estimate" }).click();
-  await expect(sheet(page).getByTestId("draft-estimate")).toContainText("$29.50 estimated");
-  await sheet(page).getByRole("button", { name: "Start drafting" }).click();
+  await briefToSheet(page, 'Faster checkout total');
+  await sheet(page).getByRole('button', { name: 'Estimate' }).click();
+  await expect(sheet(page).getByTestId('draft-estimate')).toContainText('$29.50 estimated');
+  await sheet(page).getByRole('button', { name: 'Start drafting' }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
 
-  await page.getByRole("button", { name: "Refresh progress" }).click();
-  const featureSet = page.getByTestId("segment-feature_set");
-  await featureSet.getByRole("button", { name: "Approve" }).click();
-  await expect(page.getByTestId("segment-eng_review").getByTestId("segment-state")).toHaveText("Running");
-  await page.getByRole("button", { name: "Refresh progress" }).click();
-  const line = page.getByTestId("segment-eng_review").getByTestId("review-screen-line");
-  await expect(line).toContainText("3 features · 1 blocking");
-  await line.getByRole("link", { name: "Review" }).click();
+  await page.getByRole('button', { name: 'Refresh progress' }).click();
+  const featureSet = page.getByTestId('segment-feature_set');
+  await featureSet.getByRole('button', { name: 'Approve' }).click();
+  await expect(page.getByTestId('segment-eng_review').getByTestId('segment-state')).toHaveText(
+    'Running',
+  );
+  await page.getByRole('button', { name: 'Refresh progress' }).click();
+  const line = page.getByTestId('segment-eng_review').getByTestId('review-screen-line');
+  await expect(line).toContainText('3 features · 1 blocking');
+  await line.getByRole('link', { name: 'Review' }).click();
 
-  for (const key of ["price-early", "public-signup", "saved-cards"]) await verdict(page, key, "Feasible");
-  await row(page, "price-early").getByRole("button").first().click();
-  await inspector(page).getByRole("textbox", { name: /^Answer:/ }).fill("Yes, within 150 ms.");
-  await inspector(page).getByRole("button", { name: "Answer" }).click();
-  await bar(page).getByRole("button", { name: "Approve" }).click();
-  await expect(page.getByTestId("segment-priority").getByTestId("segment-state")).toHaveText("Running");
+  for (const key of ['price-early', 'public-signup', 'saved-cards'])
+    await verdict(page, key, 'Feasible');
+  await row(page, 'price-early').getByRole('button').first().click();
+  await inspector(page)
+    .getByRole('textbox', { name: /^Answer:/ })
+    .fill('Yes, within 150 ms.');
+  await inspector(page).getByRole('button', { name: 'Answer' }).click();
+  await bar(page).getByRole('button', { name: 'Approve' }).click();
+  await expect(page.getByTestId('segment-priority').getByTestId('segment-state')).toHaveText(
+    'Running',
+  );
 });
 
-test("approver, lead named: the screen suggests as the review's can_suggest says, never decides, and says who it waits for", async ({ page }) => {
-  await withScenario(page, "eng-check");
-  await login(page, "approver@example.com");
-  await page.goto("/runs");
+test("approver, lead named: the screen suggests as the review's can_suggest says, never decides, and says who it waits for", async ({
+  page,
+}) => {
+  await withScenario(page, 'eng-check');
+  await login(page, 'approver@example.com');
+  await page.goto('/runs');
   await page.goto(`/runs/7a11c0de-0000-4000-8000-0000000000f4`);
-  const line = page.getByTestId("segment-eng_review").getByTestId("review-screen-line");
-  await expect(line).toContainText("Waits for the engineering lead");
-  await line.getByRole("link", { name: "View" }).click();
-  await expect(page.getByTestId("view-only")).toContainText("Suggestions only");
-  await expect(page.getByTestId("view-only")).toContainText("Waits for the engineering lead");
-  await expect(page.getByTestId("brief-row")).toHaveCount(3);
-  await expect(inspector(page).getByRole("group", { name: "Verdict" })).toBeVisible();
-  await expect(bar(page).getByRole("button", { name: "Approve" })).toHaveCount(0);
-  await expect(bar(page).getByRole("button", { name: "Send back to architect" })).toHaveCount(0);
+  const line = page.getByTestId('segment-eng_review').getByTestId('review-screen-line');
+  await expect(line).toContainText('Waits for the engineering lead');
+  await line.getByRole('link', { name: 'View' }).click();
+  await expect(page.getByTestId('view-only')).toContainText('Suggestions only');
+  await expect(page.getByTestId('view-only')).toContainText('Waits for the engineering lead');
+  await expect(page.getByTestId('brief-row')).toHaveCount(3);
+  await expect(inspector(page).getByRole('group', { name: 'Verdict' })).toBeVisible();
+  await expect(bar(page).getByRole('button', { name: 'Approve' })).toHaveCount(0);
+  await expect(bar(page).getByRole('button', { name: 'Send back to architect' })).toHaveCount(0);
 });
 
-test("can_suggest false: a viewer (mock role) reads the screen with no Suggest", async ({ page }) => {
-  await withScenario(page, "eng-check");
-  await page.addInitScript(([key, r]) => localStorage.setItem(key, r), [MOCK_ROLE_KEY, "viewer"] as const);
-  await login(page, "approver@example.com");
+test('can_suggest false: a viewer (mock role) reads the screen with no Suggest', async ({
+  page,
+}) => {
+  await withScenario(page, 'eng-check');
+  await page.addInitScript(([key, r]) => localStorage.setItem(key, r), [
+    MOCK_ROLE_KEY,
+    'viewer',
+  ] as const);
+  await login(page, 'approver@example.com');
   await page.goto(`/runs/7a11c0de-0000-4000-8000-0000000000f4`);
-  const line = page.getByTestId("segment-eng_review").getByTestId("review-screen-line");
-  await line.getByRole("link", { name: "View" }).click();
-  await expect(page.getByTestId("view-only")).toContainText("View only");
-  await expect(page.getByTestId("view-only")).not.toContainText("Suggestions only");
-  await expect(page.getByTestId("brief-row")).toHaveCount(3);
-  await expect(inspector(page).getByRole("group", { name: "Verdict" })).toHaveCount(0);
-  await expect(inspector(page).getByRole("group", { name: "Size" })).toHaveCount(0);
-  await expect(bar(page).getByRole("button", { name: "Approve" })).toHaveCount(0);
+  const line = page.getByTestId('segment-eng_review').getByTestId('review-screen-line');
+  await line.getByRole('link', { name: 'View' }).click();
+  await expect(page.getByTestId('view-only')).toContainText('View only');
+  await expect(page.getByTestId('view-only')).not.toContainText('Suggestions only');
+  await expect(page.getByTestId('brief-row')).toHaveCount(3);
+  await expect(inspector(page).getByRole('group', { name: 'Verdict' })).toHaveCount(0);
+  await expect(inspector(page).getByRole('group', { name: 'Size' })).toHaveCount(0);
+  await expect(bar(page).getByRole('button', { name: 'Approve' })).toHaveCount(0);
 });
 
-test("phone: at 390 px the rows are cards, the decision bar stays on screen and nothing scrolls sideways", async ({ page }) => {
+test('phone: at 390 px the rows are cards, the decision bar stays on screen and nothing scrolls sideways', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openCheckAsLead(page);
-  const first = await row(page, "f.setup-checklist").boundingBox();
-  const second = await row(page, "f.sample-data").boundingBox();
+  const first = await row(page, 'f.setup-checklist').boundingBox();
+  const second = await row(page, 'f.sample-data').boundingBox();
   expect(first && second && second.y >= first.y + first.height).toBeTruthy();
-  await expect(bar(page).getByRole("button", { name: "Approve" })).toBeInViewport();
+  await expect(bar(page).getByRole('button', { name: 'Approve' })).toBeInViewport();
   await page.mouse.wheel(0, 2000);
-  await expect(bar(page).getByRole("button", { name: "Approve" })).toBeInViewport();
-  const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  await expect(bar(page).getByRole('button', { name: 'Approve' })).toBeInViewport();
+  const sideways = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
   expect(sideways).toBeLessThanOrEqual(0);
 });
 
-test("inspector per feature: a note typed for one feature never saves against another", async ({ page }) => {
+test('inspector per feature: a note typed for one feature never saves against another', async ({
+  page,
+}) => {
   await openCheckAsLead(page);
-  await row(page, "f.sample-data").getByRole("button").first().click();
-  await inspector(page).getByRole("group", { name: "Verdict" }).getByRole("button", { name: "Feasible with changes", exact: true }).click();
-  await inspector(page).getByRole("textbox", { name: "What changes" }).fill("Ship a smaller catalogue first");
-  await row(page, "f.referral-link").getByRole("button").first().click();
-  await expect(inspector(page)).toHaveAccessibleName("Brief: Referral link");
-  await expect(inspector(page).getByRole("textbox", { name: "What changes" })).toHaveCount(0);
-  await expect(inspector(page).getByRole("button", { name: "Save verdict" })).toHaveCount(0);
-  await expect(row(page, "f.referral-link").getByTestId("brief-verdict")).toHaveText("Not decided");
+  await row(page, 'f.sample-data').getByRole('button').first().click();
+  await inspector(page)
+    .getByRole('group', { name: 'Verdict' })
+    .getByRole('button', { name: 'Feasible with changes', exact: true })
+    .click();
+  await inspector(page)
+    .getByRole('textbox', { name: 'What changes' })
+    .fill('Ship a smaller catalogue first');
+  await row(page, 'f.referral-link').getByRole('button').first().click();
+  await expect(inspector(page)).toHaveAccessibleName('Brief: Referral link');
+  await expect(inspector(page).getByRole('textbox', { name: 'What changes' })).toHaveCount(0);
+  await expect(inspector(page).getByRole('button', { name: 'Save verdict' })).toHaveCount(0);
+  await expect(row(page, 'f.referral-link').getByTestId('brief-verdict')).toHaveText('Not decided');
 });
 
-test("check once: the lead's row says Waiting, an approver sees the check on its line only", async ({ page }) => {
-  await withScenario(page, "eng-check");
-  await login(page, "commenter@example.com");
-  await page.goto("/runs/7a11c0de-0000-4000-8000-0000000000f4");
-  const segment = page.getByTestId("segment-eng_review");
-  await expect(segment.getByTestId("review-screen-line")).toContainText("Waiting for you");
-  await expect(segment.getByTestId("checkpoint-waiting")).toBeVisible();
+test("check once: the lead's row says Waiting, an approver sees the check on its line only", async ({
+  page,
+}) => {
+  await withScenario(page, 'eng-check');
+  await login(page, 'commenter@example.com');
+  await page.goto('/runs/7a11c0de-0000-4000-8000-0000000000f4');
+  const segment = page.getByTestId('segment-eng_review');
+  await expect(segment.getByTestId('review-screen-line')).toContainText('Waiting for you');
+  await expect(segment.getByTestId('checkpoint-waiting')).toBeVisible();
   await signOut(page);
-  await login(page, "approver@example.com");
-  await page.goto("/runs/7a11c0de-0000-4000-8000-0000000000f4");
-  await expect(segment.getByTestId("review-screen-line")).toHaveCount(1);
-  await expect(segment.getByTestId("checkpoint-eng_review")).toHaveCount(0);
-  await expect(segment.getByTestId("checkpoint-waiting")).toHaveCount(0);
+  await login(page, 'approver@example.com');
+  await page.goto('/runs/7a11c0de-0000-4000-8000-0000000000f4');
+  await expect(segment.getByTestId('review-screen-line')).toHaveCount(1);
+  await expect(segment.getByTestId('checkpoint-eng_review')).toHaveCount(0);
+  await expect(segment.getByTestId('checkpoint-waiting')).toHaveCount(0);
 });
 
-test("commenter suggests: with no lead named a commenter suggests, an approver stages it, and the screen waits for an approver", async ({ page }) => {
-  await withScenario(page, "eng-check-no-lead");
-  await login(page, "commenter@example.com");
-  await page.goto("/runs/7a11c0de-0000-4000-8000-0000000000f4");
-  await page.getByTestId("segment-eng_review").getByTestId("review-screen-line").getByRole("link", { name: "View" }).click();
-  await expect(page.getByTestId("view-only")).toContainText("Waits for an approver");
-  await expect(page.getByTestId("view-only")).not.toContainText("engineering lead");
-  await row(page, "f.sample-data").getByRole("button").first().click();
-  await inspector(page).getByRole("group", { name: "Verdict" }).getByRole("button", { name: "Feasible", exact: true }).click();
-  await expect(inspector(page).getByTestId("verdict-now")).toContainText("Feasible (suggested)");
-  await expect(inspector(page).getByTestId("suggestion")).toContainText("Feasible");
-  await expect(row(page, "f.sample-data").getByTestId("brief-verdict")).toHaveText("Not decided");
-  await expect(bar(page).getByTestId("eng-tally")).toHaveText("0 of 3 decided · 1 blocking question");
-  await expect(bar(page).getByRole("button", { name: "Approve" })).toHaveCount(0);
+test('commenter suggests: with no lead named a commenter suggests, an approver stages it, and the screen waits for an approver', async ({
+  page,
+}) => {
+  await withScenario(page, 'eng-check-no-lead');
+  await login(page, 'commenter@example.com');
+  await page.goto('/runs/7a11c0de-0000-4000-8000-0000000000f4');
+  await page
+    .getByTestId('segment-eng_review')
+    .getByTestId('review-screen-line')
+    .getByRole('link', { name: 'View' })
+    .click();
+  await expect(page.getByTestId('view-only')).toContainText('Waits for an approver');
+  await expect(page.getByTestId('view-only')).not.toContainText('engineering lead');
+  await row(page, 'f.sample-data').getByRole('button').first().click();
+  await inspector(page)
+    .getByRole('group', { name: 'Verdict' })
+    .getByRole('button', { name: 'Feasible', exact: true })
+    .click();
+  await expect(inspector(page).getByTestId('verdict-now')).toContainText('Feasible (suggested)');
+  await expect(inspector(page).getByTestId('suggestion')).toContainText('Feasible');
+  await expect(row(page, 'f.sample-data').getByTestId('brief-verdict')).toHaveText('Not decided');
+  await expect(bar(page).getByTestId('eng-tally')).toHaveText(
+    '0 of 3 decided · 1 blocking question',
+  );
+  await expect(bar(page).getByRole('button', { name: 'Approve' })).toHaveCount(0);
   const screen = page.url();
 
   await signOut(page);
-  await login(page, "approver@example.com");
+  await login(page, 'approver@example.com');
   await page.goto(screen);
-  await row(page, "f.sample-data").getByRole("button").first().click();
-  await inspector(page).getByTestId("suggestion").getByRole("button", { name: "Stage" }).click();
-  await expect(row(page, "f.sample-data").getByTestId("brief-verdict")).toHaveText("Feasible");
-  await expect(bar(page).getByTestId("eng-tally")).toHaveText("1 of 3 decided · 1 blocking question");
+  await row(page, 'f.sample-data').getByRole('button').first().click();
+  await inspector(page).getByTestId('suggestion').getByRole('button', { name: 'Stage' }).click();
+  await expect(row(page, 'f.sample-data').getByTestId('brief-verdict')).toHaveText('Feasible');
+  await expect(bar(page).getByTestId('eng-tally')).toHaveText(
+    '1 of 3 decided · 1 blocking question',
+  );
 });

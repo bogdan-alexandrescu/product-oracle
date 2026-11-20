@@ -1,22 +1,32 @@
-"use client";
+'use client';
 
-import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 
-import { MarkFor, WithFeatureMarks } from "@/components/current-state/CurrentState";
-import { NotInGt } from "@/components/simple/FeatureName";
-import { FlowDiagram } from "@/components/simple/FlowViews";
-import { useOpenFeature } from "@/components/simple/OpenFeature";
-import { ErrorNote, LoadError } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { calendarDay, todayIn, useCompanyZone, utcDay } from "@/lib/dates";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import { MarkFor, WithFeatureMarks } from '@/components/current-state/CurrentState';
+import { NotInGt } from '@/components/simple/FeatureName';
+import { FlowDiagram } from '@/components/simple/FlowViews';
+import { useOpenFeature } from '@/components/simple/OpenFeature';
+import { ErrorNote, LoadError } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { calendarDay, todayIn, useCompanyZone, utcDay } from '@/lib/dates';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-type Plan = Schemas["SimplePlanOut"];
-type Milestone = Schemas["SimplePlanMilestone"];
-type Slice = Schemas["SimpleSlice"];
-type Goal = Schemas["SimplePlanGoal"];
-type Decision = Schemas["SimplePlanDecision"];
-type Risk = Schemas["SimplePlanRisk"];
+type Plan = Schemas['SimplePlanOut'];
+type Milestone = Schemas['SimplePlanMilestone'];
+type Slice = Schemas['SimpleSlice'];
+type Goal = Schemas['SimplePlanGoal'];
+type Decision = Schemas['SimplePlanDecision'];
+type Risk = Schemas['SimplePlanRisk'];
 
 /*
  * fidelity prd (the owner's picks, 2026-10-28, "keep the mockup design very strictly"):
@@ -34,35 +44,48 @@ const ms = (day: string) => Date.parse(`${day.slice(0, 10)}T00:00:00Z`);
 /** "Nov 27": a day written as everywhere else in the app (qa-shell-21). */
 const dm = (day: string) => calendarDay(day);
 /** "Nov 27, 2026". */
-export const dmy = (day: string) => calendarDay(day, { month: "short", day: "numeric", year: "numeric" });
+export const dmy = (day: string) =>
+  calendarDay(day, { month: 'short', day: 'numeric', year: 'numeric' });
 /** "56", "2.5": a number of weeks with no pointless ".0". */
 const weeks = (n: number) => String(Math.round(n * 10) / 10);
 /** "56 engineer-weeks", "2.5 engineer-weeks", "1 engineer-week". */
-export const ew = (n: number) => `${weeks(n)} ${Math.round(n * 10) === 10 ? "engineer-week" : "engineer-weeks"}`;
+export const ew = (n: number) =>
+  `${weeks(n)} ${Math.round(n * 10) === 10 ? 'engineer-week' : 'engineer-weeks'}`;
 
-export const PHONE = "(max-width: 767px)";
+export const PHONE = '(max-width: 767px)';
 function subscribePhone(on: () => void) {
   const mq = window.matchMedia(PHONE);
-  mq.addEventListener("change", on);
-  return () => mq.removeEventListener("change", on);
+  mq.addEventListener('change', on);
+  return () => mq.removeEventListener('change', on);
 }
-export const usePhone = () => useSyncExternalStore(subscribePhone, () => window.matchMedia(PHONE).matches, () => false);
+export const usePhone = () =>
+  useSyncExternalStore(
+    subscribePhone,
+    () => window.matchMedia(PHONE).matches,
+    () => false,
+  );
 
 /** A milestone's hue as the mock-ups draw it (M1 blue, M2 violet, M3 amber, then round again). */
 function hue(plan: Plan, code: string) {
-  const n = (Math.max(0, plan.milestones.findIndex((m) => m.code === code)) % 3) + 1;
+  const n =
+    (Math.max(
+      0,
+      plan.milestones.findIndex((m) => m.code === code),
+    ) %
+      3) +
+    1;
   return { line: `var(--prd-m${n})`, bg: `var(--prd-m${n}-bg)`, fill: `var(--prd-m${n}-fill)` };
 }
 
 // ---------------------------------------------------------------- text widths
 
 let measure: CanvasRenderingContext2D | null | undefined;
-let family = "sans-serif";
+let family = 'sans-serif';
 /** The drawn width of `text` in the page's font (a label fitted to its bar is never cut). */
 function textWidth(text: string, px: number, weight: number): number {
-  if (typeof document === "undefined") return text.length * px * 0.6;
+  if (typeof document === 'undefined') return text.length * px * 0.6;
   if (measure === undefined) {
-    measure = document.createElement("canvas").getContext("2d");
+    measure = document.createElement('canvas').getContext('2d');
     family = getComputedStyle(document.body).fontFamily || family;
   }
   if (!measure) return text.length * px * 0.6;
@@ -75,12 +98,20 @@ const fits = (variants: string[], room: number, px = 12, weight = 650) =>
 // ---------------------------------------------------------------- the plan's shape
 
 /** A piece of work in a lane: a run of one milestone's slices (a gap of more than two weeks starts a new one). */
-export type Piece = { milestone: string; slices: Slice[]; start: string; end: string; row: number; pm: boolean };
+export type Piece = {
+  milestone: string;
+  slices: Slice[];
+  start: string;
+  end: string;
+  row: number;
+  pm: boolean;
+};
 
 export function piecesOf(slices: Slice[]): Piece[] {
   const out: Piece[] = [];
   const by = new Map<string, Slice[]>();
-  for (const s of slices) if (s.start_date && s.end_date) by.set(s.milestone, [...(by.get(s.milestone) ?? []), s]);
+  for (const s of slices)
+    if (s.start_date && s.end_date) by.set(s.milestone, [...(by.get(s.milestone) ?? []), s]);
   for (const [milestone, of] of by) {
     let cur: Piece | null = null;
     for (const s of [...of].sort((a, b) => a.start_date!.localeCompare(b.start_date!))) {
@@ -88,7 +119,14 @@ export function piecesOf(slices: Slice[]): Piece[] {
         cur.slices.push(s);
         if (s.end_date! > cur.end) cur.end = s.end_date!;
       } else {
-        cur = { milestone, slices: [s], start: s.start_date!, end: s.end_date!, row: 0, pm: s.pm_owned };
+        cur = {
+          milestone,
+          slices: [s],
+          start: s.start_date!,
+          end: s.end_date!,
+          row: 0,
+          pm: s.pm_owned,
+        };
         out.push(cur);
       }
     }
@@ -111,7 +149,8 @@ type Lane = { name: string; goal: Goal | null; pieces: Piece[] };
 /** The lanes: one per goal (the plan's order), then the PM-owned lane. */
 function lanesOf(plan: Plan): Lane[] {
   const names = [...plan.goals.map((g) => g.name)];
-  for (const s of plan.slices) if (!s.pm_owned && s.goal && !names.includes(s.goal)) names.push(s.goal);
+  for (const s of plan.slices)
+    if (!s.pm_owned && s.goal && !names.includes(s.goal)) names.push(s.goal);
   const lanes: Lane[] = names.map((n) => ({
     name: n,
     goal: plan.goals.find((g) => g.name === n) ?? null,
@@ -125,24 +164,29 @@ function lanesOf(plan: Plan): Lane[] {
 /** "M1 100 → M2 250 → M3 600 weekly active teams": the unit once when every target shares it. */
 export function targetSteps(goal: Goal): string {
   const t = goal.targets;
-  if (!t.length) return "No targets yet";
+  if (!t.length) return 'No targets yet';
   const split = t.map((x) => x.target.match(/^(\S+)\s+(.+)$/));
   const unit = split[0]?.[2];
-  if (unit && split.every((m) => m && m[2] === unit)) return `${t.map((x, i) => `${x.milestone} ${split[i]![1]}`).join(" → ")} ${unit}`;
-  return t.map((x) => `${x.milestone} ${x.target}`).join(" → ");
+  if (unit && split.every((m) => m && m[2] === unit))
+    return `${t.map((x, i) => `${x.milestone} ${split[i]![1]}`).join(' → ')} ${unit}`;
+  return t.map((x) => `${x.milestone} ${x.target}`).join(' → ');
 }
 
 /** "Now 40 · behind": what is measured now (the unit the target line already gives is left out). */
 function measuredWords(goal: Goal | null): string {
-  if (!goal?.measured) return "Not counted yet";
+  if (!goal?.measured) return 'Not counted yet';
   const unit = goal.targets[0]?.target.match(/^\S+\s+(.+)$/)?.[1];
-  const value = unit && goal.measured.endsWith(` ${unit}`) ? goal.measured.slice(0, -unit.length - 1) : goal.measured;
-  return `Now ${value}${goal.on_track == null ? "" : goal.on_track ? " · on track" : " · behind"}`;
+  const value =
+    unit && goal.measured.endsWith(` ${unit}`)
+      ? goal.measured.slice(0, -unit.length - 1)
+      : goal.measured;
+  return `Now ${value}${goal.on_track == null ? '' : goal.on_track ? ' · on track' : ' · behind'}`;
 }
 
 const dated = (m: Milestone) => !!(m.start_date && m.end_date);
 /** "M2 and M3", "M1, M2 and M3". */
-const andList = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}` : (xs[0] ?? ""));
+const andList = (xs: string[]) =>
+  xs.length > 1 ? `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}` : (xs[0] ?? '');
 
 /** The milestone running today, else the next to start, else (none dated) the first, else the last. */
 function currentOf(plan: Plan, today: string): string | null {
@@ -159,15 +203,23 @@ function currentOf(plan: Plan, today: string): string | null {
 function weeksWords(plan: Plan, m: Milestone): string {
   const n = Math.max(1, Math.round((ms(m.end_date!) - ms(m.start_date!) + 3 * DAY) / (7 * DAY)));
   const off = plan.holidays.some((h) => h.start <= m.end_date! && h.end >= m.start_date!);
-  return `${n} ${n === 1 ? "week" : "weeks"}${off ? ", holidays inside" : ""}`;
+  return `${n} ${n === 1 ? 'week' : 'weeks'}${off ? ', holidays inside' : ''}`;
 }
 
 /** "Now · week 2 of 4", "Next · starts 30 Nov", "Later · starts 28 Dec", "Ended 27 Nov". */
-function stateOf(plan: Plan, m: Milestone, today: string): { words: string; now: boolean; week: string | null } {
-  if (!dated(m)) return { words: "No dates yet", now: false, week: null };
+function stateOf(
+  plan: Plan,
+  m: Milestone,
+  today: string,
+): { words: string; now: boolean; week: string | null } {
+  if (!dated(m)) return { words: 'No dates yet', now: false, week: null };
   if (today < m.start_date!) {
     const next = plan.milestones.filter(dated).find((x) => x.start_date! > today)?.code === m.code;
-    return { words: `${next ? "Next" : "Later"} · starts ${dm(m.start_date!)}`, now: false, week: null };
+    return {
+      words: `${next ? 'Next' : 'Later'} · starts ${dm(m.start_date!)}`,
+      now: false,
+      week: null,
+    };
   }
   if (today > m.end_date!) return { words: `Ended ${dm(m.end_date!)}`, now: false, week: null };
   const n = Math.max(1, Math.round((ms(m.end_date!) - ms(m.start_date!) + 3 * DAY) / (7 * DAY)));
@@ -188,13 +240,15 @@ function ewWords(m: Milestone): string | null {
 
 /** "Nov 2 → Nov 27, 2026"; across a year end "Dec 28, 2026 → Feb 12, 2027". */
 function spanWords(start: string, end: string): string {
-  return start.slice(0, 4) === end.slice(0, 4) ? `${dm(start)} → ${dmy(end)}` : `${dmy(start)} → ${dmy(end)}`;
+  return start.slice(0, 4) === end.slice(0, 4)
+    ? `${dm(start)} → ${dmy(end)}`
+    : `${dmy(start)} → ${dmy(end)}`;
 }
 
 /** A target as a tile: its number and its words ("250" and "weekly active teams"). */
 export function splitTarget(t: string): [string, string] {
   const m = t.match(/^((?:[≥≤<>~≈]\s*)?\S+)\s+(.+)$/);
-  if (!m || !/\d/.test(m[1])) return [t, ""];
+  if (!m || !/\d/.test(m[1])) return [t, ''];
   return [m[1], m[2]];
 }
 
@@ -203,16 +257,26 @@ function placeOf(plan: Plan, day: string): string | null {
   for (const m of plan.milestones.filter(dated)) {
     if (day === m.start_date) return `before ${m.code} starts`;
     if (day === m.end_date) return `at the ${m.code} review`;
-    if (m.start_date! < day && day < m.end_date!) return `${m.code} week ${Math.floor((ms(day) - ms(m.start_date!)) / (7 * DAY)) + 1}`;
+    if (m.start_date! < day && day < m.end_date!)
+      return `${m.code} week ${Math.floor((ms(day) - ms(m.start_date!)) / (7 * DAY)) + 1}`;
   }
   return null;
 }
 
 /** A due day in words: "was due M1 week 1" / "was due 20 Oct" when past, else "before M2 starts, 30 Nov" or "due 5 Nov". */
-function dueWords(plan: Plan, day: string, today: string, withDay = true): { words: string; late: boolean } {
+function dueWords(
+  plan: Plan,
+  day: string,
+  today: string,
+  withDay = true,
+): { words: string; late: boolean } {
   const place = placeOf(plan, day);
-  if (day < today) return { words: place?.includes("week") ? `was due ${place}` : `was due ${dm(day)}`, late: true };
-  if (!withDay) return { words: place ?? "", late: false };
+  if (day < today)
+    return {
+      words: place?.includes('week') ? `was due ${place}` : `was due ${dm(day)}`,
+      late: true,
+    };
+  if (!withDay) return { words: place ?? '', late: false };
   return { words: place ? `${place}, ${dm(day)}` : `due ${dm(day)}`, late: false };
 }
 
@@ -222,22 +286,34 @@ function dueWords(plan: Plan, day: string, today: string, withDay = true): { wor
  * also listed under it). qa-simple-prd-p3-10: `owner` is the milestone the day's decisions
  * belong to, when they share one.
  */
-function datedDecisions(plan: Plan): { day: string; label: string; codes: string[]; owner: string | null }[] {
+function datedDecisions(
+  plan: Plan,
+): { day: string; label: string; codes: string[]; owner: string | null }[] {
   const by = new Map<string, [Decision, string][]>();
-  for (const m of plan.milestones) for (const d of m.decisions) if (d.due_on && !by.get(d.due_on)?.some(([x]) => x.code === d.code)) by.set(d.due_on, [...(by.get(d.due_on) ?? []), [d, m.code]]);
-  return [...by.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([day, ds]) => ({
-    day,
-    codes: ds.map(([d]) => d.code),
-    label: ds.map(([d]) => `${d.code} ${d.title}`).join(" · "),
-    owner: ds.every(([, o]) => o === ds[0][1]) ? ds[0][1] : null,
-  }));
+  for (const m of plan.milestones)
+    for (const d of m.decisions)
+      if (d.due_on && !by.get(d.due_on)?.some(([x]) => x.code === d.code))
+        by.set(d.due_on, [...(by.get(d.due_on) ?? []), [d, m.code]]);
+  return [...by.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([day, ds]) => ({
+      day,
+      codes: ds.map(([d]) => d.code),
+      label: ds.map(([d]) => `${d.code} ${d.title}`).join(' · '),
+      owner: ds.every(([, o]) => o === ds[0][1]) ? ds[0][1] : null,
+    }));
 }
 
 /**
  * qa-simple-prd-p3-10: a decision's day on the timeline says whose decision it is when it falls
  * on another milestone ("M2 decision, taken at the M1 review, 27 Nov").
  */
-function timelineDue(plan: Plan, d: { day: string; owner: string | null }, today: string, withDay = true): { words: string; late: boolean } {
+function timelineDue(
+  plan: Plan,
+  d: { day: string; owner: string | null },
+  today: string,
+  withDay = true,
+): { words: string; late: boolean } {
   const due = dueWords(plan, d.day, today, withDay);
   const place = placeOf(plan, d.day);
   if (!d.owner || !place || place.includes(d.owner) || due.late) return due;
@@ -254,21 +330,34 @@ const named = (s: Slice) => (s.code ? `${s.code} ${s.name}` : s.name);
 function barVariants(p: Piece): string[] {
   const sl = p.slices;
   if (sl.length === 1) return [named(sl[0])];
-  const out = [sl.map(named).join(" · ")];
-  for (let k = sl.length - 1; k >= 1; k--) out.push(`${sl.slice(0, k).map(named).join(" · ")} +${sl.length - k}`);
+  const out = [sl.map(named).join(' · ')];
+  for (let k = sl.length - 1; k >= 1; k--)
+    out.push(`${sl.slice(0, k).map(named).join(' · ')} +${sl.length - k}`);
   return out;
 }
 
 /** Brings the picked milestone's card into view once it has rendered. */
 function showPart() {
-  requestAnimationFrame(() => document.getElementById("milestone-part")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  requestAnimationFrame(() =>
+    document
+      .getElementById('milestone-part')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+  );
 }
 
 /** "**Goal: x.** rest": the PRD's bold words bold. */
 function Bolded({ text }: { text: string }) {
   return (
     <>
-      {text.split(/(\*\*[^*]+\*\*)/).map((part, i) => (part.startsWith("**") && part.endsWith("**") ? <b key={i} className="font-bold">{part.slice(2, -2)}</b> : <span key={i}>{part}</span>))}
+      {text.split(/(\*\*[^*]+\*\*)/).map((part, i) =>
+        part.startsWith('**') && part.endsWith('**') ? (
+          <b key={i} className="font-bold">
+            {part.slice(2, -2)}
+          </b>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
     </>
   );
 }
@@ -276,15 +365,16 @@ function Bolded({ text }: { text: string }) {
 // ---------------------------------------------------------------- shared pieces
 
 /** qa-simple-prd-p3-21: a phone's tap area is 44 px tall round a small link (it looks the same). */
-export const TAP44 = "relative after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-['']";
+export const TAP44 =
+  "relative after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-['']";
 /** qa-simple-prd-p3-20: "16 engineer-weeks" and "part 2 of 2" never break inside. */
-const keep = (words: string) => words.replace(/ (\d+)$/, "\u00a0$1");
+const keep = (words: string) => words.replace(/ (\d+)$/, '\u00a0$1');
 function Facts({ text }: { text: string }) {
   return (
     <>
-      {text.split(" · ").map((x, i) => (
+      {text.split(' · ').map((x, i) => (
         <span key={i}>
-          {i > 0 && " · "}
+          {i > 0 && ' · '}
           <span className="whitespace-nowrap">{x}</span>
         </span>
       ))}
@@ -292,16 +382,17 @@ function Facts({ text }: { text: string }) {
   );
 }
 
-const SEC_H = "text-[13px] leading-[18px] font-bold uppercase tracking-[.07em] text-text-faint";
-const H3 = "text-[20px] leading-[28px] font-[650]";
-const PAPER = "min-w-0 rounded-[14px] border border-[var(--simple-rule)] bg-[var(--simple-paper)]";
-const CODE = "self-start justify-self-start whitespace-nowrap rounded-[6px] px-[7px] py-px font-mono text-[13px] leading-[20px] font-semibold";
+const SEC_H = 'text-[13px] leading-[18px] font-bold uppercase tracking-[.07em] text-text-faint';
+const H3 = 'text-[20px] leading-[28px] font-[650]';
+const PAPER = 'min-w-0 rounded-[14px] border border-[var(--simple-rule)] bg-[var(--simple-paper)]';
+const CODE =
+  'self-start justify-self-start whitespace-nowrap rounded-[6px] px-[7px] py-px font-mono text-[13px] leading-[20px] font-semibold';
 
 function MTag({ plan, code, small }: { plan: Plan; code: string; small?: boolean }) {
   return (
     <span
-      className={`inline-grid flex-none place-items-center font-mono font-bold leading-none ${small ? "h-6 min-w-8 rounded-[8px] px-2 text-[13px]" : "h-7 min-w-[38px] rounded-[8px] px-2 text-[15px]"}`}
-      style={{ background: hue(plan, code).line, color: "var(--simple-paper)" }}
+      className={`inline-grid flex-none place-items-center font-mono font-bold leading-none ${small ? 'h-6 min-w-8 rounded-[8px] px-2 text-[13px]' : 'h-7 min-w-[38px] rounded-[8px] px-2 text-[15px]'}`}
+      style={{ background: hue(plan, code).line, color: 'var(--simple-paper)' }}
     >
       {code}
     </span>
@@ -310,7 +401,18 @@ function MTag({ plan, code, small }: { plan: Plan; code: string; small?: boolean
 
 function FlowIcon() {
   return (
-    <svg viewBox="0 0 24 24" width={16} height={16} aria-hidden fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" className="flex-none">
+    <svg
+      viewBox="0 0 24 24"
+      width={16}
+      height={16}
+      aria-hidden
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="flex-none"
+    >
       <rect x="3" y="4" width="7" height="5" rx="1" />
       <rect x="14" y="15" width="7" height="5" rx="1" />
       <path d="M6.5 9v3.5a2 2 0 002 2H14" />
@@ -319,7 +421,14 @@ function FlowIcon() {
 }
 
 const FLAG = (
-  <svg viewBox="0 0 12 12" width={13} height={13} aria-hidden fill="currentColor" className="flex-none">
+  <svg
+    viewBox="0 0 12 12"
+    width={13}
+    height={13}
+    aria-hidden
+    fill="currentColor"
+    className="flex-none"
+  >
     <path d="M2 1h1.4v10H2zM3.4 1.5h7l-1.8 2.6 1.8 2.6h-7z" />
   </svg>
 );
@@ -334,7 +443,11 @@ const SliceItems = createContext<Map<string, string> | null>(null);
  * so each "What we build" line finds the item its feature stands for, and the features' marks.
  */
 function PlanMarks({ prd, children }: { prd?: string; children: ReactNode }) {
-  const q = useQuery(`simple-prd-items|${prd ?? ""}`, () => (prd ? unwrap(api.GET("/v1/simple/roadmap", { params: { query: { prd } } })) : Promise.resolve(null)));
+  const q = useQuery(`simple-prd-items|${prd ?? ''}`, () =>
+    prd
+      ? unwrap(api.GET('/v1/simple/roadmap', { params: { query: { prd } } }))
+      : Promise.resolve(null),
+  );
   const items = useMemo(() => {
     const m = new Map<string, string>();
     for (const i of q.data?.items ?? []) {
@@ -347,7 +460,9 @@ function PlanMarks({ prd, children }: { prd?: string; children: ReactNode }) {
   return (
     <WithFeatureMarks>
       {/* #1586: marks that could not be read say so, never read as no marks. */}
-      {q.error && <LoadError what="the features' marks" error={q.error} onRetry={() => void q.reload()} />}
+      {q.error && (
+        <LoadError what="the features' marks" error={q.error} onRetry={() => void q.reload()} />
+      )}
       <SliceItems.Provider value={items}>{children}</SliceItems.Provider>
     </WithFeatureMarks>
   );
@@ -365,7 +480,19 @@ function SliceMark({ s }: { s: Slice }) {
  * desktop (D1 with B1's When strip), the vertical timeline and the milestone's card on a phone
  * (D2). Picking a milestone in the timeline switches the card.
  */
-export function PrdPlan({ plan, title, onPlan, prd, loose = [] }: { plan: Plan; title: string; onPlan: (p: Plan) => void; prd?: string; loose?: Loose[] }) {
+export function PrdPlan({
+  plan,
+  title,
+  onPlan,
+  prd,
+  loose = [],
+}: {
+  plan: Plan;
+  title: string;
+  onPlan: (p: Plan) => void;
+  prd?: string;
+  loose?: Loose[];
+}) {
   return (
     <PlanMarks prd={prd}>
       <PrdPlanBody plan={plan} title={title} onPlan={onPlan} loose={loose} />
@@ -381,7 +508,10 @@ export type Loose = { id: string; title: string; code?: string | null };
  * for the When card on the page and on the Present slide alike. Without `codes` (not read) an item's
  * code is unknown (undefined), never "no code" (null).
  */
-export function looseItems(v: Pick<Schemas["OnePagerOut"], "plan" | "timeline">, codes: Map<string, string | null> | undefined): Loose[] {
+export function looseItems(
+  v: Pick<Schemas['OnePagerOut'], 'plan' | 'timeline'>,
+  codes: Map<string, string | null> | undefined,
+): Loose[] {
   const timelineById = new Map(v.timeline.map((t) => [t.id, t]));
   return (v.plan?.rows ?? [])
     .filter((r) => !r.milestone)
@@ -404,11 +534,20 @@ function NoMilestone({ loose }: { loose: Loose[] }) {
       <h3 className={`${SEC_H} mt-1.5`}>No milestone</h3>
       <ul aria-label="No milestone" className="flex flex-col gap-2.5">
         {loose.map((x) => (
-          <li key={x.id} data-testid="timeline-no-milestone-item" className="list-none border-l-4 border-[var(--simple-rule)] pl-3">
+          <li
+            key={x.id}
+            data-testid="timeline-no-milestone-item"
+            className="list-none border-l-4 border-[var(--simple-rule)] pl-3"
+          >
             <span className="flex items-center gap-2">
               {x.code && <span className="simple-code">{x.code}</span>}
               {open ? (
-                <button type="button" data-testid="timeline-no-milestone-open" onClick={() => open({ id: x.id, code: x.code ?? "", name: x.title })} className="text-left text-[15px] leading-5 font-bold hover:underline">
+                <button
+                  type="button"
+                  data-testid="timeline-no-milestone-open"
+                  onClick={() => open({ id: x.id, code: x.code ?? '', name: x.title })}
+                  className="text-left text-[15px] leading-5 font-bold hover:underline"
+                >
                   {x.title}
                 </button>
               ) : (
@@ -425,7 +564,17 @@ function NoMilestone({ loose }: { loose: Loose[] }) {
   );
 }
 
-function PrdPlanBody({ plan, title, onPlan, loose }: { plan: Plan; title: string; onPlan: (p: Plan) => void; loose: Loose[] }) {
+function PrdPlanBody({
+  plan,
+  title,
+  onPlan,
+  loose,
+}: {
+  plan: Plan;
+  title: string;
+  onPlan: (p: Plan) => void;
+  loose: Loose[];
+}) {
   const phone = usePhone();
   const zone = useCompanyZone();
   // Today in the company's time zone.
@@ -436,7 +585,16 @@ function PrdPlanBody({ plan, title, onPlan, loose }: { plan: Plan; title: string
   const pick = picked ?? currentOf(plan, today);
   const m = plan.milestones.find((x) => x.code === pick) ?? null;
   return phone ? (
-    <PhonePlan plan={plan} title={title} today={today} pick={pick} onPick={setPicked} onPlan={onPlan} m={m} loose={loose} />
+    <PhonePlan
+      plan={plan}
+      title={title}
+      today={today}
+      pick={pick}
+      onPick={setPicked}
+      onPlan={onPlan}
+      m={m}
+      loose={loose}
+    />
   ) : (
     <>
       <TimelineCard
@@ -467,10 +625,14 @@ function NoDates({ plan, onPlan }: { plan: Plan; onPlan: (p: Plan) => void }) {
     setBusy(true);
     setError(null);
     try {
-      const read = await unwrap(api.POST("/v1/simple/prds/{prd}/plan/read-again", { params: { path: { prd: plan.prd.slug } } }));
+      const read = await unwrap(
+        api.POST('/v1/simple/prds/{prd}/plan/read-again', {
+          params: { path: { prd: plan.prd.slug } },
+        }),
+      );
       onPlan(read);
       // Oracle's job still reads it: the page says so; what it found shows when it is done.
-      setAgain(read.status !== "reading");
+      setAgain(read.status !== 'reading');
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -478,20 +640,29 @@ function NoDates({ plan, onPlan }: { plan: Plan; onPlan: (p: Plan) => void }) {
     }
   }
   return (
-    <div data-testid="timeline-no-dates" className="flex flex-wrap items-center gap-3 rounded-[10px] border border-dashed border-line-strong px-3 py-2.5">
+    <div
+      data-testid="timeline-no-dates"
+      className="flex flex-wrap items-center gap-3 rounded-[10px] border border-dashed border-line-strong px-3 py-2.5"
+    >
       <span className="text-[14px] leading-5">
-        <b className="font-bold">No dates yet:</b>{" "}
+        <b className="font-bold">No dates yet:</b>{' '}
         {undated.map((x) => {
           const c = hue(plan, x.code);
           return (
-            <span key={x.code} className="mr-1.5 inline-flex h-6 items-center whitespace-nowrap rounded-xl px-[9px] text-[13px] leading-[18px] font-semibold" style={{ background: c.bg, color: c.line }}>
+            <span
+              key={x.code}
+              className="mr-1.5 inline-flex h-6 items-center whitespace-nowrap rounded-xl px-[9px] text-[13px] leading-[18px] font-semibold"
+              style={{ background: c.bg, color: c.line }}
+            >
               {x.code} · {x.name}
             </span>
           );
         })}
       </span>
       <span className="basis-full text-[14px] leading-5 text-text2">
-        {plan.can_read_again ? "Add dates to the milestones in the PRD, then read it again." : `The PRD gives no dates for ${undated.length === 1 ? "it" : "them"} yet.`}
+        {plan.can_read_again
+          ? 'Add dates to the milestones in the PRD, then read it again.'
+          : `The PRD gives no dates for ${undated.length === 1 ? 'it' : 'them'} yet.`}
       </span>
       {plan.can_read_again && (
         <button
@@ -501,13 +672,15 @@ function NoDates({ plan, onPlan }: { plan: Plan; onPlan: (p: Plan) => void }) {
           onClick={() => void read()}
           className="simple-noprint inline-flex min-h-[34px] items-center whitespace-nowrap rounded-[9px] border border-accent bg-accent px-2.5 text-[14px] font-semibold text-on-accent disabled:opacity-60"
         >
-          {busy ? "Reading the plan…" : "Read the plan again"}
+          {busy ? 'Reading the plan…' : 'Read the plan again'}
         </button>
       )}
       {again && (
         // qa-simple-prd-p3-5: with some milestones dated, it names the ones still without.
         <span role="status" className="text-[14px] text-text-faint">
-          {plan.milestones.some(dated) ? `Read again: ${andList(undated.map((x) => x.code))} still ${undated.length === 1 ? "has" : "have"} no dates.` : "Read again: the PRD still gives no dates."}
+          {plan.milestones.some(dated)
+            ? `Read again: ${andList(undated.map((x) => x.code))} still ${undated.length === 1 ? 'has' : 'have'} no dates.`
+            : 'Read again: the PRD still gives no dates.'}
         </span>
       )}
       {error && <ErrorNote>{error}</ErrorNote>}
@@ -523,10 +696,18 @@ function GoalList({ plan }: { plan: Plan }) {
       <h3 className={SEC_H}>Goals</h3>
       <ul className="mt-1">
         {plan.goals.map((g) => (
-          <li key={g.name} data-testid="timeline-goal" className="list-none border-t border-[var(--simple-rule)] py-1.5 first:border-t-0">
+          <li
+            key={g.name}
+            data-testid="timeline-goal"
+            className="list-none border-t border-[var(--simple-rule)] py-1.5 first:border-t-0"
+          >
             <span className="flex flex-wrap items-baseline gap-x-2">
               <b className="text-[15px] leading-5 font-bold">{g.name}</b>
-              <small className={`text-[13px] leading-[18px] ${g.on_track === false ? "font-[650] text-crit" : "text-text-faint"}`}>{measuredWords(g)}</small>
+              <small
+                className={`text-[13px] leading-[18px] ${g.on_track === false ? 'font-[650] text-crit' : 'text-text-faint'}`}
+              >
+                {measuredWords(g)}
+              </small>
             </span>
             <small className="block text-[13px] leading-[18px] text-text2">{targetSteps(g)}</small>
           </li>
@@ -544,11 +725,20 @@ function DecisionLine({ plan, d, today }: { plan: Plan; d: Decision; today: stri
   const due = d.due_on ? dueWords(plan, d.due_on, today) : null;
   return (
     <li className="relative list-none pl-[18px] text-[14px] leading-5">
-      <span aria-hidden className="absolute top-[5px] left-0.5 h-2.5 w-2.5 rotate-45 rounded-[2px]" style={{ background: due?.late ? "var(--crit)" : "var(--warn)" }} />
+      <span
+        aria-hidden
+        className="absolute top-[5px] left-0.5 h-2.5 w-2.5 rotate-45 rounded-[2px]"
+        style={{ background: due?.late ? 'var(--crit)' : 'var(--warn)' }}
+      />
       <b className="font-bold">
         {d.code} {d.title}
       </b>
-      <span className={due?.late ? "font-[650] text-crit" : "text-text-faint"}>{" · "}<span className="whitespace-nowrap">{due ? (due.late ? due.words : `due ${dm(d.due_on!)}`) : "no date yet"}</span></span>
+      <span className={due?.late ? 'font-[650] text-crit' : 'text-text-faint'}>
+        {' · '}
+        <span className="whitespace-nowrap">
+          {due ? (due.late ? due.words : `due ${dm(d.due_on!)}`) : 'no date yet'}
+        </span>
+      </span>
     </li>
   );
 }
@@ -560,13 +750,19 @@ function UndatedList({ plan, today }: { plan: Plan; today: string }) {
   return (
     <ul data-testid="timeline-undated" className="flex flex-col gap-2.5">
       {undated.map((x) => (
-        <li key={x.code} data-testid="timeline-undated-milestone" className="list-none border-l-4 pl-3" style={{ borderLeftColor: hue(plan, x.code).line }}>
+        <li
+          key={x.code}
+          data-testid="timeline-undated-milestone"
+          className="list-none border-l-4 pl-3"
+          style={{ borderLeftColor: hue(plan, x.code).line }}
+        >
           <span className="flex items-center gap-2">
-            <MTag plan={plan} code={x.code} small /> <b className="text-[15px] leading-5 font-bold">{x.name}</b>
+            <MTag plan={plan} code={x.code} small />{' '}
+            <b className="text-[15px] leading-5 font-bold">{x.name}</b>
           </span>
           {x.targets.length > 0 && (
             <p className="mt-1 text-[13px] leading-[18px] text-text2">
-              <b className="font-semibold">Targets:</b> {x.targets.map((t) => t.target).join(" · ")}
+              <b className="font-semibold">Targets:</b> {x.targets.map((t) => t.target).join(' · ')}
             </p>
           )}
           {x.decisions.length > 0 && (
@@ -582,16 +778,37 @@ function UndatedList({ plan, today }: { plan: Plan; today: string }) {
   );
 }
 
-function TimelineCard({ plan, today, pick, onShow, onPlan, loose }: { plan: Plan; today: string; pick: string | null; onPick: (c: string) => void; onShow: (c: string, codes?: string[]) => void; onPlan: (p: Plan) => void; loose: Loose[] }) {
+function TimelineCard({
+  plan,
+  today,
+  pick,
+  onShow,
+  onPlan,
+  loose,
+}: {
+  plan: Plan;
+  today: string;
+  pick: string | null;
+  onPick: (c: string) => void;
+  onShow: (c: string, codes?: string[]) => void;
+  onPlan: (p: Plan) => void;
+  loose: Loose[];
+}) {
   const lanes = lanesOf(plan);
   const anyDated = plan.milestones.some(dated);
-  const undatedDecisions = plan.milestones.reduce((n, x) => n + x.decisions.filter((d) => !d.due_on).length, 0);
+  const undatedDecisions = plan.milestones.reduce(
+    (n, x) => n + x.decisions.filter((d) => !d.due_on).length,
+    0,
+  );
   return (
     <section aria-label="Timeline" className={`${PAPER} flex flex-col gap-4 px-7 py-6`}>
       {plan.summary.length > 0 && (
         <ul data-testid="timeline-summary" className="-mt-1.5">
           {plan.summary.map((line) => (
-            <li key={line} className="relative mt-1.5 list-none pl-5 text-[17px] leading-[26px] before:absolute before:top-[11px] before:left-1 before:h-1.5 before:w-1.5 before:rounded-full before:bg-text-faint">
+            <li
+              key={line}
+              className="relative mt-1.5 list-none pl-5 text-[17px] leading-[26px] before:absolute before:top-[11px] before:left-1 before:h-1.5 before:w-1.5 before:rounded-full before:bg-text-faint"
+            >
               <Bolded text={line} />
             </li>
           ))}
@@ -604,22 +821,43 @@ function TimelineCard({ plan, today, pick, onShow, onPlan, loose }: { plan: Plan
       {!anyDated && <GoalList plan={plan} />}
       {anyDated && undatedDecisions > 0 && (
         <p className="-mt-2 text-[14px] leading-5 text-text-faint">
-          {undatedDecisions} more {undatedDecisions === 1 ? "decision has" : "decisions have"} no date yet; {undatedDecisions === 1 ? "it is" : "they are"} listed under {undatedDecisions === 1 ? "its" : "their"} milestone.
+          {undatedDecisions} more {undatedDecisions === 1 ? 'decision has' : 'decisions have'} no
+          date yet; {undatedDecisions === 1 ? 'it is' : 'they are'} listed under{' '}
+          {undatedDecisions === 1 ? 'its' : 'their'} milestone.
         </p>
       )}
       <h3 className={`${SEC_H} mt-1.5`}>Milestones: done when</h3>
-      <div role="group" aria-label="Milestones" className="grid gap-6" style={{ gridTemplateColumns: `repeat(${Math.min(3, Math.max(1, plan.milestones.length))}, minmax(0, 1fr))` }}>
+      <div
+        role="group"
+        aria-label="Milestones"
+        className="grid gap-6"
+        style={{
+          gridTemplateColumns: `repeat(${Math.min(3, Math.max(1, plan.milestones.length))}, minmax(0, 1fr))`,
+        }}
+      >
         {plan.milestones.map((x) => {
           const on = pick === x.code;
           return (
             // qa-simple-prd-p3-8: picking a milestone brings its card into view, as its bar does.
-            <button key={x.code} type="button" aria-pressed={on} onClick={() => onShow(x.code)} className="flex items-center gap-2.5 rounded-[8px] text-left text-[18px] leading-6 font-[650]">
+            <button
+              key={x.code}
+              type="button"
+              aria-pressed={on}
+              onClick={() => onShow(x.code)}
+              className="flex items-center gap-2.5 rounded-[8px] text-left text-[18px] leading-6 font-[650]"
+            >
               <span
                 className="inline-grid h-[26px] min-w-9 flex-none place-items-center rounded-[8px] px-[7px] font-mono text-[14px] leading-none font-bold"
-                style={{ background: hue(plan, x.code).line, color: "var(--simple-paper)", boxShadow: on ? `0 0 0 3px var(--simple-paper), 0 0 0 5px ${hue(plan, x.code).line}` : undefined }}
+                style={{
+                  background: hue(plan, x.code).line,
+                  color: 'var(--simple-paper)',
+                  boxShadow: on
+                    ? `0 0 0 3px var(--simple-paper), 0 0 0 5px ${hue(plan, x.code).line}`
+                    : undefined,
+                }}
               >
                 {x.code}
-              </span>{" "}
+              </span>{' '}
               <span>{x.name}</span>
             </button>
           );
@@ -639,7 +877,17 @@ const SH = 22;
 const SG = 4;
 const DIA_LEVEL = 40;
 
-function Strip({ plan, lanes, today, onPick }: { plan: Plan; lanes: Lane[]; today: string; onPick: (c: string, codes?: string[]) => void }) {
+function Strip({
+  plan,
+  lanes,
+  today,
+  onPick,
+}: {
+  plan: Plan;
+  lanes: Lane[];
+  today: string;
+  onPick: (c: string, codes?: string[]) => void;
+}) {
   const box = useRef<HTMLDivElement>(null);
   const [w0, setW0] = useState(0);
   useLayoutEffect(() => {
@@ -657,7 +905,11 @@ function Strip({ plan, lanes, today, onPick }: { plan: Plan; lanes: Lane[]; toda
   // The axis: every dated milestone, today and every decision's due day, two days either side.
   const start = Math.min(...ds.map((x) => ms(x.start_date!)));
   let first = Math.min(start, ms(today), ...allDecisions.map((d) => ms(d.day)));
-  const last = Math.max(...ds.map((x) => ms(x.end_date!)), ms(today), ...allDecisions.map((d) => ms(d.day)));
+  const last = Math.max(
+    ...ds.map((x) => ms(x.end_date!)),
+    ms(today),
+    ...allDecisions.map((d) => ms(d.day)),
+  );
   // qa-simple-prd-p3-7: a long run-up before the plan starts (only today or a late decision in
   // it) does not squeeze the plan: the axis starts a week before it, and what is earlier sits
   // at its left edge (its words keep its day).
@@ -672,9 +924,17 @@ function Strip({ plan, lanes, today, onPick }: { plan: Plan; lanes: Lane[]; toda
   const XE = (day: string) => ((ms(day) + DAY - T0) / (T1 - T0)) * W;
   const XT = Math.max(1, X(today) + ((0.5 * DAY) / (T1 - T0)) * W);
   const months: { label: string; x: number; at: number }[] = [];
-  for (let d = new Date(T0); d.getTime() < T1; d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))) {
+  for (
+    let d = new Date(T0);
+    d.getTime() < T1;
+    d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))
+  ) {
     const at = Math.max(T0, Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
-    months.push({ label: calendarDay(utcDay(at), { month: "short" }), x: ((at - T0) / (T1 - T0)) * W, at });
+    months.push({
+      label: calendarDay(utcDay(at), { month: 'short' }),
+      x: ((at - T0) / (T1 - T0)) * W,
+      at,
+    });
   }
   // The first month's label gives way when the next one starts within a label's width; a
   // label the Today pill would cover moves just past the pill, unless today is in that month
@@ -699,7 +959,8 @@ function Strip({ plan, lanes, today, onPick }: { plan: Plan; lanes: Lane[]; toda
     // Its drawn width: the diamond, the gap, the words' padding and the longer line.
     const w = 23 + Math.max(textWidth(d.label, 13, 700), textWidth(due.words, 13, 400));
     // The first level where its words fit, after the diamond, else (D1's Q4 · Q8) before it.
-    const free = (lv: number, a: number, b: number) => (levels[lv] ?? []).every(([p, q]) => b + 6 < p || a > q + 6);
+    const free = (lv: number, a: number, b: number) =>
+      (levels[lv] ?? []).every(([p, q]) => b + 6 < p || a > q + 6);
     let lvl = 0;
     let right = false;
     for (; lvl < 8; lvl++) {
@@ -714,7 +975,7 @@ function Strip({ plan, lanes, today, onPick }: { plan: Plan; lanes: Lane[]; toda
   });
   const decH = decisions.length ? 6 + Math.max(1, levels.length) * DIA_LEVEL : 0;
   const holidays = plan.holidays.filter((h) => ms(h.end) + DAY > T0 && ms(h.start) < T1);
-  const holidayWords = holidays.map((h) => `${dm(h.start)} – ${dm(h.end)}`).join(", ");
+  const holidayWords = holidays.map((h) => `${dm(h.start)} – ${dm(h.end)}`).join(', ');
   const rows = lanes.map((l) => Math.max(1, ...l.pieces.map((p) => p.row + 1)));
   // Every cell has its place (the overlay shares the right column's cells).
   const at = (row: number, col: 1 | 2) => ({ gridRow: row, gridColumn: col });
@@ -722,15 +983,36 @@ function Strip({ plan, lanes, today, onPick }: { plan: Plan; lanes: Lane[]; toda
   return (
     <div ref={box} data-testid="timeline-strip" className="relative">
       {w0 > 0 && (
-        <div className="grid" style={{ gridTemplateColumns: `${LABEL_W}px ${W}px`, gridTemplateRows: `${AX_H}px ${FLAG_H}px repeat(${lastRow - 2}, auto)` }}>
+        <div
+          className="grid"
+          style={{
+            gridTemplateColumns: `${LABEL_W}px ${W}px`,
+            gridTemplateRows: `${AX_H}px ${FLAG_H}px repeat(${lastRow - 2}, auto)`,
+          }}
+        >
           {/* The month row: months and the Today pill. */}
-          <div data-testid="timeline-axis" className="relative text-[13px] leading-[22px] font-[650] text-text-faint" style={at(1, 2)}>
+          <div
+            data-testid="timeline-axis"
+            className="relative text-[13px] leading-[22px] font-[650] text-text-faint"
+            style={at(1, 2)}
+          >
             {shown.map((x) => (
-              <span key={x.at} data-testid="timeline-month" className="absolute top-0 z-[2] pr-1 pl-1.5" style={{ left: x.x, background: "linear-gradient(to right, transparent 3px, var(--simple-paper) 3px)" }}>
+              <span
+                key={x.at}
+                data-testid="timeline-month"
+                className="absolute top-0 z-[2] pr-1 pl-1.5"
+                style={{
+                  left: x.x,
+                  background: 'linear-gradient(to right, transparent 3px, var(--simple-paper) 3px)',
+                }}
+              >
                 {x.label}
               </span>
             ))}
-            <span className="absolute top-0.5 z-[7] h-[18px] -translate-x-1/2 rounded-[9px] bg-crit px-[7px] text-[11.5px] leading-[18px] font-[750] whitespace-nowrap text-[var(--simple-paper)]" style={{ left: Math.max(XT, 26) }}>
+            <span
+              className="absolute top-0.5 z-[7] h-[18px] -translate-x-1/2 rounded-[9px] bg-crit px-[7px] text-[11.5px] leading-[18px] font-[750] whitespace-nowrap text-[var(--simple-paper)]"
+              style={{ left: Math.max(XT, 26) }}
+            >
               Today
             </span>
           </div>
@@ -746,8 +1028,12 @@ function Strip({ plan, lanes, today, onPick }: { plan: Plan; lanes: Lane[]; toda
                   key={x.code}
                   type="button"
                   onClick={() => onPick(x.code)}
-                  className={`absolute top-0 z-[5] flex items-center gap-1 rounded-[5px] bg-[var(--simple-paper)] px-1 text-[12.5px] leading-5 font-bold whitespace-nowrap ${flip ? "" : "-translate-x-full"}`}
-                  style={{ left: flip ? at + 4 : at - 5, color: hue(plan, x.code).line, boxShadow: "0 0 0 2px var(--simple-paper)" }}
+                  className={`absolute top-0 z-[5] flex items-center gap-1 rounded-[5px] bg-[var(--simple-paper)] px-1 text-[12.5px] leading-5 font-bold whitespace-nowrap ${flip ? '' : '-translate-x-full'}`}
+                  style={{
+                    left: flip ? at + 4 : at - 5,
+                    color: hue(plan, x.code).line,
+                    boxShadow: '0 0 0 2px var(--simple-paper)',
+                  }}
                 >
                   {FLAG}
                   {words}
@@ -759,20 +1045,47 @@ function Strip({ plan, lanes, today, onPick }: { plan: Plan; lanes: Lane[]; toda
             const barsH = rows[i] * SH + (rows[i] - 1) * SG + 10;
             return (
               <div key={l.name} data-testid="timeline-lane" className="contents">
-                <div data-testid={l.goal ? "timeline-goal" : undefined} className="flex flex-col justify-center border-t border-[var(--simple-rule)] py-1 pr-2.5 pl-4" style={at(3 + i, 1)}>
+                <div
+                  data-testid={l.goal ? 'timeline-goal' : undefined}
+                  className="flex flex-col justify-center border-t border-[var(--simple-rule)] py-1 pr-2.5 pl-4"
+                  style={at(3 + i, 1)}
+                >
                   <span className="flex items-baseline gap-2">
                     <b className="text-[15px] leading-5 font-bold whitespace-nowrap">{l.name}</b>
-                    {l.goal && <small className={`text-[13px] leading-[17px] ${l.goal.on_track === false ? "font-[650] text-crit" : "text-text-faint"}`}>{measuredWords(l.goal)}</small>}
+                    {l.goal && (
+                      <small
+                        className={`text-[13px] leading-[17px] ${l.goal.on_track === false ? 'font-[650] text-crit' : 'text-text-faint'}`}
+                      >
+                        {measuredWords(l.goal)}
+                      </small>
+                    )}
                   </span>
-                  {l.goal && <small className="text-[13px] leading-[17px] text-text2">{targetSteps(l.goal)}</small>}
+                  {l.goal && (
+                    <small className="text-[13px] leading-[17px] text-text2">
+                      {targetSteps(l.goal)}
+                    </small>
+                  )}
                 </div>
-                <div className="relative z-[2] border-t border-[var(--simple-rule)]" style={{ minHeight: barsH, ...at(3 + i, 2) }}>
-                  <div className="absolute inset-x-0 top-1/2 -translate-y-1/2" style={{ height: barsH }}>
+                <div
+                  className="relative z-[2] border-t border-[var(--simple-rule)]"
+                  style={{ minHeight: barsH, ...at(3 + i, 2) }}
+                >
+                  <div
+                    className="absolute inset-x-0 top-1/2 -translate-y-1/2"
+                    style={{ height: barsH }}
+                  >
                     {l.pieces.map((p) => {
                       const c = hue(plan, p.milestone);
                       const x0 = X(p.start);
                       // A bar too short for its name still shows its code and first four letters ("F-04 Pric…"), never "Se…".
-                      const room = Math.max(XE(p.end) - x0, textWidth(`${named(p.slices[0]).slice(0, (p.slices[0].code ? p.slices[0].code.length + 1 : 0) + 4)}…`, 12, 650) + 22);
+                      const room = Math.max(
+                        XE(p.end) - x0,
+                        textWidth(
+                          `${named(p.slices[0]).slice(0, (p.slices[0].code ? p.slices[0].code.length + 1 : 0) + 4)}…`,
+                          12,
+                          650,
+                        ) + 22,
+                      );
                       const mile = plan.milestones.find((x) => x.code === p.milestone);
                       return (
                         <button
@@ -781,21 +1094,30 @@ function Strip({ plan, lanes, today, onPick }: { plan: Plan; lanes: Lane[]; toda
                           data-testid="timeline-bar"
                           data-milestone={p.milestone}
                           data-row={p.row}
-                          data-pm={p.pm ? "true" : undefined}
-                          aria-label={`${p.slices.map(named).join(", ")} (${p.milestone} ${mile?.name ?? ""})`}
-                          title={p.slices.map(named).join("\n")}
-                          onClick={() => onPick(p.milestone, p.slices.map((s) => s.code))}
-                          className={`absolute z-[2] flex items-center overflow-hidden rounded-full px-[9px] text-[12px] leading-none font-[650] whitespace-nowrap ${p.pm ? "border-[1.5px] border-dashed bg-[var(--simple-paper)] text-text2" : "border-[1.5px] border-solid"}`}
+                          data-pm={p.pm ? 'true' : undefined}
+                          aria-label={`${p.slices.map(named).join(', ')} (${p.milestone} ${mile?.name ?? ''})`}
+                          title={p.slices.map(named).join('\n')}
+                          onClick={() =>
+                            onPick(
+                              p.milestone,
+                              p.slices.map((s) => s.code),
+                            )
+                          }
+                          className={`absolute z-[2] flex items-center overflow-hidden rounded-full px-[9px] text-[12px] leading-none font-[650] whitespace-nowrap ${p.pm ? 'border-[1.5px] border-dashed bg-[var(--simple-paper)] text-text2' : 'border-[1.5px] border-solid'}`}
                           style={{
                             left: x0,
                             width: room,
                             top: 5 + p.row * (SH + SG),
                             height: SH,
-                            ...(p.pm ? { borderColor: "var(--prd-pm)" } : { background: c.bg, borderColor: c.line, color: c.line }),
+                            ...(p.pm
+                              ? { borderColor: 'var(--prd-pm)' }
+                              : { background: c.bg, borderColor: c.line, color: c.line }),
                           }}
                         >
                           {/* Names, not only codes; what does not fit ends in "…" (the whole list on hover). */}
-                          <span className="min-w-0 truncate">{fits(barVariants(p), room - 20)}</span>
+                          <span className="min-w-0 truncate">
+                            {fits(barVariants(p), room - 20)}
+                          </span>
                         </button>
                       );
                     })}
@@ -806,22 +1128,39 @@ function Strip({ plan, lanes, today, onPick }: { plan: Plan; lanes: Lane[]; toda
           })}
           {decisions.length > 0 && (
             <div data-testid="timeline-decisions" className="contents">
-              <div className="flex flex-col justify-center border-t border-[var(--simple-rule)] py-1 pr-2.5 pl-4" style={at(lastRow, 1)}>
+              <div
+                className="flex flex-col justify-center border-t border-[var(--simple-rule)] py-1 pr-2.5 pl-4"
+                style={at(lastRow, 1)}
+              >
                 <b className="text-[15px] leading-5 font-bold">Decisions</b>
                 <small className="text-[12.5px] leading-4 text-text-faint">with a date</small>
               </div>
-              <div className="relative border-t border-[var(--simple-rule)]" style={{ height: decH, ...at(lastRow, 2) }}>
+              <div
+                className="relative border-t border-[var(--simple-rule)]"
+                style={{ height: decH, ...at(lastRow, 2) }}
+              >
                 {placed.map((d) => (
                   <div
                     key={d.day}
                     data-testid="timeline-decision"
-                    className={`absolute z-[3] flex items-start gap-1.5 text-[13px] leading-[17px] whitespace-nowrap ${d.right ? "-translate-x-full flex-row-reverse text-right" : ""}`}
+                    className={`absolute z-[3] flex items-start gap-1.5 text-[13px] leading-[17px] whitespace-nowrap ${d.right ? '-translate-x-full flex-row-reverse text-right' : ''}`}
                     style={{ left: d.right ? d.x + 6 : d.x - 6, top: 6 + d.lvl * DIA_LEVEL }}
                   >
-                    <i aria-hidden className="mt-[3px] h-[11px] w-[11px] flex-none rotate-45 rounded-[2px]" style={{ background: d.due.late ? "var(--crit)" : "var(--warn)" }} />
-                    <span className="rounded-[4px] bg-[var(--simple-paper)] px-[3px]" style={{ boxShadow: "0 0 0 3px var(--simple-paper)" }}>
+                    <i
+                      aria-hidden
+                      className="mt-[3px] h-[11px] w-[11px] flex-none rotate-45 rounded-[2px]"
+                      style={{ background: d.due.late ? 'var(--crit)' : 'var(--warn)' }}
+                    />
+                    <span
+                      className="rounded-[4px] bg-[var(--simple-paper)] px-[3px]"
+                      style={{ boxShadow: '0 0 0 3px var(--simple-paper)' }}
+                    >
                       <b className="font-bold">{d.label}</b>
-                      <small className={`block text-[13px] ${d.due.late ? "font-[650] text-crit" : "text-text-faint"}`}>{d.due.words}</small>
+                      <small
+                        className={`block text-[13px] ${d.due.late ? 'font-[650] text-crit' : 'text-text-faint'}`}
+                      >
+                        {d.due.words}
+                      </small>
                     </span>
                   </div>
                 ))}
@@ -829,36 +1168,72 @@ function Strip({ plan, lanes, today, onPick }: { plan: Plan; lanes: Lane[]; toda
             </div>
           )}
           {/* What runs across every row: the month lines, the no-work weeks, today and each milestone's end. */}
-          <div aria-hidden className="pointer-events-none relative" style={{ gridColumn: 2, gridRow: `1 / ${lastRow + 1}` }}>
+          <div
+            aria-hidden
+            className="pointer-events-none relative"
+            style={{ gridColumn: 2, gridRow: `1 / ${lastRow + 1}` }}
+          >
             {months.slice(1).map((x) => (
-              <i key={x.at} className="absolute bottom-0 w-0 border-l border-line" style={{ left: x.x, top: AX_H }} />
+              <i
+                key={x.at}
+                className="absolute bottom-0 w-0 border-l border-line"
+                style={{ left: x.x, top: AX_H }}
+              />
             ))}
             {holidays.map((h) => (
               <i
                 key={h.start}
                 data-testid="timeline-no-work"
-                title={h.label ? `No work: ${h.label}` : "No work"}
+                title={h.label ? `No work: ${h.label}` : 'No work'}
                 className="absolute bottom-0 opacity-30"
-                style={{ left: X(h.start), width: XE(h.end) - X(h.start), top: AX_H, background: "repeating-linear-gradient(135deg, var(--line-strong) 0 1.5px, transparent 1.5px 7px)" }}
+                style={{
+                  left: X(h.start),
+                  width: XE(h.end) - X(h.start),
+                  top: AX_H,
+                  background:
+                    'repeating-linear-gradient(135deg, var(--line-strong) 0 1.5px, transparent 1.5px 7px)',
+                }}
               />
             ))}
-            <i className="absolute bottom-0 z-[1] w-0 border-l-2 border-crit" style={{ left: XT - 1, top: AX_H - 2 }} />
+            <i
+              className="absolute bottom-0 z-[1] w-0 border-l-2 border-crit"
+              style={{ left: XT - 1, top: AX_H - 2 }}
+            />
             {ds.map((x) => (
-              <i key={x.code} className="absolute bottom-0 z-[1] w-0 border-l-[1.5px] border-dashed" style={{ left: XE(x.end_date!) - 1, top: AX_H + 4, borderColor: hue(plan, x.code).line }} />
+              <i
+                key={x.code}
+                className="absolute bottom-0 z-[1] w-0 border-l-[1.5px] border-dashed"
+                style={{
+                  left: XE(x.end_date!) - 1,
+                  top: AX_H + 4,
+                  borderColor: hue(plan, x.code).line,
+                }}
+              />
             ))}
           </div>
         </div>
       )}
-      <div data-testid="timeline-legend" className="flex flex-wrap gap-x-4 gap-y-1.5 pt-2 text-[13px] leading-[18px] text-text-faint">
+      <div
+        data-testid="timeline-legend"
+        className="flex flex-wrap gap-x-4 gap-y-1.5 pt-2 text-[13px] leading-[18px] text-text-faint"
+      >
         {ds.map((x) => (
           <span key={x.code} className="inline-flex items-center gap-1.5 whitespace-nowrap">
-            <i aria-hidden className="inline-block h-2.5 w-[18px] flex-none rounded-[5px] border-[1.5px]" style={{ background: hue(plan, x.code).bg, borderColor: hue(plan, x.code).line }} />
+            <i
+              aria-hidden
+              className="inline-block h-2.5 w-[18px] flex-none rounded-[5px] border-[1.5px]"
+              style={{ background: hue(plan, x.code).bg, borderColor: hue(plan, x.code).line }}
+            />
             {x.code}
           </span>
         ))}
         {lanes.some((l) => l.name === PM_LANE) && (
           <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-            <i aria-hidden className="inline-block h-2.5 w-[18px] flex-none rounded-[5px] border-[1.5px] border-dashed" style={{ borderColor: "var(--prd-pm)" }} />
+            <i
+              aria-hidden
+              className="inline-block h-2.5 w-[18px] flex-none rounded-[5px] border-[1.5px] border-dashed"
+              style={{ borderColor: 'var(--prd-pm)' }}
+            />
             Product manager&apos;s work, no engineering
           </span>
         )}
@@ -868,12 +1243,25 @@ function Strip({ plan, lanes, today, onPick }: { plan: Plan; lanes: Lane[]; toda
         </span>
         {holidays.length > 0 && (
           <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-            <i aria-hidden className="inline-block h-2.5 w-[18px] flex-none rounded-[2px] opacity-60" style={{ background: "repeating-linear-gradient(135deg, var(--line-strong) 0 1.5px, transparent 1.5px 7px)" }} />
+            <i
+              aria-hidden
+              className="inline-block h-2.5 w-[18px] flex-none rounded-[2px] opacity-60"
+              style={{
+                background:
+                  'repeating-linear-gradient(135deg, var(--line-strong) 0 1.5px, transparent 1.5px 7px)',
+              }}
+            />
             Holidays {holidayWords}
           </span>
         )}
         <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-          <svg viewBox="0 0 12 12" width={12} height={12} aria-hidden className="flex-none fill-text-faint">
+          <svg
+            viewBox="0 0 12 12"
+            width={12}
+            height={12}
+            aria-hidden
+            className="flex-none fill-text-faint"
+          >
             <path d="M2 1h1.4v10H2zM3.4 1.5h7l-1.8 2.6 1.8 2.6h-7z" />
           </svg>
           milestone end
@@ -885,25 +1273,44 @@ function Strip({ plan, lanes, today, onPick }: { plan: Plan; lanes: Lane[]; toda
 
 // ---------------------------------------------------------------- the phone (D2)
 
-function PhonePlan({ plan, title, today, pick, onPick, onPlan, m, loose }: { plan: Plan; title: string; today: string; pick: string | null; onPick: (c: string) => void; onPlan: (p: Plan) => void; m: Milestone | null; loose: Loose[] }) {
+function PhonePlan({
+  plan,
+  title,
+  today,
+  pick,
+  onPick,
+  onPlan,
+  m,
+  loose,
+}: {
+  plan: Plan;
+  title: string;
+  today: string;
+  pick: string | null;
+  onPick: (c: string) => void;
+  onPlan: (p: Plan) => void;
+  m: Milestone | null;
+  loose: Loose[];
+}) {
   // D2: past the PRD's header a bar keeps its title and where the reader is.
   const top = useRef<HTMLDivElement>(null);
   const card = useRef<HTMLDivElement>(null);
   const [bar, setBar] = useState<string | null>(null);
   useEffect(() => {
     const on = () => {
-      const head = document.querySelector('[data-testid="phone-header"]')?.getBoundingClientRect().bottom ?? 0;
+      const head =
+        document.querySelector('[data-testid="phone-header"]')?.getBoundingClientRect().bottom ?? 0;
       // Past the header: where the plan starts has gone under the bar's own place.
       const past = (top.current?.getBoundingClientRect().top ?? Infinity) < head + 40;
       const inCard = (card.current?.getBoundingClientRect().top ?? Infinity) < head + 60;
-      setBar(past ? (inCard && m ? `${m.code} · ${m.name}` : "Timeline") : null);
+      setBar(past ? (inCard && m ? `${m.code} · ${m.name}` : 'Timeline') : null);
     };
     on();
-    window.addEventListener("scroll", on, { passive: true, capture: true });
-    window.addEventListener("resize", on);
+    window.addEventListener('scroll', on, { passive: true, capture: true });
+    window.addEventListener('resize', on);
     return () => {
-      window.removeEventListener("scroll", on, { capture: true });
-      window.removeEventListener("resize", on);
+      window.removeEventListener('scroll', on, { capture: true });
+      window.removeEventListener('resize', on);
     };
   }, [m]);
   const events: { day: string; order: number; node: ReactNode }[] = [];
@@ -934,11 +1341,23 @@ function PhonePlan({ plan, title, today, pick, onPick, onPlan, m, loose }: { pla
       order: 0,
       node: (
         <div key={`d-${d.day}`} data-testid="timeline-decision" className="relative">
-          <span className="absolute top-0.5 -left-16 w-[46px] text-right text-[12px] leading-[15px] font-bold text-text2">{dm(d.day)}</span>
-          <span aria-hidden className="absolute top-[5px] -left-4 h-2.5 w-2.5 rotate-45 rounded-[2px]" style={{ background: due.late ? "var(--crit)" : "var(--warn)" }} />
+          <span className="absolute top-0.5 -left-16 w-[46px] text-right text-[12px] leading-[15px] font-bold text-text2">
+            {dm(d.day)}
+          </span>
+          <span
+            aria-hidden
+            className="absolute top-[5px] -left-4 h-2.5 w-2.5 rotate-45 rounded-[2px]"
+            style={{ background: due.late ? 'var(--crit)' : 'var(--warn)' }}
+          />
           <div className="text-[14px] leading-[19px]">
             <b className="font-bold">{d.label}</b>
-            {due.words && <small className={`block text-[13px] ${due.late ? "font-[650] text-crit" : "text-text-faint"}`}>{due.words}</small>}
+            {due.words && (
+              <small
+                className={`block text-[13px] ${due.late ? 'font-[650] text-crit' : 'text-text-faint'}`}
+              >
+                {due.words}
+              </small>
+            )}
           </div>
         </div>
       ),
@@ -949,8 +1368,13 @@ function PhonePlan({ plan, title, today, pick, onPick, onPlan, m, loose }: { pla
     order: 1,
     node: (
       <div key="today" className="relative">
-        <span className="absolute top-0.5 -left-16 w-[46px] text-right text-[12px] leading-[15px] font-bold text-crit">{dm(today)}</span>
-        <span aria-hidden className="absolute top-[5px] -left-[17px] h-3 w-3 rounded-full border-2 border-[var(--simple-paper)] bg-crit" />
+        <span className="absolute top-0.5 -left-16 w-[46px] text-right text-[12px] leading-[15px] font-bold text-crit">
+          {dm(today)}
+        </span>
+        <span
+          aria-hidden
+          className="absolute top-[5px] -left-[17px] h-3 w-3 rounded-full border-2 border-[var(--simple-paper)] bg-crit"
+        />
         <div className="text-[13px] leading-[19px] font-[750] text-crit">Today</div>
       </div>
     ),
@@ -960,14 +1384,24 @@ function PhonePlan({ plan, title, today, pick, onPick, onPlan, m, loose }: { pla
     <>
       <div ref={top} />
       {bar && (
-        <div data-testid="timeline-stick" className="fixed inset-x-0 top-0 z-20 flex items-center gap-2 border-b border-[var(--simple-rule)] bg-[var(--simple-paper)] px-4 py-[9px] text-[15px] font-[650] max-[600px]:top-[var(--phone-top-bar)]">
+        <div
+          data-testid="timeline-stick"
+          className="fixed inset-x-0 top-0 z-20 flex items-center gap-2 border-b border-[var(--simple-rule)] bg-[var(--simple-paper)] px-4 py-[9px] text-[15px] font-[650] max-[600px]:top-[var(--phone-top-bar)]"
+        >
           <span className="min-w-0 truncate">{title}</span>
           <span className="ml-auto flex-none text-[14px] leading-5 text-text-faint">{bar}</span>
         </div>
       )}
       <GoalList plan={plan} />
-      <section aria-label="Timeline" data-testid="timeline-vertical" className="relative flex flex-col gap-3 pl-16">
-        <span aria-hidden className="absolute top-1.5 bottom-0 left-[52px] border-l-2 border-[var(--simple-rule)]" />
+      <section
+        aria-label="Timeline"
+        data-testid="timeline-vertical"
+        className="relative flex flex-col gap-3 pl-16"
+      >
+        <span
+          aria-hidden
+          className="absolute top-1.5 bottom-0 left-[52px] border-l-2 border-[var(--simple-rule)]"
+        />
         {events.map((e) => e.node)}
         {/* qa-simple-prd-p3-13: the note first, as on a desktop (it says why they are not on the line). */}
         {plan.milestones.some((x) => !dated(x)) && <NoDates plan={plan} onPlan={onPlan} />}
@@ -982,32 +1416,70 @@ function PhonePlan({ plan, title, today, pick, onPick, onPlan, m, loose }: { pla
 /** qa-simple-prd-p3-12: "6 features, 2 flows · 1 decision ›" with no "0 …" parts ("1 decision ›"; nothing: "Nothing planned yet ›"). */
 function linkWords(features: number, flows: number, decisions: number): string {
   const n = (k: number, one: string) => `${k} ${k === 1 ? one : `${one}s`}`;
-  const built = [features ? n(features, "feature") : null, flows ? n(flows, "flow") : null].filter(Boolean).join(", ");
-  const words = [built || null, decisions ? n(decisions, "decision") : null].filter(Boolean).join(" · ");
-  return `${words || "Nothing planned yet"} ›`;
+  const built = [features ? n(features, 'feature') : null, flows ? n(flows, 'flow') : null]
+    .filter(Boolean)
+    .join(', ');
+  const words = [built || null, decisions ? n(decisions, 'decision') : null]
+    .filter(Boolean)
+    .join(' · ');
+  return `${words || 'Nothing planned yet'} ›`;
 }
 
 /** A milestone in the vertical timeline: a compact summary (its part follows the timeline in full). */
-function PhoneMilestone({ plan, m, today, open, onPick, onShow }: { plan: Plan; m: Milestone; today: string; open: boolean; onPick: (c: string) => void; onShow: (c: string) => void }) {
+function PhoneMilestone({
+  plan,
+  m,
+  today,
+  open,
+  onPick,
+  onShow,
+}: {
+  plan: Plan;
+  m: Milestone;
+  today: string;
+  open: boolean;
+  onPick: (c: string) => void;
+  onShow: (c: string) => void;
+}) {
   const c = hue(plan, m.code);
   const st = stateOf(plan, m, today);
   const slices = plan.slices.filter((s) => s.milestone === m.code);
   const flows = slices.filter((s) => s.flow_steps.length).length;
-  const facts = dated(m) ? [`to ${dm(m.end_date!)}`, weeksWords(plan, m), ...(m.effort_weeks != null ? [ew(m.effort_weeks)] : [])].join(" · ") : "No dates yet";
+  const facts = dated(m)
+    ? [
+        `to ${dm(m.end_date!)}`,
+        weeksWords(plan, m),
+        ...(m.effort_weeks != null ? [ew(m.effort_weeks)] : []),
+      ].join(' · ')
+    : 'No dates yet';
   return (
     <div data-testid="timeline-step" className="relative">
-      <span className="absolute top-0.5 -left-16 w-[46px] text-right text-[12px] leading-[15px] font-bold text-text2">{m.start_date ? dm(m.start_date) : ""}</span>
-      <span aria-hidden className="absolute top-[5px] -left-[17px] h-3 w-3 rounded-full border-2 border-[var(--simple-paper)]" style={{ background: c.line }} />
-      <div className="flex flex-col gap-2 rounded-[12px] border border-l-4 border-[var(--simple-rule)] bg-[var(--simple-paper)] px-3 py-2.5" style={{ borderLeftColor: c.line }}>
-        <button type="button" aria-expanded={open} onClick={() => onPick(m.code)} className="flex items-center gap-2 text-left">
-          <MTag plan={plan} code={m.code} small />{" "}
+      <span className="absolute top-0.5 -left-16 w-[46px] text-right text-[12px] leading-[15px] font-bold text-text2">
+        {m.start_date ? dm(m.start_date) : ''}
+      </span>
+      <span
+        aria-hidden
+        className="absolute top-[5px] -left-[17px] h-3 w-3 rounded-full border-2 border-[var(--simple-paper)]"
+        style={{ background: c.line }}
+      />
+      <div
+        className="flex flex-col gap-2 rounded-[12px] border border-l-4 border-[var(--simple-rule)] bg-[var(--simple-paper)] px-3 py-2.5"
+        style={{ borderLeftColor: c.line }}
+      >
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => onPick(m.code)}
+          className="flex items-center gap-2 text-left"
+        >
+          <MTag plan={plan} code={m.code} small />{' '}
           <b className="text-[16px] leading-[21px] font-bold">{m.name}</b>
         </button>
         <div className="text-[14px] leading-5 text-text2">
           <Facts text={facts} />
           {open && st.week && (
             <>
-              {" · "}
+              {' · '}
               <b className="font-bold whitespace-nowrap text-accent-ink">{st.week}</b>
             </>
           )}
@@ -1043,26 +1515,40 @@ function Checks({ items, small }: { items: string[]; small?: boolean }) {
       {items.map((d) => (
         <li
           key={d}
-          className={`relative list-none before:absolute before:left-1 before:h-1.5 before:w-1.5 before:rounded-full before:bg-text-faint ${small ? "mt-[5px] pl-5 text-[15px] leading-[21px] before:top-[8px]" : "mt-1.5 pl-5 text-[16px] leading-[23px] before:top-[9px]"}`}
+          className={`relative list-none before:absolute before:left-1 before:h-1.5 before:w-1.5 before:rounded-full before:bg-text-faint ${small ? 'mt-[5px] pl-5 text-[15px] leading-[21px] before:top-[8px]' : 'mt-1.5 pl-5 text-[16px] leading-[23px] before:top-[9px]'}`}
         >
           {d}
         </li>
       ))}
-      {!items.length && <li className="mt-[5px] list-none text-[15px] text-text-faint">Not written yet</li>}
+      {!items.length && (
+        <li className="mt-[5px] list-none text-[15px] text-text-faint">Not written yet</li>
+      )}
     </ul>
   );
 }
 
 const PM_KIND = "Product manager's work, no new engineering";
 
-export function MilestoneCard({ plan, m, today, phone, marked = [] }: { plan: Plan; m: Milestone; today: string; phone: boolean; marked?: string[] }) {
+export function MilestoneCard({
+  plan,
+  m,
+  today,
+  phone,
+  marked = [],
+}: {
+  plan: Plan;
+  m: Milestone;
+  today: string;
+  phone: boolean;
+  marked?: string[];
+}) {
   const open = useOpenFeature();
   const c = hue(plan, m.code);
   const st = stateOf(plan, m, today);
   const slices = plan.slices.filter((s) => s.milestone === m.code);
   const groups: [string, Slice[]][] = [];
   for (const s of slices) {
-    const kind = s.pm_owned ? PM_KIND : s.kind || "Other work";
+    const kind = s.pm_owned ? PM_KIND : s.kind || 'Other work';
     const g = groups.find(([k]) => k === kind);
     if (g) g[1].push(s);
     else groups.push([kind, [s]]);
@@ -1070,29 +1556,45 @@ export function MilestoneCard({ plan, m, today, phone, marked = [] }: { plan: Pl
   groups.sort(([a], [b]) => Number(a === PM_KIND) - Number(b === PM_KIND));
   const flows = slices.filter((s) => s.flow_steps.length);
   // qa-simple-prd-p3-12: "No dates yet" once, in the chip.
-  const facts = [dated(m) ? weeksWords(plan, m) : null, ewWords(m)].filter(Boolean).join(" · ");
+  const facts = [dated(m) ? weeksWords(plan, m) : null, ewWords(m)].filter(Boolean).join(' · ');
   return (
-    <section id="milestone-part" aria-label={`${m.code} ${m.name}`} data-testid="milestone-part" className={`${PAPER} flex scroll-mt-28 flex-col gap-[18px] border-t-[5px] ${phone ? "px-4 py-5" : "px-7 py-6"}`} style={{ borderTopColor: c.line }}>
+    <section
+      id="milestone-part"
+      aria-label={`${m.code} ${m.name}`}
+      data-testid="milestone-part"
+      className={`${PAPER} flex scroll-mt-28 flex-col gap-[18px] border-t-[5px] ${phone ? 'px-4 py-5' : 'px-7 py-6'}`}
+      style={{ borderTopColor: c.line }}
+    >
       <div className="flex flex-wrap items-center gap-3">
-        <h2 className={`flex items-center gap-3 font-bold tracking-[-.01em] ${phone ? "text-[22px] leading-7" : "text-[26px] leading-8"}`}>
+        <h2
+          className={`flex items-center gap-3 font-bold tracking-[-.01em] ${phone ? 'text-[22px] leading-7' : 'text-[26px] leading-8'}`}
+        >
           <MTag plan={plan} code={m.code} /> <span>{m.name}</span>
         </h2>
-        <span className={`inline-flex h-6 items-center rounded-xl px-[9px] text-[13px] leading-[18px] font-semibold whitespace-nowrap ${st.now ? "bg-accent-soft text-accent-ink" : "bg-na-bg text-na"}`}>{st.words}</span>
+        <span
+          className={`inline-flex h-6 items-center rounded-xl px-[9px] text-[13px] leading-[18px] font-semibold whitespace-nowrap ${st.now ? 'bg-accent-soft text-accent-ink' : 'bg-na-bg text-na'}`}
+        >
+          {st.words}
+        </span>
       </div>
       {(dated(m) || facts) && (
         <p className="-mt-1 text-[15px] leading-[22px] text-text2" data-testid="part-dates">
-          {dated(m) && <b className="font-bold text-text">{spanWords(m.start_date!, m.end_date!)}</b>}
-          {dated(m) && facts ? " · " : ""}
+          {dated(m) && (
+            <b className="font-bold text-text">{spanWords(m.start_date!, m.end_date!)}</b>
+          )}
+          {dated(m) && facts ? ' · ' : ''}
           <Facts text={facts} />
         </p>
       )}
       {m.why && (
         <p data-testid="part-why" className="flex items-baseline gap-3 text-[17px] leading-[26px]">
-          <span className="w-[72px] flex-none text-[12px] leading-[18px] font-[750] tracking-[.07em] text-text-faint uppercase">Why now</span>
+          <span className="w-[72px] flex-none text-[12px] leading-[18px] font-[750] tracking-[.07em] text-text-faint uppercase">
+            Why now
+          </span>
           <span>{m.why}</span>
         </p>
       )}
-      <div className={`grid gap-7 ${phone ? "grid-cols-1" : "grid-cols-[300px_minmax(0,1fr)]"}`}>
+      <div className={`grid gap-7 ${phone ? 'grid-cols-1' : 'grid-cols-[300px_minmax(0,1fr)]'}`}>
         <div className="flex flex-col gap-3.5">
           <div>
             <h3 className={H3}>Done when</h3>
@@ -1100,12 +1602,22 @@ export function MilestoneCard({ plan, m, today, phone, marked = [] }: { plan: Pl
           </div>
           <div>
             <h3 className={H3}>Targets</h3>
-            <div data-testid="part-targets" className="mt-2 grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
+            <div
+              data-testid="part-targets"
+              className="mt-2 grid gap-2.5"
+              style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}
+            >
               {m.targets.map((t) => {
                 const [v, u] = splitTarget(t.target);
                 return (
-                  <div key={t.goal} title={t.goal} className="rounded-[12px] border border-[var(--simple-rule)] bg-[var(--simple-paper)] px-3 py-2.5">
-                    <div className="text-[28px] leading-[34px] font-[750] tracking-[-.01em]">{v}</div>
+                  <div
+                    key={t.goal}
+                    title={t.goal}
+                    className="rounded-[12px] border border-[var(--simple-rule)] bg-[var(--simple-paper)] px-3 py-2.5"
+                  >
+                    <div className="text-[28px] leading-[34px] font-[750] tracking-[-.01em]">
+                      {v}
+                    </div>
                     <div className="text-[14px] leading-[19px] text-text2">{u}</div>
                   </div>
                 );
@@ -1116,52 +1628,73 @@ export function MilestoneCard({ plan, m, today, phone, marked = [] }: { plan: Pl
         </div>
         <div data-testid="part-builds">
           <h3 className={`${H3} mb-2`}>
-            What we build{" "}
-            {slices.length > 0 && <span className="text-[16px] font-medium text-text-faint">· {slices.length} {slices.length === 1 ? "feature" : "features"}, by kind</span>}
+            What we build{' '}
+            {slices.length > 0 && (
+              <span className="text-[16px] font-medium text-text-faint">
+                · {slices.length} {slices.length === 1 ? 'feature' : 'features'}, by kind
+              </span>
+            )}
           </h3>
           <div className="flex flex-col gap-3.5">
             {groups.map(([kind, of]) => (
               <div key={kind}>
                 <h4 className="mb-1 text-[12px] leading-4 font-[750] tracking-[.07em] text-text-faint uppercase">
-                  {kind.split(" ").slice(0, -1).join(" ")}{" "}
+                  {kind.split(' ').slice(0, -1).join(' ')}{' '}
                   <span data-testid="kind-tail" className="whitespace-nowrap">
-                    {kind.split(" ").at(-1)} <span className="font-semibold">· {of.length}</span>
+                    {kind.split(' ').at(-1)} <span className="font-semibold">· {of.length}</span>
                   </span>
                 </h4>
                 <ul>
                   {of.map((s) => (
                     <li
                       key={s.code}
-                      data-marked={marked.includes(s.code) ? "true" : undefined}
-                      className={`grid list-none gap-x-2.5 border-t ${marked.includes(s.code) ? "bg-accent-soft" : ""} border-[var(--simple-rule)] py-1.5 text-[15px] leading-[21px] ${phone ? "grid-cols-[62px_minmax(0,1fr)] gap-y-0.5" : "grid-cols-[62px_250px_minmax(0,1fr)] gap-y-2.5"}`}>
-                      <span className={`${CODE} border border-line bg-surface2 text-text`}>{s.code}</span>
+                      data-marked={marked.includes(s.code) ? 'true' : undefined}
+                      className={`grid list-none gap-x-2.5 border-t ${marked.includes(s.code) ? 'bg-accent-soft' : ''} border-[var(--simple-rule)] py-1.5 text-[15px] leading-[21px] ${phone ? 'grid-cols-[62px_minmax(0,1fr)] gap-y-0.5' : 'grid-cols-[62px_250px_minmax(0,1fr)] gap-y-2.5'}`}
+                    >
+                      <span className={`${CODE} border border-line bg-surface2 text-text`}>
+                        {s.code}
+                      </span>
                       <b className="font-[650]">
                         {/* one-feature-panel: the feature's name opens its panel where the page gives an opener. */}
                         {open ? (
-                          <button type="button" data-testid="part-build-name" onClick={() => open({ code: s.feature_code, name: s.name })} className="text-left font-[650] hover:underline">
+                          <button
+                            type="button"
+                            data-testid="part-build-name"
+                            onClick={() => open({ code: s.feature_code, name: s.name })}
+                            className="text-left font-[650] hover:underline"
+                          >
                             {keep(s.name)}
                           </button>
                         ) : (
                           <span data-testid="part-build-name">{keep(s.name)}</span>
                         )}
                         {/* Its feature's Current-state pill, right after the name (cs2-b, the owner's later pick). */}
-                        <span className="ml-2 inline-flex align-middle empty:hidden" data-testid="part-build-mark">
+                        <span
+                          className="ml-2 inline-flex align-middle empty:hidden"
+                          data-testid="part-build-mark"
+                        >
                           <SliceMark s={s} />
                         </span>
                         {s.flow_steps.length > 0 && (
                           <span className="text-[13px] font-[650] whitespace-nowrap">
-                            {" · "}
+                            {' · '}
                             <button
                               type="button"
-                              onClick={() => document.getElementById(`flow-${s.code}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}
-                              className={`${phone ? TAP44 : ""} text-accent underline underline-offset-[3px]`}
+                              onClick={() =>
+                                document
+                                  .getElementById(`flow-${s.code}`)
+                                  ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                              }
+                              className={`${phone ? TAP44 : ''} text-accent underline underline-offset-[3px]`}
                             >
                               flow below
                             </button>
                           </span>
                         )}
                       </b>
-                      <span className={`text-text2 ${phone ? "col-start-2" : ""}`}>{s.what ?? ""}</span>
+                      <span className={`text-text2 ${phone ? 'col-start-2' : ''}`}>
+                        {s.what ?? ''}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -1175,16 +1708,29 @@ export function MilestoneCard({ plan, m, today, phone, marked = [] }: { plan: Pl
         <>
           <h3 className={H3}>Flows in {m.code}</h3>
           {flows.map((s) => (
-            <div key={s.code} id={`flow-${s.code}`} data-testid="part-flow" className="scroll-mt-28 rounded-[12px] border border-dashed border-line-strong bg-[var(--simple-paper)] px-3.5 pt-2.5 pb-3">
+            <div
+              key={s.code}
+              id={`flow-${s.code}`}
+              data-testid="part-flow"
+              className="scroll-mt-28 rounded-[12px] border border-dashed border-line-strong bg-[var(--simple-paper)] px-3.5 pt-2.5 pb-3"
+            >
               <div className="mb-1 flex flex-wrap items-center gap-2 text-[13px] leading-[18px] font-[650] text-text2">
                 <FlowIcon />
                 Flow · {s.code} {s.name}
                 <span className="ml-auto flex gap-3 font-medium text-text-faint">
                   <span className="inline-flex items-center gap-1">
-                    <i aria-hidden className="inline-block h-2.5 w-3 rounded-[3px] border-[1.2px] border-line-strong bg-surface" />a step
+                    <i
+                      aria-hidden
+                      className="inline-block h-2.5 w-3 rounded-[3px] border-[1.2px] border-line-strong bg-surface"
+                    />
+                    a step
                   </span>
                   <span className="inline-flex items-center gap-1">
-                    <i aria-hidden className="inline-block h-2.5 w-2.5 scale-[.8] rotate-45 border-[1.2px] border-line-strong bg-surface2" />a check
+                    <i
+                      aria-hidden
+                      className="inline-block h-2.5 w-2.5 scale-[.8] rotate-45 border-[1.2px] border-line-strong bg-surface2"
+                    />
+                    a check
                   </span>
                 </span>
               </div>
@@ -1195,40 +1741,65 @@ export function MilestoneCard({ plan, m, today, phone, marked = [] }: { plan: Pl
           ))}
         </>
       )}
-      <div className={`grid gap-6 ${phone ? "grid-cols-1" : "grid-cols-2"}`}>
+      <div className={`grid gap-6 ${phone ? 'grid-cols-1' : 'grid-cols-2'}`}>
         <div data-testid="part-decisions">
           <h3 className={H3}>
-            Decisions it needs <span className="text-[16px] font-medium text-text-faint">· {m.decisions.length}</span>
+            Decisions it needs{' '}
+            <span className="text-[16px] font-medium text-text-faint">· {m.decisions.length}</span>
           </h3>
           <ul>
             {m.decisions.map((d) => {
               const when = decisionWhen(plan, m, d, today);
               return (
-                <li key={d.code} className="grid list-none items-start gap-x-2.5 gap-y-1 border-t border-[var(--simple-rule)] py-2.5 first:border-t-0" style={{ gridTemplateColumns: phone ? "44px minmax(0,1fr)" : "44px minmax(0,1fr) auto" }}>
+                <li
+                  key={d.code}
+                  className="grid list-none items-start gap-x-2.5 gap-y-1 border-t border-[var(--simple-rule)] py-2.5 first:border-t-0"
+                  style={{
+                    gridTemplateColumns: phone ? '44px minmax(0,1fr)' : '44px minmax(0,1fr) auto',
+                  }}
+                >
                   <span className={`${CODE} bg-warn-bg text-warn`}>{d.code}</span>
                   <div>
                     <b className="text-[16px] leading-[22px] font-[650]">{d.title}</b>
                     {d.recommendation && (
                       <div className="mt-0.5 text-[14px] leading-5 text-text2">
-                        <em className="font-bold text-text not-italic">Recommended:</em> {d.recommendation}
+                        <em className="font-bold text-text not-italic">Recommended:</em>{' '}
+                        {d.recommendation}
                       </div>
                     )}
                   </div>
-                  <span className={`pt-0.5 text-[13px] leading-[18px] whitespace-nowrap ${phone ? "col-start-2" : "text-right"} ${when.late ? "font-[650] text-crit" : "text-text-faint"}`}>{when.words}</span>
+                  <span
+                    className={`pt-0.5 text-[13px] leading-[18px] whitespace-nowrap ${phone ? 'col-start-2' : 'text-right'} ${when.late ? 'font-[650] text-crit' : 'text-text-faint'}`}
+                  >
+                    {when.words}
+                  </span>
                 </li>
               );
             })}
-            {!m.decisions.length && <li className="list-none py-2.5 text-[15px] text-text-faint">No open decisions</li>}
+            {!m.decisions.length && (
+              <li className="list-none py-2.5 text-[15px] text-text-faint">No open decisions</li>
+            )}
           </ul>
         </div>
         <div data-testid="part-risks">
           <h3 className={H3}>
-            Risks <span className="text-[16px] font-medium text-text-faint">· {m.risks.length}</span>
+            Risks{' '}
+            <span className="text-[16px] font-medium text-text-faint">· {m.risks.length}</span>
           </h3>
           <ul>
             {m.risks.map((r) => (
-              <li key={r.title} className="grid list-none items-start gap-x-2.5 gap-y-1 border-t border-[var(--simple-rule)] py-2.5 first:border-t-0" style={{ gridTemplateColumns: phone ? "44px minmax(0,1fr)" : "44px minmax(0,1fr) auto" }}>
-                {r.code ? <span className={`${CODE} bg-crit-bg text-crit`}>{r.code}</span> : <span />}
+              <li
+                key={r.title}
+                className="grid list-none items-start gap-x-2.5 gap-y-1 border-t border-[var(--simple-rule)] py-2.5 first:border-t-0"
+                style={{
+                  gridTemplateColumns: phone ? '44px minmax(0,1fr)' : '44px minmax(0,1fr) auto',
+                }}
+              >
+                {r.code ? (
+                  <span className={`${CODE} bg-crit-bg text-crit`}>{r.code}</span>
+                ) : (
+                  <span />
+                )}
                 <div>
                   <b className="text-[16px] leading-[22px] font-[650]">{r.title}</b>
                   {r.what_we_do && (
@@ -1237,10 +1808,18 @@ export function MilestoneCard({ plan, m, today, phone, marked = [] }: { plan: Pl
                     </div>
                   )}
                 </div>
-                {riskLevel(r) && <span className={`pt-0.5 text-[13px] leading-[18px] whitespace-nowrap text-text-faint ${phone ? "col-start-2" : "text-right"}`}>{riskLevel(r)}</span>}
+                {riskLevel(r) && (
+                  <span
+                    className={`pt-0.5 text-[13px] leading-[18px] whitespace-nowrap text-text-faint ${phone ? 'col-start-2' : 'text-right'}`}
+                  >
+                    {riskLevel(r)}
+                  </span>
+                )}
               </li>
             ))}
-            {!m.risks.length && <li className="list-none py-2.5 text-[15px] text-text-faint">No risks written yet</li>}
+            {!m.risks.length && (
+              <li className="list-none py-2.5 text-[15px] text-text-faint">No risks written yet</li>
+            )}
           </ul>
         </div>
       </div>
@@ -1249,7 +1828,12 @@ export function MilestoneCard({ plan, m, today, phone, marked = [] }: { plan: Pl
 }
 
 /** A decision's "when" in the milestone's list, worded as the timeline words it ("was due 20 Oct", "at the M1 review, 27 Nov", "before M2 starts, 30 Nov", "due 5 Nov"), or "during M3" when it has no day. */
-function decisionWhen(plan: Plan, m: Milestone, d: Decision, today: string): { words: string; late: boolean } {
+function decisionWhen(
+  plan: Plan,
+  m: Milestone,
+  d: Decision,
+  today: string,
+): { words: string; late: boolean } {
   if (!d.due_on) return { words: `during ${m.code}`, late: false };
   return dueWords(plan, d.due_on, today);
 }
@@ -1258,5 +1842,9 @@ const level = (x: string): string => x.charAt(0).toUpperCase() + x.slice(1);
 
 /** "Likelihood: Medium · Impact: High". */
 function riskLevel(r: Risk): string | null {
-  return [r.likelihood && `Likelihood: ${level(r.likelihood)}`, r.impact && `Impact: ${level(r.impact)}`].filter(Boolean).join(" · ") || null;
+  return (
+    [r.likelihood && `Likelihood: ${level(r.likelihood)}`, r.impact && `Impact: ${level(r.impact)}`]
+      .filter(Boolean)
+      .join(' · ') || null
+  );
 }

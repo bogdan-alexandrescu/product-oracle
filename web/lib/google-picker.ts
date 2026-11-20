@@ -12,20 +12,20 @@
  * loads the scripts and the picker config ahead, and chooseFromDrive asks for the token
  * synchronously (no await before it), so popup blockers let it through.
  */
-import type { Schemas } from "@/lib/api/client";
-import { installMockGoogle, mockGoogleOn } from "@/lib/google-picker-mock";
+import type { Schemas } from '@/lib/api/client';
+import { installMockGoogle, mockGoogleOn } from '@/lib/google-picker-mock';
 
-export const GAPI_SRC = "https://apis.google.com/js/api.js";
-export const GIS_SRC = "https://accounts.google.com/gsi/client";
-export const DRIVE_READONLY_SCOPE = "https://www.googleapis.com/auth/drive.readonly";
-export const DOC_MIME = "application/vnd.google-apps.document";
-export const FOLDER_MIME = "application/vnd.google-apps.folder";
+export const GAPI_SRC = 'https://apis.google.com/js/api.js';
+export const GIS_SRC = 'https://accounts.google.com/gsi/client';
+export const DRIVE_READONLY_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
+export const DOC_MIME = 'application/vnd.google-apps.document';
+export const FOLDER_MIME = 'application/vnd.google-apps.folder';
 
-export type PickerConfig = Schemas["PickerConfigOut"];
+export type PickerConfig = Schemas['PickerConfigOut'];
 export interface PickedFile {
   id: string;
   name: string;
-  kind: "doc" | "folder";
+  kind: 'doc' | 'folder';
 }
 
 // The parts of Google's globals this module uses.
@@ -93,19 +93,20 @@ const loading = new Map<string, Promise<void>>();
 
 /** Loads one of Google's two scripts, once. Any other URL is refused. */
 function loadScript(src: typeof GAPI_SRC | typeof GIS_SRC): Promise<void> {
-  if (src !== GAPI_SRC && src !== GIS_SRC) return Promise.reject(new Error("Unexpected script host"));
+  if (src !== GAPI_SRC && src !== GIS_SRC)
+    return Promise.reject(new Error('Unexpected script host'));
   // qa-leftovers: the mock app picks from invented example docs, never Google's real sign-in.
   if (mockGoogleOn()) return Promise.resolve(installMockGoogle());
   const known = loading.get(src);
   if (known) return known;
   const promise = new Promise<void>((resolve, reject) => {
-    const script = document.createElement("script");
+    const script = document.createElement('script');
     script.src = src;
     script.async = true;
     script.onload = () => resolve();
     script.onerror = () => {
       loading.delete(src);
-      reject(new Error("Google Drive could not be loaded; check your connection and try again"));
+      reject(new Error('Google Drive could not be loaded; check your connection and try again'));
     };
     document.head.appendChild(script);
   });
@@ -113,13 +114,13 @@ function loadScript(src: typeof GAPI_SRC | typeof GIS_SRC): Promise<void> {
   return promise;
 }
 
-async function loadPickerApi(): Promise<NonNullable<GoogleGlobal["picker"]>> {
+async function loadPickerApi(): Promise<NonNullable<GoogleGlobal['picker']>> {
   await loadScript(GAPI_SRC);
   if (!window.google?.picker) {
     await new Promise<void>((resolve, reject) =>
-      window.gapi!.load("picker", {
+      window.gapi!.load('picker', {
         callback: () => resolve(),
-        onerror: () => reject(new Error("The Google Drive picker could not be loaded")),
+        onerror: () => reject(new Error('The Google Drive picker could not be loaded')),
       }),
     );
   }
@@ -146,9 +147,10 @@ let cached: { token: string; until: number; hint: string } | null = null;
  * is needed) is requested before this returns, so call it straight from a click.
  */
 function driveToken(config: PickerConfig, hint: string): Promise<string> {
-  if (cached && cached.hint === hint && cached.until > Date.now()) return Promise.resolve(cached.token);
+  if (cached && cached.hint === hint && cached.until > Date.now())
+    return Promise.resolve(cached.token);
   const oauth2 = window.google?.accounts?.oauth2;
-  if (!oauth2) return Promise.reject(new Error("Google sign-in is still loading; try again"));
+  if (!oauth2) return Promise.reject(new Error('Google sign-in is still loading; try again'));
   return new Promise<string>((resolve, reject) => {
     const client = oauth2.initTokenClient({
       client_id: config.client_id,
@@ -156,17 +158,29 @@ function driveToken(config: PickerConfig, hint: string): Promise<string> {
       login_hint: hint || undefined,
       callback: (r) => {
         if (!r.access_token) {
-          reject(new Error(r.error_description || r.error || "Google did not grant access to Drive"));
+          reject(
+            new Error(r.error_description || r.error || 'Google did not grant access to Drive'),
+          );
           return;
         }
         const seconds = Number(r.expires_in ?? 3600);
-        cached = { token: r.access_token, until: Date.now() + Math.max(0, seconds - 60) * 1000, hint };
+        cached = {
+          token: r.access_token,
+          until: Date.now() + Math.max(0, seconds - 60) * 1000,
+          hint,
+        };
         resolve(r.access_token);
       },
       error_callback: (e) =>
-        reject(new Error(e.type === "popup_closed" ? "Google sign-in was closed" : e.message || "Google sign-in failed")),
+        reject(
+          new Error(
+            e.type === 'popup_closed'
+              ? 'Google sign-in was closed'
+              : e.message || 'Google sign-in failed',
+          ),
+        ),
     });
-    client.requestAccessToken({ prompt: "" });
+    client.requestAccessToken({ prompt: '' });
   });
 }
 
@@ -177,7 +191,7 @@ function driveToken(config: PickerConfig, hint: string): Promise<string> {
  */
 export function chooseFromDrive(config: PickerConfig, hint: string): Promise<PickedFile[] | null> {
   const picker = window.google?.picker;
-  if (!picker) return Promise.reject(new Error("Google Drive is still loading; try again"));
+  if (!picker) return Promise.reject(new Error('Google Drive is still loading; try again'));
   // Synchronously, on the click: Google's sign-in popup is opened here when needed.
   const token = driveToken(config, hint);
   return token.then(
@@ -197,7 +211,7 @@ export function chooseFromDrive(config: PickerConfig, hint: string): Promise<Pic
           .setDeveloperKey(config.developer_key)
           .setOAuthToken(oauthToken)
           .setOrigin(window.location.origin)
-          .setTitle("Choose Google Docs and folders")
+          .setTitle('Choose Google Docs and folders')
           .setCallback((data) => {
             if (data.action === picker.Action.PICKED) {
               resolve(
@@ -206,7 +220,7 @@ export function chooseFromDrive(config: PickerConfig, hint: string): Promise<Pic
                   .map((d) => ({
                     id: d.id,
                     name: d.name || d.id,
-                    kind: d.mimeType === FOLDER_MIME ? ("folder" as const) : ("doc" as const),
+                    kind: d.mimeType === FOLDER_MIME ? ('folder' as const) : ('doc' as const),
                   })),
               );
             } else if (data.action === picker.Action.CANCEL) {

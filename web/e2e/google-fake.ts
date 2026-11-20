@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Page } from '@playwright/test';
 
 /**
  * Stands in for Google in the browser: answers https://apis.google.com/js/api.js and
@@ -14,8 +14,8 @@ export interface FakeDriveFile {
   mimeType?: string;
 }
 
-const DOC = "application/vnd.google-apps.document";
-export const FOLDER = "application/vnd.google-apps.folder";
+const DOC = 'application/vnd.google-apps.document';
+export const FOLDER = 'application/vnd.google-apps.folder';
 
 // A click marks its own task: inClick is true until the click's task and microtasks end.
 const CLICKS = `
@@ -89,23 +89,34 @@ window.gapi = { load(name, options) {
 }
 
 /** Fakes Google for `page`; returns the list of Google URLs the page asked for. */
-export async function fakeGoogle(page: Page, files: FakeDriveFile[], opts: { cancel?: boolean; delayMs?: number; signInClosed?: boolean } = {}) {
+export async function fakeGoogle(
+  page: Page,
+  files: FakeDriveFile[],
+  opts: { cancel?: boolean; delayMs?: number; signInClosed?: boolean } = {},
+) {
   const asked: string[] = [];
   // The mock app's own stand-in (lib/google-picker-mock.ts) steps aside for this one.
   await page.addInitScript(() => ((window as { __googleFaked?: boolean }).__googleFaked = true));
-  await page.route(/^https:\/\/([a-z0-9-]+\.)*(google\.com|googleapis\.com|gstatic\.com|googleusercontent\.com)\//, async (route) => {
-    const url = route.request().url();
-    asked.push(url);
-    if (opts.delayMs && (url === "https://apis.google.com/js/api.js" || url === "https://accounts.google.com/gsi/client")) {
-      await new Promise((r) => setTimeout(r, opts.delayMs));
-    }
-    if (url === "https://apis.google.com/js/api.js") {
-      return route.fulfill({ contentType: "text/javascript", body: gapi(files, !!opts.cancel) });
-    }
-    if (url === "https://accounts.google.com/gsi/client") {
-      return route.fulfill({ contentType: "text/javascript", body: gis(!!opts.signInClosed) });
-    }
-    return route.abort();
-  });
+  await page.route(
+    /^https:\/\/([a-z0-9-]+\.)*(google\.com|googleapis\.com|gstatic\.com|googleusercontent\.com)\//,
+    async (route) => {
+      const url = route.request().url();
+      asked.push(url);
+      if (
+        opts.delayMs &&
+        (url === 'https://apis.google.com/js/api.js' ||
+          url === 'https://accounts.google.com/gsi/client')
+      ) {
+        await new Promise((r) => setTimeout(r, opts.delayMs));
+      }
+      if (url === 'https://apis.google.com/js/api.js') {
+        return route.fulfill({ contentType: 'text/javascript', body: gapi(files, !!opts.cancel) });
+      }
+      if (url === 'https://accounts.google.com/gsi/client') {
+        return route.fulfill({ contentType: 'text/javascript', body: gis(!!opts.signInClosed) });
+      }
+      return route.abort();
+    },
+  );
   return asked;
 }

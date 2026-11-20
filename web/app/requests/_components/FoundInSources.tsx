@@ -1,27 +1,27 @@
-"use client";
+'use client';
 
-import { useRouter } from "@/lib/nav";
-import { useState } from "react";
+import { useRouter } from '@/lib/nav';
+import { useState } from 'react';
 
-import { Button, Chip, Notice, Panel } from "@/components/ds";
-import { ErrorNote } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { plural } from "@/lib/format";
-import { errorMessage, type Query } from "@/lib/use-query";
+import { Button, Chip, Notice, Panel } from '@/components/ds';
+import { ErrorNote } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { plural } from '@/lib/format';
+import { errorMessage, type Query } from '@/lib/use-query';
 
-import { NewRequestDialog } from "./NewRequest";
+import { NewRequestDialog } from './NewRequest';
 
-type Candidate = Schemas["CandidateOut"];
-type Channel = Candidate["channel"];
+type Candidate = Schemas['CandidateOut'];
+type Channel = Candidate['channel'];
 
 const CHANNEL_LABEL: Record<Channel, string> = {
-  support: "Support",
-  sales: "Sales",
-  team: "Team",
-  slack: "Slack",
-  meeting: "Meeting",
-  doc: "Doc",
-  other: "Other",
+  support: 'Support',
+  sales: 'Sales',
+  team: 'Team',
+  slack: 'Slack',
+  meeting: 'Meeting',
+  doc: 'Doc',
+  other: 'Other',
 };
 
 /**
@@ -33,17 +33,27 @@ const CHANNEL_LABEL: Record<Channel, string> = {
  * read of them (GET /v1/request-candidates?status=open), read again when a triage run ends, so
  * new finds show; the screen waits for it before drawing (qa4-work-13).
  */
-export function FoundInSources({ found: q, onFiled }: { found: Query<Candidate[]>; onFiled: (request: Schemas["RequestOut"]) => void }) {
+export function FoundInSources({
+  found: q,
+  onFiled,
+}: {
+  found: Query<Candidate[]>;
+  onFiled: (request: Schemas['RequestOut']) => void;
+}) {
   const router = useRouter();
   const [filing, setFiling] = useState<Candidate | null>(null);
-  const [filed, setFiled] = useState<Schemas["RequestOut"] | null>(null);
+  const [filed, setFiled] = useState<Schemas['RequestOut'] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const open = q.data ?? [];
 
   async function dismiss(c: Candidate) {
     setError(null);
     try {
-      await unwrap(api.POST("/v1/request-candidates/{candidate_id}/dismiss", { params: { path: { candidate_id: c.id } } }));
+      await unwrap(
+        api.POST('/v1/request-candidates/{candidate_id}/dismiss', {
+          params: { path: { candidate_id: c.id } },
+        }),
+      );
       q.setData((rows) => rows?.filter((r) => r.id !== c.id));
     } catch (e) {
       setError(errorMessage(e));
@@ -58,7 +68,10 @@ export function FoundInSources({ found: q, onFiled }: { found: Query<Candidate[]
         </Notice>
       )}
       {open.length > 0 && (
-        <Panel testId="found-in-sources" title={`Oracle found ${plural(open.length, "possible request")} in your sources`}>
+        <Panel
+          testId="found-in-sources"
+          title={`Oracle found ${plural(open.length, 'possible request')} in your sources`}
+        >
           <p className="px-4 pt-3 text-sm text-text2">Only you see these until you file one.</p>
           {error && (
             <div className="px-4 pt-2">
@@ -67,14 +80,18 @@ export function FoundInSources({ found: q, onFiled }: { found: Query<Candidate[]
           )}
           <ul className="divide-y divide-line">
             {open.map((c) => (
-              <li key={c.id} data-testid="found-item" className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
+              <li
+                key={c.id}
+                data-testid="found-item"
+                className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3"
+              >
                 <div className="flex min-w-0 flex-1 basis-64 flex-col gap-0.5">
                   <span className="truncate text-[15px] font-semibold" title={c.body ?? c.title}>
                     {c.title}
                   </span>
                   <span className="flex min-w-0 items-center gap-2 text-sm text-text2">
                     <Chip kind="line">{CHANNEL_LABEL[c.channel]}</Chip>
-                    <span className="truncate">{c.source.title ?? "Untitled item"}</span>
+                    <span className="truncate">{c.source.title ?? 'Untitled item'}</span>
                   </span>
                 </div>
                 <div className="flex flex-none gap-2">

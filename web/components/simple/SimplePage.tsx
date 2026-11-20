@@ -1,7 +1,7 @@
-import { Link } from "@/lib/nav";
-import type { ReactNode } from "react";
+import { Link } from '@/lib/nav';
+import type { ReactNode } from 'react';
 
-import { InfoTip } from "@/components/ds";
+import { InfoTip } from '@/components/ds';
 
 /**
  * A Simple page (#723 S1): its title and parts, drawn from the Simple tokens (globals.css,
@@ -11,7 +11,17 @@ import { InfoTip } from "@/components/ds";
  * `info`: what the page is for, behind an (i) beside the heading (the owner's rule: no
  * explanation lines under a heading).
  */
-export function SimplePage({ title, lead, info, children }: { title: string; lead?: ReactNode; info?: ReactNode; children: ReactNode }) {
+export function SimplePage({
+  title,
+  lead,
+  info,
+  children,
+}: {
+  title: string;
+  lead?: ReactNode;
+  info?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <div className="simple-page" data-testid="simple-page">
       <header className="flex flex-col gap-2">
@@ -33,7 +43,17 @@ export function SimplePage({ title, lead, info, children }: { title: string; lea
 }
 
 /** One part of a Simple page: a heading and a card. */
-export function SimpleSection({ title, testId, action, children }: { title: string; testId?: string; action?: ReactNode; children: ReactNode }) {
+export function SimpleSection({
+  title,
+  testId,
+  action,
+  children,
+}: {
+  title: string;
+  testId?: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <section className="simple-card" data-testid={testId} aria-label={title}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -58,7 +78,15 @@ export function SimpleEmpty({ testId, children }: { testId: string; children: Re
  * A page whose screen arrives with a later part of Simple: says what arrives and links the
  * Detailed page that has it today.
  */
-export function SimplePlaceholder({ arrives, detailedHref, detailedLabel }: { arrives: ReactNode; detailedHref: string; detailedLabel: string }) {
+export function SimplePlaceholder({
+  arrives,
+  detailedHref,
+  detailedLabel,
+}: {
+  arrives: ReactNode;
+  detailedHref: string;
+  detailedLabel: string;
+}) {
   return (
     <div className="simple-card" data-testid="simple-placeholder">
       <p>
@@ -66,7 +94,7 @@ export function SimplePlaceholder({ arrives, detailedHref, detailedLabel }: { ar
         {arrives}
       </p>
       <p>
-        Until then: {detailedLabel}.{" "}
+        Until then: {detailedLabel}.{' '}
         <Link href={detailedHref} className="font-semibold text-accent-ink hover:underline">
           Open the detailed view
         </Link>

@@ -1,37 +1,53 @@
-"use client";
+'use client';
 
-import { usePathname } from "@/lib/nav";
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { usePathname } from '@/lib/nav';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 
-import { DiscussionThread } from "@/components/discuss/DiscussionThread";
-import { isHidden, type DiscussionRow, type DiscussionSummary } from "@/components/discuss/DiscussionList";
-import { Button, Icon, InfoTip, Mark, Notice, SegmentedControl } from "@/components/ds";
-import { useLinkedThread, type LinkedThread } from "@/components/hop/open-state";
-import { ShareForm } from "@/components/hop/ShareForm";
-import { InlineError } from "@/components/review/parts";
-import { SimpleAskPanel } from "@/components/simple/chat/SimpleAsk";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { useMe } from "@/lib/me";
-import { GENERAL, subjectKey, subjectWithView, useCurrentScreenSubject, type ScreenSubject } from "@/lib/screen-subject";
-import { errorMessage } from "@/lib/use-query";
+import { DiscussionThread } from '@/components/discuss/DiscussionThread';
+import {
+  isHidden,
+  type DiscussionRow,
+  type DiscussionSummary,
+} from '@/components/discuss/DiscussionList';
+import { Button, Icon, InfoTip, Mark, Notice, SegmentedControl } from '@/components/ds';
+import { useLinkedThread, type LinkedThread } from '@/components/hop/open-state';
+import { ShareForm } from '@/components/hop/ShareForm';
+import { InlineError } from '@/components/review/parts';
+import { SimpleAskPanel } from '@/components/simple/chat/SimpleAsk';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { useMe } from '@/lib/me';
+import {
+  GENERAL,
+  subjectKey,
+  subjectWithView,
+  useCurrentScreenSubject,
+  type ScreenSubject,
+} from '@/lib/screen-subject';
+import { errorMessage } from '@/lib/use-query';
 
-type View = { kind: "list" } | { kind: "thread"; id: string } | { kind: "share"; id: string };
+type View = { kind: 'list' } | { kind: 'thread'; id: string } | { kind: 'share'; id: string };
 
 /** Chats on this subject ("Here") and the reader's own panel chats ("Recent", the last 10). */
 function useLists(subject: ScreenSubject, tick: number) {
   const [here, setHere] = useState<DiscussionRow[] | null>(null);
   const [recent, setRecent] = useState<DiscussionSummary[] | null>(null);
   const key = subjectKey(subject);
-  const runId = subject.kind === "checkpoint" ? String(subject.subject.run_id) : null;
+  const runId = subject.kind === 'checkpoint' ? String(subject.subject.run_id) : null;
   useEffect(() => {
     let live = true;
     Promise.all([
       key || runId
-        ? unwrap(api.GET("/v1/discussions", { params: { query: key ? { subject_key: key } : { run_id: runId! } } })).then((p) => p.items)
+        ? unwrap(
+            api.GET('/v1/discussions', {
+              params: { query: key ? { subject_key: key } : { run_id: runId! } },
+            }),
+          ).then((p) => p.items)
         : Promise.resolve([]),
-      unwrap(api.GET("/v1/discussions", { params: { query: { mine: true, origin: "panel", limit: 10 } } })).then((p) =>
-        p.items.filter((x): x is DiscussionSummary => !isHidden(x)),
-      ),
+      unwrap(
+        api.GET('/v1/discussions', {
+          params: { query: { mine: true, origin: 'panel', limit: 10 } },
+        }),
+      ).then((p) => p.items.filter((x): x is DiscussionSummary => !isHidden(x))),
     ])
       .then(([h, r]) => {
         if (!live) return;
@@ -53,7 +69,10 @@ function useLists(subject: ScreenSubject, tick: number) {
 function ChatRow({ row, onOpen }: { row: DiscussionRow; onOpen: (id: string) => void }) {
   if (isHidden(row))
     return (
-      <li className="flex min-h-10 items-center gap-2 px-2 text-[15px] text-text2" data-testid="hop-hidden-row">
+      <li
+        className="flex min-h-10 items-center gap-2 px-2 text-[15px] text-text2"
+        data-testid="hop-hidden-row"
+      >
         <Icon name="lock" size={16} />
         Private discussion
       </li>
@@ -66,7 +85,7 @@ function ChatRow({ row, onOpen }: { row: DiscussionRow; onOpen: (id: string) => 
         data-testid="hop-chat-row"
         className="flex min-h-10 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left text-[15px] text-text hover:bg-surface2"
       >
-        {row.visibility === "private" && <Icon name="lock" size={16} />}
+        {row.visibility === 'private' && <Icon name="lock" size={16} />}
         <span className="min-w-0 flex-1 truncate font-medium">{row.title}</span>
         <span className="flex-none text-[13px] text-text2 tnum">{row.message_count}</span>
       </button>
@@ -77,11 +96,21 @@ function ChatRow({ row, onOpen }: { row: DiscussionRow; onOpen: (id: string) => 
 /** Starts a private panel chat on the subject with the person's line; Oracle's reply streams in it. */
 async function startChat(subject: ScreenSubject, text: string): Promise<string> {
   const d = await unwrap(
-    api.POST("/v1/discussions", {
-      body: { subject_kind: subject.kind, subject: subjectWithView(subject), origin: "panel", visibility: "private" },
+    api.POST('/v1/discussions', {
+      body: {
+        subject_kind: subject.kind,
+        subject: subjectWithView(subject),
+        origin: 'panel',
+        visibility: 'private',
+      },
     }),
   );
-  await unwrap(api.POST("/v1/discussions/{discussion_id}/messages", { params: { path: { discussion_id: d.id } }, body: { body: text.trim(), mention_oracle: false } }));
+  await unwrap(
+    api.POST('/v1/discussions/{discussion_id}/messages', {
+      params: { path: { discussion_id: d.id } },
+      body: { body: text.trim(), mention_oracle: false },
+    }),
+  );
   return d.id;
 }
 
@@ -90,8 +119,14 @@ async function startChat(subject: ScreenSubject, text: string): Promise<string> 
  * streamed reply. Simple's box (qa-shell-12): pinned under the chat, Send beside it, Enter
  * sends and Shift+Enter adds a line (qa-shell-15).
  */
-function NewChat({ subject, onStarted }: { subject: ScreenSubject; onStarted: (id: string) => void }) {
-  const [text, setText] = useState("");
+function NewChat({
+  subject,
+  onStarted,
+}: {
+  subject: ScreenSubject;
+  onStarted: (id: string) => void;
+}) {
+  const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const send = async () => {
@@ -100,7 +135,7 @@ function NewChat({ subject, onStarted }: { subject: ScreenSubject; onStarted: (i
     setError(null);
     try {
       const id = await startChat(subject, text);
-      setText("");
+      setText('');
       onStarted(id);
     } catch (e) {
       setError(errorMessage(e));
@@ -126,14 +161,19 @@ function NewChat({ subject, onStarted }: { subject: ScreenSubject; onStarted: (i
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
               void send();
             }
           }}
           className="max-h-40 min-h-10 min-w-0 flex-1 resize-none rounded-[10px] border border-line-strong bg-surface px-3 py-2 text-[15px] leading-[22px] text-text [field-sizing:content] placeholder:text-text-faint"
         />
-        <Button type="submit" variant="primary" className="flex-none" disabled={busy || !text.trim()}>
+        <Button
+          type="submit"
+          variant="primary"
+          className="flex-none"
+          disabled={busy || !text.trim()}
+        >
           Send
         </Button>
       </div>
@@ -144,11 +184,11 @@ function NewChat({ subject, onStarted }: { subject: ScreenSubject; onStarted: (i
 
 /** The thread's own subject and starter, for the header's About chip and Share as discussion. */
 function useDiscussion(id: string | null, tick: number) {
-  const [d, setD] = useState<Schemas["DiscussionOut"] | null>(null);
+  const [d, setD] = useState<Schemas['DiscussionOut'] | null>(null);
   useEffect(() => {
     if (!id) return;
     let live = true;
-    unwrap(api.GET("/v1/discussions/{discussion_id}", { params: { path: { discussion_id: id } } }))
+    unwrap(api.GET('/v1/discussions/{discussion_id}', { params: { path: { discussion_id: id } } }))
       .then((x) => live && setD(x))
       .catch(() => live && setD(null));
     return () => {
@@ -164,36 +204,56 @@ function useDiscussion(id: string | null, tick: number) {
  * as discussion. Panel chats are private: just the reader and Oracle. The thread carries
  * G3's changes card and its actions (Stage, Suggest, Edit, Dismiss…) as anywhere else.
  */
-export function HopPanel({ mark, ...props }: { onClose?: () => void; closeLabel?: string; showHeader?: boolean; mark?: boolean }) {
+export function HopPanel({
+  mark,
+  ...props
+}: {
+  onClose?: () => void;
+  closeLabel?: string;
+  showHeader?: boolean;
+  mark?: boolean;
+}) {
   // ask-fresh: Simple's pages get Simple's own Ask panel (a clean chat each time it opens); Detailed has its own chats in the same layout.
-  const pathname = usePathname() ?? "";
-  return pathname.startsWith("/simple") ? <SimpleAskPanel {...props} mark={mark} /> : <DetailedPanel {...props} />;
+  const pathname = usePathname() ?? '';
+  return pathname.startsWith('/simple') ? (
+    <SimpleAskPanel {...props} mark={mark} />
+  ) : (
+    <DetailedPanel {...props} />
+  );
 }
 
-function DetailedPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader = true }: { onClose?: () => void; closeLabel?: string; showHeader?: boolean }) {
+function DetailedPanel({
+  onClose,
+  closeLabel = 'Close Ask Oracle',
+  showHeader = true,
+}: {
+  onClose?: () => void;
+  closeLabel?: string;
+  showHeader?: boolean;
+}) {
   const { can } = useMe();
   const page = useCurrentScreenSubject();
   const [general, setGeneral] = useState(false);
-  const [view, setView] = useState<View>({ kind: "list" });
+  const [view, setView] = useState<View>({ kind: 'list' });
   const [tick, setTick] = useState(0);
   const [shared, setShared] = useState(false);
   const [recentOpen, setRecentOpen] = useState(false);
   const subject = general ? GENERAL : page;
   const { here, recent } = useLists(subject, tick);
-  const threadId = view.kind === "list" ? null : view.id;
+  const threadId = view.kind === 'list' ? null : view.id;
   const d = useDiscussion(threadId, tick);
-  const writes = can("create_discussion");
-  const isPanelChat = d?.origin === "panel";
+  const writes = can('create_discussion');
+  const isPanelChat = d?.origin === 'panel';
   const started = (id: string) => {
-    setView({ kind: "thread", id });
+    setView({ kind: 'thread', id });
     setTick((t) => t + 1);
   };
   const open = (id: string) => {
     setRecentOpen(false);
-    setView({ kind: "thread", id });
+    setView({ kind: 'thread', id });
   };
   const newChat = () => {
-    setView({ kind: "list" });
+    setView({ kind: 'list' });
     setShared(false);
     setRecentOpen(false);
     setTick((t) => t + 1);
@@ -205,23 +265,33 @@ function DetailedPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader = 
   if (linked && linked !== shownLinked) {
     setShownLinked(linked);
     setRecentOpen(false);
-    setView({ kind: "thread", id: linked.id });
+    setView({ kind: 'thread', id: linked.id });
   }
 
   // qa-shell-12: Simple's layout (the owner's pick): the head with New chat, the This page |
   // General switch with "Just you and Oracle", "New chat about Home" with Recent chats, the
   // chat, and the box pinned at the bottom with Send beside it.
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-col bg-surface text-text" data-testid="hop-panel">
+    <div
+      className="flex h-full min-h-0 min-w-0 flex-col bg-surface text-text"
+      data-testid="hop-panel"
+    >
       {showHeader && (
         <div className="flex min-h-14 flex-none items-center gap-2 border-b border-line pr-3 pl-4">
           <Mark size={22} tone="current" className="flex-none text-accent" />
-          <h2 className="min-w-0 flex-1 font-display text-lg font-bold tracking-heading">Ask Oracle</h2>
+          <h2 className="min-w-0 flex-1 font-display text-lg font-bold tracking-heading">
+            Ask Oracle
+          </h2>
           <Button icon="plus" className="flex-none" data-testid="ask-new-chat" onClick={newChat}>
             New chat
           </Button>
           {onClose && (
-            <button type="button" aria-label={closeLabel} onClick={onClose} className="flex size-9 flex-none items-center justify-center rounded-lg text-text hover:bg-surface2">
+            <button
+              type="button"
+              aria-label={closeLabel}
+              onClick={onClose}
+              className="flex size-9 flex-none items-center justify-center rounded-lg text-text hover:bg-surface2"
+            >
               <Icon name="x" />
             </button>
           )}
@@ -231,18 +301,21 @@ function DetailedPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader = 
         <SegmentedControl
           label="About"
           size="sm"
-          value={general ? "general" : "page"}
+          value={general ? 'general' : 'page'}
           onChange={(v) => {
-            setGeneral(v === "general");
+            setGeneral(v === 'general');
             newChat();
           }}
           items={[
-            { value: "page", label: "This page" },
-            { value: "general", label: "General" },
+            { value: 'page', label: 'This page' },
+            { value: 'general', label: 'General' },
           ]}
         />
-        {(view.kind === "list" || isPanelChat) && (
-          <p className="ml-auto flex min-w-0 items-center gap-1 text-sm text-text2" data-testid="hop-visibility">
+        {(view.kind === 'list' || isPanelChat) && (
+          <p
+            className="ml-auto flex min-w-0 items-center gap-1 text-sm text-text2"
+            data-testid="hop-visibility"
+          >
             <Icon name="lock" size={16} />
             Just you and Oracle
             <InfoTip label="Just you and Oracle" align="end" side="bottom">
@@ -254,11 +327,15 @@ function DetailedPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader = 
 
       <div className="relative flex min-h-0 flex-1 flex-col">
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-3">
-          {view.kind === "list" && (
+          {view.kind === 'list' && (
             <>
               {/* In a thread its own header names the subject (qa-shell-20): this line is for a new chat. Plain words, never a link to the page you are on (qa-shell-15). */}
               <p className="flex min-w-0 items-center gap-2 text-sm text-text2">
-                <span className="min-w-0 truncate" data-testid="hop-about" title={`New chat about ${subject.label}`}>
+                <span
+                  className="min-w-0 truncate"
+                  data-testid="hop-about"
+                  title={`New chat about ${subject.label}`}
+                >
                   New chat about {subject.label}
                 </span>
                 <button
@@ -276,19 +353,30 @@ function DetailedPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader = 
               </p>
               {!!here?.length && (
                 <section aria-label="Here" className="flex flex-col gap-1">
-                  <h3 className="text-[13px] font-semibold tracking-wide text-text2 uppercase">Here</h3>
-                  <ul className="flex flex-col">{here.map((row) => <ChatRow key={row.id} row={row} onOpen={open} />)}</ul>
+                  <h3 className="text-[13px] font-semibold tracking-wide text-text2 uppercase">
+                    Here
+                  </h3>
+                  <ul className="flex flex-col">
+                    {here.map((row) => (
+                      <ChatRow key={row.id} row={row} onOpen={open} />
+                    ))}
+                  </ul>
                 </section>
               )}
               {here !== null && here.length === 0 && (
-                <p className="px-2 pt-7 pb-3 text-center text-[15px] text-text2" data-testid="hop-empty">
+                <p
+                  className="px-2 pt-7 pb-3 text-center text-[15px] text-text2"
+                  data-testid="hop-empty"
+                >
                   <b className="mb-1 block text-[17px] font-semibold text-text">Nothing yet</b>
-                  {writes ? "Ask why something is ranked, what to cut, or what is missing." : "Chats here show for you to read."}
+                  {writes
+                    ? 'Ask why something is ranked, what to cut, or what is missing.'
+                    : 'Chats here show for you to read.'}
                 </p>
               )}
             </>
           )}
-          {view.kind === "thread" && (
+          {view.kind === 'thread' && (
             <>
               {shared && <Notice testId="hop-shared">Shared as an open discussion</Notice>}
               <DiscussionThread
@@ -296,33 +384,44 @@ function DetailedPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader = 
                 id={view.id}
                 focusChanges={linked?.id === view.id && linked.changes}
                 // With the panel's head, its New chat goes back; the phone's sheet has no head of the panel's own.
-                {...(showHeader ? {} : { backLabel: "New chat", onBack: newChat })}
+                {...(showHeader ? {} : { backLabel: 'New chat', onBack: newChat })}
                 onChanged={() => setTick((t) => t + 1)}
               />
               {isPanelChat && d.me.can_manage && writes && (
                 <div>
-                  <Button variant="ghost" icon="comment" onClick={() => setView({ kind: "share", id: view.id })}>
+                  <Button
+                    variant="ghost"
+                    icon="comment"
+                    onClick={() => setView({ kind: 'share', id: view.id })}
+                  >
                     Share as discussion
                   </Button>
                 </div>
               )}
             </>
           )}
-          {view.kind === "share" && (
+          {view.kind === 'share' && (
             <ShareForm
               id={view.id}
-              onCancel={() => setView({ kind: "thread", id: view.id })}
+              onCancel={() => setView({ kind: 'thread', id: view.id })}
               onShared={(id) => {
                 setShared(true);
-                setView({ kind: "thread", id });
+                setView({ kind: 'thread', id });
                 setTick((t) => t + 1);
               }}
             />
           )}
         </div>
-        {view.kind === "list" && recentOpen && <RecentMenu items={recent} trigger={trigger} onOpen={open} onClose={() => setRecentOpen(false)} />}
+        {view.kind === 'list' && recentOpen && (
+          <RecentMenu
+            items={recent}
+            trigger={trigger}
+            onOpen={open}
+            onClose={() => setRecentOpen(false)}
+          />
+        )}
       </div>
-      {view.kind === "list" && (
+      {view.kind === 'list' && (
         <div className="flex-none border-t border-line px-4 pt-2.5 pb-3.5">
           {writes ? (
             <NewChat subject={subject} onStarted={started} />
@@ -361,7 +460,7 @@ function RecentMenu({
   useEffect(() => {
     // Escape closes the menu only, not the panel: first, on the window.
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+      if (e.key !== 'Escape') return;
       e.preventDefault();
       e.stopPropagation();
       shut.current();
@@ -372,11 +471,11 @@ function RecentMenu({
       if (menu.current?.contains(t) || trigger.current?.contains(t)) return;
       shut.current();
     };
-    window.addEventListener("keydown", onKey, true);
-    document.addEventListener("pointerdown", onDown, true);
+    window.addEventListener('keydown', onKey, true);
+    document.addEventListener('pointerdown', onDown, true);
     return () => {
-      window.removeEventListener("keydown", onKey, true);
-      document.removeEventListener("pointerdown", onDown, true);
+      window.removeEventListener('keydown', onKey, true);
+      document.removeEventListener('pointerdown', onDown, true);
     };
   }, [trigger]);
   return (
@@ -386,7 +485,9 @@ function RecentMenu({
       data-testid="ask-recent-list"
       className="absolute top-[37px] right-3 z-10 flex max-h-[calc(100%-50px)] w-[340px] max-w-[calc(100%-24px)] flex-col overflow-y-auto rounded-xl border border-line bg-surface p-1.5 shadow-tip"
     >
-      <h3 className="px-2 py-1.5 text-xs font-semibold tracking-[.06em] text-text2 uppercase">Your recent chats</h3>
+      <h3 className="px-2 py-1.5 text-xs font-semibold tracking-[.06em] text-text2 uppercase">
+        Your recent chats
+      </h3>
       {items !== null && items.length === 0 ? (
         <p className="px-2 py-2 text-[13px] text-text2">No chats yet.</p>
       ) : (
@@ -399,8 +500,12 @@ function RecentMenu({
                 onClick={() => onOpen(c.id)}
                 className="flex w-full flex-col rounded-lg p-2 text-left outline-none hover:bg-surface2 focus:bg-surface2 focus-visible:ring-2 focus-visible:ring-[var(--focus-ring,var(--accent))]"
               >
-                <b className="text-[15px] font-semibold text-text [overflow-wrap:anywhere]">{c.title}</b>
-                <span className="text-[13px] text-text2 [overflow-wrap:anywhere]">{c.subject_label}</span>
+                <b className="text-[15px] font-semibold text-text [overflow-wrap:anywhere]">
+                  {c.title}
+                </b>
+                <span className="text-[13px] text-text2 [overflow-wrap:anywhere]">
+                  {c.subject_label}
+                </span>
               </button>
             </li>
           ))}

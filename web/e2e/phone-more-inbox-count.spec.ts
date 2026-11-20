@@ -1,5 +1,5 @@
-import { login } from "./helpers";
-import { expect, test } from "./test";
+import { login } from './helpers';
+import { expect, test } from './test';
 
 /**
  * simple-home-qa-nov12 #17: on a phone, the tab bar's More carries the Inbox's own count, so it
@@ -14,16 +14,16 @@ test.use({ viewport: { width: 390, height: 844 } });
 
 test("More on the phone's tab bar shows the Inbox's own count", async ({ page }) => {
   await login(page);
-  await page.goto("/simple");
-  const badge = page.getByTestId("simple-tab-more-count");
+  await page.goto('/simple');
+  const badge = page.getByTestId('simple-tab-more-count');
   await expect(badge).toBeVisible();
-  await page.getByTestId("simple-tab-more").click();
-  const sheet = page.getByRole("dialog", { name: "More" });
-  const inbox = sheet.getByTestId("simple-more-inbox-count");
+  await page.getByTestId('simple-tab-more').click();
+  const sheet = page.getByRole('dialog', { name: 'More' });
+  const inbox = sheet.getByTestId('simple-more-inbox-count');
   await expect(inbox).toBeVisible();
   const n = (await inbox.textContent())!.trim();
   await expect(badge).toHaveText(n);
-  await sheet.getByRole("link", { name: "Inbox", exact: true }).click();
+  await sheet.getByRole('link', { name: 'Inbox', exact: true }).click();
   // The Inbox's own number: its New tab ("New 31").
-  await expect(page.getByRole("tab", { name: `New ${n}`, exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: `New ${n}`, exact: true })).toBeVisible();
 });

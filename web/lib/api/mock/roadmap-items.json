@@ -43,7 +43,11 @@
       "depends_titles": {},
       "validation_gates": [],
       "economics": { "priority_score": 4.2 },
-      "priority": { "rank": 1, "score": 4.2, "explanation": "activation weight 3 x contribution 2" },
+      "priority": {
+        "rank": 1,
+        "score": 4.2,
+        "explanation": "activation weight 3 x contribution 2"
+      },
       "confidence": "high",
       "engineering": [],
       "note": null
@@ -83,7 +87,11 @@
       "depends_titles": {},
       "validation_gates": [],
       "economics": { "priority_score": 2.1 },
-      "priority": { "rank": 2, "score": 2.1, "explanation": "activation weight 3 x contribution 0.7" },
+      "priority": {
+        "rank": 2,
+        "score": 2.1,
+        "explanation": "activation weight 3 x contribution 0.7"
+      },
       "confidence": "low",
       "engineering": [],
       "note": null

@@ -1,19 +1,20 @@
-"use client";
+'use client';
 
-import { Link } from "@/lib/nav";
-import { useState, type FormEvent } from "react";
+import { Link } from '@/lib/nav';
+import { useState, type FormEvent } from 'react';
 
-import { Button, Chip, InfoTip } from "@/components/ds";
-import { FRESHNESS, reasonText, type PrdWords } from "@/components/tech-brief";
-import { ErrorNote } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { useMe } from "@/lib/me";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import { Button, Chip, InfoTip } from '@/components/ds';
+import { FRESHNESS, reasonText, type PrdWords } from '@/components/tech-brief';
+import { ErrorNote } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { useMe } from '@/lib/me';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-type Spec = Schemas["SpecOut"];
-type Output = Schemas["TraceOutput"];
+type Spec = Schemas['SpecOut'];
+type Output = Schemas['TraceOutput'];
 
-const INPUT = "rounded-button border border-line-strong bg-surface px-2.5 py-2 text-[15px] font-normal text-text";
+const INPUT =
+  'rounded-button border border-line-strong bg-surface px-2.5 py-2 text-[15px] font-normal text-text';
 
 /**
  * #481 A spec version that may be stale, on its tech brief page: the Potentially stale label
@@ -26,60 +27,88 @@ const INPUT = "rounded-button border border-line-strong bg-surface px-2.5 py-2 t
  * running and there is no second Reconcile. The controls are for the roles that may approve
  * the spec (#370); others see the label only.
  */
-export function SpecStaleness({ doc, n, mayApprove, onChanged }: { doc: string; n: number; mayApprove: boolean; onChanged: () => void }) {
+export function SpecStaleness({
+  doc,
+  n,
+  mayApprove,
+  onChanged,
+}: {
+  doc: string;
+  n: number;
+  mayApprove: boolean;
+  onChanged: () => void;
+}) {
   const { can, me } = useMe();
-  const listQ = useQuery(`spec-requests|${doc}`, () => unwrap(api.GET("/v1/spec-requests")));
+  const listQ = useQuery(`spec-requests|${doc}`, () => unwrap(api.GET('/v1/spec-requests')));
   const requestId = listQ.data?.find((s) => s.document_slug === doc)?.request.id ?? null;
   const specQ = useQuery(`spec-request|${requestId}`, () =>
-    requestId ? unwrap(api.GET("/v1/spec-requests/{request_id}", { params: { path: { request_id: requestId } } })) : Promise.resolve(null),
+    requestId
+      ? unwrap(
+          api.GET('/v1/spec-requests/{request_id}', {
+            params: { path: { request_id: requestId } },
+          }),
+        )
+      : Promise.resolve(null),
   );
   const spec = specQ.data ?? null;
   const av = spec?.versions.find((v) => v.document_version === n)?.artifact_version;
   const view = av ? spec?.stale.find((s) => s.artifact_version_id === av.id) : undefined;
   const words = usePrdWords(spec, view);
-  if (!spec || !av || av.freshness === "fresh") return null;
+  if (!spec || !av || av.freshness === 'fresh') return null;
   const fresh = FRESHNESS[av.freshness];
   // The spec's proposed regeneration, while its run has not ended.
   const runId = spec.regeneration_run_id ?? null;
-  const label = av.freshness === "potentially_stale" && runId ? `${fresh.label} · regeneration running` : fresh.label;
+  const label =
+    av.freshness === 'potentially_stale' && runId
+      ? `${fresh.label} · regeneration running`
+      : fresh.label;
   // The spec's engineering approvers (all approvers when it names none) decide on it, as the API's checks;
   // an owner always may (#1591: regenerate_spec's per-item role, through can()).
   const named = spec.engineering_approver_ids;
-  const engineer = can("regenerate_spec", named.length === 0 || (!!me?.user_id && named.includes(me.user_id)));
+  const engineer = can(
+    'regenerate_spec',
+    named.length === 0 || (!!me?.user_id && named.includes(me.user_id)),
+  );
   const changed = () => {
     void specQ.reload();
     onChanged();
   };
   return (
-    <div data-testid="spec-staleness" className="mb-3 flex flex-col gap-2 rounded-button border border-line bg-surface px-4 py-3">
+    <div
+      data-testid="spec-staleness"
+      className="mb-3 flex flex-col gap-2 rounded-button border border-line bg-surface px-4 py-3"
+    >
       <div className="flex flex-wrap items-center gap-2">
         <Chip kind={fresh.kind} dot>
           {label}
         </Chip>
         {view && view.reasons.length > 0 && (
           <span data-testid="spec-staleness-reasons" className="text-sm text-text2">
-            {[...new Set(view.reasons.map((r) => reasonText(r, words)))].join("; ")}
+            {[...new Set(view.reasons.map((r) => reasonText(r, words)))].join('; ')}
           </span>
         )}
       </div>
       {runId && (
         <p className="text-sm text-text2">
-          A draft run regenerates this spec from the PRD.{" "}
+          A draft run regenerates this spec from the PRD.{' '}
           <Link href={`/runs/${runId}`} className="font-medium text-accent-ink hover:underline">
             Estimate and start it
           </Link>
         </p>
       )}
-      {av.freshness === "potentially_stale" && mayApprove && engineer && can("act_on_staleness") && (
-        <StaleActions
-          key={av.id}
-          spec={spec}
-          versionId={av.id}
-          view={view}
-          mayRegenerate={!runId && engineer}
-          onChanged={changed}
-        />
-      )}
+      {av.freshness === 'potentially_stale' &&
+        mayApprove &&
+        engineer &&
+        can('act_on_staleness') && (
+          <StaleActions
+            key={av.id}
+            spec={spec}
+            versionId={av.id}
+            view={view}
+            mayRegenerate={!runId && engineer}
+            onChanged={changed}
+          />
+        )}
     </div>
   );
 }
@@ -89,17 +118,33 @@ export function SpecStaleness({ doc, n, mayApprove, onChanged }: { doc: string; 
  * its latest version, so the reasons never show a slug or a section key.
  */
 function usePrdWords(spec: Spec | null, view: Output | undefined): PrdWords {
-  const up = (view?.dependencies ?? []).map((d) => d.upstream).find((u) => u.document_slug && (!u.document_kind || u.document_kind === "prd"));
+  const up = (view?.dependencies ?? [])
+    .map((d) => d.upstream)
+    .find((u) => u.document_slug && (!u.document_kind || u.document_kind === 'prd'));
   const slug = spec?.prd?.slug ?? up?.document_slug ?? null;
   const docQ = useQuery(`doc|${slug}`, () =>
-    slug ? unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc: slug } } })).catch(() => null) : Promise.resolve(null),
+    slug
+      ? unwrap(api.GET('/v1/documents/{doc}', { params: { path: { doc: slug } } })).catch(
+          () => null,
+        )
+      : Promise.resolve(null),
   );
   const latest = docQ.data?.latest_version ?? null;
   const sectionsQ = useQuery(`spec-stale-words|${slug}|${latest}`, () =>
-    slug && latest ? unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc: slug, n: latest } } })) : Promise.resolve(null),
+    slug && latest
+      ? unwrap(
+          api.GET('/v1/documents/{doc}/versions/{n}', {
+            params: { path: { doc: slug, n: latest } },
+          }),
+        )
+      : Promise.resolve(null),
   );
   const headings = new Map((sectionsQ.data?.sections ?? []).map((x) => [x.section_key, x.heading]));
-  return { slug, title: spec?.prd?.title ?? docQ.data?.title ?? null, heading: (key) => headings.get(key) ?? null };
+  return {
+    slug,
+    title: spec?.prd?.title ?? docQ.data?.title ?? null,
+    heading: (key) => headings.get(key) ?? null,
+  };
 }
 
 function StaleActions({
@@ -115,15 +160,20 @@ function StaleActions({
   mayRegenerate: boolean;
   onChanged: () => void;
 }) {
-  const [open, setOpen] = useState<"review" | "reconcile" | null>(null);
-  const [note, setNote] = useState("");
+  const [open, setOpen] = useState<'review' | 'reconcile' | null>(null);
+  const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function markReviewed() {
     await unwrap(
-      api.POST("/v1/trace/staleness/actions", {
-        body: { action: "review", artifact_version_id: versionId, dependency_ids: [], reason: note.trim() || null },
+      api.POST('/v1/trace/staleness/actions', {
+        body: {
+          action: 'review',
+          artifact_version_id: versionId,
+          dependency_ids: [],
+          reason: note.trim() || null,
+        },
       }),
     );
   }
@@ -152,9 +202,12 @@ function StaleActions({
     e.preventDefault();
     void run(async () => {
       await unwrap(
-        api.POST("/v1/spec-requests/{request_id}/regenerate", {
+        api.POST('/v1/spec-requests/{request_id}/regenerate', {
           params: { path: { request_id: spec.request.id } },
-          body: { reason: note.trim() || null, knobs: { depth: "standard", roles: {}, checkpoints: {} } },
+          body: {
+            reason: note.trim() || null,
+            knobs: { depth: 'standard', roles: {}, checkpoints: {} },
+          },
         }),
       );
     });
@@ -164,17 +217,17 @@ function StaleActions({
     <div className="flex flex-col gap-2">
       {!open && (
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => setOpen("review")} disabled={busy}>
+          <Button onClick={() => setOpen('review')} disabled={busy}>
             Review
           </Button>
           {mayRegenerate && (
-            <Button onClick={() => setOpen("reconcile")} disabled={busy}>
+            <Button onClick={() => setOpen('reconcile')} disabled={busy}>
               Reconcile
             </Button>
           )}
         </div>
       )}
-      {open === "review" && (
+      {open === 'review' && (
         <form onSubmit={review} className="flex flex-col gap-2" role="group" aria-label="Review">
           <NoteField value={note} onChange={setNote} />
           <div className="flex flex-wrap items-center gap-2">
@@ -183,7 +236,8 @@ function StaleActions({
             </Button>
             {/* #1590: what Mark reviewed does sits behind its (i). */}
             <InfoTip label="clearing the label" align="start" testId="mark-reviewed-tip">
-              Mark this version reviewed against the changed PRD. Its Potentially stale label clears.
+              Mark this version reviewed against the changed PRD. Its Potentially stale label
+              clears.
             </InfoTip>
             <Button variant="ghost" onClick={() => setOpen(null)} disabled={busy}>
               Cancel
@@ -191,7 +245,16 @@ function StaleActions({
           </div>
         </form>
       )}
-      {open === "reconcile" && <Reconcile view={view} note={note} setNote={setNote} busy={busy} onSubmit={regenerate} onCancel={() => setOpen(null)} />}
+      {open === 'reconcile' && (
+        <Reconcile
+          view={view}
+          note={note}
+          setNote={setNote}
+          busy={busy}
+          onSubmit={regenerate}
+          onCancel={() => setOpen(null)}
+        />
+      )}
       {error && <ErrorNote>{error}</ErrorNote>}
     </div>
   );
@@ -213,26 +276,42 @@ function Reconcile({
   onSubmit: (e: FormEvent) => void;
   onCancel: () => void;
 }) {
-  const ups = (view?.dependencies ?? []).filter((d) => d.freshness === "potentially_stale" && d.upstream.section_key && d.upstream.document_slug);
+  const ups = (view?.dependencies ?? []).filter(
+    (d) =>
+      d.freshness === 'potentially_stale' && d.upstream.section_key && d.upstream.document_slug,
+  );
   const first = ups[0]?.upstream;
   const prdQ = useQuery(`spec-stale-prd|${first?.document_slug}|${first?.version_number}`, () =>
     first?.document_slug && first.version_number
-      ? unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc: first.document_slug, n: first.version_number } } }))
+      ? unwrap(
+          api.GET('/v1/documents/{doc}/versions/{n}', {
+            params: { path: { doc: first.document_slug, n: first.version_number } },
+          }),
+        )
       : Promise.resolve(null),
   );
   const headings = new Map((prdQ.data?.sections ?? []).map((s) => [s.section_key, s.heading]));
-  const names = [...new Set(ups.map((d) => headings.get(d.upstream.section_key!)).filter((h): h is string => !!h))];
+  const names = [
+    ...new Set(
+      ups.map((d) => headings.get(d.upstream.section_key!)).filter((h): h is string => !!h),
+    ),
+  ];
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-2" role="group" aria-label="Regenerate from the PRD">
+    <form
+      onSubmit={onSubmit}
+      className="flex flex-col gap-2"
+      role="group"
+      aria-label="Regenerate from the PRD"
+    >
       <p className="text-sm text-text2">
         {names.length > 0 ? (
-          <>
-            Changed in the PRD: {names.map((h) => `"${h}"`).join(", ")}.{" "}
-          </>
+          <>Changed in the PRD: {names.map((h) => `"${h}"`).join(', ')}. </>
         ) : (
-          "The PRD changed since this spec was written. "
+          'The PRD changed since this spec was written. '
         )}
-        Regenerating proposes a draft run from the latest approved PRD; nothing runs until you estimate and start it, and this version stays Potentially stale until the regenerated one replaces it.
+        Regenerating proposes a draft run from the latest approved PRD; nothing runs until you
+        estimate and start it, and this version stays Potentially stale until the regenerated one
+        replaces it.
       </p>
       <NoteField value={note} onChange={setNote} />
       <div className="flex flex-wrap gap-2">
@@ -251,7 +330,13 @@ function NoteField({ value, onChange }: { value: string; onChange: (v: string) =
   return (
     <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
       Note (optional)
-      <textarea value={value} onChange={(e) => onChange(e.target.value)} maxLength={2000} rows={2} className={INPUT} />
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        maxLength={2000}
+        rows={2}
+        className={INPUT}
+      />
     </label>
   );
 }

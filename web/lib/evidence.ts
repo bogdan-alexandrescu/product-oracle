@@ -4,88 +4,99 @@
  * columns) is a client-side pivot of the per-section links and citations; A's section table
  * reads the sections as they come (links already strongest first).
  */
-import type { Schemas } from "@/lib/api/client";
-import { citationRefText } from "@/lib/format";
+import type { Schemas } from '@/lib/api/client';
+import { citationRefText } from '@/lib/format';
 
-export type EvidenceInspector = Schemas["EvidenceInspector"];
-export type SectionEvidence = Schemas["SectionEvidence"];
-export type SectionLinkView = Schemas["SectionLinkView"];
-export type SectionLinkTarget = Schemas["SectionLinkTarget"];
-export type EvidenceCitation = Schemas["EvidenceCitation"];
-export type LinkKind = SectionLinkView["kind"];
-export type LinkPrecision = SectionLinkView["precision"];
+export type EvidenceInspector = Schemas['EvidenceInspector'];
+export type SectionEvidence = Schemas['SectionEvidence'];
+export type SectionLinkView = Schemas['SectionLinkView'];
+export type SectionLinkTarget = Schemas['SectionLinkTarget'];
+export type EvidenceCitation = Schemas['EvidenceCitation'];
+export type LinkKind = SectionLinkView['kind'];
+export type LinkPrecision = SectionLinkView['precision'];
 
 export const KINDS: { value: LinkKind; label: string; short: string }[] = [
-  { value: "evidences", label: "Evidences", short: "Evid" },
-  { value: "implements", label: "Implements", short: "Impl" },
-  { value: "claims", label: "Claims", short: "Claim" },
-  { value: "tests", label: "Tests", short: "Tests" },
-  { value: "mentions", label: "Mentions", short: "Ment" },
+  { value: 'evidences', label: 'Evidences', short: 'Evid' },
+  { value: 'implements', label: 'Implements', short: 'Impl' },
+  { value: 'claims', label: 'Claims', short: 'Claim' },
+  { value: 'tests', label: 'Tests', short: 'Tests' },
+  { value: 'mentions', label: 'Mentions', short: 'Ment' },
 ];
 export const PRECISIONS: { value: LinkPrecision; label: string }[] = [
-  { value: "section", label: "Section" },
-  { value: "paragraph", label: "Paragraph" },
-  { value: "claim", label: "Claim" },
+  { value: 'section', label: 'Section' },
+  { value: 'paragraph', label: 'Paragraph' },
+  { value: 'claim', label: 'Claim' },
 ];
 export const kindLabel = (k: LinkKind) => KINDS.find((x) => x.value === k)?.label ?? k;
 export const kindShort = (k: LinkKind) => KINDS.find((x) => x.value === k)?.short ?? k;
 
 const SOURCE: Record<string, string> = {
-  slack: "Slack",
-  notion: "Notion",
-  gdocs: "Google Docs",
-  github: "GitHub",
-  fireflies: "Meeting notes",
-  upload: "Upload",
-  web: "Web",
-  oracle: "Oracle Ground Truth",
+  slack: 'Slack',
+  notion: 'Notion',
+  gdocs: 'Google Docs',
+  github: 'GitHub',
+  fireflies: 'Meeting notes',
+  upload: 'Upload',
+  web: 'Web',
+  oracle: 'Oracle Ground Truth',
 };
 /** "github:issue" → "GitHub". */
-export const sourceLabel = (kind: string | null | undefined) => (kind ? (SOURCE[kind.split(":")[0]] ?? kind) : "Source");
+export const sourceLabel = (kind: string | null | undefined) =>
+  kind ? (SOURCE[kind.split(':')[0]] ?? kind) : 'Source';
 
 /** B3's confidence bands, as the mockup's legend: ≥ 0.70, 0.40–0.70, < 0.40, unscored. */
-export function tone(c: number | null | undefined): "pass" | "warn" | "crit" | "na" {
-  if (c == null) return "na";
-  return c >= 0.7 ? "pass" : c >= 0.4 ? "warn" : "crit";
+export function tone(c: number | null | undefined): 'pass' | 'warn' | 'crit' | 'na' {
+  if (c == null) return 'na';
+  return c >= 0.7 ? 'pass' : c >= 0.4 ? 'warn' : 'crit';
 }
 /** qa4-docs-18: a link's confidence in the legend's words ("Strong"), never a bare decimal. */
-export const strength = (c: number | null | undefined) => (c == null ? "—" : c >= 0.7 ? "Strong" : c >= 0.4 ? "Medium" : "Weak");
+export const strength = (c: number | null | undefined) =>
+  c == null ? '—' : c >= 0.7 ? 'Strong' : c >= 0.4 ? 'Medium' : 'Weak';
 /** "Strong link", "Medium link", "Weak link" (or "—" with no score). */
-export const score = (c: number | null | undefined) => (c == null ? "—" : `${strength(c)} link`);
+export const score = (c: number | null | undefined) => (c == null ? '—' : `${strength(c)} link`);
 /** For labels: "strong link", or "no score". */
-export const linkStrength = (c: number | null | undefined) => (c == null ? "no score" : score(c).toLowerCase());
+export const linkStrength = (c: number | null | undefined) =>
+  c == null ? 'no score' : score(c).toLowerCase();
 
 /** Rejected and superseded items are left out of exports (greyed here). */
-export const leftOut = (t: SectionLinkTarget) => t.status === "rejected" || t.status === "superseded";
+export const leftOut = (t: SectionLinkTarget) =>
+  t.status === 'rejected' || t.status === 'superseded';
 
 export function targetTitle(t: SectionLinkTarget): string {
   if (t.title) return t.title;
-  if (t.restricted) return "Restricted source";
-  return t.ref ?? "Untitled";
+  if (t.restricted) return 'Restricted source';
+  return t.ref ?? 'Untitled';
 }
 
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ");
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' ');
 
 /** The second line of a target: its ref and status, or its source and state. */
 export function targetSub(t: SectionLinkTarget): string {
-  if (t.type === "entity") return [t.entity_type ? cap(t.entity_type) : "Ground Truth item", t.status ? t.status.replace(/_/g, " ") : null, t.locked ? "locked" : null].filter(Boolean).join(" · ");
+  if (t.type === 'entity')
+    return [
+      t.entity_type ? cap(t.entity_type) : 'Ground Truth item',
+      t.status ? t.status.replace(/_/g, ' ') : null,
+      t.locked ? 'locked' : null,
+    ]
+      .filter(Boolean)
+      .join(' · ');
   const parts: string[] = [sourceLabel(t.source_kind)];
-  if (t.restricted) parts.push("restricted · kind only");
-  if (t.source_removed) parts.push("source removed");
-  return parts.filter(Boolean).join(" · ");
+  if (t.restricted) parts.push('restricted · kind only');
+  if (t.source_removed) parts.push('source removed');
+  return parts.filter(Boolean).join(' · ');
 }
 
 export function targetEyebrow(t: SectionLinkTarget): string {
-  if (t.type === "entity") return `Ground Truth ${t.entity_type ?? "item"}`;
-  if (t.type === "evidence") return `Evidence · ${sourceLabel(t.source_kind)}`;
+  if (t.type === 'entity') return `Ground Truth ${t.entity_type ?? 'item'}`;
+  if (t.type === 'evidence') return `Evidence · ${sourceLabel(t.source_kind)}`;
   return `Source item · ${sourceLabel(t.source_kind)}`;
 }
 
-export type MatrixGroup = "baseline" | "evidence" | "citations";
+export type MatrixGroup = 'baseline' | 'evidence' | 'citations';
 export const GROUP_LABEL: Record<MatrixGroup, string> = {
-  baseline: "Ground Truth items",
-  evidence: "Evidence & source items",
-  citations: "Draft citations",
+  baseline: 'Ground Truth items',
+  evidence: 'Evidence & source items',
+  citations: 'Draft citations',
 };
 
 export type MatrixRow = {
@@ -116,7 +127,7 @@ export function pivot(sections: SectionEvidence[]): MatrixRow[] {
       if (!row) {
         row = {
           id,
-          group: l.target.type === "entity" ? "baseline" : "evidence",
+          group: l.target.type === 'entity' ? 'baseline' : 'evidence',
           title: targetTitle(l.target),
           sub: targetSub(l.target),
           muted: leftOut(l.target) || l.target.restricted,
@@ -136,7 +147,7 @@ export function pivot(sections: SectionEvidence[]): MatrixRow[] {
       if (!row) {
         row = {
           id,
-          group: "citations",
+          group: 'citations',
           title: c.title || citationRefText(c.ref),
           sub: sourceLabel(c.source),
           muted: false,
@@ -150,7 +161,7 @@ export function pivot(sections: SectionEvidence[]): MatrixRow[] {
       row.cited.add(s.section_key);
     }
   }
-  const order: MatrixGroup[] = ["baseline", "evidence", "citations"];
+  const order: MatrixGroup[] = ['baseline', 'evidence', 'citations'];
   return [...rows.values()].sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group));
 }
 
@@ -181,4 +192,4 @@ export function weakest(s: SectionEvidence): number | null {
 }
 
 /** "Brief" or "Full", as the Document tab names its layers. */
-export const layerLabel = (layer: string) => (layer === "brief" ? "Brief" : "Full");
+export const layerLabel = (layer: string) => (layer === 'brief' ? 'Brief' : 'Full');

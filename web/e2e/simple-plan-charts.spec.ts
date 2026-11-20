@@ -1,9 +1,9 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { THEME_KEY } from "../lib/theme";
-import { ADMIN, login } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
-import { countRowOf } from "./vxe-counts";
-import { dateIntoThisQuarter } from "./this-quarter";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { THEME_KEY } from '../lib/theme';
+import { ADMIN, login } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
+import { countRowOf } from './vxe-counts';
+import { dateIntoThisQuarter } from './this-quarter';
 
 /*
  * The plan-charts lane (the owner's picks of 2026-10-28): Priorities' Goal buckets header is
@@ -54,13 +54,13 @@ import { dateIntoThisQuarter } from "./this-quarter";
 
 const PHONE = { width: 390, height: 844 };
 const VIEWS = [
-  { name: "desktop, light", phone: false, scheme: "light" },
-  { name: "phone, dark", phone: true, scheme: "dark" },
-  { name: "desktop, dark", phone: false, scheme: "dark" },
-  { name: "phone, light", phone: true, scheme: "light" },
+  { name: 'desktop, light', phone: false, scheme: 'light' },
+  { name: 'phone, dark', phone: true, scheme: 'dark' },
+  { name: 'desktop, dark', phone: false, scheme: 'dark' },
+  { name: 'phone, light', phone: true, scheme: 'light' },
 ] as const;
 
-async function setUp(page: Page, scheme: "light" | "dark", scenario: string | null) {
+async function setUp(page: Page, scheme: 'light' | 'dark', scenario: string | null) {
   await page.context().addInitScript(
     ([key, value, themeKey, theme]) => {
       if (value) localStorage.setItem(key, value);
@@ -73,10 +73,26 @@ async function setUp(page: Page, scheme: "light" | "dark", scenario: string | nu
 }
 
 const GOALS = [
-  { goal: "Reliability", parts: ["M1 Prove it · 4 weeks", "M2 Scale volume · 3 weeks", "M3 Open to all · 4 weeks"], total: "11 weeks" },
-  { goal: "Growth", parts: ["M1 Prove it · 3 weeks", "M2 Scale volume · 7 weeks", "M3 Open to all · 6 weeks"], total: "16 weeks" },
-  { goal: "Activation", parts: ["M1 Prove it · 6 weeks", "M2 Scale volume · 3 weeks", "M3 Open to all · 4 weeks"], total: "13 weeks" },
-  { goal: "Revenue", parts: ["M2 Scale volume · 2 weeks", "M3 Open to all · 9 weeks"], total: "11 weeks" },
+  {
+    goal: 'Reliability',
+    parts: ['M1 Prove it · 4 weeks', 'M2 Scale volume · 3 weeks', 'M3 Open to all · 4 weeks'],
+    total: '11 weeks',
+  },
+  {
+    goal: 'Growth',
+    parts: ['M1 Prove it · 3 weeks', 'M2 Scale volume · 7 weeks', 'M3 Open to all · 6 weeks'],
+    total: '16 weeks',
+  },
+  {
+    goal: 'Activation',
+    parts: ['M1 Prove it · 6 weeks', 'M2 Scale volume · 3 weeks', 'M3 Open to all · 4 weeks'],
+    total: '13 weeks',
+  },
+  {
+    goal: 'Revenue',
+    parts: ['M2 Scale volume · 2 weeks', 'M3 Open to all · 9 weeks'],
+    total: '11 weeks',
+  },
 ];
 
 /** The labels whose text reads under 4.5:1 on their own background (the nearest painted one). */
@@ -105,12 +121,16 @@ async function contrasts(where: Locator) {
 
 /** No label inside the element is wider than its box (nothing cut). */
 async function nothingCut(where: Locator) {
-  const cut = await where.evaluateAll((els) => els.filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent));
+  const cut = await where.evaluateAll((els) =>
+    els.filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent),
+  );
   expect(cut).toEqual([]);
 }
 
-const mark = (page: Page, code: string) => page.locator(`[data-testid="vxe-point"][data-code="${code}"]`);
-const sideRow = (page: Page, code: string) => page.locator(`[data-testid="side-row"][data-code="${code}"]`);
+const mark = (page: Page, code: string) =>
+  page.locator(`[data-testid="vxe-point"][data-code="${code}"]`);
+const sideRow = (page: Page, code: string) =>
+  page.locator(`[data-testid="side-row"][data-code="${code}"]`);
 const centreX = async (l: Locator) => {
   const b = (await l.boundingBox())!;
   return b.x + b.width / 2;
@@ -120,65 +140,84 @@ for (const v of VIEWS) {
   test.describe(v.name, () => {
     if (v.phone) test.use({ viewport: PHONE, hasTouch: true });
 
-    test("goal buckets: where each goal's work lands, by milestone, from the plan", async ({ page }) => {
-      await setUp(page, v.scheme, "simple-plan");
-      await page.goto("/simple/priorities");
-      await expect(page.getByTestId("prio-subtitle")).toContainText("This plan, Nov 2 – Feb 12");
-      await page.getByRole("tab", { name: "Goal buckets" }).click();
-      const head = page.getByTestId("buckets-head");
-      await expect(head.getByRole("heading", { name: "Where each goal's work lands" })).toBeVisible();
+    test("goal buckets: where each goal's work lands, by milestone, from the plan", async ({
+      page,
+    }) => {
+      await setUp(page, v.scheme, 'simple-plan');
+      await page.goto('/simple/priorities');
+      await expect(page.getByTestId('prio-subtitle')).toContainText('This plan, Nov 2 – Feb 12');
+      await page.getByRole('tab', { name: 'Goal buckets' }).click();
+      const head = page.getByTestId('buckets-head');
+      await expect(
+        head.getByRole('heading', { name: "Where each goal's work lands" }),
+      ).toBeVisible();
       // PR7 (QA Nov 12): a short line; the sentence is behind its (i).
-      await expect(head.getByTestId("buckets-summary")).toHaveText("Nov 2 – Feb 12 · 56 engineer-weeks, 5 spare");
-      await expect(head.getByTestId("buckets-summary-full")).toHaveText(
-        "This plan, Nov 2 – Feb 12: 56 engineer-weeks over three milestones (51 planned + 5 spare). Bars are engineer-weeks.",
+      await expect(head.getByTestId('buckets-summary')).toHaveText(
+        'Nov 2 – Feb 12 · 56 engineer-weeks, 5 spare',
+      );
+      await expect(head.getByTestId('buckets-summary-full')).toHaveText(
+        'This plan, Nov 2 – Feb 12: 56 engineer-weeks over three milestones (51 planned + 5 spare). Bars are engineer-weeks.',
       );
       // B's legend: a swatch, the code in bold, its dates and how full ("M1 Oct 19 – Nov 13 · 14 of 14 weeks").
-      await expect(head.getByTestId("milestone-chip")).toHaveText([
-        "M1 Nov 2 – Nov 27 · 13 of 16 weeks",
-        "M2 Nov 30 – Dec 25 · 15 of 16 weeks",
-        "M3 Dec 28 – Feb 12 · 23 of 24 weeks",
+      await expect(head.getByTestId('milestone-chip')).toHaveText([
+        'M1 Nov 2 – Nov 27 · 13 of 16 weeks',
+        'M2 Nov 30 – Dec 25 · 15 of 16 weeks',
+        'M3 Dec 28 – Feb 12 · 23 of 24 weeks',
       ]);
       // The milestone's name is in its title (hover), not its words.
-      await expect(head.getByTestId("milestone-chip").nth(1)).toHaveAttribute("title", "M2 Scale volume");
-      const bars = head.getByTestId("goal-bar");
+      await expect(head.getByTestId('milestone-chip').nth(1)).toHaveAttribute(
+        'title',
+        'M2 Scale volume',
+      );
+      const bars = head.getByTestId('goal-bar');
       await expect(bars).toHaveCount(4);
       for (const [k, g] of GOALS.entries()) {
         const bar = bars.nth(k);
-        await expect(bar.getByTestId("goal-bar-name")).toHaveText(g.goal);
-        await expect(bar.getByTestId("goal-bar-total")).toHaveText(g.total);
-        await expect(bar.getByTestId("goal-bar-segment")).toHaveCount(g.parts.length);
+        await expect(bar.getByTestId('goal-bar-name')).toHaveText(g.goal);
+        await expect(bar.getByTestId('goal-bar-total')).toHaveText(g.total);
+        await expect(bar.getByTestId('goal-bar-segment')).toHaveCount(g.parts.length);
         for (const p of g.parts) await expect(bar).toContainText(p);
       }
       // A longer total draws a longer bar: Growth's 16 against Reliability's 11.
-      const width = async (k: number) => (await bars.nth(k).getByTestId("goal-bar-track").boundingBox())!.width;
+      const width = async (k: number) =>
+        (await bars.nth(k).getByTestId('goal-bar-track').boundingBox())!.width;
       const fill = async (k: number) =>
-        (await bars.nth(k).getByTestId("goal-bar-segment").evaluateAll((els) => els.reduce((n, e) => n + e.getBoundingClientRect().width, 0))) / (await width(k));
+        (await bars
+          .nth(k)
+          .getByTestId('goal-bar-segment')
+          .evaluateAll((els) => els.reduce((n, e) => n + e.getBoundingClientRect().width, 0))) /
+        (await width(k));
       expect((await fill(1)) / (await fill(0))).toBeCloseTo(16 / 11, 1);
-      await expect(head.getByTestId("buckets-footnote")).toHaveText(
+      await expect(head.getByTestId('buckets-footnote')).toHaveText(
         "Each feature counts once, under the goal it moves most (the first goal the one-pager names for it). Engineer-weeks are the one-pager's, part by part.",
       );
       await expect(page.getByText(/Share of .* by engineer-weeks/)).toHaveCount(0);
       // B's strong milestone colours, not pale tints: each segment's text is --on-accent on it.
-      const fills = await head.getByTestId("goal-bar-segment").evaluateAll((els) => [...new Set(els.map((e) => getComputedStyle(e).backgroundColor))]);
+      const fills = await head
+        .getByTestId('goal-bar-segment')
+        .evaluateAll((els) => [...new Set(els.map((e) => getComputedStyle(e).backgroundColor))]);
       expect(fills).toHaveLength(3);
       // A label shows only where it fits (B leaves a narrow segment blank, its words in its title);
       // named labels ("M2 Scale volume · 3 weeks") fit fewer segments than the code alone did.
-      await nothingCut(head.locator('[data-testid="goal-bar-label"], [data-testid="milestone-chip"]'));
+      await nothingCut(
+        head.locator('[data-testid="goal-bar-label"], [data-testid="milestone-chip"]'),
+      );
       // The rule, at whatever width the text draws: a label shows exactly where its text, as
       // drawn, fits its segment with 6 px to spare each side, wholly inside it (measured, never
       // guessed from its letters); a hidden one's segment title holds its words. So text drawn
       // wider hides a label that would be cut, and one that fits is never hidden.
       const segments = () =>
-        head.getByTestId("goal-bar-segment").evaluateAll((els) =>
+        head.getByTestId('goal-bar-segment').evaluateAll((els) =>
           els.map((e) => {
-            const text = e.querySelector<HTMLElement>("[data-label]")!;
+            const text = e.querySelector<HTMLElement>('[data-label]')!;
             const [s, t] = [e.getBoundingClientRect(), text.getBoundingClientRect()];
             return {
               label: text.textContent!,
-              shown: text.dataset.testid === "goal-bar-label" && getComputedStyle(text).opacity === "1",
+              shown:
+                text.dataset.testid === 'goal-bar-label' && getComputedStyle(text).opacity === '1',
               fits: t.width + 12 <= e.clientWidth,
               inside: t.left >= s.left - 0.5 && t.right <= s.right + 0.5,
-              title: e.getAttribute("title")!,
+              title: e.getAttribute('title')!,
             };
           }),
         );
@@ -187,59 +226,80 @@ for (const v of VIEWS) {
         for (const g of all) {
           expect(g.shown, `"${g.label}" shows only where it fits`).toBe(g.fits);
           if (g.shown) expect(g.inside, `"${g.label}" is not cut`).toBe(true);
-          else expect(g.title, `"${g.label}"'s words are in its title`).toBe(g.label.replace(/ · ([\d.]+) weeks?$/, (_, n) => `: ${n} engineer-${n === "1" ? "week" : "weeks"}`));
+          else
+            expect(g.title, `"${g.label}"'s words are in its title`).toBe(
+              g.label.replace(
+                / · ([\d.]+) weeks?$/,
+                (_, n) => `: ${n} engineer-${n === '1' ? 'week' : 'weeks'}`,
+              ),
+            );
         }
         return all.filter((g) => g.shown).map((g) => g.label);
       };
       const shown = await holds();
-      if (!v.phone) expect(shown.length, "a desktop bar names its milestones").toBeGreaterThan(0);
+      if (!v.phone) expect(shown.length, 'a desktop bar names its milestones').toBeGreaterThan(0);
       // The rule holds at 1440 too, whatever width the text draws (normal, wider, narrower):
       // no count of labels, which follows the system's text, only that each shown label fits its
       // bar, as drawn, and each hidden one would not.
       if (!v.phone) {
         await page.setViewportSize({ width: 1440, height: 900 });
-        await expect(async () => expect((await holds()).length, "a desktop bar names its milestones at 1440").toBeGreaterThan(0)).toPass();
+        await expect(async () =>
+          expect(
+            (await holds()).length,
+            'a desktop bar names its milestones at 1440',
+          ).toBeGreaterThan(0),
+        ).toPass();
         await page.setViewportSize({ width: 1366, height: 820 });
         await expect(async () => void (await holds())).toPass();
       }
       // Every label on a milestone colour reads at AA (4.5:1), light and dark.
-      expect(await contrasts(head.getByTestId("goal-bar-label"))).toEqual([]);
+      expect(await contrasts(head.getByTestId('goal-bar-label'))).toEqual([]);
 
       // The goal cards, as B: the name, "n features in the plan", a row per feature (code, name,
       // a chip per milestone, its weeks or PM-owned).
       const growth = page.locator('[data-testid="plan-goal"][data-goal="Growth"]');
-      await expect(growth.getByRole("heading", { name: "Growth" })).toBeVisible();
-      await expect(growth.getByTestId("plan-goal-count")).toHaveText("5 features in the plan");
+      await expect(growth.getByRole('heading', { name: 'Growth' })).toBeVisible();
+      await expect(growth.getByTestId('plan-goal-count')).toHaveText('5 features in the plan');
       const invites = growth.locator('[data-testid="plan-feature"][data-code="F-05"]');
-      await expect(invites).toContainText("F-05 Team invites");
-      await expect(invites.getByTestId("plan-chip")).toHaveText(["M1 Prove it", "M2 Scale volume"]);
-      await expect(invites.getByTestId("plan-chip").first()).toHaveAttribute("title", "M1 Prove it: 3 weeks");
-      await expect(invites.getByTestId("plan-feature-total")).toHaveText("5 weeks");
+      await expect(invites).toContainText('F-05 Team invites');
+      await expect(invites.getByTestId('plan-chip')).toHaveText(['M1 Prove it', 'M2 Scale volume']);
+      await expect(invites.getByTestId('plan-chip').first()).toHaveAttribute(
+        'title',
+        'M1 Prove it: 3 weeks',
+      );
+      await expect(invites.getByTestId('plan-feature-total')).toHaveText('5 weeks');
       const launch = growth.locator('[data-testid="plan-feature"][data-code="F-10"]');
-      await expect(launch.getByTestId("plan-chip")).toHaveText(["M2 Scale volume"]);
-      await expect(launch.getByTestId("plan-feature-total")).toHaveText("PM-owned");
-      await expect(page.getByTestId("plan-goal")).toHaveCount(4);
+      await expect(launch.getByTestId('plan-chip')).toHaveText(['M2 Scale volume']);
+      await expect(launch.getByTestId('plan-feature-total')).toHaveText('PM-owned');
+      await expect(page.getByTestId('plan-goal')).toHaveCount(4);
       await nothingCut(page.locator('[data-testid="plan-chip"]'));
       expect(await contrasts(page.locator('[data-testid="plan-chip"]'))).toEqual([]);
       // B's two buttons under each goal's list, for who may suggest.
-      await expect(page.getByTestId("goal-suggest-feature")).toHaveCount(4);
-      await expect(page.getByTestId("goal-ask-oracle")).toHaveText(Array(4).fill("✦ Ask Oracle to suggest"));
+      await expect(page.getByTestId('goal-suggest-feature')).toHaveCount(4);
+      await expect(page.getByTestId('goal-ask-oracle')).toHaveText(
+        Array(4).fill('✦ Ask Oracle to suggest'),
+      );
 
       // Roadmap items outside the plan (the alerts roadmap's) show, under their goal, once dated
       // this quarter (board-quarters: they are dated past it), each in its one feature panel.
       await dateIntoThisQuarter(page, [
-        { title: "Alert rules engine", start: "2026-11-02", end: "2026-11-27" },
-        { title: "Weekly alert digest", start: "2026-11-30", end: "2026-12-18" },
-        { title: "Mobile alert push", start: "2026-11-30", end: "2026-12-18" },
+        { title: 'Alert rules engine', start: '2026-11-02', end: '2026-11-27' },
+        { title: 'Weekly alert digest', start: '2026-11-30', end: '2026-12-18' },
+        { title: 'Mobile alert push', start: '2026-11-30', end: '2026-12-18' },
       ]);
-      await page.getByRole("tab", { name: "Goal buckets" }).click();
-      const outside = page.getByTestId("plan-outside");
-      await expect(outside.getByRole("heading", { name: "Also this quarter, outside the plan" })).toBeVisible();
-      const retention = outside.locator('[data-testid="plan-outside-goal"][data-key="grow-retention"]');
-      await expect(retention).toContainText("Grow retention");
-      for (const title of ["Alert rules engine", "Weekly alert digest", "Mobile alert push"]) await expect(retention).toContainText(title);
+      await page.getByRole('tab', { name: 'Goal buckets' }).click();
+      const outside = page.getByTestId('plan-outside');
+      await expect(
+        outside.getByRole('heading', { name: 'Also this quarter, outside the plan' }),
+      ).toBeVisible();
+      const retention = outside.locator(
+        '[data-testid="plan-outside-goal"][data-key="grow-retention"]',
+      );
+      await expect(retention).toContainText('Grow retention');
+      for (const title of ['Alert rules engine', 'Weekly alert digest', 'Mobile alert push'])
+        await expect(retention).toContainText(title);
       // The plan's own features are in the cards above, not again here.
-      await expect(outside).not.toContainText("Setup checklist");
+      await expect(outside).not.toContainText('Setup checklist');
     });
 
     /**
@@ -251,57 +311,83 @@ for (const v of VIEWS) {
      * sent or the drawer opens on the wrong tab; no_claim = who may suggest (the viewer test
      * below), the suggestions API (pytest test_simple_suggestions*).
      */
-    test("goal buckets: suggest a feature, or ask Oracle to suggest one, from a goal's card", async ({ page }) => {
-      await setUp(page, v.scheme, "simple-plan");
-      await page.goto("/simple/priorities?tab=buckets");
+    test("goal buckets: suggest a feature, or ask Oracle to suggest one, from a goal's card", async ({
+      page,
+    }) => {
+      await setUp(page, v.scheme, 'simple-plan');
+      await page.goto('/simple/priorities?tab=buckets');
       const growth = page.locator('[data-testid="plan-goal"][data-goal="Growth"]');
-      await growth.getByTestId("goal-suggest-feature").click();
-      const panel = page.getByTestId("goal-panel");
+      await growth.getByTestId('goal-suggest-feature').click();
+      const panel = page.getByTestId('goal-panel');
       await expect(panel).toBeVisible();
-      await expect(panel.getByRole("heading", { name: "Suggestions · Growth" })).toBeVisible();
-      const form = panel.getByTestId("suggest-form");
+      await expect(panel.getByRole('heading', { name: 'Suggestions · Growth' })).toBeVisible();
+      const form = panel.getByTestId('suggest-form');
       await expect(form).toBeVisible();
-      await form.getByLabel("Feature name").fill("Invite from the dashboard");
-      await form.getByLabel("What it does, and for whom").fill("An admin invites a teammate from the usage dashboard");
-      await form.getByRole("button", { name: "Send suggestion" }).click();
-      await expect(page.getByText("Sent: Invite from the dashboard")).toBeVisible();
-      await expect(panel.getByTestId("suggestions-tab-people")).toHaveText("People · 1");
-      await expect(panel.locator('[data-testid="person-suggestion"][data-title="Invite from the dashboard"]')).toBeVisible();
-      await panel.getByRole("button", { name: /^Close/ }).first().click();
+      await form.getByLabel('Feature name').fill('Invite from the dashboard');
+      await form
+        .getByLabel('What it does, and for whom')
+        .fill('An admin invites a teammate from the usage dashboard');
+      await form.getByRole('button', { name: 'Send suggestion' }).click();
+      await expect(page.getByText('Sent: Invite from the dashboard')).toBeVisible();
+      await expect(panel.getByTestId('suggestions-tab-people')).toHaveText('People · 1');
+      await expect(
+        panel.locator('[data-testid="person-suggestion"][data-title="Invite from the dashboard"]'),
+      ).toBeVisible();
+      await panel
+        .getByRole('button', { name: /^Close/ })
+        .first()
+        .click();
       await expect(panel).toHaveCount(0);
 
       const reliability = page.locator('[data-testid="plan-goal"][data-goal="Reliability"]');
-      await reliability.getByTestId("goal-ask-oracle").click();
-      await expect(page.getByText("Oracle is suggesting features for Reliability")).toBeVisible();
-      await expect(panel.getByRole("heading", { name: "Suggestions · Reliability" })).toBeVisible();
-      await expect(panel.getByTestId("suggestions-tab-oracle")).toHaveAttribute("aria-selected", "true");
-      await expect(panel.locator('[data-testid="goal-suggestion"][data-title="Setup health check"]')).toBeVisible();
-      await expect(panel.getByTestId("suggestions-tab-oracle")).toHaveText("✦ Oracle · 2");
-      await panel.getByRole("button", { name: /^Close/ }).first().click();
-      await expect(reliability.getByTestId("goal-ask-oracle")).toHaveText("✦ Ask Oracle to suggest");
+      await reliability.getByTestId('goal-ask-oracle').click();
+      await expect(page.getByText('Oracle is suggesting features for Reliability')).toBeVisible();
+      await expect(panel.getByRole('heading', { name: 'Suggestions · Reliability' })).toBeVisible();
+      await expect(panel.getByTestId('suggestions-tab-oracle')).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      await expect(
+        panel.locator('[data-testid="goal-suggestion"][data-title="Setup health check"]'),
+      ).toBeVisible();
+      await expect(panel.getByTestId('suggestions-tab-oracle')).toHaveText('✦ Oracle · 2');
+      await panel
+        .getByRole('button', { name: /^Close/ })
+        .first()
+        .click();
+      await expect(reliability.getByTestId('goal-ask-oracle')).toHaveText(
+        '✦ Ask Oracle to suggest',
+      );
     });
 
-    test("value / effort: a log effort axis split at the medians, linked to the ranked list", async ({ page }) => {
+    test('value / effort: a log effort axis split at the medians, linked to the ranked list', async ({
+      page,
+    }) => {
       await setUp(page, v.scheme, null);
-      await page.goto("/simple/priorities?tab=value-effort");
-      await expect(mark(page, "alert-sso")).toBeVisible();
+      await page.goto('/simple/priorities?tab=value-effort');
+      await expect(mark(page, 'alert-sso')).toBeVisible();
 
       // The log axis: 0.5, 1, 2, 4 (B: "Effort (engineer-weeks, log scale)"), each doubling the same distance.
-      const ticks = page.getByTestId("vxe-tick");
-      await expect(ticks).toHaveText(["0.5", "1", "2", "4"]);
-      await expect(page.getByText("Effort (engineer-weeks, log scale) →")).toBeVisible();
+      const ticks = page.getByTestId('vxe-tick');
+      await expect(ticks).toHaveText(['0.5', '1', '2', '4']);
+      await expect(page.getByText('Effort (engineer-weeks, log scale) →')).toBeVisible();
       // The goal value axis: B's gridlines with their values, 0 at the foot.
-      await expect(page.getByTestId("vxe-value-tick")).toHaveText(["0", "2", "4", "6", "8"]);
+      await expect(page.getByTestId('vxe-value-tick')).toHaveText(['0', '2', '4', '6', '8']);
       const xs = await Promise.all([0, 1, 2, 3].map((k) => centreX(ticks.nth(k))));
       expect(xs[1] - xs[0]).toBeCloseTo(xs[2] - xs[1], 0);
       expect(xs[2] - xs[1]).toBeCloseTo(xs[3] - xs[2], 0);
       // A 2-week mark: QA pass 3 (qa-simple-plan-13) draws it at its real effort, on the 2 wk tick.
-      expect(Math.abs((await centreX(mark(page, "alert-sso"))) - xs[2])).toBeLessThan(4);
+      expect(Math.abs((await centreX(mark(page, 'alert-sso'))) - xs[2])).toBeLessThan(4);
 
       // The quadrants at the medians, each with its name and count (P-1: 22 with the Goal map's 12 features, ranked as on Priorities).
-      await expect(page.getByTestId("vxe-quadrant")).toHaveText(["Quick wins · 4", "Big bets · 7", "Fill-ins · 7", "Later · 4"]);
-      const plot = (await page.getByTestId("vxe-plot").boundingBox())!;
-      const split = (await page.getByTestId("vxe-median-effort").boundingBox())!;
+      await expect(page.getByTestId('vxe-quadrant')).toHaveText([
+        'Quick wins · 4',
+        'Big bets · 7',
+        'Fill-ins · 7',
+        'Later · 4',
+      ]);
+      const plot = (await page.getByTestId('vxe-plot').boundingBox())!;
+      const split = (await page.getByTestId('vxe-median-effort').boundingBox())!;
       // The effort median is PM-owned work's spot, left of the 0.5 week tick (P-1: the Goal map's 12 features and Health log
       // have no effort, as the API reads a feature the mock does not list): the line is not the plot's middle.
       expect(split.x + split.width / 2).toBeLessThan(xs[0] - 4);
@@ -310,118 +396,155 @@ for (const v of VIEWS) {
       // PV-1 One count per spot: the 13 features at value 0 with no effort (setup-health-log among them) are one count, and
       // alert-export and setup-video (value 0, effort 1) another.
       const count = page.locator('[data-testid="vxe-crowd"][data-count="13"]');
-      await expect(count).toHaveAccessibleName(/^13 features at PM-owned, no effort · goal value 0 or no goal: F-110 Annual plan offer, .* and 10 more; show them$/);
-      await expect(page.getByRole("button", { name: "2 features at effort 1 week · goal value 0 · no goal: Alert history export, Welcome video; show them" })).toBeVisible();
-      for (const code of ["alert-export", "setup-video", "setup-health-log"]) await expect(mark(page, code)).toHaveCount(0);
+      await expect(count).toHaveAccessibleName(
+        /^13 features at PM-owned, no effort · goal value 0 or no goal: F-110 Annual plan offer, .* and 10 more; show them$/,
+      );
+      await expect(
+        page.getByRole('button', {
+          name: '2 features at effort 1 week · goal value 0 · no goal: Alert history export, Welcome video; show them',
+        }),
+      ).toBeVisible();
+      for (const code of ['alert-export', 'setup-video', 'setup-health-log'])
+        await expect(mark(page, code)).toHaveCount(0);
       // The median lines say what they are ("middle effort", "middle value"), never under a mark or a count.
-      const marks = await page.locator('[data-testid="vxe-point"], [data-testid="vxe-crowd"]').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON() as DOMRect));
+      const marks = await page
+        .locator('[data-testid="vxe-point"], [data-testid="vxe-crowd"]')
+        .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON() as DOMRect));
       // P-1: on a phone the 22 marks (with the Goal map's 12) leave "middle value" no free spot, so it is left out (qa4-simple-plan-9).
-      if (v.phone) await expect(page.getByTestId("vxe-middle-value")).toHaveCount(0);
-      for (const id of v.phone ? ["vxe-middle-effort"] : ["vxe-middle-effort", "vxe-middle-value"]) {
+      if (v.phone) await expect(page.getByTestId('vxe-middle-value')).toHaveCount(0);
+      for (const id of v.phone
+        ? ['vxe-middle-effort']
+        : ['vxe-middle-effort', 'vxe-middle-value']) {
         const l = (await page.getByTestId(id).boundingBox())!;
-        const under = marks.filter((m) => m.x < l.x + l.width && l.x < m.x + m.width && m.y < l.y + l.height && l.y < m.y + m.height);
+        const under = marks.filter(
+          (m) =>
+            m.x < l.x + l.width &&
+            l.x < m.x + m.width &&
+            m.y < l.y + l.height &&
+            l.y < m.y + m.height,
+        );
         expect(under, id).toEqual([]);
       }
       // A feature with no goal is never a cross: a neutral dashed circle, named in the legend (in a count's sheet too).
-      await expect(mark(page, "price-tiers")).toHaveAttribute("data-shape", "none");
+      await expect(mark(page, 'price-tiers')).toHaveAttribute('data-shape', 'none');
       // PR1 (QA Nov 12): no made-up letters; a feature with no Ground Truth code is flagged.
-      const exportRow = await countRowOf(page, "alert-export");
-      await expect(exportRow.getByTestId("vxe-crowd-code")).toHaveCount(0);
-      await expect(exportRow.getByTestId("not-in-gt")).toBeVisible();
-      for (const code of ["alert-export", "setup-video"]) await expect(page.locator(`[data-testid="vxe-crowd-row"][data-code="${code}"]`)).toHaveAttribute("data-shape", "none");
-      await page.keyboard.press("Escape");
-      await expect(await countRowOf(page, "setup-health-log")).toHaveAttribute("data-shape", "none");
-      await page.keyboard.press("Escape");
+      const exportRow = await countRowOf(page, 'alert-export');
+      await expect(exportRow.getByTestId('vxe-crowd-code')).toHaveCount(0);
+      await expect(exportRow.getByTestId('not-in-gt')).toBeVisible();
+      for (const code of ['alert-export', 'setup-video'])
+        await expect(
+          page.locator(`[data-testid="vxe-crowd-row"][data-code="${code}"]`),
+        ).toHaveAttribute('data-shape', 'none');
+      await page.keyboard.press('Escape');
+      await expect(await countRowOf(page, 'setup-health-log')).toHaveAttribute(
+        'data-shape',
+        'none',
+      );
+      await page.keyboard.press('Escape');
       // On a phone Alert rules engine shares a count with Sample data import.
       if (v.phone) {
-        await expect(await countRowOf(page, "alert-rules")).toHaveAttribute("data-shape", "square");
-        await page.keyboard.press("Escape");
-      } else await expect(mark(page, "alert-rules")).toHaveAttribute("data-shape", "square");
-      const legend = page.getByLabel("Legend");
-      await expect(legend.getByTestId("vxe-legend-no-goal")).toHaveText("No goal");
+        await expect(await countRowOf(page, 'alert-rules')).toHaveAttribute('data-shape', 'square');
+        await page.keyboard.press('Escape');
+      } else await expect(mark(page, 'alert-rules')).toHaveAttribute('data-shape', 'square');
+      const legend = page.getByLabel('Legend');
+      await expect(legend.getByTestId('vxe-legend-no-goal')).toHaveText('No goal');
       // Demo 9: how to read the chart is behind the (i) by the heading; the legend keeps "Below the line".
-      await expect(legend.getByTestId("vxe-legend-hollow")).toHaveText("Below the line");
-      await expect(page.locator("#prio-about-text")).toContainText("Each mark shows the feature's code when it has one (one with none is not in the Ground Truth); point at it for its name, its rank is in the list. Hollow: below the line (not this quarter).");
-      await expect(page.locator("#prio-about-text")).toContainText("Drag a mark sideways to change its effort, up or down to change its goal value (or use the arrow keys)");
+      await expect(legend.getByTestId('vxe-legend-hollow')).toHaveText('Below the line');
+      await expect(page.locator('#prio-about-text')).toContainText(
+        "Each mark shows the feature's code when it has one (one with none is not in the Ground Truth); point at it for its name, its rank is in the list. Hollow: below the line (not this quarter).",
+      );
+      await expect(page.locator('#prio-about-text')).toContainText(
+        'Drag a mark sideways to change its effort, up or down to change its goal value (or use the arrow keys)',
+      );
 
       // B's Ranked rows: one line each (rank, code, name, the score), the name alone wrapping to a
       // second line rather than cut (qa-nov17 G4), a row that misses the line carrying a small
       // "Misses" chip (the line in its title) on that same line.
-      const rowHeights = await page.getByTestId("side-row").evaluateAll((els) =>
-        els.map((e) => ({ row: e.getBoundingClientRect().height, name: e.querySelector('[data-testid="prio-title"]')!.getBoundingClientRect().height })),
+      const rowHeights = await page.getByTestId('side-row').evaluateAll((els) =>
+        els.map((e) => ({
+          row: e.getBoundingClientRect().height,
+          name: e.querySelector('[data-testid="prio-title"]')!.getBoundingClientRect().height,
+        })),
       );
       for (const h of rowHeights) {
-        expect(h.name, "a name takes at most two lines").toBeLessThanOrEqual(44);
-        expect(h.row - h.name, "nothing in the row drops under its name").toBeLessThanOrEqual(8);
+        expect(h.name, 'a name takes at most two lines').toBeLessThanOrEqual(44);
+        expect(h.row - h.name, 'nothing in the row drops under its name').toBeLessThanOrEqual(8);
         if (h.name <= 22) expect(h.row).toBeLessThanOrEqual(30);
       }
-      const misses = sideRow(page, "price-tiers").getByTestId("prio-misses");
-      await expect(misses).toHaveText("Misses");
-      await expect(misses).toHaveAttribute("title", "Misses this quarter");
-      await expect(sideRow(page, "price-tiers").getByTestId("prio-title")).toHaveAttribute("title", "New plan tiers");
+      const misses = sideRow(page, 'price-tiers').getByTestId('prio-misses');
+      await expect(misses).toHaveText('Misses');
+      await expect(misses).toHaveAttribute('title', 'Misses this quarter');
+      await expect(sideRow(page, 'price-tiers').getByTestId('prio-title')).toHaveAttribute(
+        'title',
+        'New plan tiers',
+      );
 
       // Select a mark (a tap on a phone): it opens its feature panel and its row lights up; on a desktop the row comes
       // into view, on a phone the chart stays in view (the list is under it).
-      if (v.phone) await mark(page, "price-tiers").tap();
-      else await mark(page, "price-tiers").click();
-      await expect(mark(page, "price-tiers")).toHaveAttribute("aria-pressed", "true");
-      await expect(page.getByTestId("item-panel")).toContainText("New plan tiers");
-      await expect(sideRow(page, "price-tiers")).toHaveAttribute("data-selected", "true");
-      if (!v.phone) await expect(sideRow(page, "price-tiers")).toBeInViewport();
+      if (v.phone) await mark(page, 'price-tiers').tap();
+      else await mark(page, 'price-tiers').click();
+      await expect(mark(page, 'price-tiers')).toHaveAttribute('aria-pressed', 'true');
+      await expect(page.getByTestId('item-panel')).toContainText('New plan tiers');
+      await expect(sideRow(page, 'price-tiers')).toHaveAttribute('data-selected', 'true');
+      if (!v.phone) await expect(sideRow(page, 'price-tiers')).toBeInViewport();
       await expect(page.locator('[data-testid="side-row"][data-selected="true"]')).toHaveCount(1);
       // Escape closes the panel first and leaves the selection.
-      await page.keyboard.press("Escape");
-      await expect(page.getByTestId("item-panel")).toHaveCount(0);
-      await expect(sideRow(page, "price-tiers")).toHaveAttribute("data-selected", "true");
+      await page.keyboard.press('Escape');
+      await expect(page.getByTestId('item-panel')).toHaveCount(0);
+      await expect(sideRow(page, 'price-tiers')).toHaveAttribute('data-selected', 'true');
       // Select a row: its mark lights up instead, and the row opens its feature panel too (Escape closes it first).
-      if (v.phone) await sideRow(page, "alert-digest").getByRole("button").tap();
-      else await sideRow(page, "alert-digest").getByRole("button").click();
-      await expect(mark(page, "alert-digest")).toHaveAttribute("aria-pressed", "true");
-      await expect(mark(page, "price-tiers")).toHaveAttribute("aria-pressed", "false");
-      await expect(sideRow(page, "alert-digest")).toHaveAttribute("data-selected", "true");
-      await expect(page.getByTestId("item-panel")).toContainText(await sideRow(page, "alert-digest").getByTestId("prio-title").innerText());
-      await page.keyboard.press("Escape");
-      await expect(page.getByTestId("item-panel")).toHaveCount(0);
-      await expect(sideRow(page, "alert-digest")).toHaveAttribute("data-selected", "true");
+      if (v.phone) await sideRow(page, 'alert-digest').getByRole('button').tap();
+      else await sideRow(page, 'alert-digest').getByRole('button').click();
+      await expect(mark(page, 'alert-digest')).toHaveAttribute('aria-pressed', 'true');
+      await expect(mark(page, 'price-tiers')).toHaveAttribute('aria-pressed', 'false');
+      await expect(sideRow(page, 'alert-digest')).toHaveAttribute('data-selected', 'true');
+      await expect(page.getByTestId('item-panel')).toContainText(
+        await sideRow(page, 'alert-digest').getByTestId('prio-title').innerText(),
+      );
+      await page.keyboard.press('Escape');
+      await expect(page.getByTestId('item-panel')).toHaveCount(0);
+      await expect(sideRow(page, 'alert-digest')).toHaveAttribute('data-selected', 'true');
       if (!v.phone) {
         // Escape closes what is open on top first (the Ask panel), and leaves the selection.
         // Simple has no Ask strip: its rail's Ask Oracle opens the panel (qa-shell-16), and a
         // closed panel leaves no dock behind.
-        await page.getByTestId("simple-ask").click();
-        await expect(page.getByTestId("hop-dock")).toHaveAttribute("data-open", "true");
-        await page.keyboard.press("Escape");
-        await expect(page.getByTestId("hop-dock")).toHaveCount(0);
-        await expect(sideRow(page, "alert-digest")).toHaveAttribute("data-selected", "true");
+        await page.getByTestId('simple-ask').click();
+        await expect(page.getByTestId('hop-dock')).toHaveAttribute('data-open', 'true');
+        await page.keyboard.press('Escape');
+        await expect(page.getByTestId('hop-dock')).toHaveCount(0);
+        await expect(sideRow(page, 'alert-digest')).toHaveAttribute('data-selected', 'true');
       }
       // Escape clears both.
-      await page.keyboard.press("Escape");
+      await page.keyboard.press('Escape');
       await expect(page.locator('[data-testid="side-row"][data-selected="true"]')).toHaveCount(0);
       await expect(page.locator('[data-testid="vxe-point"][aria-pressed="true"]')).toHaveCount(0);
       // The keyboard: Enter on a focused mark selects it and opens its panel.
-      await mark(page, "alert-mobile").focus();
-      await page.keyboard.press("Enter");
-      await expect(sideRow(page, "alert-mobile")).toHaveAttribute("data-selected", "true");
-      await expect(page.getByTestId("item-panel")).toContainText("Mobile alert push");
-      if (!v.phone) await expect(sideRow(page, "alert-mobile")).toBeInViewport();
+      await mark(page, 'alert-mobile').focus();
+      await page.keyboard.press('Enter');
+      await expect(sideRow(page, 'alert-mobile')).toHaveAttribute('data-selected', 'true');
+      await expect(page.getByTestId('item-panel')).toContainText('Mobile alert push');
+      if (!v.phone) await expect(sideRow(page, 'alert-mobile')).toBeInViewport();
     });
   });
 }
 
-test("value / effort: a sideways drag re-estimates effort on the log scale", async ({ page }) => {
-  await setUp(page, "light", null);
-  await page.goto("/simple/priorities?tab=value-effort");
-  const ticks = page.getByTestId("vxe-tick");
+test('value / effort: a sideways drag re-estimates effort on the log scale', async ({ page }) => {
+  await setUp(page, 'light', null);
+  await page.goto('/simple/priorities?tab=value-effort');
+  const ticks = page.getByTestId('vxe-tick');
   await expect(ticks).toHaveCount(4);
   // One doubling is the distance from the 1 wk tick to the 2 wk tick: setup-import, 3 weeks,
   // dragged to 1.5 weeks is one doubling to the left.
   const octave = (await centreX(ticks.nth(2))) - (await centreX(ticks.nth(1)));
-  const at = (await mark(page, "setup-import").boundingBox())!;
+  const at = (await mark(page, 'setup-import').boundingBox())!;
   await page.mouse.move(at.x + at.width / 2, at.y + at.height / 2);
   await page.mouse.down();
   await page.mouse.move(at.x + at.width / 2 - octave, at.y + at.height / 2 + 3, { steps: 10 });
   await page.mouse.up();
-  await expect(page.getByText("Re-estimated Sample data import: effort 1.5 weeks")).toBeVisible();
-  await expect(page.getByRole("button", { name: /Sample data import: goal value 6, effort 1\.5 weeks/ })).toBeVisible();
+  await expect(page.getByText('Re-estimated Sample data import: effort 1.5 weeks')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: /Sample data import: goal value 6, effort 1\.5 weeks/ }),
+  ).toBeVisible();
   // A drag is not a selection.
   await expect(page.locator('[data-testid="side-row"][data-selected="true"]')).toHaveCount(0);
 });
@@ -432,20 +555,27 @@ test("value / effort: a sideways drag re-estimates effort on the log scale", asy
  * fails_when = a viewer is offered a suggest button or a commenter is not; no_claim = the API's
  * refusal of a viewer's suggestion (pytest).
  */
-for (const who of ["commenter", "viewer"] as const) {
-  test(`goal buckets: who may suggest gets the two buttons, a viewer reads the suggestions (${who})`, async ({ page }) => {
-    await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "simple-plan"] as const);
+for (const who of ['commenter', 'viewer'] as const) {
+  test(`goal buckets: who may suggest gets the two buttons, a viewer reads the suggestions (${who})`, async ({
+    page,
+  }) => {
+    await page
+      .context()
+      .addInitScript(([key, value]) => localStorage.setItem(key, value), [
+        MOCK_SCENARIO_KEY,
+        'simple-plan',
+      ] as const);
     await login(page, `${who}@example.com`);
-    await page.goto("/simple/priorities?tab=buckets");
-    await expect(page.getByTestId("buckets-head")).toBeVisible();
+    await page.goto('/simple/priorities?tab=buckets');
+    await expect(page.getByTestId('buckets-head')).toBeVisible();
     const growth = page.locator('[data-testid="plan-goal"][data-goal="Growth"]');
-    if (who === "commenter") {
-      await expect(growth.getByTestId("goal-suggest-feature")).toHaveText("+ Suggest a feature");
-      await expect(growth.getByTestId("goal-ask-oracle")).toHaveText("✦ Ask Oracle to suggest");
+    if (who === 'commenter') {
+      await expect(growth.getByTestId('goal-suggest-feature')).toHaveText('+ Suggest a feature');
+      await expect(growth.getByTestId('goal-ask-oracle')).toHaveText('✦ Ask Oracle to suggest');
     } else {
-      await expect(growth.getByTestId("goal-suggestions-open")).toBeVisible();
-      await expect(page.getByTestId("goal-suggest-feature")).toHaveCount(0);
-      await expect(page.getByTestId("goal-ask-oracle")).toHaveCount(0);
+      await expect(growth.getByTestId('goal-suggestions-open')).toBeVisible();
+      await expect(page.getByTestId('goal-suggest-feature')).toHaveCount(0);
+      await expect(page.getByTestId('goal-ask-oracle')).toHaveCount(0);
     }
   });
 }

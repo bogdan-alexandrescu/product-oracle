@@ -1,7 +1,7 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
 
 /*
  * protects=the mock answers Write the digest with Oracle in the API's order
@@ -17,56 +17,63 @@ import { login } from "./helpers";
  * tab A asks.
  */
 
-test.use({ timezoneId: "America/New_York", locale: "en-US" });
+test.use({ timezoneId: 'America/New_York', locale: 'en-US' });
 
-const ASK = "Write the digest with Oracle";
+const ASK = 'Write the digest with Oracle';
 
 async function openDigest(page: Page) {
-  await page.addInitScript((key) => localStorage.setItem(key, "market"), MOCK_SCENARIO_KEY);
+  await page.addInitScript((key) => localStorage.setItem(key, 'market'), MOCK_SCENARIO_KEY);
   await login(page);
-  await page.goto("/inbox");
-  const row = page.getByTestId("inbox-rituals").locator("tr[data-row]").filter({ hasText: "Pre-read ready · Monthly competitive digest" });
-  await row.getByRole("link", { name: "Open" }).click();
+  await page.goto('/inbox');
+  const row = page
+    .getByTestId('inbox-rituals')
+    .locator('tr[data-row]')
+    .filter({ hasText: 'Pre-read ready · Monthly competitive digest' });
+  await row.getByRole('link', { name: 'Open' }).click();
   await expect(page).toHaveURL(/\/company\/rituals\/[0-9a-f-]{36}$/);
-  return page.getByTestId("occurrence-summary");
+  return page.getByTestId('occurrence-summary');
 }
 
-test("asking while another tab's digest is being written says so, even at Observe", async ({ context }) => {
+test("asking while another tab's digest is being written says so, even at Observe", async ({
+  context,
+}) => {
   const a = await context.newPage();
   const summaryA = await openDigest(a);
-  await expect(summaryA.getByRole("button", { name: ASK })).toBeVisible();
+  await expect(summaryA.getByRole('button', { name: ASK })).toBeVisible();
 
   // Tabs B and C share tab A's sign-in (one browser context): they open pages directly.
   const b = await context.newPage();
   await b.goto(a.url());
-  const summaryB = b.getByTestId("occurrence-summary");
-  await expect(summaryB.getByRole("button", { name: ASK })).toBeVisible();
+  const summaryB = b.getByTestId('occurrence-summary');
+  await expect(summaryB.getByRole('button', { name: ASK })).toBeVisible();
   // Tab B's clock is paused and moved on 100 ms at a time (the mock answers after 60 ms)
   // only until the run shows: its look-again timer (every second) never fires, so the
   // run stays under way.
   await b.clock.pauseAt(new Date((await b.evaluate(() => Date.now())) + 1_000));
-  await summaryB.getByRole("button", { name: ASK }).click();
-  const writing = summaryB.getByText("Writing the digest…");
+  await summaryB.getByRole('button', { name: ASK }).click();
+  const writing = summaryB.getByText('Writing the digest…');
   for (let i = 0; i < 9 && !(await writing.isVisible()); i++) await b.clock.runFor(100);
   await expect(writing).toBeVisible();
   await b.close();
   await context.clock.resume();
 
   const c = await context.newPage();
-  await c.goto("/home");
-  await c.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
-  await c.getByRole("navigation", { name: "Settings" }).getByTestId("nav-autonomy").click();
-  await expect(c.getByRole("heading", { level: 1, name: "Autonomy" })).toBeVisible();
-  const market = c.getByTestId("autonomy-row-market");
-  await market.getByRole("group").getByRole("button", { name: "Observe", exact: true }).click();
-  const sheet = c.getByRole("dialog", { name: "Change Watch the market" });
-  await sheet.getByLabel("Why").fill("Digest order test");
-  await sheet.getByRole("button", { name: "Save" }).click();
+  await c.goto('/home');
+  await c.getByRole('navigation', { name: 'Oracle' }).getByTestId('nav-settings').click();
+  await c.getByRole('navigation', { name: 'Settings' }).getByTestId('nav-autonomy').click();
+  await expect(c.getByRole('heading', { level: 1, name: 'Autonomy' })).toBeVisible();
+  const market = c.getByTestId('autonomy-row-market');
+  await market.getByRole('group').getByRole('button', { name: 'Observe', exact: true }).click();
+  const sheet = c.getByRole('dialog', { name: 'Change Watch the market' });
+  await sheet.getByLabel('Why').fill('Digest order test');
+  await sheet.getByRole('button', { name: 'Save' }).click();
   await expect(sheet).toBeHidden();
-  await expect(market.getByRole("group").getByRole("button", { name: "Observe", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    market.getByRole('group').getByRole('button', { name: 'Observe', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
   await c.close();
 
-  await summaryA.getByRole("button", { name: ASK }).click();
-  await expect(summaryA).toContainText("Oracle is already writing this summary");
-  await expect(summaryA).not.toContainText("Oracle does not write the digest at Observe");
+  await summaryA.getByRole('button', { name: ASK }).click();
+  await expect(summaryA).toContainText('Oracle is already writing this summary');
+  await expect(summaryA).not.toContainText('Oracle does not write the digest at Observe');
 });

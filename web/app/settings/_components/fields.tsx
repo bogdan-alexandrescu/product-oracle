@@ -1,20 +1,20 @@
-import type { ReactNode } from "react";
+import type { ReactNode } from 'react';
 
 /**
  * Form parts for the settings slice (the kit has no inputs yet; lift into components/ds
  * when another slice needs them). Token classes only, 15 px text, 13 px labels.
  */
 export const INPUT =
-  "h-9 w-full min-w-0 rounded-lg border border-line-strong bg-surface px-2.5 text-[15px] text-text placeholder:text-text2 focus:border-accent focus:outline-none disabled:opacity-70";
+  'h-9 w-full min-w-0 rounded-lg border border-line-strong bg-surface px-2.5 text-[15px] text-text placeholder:text-text2 focus:border-accent focus:outline-none disabled:opacity-70';
 export const TEXTAREA =
-  "w-full min-w-0 rounded-lg border border-line-strong bg-surface px-2.5 py-2 text-[15px] leading-[22px] text-text placeholder:text-text2 focus:border-accent focus:outline-none disabled:opacity-70";
+  'w-full min-w-0 rounded-lg border border-line-strong bg-surface px-2.5 py-2 text-[15px] leading-[22px] text-text placeholder:text-text2 focus:border-accent focus:outline-none disabled:opacity-70';
 export const SELECT =
-  "h-8 min-w-0 rounded-lg border border-line-strong bg-surface pr-7 pl-2 text-sm text-text focus:border-accent focus:outline-none disabled:opacity-70";
+  'h-8 min-w-0 rounded-lg border border-line-strong bg-surface pr-7 pl-2 text-sm text-text focus:border-accent focus:outline-none disabled:opacity-70';
 /** A select that fills a form field, as tall as INPUT. */
 export const SELECT_FIELD =
-  "h-9 w-full min-w-0 rounded-lg border border-line-strong bg-surface pr-7 pl-2.5 text-[15px] text-text focus:border-accent focus:outline-none disabled:opacity-70";
+  'h-9 w-full min-w-0 rounded-lg border border-line-strong bg-surface pr-7 pl-2.5 text-[15px] text-text focus:border-accent focus:outline-none disabled:opacity-70';
 
-const LABEL = "text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2";
+const LABEL = 'text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2';
 
 /**
  * A labelled field: 13 px label above the control. With `tip` (an InfoTip), pass the
@@ -26,7 +26,7 @@ export function Field({
   tip,
   htmlFor,
   children,
-  className = "",
+  className = '',
 }: {
   label: ReactNode;
   tip?: ReactNode;

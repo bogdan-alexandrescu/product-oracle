@@ -8,35 +8,59 @@
  * constraints), simplified: the company's day is the mock clock's UTC day and the planning
  * horizons are the defaults (short 1 quarter, medium 2, long 12-24 months).
  */
-import { byPrdRank, prdRanker } from "./prd-rank";
-import type { Schemas } from "@/lib/api/client";
-import { goalFigure } from "@/lib/goal-figure";
-import { goalPosition, sortGoals, type OrderedGoal } from "@/lib/goal-order";
-import { withRoadmapCodes } from "./roadmap-codes";
-import { plainFlow } from "./simple-visuals";
-import { leftOut } from "./decision-notes";
-import { unitOk } from "./goal-units";
-import { mockNowMs } from "./clock";
-import { companyDayIso } from "./connections";
-import { newCompany, seeded, stableUuid } from "./ids";
-import { calendarDay, milestoneOut, oldMilestonesOut, routeMilestones, withKindStatus, type MockMilestone, type OldCtx } from "./simple-milestones";
-import { bundleFlow, flowFor, flowsOfBets, type VisualsDb } from "./simple-visuals";
-import type { OnePagerDb } from "./simple-one-pager";
-import { appliedMilestones, planRowState, rowCodeTaken, type AppliedRecord } from "./approved-roadmap";
-import { codedTitle, prdCode } from "./item-code";
-export { codedTitle, prdCode, shownCode, shownName } from "./item-code";
-import { PLAN_PRD_SLUG, planGoalNames, planMilestones, planSlices, planSpan, type PlanDb } from "./simple-plan";
-import { COMPANY_SLUG, COMPANY_TITLE } from "./one-roadmap";
-import { featureKeyOf, startEffort } from "./simple-priorities";
-import { basePlan as fitBasePlan, PLAN_TARGET as FIT_PLAN_TARGET, schedule as fitSchedule } from "./fit-date-engine";
-import { reply } from "./typed";
+import { byPrdRank, prdRanker } from './prd-rank';
+import type { Schemas } from '@/lib/api/client';
+import { goalFigure } from '@/lib/goal-figure';
+import { goalPosition, sortGoals, type OrderedGoal } from '@/lib/goal-order';
+import { withRoadmapCodes } from './roadmap-codes';
+import { plainFlow } from './simple-visuals';
+import { leftOut } from './decision-notes';
+import { unitOk } from './goal-units';
+import { mockNowMs } from './clock';
+import { companyDayIso } from './connections';
+import { newCompany, seeded, stableUuid } from './ids';
+import {
+  calendarDay,
+  milestoneOut,
+  oldMilestonesOut,
+  routeMilestones,
+  withKindStatus,
+  type MockMilestone,
+  type OldCtx,
+} from './simple-milestones';
+import { bundleFlow, flowFor, flowsOfBets, type VisualsDb } from './simple-visuals';
+import type { OnePagerDb } from './simple-one-pager';
+import {
+  appliedMilestones,
+  planRowState,
+  rowCodeTaken,
+  type AppliedRecord,
+} from './approved-roadmap';
+import { codedTitle, prdCode } from './item-code';
+export { codedTitle, prdCode, shownCode, shownName } from './item-code';
+import {
+  PLAN_PRD_SLUG,
+  planGoalNames,
+  planMilestones,
+  planSlices,
+  planSpan,
+  type PlanDb,
+} from './simple-plan';
+import { COMPANY_SLUG, COMPANY_TITLE } from './one-roadmap';
+import { featureKeyOf, startEffort } from './simple-priorities';
+import {
+  basePlan as fitBasePlan,
+  PLAN_TARGET as FIT_PLAN_TARGET,
+  schedule as fitSchedule,
+} from './fit-date-engine';
+import { reply } from './typed';
 
-type Item = Schemas["SimpleRoadmapItem"];
-type Suggestion = Schemas["DateSuggestionOut"];
-type Dated = Schemas["SimpleDate"];
-type Flag = Schemas["SimpleFlag"];
-type Horizon = Item["horizon"];
-type Role = Schemas["Me"]["role"];
+type Item = Schemas['SimpleRoadmapItem'];
+type Suggestion = Schemas['DateSuggestionOut'];
+type Dated = Schemas['SimpleDate'];
+type Flag = Schemas['SimpleFlag'];
+type Horizon = Item['horizon'];
+type Role = Schemas['Me']['role'];
 
 interface SeedItem {
   /** trash-features-goals: moved to Trash (oracle.trash.filter.INCLUDE_TRASHED): left out of
@@ -50,11 +74,11 @@ interface SeedItem {
   /** goal-map-editing: its goal named by a confirmed goal's id (goal-ladder's goals have no key here). */
   map_goal?: string;
   track?: string;
-  confidence?: "low" | "medium" | "high";
+  confidence?: 'low' | 'medium' | 'high';
   /** Days from the window's start; with `source`. */
   start?: number;
   end?: number;
-  source?: Exclude<Dated["source"], "estimated">;
+  source?: Exclude<Dated['source'], 'estimated'>;
   depends?: string[];
   /** roadmap-edit-fixes: the key of the feature it delivers, when that is no code (another
    * PRD's item may depend on it by that key, as the API's dependency checks accept). */
@@ -65,9 +89,9 @@ interface SeedItem {
   drafted_at?: string;
   /** roadmap-edit-fixes: the fields Oracle's draft filled (the item_draft job's `filled`). */
   drafted?: string[];
-  status?: Item["status"];
+  status?: Item['status'];
   /** one-feature-panel: the status the tracker gave it, kept once its panel sets one (planned reads it again). */
-  tracked?: Item["status"];
+  tracked?: Item['status'];
   /** item-chat-understands (RoadmapItem.shipped): its own "already shipped" mark, apart from a status its tracker gives it. */
   shipped?: { note: string; on: string } | null;
   draft?: boolean;
@@ -75,13 +99,18 @@ interface SeedItem {
    * build-feature-panel review 2: `engine` is what the date engine stored besides the name and
    * day (its date_source, basis_ids...), never shown; a null name reads "Milestone". */
   /** item-milestone: `id`, a goal milestone of its roadmap picked in its panel (no day). */
-  milestone?: { name: string | null; day: number | null; engine?: Record<string, unknown>; id?: string };
+  milestone?: {
+    name: string | null;
+    day: number | null;
+    engine?: Record<string, unknown>;
+    id?: string;
+  };
   /** The track milestone record naming the item (its name), whatever its own text says. */
   record?: string;
   /** The roadmap item's validation gates (days from the window's start); one naming a
    * phase ends that phase on its day (oracle.simple.dates.named_phases). */
   gates?: { phase: string; day: number }[];
-  risks?: { flag: Flag["kind"]; note: string; subject?: string | null }[];
+  risks?: { flag: Flag['kind']; note: string; subject?: string | null }[];
   /** Simple S3a's change engine (./simple-changes.ts) edits these. */
   outcome?: string | null;
   /** build-feature-panel (AN PR 1204): the item's notes (op edit_note), the panel's Notes row. */
@@ -107,7 +136,7 @@ interface SeedItem {
   trace_feature?: string;
   /** qa-prio-twins: the Ground Truth feature this item stands for is locked (a person edited it) or a PRD section
    * links it: baseline.merge_entity refuses to merge it away (409). */
-  gt_lock?: "locked" | "linked";
+  gt_lock?: 'locked' | 'linked';
   /** feature-parts: the key of the feature it is a part of (RoadmapItem.parent_key). */
   parent?: string;
   /** S7: the Ground Truth feature (with no item) this draft was linked to by a merge. */
@@ -117,7 +146,7 @@ interface SeedItem {
   drafting_until?: number;
   /** S7: a draft quick-added on a quarter: Oracle's date suggestion falls in it. */
   quarter?: { start: string; end: string };
-  flow?: Schemas["SimpleFlow"] | null;
+  flow?: Schemas['SimpleFlow'] | null;
   /** S7: notes a merge left on the kept item. */
   notes?: string[];
   /** meet-chat-right-prd: on its PRD's draft roadmap (a run's items-only roadmap, the PRD not
@@ -133,7 +162,7 @@ interface SeedItem {
   /** qa-nov17: the key of the Ground Truth feature a seeded item is (F-01); the mock links it (feature_id) once the baseline is seeded. */
   gt_key?: string;
   /** approved-prd-roadmap: its dates as the PRD has them (ISO days; no start: end-only). */
-  dates?: { start: string | null; end: string; source: "engineering" | "accepted" };
+  dates?: { start: string | null; end: string; source: 'engineering' | 'accepted' };
   /** build-runplan RP2: the PRD it belongs to when not its roadmap's own (./meeting-draft.ts). */
   prd_doc?: { id: string; slug: string; title: string };
   /** RP2 'Draft layer on roadmap': a draft item's owner, by name (./meeting-draft.ts). */
@@ -157,11 +186,11 @@ interface SimpleDb {
   items: SeedItem[];
   ids: Record<string, string>;
   /** The items' own dates once a suggestion was accepted or edited, or moved in Simple (ISO days). */
-  own: Record<string, { start: string; end: string; source?: "typed" | "accepted" }>;
+  own: Record<string, { start: string; end: string; source?: 'typed' | 'accepted' }>;
   suggestions: Suggestion[];
   /** Simple S3a (./simple-changes.ts): sessions and changes. */
-  sessions?: Schemas["SimpleSessionOut"][];
-  changes?: Schemas["SimpleChangeOut"][];
+  sessions?: Schemas['SimpleSessionOut'][];
+  changes?: Schemas['SimpleChangeOut'][];
   /** walkc-meeting (./simple-changes.ts markMeetingProposal): the ids of proposals made in a
    * meeting, which stay with the meeting's deciders (changes.current_route). */
   meeting_proposals?: string[];
@@ -214,22 +243,33 @@ interface SimpleDb {
    * (goal key -> when the job is done, mock ms) and the goals suggested for automatically. */
   goal_suggestions?: GoalSuggestionRow[];
   /** Goal buckets (./goal-buckets.ts): the goals and each feature's goal links. */
-  goal_buckets?: import("./goal-buckets").GoalBucketsDb;
+  goal_buckets?: import('./goal-buckets').GoalBucketsDb;
   /** one-feature-panel: a roadmap goal edited through the goal edit (goal key -> its fields). */
   goal_edits?: Record<string, RoadmapGoalFields>;
   /** milestone-kinds: a roadmap goal with no goal bucket shown (true) or not (false) as a goal milestone
    * (the goal's on_roadmap, written by PATCH /v1/simple/goal-buckets/goals/{id}); left out, true. */
   goal_on_roadmap?: Record<string, boolean>;
   /** pre-demo QA P-6: item id -> the goal it serves on the Goal map (service._ladder_goals), read when the item has no goal of its own. */
-  map_goals?: Record<string, Schemas["SimpleGoalRef"]>;
+  map_goals?: Record<string, Schemas['SimpleGoalRef']>;
   /** roadmap-milestone-codes: goal-ladder's Goal map milestones, which are this roadmap's own goal
    * milestones in the API (goal_map._on_map reads the same rows), so the read codes them too
    * (server.ts copies them from the map on each request: goalMapMilestones). */
-  map_milestones?: { roadmap: string; milestones: { id: string; name: string; date: string | null; goal_id: string; rank: number; code?: string; prd?: { id: string; slug: string; title: string } }[] };
+  map_milestones?: {
+    roadmap: string;
+    milestones: {
+      id: string;
+      name: string;
+      date: string | null;
+      goal_id: string;
+      rank: number;
+      code?: string;
+      prd?: { id: string; slug: string; title: string };
+    }[];
+  };
   /** milestone-rename: a goal's own milestone's name once renamed (goal id -> name; the goal's
    * attrs.milestone_name in the API); renaming it never renames the goal. */
   goal_milestone_names?: Record<string, string>;
-  goal_jobs?: Record<string, { until: number; job_id: string; origin: "auto" | "on_demand" }>;
+  goal_jobs?: Record<string, { until: number; job_id: string; origin: 'auto' | 'on_demand' }>;
   auto_done?: string[];
   /** S7: the seeds a merge changed, as they were (change id -> seeds), for its undo. */
   snapshots?: Record<string, SeedItem[]>;
@@ -238,7 +278,7 @@ interface SimpleDb {
   /** walkb-roadmap review: the PRD's one-pager, whose bets' flows its items show. */
   onePager?: OnePagerDb;
   /** S8: decided decisions that changed each item (by item id), newest first. */
-  decided_in?: Record<string, Schemas["SimpleDecidedRef"][]>;
+  decided_in?: Record<string, Schemas['SimpleDecidedRef'][]>;
   /** The plan-model lane (./simple-plan.ts): Guided setup's plan, in the "simple-plan" scenario. */
   plan?: PlanDb;
   /** "goal-buckets-undated": the plan's roadmap has no approved version yet, so Priorities reads no dated plan. */
@@ -262,7 +302,10 @@ interface SimpleDb {
   record_dropped?: string[];
   /** approved-roadmap-to-simple: roadmaps Simple knows besides ROADMAPS (slug -> its title,
    * PRD, track key and track title), known while their items are the roadmap's. */
-  extra_roadmaps?: Record<string, { title: string; prd: string; track: string; track_title: string }>;
+  extra_roadmaps?: Record<
+    string,
+    { title: string; prd: string; track: string; track_title: string }
+  >;
   /** item-milestone: tracks Simple knows besides TRACKS and the added roadmaps' own (key -> title),
    * known as knowExtraRoadmaps knows theirs. */
   extra_tracks?: Record<string, string>;
@@ -287,7 +330,7 @@ interface SimpleDb {
   replaced_prd_titles?: string[];
   /** The current PRD each replaced one (by id and slug) went to: its first "Replaced by",
    * followed while that one is replaced too (additions._home files a new item under it). */
-  replaced_with?: Record<string, Schemas["SimpleDocRef"]>;
+  replaced_with?: Record<string, Schemas['SimpleDocRef']>;
   /** approved-roadmap-to-simple (./approved-roadmap.ts): what each roadmap's last applied version said. */
   applied?: Record<string, AppliedRecord>;
 }
@@ -312,10 +355,10 @@ export interface GoalSuggestionRow {
   title: string;
   outcome: string;
   why: string;
-  evidence: Schemas["SimpleEvidence"][];
-  status: "open" | "accepted" | "rejected";
+  evidence: Schemas['SimpleEvidence'][];
+  status: 'open' | 'accepted' | 'rejected';
   reason: string | null;
-  origin: "auto" | "on_demand" | "person";
+  origin: 'auto' | 'on_demand' | 'person';
   /** A person's suggestion (origin "person"): who sent it. */
   proposed_by?: string | null;
   created_at: string;
@@ -323,7 +366,7 @@ export interface GoalSuggestionRow {
   decided_at: string | null;
   change_id: string | null;
   item_id: string | null;
-  flow: Schemas["SimpleFlow"] | null;
+  flow: Schemas['SimpleFlow'] | null;
 }
 
 /** A reader, with every member's role (D-a: a track owner decides only as an approver or owner). */
@@ -339,32 +382,75 @@ export interface Who {
 /** A working draft of one roadmap (oracle.simple.drafts): the items in `db.items` are the
  * draft's; `published` keeps the roadmap's published items for those who may not see it. */
 interface MockDraft {
-  out: Omit<Schemas["SimpleDraftOut"], "changes" | "can_submit" | "can_resume" | "can_approve" | "can_publish" | "required_reviewers" | "change_log" | "can_withdraw" | "from_prds" | "published">;
+  out: Omit<
+    Schemas['SimpleDraftOut'],
+    | 'changes'
+    | 'can_submit'
+    | 'can_resume'
+    | 'can_approve'
+    | 'can_publish'
+    | 'required_reviewers'
+    | 'change_log'
+    | 'can_withdraw'
+    | 'from_prds'
+    | 'published'
+  >;
   roadmap: string;
-  published: { items: SeedItem[]; own: SimpleDb["own"]; key_dates?: MockKeyDate[] };
+  published: { items: SeedItem[]; own: SimpleDb['own']; key_dates?: MockKeyDate[] };
   /** approved-prd-roadmap: what each approved PRD put in it (PRD slug -> item keys, key date ids). */
-  prds?: Record<string, { prd: Schemas["SimpleDocRef"]; version: number; keys: string[]; key_dates: string[] }>;
+  prds?: Record<
+    string,
+    { prd: Schemas['SimpleDocRef']; version: number; keys: string[]; key_dates: string[] }
+  >;
 }
 
 /** `draft`: the number of the PRD draft (version) the roadmap's items were imported from. */
-export const ROADMAPS: Record<string, { title: string; visibility: "company" | "approvers"; prd: string; draft: number }> = {
-  "alerts-roadmap": { title: "Alerts roadmap", visibility: "company", prd: "Usage alerts", draft: 5 },
-  "onboarding-roadmap": { title: "Onboarding roadmap", visibility: "company", prd: "Guided setup", draft: 2 },
-  "pricing-roadmap": { title: "Pricing roadmap", visibility: "approvers", prd: "Plan changes", draft: 3 },
+export const ROADMAPS: Record<
+  string,
+  { title: string; visibility: 'company' | 'approvers'; prd: string; draft: number }
+> = {
+  'alerts-roadmap': {
+    title: 'Alerts roadmap',
+    visibility: 'company',
+    prd: 'Usage alerts',
+    draft: 5,
+  },
+  'onboarding-roadmap': {
+    title: 'Onboarding roadmap',
+    visibility: 'company',
+    prd: 'Guided setup',
+    draft: 2,
+  },
+  'pricing-roadmap': {
+    title: 'Pricing roadmap',
+    visibility: 'approvers',
+    prd: 'Plan changes',
+    draft: 3,
+  },
 };
 /**
  * plan-open-from-simple: an item's roadmap as the API names it, by its document's slug, the one
  * the Plan's rows carry (the Alerts roadmap is the usage-alerts-roadmap document); the picker
  * keeps the mock's own key.
  */
-const ROADMAP_DOC_SLUG: Record<string, string> = { "alerts-roadmap": "usage-alerts-roadmap" };
+const ROADMAP_DOC_SLUG: Record<string, string> = { 'alerts-roadmap': 'usage-alerts-roadmap' };
 /** The Simple roadmap whose items a roadmap document holds (its own slug, or alerts-roadmap for usage-alerts-roadmap). */
-export const roadmapKeyOf = (docSlug: string): string => Object.keys(ROADMAP_DOC_SLUG).find((k) => ROADMAP_DOC_SLUG[k] === docSlug) ?? docSlug;
+export const roadmapKeyOf = (docSlug: string): string =>
+  Object.keys(ROADMAP_DOC_SLUG).find((k) => ROADMAP_DOC_SLUG[k] === docSlug) ?? docSlug;
 /** S7 adds Keep alerts quiet, a goal with no items yet (Oracle suggested features for it on its own). */
-export const GOALS: Record<string, string> = { "grow-retention": "Grow retention", "faster-activation": "Faster activation", "quiet-alerts": "Keep alerts quiet" };
+export const GOALS: Record<string, string> = {
+  'grow-retention': 'Grow retention',
+  'faster-activation': 'Faster activation',
+  'quiet-alerts': 'Keep alerts quiet',
+};
 /** roadmap-talk's goals (the "roadmap-talk" scenario's items name them); known once such an item is seeded. */
-export const TALK_GOALS: Record<string, string> = { reliability: "Reliability", growth: "Growth", activation: "Activation", revenue: "Revenue" };
-const TALK_ITEM = "adaptive-pacing";
+export const TALK_GOALS: Record<string, string> = {
+  reliability: 'Reliability',
+  growth: 'Growth',
+  activation: 'Activation',
+  revenue: 'Revenue',
+};
+const TALK_ITEM = 'adaptive-pacing';
 /**
  * The goals TALK_GOALS adds, when the roadmap holds roadmap-talk's items (the scenario's seed, or
  * a reload of it), or a PRD's dated plan ("simple-plan"...: its goals are these four, so people
@@ -384,23 +470,44 @@ export const MAP_GOALS: Record<string, string> = {};
  * goal_ids; none while that goal is in Trash or unknown (service.load leaves it out).
  */
 /** tracks-goal (service.load): the live company goal a track is tied to (the Tracks sheet's track_state), by id and name. */
-export function trackGoal(db: SimpleDb, track: string): { goal_id: string | null; goal_name: string | null } {
-  const st = (db as SimpleDb & { track_state?: Record<string, { goal?: string | null }> }).track_state?.[track];
+export function trackGoal(
+  db: SimpleDb,
+  track: string,
+): { goal_id: string | null; goal_name: string | null } {
+  const st = (db as SimpleDb & { track_state?: Record<string, { goal?: string | null }> })
+    .track_state?.[track];
   // QA Nov 14: the seed ties one track to a goal (TRACK_GOALS) till a person picks or clears one.
   const seed = TRACK_GOALS[track];
-  const id = st && "goal" in st ? st.goal : seed ? stableUuid(`goal-bucket/${seed}`) : null;
-  if (id && !db.goal_buckets && !(st && "goal" in st) && planGoalNames().includes(seed)) return { goal_id: id, goal_name: seed };
-  const g = id ? db.goal_buckets?.goals.find((x) => x.id === id && !x.archived && !x.trashed) : undefined;
+  const id = st && 'goal' in st ? st.goal : seed ? stableUuid(`goal-bucket/${seed}`) : null;
+  if (id && !db.goal_buckets && !(st && 'goal' in st) && planGoalNames().includes(seed))
+    return { goal_id: id, goal_name: seed };
+  const g = id
+    ? db.goal_buckets?.goals.find((x) => x.id === id && !x.archived && !x.trashed)
+    : undefined;
   return { goal_id: g?.id ?? null, goal_name: g?.title ?? null };
 }
 /** The seed's track goals (a goal bucket's title by track): the Usage alerts track serves Reliability. Invented. */
-const TRACK_GOALS: Record<string, string> = { alerts: "Reliability" };
+const TRACK_GOALS: Record<string, string> = { alerts: 'Reliability' };
 
-export function mapGoalRef(db: Pick<SimpleDb, "goal_buckets">, id: string): Schemas["SimpleGoalRef"] | null {
-  if (!(id in MAP_GOALS) || db.goal_buckets?.goals.some((g) => g.id === id && g.trashed)) return null;
+export function mapGoalRef(
+  db: Pick<SimpleDb, 'goal_buckets'>,
+  id: string,
+): Schemas['SimpleGoalRef'] | null {
+  if (!(id in MAP_GOALS) || db.goal_buckets?.goals.some((g) => g.id === id && g.trashed))
+    return null;
   // goal-map-tracks: one store, so its goal bucket (same id) gives its name, measure and target as edited.
   const b = db.goal_buckets?.goals.find((g) => g.id === id);
-  return { id, key: id, title: b?.title || MAP_GOALS[id], metric: b?.measure || null, position: null, target: b?.target || null, due: null, current: null, unit: null };
+  return {
+    id,
+    key: id,
+    title: b?.title || MAP_GOALS[id],
+    metric: b?.measure || null,
+    position: null,
+    target: b?.target || null,
+    due: null,
+    current: null,
+    unit: null,
+  };
 }
 
 /**
@@ -409,22 +516,25 @@ export function mapGoalRef(db: Pick<SimpleDb, "goal_buckets">, id: string): Sche
  * once another scenario's data loads the ones it added are taken out again. Invented data.
  */
 const GOAL_ORDER_GOALS: Record<string, string> = {
-  "g.paid-conversion": "Growth",
-  "support-load": "Cut support load",
-  "guided-week": "Make the first week feel guided for every new team, from sign-up to their first shared report",
-  "mid-size": "Win more mid-size teams",
-  "page-speed": "Faster page loads",
+  'g.paid-conversion': 'Growth',
+  'support-load': 'Cut support load',
+  'guided-week':
+    'Make the first week feel guided for every new team, from sign-up to their first shared report',
+  'mid-size': 'Win more mid-size teams',
+  'page-speed': 'Faster page loads',
   // kr-in-goal-card: "goal-key-results"'s two key results (subgoals) of Faster activation.
-  "kr-setup-day": "KR 1 Half of new teams set up in one day",
-  "kr-first-alert": "KR 2 New teams send a first alert in week one",
-  "kr-first-report": "Teams share a first report",
-  "kr-setup-ten": "Setup takes ten minutes",
+  'kr-setup-day': 'KR 1 Half of new teams set up in one day',
+  'kr-first-alert': 'KR 2 New teams send a first alert in week one',
+  'kr-first-report': 'Teams share a first report',
+  'kr-setup-ten': 'Setup takes ten minutes',
 };
 let goalOrderAdded: string[] = [];
 export function knowGoalOrderGoals(entities: { key: string; status: string }[]): void {
-  const scenario = entities.some((e) => e.key === "support-load");
+  const scenario = entities.some((e) => e.key === 'support-load');
   // kr-fold: a proposed key result's work names it too (its parent's lane holds it).
-  const want = Object.keys(GOAL_ORDER_GOALS).filter((k) => scenario && entities.some((e) => e.key === k && e.status !== "rejected"));
+  const want = Object.keys(GOAL_ORDER_GOALS).filter(
+    (k) => scenario && entities.some((e) => e.key === k && e.status !== 'rejected'),
+  );
   for (const k of goalOrderAdded) if (!want.includes(k)) delete GOALS[k];
   goalOrderAdded = goalOrderAdded.filter((k) => want.includes(k));
   for (const k of want)
@@ -451,12 +561,31 @@ let goalTitles = new Map<string, string>();
 /** goal-delete-r4: each key result's own parent goal key, by its key (Entity.parent_id, one level up). */
 let goalParentKeys = new Map<string, string>();
 export const goalParentKey = (key: string): string | undefined => goalParentKeys.get(key);
-export function knowGoalParents(goals: { id: string; key: string; title?: string; type: string; status: string; parent_id?: string | null }[]): void {
-  goalTitles = new Map(goals.flatMap((g) => (g.type === "goal" && g.title ? [[g.key, g.title] as const] : [])));
+export function knowGoalParents(
+  goals: {
+    id: string;
+    key: string;
+    title?: string;
+    type: string;
+    status: string;
+    parent_id?: string | null;
+  }[],
+): void {
+  goalTitles = new Map(
+    goals.flatMap((g) => (g.type === 'goal' && g.title ? [[g.key, g.title] as const] : [])),
+  );
   const keyOf = new Map(goals.map((g) => [g.id, g.key]));
-  goalParentKeys = new Map(goals.flatMap((g) => (g.type === "goal" && g.parent_id && keyOf.has(g.parent_id) ? [[g.key, keyOf.get(g.parent_id)!] as const] : [])));
+  goalParentKeys = new Map(
+    goals.flatMap((g) =>
+      g.type === 'goal' && g.parent_id && keyOf.has(g.parent_id)
+        ? [[g.key, keyOf.get(g.parent_id)!] as const]
+        : [],
+    ),
+  );
   type G = (typeof goals)[number];
-  const parents = new Map(goals.filter((g) => g.type === "goal" && g.status === "confirmed").map((g) => [g.id, g]));
+  const parents = new Map(
+    goals.filter((g) => g.type === 'goal' && g.status === 'confirmed').map((g) => [g.id, g]),
+  );
   const top = (g: G): G => {
     const seen = new Set([g.id]);
     while (g.parent_id && parents.has(g.parent_id) && !seen.has(g.parent_id)) {
@@ -465,7 +594,13 @@ export function knowGoalParents(goals: { id: string; key: string; title?: string
     }
     return g;
   };
-  goalParents = new Map(goals.flatMap((g) => (g.type === "goal" && g.parent_id && parents.has(g.parent_id) ? [[g.key, top(g).key] as const] : [])));
+  goalParents = new Map(
+    goals.flatMap((g) =>
+      g.type === 'goal' && g.parent_id && parents.has(g.parent_id)
+        ? [[g.key, top(g).key] as const]
+        : [],
+    ),
+  );
 }
 /** A goal's place in the one goal order (by key). */
 export function goalRank(key: string): number {
@@ -473,7 +608,8 @@ export function goalRank(key: string): number {
   return n < 0 ? Number.MAX_SAFE_INTEGER : n;
 }
 /** goal-order: how goal groups sort: the one goal order, then by key (the goal-suggestions list sorts so too). */
-export const goalOrderKey = (key: string): string => `0${String(goalRank(key)).padStart(16, "0")}${key}`;
+export const goalOrderKey = (key: string): string =>
+  `0${String(goalRank(key)).padStart(16, '0')}${key}`;
 /** A goal's position (by key), null when unset or unknown. */
 export function goalPositionOf(key: string): number | null {
   const g = companyGoals.find((x) => x.key === key);
@@ -483,13 +619,28 @@ export function goalPositionOf(key: string): number | null {
 /** The item a stored dependency key names: its key, its code, else the key of its feature. */
 export function dependencyOf(items: SeedItem[], k: string): SeedItem | undefined {
   const low = k.toLowerCase();
-  return items.find((x) => x.key === k) ?? items.find((x) => [codedTitle(x.title, prdCode(x.section))[0], x.feature_key].some((c) => !!c && c.toLowerCase() === low));
+  return (
+    items.find((x) => x.key === k) ??
+    items.find((x) =>
+      [codedTitle(x.title, prdCode(x.section))[0], x.feature_key].some(
+        (c) => !!c && c.toLowerCase() === low,
+      ),
+    )
+  );
 }
 
 /** roadmap-edit-fixes (changes.loop_of): why `key` may not depend on `keys`: one already
  * depends on it, directly or through others; null when none closes a loop. */
-export function loopOf(items: SeedItem[], key: string, keys: string[], ignore: string[] = []): string | null {
-  const named = (x: SeedItem) => { const [c, t] = codedTitle(x.title, prdCode(x.section)); return c ? `${c} ${t}` : t; };
+export function loopOf(
+  items: SeedItem[],
+  key: string,
+  keys: string[],
+  ignore: string[] = [],
+): string | null {
+  const named = (x: SeedItem) => {
+    const [c, t] = codedTitle(x.title, prdCode(x.section));
+    return c ? `${c} ${t}` : t;
+  };
   const self = items.find((x) => x.key === key);
   if (!self) return null;
   for (const k of keys) {
@@ -501,16 +652,23 @@ export function loopOf(items: SeedItem[], key: string, keys: string[], ignore: s
       const cur = todo.pop()!;
       if (seen.has(cur)) continue;
       seen.add(cur);
-      if (cur === key) return `Not added, it would make a loop: ${named(d)} already depends on ${named(self)}`;
+      if (cur === key)
+        return `Not added, it would make a loop: ${named(d)} already depends on ${named(self)}`;
       const x = items.find((i) => i.key === cur);
-      for (const n of x?.depends ?? []) { const y = dependencyOf(items, n); if (y && !ignore.includes(y.key)) todo.push(y.key); }
+      for (const n of x?.depends ?? []) {
+        const y = dependencyOf(items, n);
+        if (y && !ignore.includes(y.key)) todo.push(y.key);
+      }
     }
   }
   return null;
 }
 
 /** An item named as the API's visuals name it (subject_name): "F-06 Weekly alert digest", or its title with no code. */
-export function itemSubjectName(db: Pick<SimpleDb, "items" | "ids"> | undefined, id: string): string | null {
+export function itemSubjectName(
+  db: Pick<SimpleDb, 'items' | 'ids'> | undefined,
+  id: string,
+): string | null {
   const key = db && Object.keys(db.ids).find((k) => db.ids[k] === id);
   const item = key ? db!.items.find((s) => s.key === key) : undefined;
   if (!item) return null;
@@ -522,19 +680,31 @@ export function itemSubjectName(db: Pick<SimpleDb, "items" | "ids"> | undefined,
  * never the section's key (service.prd_section_label). */
 function sectionLabel(section: string, heading: string | undefined, name: string): string {
   const code = prdCode(section);
-  let words = (heading ?? "").trim() || name.trim();
-  if (code && words.toUpperCase().startsWith(code)) words = words.slice(code.length).replace(/^[\s:.\-·–—]+/, "");
-  return `${code ?? ""} ${words}`.trim();
+  let words = (heading ?? '').trim() || name.trim();
+  if (code && words.toUpperCase().startsWith(code))
+    words = words.slice(code.length).replace(/^[\s:.\-·–—]+/, '');
+  return `${code ?? ''} ${words}`.trim();
 }
 
 /** S4: each goal's metric (the goal counters' line). */
-const METRICS: Record<string, string> = { "grow-retention": "Teams active after 90 days", "faster-activation": "Days to the first alert", "quiet-alerts": "Teams muting alerts" };
+const METRICS: Record<string, string> = {
+  'grow-retention': 'Teams active after 90 days',
+  'faster-activation': 'Days to the first alert',
+  'quiet-alerts': 'Teams muting alerts',
+};
 /** roadmap-gantt ("simple-plan-two"): a goal named like a plan goal ("Growth"), for the plan's items only. */
-const PLAN_GOALS: Record<string, string> = { growth: "Growth" };
+const PLAN_GOALS: Record<string, string> = { growth: 'Growth' };
 /** one-feature-panel: each goal's target and date (invented), as the goal edit reads them. */
-const TARGETS: Record<string, [string, string]> = { "grow-retention": ["70% of teams", "2027-03-31"], "faster-activation": ["2 days", "2027-02-26"], "quiet-alerts": ["Under 10% of teams", "2027-03-31"] };
+const TARGETS: Record<string, [string, string]> = {
+  'grow-retention': ['70% of teams', '2027-03-31'],
+  'faster-activation': ['2 days', '2027-02-26'],
+  'quiet-alerts': ['Under 10% of teams', '2027-03-31'],
+};
 /** build-feature-panel (AN PR 1204): each goal's latest reading and unit (invented), the panel's Reading row. */
-const READINGS: Record<string, { current: number; unit: string }> = { "grow-retention": { current: 61, unit: "%" }, "faster-activation": { current: 3, unit: "days" } };
+const READINGS: Record<string, { current: number; unit: string }> = {
+  'grow-retention': { current: 61, unit: '%' },
+  'faster-activation': { current: 3, unit: 'days' },
+};
 /** goal-target-kept (goal_buckets.typed_target): a goal measured as a number of its reading's
  * unit ("2 days"): its unit, else null (a target in words). */
 export const TYPED_TARGET = /^(-?\d[\d,]*(?:\.\d+)?)\s*(.*)$/;
@@ -547,62 +717,112 @@ export const measuredUnit = (key: string, target: string | null): string | null 
 const TYPED_NUMBER = /^(\D*?)(-?\d[\d,]*(?:\.\d+)?)\s*(.*)$/;
 /** Commas only between thousands ("1,200", "12,000,000"), never "1,2". */
 const NUMBER = /^-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?$/;
-const SIGNS: Record<string, string> = { $: "usd", "€": "eur", "£": "gbp" };
+const SIGNS: Record<string, string> = { $: 'usd', '€': 'eur', '£': 'gbp' };
 /** A stored currency unit as a person reads it ("usd" is "$"). */
-const READ: Record<string, string> = Object.fromEntries(Object.entries(SIGNS).map(([sign, code]) => [code, sign]));
+const READ: Record<string, string> = Object.fromEntries(
+  Object.entries(SIGNS).map(([sign, code]) => [code, sign]),
+);
 /** goal-target-kept (goal_buckets.typed_target): the target goal `key` (its target reads `was`)
  * gets when a person types `typed`, or the API's 422 detail. A measured goal takes a number alone
  * or in its own unit (any case), in its unit; another unit, words only or nothing is refused.
  * `stored`: the unit of a goal bucket's target stored as a number ("" none), else its reading's. */
-export const keptTarget = (key: string | null | undefined, was: string | null, typed: string | null | undefined, stored?: string): { target: string | null; unit?: string } | { detail: string } => {
-  const words = (v: string | null | undefined) => (v ?? "").trim().replace(/\s+/g, " ") || null;
+export const keptTarget = (
+  key: string | null | undefined,
+  was: string | null,
+  typed: string | null | undefined,
+  stored?: string,
+): { target: string | null; unit?: string } | { detail: string } => {
+  const words = (v: string | null | undefined) => (v ?? '').trim().replace(/\s+/g, ' ') || null;
   const t = words(typed);
   const unit = stored ?? (key ? measuredUnit(key, was) : null);
   if (unit == null || t === words(was)) return { target: t };
   const m = t ? TYPED_NUMBER.exec(t) : null;
-  if (!m) return { detail: "A measured goal keeps its target: type its new number" };
-  if (!NUMBER.test(m[2])) return { detail: "Type the target as a number, like 60" };
-  const typedUnit = words(`${m[1]} ${m[3]}`) ?? "";
+  if (!m) return { detail: 'A measured goal keeps its target: type its new number' };
+  if (!NUMBER.test(m[2])) return { detail: 'Type the target as a number, like 60' };
+  const typedUnit = words(`${m[1]} ${m[3]}`) ?? '';
   const u = SIGNS[typedUnit] ?? typedUnit.toLowerCase();
   let have = unit;
   if (u && u !== unit.toLowerCase()) {
-    if (unit) return { detail: `This goal is measured in ${READ[unit.toLowerCase()] ?? unit}: type its new number` };
-    if (!unitOk(u)) return { detail: "Type the target as a number, like 60" };
+    if (unit)
+      return {
+        detail: `This goal is measured in ${READ[unit.toLowerCase()] ?? unit}: type its new number`,
+      };
+    if (!unitOk(u)) return { detail: 'Type the target as a number, like 60' };
     have = u;
   }
-  const n = Number(m[2].replace(/,/g, ""));
+  const n = Number(m[2].replace(/,/g, ''));
   return { target: targetRead(n, have), unit: have };
 };
 /** A target stored as a number in its unit, as goal_buckets._target reads it. */
 export const targetRead = (n: number, unit: string): string => goalFigure(n, unit);
 /** The unit of goal bucket `key`'s target stored as a number ("" none), else undefined (its reading's, or words). */
-export const storedUnit = (db: Pick<SimpleDb, "goal_buckets">, key: string | null | undefined): string | undefined =>
-  key ? bucketGoalOf(db, key)?.unit : undefined;
-export type RoadmapGoalFields = { title: string; metric: string | null; target: string | null; due: string | null };
+export const storedUnit = (
+  db: Pick<SimpleDb, 'goal_buckets'>,
+  key: string | null | undefined,
+): string | undefined => (key ? bucketGoalOf(db, key)?.unit : undefined);
+export type RoadmapGoalFields = {
+  title: string;
+  metric: string | null;
+  target: string | null;
+  due: string | null;
+};
 /** A goal's key from its id (the goal edit takes either kind of goal, as the API's one goal entity):
  * a roadmap goal's, or a goal bucket's of that key. */
-export const roadmapGoalKey = (id: string, db?: Pick<SimpleDb, "goal_buckets">): string | null =>
-  [...Object.keys(GOALS), ...Object.keys(PLAN_GOALS), ...(db?.goal_buckets?.goals.filter((g) => !g.trashed).map((g) => g.key) ?? [])].find((k) => stableUuid(`simple-goal/${k}`) === id) ?? null;
+export const roadmapGoalKey = (id: string, db?: Pick<SimpleDb, 'goal_buckets'>): string | null =>
+  [
+    ...Object.keys(GOALS),
+    ...Object.keys(PLAN_GOALS),
+    ...(db?.goal_buckets?.goals.filter((g) => !g.trashed).map((g) => g.key) ?? []),
+  ].find((k) => stableUuid(`simple-goal/${k}`) === id) ?? null;
 /** The goal bucket of a roadmap goal's key, not in Trash: the one goal both read and write. */
-const bucketGoalOf = (db: Pick<SimpleDb, "goal_buckets">, key: string) => db.goal_buckets?.goals.find((g) => g.key === key && !g.trashed);
+const bucketGoalOf = (db: Pick<SimpleDb, 'goal_buckets'>, key: string) =>
+  db.goal_buckets?.goals.find((g) => g.key === key && !g.trashed);
 /** trash-features-goals: whether the goal of this key is in Trash (left out of every item's goal). */
-export const goalInTrash = (db: Pick<SimpleDb, "goal_buckets">, key: string): boolean =>
-  (db.goal_buckets?.goals ?? []).some((g) => g.trashed && (g.key === key || g.title.toLowerCase() === (GOALS[key] ?? PLAN_GOALS[key] ?? "").toLowerCase()));
+export const goalInTrash = (db: Pick<SimpleDb, 'goal_buckets'>, key: string): boolean =>
+  (db.goal_buckets?.goals ?? []).some(
+    (g) =>
+      g.trashed &&
+      (g.key === key ||
+        g.title.toLowerCase() === (GOALS[key] ?? PLAN_GOALS[key] ?? '').toLowerCase()),
+  );
 /** An archived goal (a goal bucket of its key or name): it stays in an item's goal_ids but is no item's goal. */
-export const goalArchived = (db: Pick<SimpleDb, "goal_buckets">, key: string): boolean =>
-  (db.goal_buckets?.goals ?? []).some((g) => g.archived && (g.key === key || g.title.toLowerCase() === (GOALS[key] ?? PLAN_GOALS[key] ?? "").toLowerCase()));
+export const goalArchived = (db: Pick<SimpleDb, 'goal_buckets'>, key: string): boolean =>
+  (db.goal_buckets?.goals ?? []).some(
+    (g) =>
+      g.archived &&
+      (g.key === key ||
+        g.title.toLowerCase() === (GOALS[key] ?? PLAN_GOALS[key] ?? '').toLowerCase()),
+  );
 /** The seeded fields of a roadmap goal (a goal bucket of its key starts from them). */
-export const roadmapGoalSeed = (key: string): RoadmapGoalFields => ({ title: GOALS[key] ?? PLAN_GOALS[key] ?? goalTitles.get(key) ?? "", metric: METRICS[key] ?? null, target: TARGETS[key]?.[0] ?? null, due: TARGETS[key]?.[1] ?? null });
+export const roadmapGoalSeed = (key: string): RoadmapGoalFields => ({
+  title: GOALS[key] ?? PLAN_GOALS[key] ?? goalTitles.get(key) ?? '',
+  metric: METRICS[key] ?? null,
+  target: TARGETS[key]?.[0] ?? null,
+  due: TARGETS[key]?.[1] ?? null,
+});
 /** The goal's fields as read: its goal bucket's (one goal store, as the API's one goal entity), else an edit, else its seed. */
-export const roadmapGoal = (db: Pick<SimpleDb, "goal_edits" | "goal_buckets">, key: string): RoadmapGoalFields => {
+export const roadmapGoal = (
+  db: Pick<SimpleDb, 'goal_edits' | 'goal_buckets'>,
+  key: string,
+): RoadmapGoalFields => {
   const b = bucketGoalOf(db, key);
   if (b) return { title: b.title, metric: b.measure, target: b.target, due: b.due };
   return db.goal_edits?.[key] ?? roadmapGoalSeed(key);
 };
 /** A goal's name, measure, target and date written where every page reads them: its goal bucket, else the roadmap goal's edit. */
-export function writeRoadmapGoal(db: Pick<SimpleDb, "goal_edits" | "goal_buckets">, key: string, fields: RoadmapGoalFields): void {
+export function writeRoadmapGoal(
+  db: Pick<SimpleDb, 'goal_edits' | 'goal_buckets'>,
+  key: string,
+  fields: RoadmapGoalFields,
+): void {
   const b = bucketGoalOf(db, key);
-  if (b) Object.assign(b, { title: fields.title, measure: fields.metric, target: fields.target, due: fields.due });
+  if (b)
+    Object.assign(b, {
+      title: fields.title,
+      measure: fields.metric,
+      target: fields.target,
+      due: fields.due,
+    });
   else (db.goal_edits ??= {})[key] = fields;
 }
 /** A goal buckets' feature-goal link, as GoalBucketsDb.lazy_links names it. */
@@ -613,17 +833,33 @@ export const goalId = (key: string): string => stableUuid(`simple-goal/${key}`);
  * feature's, the first live goal that feature serves in the goal order, so a goal deleted with
  * its features moved to another reads that one. Named as targetGoals names it.
  */
-export function featureGoalRef(db: SimpleDb, key: string): Schemas["SimpleGoalRef"] | null {
+export function featureGoalRef(db: SimpleDb, key: string): Schemas['SimpleGoalRef'] | null {
   const gb = db.goal_buckets;
   const f = gb?.features.find((x) => x.key === featureKeyOf(db, key));
   // The links a route seeded with the default goals on first read (lazyGoalBuckets) and no person has written since are
   // not this roadmap's (as targetGoals), so an item reads the same goal before and after another page seeds them, in its
   // panel and in a change's before; a link a person moved it onto is read, as the API's.
   const lazy = new Set(gb?.lazy_links ?? []);
-  const g = gb?.goals.filter((x) => f?.goal_ids.includes(x.id) && !x.archived && !x.trashed && !lazy.has(linkOf(f.id, x.id))).sort((a, b) => a.order - b.order)[0];
+  const g = gb?.goals
+    .filter(
+      (x) =>
+        f?.goal_ids.includes(x.id) && !x.archived && !x.trashed && !lazy.has(linkOf(f.id, x.id)),
+    )
+    .sort((a, b) => a.order - b.order)[0];
   if (!g) return null;
-  const k = Object.keys(GOALS).find((x) => x === g.key || GOALS[x].toLowerCase() === g.title.toLowerCase());
-  return { id: k ? goalId(k) : g.id, key: k ?? g.key, title: g.title, metric: g.measure, target: g.target, due: g.due, position: goalPositionOf(k ?? g.key), ...(READINGS[k ?? g.key] ?? { current: null, unit: null }) };
+  const k = Object.keys(GOALS).find(
+    (x) => x === g.key || GOALS[x].toLowerCase() === g.title.toLowerCase(),
+  );
+  return {
+    id: k ? goalId(k) : g.id,
+    key: k ?? g.key,
+    title: g.title,
+    metric: g.measure,
+    target: g.target,
+    due: g.due,
+    position: goalPositionOf(k ?? g.key),
+    ...(READINGS[k ?? g.key] ?? { current: null, unit: null }),
+  };
 }
 /** The item's goal_ids as the API reads them (set_goals' before): the goal it moves most first. */
 export function goalIdsOf(s: { goal?: string; goals?: string[] }): string[] {
@@ -633,40 +869,84 @@ export const roadmapId = (slug: string): string => stableUuid(`simple-doc/${slug
 // A new company has no roadmap yet (qa-shell-8: oracle.simple.service reads none).
 export const ROADMAP_SLUGS = (): string[] => (newCompany() ? [] : Object.keys(ROADMAPS));
 /** Whether a commenter or viewer reads the roadmap (oracle.docs.visibility). */
-export const readsRoadmap = (slug: string, role: Role): boolean => !(role === "commenter" || role === "viewer") || ROADMAPS[slug]?.visibility === "company";
+export const readsRoadmap = (slug: string, role: Role): boolean =>
+  !(role === 'commenter' || role === 'viewer') || ROADMAPS[slug]?.visibility === 'company';
 /** The roadmap slug of a roadmap's id (any roadmap the mock knows), else null. */
-export const slugOfRoadmapId = (id: unknown): string | null => Object.keys(ROADMAPS).find((r) => roadmapId(r) === id) ?? null;
+export const slugOfRoadmapId = (id: unknown): string | null =>
+  Object.keys(ROADMAPS).find((r) => roadmapId(r) === id) ?? null;
 
 /** milestone-kinds: the company's goals a goal target may be made of (service._goal_targets' goals), with
  * milestone-rename's name: its own (db.goal_milestone_names) once renamed, else the goal's title. */
-export function targetGoals(db: SimpleDb): { key: string; id: string; title: string; name: string; due: string | null; on: boolean; metric: string | null }[] {
+export function targetGoals(db: SimpleDb): {
+  key: string;
+  id: string;
+  title: string;
+  name: string;
+  due: string | null;
+  on: boolean;
+  metric: string | null;
+}[] {
   const buckets = (db.goal_buckets?.goals ?? []).filter((g) => !g.trashed);
-  const bucketOf = (k: string) => buckets.find((g) => g.key === k || g.title.toLowerCase() === (GOALS[k] ?? "").toLowerCase());
-  const goals: { key: string; id: string; title: string; due: string | null; on: boolean; metric: string | null }[] = [];
+  const bucketOf = (k: string) =>
+    buckets.find((g) => g.key === k || g.title.toLowerCase() === (GOALS[k] ?? '').toLowerCase());
+  const goals: {
+    key: string;
+    id: string;
+    title: string;
+    due: string | null;
+    on: boolean;
+    metric: string | null;
+  }[] = [];
   const matched = new Set<string>();
   for (const k of Object.keys(GOALS)) {
     const b = bucketOf(k);
     if (b) matched.add(b.id);
     if (b?.archived || goalInTrash(db, k)) continue;
     const f = roadmapGoal(db, k);
-    goals.push({ key: k, id: goalId(k), title: f.title ?? GOALS[k], due: b?.due ?? f.due, on: b?.on_roadmap ?? db.goal_on_roadmap?.[k] ?? true, metric: f.metric });
+    goals.push({
+      key: k,
+      id: goalId(k),
+      title: f.title ?? GOALS[k],
+      due: b?.due ?? f.due,
+      on: b?.on_roadmap ?? db.goal_on_roadmap?.[k] ?? true,
+      metric: f.metric,
+    });
   }
   // The default goals a route seeded on first read (lazyGoalBuckets) are not this roadmap's goals.
   const lazy = new Set(db.goal_buckets?.lazy ?? []);
-  for (const b of buckets) if (!matched.has(b.id) && !b.archived && !lazy.has(b.id)) goals.push({ key: b.key, id: b.id, title: b.title, due: b.due, on: b.on_roadmap ?? true, metric: b.measure });
+  for (const b of buckets)
+    if (!matched.has(b.id) && !b.archived && !lazy.has(b.id))
+      goals.push({
+        key: b.key,
+        id: b.id,
+        title: b.title,
+        due: b.due,
+        on: b.on_roadmap ?? true,
+        metric: b.measure,
+      });
   return goals.map((g) => ({ ...g, name: db.goal_milestone_names?.[g.id]?.trim() || g.title }));
 }
 
 /** milestone-rename (goal_milestones._target): a goal on the roadmap with a date (its milestone's id is the
  * goal's) and the roadmap its milestone sits on (the company roadmap, else its features', else the first). */
-export function goalTargetOf(db: SimpleDb, id: unknown): { goal: ReturnType<typeof targetGoals>[number]; roadmap: string } | null {
+export function goalTargetOf(
+  db: SimpleDb,
+  id: unknown,
+): { goal: ReturnType<typeof targetGoals>[number]; roadmap: string } | null {
   const goal = targetGoals(db).find((g) => g.id === id && g.due && g.on);
-  const roadmap = db.company_roadmap ?? db.items.find((s) => !s.trashed && goalIdsOf(s).includes(String(id)))?.roadmap ?? ROADMAP_SLUGS()[0];
+  const roadmap =
+    db.company_roadmap ??
+    db.items.find((s) => !s.trashed && goalIdsOf(s).includes(String(id)))?.roadmap ??
+    ROADMAP_SLUGS()[0];
   return goal && roadmap ? { goal, roadmap } : null;
 }
 
 /** milestone-rename (goal_milestones._set_target_name): the goal's title again drops the override. */
-export function setTargetName(db: SimpleDb, goal: { id: string; title: string }, name: string): void {
+export function setTargetName(
+  db: SimpleDb,
+  goal: { id: string; title: string },
+  name: string,
+): void {
   const names = (db.goal_milestone_names ??= {});
   if (name.trim() === goal.title) delete names[goal.id];
   else names[goal.id] = name.trim();
@@ -674,65 +954,130 @@ export function setTargetName(db: SimpleDb, goal: { id: string; title: string },
 
 /** milestone-rename (key_dates.may_decide on a roadmap's own milestone's proposal): an owner, who it is
  * routed to, or who changes its roadmap (drafts.can_edit). */
-export const decidesMilestoneAsk = (db: SimpleDb, c: Pick<Schemas["SimpleChangeOut"], "routed_to" | "document_id"> & { target: Record<string, unknown> }, me: { id: string; role: Role }): boolean => {
+export const decidesMilestoneAsk = (
+  db: SimpleDb,
+  c: Pick<Schemas['SimpleChangeOut'], 'routed_to' | 'document_id'> & {
+    target: Record<string, unknown>;
+  },
+  me: { id: string; role: Role },
+): boolean => {
   const rm = slugOfRoadmapId(c.target.document_id ?? c.document_id);
-  return me.role === "owner" || (c.routed_to ?? []).includes(me.id) || (!!rm && canEditRoadmap(db, rm, me));
+  return (
+    me.role === 'owner' ||
+    (c.routed_to ?? []).includes(me.id) ||
+    (!!rm && canEditRoadmap(db, rm, me))
+  );
 };
 
 /** milestone-rename (goal_milestones.with_asks): a roadmap's own milestone, a goal's or the Goal map's
  * with an open edit_goal_milestone proposal reads it as pending (the name, date and rule asked, who it
  * waits for, whether this reader decides it); the latest open one wins. */
-function withAsks(db: SimpleDb, out: Schemas["SimpleGoalMilestone"][], me?: Who): Schemas["SimpleGoalMilestone"][] {
-  const asks = (db.changes ?? []).filter((c) => c.op === "edit_goal_milestone" && c.status === "proposed" && !!c.before && "milestone" in c.before);
+function withAsks(
+  db: SimpleDb,
+  out: Schemas['SimpleGoalMilestone'][],
+  me?: Who,
+): Schemas['SimpleGoalMilestone'][] {
+  const asks = (db.changes ?? []).filter(
+    (c) =>
+      c.op === 'edit_goal_milestone' &&
+      c.status === 'proposed' &&
+      !!c.before &&
+      'milestone' in c.before,
+  );
   if (!asks.length) return out;
   return out.map((m) => {
     if (m.prd || m.pending) return m;
     const c = asks.filter((x) => (x.target as Record<string, unknown>).milestone_id === m.id).pop();
-    const after = (c?.after as Record<string, unknown> | null)?.milestone as Record<string, unknown> | null | undefined;
-    if (!c || !after || typeof after !== "object") return m;
+    const after = (c?.after as Record<string, unknown> | null)?.milestone as
+      Record<string, unknown> | null | undefined;
+    if (!c || !after || typeof after !== 'object') return m;
     const differs = (v: unknown, now: unknown) => (v != null && v !== now ? (v as string) : null);
     const to = (c.routed_to ?? [])[0];
     return {
       ...m,
       pending: {
-        name: differs(after.name, m.name), date: differs(after.date, m.date),
-        counts_when: differs(after.counts_when, m.counts_when), asked_of: to ? (me?.names?.[to] ?? null) : null, change_id: c.id,
-        can_decide: !!me && decidesMilestoneAsk(db, c as Schemas["SimpleChangeOut"] & { target: Record<string, unknown> }, me),
+        name: differs(after.name, m.name),
+        date: differs(after.date, m.date),
+        counts_when: differs(after.counts_when, m.counts_when),
+        asked_of: to ? (me?.names?.[to] ?? null) : null,
+        change_id: c.id,
+        can_decide:
+          !!me &&
+          decidesMilestoneAsk(
+            db,
+            c as Schemas['SimpleChangeOut'] & { target: Record<string, unknown> },
+            me,
+          ),
       },
     };
   });
 }
 
-type StoredTask = { id: string; title: string; status: Schemas["SimpleItemTask"]["status"]; owner_id: string | null; owner_name: string | null; due_date: string | null; item_id: string; at: string };
+type StoredTask = {
+  id: string;
+  title: string;
+  status: Schemas['SimpleItemTask']['status'];
+  owner_id: string | null;
+  owner_name: string | null;
+  due_date: string | null;
+  item_id: string;
+  at: string;
+};
 const storedTasks = (db: SimpleDb): StoredTask[] =>
   Object.entries(db.targets ?? {})
-    .filter(([, v]) => v.kind === "item_task")
-    .map(([id, v]) => ({ ...(v as Omit<StoredTask, "id">), id }))
+    .filter(([, v]) => v.kind === 'item_task')
+    .map(([id, v]) => ({ ...(v as Omit<StoredTask, 'id'>), id }))
     .sort((a, b) => (a.at < b.at ? -1 : 1));
-const taskOut = (t: StoredTask): Schemas["SimpleItemTask"] => ({ id: t.id, title: t.title, status: t.status, owner: t.owner_id ? { id: t.owner_id, name: t.owner_name ?? "someone" } : null, due_date: t.due_date });
+const taskOut = (t: StoredTask): Schemas['SimpleItemTask'] => ({
+  id: t.id,
+  title: t.title,
+  status: t.status,
+  owner: t.owner_id ? { id: t.owner_id, name: t.owner_name ?? 'someone' } : null,
+  due_date: t.due_date,
+});
 /** walkc-roadmap-tasks: an item's tasks, not dropped, in the order they were added. */
-export const itemTasks = (db: SimpleDb, itemId: string): Schemas["SimpleItemTask"][] => storedTasks(db).filter((t) => t.item_id === itemId && t.status !== "dropped").map(taskOut);
+export const itemTasks = (db: SimpleDb, itemId: string): Schemas['SimpleItemTask'][] =>
+  storedTasks(db)
+    .filter((t) => t.item_id === itemId && t.status !== 'dropped')
+    .map(taskOut);
 /** walkc-roadmap-tasks: the open tasks waiting on `me` (questions.tasks_waiting), due first. */
-export function tasksWaiting(db: SimpleDb, me: { id: string; role: Role }): Schemas["SimpleTaskWaiting"][] {
+export function tasksWaiting(
+  db: SimpleDb,
+  me: { id: string; role: Role },
+): Schemas['SimpleTaskWaiting'][] {
   const today = companyToday();
   return storedTasks(db)
-    .filter((t) => t.owner_id === me.id && (t.status === "todo" || t.status === "doing"))
+    .filter((t) => t.owner_id === me.id && (t.status === 'todo' || t.status === 'doing'))
     .flatMap((t) => {
       const key = Object.keys(db.ids).find((k) => db.ids[k] === t.item_id);
       const s = key ? db.items.find((x) => x.key === key) : undefined;
       if (!s || !readsRoadmap(s.roadmap, me.role)) return [];
-      return [{ ...taskOut(t), item_id: t.item_id, item_title: s.title, roadmap_id: roadmapId(s.roadmap), late: !!t.due_date && t.due_date < today }];
+      return [
+        {
+          ...taskOut(t),
+          item_id: t.item_id,
+          item_title: s.title,
+          roadmap_id: roadmapId(s.roadmap),
+          late: !!t.due_date && t.due_date < today,
+        },
+      ];
     })
-    .sort((a, b) => (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999"));
+    .sort((a, b) => (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999'));
 }
 /** The roadmap a slug or id names, when the role reads it. */
 export const readableRoadmap = (asked: string | null, role: Role): string | undefined =>
-  asked ? ROADMAP_SLUGS().find((r) => (r === asked || roadmapId(r) === asked) && readsRoadmap(r, role)) : undefined;
+  asked
+    ? ROADMAP_SLUGS().find((r) => (r === asked || roadmapId(r) === asked) && readsRoadmap(r, role))
+    : undefined;
 /** S7: an item closed for the plan (cut, or a draft merged into another). */
-export const closed = (s: SeedItem): boolean => s.status === "cut" || !!s.merged_into;
+export const closed = (s: SeedItem): boolean => s.status === 'cut' || !!s.merged_into;
 /** roadmap-done (owner, Nov 4), as the API's status: a done (shipped) item is off the roadmap, never checked, and holds nothing up. */
-export const doneItem = (s: SeedItem): boolean => !closed(s) && !s.draft && s.status === "done";
-export const TRACKS: Record<string, string> = { alerts: "Usage alerts track", onboarding: "Guided setup track", welcome: "Welcome media track" };
+export const doneItem = (s: SeedItem): boolean => !closed(s) && !s.draft && s.status === 'done';
+export const TRACKS: Record<string, string> = {
+  alerts: 'Usage alerts track',
+  onboarding: 'Guided setup track',
+  welcome: 'Welcome media track',
+};
 /** track-order (the API's TRACK_ORDER): TRACKS' keys in the company's track order, every read that lists tracks in order follows it. */
 export function trackKeys(db: { track_order?: string[] }): string[] {
   const at = (k: string) => {
@@ -745,24 +1090,157 @@ export function trackKeys(db: { track_order?: string[] }): string[] {
     .map(([k]) => k);
 }
 /** track-order: a track's place number (product_tracks.position, lower first) as the reads carry it as `order`. */
-export const trackPlace = (db: { track_order?: string[] }, k: string): number => trackKeys(db).indexOf(k) + 1;
+export const trackPlace = (db: { track_order?: string[] }, k: string): number =>
+  trackKeys(db).indexOf(k) + 1;
 
 const SEED: SeedItem[] = [
-  { key: "alert-rules", title: "Alert rules engine", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", start: 0, end: 40, source: "typed", status: "in_progress", gates: [{ phase: "discover", day: 6 }, { phase: "build", day: 28 }], why: "Admins asked for it most this quarter.", section: "bets" },
+  {
+    key: 'alert-rules',
+    title: 'Alert rules engine',
+    horizon: 'now',
+    roadmap: 'alerts-roadmap',
+    goal: 'grow-retention',
+    track: 'alerts',
+    confidence: 'high',
+    start: 0,
+    end: 40,
+    source: 'typed',
+    status: 'in_progress',
+    gates: [
+      { phase: 'discover', day: 6 },
+      { phase: 'build', day: 28 },
+    ],
+    why: 'Admins asked for it most this quarter.',
+    section: 'bets',
+  },
   // qa-nov17: one code names one feature: the digest's PRD section is F-79 (the Ground Truth's F-06 is Setup error
   // report), and Setup checklist is the Ground Truth's F-01 (gt_key).
-  { key: "alert-digest", title: "Weekly alert digest", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "medium", start: 30, end: 70, source: "accepted", depends: ["alert-rules"], milestone: { name: "Beta", day: 60 }, section: "f-79", heading: "F-79 Weekly digest of fired alerts" },
-  { key: "alert-mobile", title: "Mobile alert push", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", end: 80, source: "engineering", depends: ["alert-rules"], status: "in_progress" },
-  { key: "alert-export", title: "Alert history export", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", confidence: "medium", end: 50, source: "tracker" },
-  { key: "alert-sso", title: "Alert routing by team", horizon: "next", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "low", depends: ["alert-export"] },
-  { key: "setup-checklist", title: "Setup checklist", horizon: "now", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "high", start: 10, end: 45, source: "typed", status: "in_progress", gates: [{ phase: "Beta", day: 40 }], gt_key: "F-01" },
-  { key: "setup-import", title: "Sample data import", horizon: "now", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "medium", start: 20, end: 60, source: "typed", status: "in_progress", depends: ["setup-checklist"], gates: [{ phase: "beta", day: 75 }], risks: [{ flag: "dependency_order", note: "The checklist's last step is not needed" }] },
-  { key: "setup-tour", title: "In-app tour", horizon: "later", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", status: "cut", start: 30, end: 75, source: "typed" },
-  { key: "setup-video", title: "Welcome video", horizon: "later", roadmap: "onboarding-roadmap", track: "onboarding", depends: ["setup-tour"] },
-  { key: "setup-ideas", title: "Team invite nudges", horizon: "next", roadmap: "onboarding-roadmap", goal: "faster-activation", draft: true },
+  {
+    key: 'alert-digest',
+    title: 'Weekly alert digest',
+    horizon: 'now',
+    roadmap: 'alerts-roadmap',
+    goal: 'grow-retention',
+    track: 'alerts',
+    confidence: 'medium',
+    start: 30,
+    end: 70,
+    source: 'accepted',
+    depends: ['alert-rules'],
+    milestone: { name: 'Beta', day: 60 },
+    section: 'f-79',
+    heading: 'F-79 Weekly digest of fired alerts',
+  },
+  {
+    key: 'alert-mobile',
+    title: 'Mobile alert push',
+    horizon: 'now',
+    roadmap: 'alerts-roadmap',
+    goal: 'grow-retention',
+    track: 'alerts',
+    confidence: 'high',
+    end: 80,
+    source: 'engineering',
+    depends: ['alert-rules'],
+    status: 'in_progress',
+  },
+  {
+    key: 'alert-export',
+    title: 'Alert history export',
+    horizon: 'next',
+    roadmap: 'alerts-roadmap',
+    track: 'alerts',
+    confidence: 'medium',
+    end: 50,
+    source: 'tracker',
+  },
+  {
+    key: 'alert-sso',
+    title: 'Alert routing by team',
+    horizon: 'next',
+    roadmap: 'alerts-roadmap',
+    goal: 'grow-retention',
+    track: 'alerts',
+    confidence: 'low',
+    depends: ['alert-export'],
+  },
+  {
+    key: 'setup-checklist',
+    title: 'Setup checklist',
+    horizon: 'now',
+    roadmap: 'onboarding-roadmap',
+    goal: 'faster-activation',
+    track: 'onboarding',
+    confidence: 'high',
+    start: 10,
+    end: 45,
+    source: 'typed',
+    status: 'in_progress',
+    gates: [{ phase: 'Beta', day: 40 }],
+    gt_key: 'F-01',
+  },
+  {
+    key: 'setup-import',
+    title: 'Sample data import',
+    horizon: 'now',
+    roadmap: 'onboarding-roadmap',
+    goal: 'faster-activation',
+    track: 'onboarding',
+    confidence: 'medium',
+    start: 20,
+    end: 60,
+    source: 'typed',
+    status: 'in_progress',
+    depends: ['setup-checklist'],
+    gates: [{ phase: 'beta', day: 75 }],
+    risks: [{ flag: 'dependency_order', note: "The checklist's last step is not needed" }],
+  },
+  {
+    key: 'setup-tour',
+    title: 'In-app tour',
+    horizon: 'later',
+    roadmap: 'onboarding-roadmap',
+    goal: 'faster-activation',
+    track: 'onboarding',
+    status: 'cut',
+    start: 30,
+    end: 75,
+    source: 'typed',
+  },
+  {
+    key: 'setup-video',
+    title: 'Welcome video',
+    horizon: 'later',
+    roadmap: 'onboarding-roadmap',
+    track: 'onboarding',
+    depends: ['setup-tour'],
+  },
+  {
+    key: 'setup-ideas',
+    title: 'Team invite nudges',
+    horizon: 'next',
+    roadmap: 'onboarding-roadmap',
+    goal: 'faster-activation',
+    draft: true,
+  },
   // one-feature-panel: the Guided setup PRD's F-03 (the feature its decisions block), on its roadmap as the API has it.
-  { key: "setup-health-log", title: "Health log", horizon: "later", roadmap: "onboarding-roadmap", track: "onboarding", confidence: "low", section: "f-03", heading: "F-03 Health log" },
-  { key: "price-tiers", title: "New plan tiers", horizon: "next", roadmap: "pricing-roadmap", confidence: "medium" },
+  {
+    key: 'setup-health-log',
+    title: 'Health log',
+    horizon: 'later',
+    roadmap: 'onboarding-roadmap',
+    track: 'onboarding',
+    confidence: 'low',
+    section: 'f-03',
+    heading: 'F-03 Health log',
+  },
+  {
+    key: 'price-tiers',
+    title: 'New plan tiers',
+    horizon: 'next',
+    roadmap: 'pricing-roadmap',
+    confidence: 'medium',
+  },
 ];
 
 /**
@@ -770,21 +1248,33 @@ const SEED: SeedItem[] = [
  * from (service.bet_flows): the bet naming the item's code or title, else the one bet drawn
  * from the item's PRD section alone; null for an item not built from a PRD section.
  */
-function betFlow(db: SimpleDb, s: SeedItem): Schemas["SimpleFlow"] | null {
+function betFlow(db: SimpleDb, s: SeedItem): Schemas['SimpleFlow'] | null {
   const op = db.onePager;
-  if (!op || !s.section || ROADMAPS[s.roadmap].prd.toLowerCase().replace(/ /g, "-") !== op.doc.slug) return null;
-  const bets = op.blocks.find((b) => b.key === "bets")?.lines ?? [];
-  const words = (t: string) => ` ${t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()} `;
+  if (!op || !s.section || ROADMAPS[s.roadmap].prd.toLowerCase().replace(/ /g, '-') !== op.doc.slug)
+    return null;
+  const bets = op.blocks.find((b) => b.key === 'bets')?.lines ?? [];
+  const words = (t: string) =>
+    ` ${t
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
+      .trim()} `;
   const code = prdCode(s.section);
   // roadmap-keydates: its own bet: the one naming its code, else the one bet from its section
   // alone, else the one bet its title names (a short title two bets mention names neither).
-  const one = <T,>(xs: T[]): T | undefined => (xs.length === 1 ? xs[0] : undefined);
+  const one = <T>(xs: T[]): T | undefined => (xs.length === 1 ? xs[0] : undefined);
   const line =
     one(bets.filter((l) => !!code && words(l.text).includes(words(code)))) ??
     one(bets.filter((l) => l.keys.includes(s.section!))) ??
     one(bets.filter((l) => !!s.title.trim() && words(l.text).includes(words(s.title))));
   // As one_pager.bet_flows: the flow on the bet it was drawn for (visuals.flows_of_bets).
-  const found = flowsOfBets(db.visuals, op.flowKey ?? op.doc.slug, bets.map((l) => ({ key: op.flowKey ? `${op.flowKey}/${l.id}` : l.id, text: l.text.split(/\s+/).filter(Boolean).join(" ") })));
+  const found = flowsOfBets(
+    db.visuals,
+    op.flowKey ?? op.doc.slug,
+    bets.map((l) => ({
+      key: op.flowKey ? `${op.flowKey}/${l.id}` : l.id,
+      text: l.text.split(/\s+/).filter(Boolean).join(' '),
+    })),
+  );
   return line ? found[bets.indexOf(line)].flow : null;
 }
 
@@ -795,7 +1285,12 @@ const addDays = (day: string, n: number): string => iso(ms(day) + n * DAY);
 /** Today: the company's day (its time zone), as oracle.company_time.company_today (qa-shell-6). */
 export const companyToday = (): string => companyDayIso(new Date(mockNowMs()));
 const span = (a: string, b: string): number => Math.round((ms(b) - ms(a)) / DAY) + 1;
-const word = (day: string): string => new Date(ms(day)).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+const word = (day: string): string =>
+  new Date(ms(day)).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
 
 function addMonths(day: string, months: number): string {
   const d = new Date(ms(day));
@@ -812,7 +1307,11 @@ export function simpleWindows(today: string): Record<Horizon, [string, string]> 
   const q = iso(Date.UTC(d.getUTCFullYear(), 3 * Math.floor(d.getUTCMonth() / 3), 1));
   const medium = addMonths(q, 3);
   const mediumEnd = addMonths(medium, 6);
-  return { now: [q, addDays(medium, -1)], next: [medium, addDays(mediumEnd, -1)], later: [mediumEnd, addMonths(today, 24)] };
+  return {
+    now: [q, addDays(medium, -1)],
+    next: [medium, addDays(mediumEnd, -1)],
+    later: [mediumEnd, addMonths(today, 24)],
+  };
 }
 
 /** board-quarters (oracle.simple.dates.windows): the roadmap's columns on the mock's day, Now
@@ -826,32 +1325,46 @@ export function quarterWindows(today: string): Record<Horizon, [string, string]>
   const q2 = addMonths(q0, 6);
   const q2End = addDays(addMonths(q0, 9), -1);
   const long = addMonths(today, 24);
-  return { now: [q0, addDays(q1, -1)], next: [q1, addDays(q2, -1)], later: [q2, long > q2End ? long : q2End] };
+  return {
+    now: [q0, addDays(q1, -1)],
+    next: [q1, addDays(q2, -1)],
+    later: [q2, long > q2End ? long : q2End],
+  };
 }
 
 /** dates.horizon_of: Now when the dates touch this quarter (started earlier and still running,
  * or overdue), Next when they start next quarter, Later after that; undated: by its suggestion's
  * or picked quarter's start (roadmap-dates), else Later. */
-export function horizonOfDates(r: { start: Dated; end: Dated; basis?: EstimateBasis }, q: Record<Horizon, [string, string]>): Horizon {
-  if (r.start.estimated && r.end.estimated && !r.basis) return "later";
-  if (r.start.date <= q.now[1]) return "now";
-  return r.start.date <= q.next[1] ? "next" : "later";
+export function horizonOfDates(
+  r: { start: Dated; end: Dated; basis?: EstimateBasis },
+  q: Record<Horizon, [string, string]>,
+): Horizon {
+  if (r.start.estimated && r.end.estimated && !r.basis) return 'later';
+  if (r.start.date <= q.now[1]) return 'now';
+  return r.start.date <= q.next[1] ? 'next' : 'later';
 }
 
 /** dates.shift_to: the dates a move to `to`'s column gives, by whole quarters (length kept), so
  * the item starts in it (Now: unless it touches this quarter already; Later: unless it starts
  * later still); undated: the quarter itself. */
-export function shiftToQuarter(start: string | null, end: string | null, to: Horizon, q: Record<Horizon, [string, string]>): [string, string] {
+export function shiftToQuarter(
+  start: string | null,
+  end: string | null,
+  to: Horizon,
+  q: Record<Horizon, [string, string]>,
+): [string, string] {
   if (!start || !end) {
     const first = q[to][0];
     return [first, addDays(addMonths(first, 3), -1)];
   }
   const a = new Date(ms(start));
   const b = new Date(ms(q.now[0]));
-  const at = Math.floor(((a.getUTCFullYear() - b.getUTCFullYear()) * 12 + a.getUTCMonth() - b.getUTCMonth()) / 3);
+  const at = Math.floor(
+    ((a.getUTCFullYear() - b.getUTCFullYear()) * 12 + a.getUTCMonth() - b.getUTCMonth()) / 3,
+  );
   let n = { now: 0, next: 1, later: 2 }[to];
-  if (to === "now" && start <= q.now[1]) n = at;
-  if (to === "later" && at >= 2) n = at;
+  if (to === 'now' && start <= q.now[1]) n = at;
+  if (to === 'later' && at >= 2) n = at;
   const moved = addMonths(start, 3 * (n - at));
   return [moved, addDays(moved, Math.round((ms(end) - ms(start)) / 86_400_000))];
 }
@@ -861,11 +1374,21 @@ export function shiftToQuarter(start: string | null, end: string | null, to: Hor
  * each track an owner of another role; the welcome video and tour move to the welcome
  * track. People are member ids.
  */
-export function seedSimpleDeciders(people: { decider: string; approver: string; commenter: string; viewer: string }): SimpleDb {
+export function seedSimpleDeciders(people: {
+  decider: string;
+  approver: string;
+  commenter: string;
+  viewer: string;
+}): SimpleDb {
   const db = seedSimpleRoadmap();
-  for (const s of db.items) if (s.key === "setup-tour" || s.key === "setup-video") s.track = "welcome";
-  db.deciders = { "pricing-roadmap": people.decider };
-  db.track_owners = { alerts: people.approver, onboarding: people.commenter, welcome: people.viewer };
+  for (const s of db.items)
+    if (s.key === 'setup-tour' || s.key === 'setup-video') s.track = 'welcome';
+  db.deciders = { 'pricing-roadmap': people.decider };
+  db.track_owners = {
+    alerts: people.approver,
+    onboarding: people.commenter,
+    welcome: people.viewer,
+  };
   return db;
 }
 
@@ -876,8 +1399,26 @@ export function seedSimpleDeciders(people: { decider: string; approver: string; 
  */
 export function seedPrdCalmPage(): SimpleDb {
   const db = seedSimpleRoadmap();
-  const s: SeedItem = { key: "setup-calendar", title: "Calendar invites", horizon: "next", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "medium", start: 50, end: 80, source: "typed", depends: ["setup-checklist"], section: "f-26", heading: "F-26 Calendar invites" };
-  db.items.splice(db.items.findIndex((x) => x.key === "price-tiers"), 0, s);
+  const s: SeedItem = {
+    key: 'setup-calendar',
+    title: 'Calendar invites',
+    horizon: 'next',
+    roadmap: 'onboarding-roadmap',
+    goal: 'faster-activation',
+    track: 'onboarding',
+    confidence: 'medium',
+    start: 50,
+    end: 80,
+    source: 'typed',
+    depends: ['setup-checklist'],
+    section: 'f-26',
+    heading: 'F-26 Calendar invites',
+  };
+  db.items.splice(
+    db.items.findIndex((x) => x.key === 'price-tiers'),
+    0,
+    s,
+  );
   db.ids[s.key] = stableUuid(`simple-item/${s.key}`);
   return db;
 }
@@ -885,13 +1426,24 @@ export function seedPrdCalmPage(): SimpleDb {
 export function seedSimpleRoadmap(): SimpleDb {
   // A new company: no items yet, so no plan, broken links, priorities or key dates (Detailed says no goals).
   // Nor Oracle's goal suggestions (no goal is confirmed yet: none are made on its own).
-  if (newCompany()) return { items: [], ids: {}, own: {}, suggestions: [], decisions: {}, key_dates: {}, goal_suggestions: [], goal_jobs: {}, auto_done: Object.keys(GOALS) };
-  return seeded("simple-roadmap", () => ({
+  if (newCompany())
+    return {
+      items: [],
+      ids: {},
+      own: {},
+      suggestions: [],
+      decisions: {},
+      key_dates: {},
+      goal_suggestions: [],
+      goal_jobs: {},
+      auto_done: Object.keys(GOALS),
+    };
+  return seeded('simple-roadmap', () => ({
     items: SEED.map((s) => ({ ...s })),
     ids: Object.fromEntries(SEED.map((s) => [s.key, stableUuid(`simple-item/${s.key}`)])),
     own: {},
     suggestions: [],
-    decisions: { "alert-digest": [{ number: 7, title: "Send the digest weekly or daily?" }] },
+    decisions: { 'alert-digest': [{ number: 7, title: 'Send the digest weekly or daily?' }] },
     key_dates: seedKeyDates(),
   }));
 }
@@ -900,8 +1452,22 @@ export function seedSimpleRoadmap(): SimpleDb {
 export function seedKeyDates(): Record<string, MockKeyDate[]> {
   const q = simpleWindows(companyToday()).now[0];
   return {
-    "alerts-roadmap": [{ id: stableUuid("simple-key-date/conference"), name: "Customer conference", date: addDays(q, 44), note: "Keynote slot for alerts" }],
-    "onboarding-roadmap": [{ id: stableUuid("simple-key-date/board"), name: "Board meeting", date: addDays(q, 75), note: null }],
+    'alerts-roadmap': [
+      {
+        id: stableUuid('simple-key-date/conference'),
+        name: 'Customer conference',
+        date: addDays(q, 44),
+        note: 'Keynote slot for alerts',
+      },
+    ],
+    'onboarding-roadmap': [
+      {
+        id: stableUuid('simple-key-date/board'),
+        name: 'Board meeting',
+        date: addDays(q, 75),
+        note: null,
+      },
+    ],
   };
 }
 
@@ -909,15 +1475,21 @@ export function seedKeyDates(): Record<string, MockKeyDate[]> {
  * The dates an item stores (its start_date/end_date columns in the API): a typed or accepted
  * seed's dates, or those Simple set; null for engineering, tracker and estimated dates.
  */
-export function storedDates(db: SimpleDb, key: string): { start: string | null; end: string | null } {
+export function storedDates(
+  db: SimpleDb,
+  key: string,
+): { start: string | null; end: string | null } {
   const own = db.own[key];
   if (own) return { start: own.start, end: own.end };
   const s = db.items.find((x) => x.key === key)!;
   // hotfix-2: a PRD's item stores the dates the PRD gave it (an engineering end-only one too).
   if (s.dates) return { start: s.dates.start, end: s.dates.end };
-  if (s.source !== "typed" && s.source !== "accepted") return { start: null, end: null };
+  if (s.source !== 'typed' && s.source !== 'accepted') return { start: null, end: null };
   const w = simpleWindows(companyToday())[s.horizon];
-  return { start: s.start !== undefined ? addDays(w[0], s.start) : null, end: s.end !== undefined ? addDays(w[0], s.end) : null };
+  return {
+    start: s.start !== undefined ? addDays(w[0], s.start) : null,
+    end: s.end !== undefined ? addDays(w[0], s.end) : null,
+  };
 }
 
 /**
@@ -925,15 +1497,64 @@ export function storedDates(db: SimpleDb, key: string): { start: string | null; 
  * roadmap of 500 invented items over 12 roadmaps (each from its own PRD), 8 goals and 6
  * tracks, two in three dated, with chains of dependencies inside each roadmap.
  */
-const MANY_PRDS = ["Billing portal", "Team spaces", "Audit trail", "Usage reports", "Mobile app", "Search", "Integrations hub", "Data export", "Access control", "Notifications", "Help center", "Partner API"];
+const MANY_PRDS = [
+  'Billing portal',
+  'Team spaces',
+  'Audit trail',
+  'Usage reports',
+  'Mobile app',
+  'Search',
+  'Integrations hub',
+  'Data export',
+  'Access control',
+  'Notifications',
+  'Help center',
+  'Partner API',
+];
 const MANY_GOALS: Record<string, string> = {
-  "grow-retention": "Grow retention", "faster-activation": "Faster activation", "win-teams": "Win larger teams", "cut-churn": "Cut churn",
-  "trust-security": "Earn security trust", "open-platform": "Open the platform", "self-serve": "Self-serve support", "go-mobile": "Work from phones",
+  'grow-retention': 'Grow retention',
+  'faster-activation': 'Faster activation',
+  'win-teams': 'Win larger teams',
+  'cut-churn': 'Cut churn',
+  'trust-security': 'Earn security trust',
+  'open-platform': 'Open the platform',
+  'self-serve': 'Self-serve support',
+  'go-mobile': 'Work from phones',
 };
-const MANY_TRACKS: Record<string, string> = { "web-core": "Web core track", "mobile": "Mobile track", "platform": "Platform track", "data": "Data track", "growth": "Growth track", "security": "Security track" };
-const MANY_WORDS = ["Faster", "Simpler", "Shared", "Bulk", "Scheduled", "Smarter", "Offline", "Guided"];
-const MANY_THINGS = ["invoices", "filters", "exports", "invites", "alerts", "reports", "settings", "search", "roles", "dashboards", "imports", "comments", "webhooks"];
-const manySlug = (n: number): string => `${MANY_PRDS[n].toLowerCase().replace(/ /g, "-")}-roadmap`;
+const MANY_TRACKS: Record<string, string> = {
+  'web-core': 'Web core track',
+  mobile: 'Mobile track',
+  platform: 'Platform track',
+  data: 'Data track',
+  growth: 'Growth track',
+  security: 'Security track',
+};
+const MANY_WORDS = [
+  'Faster',
+  'Simpler',
+  'Shared',
+  'Bulk',
+  'Scheduled',
+  'Smarter',
+  'Offline',
+  'Guided',
+];
+const MANY_THINGS = [
+  'invoices',
+  'filters',
+  'exports',
+  'invites',
+  'alerts',
+  'reports',
+  'settings',
+  'search',
+  'roles',
+  'dashboards',
+  'imports',
+  'comments',
+  'webhooks',
+];
+const manySlug = (n: number): string => `${MANY_PRDS[n].toLowerCase().replace(/ /g, '-')}-roadmap`;
 /**
  * The 500-item scenario's roadmaps, goals and tracks, known once its items are seeded or reloaded
  * (as knowTalkGoals). dod-perf review: once the roadmap holds them no longer (another scenario's
@@ -949,7 +1570,15 @@ export function knowManyPlans(db: { items: { key: string; roadmap: string }[] } 
       goals: Object.keys(MANY_GOALS).filter((k) => !(k in GOALS)),
       tracks: Object.keys(MANY_TRACKS).filter((k) => !(k in TRACKS)),
     };
-    MANY_PRDS.forEach((prd, n) => (ROADMAPS[manySlug(n)] ??= { title: `${prd} roadmap`, visibility: "company", prd, draft: 1 + (n % 4) }));
+    MANY_PRDS.forEach(
+      (prd, n) =>
+        (ROADMAPS[manySlug(n)] ??= {
+          title: `${prd} roadmap`,
+          visibility: 'company',
+          prd,
+          draft: 1 + (n % 4),
+        }),
+    );
     for (const k of manyAdded.goals) GOALS[k] = MANY_GOALS[k];
     for (const k of manyAdded.tracks) TRACKS[k] = MANY_TRACKS[k];
   } else if (!many && manyAdded) {
@@ -967,7 +1596,15 @@ export function knowManyPlans(db: { items: { key: string; roadmap: string }[] } 
 let extraAdded: { roadmaps: string[]; tracks: string[] } = { roadmaps: [], tracks: [] };
 /** goal-map-tracks: TRACKS' seeded tracks a tracks_only db leaves out (key -> title), put back once it is not loaded. */
 let tracksLeftOut: Record<string, string> = {};
-export function knowExtraRoadmaps(db: { extra_roadmaps?: SimpleDb["extra_roadmaps"]; extra_tracks?: SimpleDb["extra_tracks"]; tracks_only?: boolean } | undefined): void {
+export function knowExtraRoadmaps(
+  db:
+    | {
+        extra_roadmaps?: SimpleDb['extra_roadmaps'];
+        extra_tracks?: SimpleDb['extra_tracks'];
+        tracks_only?: boolean;
+      }
+    | undefined,
+): void {
   for (const k of extraAdded.roadmaps) delete ROADMAPS[k];
   for (const k of extraAdded.tracks) delete TRACKS[k];
   extraAdded = { roadmaps: [], tracks: [] };
@@ -982,7 +1619,7 @@ export function knowExtraRoadmaps(db: { extra_roadmaps?: SimpleDb["extra_roadmap
   }
   for (const [slug, r] of Object.entries(db?.extra_roadmaps ?? {})) {
     if (!(slug in ROADMAPS)) {
-      ROADMAPS[slug] = { title: r.title, visibility: "company", prd: r.prd, draft: 1 };
+      ROADMAPS[slug] = { title: r.title, visibility: 'company', prd: r.prd, draft: 1 };
       extraAdded.roadmaps.push(slug);
     }
     if (!(r.track in TRACKS)) {
@@ -1001,20 +1638,30 @@ export function knowExtraRoadmaps(db: { extra_roadmaps?: SimpleDb["extra_roadmap
 export function seedSimpleMany(n = 500): SimpleDb {
   const goals = Object.keys(MANY_GOALS);
   const tracks = Object.keys(MANY_TRACKS);
-  const horizons: Horizon[] = ["now", "next", "later"];
+  const horizons: Horizon[] = ['now', 'next', 'later'];
   const items: SeedItem[] = Array.from({ length: n }, (_, i) => {
     const dated = i % 3 !== 2;
     const start = (i * 7) % 60;
     return {
-      key: `item-${i}`, title: `${MANY_WORDS[i % 8]} ${MANY_THINGS[i % 13]} ${Math.floor(i / 12) + 1}`, horizon: horizons[i % 3], roadmap: manySlug(i % 12),
-      goal: goals[i % 8], track: tracks[i % 6], confidence: (["low", "medium", "high"] as const)[i % 3],
-      ...(dated ? { start, end: start + 20 + (i % 30), source: "typed" as const } : {}),
+      key: `item-${i}`,
+      title: `${MANY_WORDS[i % 8]} ${MANY_THINGS[i % 13]} ${Math.floor(i / 12) + 1}`,
+      horizon: horizons[i % 3],
+      roadmap: manySlug(i % 12),
+      goal: goals[i % 8],
+      track: tracks[i % 6],
+      confidence: (['low', 'medium', 'high'] as const)[i % 3],
+      ...(dated ? { start, end: start + 20 + (i % 30), source: 'typed' as const } : {}),
       ...(i >= 12 && i % 5 === 3 ? { depends: [`item-${i - 12}`] } : {}),
       // QA Nov 12: each a Ground Truth feature with its code, as the API's items are (F-200 on).
       section: `f-${200 + i}`,
     };
   });
-  const db: SimpleDb = { items, ids: Object.fromEntries(items.map((s) => [s.key, stableUuid(`simple-item/${s.key}`)])), own: {}, suggestions: [] };
+  const db: SimpleDb = {
+    items,
+    ids: Object.fromEntries(items.map((s) => [s.key, stableUuid(`simple-item/${s.key}`)])),
+    own: {},
+    suggestions: [],
+  };
   knowManyPlans(db);
   return db;
 }
@@ -1024,34 +1671,47 @@ export function seedSimpleMany(n = 500): SimpleDb {
  * fit-date scenarios, ending where its plan has them. An approved re-plan moves them
  * (fitDateApproved), as the API's fit_date_router._roadmap_follows does in the roadmap's next version.
  */
-const FIT_ROADMAP = "help-desk-roadmap";
-const FIT_PRD = { id: stableUuid("fit-date/prd"), slug: "reply-faster", title: "Reply faster in the shared inbox" };
+const FIT_ROADMAP = 'help-desk-roadmap';
+const FIT_PRD = {
+  id: stableUuid('fit-date/prd'),
+  slug: 'reply-faster',
+  title: 'Reply faster in the shared inbox',
+};
 // Each item ends where the fit-date plan's capacity queue has it (./fit-date-engine, the API's
 // fit_date.schedule), so the roadmap and the panel read the same dates.
 const FIT_PLAN = fitBasePlan(1, FIT_PLAN_TARGET);
 const FIT_SCHEDULE = fitSchedule(FIT_PLAN);
 const FIT_M1_END = FIT_SCHEDULE.milestones.M1;
-const FIT_ITEMS: [key: string, title: string, end: string][] = FIT_PLAN.items.map((i) => [`fit-${i.id}`, i.title, FIT_SCHEDULE.items[i.id]]);
+const FIT_ITEMS: [key: string, title: string, end: string][] = FIT_PLAN.items.map((i) => [
+  `fit-${i.id}`,
+  i.title,
+  FIT_SCHEDULE.items[i.id],
+]);
 const horizonOf = (end: string): Horizon => {
   const w = simpleWindows(companyToday());
-  return end <= w.now[1] ? "now" : end <= w.next[1] ? "next" : "later";
+  return end <= w.now[1] ? 'now' : end <= w.next[1] ? 'next' : 'later';
 };
 
 /** The Help desk roadmap, its goal and track, known while the roadmap holds its items (as knowManyPlans). */
 function knowFitRoadmap(db: { items: { roadmap: string }[] } | undefined): void {
   if (db?.items.some((x) => x.roadmap === FIT_ROADMAP)) {
-    ROADMAPS[FIT_ROADMAP] ??= { title: "Help desk roadmap", visibility: "company", prd: FIT_PRD.title, draft: 3 };
-    GOALS["reply-faster"] ??= "Reply faster";
-    TRACKS["help-desk"] ??= "Help desk track";
+    ROADMAPS[FIT_ROADMAP] ??= {
+      title: 'Help desk roadmap',
+      visibility: 'company',
+      prd: FIT_PRD.title,
+      draft: 3,
+    };
+    GOALS['reply-faster'] ??= 'Reply faster';
+    TRACKS['help-desk'] ??= 'Help desk track';
   } else if (ROADMAPS[FIT_ROADMAP]) {
     delete ROADMAPS[FIT_ROADMAP];
-    delete GOALS["reply-faster"];
-    delete TRACKS["help-desk"];
+    delete GOALS['reply-faster'];
+    delete TRACKS['help-desk'];
   }
 }
 
 /** An item only the Help desk roadmap holds once the company roadmap exists: history, never on Simple. */
-export const FIT_OLD_ITEM = "Saved reply folders";
+export const FIT_OLD_ITEM = 'Saved reply folders';
 
 /**
  * The fit-date scenarios: the Help desk roadmap's items, added to the company's roadmap. With
@@ -1062,20 +1722,43 @@ export function seedFitDateRoadmap(db: SimpleDb, company = false): void {
   const roadmap = company ? COMPANY_SLUG : FIT_ROADMAP;
   for (const [key, title, end] of FIT_ITEMS) {
     db.items.push({
-      key, title, horizon: horizonOf(end), roadmap, goal: "reply-faster", track: "help-desk", confidence: "medium",
-      status: end <= FIT_M1_END ? "in_progress" : "planned", prd_doc: FIT_PRD,
-      dates: { start: addDays(end, -20), end, source: "engineering" },
+      key,
+      title,
+      horizon: horizonOf(end),
+      roadmap,
+      goal: 'reply-faster',
+      track: 'help-desk',
+      confidence: 'medium',
+      status: end <= FIT_M1_END ? 'in_progress' : 'planned',
+      prd_doc: FIT_PRD,
+      dates: { start: addDays(end, -20), end, source: 'engineering' },
     });
     db.ids[key] = stableUuid(`simple-item/${key}`);
   }
   if (company) {
-    const end = "2027-01-15";
+    const end = '2027-01-15';
     db.items.push({
-      key: "fit-old-folders", title: FIT_OLD_ITEM, horizon: horizonOf(end), roadmap: FIT_ROADMAP, goal: "reply-faster", track: "help-desk",
-      confidence: "medium", status: "planned", prd_doc: FIT_PRD, dates: { start: addDays(end, -20), end, source: "engineering" },
+      key: 'fit-old-folders',
+      title: FIT_OLD_ITEM,
+      horizon: horizonOf(end),
+      roadmap: FIT_ROADMAP,
+      goal: 'reply-faster',
+      track: 'help-desk',
+      confidence: 'medium',
+      status: 'planned',
+      prd_doc: FIT_PRD,
+      dates: { start: addDays(end, -20), end, source: 'engineering' },
     });
-    db.ids["fit-old-folders"] = stableUuid("simple-item/fit-old-folders");
-    db.extra_roadmaps = { ...db.extra_roadmaps, [COMPANY_SLUG]: { title: COMPANY_TITLE, prd: FIT_PRD.title, track: "help-desk", track_title: "Help desk track" } };
+    db.ids['fit-old-folders'] = stableUuid('simple-item/fit-old-folders');
+    db.extra_roadmaps = {
+      ...db.extra_roadmaps,
+      [COMPANY_SLUG]: {
+        title: COMPANY_TITLE,
+        prd: FIT_PRD.title,
+        track: 'help-desk',
+        track_title: 'Help desk track',
+      },
+    };
     // The company roadmap alone feeds Simple (api/oracle/roadmap/company.feeding_ids).
     db.company_roadmap = COMPANY_SLUG;
   }
@@ -1090,7 +1773,10 @@ let fitMoves: { moves: { item: string; end?: string | null }[]; pending: string[
  * date (null: it leaves the plan's dates as they were), and the sliced or split ones wait on a
  * new estimate. Applied to the roadmap by applyFitDate in the same request.
  */
-export function fitDateApproved(moves: { item: string; end?: string | null }[], pending: string[]): void {
+export function fitDateApproved(
+  moves: { item: string; end?: string | null }[],
+  pending: string[],
+): void {
   fitMoves = { moves, pending };
 }
 
@@ -1101,11 +1787,13 @@ export function applyFitDate(db: SimpleDb | undefined): void {
   if (!was || !db) return;
   // The re-plan lands on the company roadmap while there is one (fit_date_router._roadmap_id).
   const on = db.company_roadmap ?? FIT_ROADMAP;
-  const named = (s: SeedItem, names: string[]) => s.roadmap === on && (names.includes(s.key) || names.includes(s.title));
+  const named = (s: SeedItem, names: string[]) =>
+    s.roadmap === on && (names.includes(s.key) || names.includes(s.title));
   for (const s of db.items) {
     const to = was.moves.find((m) => named(s, [m.item]));
     if (to?.end && s.dates) {
-      const start = s.dates.start && s.dates.start < addDays(to.end, -7) ? s.dates.start : addDays(to.end, -14);
+      const start =
+        s.dates.start && s.dates.start < addDays(to.end, -7) ? s.dates.start : addDays(to.end, -14);
       s.dates = { ...s.dates, start, end: to.end };
       s.horizon = horizonOf(to.end);
       delete db.own[s.key];
@@ -1116,9 +1804,14 @@ export function applyFitDate(db: SimpleDb | undefined): void {
 
 /** The item's stored dates (the API's start_date, end_date, date_source columns): moved or
  * accepted in Simple, else the seed's typed or accepted dates; undefined when none. */
-export function ownDates(db: SimpleDb, s: SeedItem): SimpleDb["own"][string] | undefined {
+export function ownDates(db: SimpleDb, s: SeedItem): SimpleDb['own'][string] | undefined {
   if (db.own[s.key]) return db.own[s.key];
-  if ((s.source !== "typed" && s.source !== "accepted") || s.start === undefined || s.end === undefined) return undefined;
+  if (
+    (s.source !== 'typed' && s.source !== 'accepted') ||
+    s.start === undefined ||
+    s.end === undefined
+  )
+    return undefined;
   const w = simpleWindows(companyToday())[s.horizon];
   return { start: addDays(w[0], s.start), end: addDays(w[0], s.end), source: s.source };
 }
@@ -1134,19 +1827,26 @@ function leadDays(db: SimpleDb, s: SeedItem): number {
 }
 
 /** roadmap-dates (dates.Resolved.basis): where an undated bar's estimate comes from. */
-type EstimateBasis = "suggestion" | "quarter" | "dependencies";
+type EstimateBasis = 'suggestion' | 'quarter' | 'dependencies';
 type Resolved = { start: Dated; end: Dated; basis?: EstimateBasis };
 
 function resolve(db: SimpleDb, s: SeedItem): Resolved {
   const own = db.own[s.key];
   if (own) {
-    const source = own.source ?? "accepted";
-    return { start: { date: own.start, source, estimated: false }, end: { date: own.end, source, estimated: false } };
+    const source = own.source ?? 'accepted';
+    return {
+      start: { date: own.start, source, estimated: false },
+      end: { date: own.end, source, estimated: false },
+    };
   }
   if (s.dates) {
     const end: Dated = { date: s.dates.end, source: s.dates.source, estimated: false };
-    if (s.dates.start) return { start: { date: s.dates.start, source: s.dates.source, estimated: false }, end };
-    return { start: { date: addDays(end.date, 1 - leadDays(db, s)), source: "estimated", estimated: true }, end };
+    if (s.dates.start)
+      return { start: { date: s.dates.start, source: s.dates.source, estimated: false }, end };
+    return {
+      start: { date: addDays(end.date, 1 - leadDays(db, s)), source: 'estimated', estimated: true },
+      end,
+    };
   }
   // A seed's day offsets count from the window it was written against (simpleWindows); a part
   // no source gives is estimated in the column its dates put it in (board-quarters), an undated
@@ -1160,27 +1860,65 @@ function resolve(db: SimpleDb, s: SeedItem): Resolved {
     // roadmap-dates: Oracle's open suggestion, else the quarter it was added to, else Later's window.
     const id = db.ids[s.key] ?? stableUuid(`simple-item/${s.key}`);
     const sug = itemSuggestion(db, id) ?? acceptedInOpenDraft(db, id);
-    const [a, b, basis]: [string, string, EstimateBasis | undefined] = sug ? [sug.start_date, sug.end_date, "suggestion"] : s.quarter ? [s.quarter.start, s.quarter.end, "quarter"] : [q.later[0], q.later[1], undefined];
-    return { start: { date: a, source: "estimated", estimated: true }, end: { date: b, source: "estimated", estimated: true }, ...(basis ? { basis } : {}) };
+    const [a, b, basis]: [string, string, EstimateBasis | undefined] = sug
+      ? [sug.start_date, sug.end_date, 'suggestion']
+      : s.quarter
+        ? [s.quarter.start, s.quarter.end, 'quarter']
+        : [q.later[0], q.later[1], undefined];
+    return {
+      start: { date: a, source: 'estimated', estimated: true },
+      end: { date: b, source: 'estimated', estimated: true },
+      ...(basis ? { basis } : {}),
+    };
   }
   const source = s.source!;
-  if (start0 && end0) return { start: { date: start0, source, estimated: false }, end: { date: end0, source, estimated: false } };
-  if (end0) return { start: { date: addDays(end0, 1 - leadDays(db, s)), source: "estimated", estimated: true }, end: { date: end0, source, estimated: false } };
+  if (start0 && end0)
+    return {
+      start: { date: start0, source, estimated: false },
+      end: { date: end0, source, estimated: false },
+    };
+  if (end0)
+    return {
+      start: { date: addDays(end0, 1 - leadDays(db, s)), source: 'estimated', estimated: true },
+      end: { date: end0, source, estimated: false },
+    };
   const start: Dated = { date: start0!, source, estimated: false };
   const w = q[horizonOfDates({ start, end: { date: start0!, source, estimated: false } }, q)];
-  return { start, end: { date: start0! > w[1] ? addDays(start0!, 41) : w[1], source: "estimated", estimated: true } };
+  return {
+    start,
+    end: {
+      date: start0! > w[1] ? addDays(start0!, 41) : w[1],
+      source: 'estimated',
+      estimated: true,
+    },
+  };
 }
 
 /** join (service._accepted_in_open_drafts): the dates the item's latest accept (or edit) of
  * Oracle's suggestion wrote into a working or submitted draft, a reader of the published roadmap's estimate. */
-function acceptedInOpenDraft(db: SimpleDb, itemId: string): { start_date: string; end_date: string } | undefined {
-  const open = new Set((db.drafts ?? []).filter((d) => OPEN_DRAFT.includes(d.out.status)).map((d) => d.out.id));
+function acceptedInOpenDraft(
+  db: SimpleDb,
+  itemId: string,
+): { start_date: string; end_date: string } | undefined {
+  const open = new Set(
+    (db.drafts ?? []).filter((d) => OPEN_DRAFT.includes(d.out.status)).map((d) => d.out.id),
+  );
   const cs = db.changes ?? [];
   const c = cs
-    .filter((x) => x.op === "accept_date_suggestion" && ["applied", "accepted"].includes(x.status) && x.target.item_id === itemId && (x.draft_ids ?? []).some((d) => open.has(d)) && !cs.some((u) => u.undoes_id === x.id))
+    .filter(
+      (x) =>
+        x.op === 'accept_date_suggestion' &&
+        ['applied', 'accepted'].includes(x.status) &&
+        x.target.item_id === itemId &&
+        (x.draft_ids ?? []).some((d) => open.has(d)) &&
+        !cs.some((u) => u.undoes_id === x.id),
+    )
     .at(-1);
-  const a = c?.after.start_date, b = c?.after.end_date;
-  return typeof a === "string" && typeof b === "string" ? { start_date: a, end_date: b } : undefined;
+  const a = c?.after.start_date,
+    b = c?.after.end_date;
+  return typeof a === 'string' && typeof b === 'string'
+    ? { start_date: a, end_date: b }
+    : undefined;
 }
 
 /**
@@ -1203,11 +1941,19 @@ export function readDates(db: SimpleDb, key: string): { start: string; end: stri
 }
 
 /** board-quarters: the dates the roadmap shows for an item and the column they put it in. */
-export function readColumn(db: SimpleDb, key: string): { start: string; end: string; undated: boolean; horizon: Horizon } {
+export function readColumn(
+  db: SimpleDb,
+  key: string,
+): { start: string; end: string; undated: boolean; horizon: Horizon } {
   const all = new Map(db.items.map((s) => [s.key, { s, r: resolve(db, s) }]));
   afterDependencies(all);
   const r = all.get(key)!.r;
-  return { start: r.start.date, end: r.end.date, undated: r.start.estimated && r.end.estimated, horizon: horizonOfDates(r, quarterWindows(companyToday())) };
+  return {
+    start: r.start.date,
+    end: r.end.date,
+    undated: r.start.estimated && r.end.estimated,
+    horizon: horizonOfDates(r, quarterWindows(companyToday())),
+  };
 }
 
 /**
@@ -1222,7 +1968,9 @@ function afterDependencies(all: Map<string, { s: SeedItem; r: Resolved }>): void
     const x = all.get(key);
     if (!x || done.has(key)) return;
     done.add(key);
-    const deps = (x.s.depends ?? []).filter((k) => k !== key && all.has(k) && !doneItem(all.get(k)!.s));
+    const deps = (x.s.depends ?? []).filter(
+      (k) => k !== key && all.has(k) && !doneItem(all.get(k)!.s),
+    );
     deps.forEach(visit);
     const ends = deps.map((k) => all.get(k)!.r.end.date).sort();
     const latest = ends[ends.length - 1];
@@ -1231,17 +1979,28 @@ function afterDependencies(all: Map<string, { s: SeedItem; r: Resolved }>): void
     // dates.after_dependencies (flakes-dates): dates accepted from a suggestion, once moved, follow what it depends on.
     if (x.r.end.estimated) {
       const end = addDays(day, span(x.r.start.date, x.r.end.date) - 1);
-      x.r = { start: { date: day, source: "estimated", estimated: true }, end: { date: end, source: "estimated", estimated: true }, basis: x.r.basis === "suggestion" ? "dependencies" : x.r.basis };
+      x.r = {
+        start: { date: day, source: 'estimated', estimated: true },
+        end: { date: end, source: 'estimated', estimated: true },
+        basis: x.r.basis === 'suggestion' ? 'dependencies' : x.r.basis,
+      };
       return;
     }
-    x.r = { start: { date: day < x.r.end.date ? day : x.r.end.date, source: "estimated", estimated: true }, end: x.r.end };
+    x.r = {
+      start: {
+        date: day < x.r.end.date ? day : x.r.end.date,
+        source: 'estimated',
+        estimated: true,
+      },
+      end: x.r.end,
+    };
   };
   [...all.keys()].forEach(visit);
 }
 
 /** meeting-changes-only-its-agenda: the roadmap a PRD's own track is on (the one whose PRD it is). */
 export const homeRoadmapOf = (prdSlug: string): string | undefined =>
-  ROADMAP_SLUGS().find((r) => ROADMAPS[r].prd.toLowerCase().replace(/ /g, "-") === prdSlug);
+  ROADMAP_SLUGS().find((r) => ROADMAPS[r].prd.toLowerCase().replace(/ /g, '-') === prdSlug);
 
 /** meeting-changes-only-its-agenda ("meeting-agenda"): an item of another roadmap's PRD, as a
  * test roadmap built from the same PRD (Welcome video, on the onboarding roadmap, of Usage alerts). */
@@ -1255,10 +2014,22 @@ export function itemOfOtherPrd(db: SimpleDb, key: string, roadmap: string): void
  * roadmap they are on it, as the map holds only the milestones of roadmaps that feed it
  * (goal_map._on_map: company.feeding_ids).
  */
-export function knowGoalMapItems(db: SimpleDb | undefined, items: { key: string; id: string; title: string; section: string }[]): void {
+export function knowGoalMapItems(
+  db: SimpleDb | undefined,
+  items: { key: string; id: string; title: string; section: string }[],
+): void {
   for (const it of items) {
     if (!db || db.ids[it.key]) continue;
-    db.items.push({ key: it.key, title: it.title, horizon: "next", roadmap: db.company_roadmap ?? "onboarding-roadmap", track: "onboarding", confidence: "medium", section: it.section, heading: `${it.section.toUpperCase()} ${it.title}` });
+    db.items.push({
+      key: it.key,
+      title: it.title,
+      horizon: 'next',
+      roadmap: db.company_roadmap ?? 'onboarding-roadmap',
+      track: 'onboarding',
+      confidence: 'medium',
+      section: it.section,
+      heading: `${it.section.toUpperCase()} ${it.title}`,
+    });
     db.ids[it.key] = it.id;
   }
 }
@@ -1267,13 +2038,35 @@ export function knowGoalMapItems(db: SimpleDb | undefined, items: { key: string;
  * end, no start), as approving the PRD stores it on the draft; its start is estimated. Two more
  * such items whose features have no effort (a 28-day span), the second after Alert replay engine. */
 export function dateSourceItem(db: SimpleDb): void {
-  for (const [key, title, end, depends] of [["alert-archive", "Alert archive", "2027-03-19", []], ["alert-sounds", "Alert sound picker", "2027-04-16", ["alert-replay"]]] as const) {
-    db.items.push({ key, title, horizon: horizonOf(end), roadmap: "alerts-roadmap", track: "alerts", confidence: "medium", from_prd: { slug: "usage-alerts", title: "Usage alerts" }, dates: { start: null, end, source: "engineering" }, depends: [...depends] });
+  for (const [key, title, end, depends] of [
+    ['alert-archive', 'Alert archive', '2027-03-19', []],
+    ['alert-sounds', 'Alert sound picker', '2027-04-16', ['alert-replay']],
+  ] as const) {
+    db.items.push({
+      key,
+      title,
+      horizon: horizonOf(end),
+      roadmap: 'alerts-roadmap',
+      track: 'alerts',
+      confidence: 'medium',
+      from_prd: { slug: 'usage-alerts', title: 'Usage alerts' },
+      dates: { start: null, end, source: 'engineering' },
+      depends: [...depends],
+    });
     db.ids[key] = stableUuid(`simple-item/${key}`);
   }
-  const end = "2027-04-02";
-  db.items.push({ key: "alert-replay", title: "Alert replay engine", horizon: horizonOf(end), roadmap: "alerts-roadmap", track: "alerts", confidence: "medium", from_prd: { slug: "usage-alerts", title: "Usage alerts" }, dates: { start: null, end, source: "engineering" } });
-  db.ids["alert-replay"] = stableUuid("simple-item/alert-replay");
+  const end = '2027-04-02';
+  db.items.push({
+    key: 'alert-replay',
+    title: 'Alert replay engine',
+    horizon: horizonOf(end),
+    roadmap: 'alerts-roadmap',
+    track: 'alerts',
+    confidence: 'medium',
+    from_prd: { slug: 'usage-alerts', title: 'Usage alerts' },
+    dates: { start: null, end, source: 'engineering' },
+  });
+  db.ids['alert-replay'] = stableUuid('simple-item/alert-replay');
 }
 
 /** cross-prd-deps ("simple-cross-prd-dates"): ``key`` also depends on ``dep``, an item of another PRD. */
@@ -1283,15 +2076,24 @@ export function dependOnOtherPrd(db: SimpleDb, key: string, dep: string): void {
 }
 
 /** The PRD a seeded item was built from (its roadmap's). */
-function itemPrd(s: SeedItem): Schemas["SimpleDocRef"] {
+function itemPrd(s: SeedItem): Schemas['SimpleDocRef'] {
   const prd = ROADMAPS[s.roadmap].prd;
-  return { id: stableUuid(`simple-prd/${s.roadmap}`), slug: prd.toLowerCase().replace(/ /g, "-"), title: prd };
+  return {
+    id: stableUuid(`simple-prd/${s.roadmap}`),
+    slug: prd.toLowerCase().replace(/ /g, '-'),
+    title: prd,
+  };
 }
 
 /** The PRD an item reads as its own: the one it was added from, else its roadmap's (the API's item.prd). */
-export function ownPrd(s: SeedItem): Schemas["SimpleDocRef"] {
+export function ownPrd(s: SeedItem): Schemas['SimpleDocRef'] {
   if (s.prd_doc) return s.prd_doc;
-  if (s.from_prd) return { id: stableUuid(`simple-prd/${s.from_prd.slug}`), slug: s.from_prd.slug, title: s.from_prd.title };
+  if (s.from_prd)
+    return {
+      id: stableUuid(`simple-prd/${s.from_prd.slug}`),
+      slug: s.from_prd.slug,
+      title: s.from_prd.title,
+    };
   return itemPrd(s);
 }
 
@@ -1299,25 +2101,49 @@ export function ownPrd(s: SeedItem): Schemas["SimpleDocRef"] {
 export function ownPrdSlug(s: SeedItem): string {
   if (s.prd_doc) return s.prd_doc.slug;
   if (s.from_prd) return s.from_prd.slug;
-  return ROADMAPS[s.roadmap].prd.toLowerCase().replace(/ /g, "-");
+  return ROADMAPS[s.roadmap].prd.toLowerCase().replace(/ /g, '-');
 }
 
 /** A milestone no plan dates (the new SimpleMilestone fields, empty). */
-const UNDATED = { start_date: null, end_date: null, effort_weeks: null, done_when: [] as string[], targets: [] as { goal: string; target: string }[] };
+const UNDATED = {
+  start_date: null,
+  end_date: null,
+  effort_weeks: null,
+  done_when: [] as string[],
+  targets: [] as { goal: string; target: string }[],
+};
 
-const PHASES = [["discover", 0.15], ["build", 0.55], ["beta", 0.2], ["launch", 0.1]] as const;
+const PHASES = [
+  ['discover', 0.15],
+  ['build', 0.55],
+  ['beta', 0.2],
+  ['launch', 0.1],
+] as const;
 
 /** The track milestone record naming a seeded item, as the API's read carries it. */
-function recordOf(s: { record?: string; track?: string }): { record_id?: string; record_name?: string } {
-  return s.record ? { record_id: stableUuid(`simple-milestone/${s.track}/${s.record}`), record_name: s.record } : {};
+function recordOf(s: { record?: string; track?: string }): {
+  record_id?: string;
+  record_name?: string;
+} {
+  return s.record
+    ? { record_id: stableUuid(`simple-milestone/${s.track}/${s.record}`), record_name: s.record }
+    : {};
 }
 
 /** oracle.simple.dates.phases: the milestone and gates naming a phase end it on their date;
  * every other phase keeps the 15/55/20/10 split of the bar, estimated. */
-function phases(start: string, end: string, s: SeedItem, w: [string, string]): Schemas["SimplePhase"][] {
+function phases(
+  start: string,
+  end: string,
+  s: SeedItem,
+  w: [string, string],
+): Schemas['SimplePhase'][] {
   const named = new Map<string, string>();
-  for (const e of [...(s.milestone?.day != null ? [{ phase: s.milestone.name, day: s.milestone.day }] : []), ...(s.gates ?? [])]) {
-    const word = (e.phase ?? "").trim().toLowerCase();
+  for (const e of [
+    ...(s.milestone?.day != null ? [{ phase: s.milestone.name, day: s.milestone.day }] : []),
+    ...(s.gates ?? []),
+  ]) {
+    const word = (e.phase ?? '').trim().toLowerCase();
     if (PHASES.some(([k]) => k === word)) named.set(word, addDays(w[0], e.day));
   }
   const total = span(start, end);
@@ -1326,10 +2152,14 @@ function phases(start: string, end: string, s: SeedItem, w: [string, string]): S
   return PHASES.map(([key, part], i) => {
     share += part;
     const own = named.get(key);
-    let day = own ?? (i === PHASES.length - 1 ? end : addDays(start, Math.round(total * share) - 1));
+    let day =
+      own ?? (i === PHASES.length - 1 ? end : addDays(start, Math.round(total * share) - 1));
     if (!own) {
       // An estimated phase ends before the next dated gate (roadmap-plus: they may bunch up).
-      const gate = PHASES.slice(i + 1).map(([k]) => named.get(k)).filter((d): d is string => !!d).sort()[0];
+      const gate = PHASES.slice(i + 1)
+        .map(([k]) => named.get(k))
+        .filter((d): d is string => !!d)
+        .sort()[0];
       if (gate && day >= gate) day = addDays(gate, -1);
       if (day < cursor) day = cursor;
     }
@@ -1342,38 +2172,84 @@ function phases(start: string, end: string, s: SeedItem, w: [string, string]): S
 const short = (t: string): string => (t.length <= 40 ? t : `${t.slice(0, 39)}…`);
 
 /** "Usage alerts PRD": a PRD's title with PRD after it when it does not say so (company.OnRoadmap.prd_name). */
-const prdName = (title: string): string => (title.toLowerCase().endsWith("prd") ? title : `${title} PRD`);
+const prdName = (title: string): string =>
+  title.toLowerCase().endsWith('prd') ? title : `${title} PRD`;
 
 /** A dependency_order line, naming the item and its dependency (constraints.check), with the years when they differ;
  * a dependency of another PRD is named with its PRD (the owner, Nov 4). */
-function dependencyLine(title: string, start: string, depTitle: string, end: string, verb: "starts" | "ends" = "starts", depPrd: string | null = null): string {
+function dependencyLine(
+  title: string,
+  start: string,
+  depTitle: string,
+  end: string,
+  verb: 'starts' | 'ends' = 'starts',
+  depPrd: string | null = null,
+): string {
   const years = start.slice(0, 4) !== end.slice(0, 4);
-  const day = (d: string) => `${word(d)}${years ? ` ${d.slice(0, 4)}` : ""}`;
-  return `‘${short(title)}’ ${verb} ${day(start)}, but ‘${short(depTitle)}’${depPrd ? ` (${depPrd})` : ""}, which it depends on, ends ${day(end)}`;
+  const day = (d: string) => `${word(d)}${years ? ` ${d.slice(0, 4)}` : ''}`;
+  return `‘${short(title)}’ ${verb} ${day(start)}, but ‘${short(depTitle)}’${depPrd ? ` (${depPrd})` : ''}, which it depends on, ends ${day(end)}`;
 }
 
 /** feature-parts: the keys of the features an item is part of, its parent first, any depth (a loop stops where it would close). */
 function ancestorKeys(s: SeedItem, all: Map<string, { s: SeedItem }>): string[] {
   const out: string[] = [];
-  for (let cur: SeedItem | undefined = s; cur?.parent && cur.parent !== s.key && !out.includes(cur.parent); cur = all.get(cur.parent)?.s) out.push(cur.parent);
+  for (
+    let cur: SeedItem | undefined = s;
+    cur?.parent && cur.parent !== s.key && !out.includes(cur.parent);
+    cur = all.get(cur.parent)?.s
+  )
+    out.push(cur.parent);
   return out;
 }
 
-function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, { s: SeedItem; r: { start: Dated; end: Dated } }>, w: [string, string]): Flag[] {
+function flagsOf(
+  s: SeedItem,
+  r: { start: Dated; end: Dated },
+  all: Map<string, { s: SeedItem; r: { start: Dated; end: Dated } }>,
+  w: [string, string],
+): Flag[] {
   const out: Flag[] = [];
-  const flag = (kind: Flag["kind"], reason: string, fixes: Flag["fixes"], subject: string | null = null): void => {
+  const flag = (
+    kind: Flag['kind'],
+    reason: string,
+    fixes: Flag['fixes'],
+    subject: string | null = null,
+  ): void => {
     const risk = s.risks?.find((x) => x.flag === kind && (!x.subject || x.subject === subject));
-    out.push({ kind, reason, fixes, state: risk ? "amber" : "red", subject, risk_note: risk?.note ?? null, moves: [], dependents: [] });
+    out.push({
+      kind,
+      reason,
+      fixes,
+      state: risk ? 'amber' : 'red',
+      subject,
+      risk_note: risk?.note ?? null,
+      moves: [],
+      dependents: [],
+    });
   };
   // roadmap-done, as constraints.check: a done item is not checked, and a dependency on one is met.
   if (doneItem(s)) return out;
   // roadmap-decide, as constraints.check: a cut item (below the line) is not checked for its order.
-  for (const k of s.status === "cut" ? [] : (s.depends ?? [])) {
+  for (const k of s.status === 'cut' ? [] : (s.depends ?? [])) {
     // roadmap-edit-fixes round 1 (constraints.check): a key by code names its item; a done dependency is met whatever
     // its dates, and a cut item's own links break nothing.
-    const key = all.has(k) ? k : (dependencyOf([...all.values()].map((x) => x.s), k)?.key ?? k);
+    const key = all.has(k)
+      ? k
+      : (dependencyOf(
+          [...all.values()].map((x) => x.s),
+          k,
+        )?.key ?? k);
     const dep = all.get(key);
-    if (!dep || key === s.key || closed(dep.s) || closed(s) || dep.s.status === "done" || doneItem(dep.s) || (dep.r.end.estimated && r.start.estimated)) continue;
+    if (
+      !dep ||
+      key === s.key ||
+      closed(dep.s) ||
+      closed(s) ||
+      dep.s.status === 'done' ||
+      doneItem(dep.s) ||
+      (dep.r.end.estimated && r.start.estimated)
+    )
+      continue;
     // feature-parts: a part is never a broken link against an ancestor, any depth (constraints.check).
     if (ancestorKeys(s, all).includes(key) || ancestorKeys(dep.s, all).includes(s.key)) continue;
     const theirs = ownPrd(dep.s).title;
@@ -1381,24 +2257,48 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
     if (r.start.estimated) {
       // walkb-roadmap, as constraints.check: an invented start breaks no link; a real end before the dependency's end does.
       if (!r.end.estimated && dep.r.end.date >= r.end.date)
-        flag("dependency_order", dependencyLine(s.title, r.end.date, dep.s.title, dep.r.end.date, "ends", depPrd), ["shift_dependents", "move_dependency", "accept_risk"], stableUuid(`simple-item/${key}`));
+        flag(
+          'dependency_order',
+          dependencyLine(s.title, r.end.date, dep.s.title, dep.r.end.date, 'ends', depPrd),
+          ['shift_dependents', 'move_dependency', 'accept_risk'],
+          stableUuid(`simple-item/${key}`),
+        );
       continue;
     }
     if (dep.r.end.date >= r.start.date)
-      flag("dependency_order", dependencyLine(s.title, r.start.date, dep.s.title, dep.r.end.date, "starts", depPrd), ["shift_dependents", "move_dependency", "accept_risk"], stableUuid(`simple-item/${key}`));
+      flag(
+        'dependency_order',
+        dependencyLine(s.title, r.start.date, dep.s.title, dep.r.end.date, 'starts', depPrd),
+        ['shift_dependents', 'move_dependency', 'accept_risk'],
+        stableUuid(`simple-item/${key}`),
+      );
   }
   if (s.milestone?.day != null) {
     const day = addDays(w[0], s.milestone.day);
-    if (r.end.date > day) flag("outside_milestone", `‘${short(s.title)}’ ends ${word(r.end.date)}, after its milestone ‘${s.milestone.name}’ (${word(day)})`, ["accept_risk"], s.milestone.name);
+    if (r.end.date > day)
+      flag(
+        'outside_milestone',
+        `‘${short(s.title)}’ ends ${word(r.end.date)}, after its milestone ‘${s.milestone.name}’ (${word(day)})`,
+        ['accept_risk'],
+        s.milestone.name,
+      );
   }
-  if (s.status === "cut") {
-    const live = [...all.values()].filter((x) => x.s.status !== "cut" && !doneItem(x.s) && x.s.depends?.includes(s.key));
+  if (s.status === 'cut') {
+    const live = [...all.values()].filter(
+      (x) => x.s.status !== 'cut' && !doneItem(x.s) && x.s.depends?.includes(s.key),
+    );
     if (live.length) {
-      const more = live.length > 1 ? ` and ${live.length - 1} other${live.length > 2 ? "s" : ""}` : "";
-      flag("cut_with_dependents", `Cut, but ‘${short(live[0].s.title)}’${more} ${live.length > 1 ? "depend" : "depends"} on it`, ["restore", "remove_dependency", "accept_risk"]);
+      const more =
+        live.length > 1 ? ` and ${live.length - 1} other${live.length > 2 ? 's' : ''}` : '';
+      flag(
+        'cut_with_dependents',
+        `Cut, but ‘${short(live[0].s.title)}’${more} ${live.length > 1 ? 'depend' : 'depends'} on it`,
+        ['restore', 'remove_dependency', 'accept_risk'],
+      );
     }
   }
-  if (s.draft && !s.track && !closed(s)) flag("draft_without_owner", "Draft with no owner to confirm it", []);
+  if (s.draft && !s.track && !closed(s))
+    flag('draft_without_owner', 'Draft with no owner to confirm it', []);
   return out;
 }
 
@@ -1408,7 +2308,11 @@ const days = (a: string, b: string): number => Math.round((ms(b) - ms(a)) / DAY)
  * The new [start, end] of every item "Move the dependents" moves (changes.shift_plan): the
  * roadmap's flags name them (SimpleFlag.moves) and the change engine moves them (./simple-changes.ts).
  */
-export function shiftPlan(items: Map<string, Item>, itemId: string, depId: string): Record<string, [string, string]> {
+export function shiftPlan(
+  items: Map<string, Item>,
+  itemId: string,
+  depId: string,
+): Record<string, [string, string]> {
   // #9: every direct dependent of `dep` that starts too early moves, not only the one whose
   // callout was clicked (two items can share a dependency, each estimated or slice-dated);
   // then the move walks forward transitively through each moved item's own dependents.
@@ -1418,9 +2322,15 @@ export function shiftPlan(items: Map<string, Item>, itemId: string, depId: strin
   if (!dep) return moves;
   for (const n of dep.needed_by) {
     const next = items.get(n);
-    if (!next || next.status === "cut" || next.start.date > dep.end.date) continue;
+    if (!next || next.status === 'cut' || next.start.date > dep.end.date) continue;
     // A sibling whose order on dep was accepted as a risk stays where it is (as the API).
-    if (n !== itemId && next.flags.some((f) => f.kind === "dependency_order" && f.state === "amber" && f.subject === depId)) continue;
+    if (
+      n !== itemId &&
+      next.flags.some(
+        (f) => f.kind === 'dependency_order' && f.state === 'amber' && f.subject === depId,
+      )
+    )
+      continue;
     const delta = days(next.start.date, addDays(dep.end.date, 1));
     moves[n] = [addDays(next.start.date, delta), addDays(next.end.date, delta)];
     queue.push(n);
@@ -1429,7 +2339,7 @@ export function shiftPlan(items: Map<string, Item>, itemId: string, depId: strin
     const cur = queue.shift()!;
     for (const n of items.get(cur)!.needed_by) {
       const next = items.get(n);
-      if (!next || moves[n] || next.status === "cut") continue;
+      if (!next || moves[n] || next.status === 'cut') continue;
       if (next.start.date <= moves[cur][1]) {
         const delta = days(next.start.date, addDays(moves[cur][1], 1));
         moves[n] = [addDays(next.start.date, delta), addDays(next.end.date, delta)];
@@ -1441,13 +2351,17 @@ export function shiftPlan(items: Map<string, Item>, itemId: string, depId: strin
 }
 
 /** S4: the item's owner, by name (service: an enabled track owner), from the people /v1/people lists. */
-function ownerOf(db: SimpleDb, s: SeedItem, names?: Record<string, string>): Item["owner"] {
+function ownerOf(db: SimpleDb, s: SeedItem, names?: Record<string, string>): Item['owner'] {
   const id = itemOwnerId(db, s.key);
-  return id ? { id, name: names?.[id] ?? db.people?.[id] ?? "Track owner" } : null;
+  return id ? { id, name: names?.[id] ?? db.people?.[id] ?? 'Track owner' } : null;
 }
 
 /** A chat card's set_owner / set_decider (the targets kept by item id), if any: the item's own owner or decider. */
-export const namedOn = (db: SimpleDb, key: string, field: "owner_id" | "decider_id"): string | null | undefined => {
+export const namedOn = (
+  db: SimpleDb,
+  key: string,
+  field: 'owner_id' | 'decider_id',
+): string | null | undefined => {
   const t = db.targets?.[db.ids[key]];
   return t && field in t ? ((t[field] as string | null) ?? null) : undefined;
 };
@@ -1456,9 +2370,14 @@ export const namedOn = (db: SimpleDb, key: string, field: "owner_id" | "decider_
  * PRD it is (prd_doc, else their roadmap's; one company roadmap holds many PRDs' items), and the tracks
  * the Tracks sheet keeps for it (track_state). */
 export function prdTrackOwnerIds(db: SimpleDb, prdSlug: string): string[] {
-  const slug = (title: string | undefined) => title?.toLowerCase().replace(/ /g, "-");
-  const state = (db as SimpleDb & { track_state?: Record<string, { prd: string }> }).track_state ?? {};
-  const tracks = new Set(db.items.filter((s) => (s.prd_doc?.slug ?? slug(ROADMAPS[s.roadmap]?.prd)) === prdSlug).flatMap((s) => (s.track ? [s.track] : [])));
+  const slug = (title: string | undefined) => title?.toLowerCase().replace(/ /g, '-');
+  const state =
+    (db as SimpleDb & { track_state?: Record<string, { prd: string }> }).track_state ?? {};
+  const tracks = new Set(
+    db.items
+      .filter((s) => (s.prd_doc?.slug ?? slug(ROADMAPS[s.roadmap]?.prd)) === prdSlug)
+      .flatMap((s) => (s.track ? [s.track] : [])),
+  );
   for (const [k, t] of Object.entries(state)) if (slug(t.prd) === prdSlug) tracks.add(k);
   return [...tracks].flatMap((t) => (db.track_owners?.[t] ? [db.track_owners[t]] : []));
 }
@@ -1466,10 +2385,11 @@ export function prdTrackOwnerIds(db: SimpleDb, prdSlug: string): string[] {
 /** tracks-goal (the API's track.prd_ids): a track's PRDs by title, its first one first, as the Tracks sheet
  * keeps them (track_state); a track the sheet has not read yet holds its first item's PRD, as the sheet seeds it. */
 export function trackPrdTitles(db: SimpleDb, track: string): string[] {
-  const st = (db as SimpleDb & { track_state?: Record<string, { prd: string; more?: string[] }> }).track_state?.[track];
+  const st = (db as SimpleDb & { track_state?: Record<string, { prd: string; more?: string[] }> })
+    .track_state?.[track];
   if (st) return [st.prd, ...(st.more ?? [])].filter(Boolean);
   const on = db.items.find((s) => s.track === track);
-  const first = on ? (on.prd_doc?.title ?? ROADMAPS[on.roadmap]?.prd ?? "") : "";
+  const first = on ? (on.prd_doc?.title ?? ROADMAPS[on.roadmap]?.prd ?? '') : '';
   return first ? [first] : [];
 }
 
@@ -1477,25 +2397,47 @@ export function trackPrdTitles(db: SimpleDb, track: string): string[] {
  * the tracks that hold them, by title, as what stays and what goes with them: an item on a roadmap
  * document of the delete (`gone`, its slugs) or on a draft of these PRDs goes, as does a track holding
  * no other PRD. Delete PRD names both. */
-export function prdFeeds(db: SimpleDb, prdSlugs: string[], gone: string[]): { stays: Schemas["TrashItem"][]; goes: Schemas["TrashItem"][] } {
-  const slug = (title: string | undefined) => title?.toLowerCase().replace(/ /g, "-");
+export function prdFeeds(
+  db: SimpleDb,
+  prdSlugs: string[],
+  gone: string[],
+): { stays: Schemas['TrashItem'][]; goes: Schemas['TrashItem'][] } {
+  const slug = (title: string | undefined) => title?.toLowerCase().replace(/ /g, '-');
   const prds = new Set(prdSlugs);
-  const stays = new Map<string, Schemas["TrashItem"]>();
-  const goes = new Map<string, Schemas["TrashItem"]>();
+  const stays = new Map<string, Schemas['TrashItem']>();
+  const goes = new Map<string, Schemas['TrashItem']>();
   for (const s of db.items) {
     const prd = s.prd_doc?.slug ?? slug(ROADMAPS[s.roadmap]?.prd);
     if (s.trashed || !prd || !prds.has(prd)) continue;
     const going = gone.includes(ROADMAP_DOC_SLUG[s.roadmap] ?? s.roadmap) || !!s.draft_roadmap;
-    (going ? goes : stays).set(s.key, { type: "feature", id: db.ids[s.key] ?? stableUuid(`simple-item/${s.key}`), slug: s.key, title: s.title, kind: "feature" });
+    (going ? goes : stays).set(s.key, {
+      type: 'feature',
+      id: db.ids[s.key] ?? stableUuid(`simple-item/${s.key}`),
+      slug: s.key,
+      title: s.title,
+      kind: 'feature',
+    });
   }
   // An item on several roadmaps stays while one of them does.
   for (const k of stays.keys()) goes.delete(k);
-  const byTitle = (a: Schemas["TrashItem"], b: Schemas["TrashItem"]) => a.title.localeCompare(b.title);
-  const tracks = Object.keys(TRACKS).map((t) => [t, trackPrdTitles(db, t).map(slug)] as const).filter(([, held]) => held.some((x) => x && prds.has(x)));
-  const track = (t: string): Schemas["TrashItem"] => ({ type: "track", id: stableUuid(`simple-track/${t}`), slug: null, title: TRACKS[t], kind: "Track" });
-  const out = (items: Map<string, Schemas["TrashItem"]>, going: boolean) => [
+  const byTitle = (a: Schemas['TrashItem'], b: Schemas['TrashItem']) =>
+    a.title.localeCompare(b.title);
+  const tracks = Object.keys(TRACKS)
+    .map((t) => [t, trackPrdTitles(db, t).map(slug)] as const)
+    .filter(([, held]) => held.some((x) => x && prds.has(x)));
+  const track = (t: string): Schemas['TrashItem'] => ({
+    type: 'track',
+    id: stableUuid(`simple-track/${t}`),
+    slug: null,
+    title: TRACKS[t],
+    kind: 'Track',
+  });
+  const out = (items: Map<string, Schemas['TrashItem']>, going: boolean) => [
     ...[...items.values()].sort(byTitle),
-    ...tracks.filter(([, held]) => held.every((x) => x && prds.has(x)) === going).map(([t]) => track(t)).sort(byTitle),
+    ...tracks
+      .filter(([, held]) => held.every((x) => x && prds.has(x)) === going)
+      .map(([t]) => track(t))
+      .sort(byTitle),
   ];
   return { stays: out(stays, false), goes: out(goes, true) };
 }
@@ -1508,15 +2450,19 @@ export function prdOwnerIdsOf(db: SimpleDb, prdSlug: string): string[] {
 
 /** The item's owner: the one a chat card named, else its track's owner. */
 export function itemOwnerId(db: SimpleDb, key: string): string | null {
-  const named = namedOn(db, key, "owner_id");
+  const named = namedOn(db, key, 'owner_id');
   if (named !== undefined) return named;
   const track = db.items.find((x) => x.key === key)?.track;
   return (track ? db.track_owners?.[track] : undefined) ?? null;
 }
 
 /** The item's own decider (a chat card's set_decider), else the first of deciderIds. */
-export function itemDeciderId(db: SimpleDb, key: string, roles?: Record<string, Role>): string | null {
-  const named = namedOn(db, key, "decider_id");
+export function itemDeciderId(
+  db: SimpleDb,
+  key: string,
+  roles?: Record<string, Role>,
+): string | null {
+  const named = namedOn(db, key, 'decider_id');
   if (named !== undefined) return named;
   const s = db.items.find((x) => x.key === key);
   return s ? (deciderIds(db, s, roles)[0] ?? null) : null;
@@ -1528,18 +2474,18 @@ const RANK: Record<Role, number> = { viewer: 0, commenter: 1, approver: 2, owner
  * approver or owner; [] when the company's owners decide. The default seed names none;
  * the "simple-deciders" scenario (seedSimpleDeciders) names both. */
 export function deciderIds(db: SimpleDb, s: SeedItem, roles?: Record<string, Role>): string[] {
-  const named = namedOn(db, s.key, "decider_id");
+  const named = namedOn(db, s.key, 'decider_id');
   if (named) return [named];
   const decider = db.deciders?.[s.roadmap];
   if (decider) return [decider];
   const owner = s.track ? db.track_owners?.[s.track] : undefined;
-  return owner && RANK[roles?.[owner] ?? "viewer"] >= RANK.approver ? [owner] : [];
+  return owner && RANK[roles?.[owner] ?? 'viewer'] >= RANK.approver ? [owner] : [];
 }
 
 /** service.can_decide (D-a): an owner; the decider; with none, the item's track owner while an approver or owner. */
 export function canDecideItem(db: SimpleDb, s: SeedItem, me: { id: string; role: Role }): boolean {
-  if (me.role === "owner") return true;
-  const named = namedOn(db, s.key, "decider_id");
+  if (me.role === 'owner') return true;
+  const named = namedOn(db, s.key, 'decider_id');
   if (named) return named === me.id;
   const decider = db.deciders?.[s.roadmap];
   if (decider) return decider === me.id;
@@ -1547,28 +2493,45 @@ export function canDecideItem(db: SimpleDb, s: SeedItem, me: { id: string; role:
 }
 
 /** drafts.can_edit: who changes (submits, approves) a roadmap directly. */
-export function canEditRoadmap(db: SimpleDb, roadmap: string, me: { id: string; role: Role }): boolean {
-  if (me.role === "owner") return true;
+export function canEditRoadmap(
+  db: SimpleDb,
+  roadmap: string,
+  me: { id: string; role: Role },
+): boolean {
+  if (me.role === 'owner') return true;
   const decider = db.deciders?.[roadmap];
   if (decider) return decider === me.id;
-  const tracks = new Set(db.items.filter((s) => s.roadmap === roadmap && s.track).map((s) => s.track!));
+  const tracks = new Set(
+    db.items.filter((s) => s.roadmap === roadmap && s.track).map((s) => s.track!),
+  );
   return [...tracks].some((t) => db.track_owners?.[t] === me.id) && RANK[me.role] >= RANK.approver;
 }
 
 /** key_dates.route: who a proposal on a roadmap's own milestone goes to: its decider, else the
  * owners of its tracks who are approvers or owners (by id), else the company's owners. */
-export function roadmapRoute(db: SimpleDb, roadmap: string, roles: Record<string, Role> | undefined, owners: string[]): string[] {
+export function roadmapRoute(
+  db: SimpleDb,
+  roadmap: string,
+  roles: Record<string, Role> | undefined,
+  owners: string[],
+): string[] {
   const decider = db.deciders?.[roadmap];
   if (decider) return [decider];
-  const tracks = new Set(db.items.filter((s) => s.roadmap === roadmap && s.track).map((s) => s.track!));
-  const deciding = [...new Set([...tracks].flatMap((t) => db.track_owners?.[t] ?? []))].filter((id) => RANK[roles?.[id] ?? "viewer"] >= RANK.approver).sort();
+  const tracks = new Set(
+    db.items.filter((s) => s.roadmap === roadmap && s.track).map((s) => s.track!),
+  );
+  const deciding = [...new Set([...tracks].flatMap((t) => db.track_owners?.[t] ?? []))]
+    .filter((id) => RANK[roles?.[id] ?? 'viewer'] >= RANK.approver)
+    .sort();
   return deciding.length ? deciding : owners;
 }
 
 /** simple-replaced-prds (service.load): an item of a replaced PRD is history, read in Detailed only. */
 export function ofReplacedPrd(db: SimpleDb, s: SeedItem): boolean {
   const replaced = db.replaced_prds ?? [];
-  return !!replaced.length && (replaced.includes(ownPrd(s).id) || replaced.includes(ownPrd(s).slug));
+  return (
+    !!replaced.length && (replaced.includes(ownPrd(s).id) || replaced.includes(ownPrd(s).slug))
+  );
 }
 
 /** additions._home: the track and PRD a feature added in Simple is filed under, in place: the
@@ -1593,15 +2556,28 @@ export function fileUnderCurrentPrd(db: SimpleDb, s: SeedItem): void {
 }
 
 function visibleItems(db: SimpleDb, role: Role): SeedItem[] {
-  const restricted = role === "commenter" || role === "viewer";
+  const restricted = role === 'commenter' || role === 'viewer';
   const trashed = new Set(db.trashed_roadmaps ?? []);
-  return db.items.filter((s) => !s.trashed && !trashed.has(s.roadmap) && !offLatest(db, s) && (!db.company_roadmap || s.roadmap === db.company_roadmap) && (!restricted || ROADMAPS[s.roadmap].visibility === "company") && !ofReplacedPrd(db, s));
+  return db.items.filter(
+    (s) =>
+      !s.trashed &&
+      !trashed.has(s.roadmap) &&
+      !offLatest(db, s) &&
+      (!db.company_roadmap || s.roadmap === db.company_roadmap) &&
+      (!restricted || ROADMAPS[s.roadmap].visibility === 'company') &&
+      !ofReplacedPrd(db, s),
+  );
 }
 
 /** plan-model (suggestions._planned): the item's dated slices in its PRD's plan; none when the plan does not place it. */
-function plannedSlices(db: SimpleDb, s: SeedItem): Schemas["SimpleSlice"][] {
+function plannedSlices(db: SimpleDb, s: SeedItem): Schemas['SimpleSlice'][] {
   const code = prdCode(s.section);
-  if (!db.plan || !code || ROADMAPS[s.roadmap].prd.toLowerCase().replace(/ /g, "-") !== PLAN_PRD_SLUG) return [];
+  if (
+    !db.plan ||
+    !code ||
+    ROADMAPS[s.roadmap].prd.toLowerCase().replace(/ /g, '-') !== PLAN_PRD_SLUG
+  )
+    return [];
   return planSlices().filter((x) => x.feature_code === code && x.start_date && x.end_date);
 }
 
@@ -1611,7 +2587,9 @@ function plannedSlices(db: SimpleDb, s: SeedItem): Schemas["SimpleSlice"][] {
  * end) under the first slice's id, which Accept applies whole.
  */
 export function itemSuggestion(db: SimpleDb, itemId: string): Suggestion | undefined {
-  const open = db.suggestions.filter((x) => x.item_id === itemId && x.status === "open").sort((a, b) => (a.start_date < b.start_date ? -1 : a.start_date > b.start_date ? 1 : 0));
+  const open = db.suggestions
+    .filter((x) => x.item_id === itemId && x.status === 'open')
+    .sort((a, b) => (a.start_date < b.start_date ? -1 : a.start_date > b.start_date ? 1 : 0));
   const first = open[0];
   if (!first || first.slice_code == null) return first;
   const start = open.map((x) => x.start_date).reduce((a, b) => (b < a ? b : a));
@@ -1625,11 +2603,18 @@ export function itemSuggestion(db: SimpleDb, itemId: string): Suggestion | undef
  * dependency outdate it, so its row, its panel block and the counts clear at once.
  */
 function offered(r: Resolved, sug: Suggestion | undefined): Suggestion | undefined {
-  return sug && r.start.estimated && r.end.estimated && r.start.date === sug.start_date && r.end.date === sug.end_date ? sug : undefined;
+  return sug &&
+    r.start.estimated &&
+    r.end.estimated &&
+    r.start.date === sug.start_date &&
+    r.end.date === sug.end_date
+    ? sug
+    : undefined;
 }
 
 /** dates.quarter_word: "Q2 2027". */
-const quarterWord = (first: string) => `Q${Math.floor((Number(first.slice(5, 7)) - 1) / 3) + 1} ${first.slice(0, 4)}`;
+const quarterWord = (first: string) =>
+  `Q${Math.floor((Number(first.slice(5, 7)) - 1) / 3) + 1} ${first.slice(0, 4)}`;
 
 /** oracle.simple.suggestions.regenerate: one open suggestion per undated item (plan-model: per slice of a planned one). */
 function regenerate(db: SimpleDb, today: string): number {
@@ -1638,34 +2623,53 @@ function regenerate(db: SimpleDb, today: string): number {
   const durations = new Map<string, number[]>();
   for (const { s, r } of resolved.values()) {
     if (r.start.estimated || r.end.estimated) continue;
-    const k = s.confidence ?? "";
+    const k = s.confidence ?? '';
     durations.set(k, [...(durations.get(k) ?? []), span(r.start.date, r.end.date)]);
   }
   let open = 0;
   for (const { s, r } of resolved.values()) {
     const id = db.ids[s.key];
-    const current = db.suggestions.find((x) => x.item_id === id && x.status === "open");
-    const undated = r.start.estimated && r.end.estimated && !closed(s) && s.status !== "done" && !s.drafting_until;
-    if (!undated || db.suggestions.some((x) => x.item_id === id && x.status === "dismissed")) {
-      db.suggestions = db.suggestions.filter((x) => !(x.item_id === id && x.status === "open"));
+    const current = db.suggestions.find((x) => x.item_id === id && x.status === 'open');
+    const undated =
+      r.start.estimated &&
+      r.end.estimated &&
+      !closed(s) &&
+      s.status !== 'done' &&
+      !s.drafting_until;
+    if (!undated || db.suggestions.some((x) => x.item_id === id && x.status === 'dismissed')) {
+      db.suggestions = db.suggestions.filter((x) => !(x.item_id === id && x.status === 'open'));
       continue;
     }
     // plan-model: an item the plan places gets one suggestion per dated slice, inside its milestone.
     const planned = plannedSlices(db, s);
     if (planned.length) {
       const codes = new Set(planned.map((x) => x.code));
-      db.suggestions = db.suggestions.filter((x) => !(x.item_id === id && x.status === "open" && !codes.has(x.slice_code ?? "")));
+      db.suggestions = db.suggestions.filter(
+        (x) => !(x.item_id === id && x.status === 'open' && !codes.has(x.slice_code ?? '')),
+      );
       for (const sl of planned) {
         const [start, end] = [sl.start_date!, sl.end_date!];
         const basis = `Placed inside ${sl.milestone} ${sl.milestone_name} by the PRD's order (${word(sl.milestone_start!)} – ${word(sl.milestone_end!)}).`;
         open += 1;
-        const mine = db.suggestions.find((x) => x.item_id === id && x.status === "open" && x.slice_code === sl.code);
+        const mine = db.suggestions.find(
+          (x) => x.item_id === id && x.status === 'open' && x.slice_code === sl.code,
+        );
         if (mine) Object.assign(mine, { start_date: start, end_date: end, basis });
         else
           db.suggestions.push({
             id: stableUuid(`simple-suggestion/${s.key}/${sl.code}/${start}/${end}`),
-            item_id: id, item_key: s.key, item_title: s.title, start_date: start, end_date: end, basis,
-            status: "open", created_at: new Date(mockNowMs()).toISOString(), decided_by: null, decided_at: null, slice_code: sl.code, can_decide: false,
+            item_id: id,
+            item_key: s.key,
+            item_title: s.title,
+            start_date: start,
+            end_date: end,
+            basis,
+            status: 'open',
+            created_at: new Date(mockNowMs()).toISOString(),
+            decided_by: null,
+            decided_at: null,
+            slice_code: sl.code,
+            can_decide: false,
           });
       }
       continue;
@@ -1673,22 +2677,30 @@ function regenerate(db: SimpleDb, today: string): number {
     // board-quarters: an undated item is Later's, so its suggestion starts with Later's window;
     // roadmap-dates: one added to a quarter, inside that quarter (from today on).
     const q = s.quarter;
-    const window: [string, string] = q ? [q.start < today ? today : q.start, q.end] : quarterWindows(today).later;
+    const window: [string, string] = q
+      ? [q.start < today ? today : q.start, q.end]
+      : quarterWindows(today).later;
     let start = window[0];
-    let why = q ? `starts with the ${quarterWord(q.start)} window` : "starts with the Later window";
+    let why = q ? `starts with the ${quarterWord(q.start)} window` : 'starts with the Later window';
     const deps = (s.depends ?? []).map((k) => resolved.get(k)).filter((x) => x !== undefined);
     const latest = deps.sort((a, b) => (a.r.end.date < b.r.end.date ? 1 : -1))[0];
     if (latest && addDays(latest.r.end.date, 1) > start) {
       start = addDays(latest.r.end.date, 1);
       why = `starts the day after ‘${latest.s.title}’ ends`;
     }
-    const same = [...(durations.get(s.confidence ?? "") ?? [])].sort((a, b) => a - b);
-    const mid = same.length ? (same.length % 2 ? same[(same.length - 1) / 2] : Math.floor((same[same.length / 2 - 1] + same[same.length / 2]) / 2 + 0.5)) : 28;
-    const conf = s.confidence ? `${s.confidence}-confidence` : "unrated";
+    const same = [...(durations.get(s.confidence ?? '') ?? [])].sort((a, b) => a - b);
+    const mid = same.length
+      ? same.length % 2
+        ? same[(same.length - 1) / 2]
+        : Math.floor((same[same.length / 2 - 1] + same[same.length / 2]) / 2 + 0.5)
+      : 28;
+    const conf = s.confidence ? `${s.confidence}-confidence` : 'unrated';
     // finding 30: plain words, not statistics jargon ("median").
-    const how = same.length ? `${mid} days, about the same as ${same.length} similar ${conf} item${same.length === 1 ? "" : "s"}` : `${mid} days, typical with no dated ${conf} items yet`;
+    const how = same.length
+      ? `${mid} days, about the same as ${same.length} similar ${conf} item${same.length === 1 ? '' : 's'}`
+      : `${mid} days, typical with no dated ${conf} items yet`;
     let end = addDays(start, mid - 1);
-    let tail = "";
+    let tail = '';
     if (start <= window[1] && window[1] < end) {
       end = window[1];
       tail = `, cut at the window's end (${word(window[1])})`;
@@ -1699,14 +2711,23 @@ function regenerate(db: SimpleDb, today: string): number {
     else
       db.suggestions.push({
         id: stableUuid(`simple-suggestion/${s.key}/${start}/${end}`),
-        item_id: id, item_key: s.key, item_title: s.title, start_date: start, end_date: end, basis,
-        status: "open", created_at: new Date(mockNowMs()).toISOString(), decided_by: null, decided_at: null, can_decide: false,
+        item_id: id,
+        item_key: s.key,
+        item_title: s.title,
+        start_date: start,
+        end_date: end,
+        basis,
+        status: 'open',
+        created_at: new Date(mockNowMs()).toISOString(),
+        decided_by: null,
+        decided_at: null,
+        can_decide: false,
       });
   }
   return open;
 }
 
-const OPEN_DRAFT = ["working", "submitted"];
+const OPEN_DRAFT = ['working', 'submitted'];
 
 /** drafts.ensure: the roadmap's new working draft, opened on its published items (`except`:
  * keys left out of them, read by no one outside the draft). */
@@ -1715,11 +2736,31 @@ export function openDraft(db: SimpleDb, rm: string, by: string, except: string[]
   const keys = new Set(items.map((x) => x.key));
   const d: MockDraft = {
     roadmap: rm,
-    published: structuredClone({ items, own: Object.fromEntries(Object.entries(db.own).filter(([k]) => keys.has(k))), key_dates: db.key_dates?.[rm] ?? [] }),
+    published: structuredClone({
+      items,
+      own: Object.fromEntries(Object.entries(db.own).filter(([k]) => keys.has(k))),
+      key_dates: db.key_dates?.[rm] ?? [],
+    }),
     out: {
-      id: crypto.randomUUID(), document: { id: stableUuid(`simple-doc/${rm}`), slug: rm, title: rm.replace(/-/g, " ").replace(/^./, (x) => x.toUpperCase()) },
-      status: "working", base_version: 1, version: null, created_by: by, created_at: new Date(mockNowMs()).toISOString(), participant_ids: [by],
-      submitted_at: null, submitted_by: null, decider_approved: false, waiting_on: [], approved_at: null, blocked_by: [], decision_notes: [],
+      id: crypto.randomUUID(),
+      document: {
+        id: stableUuid(`simple-doc/${rm}`),
+        slug: rm,
+        title: rm.replace(/-/g, ' ').replace(/^./, (x) => x.toUpperCase()),
+      },
+      status: 'working',
+      base_version: 1,
+      version: null,
+      created_by: by,
+      created_at: new Date(mockNowMs()).toISOString(),
+      participant_ids: [by],
+      submitted_at: null,
+      submitted_by: null,
+      decider_approved: false,
+      waiting_on: [],
+      approved_at: null,
+      blocked_by: [],
+      decision_notes: [],
     },
   };
   (db.drafts ??= []).push(d);
@@ -1734,20 +2775,33 @@ export function openDraft(db: SimpleDb, rm: string, by: string, except: string[]
  */
 export function reopenDraftOnly(db: SimpleDb, key: string, roadmap: string, by: string): void {
   const id = db.ids[key];
-  const added = (db.changes ?? []).find((c) => c.op === "add_item" && c.target.item_id === id && ["applied", "accepted"].includes(c.status));
+  const added = (db.changes ?? []).find(
+    (c) =>
+      c.op === 'add_item' && c.target.item_id === id && ['applied', 'accepted'].includes(c.status),
+  );
   const own = (db.drafts ?? []).filter((d) => (added?.draft_ids ?? []).includes(d.out.id));
   if (!added || !own.length || own.some((d) => OPEN_DRAFT.includes(d.out.status))) return;
-  const made = own.map((d) => (db.versions ?? []).find((v) => v.roadmap === roadmap && v.number === d.out.version));
+  const made = own.map((d) =>
+    (db.versions ?? []).find((v) => v.roadmap === roadmap && v.number === d.out.version),
+  );
   if (made.some((v) => !v?.without.includes(key))) return;
-  const open = (db.drafts ?? []).filter((d) => d.roadmap === roadmap && OPEN_DRAFT.includes(d.out.status));
-  const d = open.find((x) => x.out.status === "working") ?? open[0] ?? openDraft(db, roadmap, by, [key]);
+  const open = (db.drafts ?? []).filter(
+    (d) => d.roadmap === roadmap && OPEN_DRAFT.includes(d.out.status),
+  );
+  const d =
+    open.find((x) => x.out.status === 'working') ?? open[0] ?? openDraft(db, roadmap, by, [key]);
   added.draft_ids = [...(added.draft_ids ?? []), d.out.id];
 }
 
 /** A draft's applied changes, not undone. */
 export function draftChanges(db: SimpleDb, id: string): number {
   const cs = db.changes ?? [];
-  return cs.filter((c) => ["applied", "accepted"].includes(c.status) && (c.draft_ids ?? []).includes(id) && !cs.some((u) => u.undoes_id === c.id)).length;
+  return cs.filter(
+    (c) =>
+      ['applied', 'accepted'].includes(c.status) &&
+      (c.draft_ids ?? []).includes(id) &&
+      !cs.some((u) => u.undoes_id === c.id),
+  ).length;
 }
 
 /**
@@ -1758,9 +2812,17 @@ export function draftChanges(db: SimpleDb, id: string): number {
  */
 export function roadmapTrackOwnerIds(db: SimpleDb, d: MockDraft): string[] {
   const prd = ROADMAPS[d.roadmap]?.prd ?? db.extra_roadmaps?.[d.roadmap]?.prd;
-  const state = (db as SimpleDb & { track_state?: Record<string, { prd: string }> }).track_state ?? {};
-  const published = new Set(d.published.items.filter((s) => s.roadmap === d.roadmap).flatMap((s) => (s.track ? [s.track] : [])));
-  const ofRoadmap = (k: string) => (state[k] ? !!prd && state[k].prd === prd : db.extra_roadmaps?.[d.roadmap]?.track === k || published.has(k));
+  const state =
+    (db as SimpleDb & { track_state?: Record<string, { prd: string }> }).track_state ?? {};
+  const published = new Set(
+    d.published.items
+      .filter((s) => s.roadmap === d.roadmap)
+      .flatMap((s) => (s.track ? [s.track] : [])),
+  );
+  const ofRoadmap = (k: string) =>
+    state[k]
+      ? !!prd && state[k].prd === prd
+      : db.extra_roadmaps?.[d.roadmap]?.track === k || published.has(k);
   return Object.entries(db.track_owners ?? {}).flatMap(([k, id]) => (ofRoadmap(k) ? [id] : []));
 }
 
@@ -1768,22 +2830,45 @@ export function roadmapTrackOwnerIds(db: SimpleDb, d: MockDraft): string[] {
 export function seesDraft(d: MockDraft, me: { id: string; role: Role }, db?: SimpleDb): boolean {
   // drafts.sees: whoever it waits on, its roadmap's required reviewers and the owners of its roadmap's tracks read it too.
   const ownsTrack = !!db && roadmapTrackOwnerIds(db, d).includes(me.id);
-  return me.role === "owner" || d.out.created_by === me.id || d.out.participant_ids.includes(me.id) || db?.deciders?.[d.roadmap] === me.id || (d.out.waiting_on ?? []).includes(me.id) || (db?.reviewers?.[d.roadmap] ?? []).includes(me.id) || ownsTrack;
+  return (
+    me.role === 'owner' ||
+    d.out.created_by === me.id ||
+    d.out.participant_ids.includes(me.id) ||
+    db?.deciders?.[d.roadmap] === me.id ||
+    (d.out.waiting_on ?? []).includes(me.id) ||
+    (db?.reviewers?.[d.roadmap] ?? []).includes(me.id) ||
+    ownsTrack
+  );
 }
 
 /** The roadmap as one reader reads it: hidden drafts' roadmaps at their published items. */
-function readerView(db: SimpleDb, me: { id: string; role: Role }): { db: SimpleDb; hidden: number; visible: Schemas["SimpleDraftBrief"][]; hiddenBy: Record<string, number> } {
+function readerView(
+  db: SimpleDb,
+  me: { id: string; role: Role },
+): {
+  db: SimpleDb;
+  hidden: number;
+  visible: Schemas['SimpleDraftBrief'][];
+  hiddenBy: Record<string, number>;
+} {
   const hiddenBy: Record<string, number> = {};
   let items = db.items;
   let own = db.own;
   let keyDates = db.key_dates ?? {};
   let hidden = 0;
-  const visible: Schemas["SimpleDraftBrief"][] = [];
+  const visible: Schemas['SimpleDraftBrief'][] = [];
   // replaced-prd-history (drafts.reader): a replaced PRD's roadmap is history: no draft, no count.
   const history = new Set(db.history_roadmaps ?? []);
-  for (const d of (db.drafts ?? []).filter((x) => OPEN_DRAFT.includes(x.out.status) && !history.has(x.roadmap))) {
+  for (const d of (db.drafts ?? []).filter(
+    (x) => OPEN_DRAFT.includes(x.out.status) && !history.has(x.roadmap),
+  )) {
     if (seesDraft(d, me, db)) {
-      visible.push({ id: d.out.id, document_id: d.out.document.id, status: d.out.status, changes: draftChanges(db, d.out.id) });
+      visible.push({
+        id: d.out.id,
+        document_id: d.out.document.id,
+        status: d.out.status,
+        changes: draftChanges(db, d.out.id),
+      });
       continue;
     }
     hidden += draftChanges(db, d.out.id);
@@ -1791,10 +2876,19 @@ function readerView(db: SimpleDb, me: { id: string; role: Role }): { db: SimpleD
     const keys = new Set(items.filter((s) => s.roadmap === d.roadmap).map((s) => s.key));
     items = [...items.filter((s) => s.roadmap !== d.roadmap), ...d.published.items];
     keyDates = { ...keyDates, [d.roadmap]: d.published.key_dates ?? [] };
-    own = { ...Object.fromEntries(Object.entries(own).filter(([k]) => !keys.has(k))), ...d.published.own };
+    own = {
+      ...Object.fromEntries(Object.entries(own).filter(([k]) => !keys.has(k))),
+      ...d.published.own,
+    };
   }
   const shownDocs = new Set(visible.map((v) => v.document_id));
-  const proposed = (db.changes ?? []).filter((c) => c.status === "proposed" && me.role !== "owner" && c.document_id && !shownDocs.has(c.document_id));
+  const proposed = (db.changes ?? []).filter(
+    (c) =>
+      c.status === 'proposed' &&
+      me.role !== 'owner' &&
+      c.document_id &&
+      !shownDocs.has(c.document_id),
+  );
   hidden += proposed.length;
   for (const c of proposed) hiddenBy[c.document_id!] = (hiddenBy[c.document_id!] ?? 0) + 1;
   return { db: { ...db, items, own, key_dates: keyDates }, hidden, visible, hiddenBy };
@@ -1807,26 +2901,41 @@ export function readerDb(db: SimpleDb, me: { id: string; role: Role }): SimpleDb
 }
 
 /** item-milestone: a picked goal milestone's code and name as the read shows them (service.build), else as stored. */
-export function pickedName(db: Pick<SimpleDb, "goal_milestones">, m: { id?: string; name: string | null }): string | null {
+export function pickedName(
+  db: Pick<SimpleDb, 'goal_milestones'>,
+  m: { id?: string; name: string | null },
+): string | null {
   const gm = (db.goal_milestones ?? []).find((x) => x.id === m.id);
   return gm ? `${gm.code} ${gm.name}` : m.name;
 }
 
-export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Who): Schemas["SimpleRoadmapOut"] | null {
+export function roadmapOut(
+  db: SimpleDb,
+  role: Role,
+  q: URLSearchParams,
+  me?: Who,
+): Schemas['SimpleRoadmapOut'] | null {
   knowTalkGoals(db);
   knowExtraRoadmaps(db);
   foldPrdCopies(db);
-  const decides = (s: SeedItem) => canDecideItem(db, s, me ?? { id: "", role });
+  const decides = (s: SeedItem) => canDecideItem(db, s, me ?? { id: '', role });
   const deciders = (s: SeedItem) => {
     const ids = deciderIds(db, s, me?.roles);
-    return (ids.length ? ids : (me?.owners ?? [])).map((id) => me?.names?.[id]).filter((n): n is string => !!n);
+    return (ids.length ? ids : (me?.owners ?? []))
+      .map((id) => me?.names?.[id])
+      .filter((n): n is string => !!n);
   };
-  const reader = { ...(me ? readerView(db, me) : { db, hidden: 0, visible: [], hiddenBy: {} as Record<string, number> }), full: db };
+  const reader = {
+    ...(me
+      ? readerView(db, me)
+      : { db, hidden: 0, visible: [], hiddenBy: {} as Record<string, number> }),
+    full: db,
+  };
   db = reader.db;
   const today = companyToday();
   const w = simpleWindows(today);
-  const group = (q.get("group") ?? "goal") as Schemas["SimpleRoadmapOut"]["group"];
-  if (!["goal", "track", "prd"].includes(group)) return null;
+  const group = (q.get('group') ?? 'goal') as Schemas['SimpleRoadmapOut']['group'];
+  if (!['goal', 'track', 'prd'].includes(group)) return null;
   const seeds = visibleItems(db, role);
   const all = new Map(seeds.map((s) => [s.key, { s, r: resolve(db, s) }]));
   afterDependencies(all);
@@ -1835,7 +2944,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   const ancestorsOf = (s: SeedItem): SeedItem[] => {
     const out: SeedItem[] = [];
     const seen = new Set([s.key]);
-    for (let cur = s; cur.parent && !seen.has(cur.parent); ) {
+    for (let cur = s; cur.parent && !seen.has(cur.parent);) {
       seen.add(cur.parent);
       const next = all.get(cur.parent)?.s;
       if (!next) break;
@@ -1846,7 +2955,9 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   };
   const trashedParent = (s: SeedItem): SeedItem | undefined => {
     const top = ancestorsOf(s).at(-1) ?? s;
-    return top.parent && !all.has(top.parent) ? reader.full.items.find((y) => y.key === top.parent && y.trashed && y.roadmap === s.roadmap) : undefined;
+    return top.parent && !all.has(top.parent)
+      ? reader.full.items.find((y) => y.key === top.parent && y.trashed && y.roadmap === s.roadmap)
+      : undefined;
   };
   // service.load: a part with no dates of its own reads its nearest dated ancestor's (a parent in
   // Trash still lends its own).
@@ -1861,59 +2972,123 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   }
   // qa-nov17: a parent, part or kept item reads its display code as service.load's Entry.code does: its
   // Ground Truth feature's (Setup checklist: F-01), else its PRD section's.
-  const shownCode = (x: SeedItem) => (x.feature_id && db.feature_codes?.[x.feature_id]) || prdCode(x.section);
+  const shownCode = (x: SeedItem) =>
+    (x.feature_id && db.feature_codes?.[x.feature_id]) || prdCode(x.section);
   // additions._parts: a parent or a part by its display code ("" when none) and name; one in Trash by its name only.
-  const partRef = (x: SeedItem, inTrash = false) => ({ id: db.ids[x.key] ?? reader.full.ids[x.key], code: inTrash ? "" : shownCode(x) || "", title: x.title, cut: !x.merged_into && x.status === "cut", in_trash: inTrash });
+  const partRef = (x: SeedItem, inTrash = false) => ({
+    id: db.ids[x.key] ?? reader.full.ids[x.key],
+    code: inTrash ? '' : shownCode(x) || '',
+    title: x.title,
+    cut: !x.merged_into && x.status === 'cut',
+    in_trash: inTrash,
+  });
   const pathOf = (s: SeedItem) => {
     const gone = trashedParent(s);
-    return [...(gone ? [partRef(gone, true)] : []), ...ancestorsOf(s).reverse().map((a) => partRef(a))];
+    return [
+      ...(gone ? [partRef(gone, true)] : []),
+      ...ancestorsOf(s)
+        .reverse()
+        .map((a) => partRef(a)),
+    ];
   };
   // additions.item_extras: merged_into's code falls back to the kept item's name, never its key; a part's is its display code or "".
   // A kept item in Trash or gone reads "a deleted feature", its id and code empty. The kept item is
   // found in the merged item's own roadmap, as the API's by_key is keyed by (roadmap id, key).
   const ref = (k: string, roadmap: string) => {
     const x = db.items.find((y) => y.key === k && y.roadmap === roadmap && !y.trashed);
-    return x ? { id: db.ids[k], code: shownCode(x) || x.title, title: x.title } : { id: "", code: "", title: "a deleted feature" };
+    return x
+      ? { id: db.ids[k], code: shownCode(x) || x.title, title: x.title }
+      : { id: '', code: '', title: 'a deleted feature' };
   };
   // The plan-model lane: the plan PRD's items whose code is a plan feature carry its slices.
   const slices = db.plan ? planSlices() : [];
   const slicesOf = (s: SeedItem, prdSlug: string) => {
     const code = prdCode(s.section);
-    return code && (prdSlug === PLAN_PRD_SLUG || db.plan?.prds?.includes(prdSlug)) ? slices.filter((x) => x.feature_code === code) : [];
+    return code && (prdSlug === PLAN_PRD_SLUG || db.plan?.prds?.includes(prdSlug))
+      ? slices.filter((x) => x.feature_code === code)
+      : [];
   };
   // trash-features-goals: a goal in Trash is left out of every item's goal (service.load's goal_ids).
   const inTrash = (k: string) => goalInTrash(reader.full, k);
   // An archived goal stays in its goal_ids (for Undo) but is no item's goal.
-  const linked = (s: SeedItem): string | undefined => [...(s.goal ? [s.goal] : []), ...(s.goals ?? [])].find((k) => !inTrash(k) && !goalArchived(reader.full, k));
+  const linked = (s: SeedItem): string | undefined =>
+    [...(s.goal ? [s.goal] : []), ...(s.goals ?? [])].find(
+      (k) => !inTrash(k) && !goalArchived(reader.full, k),
+    );
   // roadmap-edit-fixes: a dependency names an item by its key, else by its code or feature key.
   const depOf = (k: string) => (all.has(k) ? k : dependencyOf(seeds, k)?.key);
   const items: Item[] = seeds.map((s) => {
     const r = all.get(s.key)!.r;
     const [code, title] = codedTitle(s.title, prdCode(s.section));
     const rm = ROADMAPS[s.roadmap];
-    const sliced = slicesOf(s, rm.prd.toLowerCase().replace(/ /g, "-"));
+    const sliced = slicesOf(s, rm.prd.toLowerCase().replace(/ /g, '-'));
     const open = itemSuggestion(db, db.ids[s.key]);
     const suggestion = offered(own.get(s.key)!, open);
     return {
-      id: db.ids[s.key], key: s.key, title, outcome: s.outcome ?? null, note: s.note ?? null, horizon: horizonOfDates(r, quarterWindows(today)),
+      id: db.ids[s.key],
+      key: s.key,
+      title,
+      outcome: s.outcome ?? null,
+      note: s.note ?? null,
+      horizon: horizonOfDates(r, quarterWindows(today)),
       estimate_pending: !!s.estimate_pending,
       picked_quarter: s.quarter?.start ?? null,
       // service.item_out: where an estimate's dates come from (dates.Resolved.basis); qa-nov17
       // (service.load): what it depends on once that outdated its open suggestion.
-      estimate_basis: r.start.estimated && r.end.estimated ? (r.basis === "suggestion" && open && !suggestion ? "dependencies" : (r.basis ?? null)) : null,
+      estimate_basis:
+        r.start.estimated && r.end.estimated
+          ? r.basis === 'suggestion' && open && !suggestion
+            ? 'dependencies'
+            : (r.basis ?? null)
+          : null,
       // Its feature's code (F-12), else its own (codedTitle: the title's, else its PRD section's), as service.load's Entry.code.
       code: (s.feature_id && db.feature_codes?.[s.feature_id]) || code,
       // every-field-editable (service.item_out): a code set_code may not change, and where it comes from.
-      code_from: s.feature_id && db.feature_codes?.[s.feature_id] && db.feature_codes[s.feature_id] !== prdCode(s.section) ? "feature" : prdCode(s.section) ? "prd" : null,
-      roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: ROADMAP_DOC_SLUG[s.roadmap] ?? s.roadmap, title: rm.title },
+      code_from:
+        s.feature_id &&
+        db.feature_codes?.[s.feature_id] &&
+        db.feature_codes[s.feature_id] !== prdCode(s.section)
+          ? 'feature'
+          : prdCode(s.section)
+            ? 'prd'
+            : null,
+      roadmap: {
+        id: stableUuid(`simple-doc/${s.roadmap}`),
+        slug: ROADMAP_DOC_SLUG[s.roadmap] ?? s.roadmap,
+        title: rm.title,
+      },
       prd: ownPrd(s),
       // service.load: the first goal it is linked to directly (goal_ids) that is not in Trash, else its Goal map goal, else its feature's.
-      goal: linked(s) ? { id: stableUuid(`simple-goal/${linked(s)}`), key: linked(s)!, ...roadmapGoal(reader.full, linked(s)!), position: goalPositionOf(linked(s)!), ...READINGS[linked(s)!] } : s.map_goal ? mapGoalRef(reader.full, s.map_goal) : (reader.full.map_goals?.[db.ids[s.key]] ?? featureGoalRef(reader.full, s.key)),
-      track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track], ...trackGoal(db, s.track), order: trackPlace(db, s.track) } : null,
+      goal: linked(s)
+        ? {
+            id: stableUuid(`simple-goal/${linked(s)}`),
+            key: linked(s)!,
+            ...roadmapGoal(reader.full, linked(s)!),
+            position: goalPositionOf(linked(s)!),
+            ...READINGS[linked(s)!],
+          }
+        : s.map_goal
+          ? mapGoalRef(reader.full, s.map_goal)
+          : (reader.full.map_goals?.[db.ids[s.key]] ?? featureGoalRef(reader.full, s.key)),
+      track: s.track
+        ? {
+            id: stableUuid(`simple-track/${s.track}`),
+            title: TRACKS[s.track],
+            ...trackGoal(db, s.track),
+            order: trackPlace(db, s.track),
+          }
+        : null,
       confidence: s.confidence ?? null,
-      status: s.merged_into ? "merged" : s.status === "cut" ? "cut" : s.draft ? "draft" : (s.status ?? "planned"),
+      status: s.merged_into
+        ? 'merged'
+        : s.status === 'cut'
+          ? 'cut'
+          : s.draft
+            ? 'draft'
+            : (s.status ?? 'planned'),
       draft: !!s.draft,
-      start: r.start, end: r.end,
+      start: r.start,
+      end: r.end,
       // approved-roadmap-to-simple: the applied version's words, until a person changes the dates.
       date_basis: s.basis && s.dates && !db.own[s.key] ? s.basis : null,
       source: r.end.estimated ? r.start.source : r.end.source,
@@ -1923,37 +3098,77 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       // panel; null: cleared), else the track's record, else its own undated one.
       // item-milestone: a goal milestone picked in its panel, read by id with its live code and name.
       milestone: s.milestone?.id
-        ? { id: s.milestone.id, name: pickedName(db, s.milestone), date: null, source: "item", ...recordOf(s) }
+        ? {
+            id: s.milestone.id,
+            name: pickedName(db, s.milestone),
+            date: null,
+            source: 'item',
+            ...recordOf(s),
+          }
         : s.milestone?.day != null
-        ? { name: s.milestone.name, date: addDays(w[s.horizon][0], s.milestone.day), source: "item", ...recordOf(s) }
-        : s.milestone && !s.record
-          ? { name: s.milestone.name, date: null, source: "item" }
-          : s.record ? { name: s.record, date: null, source: "track", ...recordOf(s) } : null,
+          ? {
+              name: s.milestone.name,
+              date: addDays(w[s.horizon][0], s.milestone.day),
+              source: 'item',
+              ...recordOf(s),
+            }
+          : s.milestone && !s.record
+            ? { name: s.milestone.name, date: null, source: 'item' }
+            : s.record
+              ? { name: s.record, date: null, source: 'track', ...recordOf(s) }
+              : null,
       phases: phases(r.start.date, r.end.date, s, w[s.horizon]),
       slices: sliced,
       milestones: [...new Set(sliced.map((x) => x.milestone))],
-      depends_on: [...new Set((s.depends ?? []).map(depOf).filter((k): k is string => !!k && k !== s.key))].map((k) => db.ids[k]),
-      needed_by: seeds.filter((x) => x.key !== s.key && (x.depends ?? []).some((k) => depOf(k) === s.key)).map((x) => db.ids[x.key]),
+      depends_on: [
+        ...new Set((s.depends ?? []).map(depOf).filter((k): k is string => !!k && k !== s.key)),
+      ].map((k) => db.ids[k]),
+      needed_by: seeds
+        .filter((x) => x.key !== s.key && (x.depends ?? []).some((k) => depOf(k) === s.key))
+        .map((x) => db.ids[x.key]),
       flags: flagsOf(s, r, all, w[s.horizon]),
       owner: ownerOf(db, s, me?.names),
       // one-feature-panel: the item's own owner (set_owner's before) and its stored dependency keys.
-      own_owner_id: namedOn(db, s.key, "owner_id") ?? null,
+      own_owner_id: namedOn(db, s.key, 'owner_id') ?? null,
       // one-feature-panel: the item's own decider (set_decider's before).
-      own_decider_id: namedOn(db, s.key, "decider_id") ?? null,
+      own_decider_id: namedOn(db, s.key, 'decider_id') ?? null,
       depends_keys: s.depends ?? [],
-      depends_key_of: Object.fromEntries((s.depends ?? []).flatMap((k) => { const d = depOf(k); return d && d !== s.key ? [[db.ids[d], k]] : []; }).reverse()),
-      depends_keys_of: (s.depends ?? []).reduce<Record<string, string[]>>((o, k) => { const d = depOf(k); if (d && d !== s.key) (o[db.ids[d]] ??= []).push(k); return o; }, {}),
-      suggested_depends: (s.suggested_depends ?? []).filter((k) => !(s.depends ?? []).includes(k) && !loopOf(seeds, s.key, [k])),
+      depends_key_of: Object.fromEntries(
+        (s.depends ?? [])
+          .flatMap((k) => {
+            const d = depOf(k);
+            return d && d !== s.key ? [[db.ids[d], k]] : [];
+          })
+          .reverse(),
+      ),
+      depends_keys_of: (s.depends ?? []).reduce<Record<string, string[]>>((o, k) => {
+        const d = depOf(k);
+        if (d && d !== s.key) (o[db.ids[d]] ??= []).push(k);
+        return o;
+      }, {}),
+      suggested_depends: (s.suggested_depends ?? []).filter(
+        (k) => !(s.depends ?? []).includes(k) && !loopOf(seeds, s.key, [k]),
+      ),
       can_decide: decides(s),
       deciders: deciders(s),
       reasons: [
         ...(s.notes ?? []),
         ...(s.why ? [s.why] : []),
         // goal-delete-r4: a key result it is left on by its own title (service._reasons' e.goal.title).
-        ...(s.goal ? [`Serves the goal ${GOALS[s.goal] ?? roadmapGoal(reader.full, s.goal).title}.`] : []),
-        ...(s.section ? [`From ${rm.prd}: ${sectionLabel(s.section, s.heading, s.title).replace(/^[A-Z][A-Z0-9]*-\d+[a-z]?\s+/, "")}.`] : []),
+        ...(s.goal
+          ? [`Serves the goal ${GOALS[s.goal] ?? roadmapGoal(reader.full, s.goal).title}.`]
+          : []),
+        ...(s.section
+          ? [
+              `From ${rm.prd}: ${sectionLabel(s.section, s.heading, s.title).replace(/^[A-Z][A-Z0-9]*-\d+[a-z]?\s+/, '')}.`,
+            ]
+          : []),
       ].slice(0, 3),
-      open_decisions: (db.decisions?.[s.key] ?? []).map((d) => ({ id: stableUuid(`simple-decision/${d.number}`), number: d.number, title: d.title })),
+      open_decisions: (db.decisions?.[s.key] ?? []).map((d) => ({
+        id: stableUuid(`simple-decision/${d.number}`),
+        number: d.number,
+        title: d.title,
+      })),
       looks_like: s.draft && !s.kept_both && !closed(s) ? matchesOf(db, s.looks_like ?? []) : [],
       merged_into: s.merged_into ? ref(s.merged_into, s.roadmap) : null,
       // feature-parts: the feature it is a part of (set_parent's before is its key) and its open parts.
@@ -1964,7 +3179,9 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       parts: seeds.filter((x) => x.parent === s.key && !x.merged_into).map((x) => partRef(x)),
       drafting: !!s.drafting_until,
       // As additions: a draft's flow is its draft_item visual (numbered notes, comments).
-      flow: s.draft ? bundleFlow(db.visuals, "draft_item", db.ids[s.key], s.flow ?? null) : (flowFor(db.visuals, "feature", db.ids[s.key]) ?? betFlow(db, s)),
+      flow: s.draft
+        ? bundleFlow(db.visuals, 'draft_item', db.ids[s.key], s.flow ?? null)
+        : (flowFor(db.visuals, 'feature', db.ids[s.key]) ?? betFlow(db, s)),
       goal_ids: goalIdsOf(s),
       // S8: the decided decisions that changed the item (./simple-meetings.ts records them).
       decided_in: [...(db.decided_in?.[db.ids[s.key]] ?? [])],
@@ -1975,33 +3192,43 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   // qa-simple-home-1: what "Move the dependents" moves, as the change engine moves it (service.read).
   const byItem = new Map(items.map((i) => [i.id, i]));
   for (const i of items)
-    for (const f of i.flags) if (f.kind === "dependency_order" && f.fixes.includes("shift_dependents") && f.subject) f.moves = Object.keys(shiftPlan(byItem, i.id, f.subject));
+    for (const f of i.flags)
+      if (f.kind === 'dependency_order' && f.fixes.includes('shift_dependents') && f.subject)
+        f.moves = Object.keys(shiftPlan(byItem, i.id, f.subject));
   // roadmap-decide review (service.load): a cut item's live dependents, read before any filter.
   for (const i of items)
     for (const f of i.flags)
-      if (f.kind === "cut_with_dependents")
+      if (f.kind === 'cut_with_dependents')
         f.dependents = i.needed_by
           .map((id) => byItem.get(id))
-          .filter((n): n is Item => !!n && n.status !== "cut" && n.status !== "done")
+          .filter((n): n is Item => !!n && n.status !== 'cut' && n.status !== 'done')
           .map((n) => ({ id: n.id, title: n.title, can_decide: n.can_decide }));
   // The Roadmap filter (service.build's ``roadmap``): one readable roadmap, by id or slug.
   const readable = ROADMAP_SLUGS().filter((r) => readsRoadmap(r, role));
-  const chosen = readableRoadmap(q.get("roadmap"), role);
-  const prd = q.get("prd");
-  const goal = q.get("goal");
-  const track = q.get("track");
-  const from = q.get("from");
-  const to = q.get("to");
+  const chosen = readableRoadmap(q.get('roadmap'), role);
+  const prd = q.get('prd');
+  const goal = q.get('goal');
+  const track = q.get('track');
+  const from = q.get('from');
+  const to = q.get('to');
   const onDraft = new Set(db.items.filter((s) => s.draft_roadmap).map((s) => db.ids[s.key]));
   // kr-in-goal-card (service._lane_goal): a key result's items sit under its parent goal.
-  const laneGoal = (i: Item): Item["goal"] => {
+  const laneGoal = (i: Item): Item['goal'] => {
     const parent = i.goal ? goalParents.get(i.goal.key) : undefined;
-    return parent ? { id: stableUuid(`simple-goal/${parent}`), key: parent, ...roadmapGoal(reader.full, parent), position: goalPositionOf(parent), ...READINGS[parent] } : i.goal;
+    return parent
+      ? {
+          id: stableUuid(`simple-goal/${parent}`),
+          key: parent,
+          ...roadmapGoal(reader.full, parent),
+          position: goalPositionOf(parent),
+          ...READINGS[parent],
+        }
+      : i.goal;
   };
   const shown = items.filter(
     (i) =>
-      (q.get("draft_roadmap") === "1" || !onDraft.has(i.id)) &&
-      (!q.get("roadmap") || i.roadmap.slug === (ROADMAP_DOC_SLUG[chosen ?? ""] ?? chosen)) &&
+      (q.get('draft_roadmap') === '1' || !onDraft.has(i.id)) &&
+      (!q.get('roadmap') || i.roadmap.slug === (ROADMAP_DOC_SLUG[chosen ?? ''] ?? chosen)) &&
       (!prd || i.prd?.slug === prd || i.prd?.id === prd) &&
       (!goal || [i.goal, laneGoal(i)].some((g) => g?.key === goal || g?.id === goal)) &&
       (!track || i.track?.id === track) &&
@@ -2013,30 +3240,54 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   // track-order: track groups in the company's track order.
   const trackRank = new Map(trackKeys(db).map((k, n) => [stableUuid(`simple-track/${k}`), n]));
   for (const i of shown) {
-    const ref = group === "goal" ? laneGoal(i) : group === "track" ? i.track : i.prd;
-    const none = { goal: "No goal", track: "No track", prd: "No PRD" }[group];
-    const key = ref?.id ?? "none";
+    const ref = group === 'goal' ? laneGoal(i) : group === 'track' ? i.track : i.prd;
+    const none = { goal: 'No goal', track: 'No track', prd: 'No PRD' }[group];
+    const key = ref?.id ?? 'none';
     // goal-order: goal groups in the one goal order (then by key); prd-order: PRD groups in the company PRD order; No goal last.
     const sort = !ref
-      ? "1"
-      : "key" in ref
+      ? '1'
+      : 'key' in ref
         ? goalOrderKey(String(ref.key))
-        : group === "prd"
-          ? `0${String(prdRank(ref)).padStart(16, "0")}${ref.title}`
-          : `0${String(trackRank.get(ref.id) ?? 1e9).padStart(16, "0")}${ref.title}`;
+        : group === 'prd'
+          ? `0${String(prdRank(ref)).padStart(16, '0')}${ref.title}`
+          : `0${String(trackRank.get(ref.id) ?? 1e9).padStart(16, '0')}${ref.title}`;
     const g = groups.get(key) ?? { title: ref?.title ?? none, sort, item_ids: [] };
     g.item_ids.push(i.id);
     groups.set(key, g);
   }
-  const goalRanks = new Map(Object.keys(GOALS).sort((a, b) => (goalOrderKey(a) < goalOrderKey(b) ? -1 : 1)).map((k, n) => [goalId(k), n]));
+  const goalRanks = new Map(
+    Object.keys(GOALS)
+      .sort((a, b) => (goalOrderKey(a) < goalOrderKey(b) ? -1 : 1))
+      .map((k, n) => [goalId(k), n]),
+  );
   const trackMilestones = (slugs: string[]) => [
     // The digest's Beta (a new company has no digest, so no Beta).
-    ...(db.ids["alert-digest"]
-      ? [{ id: stableUuid("simple-milestone/beta"), track_id: stableUuid("simple-track/alerts"), name: "Beta", date: addDays(w.now[0], 60), horizon: "now" as const, status: "planned" as const, item_ids: [db.ids["alert-digest"]], ...UNDATED }]
+    ...(db.ids['alert-digest']
+      ? [
+          {
+            id: stableUuid('simple-milestone/beta'),
+            track_id: stableUuid('simple-track/alerts'),
+            name: 'Beta',
+            date: addDays(w.now[0], 60),
+            horizon: 'now' as const,
+            status: 'planned' as const,
+            item_ids: [db.ids['alert-digest']],
+            ...UNDATED,
+          },
+        ]
       : []),
     ...[...new Set(seeds.flatMap((s) => (s.record ? [s.record] : [])))].map((name) => {
       const of = seeds.filter((s) => s.record === name);
-      return { id: recordOf(of[0]).record_id!, track_id: stableUuid(`simple-track/${of[0].track}`), name, date: db.record_dates?.[name] ?? null, horizon: "now" as const, status: db.record_dropped?.includes(name) ? ("dropped" as const) : ("planned" as const), item_ids: of.map((s) => db.ids[s.key]), ...UNDATED };
+      return {
+        id: recordOf(of[0]).record_id!,
+        track_id: stableUuid(`simple-track/${of[0].track}`),
+        name,
+        date: db.record_dates?.[name] ?? null,
+        horizon: 'now' as const,
+        status: db.record_dropped?.includes(name) ? ('dropped' as const) : ('planned' as const),
+        item_ids: of.map((s) => db.ids[s.key]),
+        ...UNDATED,
+      };
     }),
     // approved-roadmap-to-simple: each shown roadmap's applied version's milestones.
     ...slugs.flatMap((slug) => appliedMilestones(db, slug)),
@@ -2047,136 +3298,317 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     ...(db.plan ? [PLAN_PRD_SLUG, ...(db.plan.prds ?? [])] : []).flatMap((slug) => {
       const inPlay = items.some((i) => i.prd?.slug === slug);
       return planMilestones().map((m) => ({
-        id: stableUuid(slug === PLAN_PRD_SLUG ? `simple-plan-milestone/${m.code}` : `simple-plan-milestone/${slug}/${m.code}`),
-        track_id: stableUuid(`simple-track/${slug === PLAN_PRD_SLUG ? "onboarding" : (seeds.find((s) => ROADMAPS[s.roadmap].prd.toLowerCase().replace(/ /g, "-") === slug)?.track ?? "onboarding")}`),
-        name: `${m.code} · ${m.name}`, date: m.end_date,
-        horizon: (m.end_date <= w.now[1] ? "now" : m.end_date <= w.next[1] ? "next" : "later") as Horizon, status: "planned" as const,
-        item_ids: items.filter((i) => i.prd?.slug === slug && i.milestones.includes(m.code)).map((i) => i.id),
-        ...(inPlay ? { start_date: m.start_date, end_date: m.end_date, effort_weeks: m.effort_weeks, done_when: m.done_when, targets: m.targets } : UNDATED),
+        id: stableUuid(
+          slug === PLAN_PRD_SLUG
+            ? `simple-plan-milestone/${m.code}`
+            : `simple-plan-milestone/${slug}/${m.code}`,
+        ),
+        track_id: stableUuid(
+          `simple-track/${slug === PLAN_PRD_SLUG ? 'onboarding' : (seeds.find((s) => ROADMAPS[s.roadmap].prd.toLowerCase().replace(/ /g, '-') === slug)?.track ?? 'onboarding')}`,
+        ),
+        name: `${m.code} · ${m.name}`,
+        date: m.end_date,
+        horizon: (m.end_date <= w.now[1]
+          ? 'now'
+          : m.end_date <= w.next[1]
+            ? 'next'
+            : 'later') as Horizon,
+        status: 'planned' as const,
+        item_ids: items
+          .filter((i) => i.prd?.slug === slug && i.milestones.includes(m.code))
+          .map((i) => i.id),
+        ...(inPlay
+          ? {
+              start_date: m.start_date,
+              end_date: m.end_date,
+              effort_weeks: m.effort_weeks,
+              done_when: m.done_when,
+              targets: m.targets,
+            }
+          : UNDATED),
       }));
     }),
   ];
   // build-milestones-on-roadmap: the shown roadmaps' milestones per goal (a PRD's among them);
   // while the company roadmap exists, its own alone (older roadmaps are history, company.feeding_ids).
-  const liveGoalMilestones = (db.goal_milestones ?? []).filter((m) => !m.deleted && (!db.company_roadmap || m.roadmap === db.company_roadmap) && readable.includes(m.roadmap));
-  const ownRights = (slug: string) => role !== "viewer" && role !== "commenter" && (!me || canEditRoadmap(db, slug, me));
+  const liveGoalMilestones = (db.goal_milestones ?? []).filter(
+    (m) =>
+      !m.deleted &&
+      (!db.company_roadmap || m.roadmap === db.company_roadmap) &&
+      readable.includes(m.roadmap),
+  );
+  const ownRights = (slug: string) =>
+    role !== 'viewer' && role !== 'commenter' && (!me || canEditRoadmap(db, slug, me));
   const rightsOn = (slug: string | null) => {
     const can_change = !!slug && ownRights(slug);
-    return { can_change, can_propose: !can_change && role !== "viewer" };
+    return { can_change, can_propose: !can_change && role !== 'viewer' };
   };
-  const goalMilestoneOut = (x: (typeof liveGoalMilestones)[number]) => milestoneOut(x, db.ids, x.prd ? role !== "viewer" : ownRights(x.roadmap), role !== "viewer", me && { role: me.role, id: me.id, names: me.names, prdOwners: (slug) => prdOwnerIdsOf(db, slug) }, (slug) => roadmapTitle(db, slug));
+  const goalMilestoneOut = (x: (typeof liveGoalMilestones)[number]) =>
+    milestoneOut(
+      x,
+      db.ids,
+      x.prd ? role !== 'viewer' : ownRights(x.roadmap),
+      role !== 'viewer',
+      me && {
+        role: me.role,
+        id: me.id,
+        names: me.names,
+        prdOwners: (slug) => prdOwnerIdsOf(db, slug),
+      },
+      (slug) => roadmapTitle(db, slug),
+    );
   // milestone-kinds (service._goal_targets): each company goal with a date and on_roadmap as a goal
   // milestone (id: the goal's) on the company roadmap, else the roadmap its features are on, else the
   // first readable one, measured by the goal's metric (start, target, latest reading; its comparison
   // at_most or below: lower is better); changed on the goal, not here.
   const goalTargetDown = new Map<string, boolean | undefined>();
-  const goalTargets: Schemas["SimpleGoalMilestone"][] = (() => {
+  const goalTargets: Schemas['SimpleGoalMilestone'][] = (() => {
     if (!readable.length) return [];
-    const numOf = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+    const numOf = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
     const goals = targetGoals(db);
-    const company = db.company_roadmap && readable.includes(db.company_roadmap) ? db.company_roadmap : null;
+    const company =
+      db.company_roadmap && readable.includes(db.company_roadmap) ? db.company_roadmap : null;
     return goals.flatMap((g) => {
       if (!g.due || !g.on) return [];
       const mine = items.filter((i) => i.goal?.id === g.id);
       const on = mine.find((i) => readable.some((r) => roadmapId(r) === i.roadmap.id))?.roadmap.id;
       const rid = (company ? roadmapId(company) : on) ?? roadmapId(readable[0]);
       const attrs = companyGoals.find((x) => x.key === g.key)?.attrs ?? {};
-      const comparison = typeof attrs.comparison === "string" ? attrs.comparison : null;
-      goalTargetDown.set(g.id, comparison ? comparison === "at_most" || comparison === "below" : undefined);
-      return [{
-        id: g.id, roadmap_id: rid, code: "", name: g.name, date: g.due, goal_id: g.id, item_ids: mine.map((i) => i.id),
-        counts_when: "", progress: "not_started" as Schemas["SimpleGoalMilestone"]["progress"], prd: null, prd_owner: null, pending: null,
-        carried_from: null, kind: "goal" as const, done_when_line: "", status: "on_track" as const,
-        status_reason: null, status_set: null, status_set_by_name: null, measure: g.metric ?? (typeof attrs.metric === "string" ? attrs.metric : null),
-        baseline: numOf(attrs.start), target: numOf(attrs.target), current: numOf(attrs.current) ?? READINGS[g.key]?.current ?? null,
-        sub_goal_of_id: null, sub_goal_ids: [], home_track_id: null, home_track_name: null, from_track_id: null, to_track_id: null,
-        from_track_name: null, to_track_name: null, goal_target: true,
-        // milestone-rename (goal_milestones.target_rights): who decides its roadmap renames it.
-        ...rightsOn(slugOfRoadmapId(rid)),
-      }];
+      const comparison = typeof attrs.comparison === 'string' ? attrs.comparison : null;
+      goalTargetDown.set(
+        g.id,
+        comparison ? comparison === 'at_most' || comparison === 'below' : undefined,
+      );
+      return [
+        {
+          id: g.id,
+          roadmap_id: rid,
+          code: '',
+          name: g.name,
+          date: g.due,
+          goal_id: g.id,
+          item_ids: mine.map((i) => i.id),
+          counts_when: '',
+          progress: 'not_started' as Schemas['SimpleGoalMilestone']['progress'],
+          prd: null,
+          prd_owner: null,
+          pending: null,
+          carried_from: null,
+          kind: 'goal' as const,
+          done_when_line: '',
+          status: 'on_track' as const,
+          status_reason: null,
+          status_set: null,
+          status_set_by_name: null,
+          measure: g.metric ?? (typeof attrs.metric === 'string' ? attrs.metric : null),
+          baseline: numOf(attrs.start),
+          target: numOf(attrs.target),
+          current: numOf(attrs.current) ?? READINGS[g.key]?.current ?? null,
+          sub_goal_of_id: null,
+          sub_goal_ids: [],
+          home_track_id: null,
+          home_track_name: null,
+          from_track_id: null,
+          to_track_id: null,
+          from_track_name: null,
+          to_track_name: null,
+          goal_target: true,
+          // milestone-rename (goal_milestones.target_rights): who decides its roadmap renames it.
+          ...rightsOn(slugOfRoadmapId(rid)),
+        },
+      ];
     });
   })();
   // roadmap-milestone-codes: each milestone's one code across every readable roadmap and item, numbered
   // before the filters so a filtered read shows the codes Home and the Goal map show (oracle.simple.service).
-  const onMap = db.map_milestones && readable.includes(db.map_milestones.roadmap) ? db.map_milestones : null;
+  const onMap =
+    db.map_milestones && readable.includes(db.map_milestones.roadmap) ? db.map_milestones : null;
   const mapRanks = new Map((onMap?.milestones ?? []).map((m) => [m.goal_id, m.rank]));
   // milestone-rename: the map's milestones are the roadmap's own (TrackMilestone rows): its rights.
-  const mapMilestoneOut = (m: NonNullable<typeof onMap>["milestones"][number]): Schemas["SimpleGoalMilestone"] => ({
-    id: m.id, roadmap_id: roadmapId(onMap!.roadmap), code: m.code ?? "", name: m.name, date: m.date, goal_id: m.goal_id, item_ids: [], counts_when: "", progress: "not_started",
-    prd: m.prd ?? null, prd_owner: null, pending: null, ...rightsOn(onMap!.roadmap), carried_from: null, kind: "goal", done_when_line: "", status: "on_track",
-    status_reason: null, status_set: null, status_set_by_name: null, measure: null, baseline: null, target: null, current: null,
-    sub_goal_of_id: null, sub_goal_ids: [], home_track_id: null, home_track_name: null, from_track_id: null, to_track_id: null,
-    from_track_name: null, to_track_name: null, goal_target: false,
+  const mapMilestoneOut = (
+    m: NonNullable<typeof onMap>['milestones'][number],
+  ): Schemas['SimpleGoalMilestone'] => ({
+    id: m.id,
+    roadmap_id: roadmapId(onMap!.roadmap),
+    code: m.code ?? '',
+    name: m.name,
+    date: m.date,
+    goal_id: m.goal_id,
+    item_ids: [],
+    counts_when: '',
+    progress: 'not_started',
+    prd: m.prd ?? null,
+    prd_owner: null,
+    pending: null,
+    ...rightsOn(onMap!.roadmap),
+    carried_from: null,
+    kind: 'goal',
+    done_when_line: '',
+    status: 'on_track',
+    status_reason: null,
+    status_set: null,
+    status_set_by_name: null,
+    measure: null,
+    baseline: null,
+    target: null,
+    current: null,
+    sub_goal_of_id: null,
+    sub_goal_ids: [],
+    home_track_id: null,
+    home_track_name: null,
+    from_track_id: null,
+    to_track_id: null,
+    from_track_name: null,
+    to_track_name: null,
+    goal_target: false,
   });
   // milestone-rename (goal_milestones.with_asks): an open edit_goal_milestone proposal reads as pending.
-  const ownGoalMilestones = withAsks(db, [...liveGoalMilestones.map(goalMilestoneOut), ...(onMap?.milestones ?? []).map(mapMilestoneOut), ...goalTargets], me);
-  const coded = withRoadmapCodes({ goal_milestones: ownGoalMilestones, milestones: trackMilestones(readable), items }, (id) => goalRanks.get(id) ?? mapRanks.get(id) ?? Number.MAX_SAFE_INTEGER);
-  const codeOf = new Map<string, string | null>([...coded.goal_milestones, ...(coded.milestones as { id: string; roadmap_code?: string | null }[])].map((m) => [m.id, m.roadmap_code ?? null]));
-  const withCode = <M extends { id: string }>(m: M) => ({ ...m, roadmap_code: codeOf.get(m.id) ?? null });
+  const ownGoalMilestones = withAsks(
+    db,
+    [
+      ...liveGoalMilestones.map(goalMilestoneOut),
+      ...(onMap?.milestones ?? []).map(mapMilestoneOut),
+      ...goalTargets,
+    ],
+    me,
+  );
+  const coded = withRoadmapCodes(
+    { goal_milestones: ownGoalMilestones, milestones: trackMilestones(readable), items },
+    (id) => goalRanks.get(id) ?? mapRanks.get(id) ?? Number.MAX_SAFE_INTEGER,
+  );
+  const codeOf = new Map<string, string | null>(
+    [
+      ...coded.goal_milestones,
+      ...(coded.milestones as { id: string; roadmap_code?: string | null }[]),
+    ].map((m) => [m.id, m.roadmap_code ?? null]),
+  );
+  const withCode = <M extends { id: string }>(m: M) => ({
+    ...m,
+    roadmap_code: codeOf.get(m.id) ?? null,
+  });
   // tb-mk: each milestone's status and reason (goal_milestones.status_of), and every live track as a band.
   const itemOf = new Map(items.map((i) => [i.id, { title: i.title, end: i.end.date }]));
   const trackTitle = (id: string) => {
     const k = Object.keys(TRACKS).find((x) => stableUuid(`simple-track/${x}`) === id);
     return k ? TRACKS[k] : null;
   };
-  const statusOf = (outs: Schemas["SimpleGoalMilestone"][]) => outs.map((m) => withKindStatus(m, outs, (id) => itemOf.get(id), today, trackTitle, m.goal_target ? goalTargetDown.get(m.id) : undefined));
+  const statusOf = (outs: Schemas['SimpleGoalMilestone'][]) =>
+    outs.map((m) =>
+      withKindStatus(
+        m,
+        outs,
+        (id) => itemOf.get(id),
+        today,
+        trackTitle,
+        m.goal_target ? goalTargetDown.get(m.id) : undefined,
+      ),
+    );
   const allGoalMilestones = statusOf(ownGoalMilestones.map(withCode));
-  const shownGoalMilestones = allGoalMilestones.filter((m) => !chosen || m.roadmap_id === roadmapId(chosen));
+  const shownGoalMilestones = allGoalMilestones.filter(
+    (m) => !chosen || m.roadmap_id === roadmapId(chosen),
+  );
   // service._track_bands: every live track (company.history_track_ids left out: a history roadmap's
   // track, a replaced PRD's), in the Tracks order; at risk when a feature of it ends after a milestone
   // it serves (the latest by most days), else stale when not checked, else on track.
   const historyTracks = new Set([
-    ...Object.entries(db.extra_roadmaps ?? {}).filter(([slug]) => (db.history_roadmaps ?? []).includes(slug)).map(([, r]) => r.track),
+    ...Object.entries(db.extra_roadmaps ?? {})
+      .filter(([slug]) => (db.history_roadmaps ?? []).includes(slug))
+      .map(([, r]) => r.track),
     ...Object.keys(TRACKS).filter((k) => {
-      const prdOf = (db as SimpleDb & { track_state?: Record<string, { prd?: string }> }).track_state?.[k]?.prd;
+      const prdOf = (db as SimpleDb & { track_state?: Record<string, { prd?: string }> })
+        .track_state?.[k]?.prd;
       return !!prdOf && (db.replaced_prd_titles ?? []).includes(prdOf);
     }),
   ]);
   const byMilestone = new Map(allGoalMilestones.map((m) => [m.id, m]));
-  const roadmapTracks = trackKeys(db).filter((k) => !historyTracks.has(k)).map((k) => {
-    const id = stableUuid(`simple-track/${k}`);
-    const own = items.filter((i) => i.track?.id === id);
-    const late: { days: number; title: string; end: string; m: Schemas["SimpleGoalMilestone"] }[] = [];
-    for (const i of own) {
-      const ms = allGoalMilestones.filter((m) => m.item_ids.includes(i.id));
-      const picked = i.milestone?.id ? byMilestone.get(i.milestone.id) : undefined;
-      if (picked && !ms.includes(picked)) ms.push(picked);
-      for (const m of ms) if (m.date && i.end.date > m.date) late.push({ days: (Date.parse(i.end.date) - Date.parse(m.date)) / 86_400_000, title: i.title, end: i.end.date, m });
-    }
-    const worst = late.sort((a, b) => b.days - a.days || (a.title < b.title ? -1 : a.title > b.title ? 1 : 0))[0];
-    const why = worst ? `At risk: ${worst.title} ends ${calendarDay(worst.end, today)}, after ${`${worst.m.roadmap_code ?? worst.m.code} ${worst.m.name}`.trim().replace(/\s+/g, " ")} on ${calendarDay(worst.m.date!, today)}` : null;
-    const stale = db.track_checked?.[k];
-    return {
-      id,
-      title: TRACKS[k],
-      ...trackGoal(db, k),
-      owner_name: db.track_owners?.[k] ? ((db as { names?: Record<string, string> }).names?.[db.track_owners[k]] ?? null) : null,
-      prds: [...new Set(own.flatMap((i) => (i.prd ? [i.prd.title] : [])))].map((t) => ({ id: stableUuid(`simple-doc/${t}`), title: t })),
-      health: why ? ("at_risk" as const) : stale ? ("stale" as const) : ("on_track" as const),
-      health_reason: why ?? (stale ? `Not checked since ${calendarDay(stale.slice(0, 10))}` : "On track: every feature ends before its milestone"),
-      order: trackPlace(db, k),
-    };
-  });
+  const roadmapTracks = trackKeys(db)
+    .filter((k) => !historyTracks.has(k))
+    .map((k) => {
+      const id = stableUuid(`simple-track/${k}`);
+      const own = items.filter((i) => i.track?.id === id);
+      const late: {
+        days: number;
+        title: string;
+        end: string;
+        m: Schemas['SimpleGoalMilestone'];
+      }[] = [];
+      for (const i of own) {
+        const ms = allGoalMilestones.filter((m) => m.item_ids.includes(i.id));
+        const picked = i.milestone?.id ? byMilestone.get(i.milestone.id) : undefined;
+        if (picked && !ms.includes(picked)) ms.push(picked);
+        for (const m of ms)
+          if (m.date && i.end.date > m.date)
+            late.push({
+              days: (Date.parse(i.end.date) - Date.parse(m.date)) / 86_400_000,
+              title: i.title,
+              end: i.end.date,
+              m,
+            });
+      }
+      const worst = late.sort(
+        (a, b) => b.days - a.days || (a.title < b.title ? -1 : a.title > b.title ? 1 : 0),
+      )[0];
+      const why = worst
+        ? `At risk: ${worst.title} ends ${calendarDay(worst.end, today)}, after ${`${worst.m.roadmap_code ?? worst.m.code} ${worst.m.name}`.trim().replace(/\s+/g, ' ')} on ${calendarDay(worst.m.date!, today)}`
+        : null;
+      const stale = db.track_checked?.[k];
+      return {
+        id,
+        title: TRACKS[k],
+        ...trackGoal(db, k),
+        owner_name: db.track_owners?.[k]
+          ? ((db as { names?: Record<string, string> }).names?.[db.track_owners[k]] ?? null)
+          : null,
+        prds: [...new Set(own.flatMap((i) => (i.prd ? [i.prd.title] : [])))].map((t) => ({
+          id: stableUuid(`simple-doc/${t}`),
+          title: t,
+        })),
+        health: why ? ('at_risk' as const) : stale ? ('stale' as const) : ('on_track' as const),
+        health_reason:
+          why ??
+          (stale
+            ? `Not checked since ${calendarDay(stale.slice(0, 10))}`
+            : 'On track: every feature ends before its milestone'),
+        order: trackPlace(db, k),
+      };
+    });
   // board-quarters: the columns are calendar quarters.
   const qw = quarterWindows(today);
   return {
-    today, group,
-    windows: { now: { start: qw.now[0], end: qw.now[1] }, next: { start: qw.next[0], end: qw.next[1] }, later: { start: qw.later[0], end: qw.later[1] } },
-    groups: [...groups.entries()].sort((a, b) => (a[1].sort < b[1].sort ? -1 : 1)).map(([key, g]) => ({ key, title: g.title, item_ids: g.item_ids })),
+    today,
+    group,
+    windows: {
+      now: { start: qw.now[0], end: qw.now[1] },
+      next: { start: qw.next[0], end: qw.next[1] },
+      later: { start: qw.later[0], end: qw.later[1] },
+    },
+    groups: [...groups.entries()]
+      .sort((a, b) => (a[1].sort < b[1].sort ? -1 : 1))
+      .map(([key, g]) => ({ key, title: g.title, item_ids: g.item_ids })),
     items: shown,
     milestones: trackMilestones(chosen ? [chosen] : readable).map(withCode),
     goal_milestones: shownGoalMilestones,
     tracks: roadmapTracks,
     old_milestones: oldMilestonesOut(db.goal_milestones ?? [], role, oldCtx(db)),
     // service.build: the span of the shown items' PRDs' plans only (a replaced plan PRD's goes with its items).
-    span: db.plan && shown.some((i) => !!i.prd && (i.prd.slug === PLAN_PRD_SLUG || !!db.plan?.prds?.includes(i.prd.slug))) ? planSpan() : null,
+    span:
+      db.plan &&
+      shown.some(
+        (i) => !!i.prd && (i.prd.slug === PLAN_PRD_SLUG || !!db.plan?.prds?.includes(i.prd.slug)),
+      )
+        ? planSpan()
+        : null,
     // A working draft belongs to one roadmap: a chosen roadmap's read carries its own only.
     changes_in_review: chosen ? (reader.hiddenBy[roadmapId(chosen)] ?? 0) : reader.hidden,
-    drafts: chosen ? reader.visible.filter((d) => d.document_id === roadmapId(chosen)) : reader.visible,
+    drafts: chosen
+      ? reader.visible.filter((d) => d.document_id === roadmapId(chosen))
+      : reader.visible,
     // One roadmap chosen: its key dates; all roadmaps: every readable one's (oracle.simple.service).
-    ...keyDatesOut(db, reader.full, chosen ? [chosen] : readable, me ?? { id: "", role }),
-    roadmaps: keyDatesOut(db, reader.full, readable, me ?? { id: "", role }).key_date_roadmaps,
-    roadmap: chosen ? { id: roadmapId(chosen), slug: chosen, title: roadmapTitle(db, chosen) } : null,
+    ...keyDatesOut(db, reader.full, chosen ? [chosen] : readable, me ?? { id: '', role }),
+    roadmaps: keyDatesOut(db, reader.full, readable, me ?? { id: '', role }).key_date_roadmaps,
+    roadmap: chosen
+      ? { id: roadmapId(chosen), slug: chosen, title: roadmapTitle(db, chosen) }
+      : null,
     // decisions-reversed-or-trashed: the items' decisions left out as no longer standing.
     left_out: leftOut(),
     applied_versions: (chosen ? [chosen] : readable).flatMap((slug) => {
@@ -2187,13 +3619,18 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
 }
 
 /** "Dec 2" (Simple's dates in a difference line). */
-const dayWord = (d: string | null): string => (d ? word(d) : "no date");
+const dayWord = (d: string | null): string => (d ? word(d) : 'no date');
 
 /**
  * approved-roadmap-to-simple: the line for a roadmap whose shown version was applied: whether
  * its items still read what that version says, else each difference in plain words.
  */
-function appliedVersionOut(db: SimpleDb, slug: string, role: Role, all: Map<string, { s: SeedItem; r: { start: Dated; end: Dated } }>): Schemas["SimpleAppliedVersion"] | null {
+function appliedVersionOut(
+  db: SimpleDb,
+  slug: string,
+  role: Role,
+  all: Map<string, { s: SeedItem; r: { start: Dated; end: Dated } }>,
+): Schemas['SimpleAppliedVersion'] | null {
   const a = db.applied?.[slug];
   if (!a) return null;
   const n = a.version;
@@ -2208,7 +3645,7 @@ function appliedVersionOut(db: SimpleDb, slug: string, role: Role, all: Map<stri
       differences.push(`${x.s.title} was added after version ${n}`);
       continue;
     }
-    if (x.s.status === "cut") {
+    if (x.s.status === 'cut') {
       differences.push(`${x.s.title} was cut after version ${n}`);
       continue;
     }
@@ -2216,69 +3653,129 @@ function appliedVersionOut(db: SimpleDb, slug: string, role: Role, all: Map<stri
     const [start, end] = [x.r.start.date, x.r.end.date];
     const startDiffers = !!row.start && row.start !== start;
     const endDiffers = row.end !== end;
-    if (startDiffers && endDiffers) differences.push(`${x.s.title} runs ${dayWord(start)} to ${dayWord(end)}, version ${n} says ${dayWord(row.start)} to ${dayWord(row.end)}`);
-    else if (endDiffers) differences.push(`${x.s.title} ends ${dayWord(end)}, version ${n} says ${dayWord(row.end)}`);
-    else if (startDiffers) differences.push(`${x.s.title} starts ${dayWord(start)}, version ${n} says ${dayWord(row.start)}`);
+    if (startDiffers && endDiffers)
+      differences.push(
+        `${x.s.title} runs ${dayWord(start)} to ${dayWord(end)}, version ${n} says ${dayWord(row.start)} to ${dayWord(row.end)}`,
+      );
+    else if (endDiffers)
+      differences.push(`${x.s.title} ends ${dayWord(end)}, version ${n} says ${dayWord(row.end)}`);
+    else if (startDiffers)
+      differences.push(
+        `${x.s.title} starts ${dayWord(start)}, version ${n} says ${dayWord(row.start)}`,
+      );
   }
   // As lines' _not_added_rows: the version's rows with no state that match no item (by key or title) and added none because their code was taken.
   const mine = db.items.filter((s) => s.roadmap === slug);
   const shownKeys = new Set(mine.map((s) => s.key));
   const shownTitles = new Set(mine.map((s) => s.title.trim().toLowerCase()));
   for (const row of a.plan) {
-    if (planRowState(row.status) || shownKeys.has(row.key) || shownTitles.has(row.title.toLowerCase())) continue;
+    if (
+      planRowState(row.status) ||
+      shownKeys.has(row.key) ||
+      shownTitles.has(row.title.toLowerCase())
+    )
+      continue;
     const said = rowCodeTaken(db, slug, row.title);
     if (said) differences.push(said);
   }
   return {
     roadmap: { id: roadmapId(slug), slug, title: roadmapTitle(db, slug) },
-    version: n, approved_at: a.approved_at, href: a.href,
-    matches: differences.length === 0, differences,
-    shipped: [...a.shipped], moved_out: [...a.moved_out],
+    version: n,
+    approved_at: a.approved_at,
+    href: a.href,
+    matches: differences.length === 0,
+    differences,
+    shipped: [...a.shipped],
+    moved_out: [...a.moved_out],
     can_apply: RANK[role] >= RANK.approver,
   };
 }
 
 /** The applied-version line of one roadmap, as GET /v1/simple/roadmap?roadmap= reads it. */
-export function appliedVersionOf(db: SimpleDb, slug: string, me: Who): Schemas["SimpleAppliedVersion"] | null {
+export function appliedVersionOf(
+  db: SimpleDb,
+  slug: string,
+  me: Who,
+): Schemas['SimpleAppliedVersion'] | null {
   const out = roadmapOut(db, me.role, new URLSearchParams({ roadmap: slug }), me);
   return out?.applied_versions?.find((x) => x.roadmap.slug === slug) ?? null;
 }
 
-const roadmapTitle = (db: SimpleDb, slug: string): string => db.titles?.[slug] ?? ROADMAPS[slug].title;
+const roadmapTitle = (db: SimpleDb, slug: string): string =>
+  db.titles?.[slug] ?? ROADMAPS[slug].title;
 
 /** old-milestones: the company roadmap and its items, for the older roadmaps' milestones (./simple-milestones.ts). */
 const oldCtx = (db: SimpleDb): OldCtx => ({
   company: db.company_roadmap,
-  companyItems: new Map(db.items.filter((s) => s.roadmap === db.company_roadmap).map((s) => [s.key, s.title])),
-  feedingPrds: new Set(db.items.filter((s) => s.roadmap === db.company_roadmap).flatMap((s) => (s.prd_doc ? [s.prd_doc.slug] : []))),
+  companyItems: new Map(
+    db.items.filter((s) => s.roadmap === db.company_roadmap).map((s) => [s.key, s.title]),
+  ),
+  feedingPrds: new Set(
+    db.items
+      .filter((s) => s.roadmap === db.company_roadmap)
+      .flatMap((s) => (s.prd_doc ? [s.prd_doc.slug] : [])),
+  ),
   // The mock's items carry no feature of their own: the same item key is the same feature.
-  companyKey: (_roadmap, key) => db.items.find((s) => s.roadmap === db.company_roadmap && s.key === key)?.key,
+  companyKey: (_roadmap, key) =>
+    db.items.find((s) => s.roadmap === db.company_roadmap && s.key === key)?.key,
   roadmapTitle: (slug) => roadmapTitle(db, slug),
   goalTitle: (key) => GOALS[key] ?? null,
 });
 
 /** Roadmap-plus: the shown roadmaps' key dates (the draft's to who sees it) and who may change them. */
-function keyDatesOut(db: SimpleDb, full: SimpleDb, shown: string[], me: { id: string; role: Role }): Pick<Schemas["SimpleRoadmapOut"], "key_dates" | "key_date_roadmaps"> {
+function keyDatesOut(
+  db: SimpleDb,
+  full: SimpleDb,
+  shown: string[],
+  me: { id: string; role: Role },
+): Pick<Schemas['SimpleRoadmapOut'], 'key_dates' | 'key_date_roadmaps'> {
   const slugs = [...shown].sort((a, b) => roadmapTitle(db, a).localeCompare(roadmapTitle(db, b)));
-  const ref = (slug: string) => ({ id: stableUuid(`simple-doc/${slug}`), slug, title: roadmapTitle(db, slug) });
-  const draftOf = (slug: string) => (full.drafts ?? []).find((d) => d.roadmap === slug && OPEN_DRAFT.includes(d.out.status));
+  const ref = (slug: string) => ({
+    id: stableUuid(`simple-doc/${slug}`),
+    slug,
+    title: roadmapTitle(db, slug),
+  });
+  const draftOf = (slug: string) =>
+    (full.drafts ?? []).find((d) => d.roadmap === slug && OPEN_DRAFT.includes(d.out.status));
   const keyDates = slugs
     .flatMap((slug) => {
       const pub = draftOf(slug)?.published.key_dates ?? null;
       const fromPrds = prdKeyDates(db, slug, ref(slug));
       // ah-prd-milestones-once review (key_dates.published_copies): a copy of a PRD's milestone the
       // roadmap published before they were read-only from the PRD (its name, "From <PRD>") is skipped.
-      const copies = new Set(fromPrds.map((k) => `${k.id}/${k.name.replace(/^\S+ · /, "")}/From ${k.prd!.title}`));
-      const own = (db.key_dates?.[slug] ?? []).filter((k) => !copies.has(`${k.id}/${k.name}/${k.note}`)).map((k) => {
-        const was = pub?.find((x) => x.id === k.id);
-        const inDraft = pub !== null && (!was || JSON.stringify(was) !== JSON.stringify(k));
-        return { id: k.id, roadmap: ref(slug), name: k.name, date: k.date, note: k.note, in_draft: inDraft, prd: null, kind: "delivery" as const, status: "on_track" as const, status_reason: null };
-      });
+      const copies = new Set(
+        fromPrds.map((k) => `${k.id}/${k.name.replace(/^\S+ · /, '')}/From ${k.prd!.title}`),
+      );
+      const own = (db.key_dates?.[slug] ?? [])
+        .filter((k) => !copies.has(`${k.id}/${k.name}/${k.note}`))
+        .map((k) => {
+          const was = pub?.find((x) => x.id === k.id);
+          const inDraft = pub !== null && (!was || JSON.stringify(was) !== JSON.stringify(k));
+          return {
+            id: k.id,
+            roadmap: ref(slug),
+            name: k.name,
+            date: k.date,
+            note: k.note,
+            in_draft: inDraft,
+            prd: null,
+            kind: 'delivery' as const,
+            status: 'on_track' as const,
+            status_reason: null,
+          };
+        });
       return [...own, ...fromPrds];
     })
     .sort((a, b) => (a.date === b.date ? a.name.localeCompare(b.name) : a.date < b.date ? -1 : 1));
-  const may = me.role !== "viewer";
-  return { key_dates: keyDates, key_date_roadmaps: slugs.map((slug) => ({ roadmap: ref(slug), applies: may && canEditRoadmap(full, slug, me), can_change: may })) };
+  const may = me.role !== 'viewer';
+  return {
+    key_dates: keyDates,
+    key_date_roadmaps: slugs.map((slug) => ({
+      roadmap: ref(slug),
+      applies: may && canEditRoadmap(full, slug, me),
+      can_change: may,
+    })),
+  };
 }
 
 /**
@@ -2286,30 +3783,42 @@ function keyDatesOut(db: SimpleDb, full: SimpleDb, shown: string[], me: { id: st
  * PRDs on the roadmap (key_dates.prd_key_dates), "M1 · Prove it" on its end day, its PRD
  * named: no row of the roadmap's, so never edited here; it moves when the PRD does.
  */
-function prdKeyDates(db: SimpleDb, slug: string, roadmap: Schemas["SimpleDocRef"]): Schemas["SimpleKeyDate"][] {
+function prdKeyDates(
+  db: SimpleDb,
+  slug: string,
+  roadmap: Schemas['SimpleDocRef'],
+): Schemas['SimpleKeyDate'][] {
   const hidden = new Set(db.plan?.hidden ?? []);
   // roadmap-keydates review: every PRD the roadmap's items come from, each item's own (an item
   // added from another approved PRD names that one), as the API's key_date_prds reads them.
   // simple-replaced-prds: never a replaced PRD's (service.load drops its items, as visibleItems).
-  const prds = [...new Map(db.items.filter((s) => s.roadmap === slug && !s.draft_roadmap && !ofReplacedPrd(db, s)).map((s) => [ownPrd(s).id, ownPrd(s)])).values()];
-  return prds
-    .filter((p) => !hidden.has(p.slug))
-    // prd-order (as key_date_prds): the roadmap's PRDs in the company PRD order.
-    .sort(byPrdRank(prdRanker()))
-    .flatMap((prd) =>
-      (db.prd_milestones?.[prd.slug] ?? []).map((m) => ({
-        id: stableUuid(`simple-prd-key-date/${slug}/${prd.slug}/${m.code}`),
-        roadmap,
-        name: m.name ? `${m.code} · ${m.name}` : m.code,
-        date: m.date,
-        note: null,
-        in_draft: false,
-        kind: "delivery" as const,
-        status: "on_track" as const,
-        status_reason: null,
-        prd,
-      })),
-    );
+  const prds = [
+    ...new Map(
+      db.items
+        .filter((s) => s.roadmap === slug && !s.draft_roadmap && !ofReplacedPrd(db, s))
+        .map((s) => [ownPrd(s).id, ownPrd(s)]),
+    ).values(),
+  ];
+  return (
+    prds
+      .filter((p) => !hidden.has(p.slug))
+      // prd-order (as key_date_prds): the roadmap's PRDs in the company PRD order.
+      .sort(byPrdRank(prdRanker()))
+      .flatMap((prd) =>
+        (db.prd_milestones?.[prd.slug] ?? []).map((m) => ({
+          id: stableUuid(`simple-prd-key-date/${slug}/${prd.slug}/${m.code}`),
+          roadmap,
+          name: m.name ? `${m.code} · ${m.name}` : m.code,
+          date: m.date,
+          note: null,
+          in_draft: false,
+          kind: 'delivery' as const,
+          status: 'on_track' as const,
+          status_reason: null,
+          prd,
+        })),
+      )
+  );
 }
 
 /** roadmap-keydates: the plan PRDs' dated milestones when no approved version of theirs states any (the "simple-plan" scenarios). */
@@ -2322,28 +3831,56 @@ export function planPrdMilestones(plan: PlanDb | undefined): Record<string, PrdM
 }
 
 function json(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
 
 /** S7: the matches a draft keeps (live items, best first, at most 2). */
-export function matchesOf(db: SimpleDb, keys: string[]): Schemas["SimpleMatch"][] {
-  return keys
-    .map((k) => db.items.find((x) => x.key === k))
-    .filter((x): x is SeedItem => !!x && !closed(x) && !ofReplacedPrd(db, x))
-    .slice(0, 2)
-    // Its display code (F-06) or none, never its key, as additions.reconcile.
-    .map((x) => ({ kind: "item" as const, id: db.ids[x.key], code: prdCode(x.section) ?? "", title: x.title }));
+export function matchesOf(db: SimpleDb, keys: string[]): Schemas['SimpleMatch'][] {
+  return (
+    keys
+      .map((k) => db.items.find((x) => x.key === k))
+      .filter((x): x is SeedItem => !!x && !closed(x) && !ofReplacedPrd(db, x))
+      .slice(0, 2)
+      // Its display code (F-06) or none, never its key, as additions.reconcile.
+      .map((x) => ({
+        kind: 'item' as const,
+        id: db.ids[x.key],
+        code: prdCode(x.section) ?? '',
+        title: x.title,
+      }))
+  );
 }
 
-const WORDS = (t: string): Set<string> => new Set(t.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 4));
+const WORDS = (t: string): Set<string> =>
+  new Set(
+    t
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w.length >= 4),
+  );
 
 /** S7, Oracle's duplicate check (simplified): live items of the roadmap sharing a word of four
  * letters or more with the title, most shared first; never a replaced PRD's (additions.reconcile
  * reads service.load). */
-export function lookalikes(db: SimpleDb, title: string, roadmap: string | null, except?: string): string[] {
+export function lookalikes(
+  db: SimpleDb,
+  title: string,
+  roadmap: string | null,
+  except?: string,
+): string[] {
   const mine = WORDS(title);
   return db.items
-    .filter((x) => x.key !== except && !closed(x) && !x.draft && (!roadmap || x.roadmap === roadmap) && !ofReplacedPrd(db, x))
+    .filter(
+      (x) =>
+        x.key !== except &&
+        !closed(x) &&
+        !x.draft &&
+        (!roadmap || x.roadmap === roadmap) &&
+        !ofReplacedPrd(db, x),
+    )
     .map((x) => ({ k: x.key, n: [...WORDS(x.title)].filter((w) => mine.has(w)).length }))
     .filter((x) => x.n > 0)
     .sort((a, b) => b.n - a.n || a.k.localeCompare(b.k))
@@ -2365,7 +3902,7 @@ export function settleDrafting(db: SimpleDb): void {
     const filled: string[] = [];
     if (s.outcome == null) {
       s.outcome = `Teams get ${s.title.toLowerCase()} without asking support`;
-      filled.push("outcome");
+      filled.push('outcome');
     }
     const mine = WORDS(s.title);
     const feature = Object.keys(db.feature_titles ?? {})
@@ -2373,7 +3910,7 @@ export function settleDrafting(db: SimpleDb): void {
       .find((f) => [...WORDS(db.feature_titles![f])].some((w) => mine.has(w)));
     if (!s.feature_id && feature) {
       s.feature_id = feature;
-      filled.push("feature_id");
+      filled.push('feature_id');
     }
     if (filled.length) {
       s.drafted_at = new Date(now).toISOString();
@@ -2381,20 +3918,53 @@ export function settleDrafting(db: SimpleDb): void {
     }
     s.flow = plainFlow({
       title: s.title,
-      steps: ["Open the alerts page", `Find ${s.title.toLowerCase()}`, "Set it up in one step", "See it working"],
-      screen: { title: `${s.title} settings`, regions: ["Header: what it does", "The one setting", "A preview", "Save and Cancel buttons"] },
+      steps: [
+        'Open the alerts page',
+        `Find ${s.title.toLowerCase()}`,
+        'Set it up in one step',
+        'See it working',
+      ],
+      screen: {
+        title: `${s.title} settings`,
+        regions: [
+          'Header: what it does',
+          'The one setting',
+          'A preview',
+          'Save and Cancel buttons',
+        ],
+      },
     });
     // roadmap-edit-fixes: its dependency ideas are suggestions a person adds, never written.
-    const dep = db.items.find((x) => x.key !== s.key && x.goal && x.goal === s.goal && !closed(x) && !x.draft && x.roadmap === s.roadmap);
+    const dep = db.items.find(
+      (x) =>
+        x.key !== s.key &&
+        x.goal &&
+        x.goal === s.goal &&
+        !closed(x) &&
+        !x.draft &&
+        x.roadmap === s.roadmap,
+    );
     if (dep && !(s.depends ?? []).includes(dep.key)) s.suggested_depends = [dep.key];
-    const [start, end] = s.quarter ? [s.quarter.start < iso(now) ? iso(now) : s.quarter.start, s.quarter.end] : w[s.horizon];
+    const [start, end] = s.quarter
+      ? [s.quarter.start < iso(now) ? iso(now) : s.quarter.start, s.quarter.end]
+      : w[s.horizon];
     const id = db.ids[s.key];
-    db.suggestions = db.suggestions.filter((x) => !(x.item_id === id && x.status === "open"));
+    db.suggestions = db.suggestions.filter((x) => !(x.item_id === id && x.status === 'open'));
     db.suggestions.push({
       id: stableUuid(`simple-suggestion/${s.key}/${start}/${end}`),
-      item_id: id, item_key: s.key, item_title: s.title, start_date: start, end_date: end,
-      basis: s.quarter ? `It falls in the quarter it was added to (${word(start)} – ${word(end)}).` : `It spans the ${s.horizon} window (${word(start)} – ${word(end)}).`,
-      status: "open", created_at: new Date(now).toISOString(), decided_by: null, decided_at: null, can_decide: false,
+      item_id: id,
+      item_key: s.key,
+      item_title: s.title,
+      start_date: start,
+      end_date: end,
+      basis: s.quarter
+        ? `It falls in the quarter it was added to (${word(start)} – ${word(end)}).`
+        : `It spans the ${s.horizon} window (${word(start)} – ${word(end)}).`,
+      status: 'open',
+      created_at: new Date(now).toISOString(),
+      decided_by: null,
+      decided_at: null,
+      can_decide: false,
     });
   }
 }
@@ -2404,22 +3974,41 @@ export function settleDrafting(db: SimpleDb): void {
  * one row per item (its slices' span), newest first. The mock makes suggestions when the
  * roadmap is first read, so the Inbox lists them from then on.
  */
-export function dateSuggestionInboxRows(db: SimpleDb | undefined, me: { id: string; role: Role }, seen: string | null): Schemas["InboxSimpleDateSuggestion"][] {
+export function dateSuggestionInboxRows(
+  db: SimpleDb | undefined,
+  me: { id: string; role: Role },
+  seen: string | null,
+): Schemas['InboxSimpleDateSuggestion'][] {
   if (!db) return [];
   const seeds = new Map(visibleItems(db, me.role).map((s) => [db.ids[s.key], s]));
   // qa-nov17 (suggestions.inbox_rows): one the read no longer offers is not asked.
   const all = new Map([...seeds.values()].map((s) => [s.key, { s, r: resolve(db, s) }]));
   afterDependencies(all);
-  const out: Schemas["InboxSimpleDateSuggestion"][] = [];
+  const out: Schemas['InboxSimpleDateSuggestion'][] = [];
   const done = new Set<string>();
-  for (const x of [...db.suggestions].filter((y) => y.status === "open").sort((a, b) => (a.created_at < b.created_at ? 1 : -1))) {
+  for (const x of [...db.suggestions]
+    .filter((y) => y.status === 'open')
+    .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))) {
     const s = seeds.get(x.item_id);
-    if (done.has(x.item_id) || !s || !canDecideItem(db, s, me) || !offered(all.get(s.key)!.r, itemSuggestion(db, x.item_id))) continue;
+    if (
+      done.has(x.item_id) ||
+      !s ||
+      !canDecideItem(db, s, me) ||
+      !offered(all.get(s.key)!.r, itemSuggestion(db, x.item_id))
+    )
+      continue;
     done.add(x.item_id);
     const span = itemSuggestion(db, x.item_id) ?? x;
     out.push({
-      id: span.id, item_id: x.item_id, item_title: s.title, document_id: roadmapId(s.roadmap), start_date: span.start_date, end_date: span.end_date,
-      basis: span.basis, at: x.created_at, state: !seen || x.created_at > seen ? "new" : "open",
+      id: span.id,
+      item_id: x.item_id,
+      item_title: s.title,
+      document_id: roadmapId(s.roadmap),
+      start_date: span.start_date,
+      end_date: span.end_date,
+      basis: span.basis,
+      at: x.created_at,
+      state: !seen || x.created_at > seen ? 'new' : 'open',
     });
   }
   return out;
@@ -2430,21 +4019,29 @@ export function dateSuggestionInboxRows(db: SimpleDb | undefined, me: { id: stri
  * for those two reads only). The mock answers on the page's own thread, one call at a time, so
  * building the same 500 items again for the waiting counts held up drawing them. */
 let readsOn = false;
-let reads: { stored: string; out: Map<string, Schemas["SimpleRoadmapOut"] | null> } = { stored: "", out: new Map() };
+let reads: { stored: string; out: Map<string, Schemas['SimpleRoadmapOut'] | null> } = {
+  stored: '',
+  out: new Map(),
+};
 export function roadmapReadsAt(on: boolean): void {
   readsOn = on;
 }
 /** Any write (a person, a goal's order, the PRD order, the roadmap itself) drops the shared
  * build: the roadmap also reads members, goals and the PRD order, which its own JSON lacks. */
 export function forgetRoadmapReads(): void {
-  reads = { stored: "", out: new Map() };
+  reads = { stored: '', out: new Map() };
 }
-function readRoadmap(db: SimpleDb, role: Role, q: URLSearchParams, me: Who): Schemas["SimpleRoadmapOut"] | null {
+function readRoadmap(
+  db: SimpleDb,
+  role: Role,
+  q: URLSearchParams,
+  me: Who,
+): Schemas['SimpleRoadmapOut'] | null {
   if (!readsOn) return roadmapOut(db, role, q, me);
   const stored = JSON.stringify(db);
   if (stored !== reads.stored) reads = { stored, out: new Map() };
   const key = new URLSearchParams(q);
-  if (!key.get("group")) key.set("group", "goal");
+  if (!key.get('group')) key.set('group', 'goal');
   key.sort();
   const at = `${role}|${me.id}|${companyToday()}|${key}`;
   if (!reads.out.has(at)) reads.out.set(at, roadmapOut(db, role, q, me));
@@ -2452,85 +4049,183 @@ function readRoadmap(db: SimpleDb, role: Role, q: URLSearchParams, me: Who): Sch
 }
 
 /** /v1/simple/roadmap and its date suggestions (api/oracle/simple/router.py). */
-export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
-  if (p[1] !== "simple" || p[2] !== "roadmap") return null;
+export async function routeSimpleRoadmap(
+  db: SimpleDb,
+  me: Who,
+  req: Request,
+  p: string[],
+  q: URLSearchParams,
+): Promise<Response | null> {
+  if (p[1] !== 'simple' || p[2] !== 'roadmap') return null;
   const m = req.method;
   const today = companyToday();
   if (!db.suggestions.length && !Object.keys(db.own).length) regenerate(db, today);
   settleDrafting(db);
-  if (!p[3] && m === "GET") {
-    if (q.get("roadmap") && !readableRoadmap(q.get("roadmap"), me.role)) return json(404, { detail: "No such roadmap" });
+  if (!p[3] && m === 'GET') {
+    if (q.get('roadmap') && !readableRoadmap(q.get('roadmap'), me.role))
+      return json(404, { detail: 'No such roadmap' });
     const out = readRoadmap(db, me.role, q, me);
-    return out ? reply("/v1/simple/roadmap", "get", out) : json(422, { detail: "group: goal, track or prd" });
+    return out
+      ? reply('/v1/simple/roadmap', 'get', out)
+      : json(422, { detail: 'group: goal, track or prd' });
   }
-  if (p[3] === "waiting" && !p[4] && m === "GET") {
+  if (p[3] === 'waiting' && !p[4] && m === 'GET') {
     // roadmap-decide review (GET /v1/simple/roadmap/waiting): the whole roadmap's broken links and
     // the dates the reader may confirm, no filter but ``roadmap`` (one roadmap's; 404 when unread).
-    const one = q.get("roadmap");
-    if (one && !readableRoadmap(one, me.role)) return json(404, { detail: "No such roadmap" });
-    const items = (readRoadmap(db, me.role, new URLSearchParams(one ? { roadmap: one } : {}), me)?.items ?? []).filter((i) => i.status !== "done");
-    const links = items.flatMap((i) => i.flags).filter((f) => f.state === "red" && f.fixes.length > 0);
-    return reply("/v1/simple/roadmap/waiting", "get", { broken_links: links.length, dates_to_confirm: items.filter((i) => !!i.suggestion?.can_decide).length });
+    const one = q.get('roadmap');
+    if (one && !readableRoadmap(one, me.role)) return json(404, { detail: 'No such roadmap' });
+    const items = (
+      readRoadmap(db, me.role, new URLSearchParams(one ? { roadmap: one } : {}), me)?.items ?? []
+    ).filter((i) => i.status !== 'done');
+    const links = items
+      .flatMap((i) => i.flags)
+      .filter((f) => f.state === 'red' && f.fixes.length > 0);
+    return reply('/v1/simple/roadmap/waiting', 'get', {
+      broken_links: links.length,
+      dates_to_confirm: items.filter((i) => !!i.suggestion?.can_decide).length,
+    });
   }
   const slugOf = (id: string) => Object.keys(ROADMAPS).find((r) => roadmapId(r) === id) ?? null;
   // milestone-rename (goal_milestones.rename_target): PATCH on a goal's own milestone (id: the goal's)
   // takes its name alone; who decides its roadmap renames it, anyone else is refused (they propose).
-  const target = p[3] === "milestones" && p[4] && !p[5] && m === "PATCH" && !(db.goal_milestones ?? []).some((x) => x.id === p[4]) ? goalTargetOf(db, p[4]) : null;
+  const target =
+    p[3] === 'milestones' &&
+    p[4] &&
+    !p[5] &&
+    m === 'PATCH' &&
+    !(db.goal_milestones ?? []).some((x) => x.id === p[4])
+      ? goalTargetOf(db, p[4])
+      : null;
   if (target) {
     const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
-    if (Object.keys(b).join() !== "name" || !String(b.name ?? "").trim()) return json(422, { detail: "A goal's milestone: only its name changes here (the rest is the goal's)" });
-    if (me.role === "viewer" || me.role === "commenter" || !canEditRoadmap(db, target.roadmap, me)) return json(403, { detail: "Only an owner or the roadmap's decider (with none, its owner) changes its milestones" });
+    if (Object.keys(b).join() !== 'name' || !String(b.name ?? '').trim())
+      return json(422, {
+        detail: "A goal's milestone: only its name changes here (the rest is the goal's)",
+      });
+    if (me.role === 'viewer' || me.role === 'commenter' || !canEditRoadmap(db, target.roadmap, me))
+      return json(403, {
+        detail:
+          "Only an owner or the roadmap's decider (with none, its owner) changes its milestones",
+      });
     setTargetName(db, target.goal, String(b.name));
     const { goal } = goalTargetOf(db, p[4])!;
-    return reply("/v1/simple/roadmap/milestones/{milestone_id}", "patch", {
-      id: goal.id, roadmap_id: roadmapId(target.roadmap), code: "", name: goal.name, date: goal.due, goal_id: goal.id, kind: "goal", goal_target: true,
-      can_change: true, can_propose: false, item_ids: [], counts_when: "", progress: "not_started", prd: null, prd_owner: null, pending: null, carried_from: null,
-      done_when_line: "", status: "on_track", sub_goal_ids: [],
+    return reply('/v1/simple/roadmap/milestones/{milestone_id}', 'patch', {
+      id: goal.id,
+      roadmap_id: roadmapId(target.roadmap),
+      code: '',
+      name: goal.name,
+      date: goal.due,
+      goal_id: goal.id,
+      kind: 'goal',
+      goal_target: true,
+      can_change: true,
+      can_propose: false,
+      item_ids: [],
+      counts_when: '',
+      progress: 'not_started',
+      prd: null,
+      prd_owner: null,
+      pending: null,
+      carried_from: null,
+      done_when_line: '',
+      status: 'on_track',
+      sub_goal_ids: [],
     });
   }
-  const ms = await routeMilestones(db, { ...me, prdOwners: (slug) => prdOwnerIdsOf(db, slug) }, req, p, slugOf, (r) => canEditRoadmap(db, r, me), (r) => !!db.company_roadmap && r !== db.company_roadmap, oldCtx(db));
+  const ms = await routeMilestones(
+    db,
+    { ...me, prdOwners: (slug) => prdOwnerIdsOf(db, slug) },
+    req,
+    p,
+    slugOf,
+    (r) => canEditRoadmap(db, r, me),
+    (r) => !!db.company_roadmap && r !== db.company_roadmap,
+    oldCtx(db),
+  );
   if (ms) return ms;
-  if (p[3] !== "date-suggestions") return null;
-  if (!p[4] && m === "GET") {
-    const status = q.get("status") ?? "open";
+  if (p[3] !== 'date-suggestions') return null;
+  if (!p[4] && m === 'GET') {
+    const status = q.get('status') ?? 'open';
     const seeds = new Map(visibleItems(db, me.role).map((s) => [db.ids[s.key], s]));
-    return reply("/v1/simple/roadmap/date-suggestions", "get", db.suggestions.filter((s) => s.status === status && seeds.has(s.item_id)).map((s) => ({ ...s, can_decide: canDecideItem(db, seeds.get(s.item_id)!, me) })));
+    return reply(
+      '/v1/simple/roadmap/date-suggestions',
+      'get',
+      db.suggestions
+        .filter((s) => s.status === status && seeds.has(s.item_id))
+        .map((s) => ({ ...s, can_decide: canDecideItem(db, seeds.get(s.item_id)!, me) })),
+    );
   }
-  if (p[4] === "refresh" && m === "POST") {
-    if (me.role !== "owner" && me.role !== "approver") return json(403, { detail: "Requires the approver role" });
-    return reply("/v1/simple/roadmap/date-suggestions/refresh", "post", { open: regenerate(db, today) }, 200);
+  if (p[4] === 'refresh' && m === 'POST') {
+    if (me.role !== 'owner' && me.role !== 'approver')
+      return json(403, { detail: 'Requires the approver role' });
+    return reply(
+      '/v1/simple/roadmap/date-suggestions/refresh',
+      'post',
+      { open: regenerate(db, today) },
+      200,
+    );
   }
   // D-b: accept and edit are changes (./simple-changes.ts routes them); dismiss and its Undo (reopen) are here.
-  if (m !== "POST" || !p[4] || (p[5] !== "dismiss" && p[5] !== "reopen")) return null;
+  if (m !== 'POST' || !p[4] || (p[5] !== 'dismiss' && p[5] !== 'reopen')) return null;
   const s = db.suggestions.find((x) => x.id === p[4]);
   const item = s && visibleItems(db, me.role).find((x) => db.ids[x.key] === s.item_id);
-  if (!s || !item) return json(404, { detail: "No such date suggestion" });
-  if (!canDecideItem(db, item, me)) return json(403, { detail: "Only an owner or the roadmap's decider (with no decider, its owner) decides date suggestions" });
-  if (p[5] === "reopen") {
+  if (!s || !item) return json(404, { detail: 'No such date suggestion' });
+  if (!canDecideItem(db, item, me))
+    return json(403, {
+      detail:
+        "Only an owner or the roadmap's decider (with no decider, its owner) decides date suggestions",
+    });
+  if (p[5] === 'reopen') {
     // As the API: every slice the same dismissal closed (same person, same moment) opens again.
-    if (s.status !== "dismissed") return json(409, { detail: `This suggestion is ${s.status}, not dismissed` });
+    if (s.status !== 'dismissed')
+      return json(409, { detail: `This suggestion is ${s.status}, not dismissed` });
     const rows = db.suggestions.filter(
-      (x) => x === s || (s.slice_code != null && x.item_id === s.item_id && x.status === "dismissed" && x.slice_code != null && x.decided_by === s.decided_by && x.decided_at === s.decided_at),
+      (x) =>
+        x === s ||
+        (s.slice_code != null &&
+          x.item_id === s.item_id &&
+          x.status === 'dismissed' &&
+          x.slice_code != null &&
+          x.decided_by === s.decided_by &&
+          x.decided_at === s.decided_at),
     );
-    const keys = new Set(rows.map((x) => x.slice_code ?? ""));
-    if (db.suggestions.some((x) => x.item_id === s.item_id && x.status === "open" && keys.has(x.slice_code ?? ""))) return json(409, { detail: "The item has an open date suggestion again" });
-    for (const x of rows) Object.assign(x, { status: "open", decided_by: null, decided_at: null });
-    return reply("/v1/simple/roadmap/date-suggestions/{suggestion_id}/reopen", "post", { ...s, can_decide: true });
+    const keys = new Set(rows.map((x) => x.slice_code ?? ''));
+    if (
+      db.suggestions.some(
+        (x) => x.item_id === s.item_id && x.status === 'open' && keys.has(x.slice_code ?? ''),
+      )
+    )
+      return json(409, { detail: 'The item has an open date suggestion again' });
+    for (const x of rows) Object.assign(x, { status: 'open', decided_by: null, decided_at: null });
+    return reply('/v1/simple/roadmap/date-suggestions/{suggestion_id}/reopen', 'post', {
+      ...s,
+      can_decide: true,
+    });
   }
-  if (s.status !== "open") return json(409, { detail: `This suggestion is ${s.status} already` });
+  if (s.status !== 'open') return json(409, { detail: `This suggestion is ${s.status} already` });
   const at = new Date(mockNowMs()).toISOString();
   // As the API: dismissing a planned item's row dismisses every open slice of the item.
   for (const x of db.suggestions) {
-    if (x === s || (s.slice_code != null && x.item_id === s.item_id && x.status === "open" && x.slice_code != null)) Object.assign(x, { status: "dismissed", decided_by: me.id, decided_at: at });
+    if (
+      x === s ||
+      (s.slice_code != null &&
+        x.item_id === s.item_id &&
+        x.status === 'open' &&
+        x.slice_code != null)
+    )
+      Object.assign(x, { status: 'dismissed', decided_by: me.id, decided_at: at });
   }
-  return reply("/v1/simple/roadmap/date-suggestions/{suggestion_id}/dismiss", "post", { ...s, can_decide: true });
+  return reply('/v1/simple/roadmap/date-suggestions/{suggestion_id}/dismiss', 'post', {
+    ...s,
+    can_decide: true,
+  });
 }
 
 export type { MockDraft, SeedItem, SimpleDb };
 
 /** approved-prd-roadmap: what an approved PRD version brings (oracle.simple.prd_roadmap). */
 export interface PrdApproval {
-  prd: Schemas["SimpleDocRef"];
+  prd: Schemas['SimpleDocRef'];
   version: number;
   /** The roadmap its derived items name (Simple roadmap slug), when no roadmap holds the PRD. */
   roadmap?: string | null;
@@ -2542,7 +4237,7 @@ export interface PrdApproval {
     feature_id?: string | null;
     start: string | null;
     end: string | null;
-    source: "engineering" | "accepted";
+    source: 'engineering' | 'accepted';
   }[];
 }
 
@@ -2554,17 +4249,24 @@ export interface PrdApproval {
  * never folded into "phase". Folded for good, so a change made later on the item always takes effect.
  */
 export function foldPrdCopies(db: SimpleDb): void {
-  const prdOf = (x: SeedItem) => x.from_prd?.slug ?? ROADMAPS[x.roadmap]?.prd.toLowerCase().replace(/ /g, "-");
+  const prdOf = (x: SeedItem) =>
+    x.from_prd?.slug ?? ROADMAPS[x.roadmap]?.prd.toLowerCase().replace(/ /g, '-');
   for (const copy of [...db.items]) {
     if (!copy.from_prd) continue;
     const key = copy.prd_key;
-    const shown = key && key !== copy.key && db.items.find((x) => x !== copy && x.key === key && x.roadmap === copy.roadmap && prdOf(x) === prdOf(copy));
+    const shown =
+      key &&
+      key !== copy.key &&
+      db.items.find(
+        (x) =>
+          x !== copy && x.key === key && x.roadmap === copy.roadmap && prdOf(x) === prdOf(copy),
+      );
     if (!shown) continue;
     shown.title = copy.title;
     if (copy.dates) shown.dates = copy.dates;
     if (db.own[copy.key]) db.own[shown.key] = db.own[copy.key];
     else if (copy.dates) delete db.own[shown.key];
-    if (copy.status === "cut") shown.status = "cut";
+    if (copy.status === 'cut') shown.status = 'cut';
     delete db.own[copy.key];
     db.items = db.items.filter((x) => x !== copy);
     for (const d of db.drafts ?? [])
@@ -2580,29 +4282,22 @@ export function foldPrdCopies(db: SimpleDb): void {
  * Approving again takes the PRD's earlier additions out first; an item already published only
  * adds what changed; nothing while the roadmap's draft is in review.
  */
-export function approvedPrdToDraft(
-  db: SimpleDb,
-  a: PrdApproval,
-  me: string,
-): void {
+export function approvedPrdToDraft(db: SimpleDb, a: PrdApproval, me: string): void {
   const rm =
     Object.keys(ROADMAPS).find((k) => ROADMAPS[k].prd === a.prd.title) ??
     (a.roadmap && ROADMAPS[a.roadmap] ? a.roadmap : null);
   if (!rm) return;
   const drafts = (db.drafts ??= []);
-  let d = drafts.find((x) => x.roadmap === rm && x.out.status === "working");
+  let d = drafts.find((x) => x.roadmap === rm && x.out.status === 'working');
   if (!d) {
-    if (drafts.some((x) => x.roadmap === rm && x.out.status === "submitted"))
-      return;
+    if (drafts.some((x) => x.roadmap === rm && x.out.status === 'submitted')) return;
     const items = db.items.filter((x) => x.roadmap === rm);
     const keys = new Set(items.map((x) => x.key));
     d = {
       roadmap: rm,
       published: structuredClone({
         items,
-        own: Object.fromEntries(
-          Object.entries(db.own).filter(([k]) => keys.has(k)),
-        ),
+        own: Object.fromEntries(Object.entries(db.own).filter(([k]) => keys.has(k))),
         key_dates: db.key_dates?.[rm] ?? [],
       }),
       out: {
@@ -2612,7 +4307,7 @@ export function approvedPrdToDraft(
           slug: rm,
           title: ROADMAPS[rm].title,
         },
-        status: "working",
+        status: 'working',
         base_version: 1,
         version: null,
         created_by: me,
@@ -2634,9 +4329,7 @@ export function approvedPrdToDraft(
   // The PRD's earlier additions leave the draft: added items go, changed published ones are as published.
   const before = prds[a.prd.slug];
   delete prds[a.prd.slug];
-  const kds = [...(db.key_dates?.[rm] ?? [])].filter(
-    (k) => !before?.key_dates.includes(k.id),
-  );
+  const kds = [...(db.key_dates?.[rm] ?? [])].filter((k) => !before?.key_dates.includes(k.id));
   if (before) {
     const published = new Map(d.published.items.map((x) => [x.key, x]));
     db.items = db.items.flatMap((x) =>
@@ -2655,15 +4348,15 @@ export function approvedPrdToDraft(
   const ours = db.items.filter(
     (x) =>
       x.roadmap === rm &&
-      (x.from_prd?.slug ??
-        ROADMAPS[rm].prd.toLowerCase().replace(/ /g, "-")) === a.prd.slug,
+      (x.from_prd?.slug ?? ROADMAPS[rm].prd.toLowerCase().replace(/ /g, '-')) === a.prd.slug,
   );
   const named = (t: string) => t.trim().toLowerCase();
   const matched = new Map<string, SeedItem>();
   for (const same of [
-    (it: PrdApproval["items"][number], x: SeedItem) => x.key === it.key,
-    (it: PrdApproval["items"][number], x: SeedItem) => !!it.feature_id && x.feature_id === it.feature_id,
-    (it: PrdApproval["items"][number], x: SeedItem) =>
+    (it: PrdApproval['items'][number], x: SeedItem) => x.key === it.key,
+    (it: PrdApproval['items'][number], x: SeedItem) =>
+      !!it.feature_id && x.feature_id === it.feature_id,
+    (it: PrdApproval['items'][number], x: SeedItem) =>
       !!named(it.title) && named(x.title) === named(it.title),
   ]) {
     for (const it of a.items) {
@@ -2694,8 +4387,7 @@ export function approvedPrdToDraft(
       continue;
     }
     let key = it.key;
-    for (let n = 2; db.items.some((x) => x.key === key); n++)
-      key = `${it.key.slice(0, 21)}-${n}`;
+    for (let n = 2; db.items.some((x) => x.key === key); n++) key = `${it.key.slice(0, 21)}-${n}`;
     db.ids[key] = stableUuid(`simple-prd-item/${rm}/${a.prd.slug}/${key}`);
     db.items.push({
       key,
@@ -2704,12 +4396,7 @@ export function approvedPrdToDraft(
       roadmap: rm,
       outcome: it.outcome ?? null,
       position:
-        Math.max(
-          0,
-          ...db.items
-            .filter((x) => x.roadmap === rm)
-            .map((x) => x.position ?? 0),
-        ) + 1,
+        Math.max(0, ...db.items.filter((x) => x.roadmap === rm).map((x) => x.position ?? 0)) + 1,
       from_prd: { slug: a.prd.slug, title: a.prd.title },
       ...(key !== it.key ? { prd_key: it.key } : {}),
       dates: { start, end: it.end, source: it.source },
@@ -2730,7 +4417,7 @@ export function approvedPrdToDraft(
 
 /** approved-prd-roadmap: how many items each approved PRD put in the draft; key_dates is always 0
  * (ah-prd-milestones-once: its milestones are read-only from the PRD), as the API's sources_out. */
-export function draftPrds(d: MockDraft): Schemas["SimpleDraftPrd"][] {
+export function draftPrds(d: MockDraft): Schemas['SimpleDraftPrd'][] {
   const byRank = byPrdRank(prdRanker());
   return Object.values(d.prds ?? {})
     .map((x) => ({

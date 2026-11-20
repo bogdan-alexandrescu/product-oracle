@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { login } from "./helpers";
+import { login } from './helpers';
 
 // Visual QA pass E: Present mode of Referral link v2. Dates in the brief's text read month
 // first (E-11), a goal in the items table carries its name (E-12), and a version with no
@@ -10,22 +10,17 @@ const ISO = /\d{4}-\d{2}-\d{2}/;
 
 async function openPresent(page: Page) {
   await login(page);
-  await page.goto("/documents/referral-link/v/2");
-  await page
-    .getByRole("link", { name: "Present" })
-    .filter({ visible: true })
-    .first()
-    .click();
+  await page.goto('/documents/referral-link/v/2');
+  await page.getByRole('link', { name: 'Present' }).filter({ visible: true }).first().click();
   await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2\/present$/);
-  await expect(page.getByTestId("slide-counter")).toHaveText("1 / 10");
+  await expect(page.getByTestId('slide-counter')).toHaveText('1 / 10');
 }
 
-const current = (page: Page) =>
-  page.getByTestId("audience-view").locator(".current-slide");
+const current = (page: Page) => page.getByTestId('audience-view').locator('.current-slide');
 
 async function next(page: Page, to: number) {
-  await page.getByRole("button", { name: "Next slide" }).click();
-  await expect(page.getByTestId("slide-counter")).toHaveText(`${to} / 10`);
+  await page.getByRole('button', { name: 'Next slide' }).click();
+  await expect(page.getByTestId('slide-counter')).toHaveText(`${to} / 10`);
 }
 
 test.use({ viewport: { width: 1440, height: 900 } });
@@ -40,35 +35,23 @@ test("E-11, E-12: every slide's dates read month first; the items table names it
     const text = await current(page).innerText();
     expect(text, `slide ${n}`).not.toMatch(ISO);
     if (n === 5) {
-      await expect(current(page).locator(".slide-title")).toHaveText(
-        "Features by milestone",
-      );
-      const goals = current(page).locator("tbody tr td:nth-child(3)");
-      await expect(goals).toHaveText([
-        "Growth",
-        "Growth",
-        "Growth",
-      ]);
+      await expect(current(page).locator('.slide-title')).toHaveText('Features by milestone');
+      const goals = current(page).locator('tbody tr td:nth-child(3)');
+      await expect(goals).toHaveText(['Growth', 'Growth', 'Growth']);
     }
     if (n === 9) {
-      await expect(current(page).locator(".slide-title")).toHaveText(
-        "Decisions needed",
-      );
-      await expect(current(page)).toContainText("needed by Nov 1, 2026");
-      await expect(current(page)).toContainText("needed by Nov 15, 2026");
+      await expect(current(page).locator('.slide-title')).toHaveText('Decisions needed');
+      await expect(current(page)).toContainText('needed by Nov 1, 2026');
+      await expect(current(page)).toContainText('needed by Nov 15, 2026');
     }
   }
 });
 
-test("E-15: a version without a brief names the PRD by its title", async ({
-  page,
-}) => {
+test('E-15: a version without a brief names the PRD by its title', async ({ page }) => {
   await login(page);
-  await page.goto("/documents/annual-billing/v/2/present");
-  await expect(page.getByTestId("present-mode")).toContainText(
-    "Version 2 of Annual billing PRD has no brief to present: open the full PRD instead.",
+  await page.goto('/documents/annual-billing/v/2/present');
+  await expect(page.getByTestId('present-mode')).toContainText(
+    'Version 2 of Annual billing PRD has no brief to present: open the full PRD instead.',
   );
-  await expect(page.getByTestId("present-mode")).not.toContainText(
-    "annual-billing",
-  );
+  await expect(page.getByTestId('present-mode')).not.toContainText('annual-billing');
 });

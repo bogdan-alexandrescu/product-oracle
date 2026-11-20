@@ -1,23 +1,26 @@
-"use client";
+'use client';
 
-import { useMemo, type ReactNode } from "react";
+import { useMemo, type ReactNode } from 'react';
 
-import { InfoTip } from "@/components/ds";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { keyResults, type KeyResults } from "@/lib/key-results";
-import { useQuery } from "@/lib/use-query";
+import { InfoTip } from '@/components/ds';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { keyResults, type KeyResults } from '@/lib/key-results';
+import { useQuery } from '@/lib/use-query';
 
-import { goalLabel } from "./plan-buckets";
+import { goalLabel } from './plan-buckets';
 
-type Out = Schemas["SimplePrioritiesOut"];
-type Buckets = Schemas["GoalBucketsOut"];
-type Plan = Schemas["SimplePlanOut"];
+type Out = Schemas['SimplePrioritiesOut'];
+type Buckets = Schemas['GoalBucketsOut'];
+type Plan = Schemas['SimplePlanOut'];
 type GoalRef = { key: string; title: string; position?: number | null };
 /** A row's goal as Priorities reads it: its top-level goal, and the key result it names (`kr_key`), if any. */
 type PlacedGoal = GoalRef & { kr_key?: string };
 
 /** A row's top-level goal key and, when the row names a key result, that key result's own: a goal's list (?goal=) matches either. */
-export const goalKeysOf = (g: GoalRef): string[] => [g.key, ...((g as PlacedGoal).kr_key ? [(g as PlacedGoal).kr_key!] : [])];
+export const goalKeysOf = (g: GoalRef): string[] => [
+  g.key,
+  ...((g as PlacedGoal).kr_key ? [(g as PlacedGoal).kr_key!] : []),
+];
 
 /** A goal's key result as its bucket lists it: its name (with its code) and its target line, if it has one. */
 export type BucketKeyResult = { id: string; name: string; line: string | null };
@@ -37,7 +40,7 @@ export type PriorityKeyResults = {
   under: (id: string, goal: { id: string; title: string }) => boolean;
 };
 
-const text = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
+const text = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
 /** A key result's name that starts with a code of its own ("KR 1 Half of …") reads without the goal tree's code too. */
 const OWN_CODE = /^(KR|O)[\s-]?\d+(\.\d+)*\b/i;
 
@@ -46,28 +49,43 @@ const OWN_CODE = /^(KR|O)[\s-]?\d+(\.\d+)*\b/i;
  * only top-level goals are goals; a key result (a subgoal) sits in its goal's bucket.
  */
 export function usePriorityKeyResults(): PriorityKeyResults {
-  const goals = useQuery("simple-priorities-goal-tree", () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })));
+  const goals = useQuery('simple-priorities-goal-tree', () =>
+    unwrap(api.GET('/v1/baseline/entities', { params: { query: { type: 'goal' } } })),
+  );
   const { error, reload } = goals;
-  const failed = useMemo(() => (error && !goals.data ? { error, retry: () => void reload() } : null), [error, goals.data, reload]);
+  const failed = useMemo(
+    () => (error && !goals.data ? { error, retry: () => void reload() } : null),
+    [error, goals.data, reload],
+  );
   const read = useMemo(() => {
     const list = goals.data ?? [];
     const krs = keyResults(list);
     // A goal named without its code ("Faster activation" for "G-A Faster activation") is found by its name.
-    const named = (ref: string) => list.find((e) => goalLabel(e.title).name.toLowerCase() === goalLabel(ref).name.toLowerCase())?.id;
+    const named = (ref: string) =>
+      list.find((e) => goalLabel(e.title).name.toLowerCase() === goalLabel(ref).name.toLowerCase())
+        ?.id;
     const find = (refs: (string | null | undefined)[]) => {
-      for (const ref of refs.filter((r): r is string => !!r)) for (const k of [ref, named(ref)]) if (k && krs.of(k).length) return krs.of(k);
+      for (const ref of refs.filter((r): r is string => !!r))
+        for (const k of [ref, named(ref)]) if (k && krs.of(k).length) return krs.of(k);
       return [];
     };
     const of = (refs: (string | null | undefined)[], gb?: Buckets): BucketKeyResult[] =>
       find(refs).map((k) => {
         // Its target line: the goal buckets' own (measure, target; by id, else by name), else the Ground Truth's.
-        const rec = gb?.goals.find((g) => g.id === k.id) ?? gb?.goals.find((g) => goalLabel(g.title).name.toLowerCase() === k.name.toLowerCase());
+        const rec =
+          gb?.goals.find((g) => g.id === k.id) ??
+          gb?.goals.find((g) => goalLabel(g.title).name.toLowerCase() === k.name.toLowerCase());
         const attrs = list.find((e) => e.id === k.id)?.attrs;
         const measure = text(rec?.measure) ?? krs.metricOf(k.id);
         const target = text(rec?.target) ?? text(attrs?.target_text) ?? text(attrs?.target);
-        return { id: k.id, name: k.code && !OWN_CODE.test(k.name) ? `${k.code} ${k.name}` : k.name, line: target && (measure ? `${measure}: ${target}` : target) };
+        return {
+          id: k.id,
+          name: k.code && !OWN_CODE.test(k.name) ? `${k.code} ${k.name}` : k.name,
+          line: target && (measure ? `${measure}: ${target}` : target),
+        };
       });
-    const top = (ref: string | null | undefined) => (ref ? (krs.parentOf(ref) ?? krs.parentOf(named(ref))) : null);
+    const top = (ref: string | null | undefined) =>
+      ref ? (krs.parentOf(ref) ?? krs.parentOf(named(ref))) : null;
     const byId = new Map(list.map((e) => [e.id, e]));
     const name = (title: string) => goalLabel(title).name.toLowerCase();
     const under = (id: string, goal: { id: string; title: string }) => {
@@ -100,14 +118,18 @@ export function topGoalPriorities(data: Out | undefined, krs: KeyResults): Out |
   const top = <G extends GoalRef>(g: G | null | undefined): G | null => (g ? topOf(g, krs) : null);
   // A goal's position: its own row's, so its key results' rows sort with it.
   const position = new Map<string, number | null>();
-  for (const r of data.rows) if (r.goal && !krs.parentOf(r.goal.key)) position.set(r.goal.key, r.goal.position ?? null);
-  for (const b of data.buckets) if (!b.no_goal && !krs.parentOf(b.key)) position.set(b.key, b.position ?? null);
+  for (const r of data.rows)
+    if (r.goal && !krs.parentOf(r.goal.key)) position.set(r.goal.key, r.goal.position ?? null);
+  for (const b of data.buckets)
+    if (!b.no_goal && !krs.parentOf(b.key)) position.set(b.key, b.position ?? null);
   const placed = <G extends GoalRef>(g: G | null | undefined): G | null => {
     const t = top(g);
     // Its own goal's key stays as `kr_key`, so a key result's list (?goal=) still finds it.
-    return t && g && t.key !== g.key ? { ...t, position: position.get(t.key) ?? t.position ?? null, kr_key: g.key } : t;
+    return t && g && t.key !== g.key
+      ? { ...t, position: position.get(t.key) ?? t.position ?? null, kr_key: g.key }
+      : t;
   };
-  const buckets: Out["buckets"] = [];
+  const buckets: Out['buckets'] = [];
   for (const b of data.buckets) {
     const t = b.no_goal ? null : (krs.parentOf(b.key) ?? krs.parentOf(b.title));
     // A goal's bucket already taken in (its key result came first): nothing more to add.
@@ -123,7 +145,17 @@ export function topGoalPriorities(data: Out | undefined, krs: KeyResults): Out |
     }
     // Its goal's own bucket, wherever it comes, takes it in here; else the goal's bucket stands here.
     const own = data.buckets.find((x) => x.key === t.key);
-    buckets.push(own ? { ...own, weeks: own.weeks + b.weeks, codes: [...own.codes, ...b.codes] } : { ...b, key: t.key, title: t.title, position: position.get(t.key) ?? b.position ?? null, codes: [...b.codes] });
+    buckets.push(
+      own
+        ? { ...own, weeks: own.weeks + b.weeks, codes: [...own.codes, ...b.codes] }
+        : {
+            ...b,
+            key: t.key,
+            title: t.title,
+            position: position.get(t.key) ?? b.position ?? null,
+            codes: [...b.codes],
+          },
+    );
   }
   for (const b of buckets) {
     b.weeks = Number(b.weeks.toFixed(3));
@@ -152,12 +184,18 @@ export function topGoalBuckets(gb: Buckets | undefined, krs: KeyResults): Bucket
     if (to && to.id !== g.id) parent.set(g.id, to.id);
   }
   if (!parent.size) return gb;
-  const lift = (ids: string[] | undefined) => [...new Set((ids ?? []).map((id) => parent.get(id) ?? id))];
+  const lift = (ids: string[] | undefined) => [
+    ...new Set((ids ?? []).map((id) => parent.get(id) ?? id)),
+  ];
   return {
     ...gb,
     // The API's numbers count key results too: the goals left are numbered again, without gaps.
     goals: gb.goals.filter((g) => !parent.has(g.id)).map((g, i) => ({ ...g, order: i + 1 })),
-    features: gb.features.map((f) => ({ ...f, goal_ids: lift(f.goal_ids), assumed_goal_ids: lift(f.assumed_goal_ids) })),
+    features: gb.features.map((f) => ({
+      ...f,
+      goal_ids: lift(f.goal_ids),
+      assumed_goal_ids: lift(f.assumed_goal_ids),
+    })),
   };
 }
 
@@ -165,15 +203,22 @@ export function topGoalBuckets(gb: Buckets | undefined, krs: KeyResults): Bucket
  * A dated plan with each slice that names a key result under its top-level goal (a plan goal that is
  * a key result is left out when its goal is listed), so placedPlan finds the goal among the buckets.
  */
-export function topGoalPlan(plan: Plan, top: PriorityKeyResults["top"]): Plan {
-  const same = (a: string, b: string) => goalLabel(a).name.toLowerCase() === goalLabel(b).name.toLowerCase();
+export function topGoalPlan(plan: Plan, top: PriorityKeyResults['top']): Plan {
+  const same = (a: string, b: string) =>
+    goalLabel(a).name.toLowerCase() === goalLabel(b).name.toLowerCase();
   const listed = (name: string) => plan.goals.some((g) => same(g.name, name));
   const up = (name: string) => {
     const t = top(name);
-    return t && (listed(t.title) || !listed(name)) ? (plan.goals.find((g) => same(g.name, t.title))?.name ?? t.title) : name;
+    return t && (listed(t.title) || !listed(name))
+      ? (plan.goals.find((g) => same(g.name, t.title))?.name ?? t.title)
+      : name;
   };
-  if (!plan.slices.some((s) => s.goal && up(s.goal) !== s.goal) && !plan.goals.some((g) => up(g.name) !== g.name)) return plan;
-  const weeks = new Map<string, Plan["goal_weeks"][number]>();
+  if (
+    !plan.slices.some((s) => s.goal && up(s.goal) !== s.goal) &&
+    !plan.goals.some((g) => up(g.name) !== g.name)
+  )
+    return plan;
+  const weeks = new Map<string, Plan['goal_weeks'][number]>();
   for (const w of plan.goal_weeks) {
     const k = `${up(w.goal)}|${w.milestone}`;
     const was = weeks.get(k);
@@ -188,10 +233,22 @@ export function topGoalPlan(plan: Plan, top: PriorityKeyResults["top"]): Plan {
 }
 
 /** A goal's key results inside its bucket: each one's name, its target line behind an (i). */
-export function KeyResultList({ list, goal, className = "" }: { list: BucketKeyResult[]; goal: string; className?: string }) {
+export function KeyResultList({
+  list,
+  goal,
+  className = '',
+}: {
+  list: BucketKeyResult[];
+  goal: string;
+  className?: string;
+}) {
   if (!list.length) return null;
   return (
-    <ul data-testid="goal-krs" aria-label={`${goal}'s key results`} className={`mt-1 text-[15px] leading-5 text-text2 ${className}`}>
+    <ul
+      data-testid="goal-krs"
+      aria-label={`${goal}'s key results`}
+      className={`mt-1 text-[15px] leading-5 text-text2 ${className}`}
+    >
       {list.map((k) => (
         <li key={k.id} data-testid="goal-kr" className="flex min-w-0 items-center gap-1">
           <span className="truncate" title={k.name}>
@@ -212,6 +269,19 @@ export function KeyResultList({ list, goal, className = "" }: { list: BucketKeyR
  * A move as the goal buckets write it: a feature carried off its goal's bucket leaves the link it
  * is placed by (a key result's, when that is what places it there), so it never keeps that link behind.
  */
-export function liftedMoves<W extends { move: (feature: string, from: string | null, to: string, text: ReactNode) => Promise<boolean> }>(writes: W, read: Buckets | undefined): W {
-  return { ...writes, move: (feature, from, to, text) => writes.move(feature, from && (read?.features.find((f) => f.id === feature)?.goal_ids?.[0] ?? from), to, text) };
+export function liftedMoves<
+  W extends {
+    move: (feature: string, from: string | null, to: string, text: ReactNode) => Promise<boolean>;
+  },
+>(writes: W, read: Buckets | undefined): W {
+  return {
+    ...writes,
+    move: (feature, from, to, text) =>
+      writes.move(
+        feature,
+        from && (read?.features.find((f) => f.id === feature)?.goal_ids?.[0] ?? from),
+        to,
+        text,
+      ),
+  };
 }

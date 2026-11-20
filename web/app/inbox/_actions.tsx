@@ -1,16 +1,16 @@
-"use client";
+'use client';
 
-import { Link } from "@/lib/nav";
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { Link } from '@/lib/nav';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 
-import { Button, LinkButton } from "@/components/ds";
-import { api, unwrap } from "@/lib/api/client";
-import { errorMessage } from "@/lib/use-query";
-import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
+import { Button, LinkButton } from '@/components/ds';
+import { api, unwrap } from '@/lib/api/client';
+import { errorMessage } from '@/lib/use-query';
+import { invalidateWaiting, waitingChanged } from '@/lib/waiting';
 
-import type { InboxOut } from "../runs/_lib";
+import type { InboxOut } from '../runs/_lib';
 
-type FeedbackRow = InboxOut["items"][number];
+type FeedbackRow = InboxOut['items'][number];
 
 /**
  * What an action did, said once above the rows; `undo` where the routes allow it: Decline,
@@ -22,25 +22,28 @@ export type OnActed = (a: Acted) => void;
 /** How long the "what happened" line, and its Undo, stays. */
 export const UNDO_MS = 10_000;
 
-type Primary = "Accept" | "Send answer" | "Close" | "Merge";
+type Primary = 'Accept' | 'Send answer' | 'Close' | 'Merge';
 
 /**
  * The row's one-click decision on Oracle's open suggestion (D14): Accept section text,
  * Send an answer, Close on "nothing to change", Merge a duplicate; none without one.
  */
-export function primaryOf(f: Pick<FeedbackRow, "suggestion_id" | "suggestion_kind">): Primary | null {
+export function primaryOf(
+  f: Pick<FeedbackRow, 'suggestion_id' | 'suggestion_kind'>,
+): Primary | null {
   if (!f.suggestion_id) return null;
-  if (f.suggestion_kind === "section_text") return "Accept";
-  if (f.suggestion_kind === "answer") return "Send answer";
-  if (f.suggestion_kind === "none") return "Close";
-  if (f.suggestion_kind === "duplicate") return "Merge";
+  if (f.suggestion_kind === 'section_text') return 'Accept';
+  if (f.suggestion_kind === 'answer') return 'Send answer';
+  if (f.suggestion_kind === 'none') return 'Close';
+  if (f.suggestion_kind === 'duplicate') return 'Merge';
   return null;
 }
 
 function doneMessage(f: FeedbackRow, primary: Primary): string {
-  if (primary === "Accept") return `Staged for draft ${(f.latest_version ?? f.raised_on_version) + 1}: ${f.summary}`;
-  if (primary === "Send answer") return `Answer sent: ${f.summary}`;
-  if (primary === "Close") return `Nothing to change, closed: ${f.summary}`;
+  if (primary === 'Accept')
+    return `Staged for draft ${(f.latest_version ?? f.raised_on_version) + 1}: ${f.summary}`;
+  if (primary === 'Send answer') return `Answer sent: ${f.summary}`;
+  if (primary === 'Close') return `Nothing to change, closed: ${f.summary}`;
   return `Merged with the earlier item: ${f.summary}`;
 }
 
@@ -64,8 +67,8 @@ export function InboxActions({
   compact?: boolean;
   onActed: OnActed;
 }) {
-  const [mode, setMode] = useState<"idle" | "reason" | "decline">("idle");
-  const [text, setText] = useState("");
+  const [mode, setMode] = useState<'idle' | 'reason' | 'decline'>('idle');
+  const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [settled, setSettled] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -74,14 +77,14 @@ export function InboxActions({
   const primary = primaryOf(f);
   const sid = f.suggestion_id;
 
-  async function run(call: () => Promise<unknown>, done: string, acted: Omit<Acted, "id">) {
+  async function run(call: () => Promise<unknown>, done: string, acted: Omit<Acted, 'id'>) {
     setBusy(true);
     setError(null);
     try {
       await call();
       // Until the reload moves the row, it says what happened.
       setSettled(done);
-      setMode("idle");
+      setMode('idle');
       onActed({ id: f.id, ...acted });
     } catch (e) {
       setError(errorMessage(e));
@@ -92,38 +95,47 @@ export function InboxActions({
 
   const accept = (reason?: string) =>
     run(
-      () => unwrap(api.POST("/v1/suggestions/{suggestion_id}/accept", { ...suggestionPath(sid!), body: reason ? { reason } : {} })),
-      primary === "Accept" ? "Staged" : "Done",
+      () =>
+        unwrap(
+          api.POST('/v1/suggestions/{suggestion_id}/accept', {
+            ...suggestionPath(sid!),
+            body: reason ? { reason } : {},
+          }),
+        ),
+      primary === 'Accept' ? 'Staged' : 'Done',
       {
         message: doneMessage(f, primary!),
         // Back to open, as before Accept; the API says why when it cannot (a build uses it).
         undo:
-          primary === "Send answer"
+          primary === 'Send answer'
             ? undefined
-            : () => unwrap(api.POST("/v1/suggestions/{suggestion_id}/undo-accept", suggestionPath(sid!))),
+            : () =>
+                unwrap(
+                  api.POST('/v1/suggestions/{suggestion_id}/undo-accept', suggestionPath(sid!)),
+                ),
       },
     );
 
   function onPrimary() {
-    if (primary === "Accept" && f.suggestion_pushback) {
-      open("reason");
+    if (primary === 'Accept' && f.suggestion_pushback) {
+      open('reason');
       return;
     }
     void accept();
   }
 
-  function open(next: "reason" | "decline") {
+  function open(next: 'reason' | 'decline') {
     setMode(next);
-    setText("");
+    setText('');
     setError(null);
   }
 
   function submit(e: FormEvent) {
     e.preventDefault();
     const value = text.trim();
-    if (mode === "reason") {
+    if (mode === 'reason') {
       if (!value) {
-        setError("Say why you accept it.");
+        setError('Say why you accept it.');
         field.current?.focus();
         return;
       }
@@ -133,38 +145,64 @@ export function InboxActions({
     const note = value || null;
     void run(
       sid
-        ? () => unwrap(api.POST("/v1/suggestions/{suggestion_id}/dismiss", { ...suggestionPath(sid), body: { reason: note, decline: true } }))
-        : () => unwrap(api.PATCH("/v1/feedback/{feedback_id}", { ...feedbackPath(f.id), body: { status: "declined", resolution_note: note } })),
-      "Declined",
+        ? () =>
+            unwrap(
+              api.POST('/v1/suggestions/{suggestion_id}/dismiss', {
+                ...suggestionPath(sid),
+                body: { reason: note, decline: true },
+              }),
+            )
+        : () =>
+            unwrap(
+              api.PATCH('/v1/feedback/{feedback_id}', {
+                ...feedbackPath(f.id),
+                body: { status: 'declined', resolution_note: note },
+              }),
+            ),
+      'Declined',
       {
         message: `Declined: ${f.summary}`,
         // Re-open the item; Oracle's dismissed suggestion stays dismissed.
-        undo: () => unwrap(api.PATCH("/v1/feedback/{feedback_id}", { ...feedbackPath(f.id), body: { status: "open", resolution_note: null } })),
+        undo: () =>
+          unwrap(
+            api.PATCH('/v1/feedback/{feedback_id}', {
+              ...feedbackPath(f.id),
+              body: { status: 'open', resolution_note: null },
+            }),
+          ),
       },
     );
   }
 
   const errorLine = error && (
-    <span role="alert" data-testid="inbox-action-error" className="w-full text-left text-sm leading-5 whitespace-normal text-crit">
+    <span
+      role="alert"
+      data-testid="inbox-action-error"
+      className="w-full text-left text-sm leading-5 whitespace-normal text-crit"
+    >
       {error}
     </span>
   );
   // qa-company-4 (round 3): on a phone the actions keep one line under the row, the lead
   // button then the text ones, as on a question's row; only the field's buttons stack.
-  const stack = "max-[600px]:w-full";
+  const stack = 'max-[600px]:w-full';
 
   if (settled) {
     return (
-      <span data-inbox-actions className="text-sm font-semibold text-text2" data-testid="inbox-action-settled">
+      <span
+        data-inbox-actions
+        className="text-sm font-semibold text-text2"
+        data-testid="inbox-action-settled"
+      >
         {settled}
       </span>
     );
   }
 
-  if (mode !== "idle") {
+  if (mode !== 'idle') {
     // qa4-work-32: the prompt matches the action (it is someone else's comment being accepted).
-    const label = mode === "reason" ? "Oracle pushed back. Why accept anyway?" : "Why? (optional)";
-    const verb = mode === "reason" ? "Accept" : "Decline";
+    const label = mode === 'reason' ? 'Oracle pushed back. Why accept anyway?' : 'Why? (optional)';
+    const verb = mode === 'reason' ? 'Accept' : 'Decline';
     return (
       <form
         data-inbox-actions
@@ -181,9 +219,9 @@ export function InboxActions({
           autoFocus
           value={text}
           maxLength={500}
-          aria-invalid={mode === "reason" && !!error}
+          aria-invalid={mode === 'reason' && !!error}
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === "Escape" && setMode("idle")}
+          onKeyDown={(e) => e.key === 'Escape' && setMode('idle')}
           className="h-8 w-full min-w-0 rounded-lg border border-line-strong bg-surface px-2 text-sm"
         />
         {errorLine}
@@ -191,7 +229,7 @@ export function InboxActions({
           <Button type="submit" disabled={busy} className={stack}>
             {verb}
           </Button>
-          <Button variant="ghost" disabled={busy} onClick={() => setMode("idle")} className={stack}>
+          <Button variant="ghost" disabled={busy} onClick={() => setMode('idle')} className={stack}>
             Cancel
           </Button>
         </span>
@@ -201,20 +239,25 @@ export function InboxActions({
 
   // D12: no section text to accept here: the item can go to the agents with the next draft.
   const canStage =
-    !compact && primary !== "Accept" && primary !== "Merge" && (f.suggestion_kind !== "section_text" || f.suggestion_status === "dismissed");
+    !compact &&
+    primary !== 'Accept' &&
+    primary !== 'Merge' &&
+    (f.suggestion_kind !== 'section_text' || f.suggestion_status === 'dismissed');
   // qa-company-29: one rule on every row: the first action is the bordered one, the rest are
   // text, but Open, bordered on every row (G-5). With no suggestion to act on, Stage for agents
   // leads, else Open; Decline never does.
-  const lead: "primary" | "stage" | "open" = primary ? "primary" : canStage ? "stage" : "open";
+  const lead: 'primary' | 'stage' | 'open' = primary ? 'primary' : canStage ? 'stage' : 'open';
   const stage = canStage && (
     <Button
-      variant={lead === "stage" ? "secondary" : "ghost"}
+      variant={lead === 'stage' ? 'secondary' : 'ghost'}
       disabled={busy}
       onClick={() =>
         void run(
-          () => unwrap(api.POST("/v1/feedback/{feedback_id}/stage-for-agents", feedbackPath(f.id))),
-          "Staged",
-          { message: `Staged for draft ${(f.latest_version ?? f.raised_on_version) + 1} · agents: ${f.summary}` },
+          () => unwrap(api.POST('/v1/feedback/{feedback_id}/stage-for-agents', feedbackPath(f.id))),
+          'Staged',
+          {
+            message: `Staged for draft ${(f.latest_version ?? f.raised_on_version) + 1} · agents: ${f.summary}`,
+          },
         )
       }
     >
@@ -226,8 +269,8 @@ export function InboxActions({
       Open
     </LinkButton>
   );
-  const decline = primary !== "Merge" && (
-    <Button variant="ghost" disabled={busy} onClick={() => open("decline")}>
+  const decline = primary !== 'Merge' && (
+    <Button variant="ghost" disabled={busy} onClick={() => open('decline')}>
       Decline
     </Button>
   );
@@ -241,11 +284,11 @@ export function InboxActions({
           {primary}
         </Button>
       )}
-      {lead === "stage" && stage}
-      {lead === "open" && openLink}
+      {lead === 'stage' && stage}
+      {lead === 'open' && openLink}
       {(!compact || !primary) && decline}
-      {lead !== "stage" && stage}
-      {lead !== "open" && openLink}
+      {lead !== 'stage' && stage}
+      {lead !== 'open' && openLink}
       {errorLine}
     </span>
   );
@@ -255,7 +298,15 @@ export function InboxActions({
  * The item's text, linking to it; hovering or focusing it shows Oracle's suggested text
  * (its first 280 characters; the document has all of it).
  */
-export function SuggestionPeek({ href, summary, text }: { href: string; summary: string; text: string | null | undefined }) {
+export function SuggestionPeek({
+  href,
+  summary,
+  text,
+}: {
+  href: string;
+  summary: string;
+  text: string | null | undefined;
+}) {
   const id = useId();
   const ref = useRef<HTMLAnchorElement>(null);
   const [at, setAt] = useState<{ left: number; top: number } | null>(null);
@@ -273,8 +324,8 @@ export function SuggestionPeek({ href, summary, text }: { href: string; summary:
   useEffect(() => {
     if (!at) return;
     const close = () => setAt(null);
-    window.addEventListener("scroll", close, true);
-    return () => window.removeEventListener("scroll", close, true);
+    window.addEventListener('scroll', close, true);
+    return () => window.removeEventListener('scroll', close, true);
   }, [at]);
   return (
     <>
@@ -371,7 +422,11 @@ export function useActed(reload: () => Promise<unknown>) {
         data-testid="inbox-acted"
         className="mx-4 mt-3 flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-surface2 px-3 py-1.5 text-[15px] max-[600px]:mx-3"
       >
-        {acted && <span className="min-w-0 flex-1 truncate font-medium max-[600px]:whitespace-normal">{acted.message}</span>}
+        {acted && (
+          <span className="min-w-0 flex-1 truncate font-medium max-[600px]:whitespace-normal">
+            {acted.message}
+          </span>
+        )}
         {error && <span className="text-sm text-crit">{error}</span>}
         {acted?.undo && (
           <Button variant="ghost" disabled={undoing} onClick={() => void undo()}>

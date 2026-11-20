@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { login } from "./helpers";
+import { login } from './helpers';
 
 /**
  * qa-onboarding-3, -43: a new company's owner picks a Slack source (not an upload) from Home's
@@ -15,82 +15,90 @@ import { login } from "./helpers";
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
-const panel = (page: Page) => page.getByTestId("home-setup");
+const panel = (page: Page) => page.getByTestId('home-setup');
 const row = (page: Page, key: string) => page.getByTestId(`setup-row-${key}`);
-const settingsNav = (page: Page) => page.getByRole("navigation", { name: "Settings" });
+const settingsNav = (page: Page) => page.getByRole('navigation', { name: 'Settings' });
 
 async function backToHome(page: Page) {
-  await settingsNav(page).getByRole("link", { name: "Back to Home" }).click();
+  await settingsNav(page).getByRole('link', { name: 'Back to Home' }).click();
   await expect(page).toHaveURL(/\/home$/);
 }
 
-test("Pick sources: a Slack source added and synced from Set up is counted on Home, as on Sources", async ({ page }) => {
+test('Pick sources: a Slack source added and synced from Set up is counted on Home, as on Sources', async ({
+  page,
+}) => {
   // protects=qa-onboarding-3/-43; fails_when=Home still says "None" for Pick sources while
   // Sources lists the source, the step stays open after a sync that read messages, or the sync
   // says it saw items the source does not hold; no_claim=a real Slack workspace.
-  await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "empty"));
+  await page.addInitScript(() => localStorage.setItem('po-mock-scenario', 'empty'));
   await login(page);
-  await expect(panel(page).getByTestId("panel-count")).toHaveText("2 of 8");
-  await expect(row(page, "sources").getByTestId("setup-status")).toHaveText("None");
+  await expect(panel(page).getByTestId('panel-count')).toHaveText('2 of 8');
+  await expect(row(page, 'sources').getByTestId('setup-status')).toHaveText('None');
 
   // Connect tools first: Slack, with a pasted token.
-  await row(page, "connect").getByRole("link", { name: "Open Connect tools" }).click();
+  await row(page, 'connect').getByRole('link', { name: 'Open Connect tools' }).click();
   await expect(page).toHaveURL(/\/settings\/connections\?from=setup$/);
-  const slack = page.getByTestId("connection-card-slack");
-  await slack.getByRole("button", { name: "Paste a token" }).click();
-  await slack.getByLabel("Token", { exact: true }).fill("example-slack-1234");
-  await slack.getByRole("button", { name: "Connect", exact: true }).click();
-  await expect(slack.getByText("Connected")).toBeVisible();
+  const slack = page.getByTestId('connection-card-slack');
+  await slack.getByRole('button', { name: 'Paste a token' }).click();
+  await slack.getByLabel('Token', { exact: true }).fill('example-slack-1234');
+  await slack.getByRole('button', { name: 'Connect', exact: true }).click();
+  await expect(slack.getByText('Connected')).toBeVisible();
   await backToHome(page);
-  await expect(panel(page).getByTestId("panel-count")).toHaveText("3 of 8");
+  await expect(panel(page).getByTestId('panel-count')).toHaveText('3 of 8');
 
   // Pick sources: Slack, "Team chat", one channel; then Sync now.
-  await row(page, "sources").getByRole("link", { name: "Open Pick sources" }).click();
+  await row(page, 'sources').getByRole('link', { name: 'Open Pick sources' }).click();
   await expect(page).toHaveURL(/\/settings\/sources\?from=setup$/);
   // One way in: the header's Add a source; the empty list has no button of its own (qa-onboarding-18).
-  await expect(page.getByTestId("sources-empty")).toContainText("No sources yet");
-  await page.getByRole("button", { name: "Add a source" }).click();
-  const form = page.getByRole("form", { name: "Add a source" });
-  await form.getByLabel("Kind").selectOption("slack");
-  await expect(form.getByLabel("Connection")).toHaveValue(/.+/);
-  await form.getByLabel("Name").fill("Team chat");
-  await form.getByRole("button", { name: "Paste links" }).click();
-  await form.getByLabel("Channel links (one per line)").fill("C0TEAMCHAT");
-  await form.getByRole("button", { name: "Add source" }).click();
-  const chat = page.getByRole("listitem", { name: "Team chat" });
+  await expect(page.getByTestId('sources-empty')).toContainText('No sources yet');
+  await page.getByRole('button', { name: 'Add a source' }).click();
+  const form = page.getByRole('form', { name: 'Add a source' });
+  await form.getByLabel('Kind').selectOption('slack');
+  await expect(form.getByLabel('Connection')).toHaveValue(/.+/);
+  await form.getByLabel('Name').fill('Team chat');
+  await form.getByRole('button', { name: 'Paste links' }).click();
+  await form.getByLabel('Channel links (one per line)').fill('C0TEAMCHAT');
+  await form.getByRole('button', { name: 'Add source' }).click();
+  const chat = page.getByRole('listitem', { name: 'Team chat' });
   await expect(chat).toBeVisible();
-  await expect(page.getByRole("list", { name: "My sources" }).getByRole("listitem")).toHaveCount(1);
-  await chat.getByRole("button", { name: "Sync now" }).click();
+  await expect(page.getByRole('list', { name: 'My sources' }).getByRole('listitem')).toHaveCount(1);
+  await chat.getByRole('button', { name: 'Sync now' }).click();
   // The sync says what it read: the channel's messages, which the source now holds.
-  await expect(chat.getByRole("status")).toContainText("Synced: 2 items,");
-  await expect(chat.getByTestId("source-items")).toHaveText("2 items");
+  await expect(chat.getByRole('status')).toContainText('Synced: 2 items,');
+  await expect(chat.getByTestId('source-items')).toHaveText('2 items');
 
   // Back to Home: the source is read, and the step is done (qa-onboarding-3).
   await backToHome(page);
-  const status = row(page, "sources").getByTestId("setup-status");
-  await expect(status).toHaveText("1 source with content");
-  await expect(row(page, "sources")).toHaveAttribute("data-done", "true");
-  await expect(panel(page).getByTestId("panel-count")).toHaveText("4 of 8");
+  const status = row(page, 'sources').getByTestId('setup-status');
+  await expect(status).toHaveText('1 source with content');
+  await expect(row(page, 'sources')).toHaveAttribute('data-done', 'true');
+  await expect(panel(page).getByTestId('panel-count')).toHaveText('4 of 8');
 
   // Sources, opened again from the done step's Change, lists the same one source.
-  await row(page, "sources").getByRole("link", { name: "Change Pick sources" }).click();
+  await row(page, 'sources').getByRole('link', { name: 'Change Pick sources' }).click();
   await expect(page).toHaveURL(/\/settings\/sources\?from=setup$/);
-  await expect(page.getByRole("list", { name: "My sources" }).getByRole("listitem")).toHaveCount(1);
-  await expect(page.getByRole("listitem", { name: "Team chat" })).toBeVisible();
+  await expect(page.getByRole('list', { name: 'My sources' }).getByRole('listitem')).toHaveCount(1);
+  await expect(page.getByRole('listitem', { name: 'Team chat' })).toBeVisible();
 
   // An upload with a file beside it: two sources, both read; the step says both.
-  await page.getByRole("button", { name: "Add a source" }).first().click();
-  await form.getByLabel("Kind").selectOption("upload");
-  await form.getByLabel("Name").fill("Research notes");
-  await form.getByRole("button", { name: "Add source" }).click();
-  const notes = page.getByRole("listitem", { name: "Research notes" });
-  await notes.getByLabel("Upload files to Research notes").setInputFiles([
-    { name: "interview.md", mimeType: "text/markdown", buffer: Buffer.from("# Interview\nThe export button is hard to find.") },
+  await page.getByRole('button', { name: 'Add a source' }).first().click();
+  await form.getByLabel('Kind').selectOption('upload');
+  await form.getByLabel('Name').fill('Research notes');
+  await form.getByRole('button', { name: 'Add source' }).click();
+  const notes = page.getByRole('listitem', { name: 'Research notes' });
+  await notes.getByLabel('Upload files to Research notes').setInputFiles([
+    {
+      name: 'interview.md',
+      mimeType: 'text/markdown',
+      buffer: Buffer.from('# Interview\nThe export button is hard to find.'),
+    },
   ]);
-  await expect(notes.getByTestId("source-items")).toHaveText("1 item");
-  await expect(page.getByRole("list", { name: "My sources" }).getByRole("listitem")).toHaveCount(2);
+  await expect(notes.getByTestId('source-items')).toHaveText('1 item');
+  await expect(page.getByRole('list', { name: 'My sources' }).getByRole('listitem')).toHaveCount(2);
   await backToHome(page);
-  await expect(row(page, "sources")).toHaveAttribute("data-done", "true");
-  await expect(row(page, "sources").getByTestId("setup-status")).toHaveText("2 sources with content");
-  await expect(panel(page).getByTestId("panel-count")).toHaveText("4 of 8");
+  await expect(row(page, 'sources')).toHaveAttribute('data-done', 'true');
+  await expect(row(page, 'sources').getByTestId('setup-status')).toHaveText(
+    '2 sources with content',
+  );
+  await expect(panel(page).getByTestId('panel-count')).toHaveText('4 of 8');
 });

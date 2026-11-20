@@ -10,18 +10,19 @@
  * their role's default (`default_experience` in GET /v1/me/capabilities), only decides where
  * they land after sign-in and on `/`.
  */
-export type Mode = "simple" | "detailed";
+export type Mode = 'simple' | 'detailed';
 
-export const SIMPLE_HOME = "/simple";
-export const DETAILED_HOME = "/home";
+export const SIMPLE_HOME = '/simple';
+export const DETAILED_HOME = '/home';
 
 export function modeOf(pathname: string): Mode {
-  return pathname === SIMPLE_HOME || pathname.startsWith(`${SIMPLE_HOME}/`) ? "simple" : "detailed";
+  return pathname === SIMPLE_HOME || pathname.startsWith(`${SIMPLE_HOME}/`) ? 'simple' : 'detailed';
 }
 
-export const homeOf = (mode: Mode) => (mode === "simple" ? SIMPLE_HOME : DETAILED_HOME);
+export const homeOf = (mode: Mode) => (mode === 'simple' ? SIMPLE_HOME : DETAILED_HOME);
 
-const under = (pathname: string, base: string) => pathname === base || pathname.startsWith(`${base}/`);
+const under = (pathname: string, base: string) =>
+  pathname === base || pathname.startsWith(`${base}/`);
 
 /**
  * Simple's pages and the Detailed page each one matches (D10); the rest match the other home.
@@ -29,14 +30,14 @@ const under = (pathname: string, base: string) => pathname === base || pathname.
  * only takes the lists themselves.
  */
 const PAIRS: [simple: string, detailed: string][] = [
-  ["/simple/roadmap", "/plan"],
+  ['/simple/roadmap', '/plan'],
   // qa-shell-5: the Roadmap's Changelog and Launches are Plan's tabs too (the rail says Plan).
-  ["/simple/roadmap", "/roadmap"],
-  ["/simple/priorities", "/priorities"],
-  ["/simple/meetings", "/company/rituals"],
-  ["/simple/decisions", "/company/decisions"],
-  ["/simple/one-pagers", "/documents"],
-  ["/simple/inbox", "/inbox"],
+  ['/simple/roadmap', '/roadmap'],
+  ['/simple/priorities', '/priorities'],
+  ['/simple/meetings', '/company/rituals'],
+  ['/simple/decisions', '/company/decisions'],
+  ['/simple/one-pagers', '/documents'],
+  ['/simple/inbox', '/inbox'],
 ];
 
 /**
@@ -52,11 +53,11 @@ const PAIRS: [simple: string, detailed: string][] = [
  * It is a flag, compared only as `documentHome` in switchTarget; never navigated to (no page
  * lives at this path).
  */
-export const REPLACED_PRD_HOME = "/documents/replaced";
+export const REPLACED_PRD_HOME = '/documents/replaced';
 
 export function switchTarget(pathname: string, to: Mode, documentHome?: string): string {
   if (to === modeOf(pathname)) return pathname;
-  if (to === "detailed") {
+  if (to === 'detailed') {
     // qa-shell-4: a PRD's one-pager by either of its paths opens that PRD's page.
     const onePager = /^\/simple\/(?:one-pagers|prds)\/([^/]+)/.exec(pathname)?.[1];
     if (onePager) return `/documents/${onePager}`;
@@ -64,14 +65,22 @@ export function switchTarget(pathname: string, to: Mode, documentHome?: string):
   }
   const doc = /^\/documents\/([^/]+)/.exec(pathname)?.[1];
   // qa4-shell-5: a new document of another kind (New roadmap, whose rail lights Plan) opens its list's match.
-  if (doc === "new" && documentHome && documentHome !== "/documents") {
-    return PAIRS.find(([, detailed]) => detailed !== "/documents" && under(documentHome, detailed))?.[0] ?? SIMPLE_HOME;
+  if (doc === 'new' && documentHome && documentHome !== '/documents') {
+    return (
+      PAIRS.find(
+        ([, detailed]) => detailed !== '/documents' && under(documentHome, detailed),
+      )?.[0] ?? SIMPLE_HOME
+    );
   }
-  if (doc && doc !== "new") {
-    if (documentHome === REPLACED_PRD_HOME) return "/simple/one-pagers";
-    if (!documentHome || documentHome === "/documents") return `/simple/one-pagers/${doc}`;
+  if (doc && doc !== 'new') {
+    if (documentHome === REPLACED_PRD_HOME) return '/simple/one-pagers';
+    if (!documentHome || documentHome === '/documents') return `/simple/one-pagers/${doc}`;
     // A document page of another kind (a roadmap, a strategy) has no one-pager: its list's match, else Home.
-    return PAIRS.find(([, detailed]) => detailed !== "/documents" && under(documentHome, detailed))?.[0] ?? SIMPLE_HOME;
+    return (
+      PAIRS.find(
+        ([, detailed]) => detailed !== '/documents' && under(documentHome, detailed),
+      )?.[0] ?? SIMPLE_HOME
+    );
   }
   return PAIRS.find(([, detailed]) => under(pathname, detailed))?.[0] ?? SIMPLE_HOME;
 }

@@ -1,8 +1,8 @@
-import { expect, test, type Locator, type Page } from "./test";
+import { expect, test, type Locator, type Page } from './test';
 
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { PRIORITY_BLOCKED_RUN, PRIORITY_RUN } from "../lib/api/mock/runs";
-import { login } from "./helpers";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { PRIORITY_BLOCKED_RUN, PRIORITY_RUN } from '../lib/api/mock/runs';
+import { login } from './helpers';
 
 /**
  * walk-docs-priorities: the Priorities screen as a person reads it, live and in a run's order.
@@ -22,16 +22,19 @@ import { login } from "./helpers";
  * - "6 at 390 px every table row fits the phone".
  */
 
-const APPROVER = "approver@example.com";
+const APPROVER = 'approver@example.com';
 
 async function seeded(page: Page) {
-  await page.addInitScript((key) => localStorage.setItem(key, "priority-order"), MOCK_SCENARIO_KEY);
+  await page.addInitScript((key) => localStorage.setItem(key, 'priority-order'), MOCK_SCENARIO_KEY);
   await login(page, APPROVER);
 }
 
 async function runOrder(page: Page, run = PRIORITY_RUN) {
   await page.goto(`/runs/${run}`);
-  await page.getByTestId("checkpoint-priority_order").getByRole("link", { name: "Review the order" }).click();
+  await page
+    .getByTestId('checkpoint-priority_order')
+    .getByRole('link', { name: 'Review the order' })
+    .click();
   await expect(page).toHaveURL(/\/priorities\?snapshot=/);
   await expect(page.locator('tr[data-testid^="priority-row-"]').first()).toBeVisible();
 }
@@ -47,7 +50,8 @@ function brokenWords(root: Locator): Promise<string[]> {
           const r = document.createRange();
           r.setStart(n, m.index!);
           r.setEnd(n, m.index! + m[0].length);
-          if (new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size > 1) out.push(m[0]);
+          if (new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size > 1)
+            out.push(m[0]);
         }
       }
     }
@@ -55,37 +59,39 @@ function brokenWords(root: Locator): Promise<string[]> {
   });
 }
 
-test("1 the band names the PRD by its title, never its slug", async ({ page }) => {
+test('1 the band names the PRD by its title, never its slug', async ({ page }) => {
   await seeded(page);
   await runOrder(page, PRIORITY_BLOCKED_RUN);
-  await expect(page.getByTestId("snapshot-band")).toContainText("Example Co · Usage alerts");
+  await expect(page.getByTestId('snapshot-band')).toContainText('Example Co · Usage alerts');
 });
 
 test("2 the inspector's tiles fit their content at 1456 px", async ({ page }) => {
   await page.setViewportSize({ width: 1456, height: 900 });
   await seeded(page);
   await runOrder(page);
-  const tiles = page.getByTestId("priority-inspector").locator("dl");
-  await expect(tiles).toContainText("Confidence");
-  await expect(tiles).toContainText("Score");
+  const tiles = page.getByTestId('priority-inspector').locator('dl');
+  await expect(tiles).toContainText('Confidence');
+  await expect(tiles).toContainText('Score');
   expect(await brokenWords(tiles)).toEqual([]);
   // Live too: the same tiles.
-  await page.goto("/priorities");
-  await expect(page.getByTestId("priority-inspector").locator("dl")).toContainText("Confidence");
-  expect(await brokenWords(page.getByTestId("priority-inspector").locator("dl"))).toEqual([]);
+  await page.goto('/priorities');
+  await expect(page.getByTestId('priority-inspector').locator('dl')).toContainText('Confidence');
+  expect(await brokenWords(page.getByTestId('priority-inspector').locator('dl'))).toEqual([]);
 });
 
-test("3 a snapshot's Top names its features, also those the order on screen lacks", async ({ page }) => {
+test("3 a snapshot's Top names its features, also those the order on screen lacks", async ({
+  page,
+}) => {
   await seeded(page);
-  await page.goto("/priorities");
-  await page.getByRole("button", { name: "Save snapshot" }).click();
-  await expect(page.getByTestId("snapshot-list").getByRole("listitem")).toHaveCount(2);
+  await page.goto('/priorities');
+  await page.getByRole('button', { name: 'Save snapshot' }).click();
+  await expect(page.getByTestId('snapshot-list').getByRole('listitem')).toHaveCount(2);
   await runOrder(page);
-  const list = page.getByTestId("snapshot-list");
-  await expect(list.getByRole("listitem")).toHaveCount(2);
-  await expect(list).toContainText("Top: ");
+  const list = page.getByTestId('snapshot-list');
+  await expect(list.getByRole('listitem')).toHaveCount(2);
+  await expect(list).toContainText('Top: ');
   // The Annual billing order's fifth feature was dropped since: by its name, not "F-41".
-  await expect(list).toContainText("Gift wrap at checkout");
+  await expect(list).toContainText('Gift wrap at checkout');
   await expect(list).not.toContainText(/\bF-\d+\b/);
 });
 
@@ -93,31 +99,39 @@ test("4 the run's Goal column breaks no goal name inside a word at 1512 px", asy
   await page.setViewportSize({ width: 1512, height: 900 });
   await seeded(page);
   await runOrder(page);
-  const goals = page.getByTestId("row-goals");
+  const goals = page.getByTestId('row-goals');
   await expect(goals.first()).toBeVisible();
   expect(await brokenWords(goals)).toEqual([]);
 });
 
-test("5 Depends on names a dependency the PRD left out, with no extra note (RP1 a)", async ({ page }) => {
+test('5 Depends on names a dependency the PRD left out, with no extra note (RP1 a)', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1512, height: 900 });
   await seeded(page);
   await runOrder(page);
-  const deps = page.getByTestId("row-deps");
-  await expect(deps.filter({ hasText: "Bulk import" })).toHaveCount(1);
+  const deps = page.getByTestId('row-deps');
+  await expect(deps.filter({ hasText: 'Bulk import' })).toHaveCount(1);
   // docs/ground-truth.md: a feature shows its code with its name, never the code alone.
-  await expect(deps.filter({ hasText: "F-13 Public signup" })).toHaveCount(1);
-  await expect(page.locator("main")).not.toContainText("Outside this PRD's scope");
+  await expect(deps.filter({ hasText: 'F-13 Public signup' })).toHaveCount(1);
+  await expect(page.locator('main')).not.toContainText("Outside this PRD's scope");
   // The cycle banner names it too.
-  await expect(page.getByTestId("cycles-banner")).toContainText("F-12 Referral link → F-13 Public signup");
+  await expect(page.getByTestId('cycles-banner')).toContainText(
+    'F-12 Referral link → F-13 Public signup',
+  );
 });
 
 test("6 at 390 px every table row of the run's order fits the phone", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await seeded(page);
   await runOrder(page);
-  const wide = await page.locator("tr").evaluateAll((rows) =>
-    rows.map((r) => Math.ceil(r.getBoundingClientRect().width)).filter((w) => w > window.innerWidth),
-  );
+  const wide = await page
+    .locator('tr')
+    .evaluateAll((rows) =>
+      rows
+        .map((r) => Math.ceil(r.getBoundingClientRect().width))
+        .filter((w) => w > window.innerWidth),
+    );
   expect(wide).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });

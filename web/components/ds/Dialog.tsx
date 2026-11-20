@@ -1,16 +1,18 @@
-"use client";
+'use client';
 
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
-import { Button } from "./Button";
-import { useFocusTrap } from "./ConfirmDialog";
-import { Icon } from "./Icon";
+import { Button } from './Button';
+import { useFocusTrap } from './ConfirmDialog';
+import { Icon } from './Icon';
 
-const FIELD = "input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled])";
-const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const FIELD =
+  'input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled])';
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-const SIZE = { md: "max-w-xl", lg: "max-w-3xl" } as const;
+const SIZE = { md: 'max-w-xl', lg: 'max-w-3xl' } as const;
 
 /**
  * The app's one modal dialog (qa-plan-29): a dimmed backdrop, a head row with the title and
@@ -34,10 +36,10 @@ export function Dialog({
   testId,
   head,
   actions,
-  cancelLabel = "Cancel",
+  cancelLabel = 'Cancel',
   busy = false,
   onSubmit,
-  size = "md",
+  size = 'md',
   phoneSheet = false,
   scrollBody = false,
   fullHeight = false,
@@ -82,7 +84,9 @@ export function Dialog({
   const [asking, setAsking] = useState(false);
   // vqa-detailed: a dialog opened from an open Sheet (Re-plan… in a plan item's sheet on a
   // phone) sits above that sheet, not under it.
-  const [overSheet] = useState(() => typeof document !== "undefined" && !!document.querySelector("[data-sheet]"));
+  const [overSheet] = useState(
+    () => typeof document !== 'undefined' && !!document.querySelector('[data-sheet]'),
+  );
   /** Where focus was when the question opened: Keep editing puts it back. */
   const before = useRef<HTMLElement | null>(null);
 
@@ -116,9 +120,9 @@ export function Dialog({
   // The first field takes focus (useFocusTrap has focused [data-autofocus] or the dialog).
   useEffect(() => {
     const p = panel.current;
-    if (!p || p.querySelector("[data-autofocus]")) return;
+    if (!p || p.querySelector('[data-autofocus]')) return;
     const visible = (el: HTMLElement) => el.checkVisibility();
-    const body = p.querySelector<HTMLElement>("[data-dialog-body]");
+    const body = p.querySelector<HTMLElement>('[data-dialog-body]');
     const first =
       [...(body?.querySelectorAll<HTMLElement>(FIELD) ?? [])].find(visible) ??
       [...(body?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])].find(visible) ??
@@ -127,13 +131,16 @@ export function Dialog({
   }, []);
 
   useEffect(() => {
-    if (asking) panel.current?.querySelector<HTMLElement>("[data-keep-editing]")?.focus();
+    if (asking) panel.current?.querySelector<HTMLElement>('[data-keep-editing]')?.focus();
   }, [asking]);
 
   const titleId = `${id}-title`;
   const footer =
     actions !== undefined ? (
-      <div className={`flex flex-wrap items-center justify-end gap-2 border-t border-line px-5 py-3 max-[600px]:px-4 ${scrollBody ? "flex-none" : ""}`} data-testid="dialog-footer">
+      <div
+        className={`flex flex-wrap items-center justify-end gap-2 border-t border-line px-5 py-3 max-[600px]:px-4 ${scrollBody ? 'flex-none' : ''}`}
+        data-testid="dialog-footer"
+      >
         <Button variant="secondary" onClick={askOnCancel ? requestClose : onClose} disabled={busy}>
           {cancelLabel}
         </Button>
@@ -141,7 +148,10 @@ export function Dialog({
       </div>
     ) : null;
   const body = (
-    <div data-dialog-body className={`space-y-4 px-5 py-4 text-[15px] max-[600px]:px-4 ${scrollBody ? "min-h-0 flex-1 overflow-y-auto" : ""}`}>
+    <div
+      data-dialog-body
+      className={`space-y-4 px-5 py-4 text-[15px] max-[600px]:px-4 ${scrollBody ? 'min-h-0 flex-1 overflow-y-auto' : ''}`}
+    >
       {children}
     </div>
   );
@@ -155,9 +165,9 @@ export function Dialog({
     <div
       data-testid="dialog-backdrop"
       data-backdrop=""
-      className={`fixed inset-0 ${overSheet ? "z-[55]" : "z-[45]"} flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 ${phoneSheet ? "max-[600px]:p-0" : "max-[600px]:px-2 max-[600px]:py-4"}`}
+      className={`fixed inset-0 ${overSheet ? 'z-[55]' : 'z-[45]'} flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 ${phoneSheet ? 'max-[600px]:p-0' : 'max-[600px]:px-2 max-[600px]:py-4'}`}
       onClick={(e) => e.stopPropagation()}
-      onKeyDown={(e) => e.key !== "Escape" && e.key !== "Tab" && e.stopPropagation()}
+      onKeyDown={(e) => e.key !== 'Escape' && e.key !== 'Tab' && e.stopPropagation()}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) requestClose();
       }}
@@ -169,10 +179,14 @@ export function Dialog({
         aria-labelledby={titleId}
         tabIndex={-1}
         data-testid={testId}
-        className={`w-full ${SIZE[size]} min-w-0 rounded-inspector border border-line bg-surface text-text shadow-tip outline-none ${phoneSheet ? "max-[600px]:min-h-full max-[600px]:max-w-none max-[600px]:rounded-none max-[600px]:border-0" : ""} ${
-          scrollBody ? `flex max-h-[calc(100dvh-5rem)] flex-col ${phoneSheet ? "max-[600px]:max-h-dvh" : "max-[600px]:max-h-[calc(100dvh-2rem)]"}` : ""
+        className={`w-full ${SIZE[size]} min-w-0 rounded-inspector border border-line bg-surface text-text shadow-tip outline-none ${phoneSheet ? 'max-[600px]:min-h-full max-[600px]:max-w-none max-[600px]:rounded-none max-[600px]:border-0' : ''} ${
+          scrollBody
+            ? `flex max-h-[calc(100dvh-5rem)] flex-col ${phoneSheet ? 'max-[600px]:max-h-dvh' : 'max-[600px]:max-h-[calc(100dvh-2rem)]'}`
+            : ''
         } ${
-          scrollBody && fullHeight ? `h-[calc(100dvh-5rem)] ${phoneSheet ? "max-[600px]:h-dvh" : "max-[600px]:h-[calc(100dvh-2rem)]"}` : ""
+          scrollBody && fullHeight
+            ? `h-[calc(100dvh-5rem)] ${phoneSheet ? 'max-[600px]:h-dvh' : 'max-[600px]:h-[calc(100dvh-2rem)]'}`
+            : ''
         }`}
       >
         <div className="flex min-h-14 flex-none items-start gap-3 border-b border-line py-3 pr-3 pl-5 max-[600px]:pl-4">
@@ -212,7 +226,7 @@ export function Dialog({
         {onSubmit ? (
           <form
             noValidate
-            className={scrollBody ? "flex min-h-0 flex-1 flex-col" : undefined}
+            className={scrollBody ? 'flex min-h-0 flex-1 flex-col' : undefined}
             onSubmit={(e: FormEvent) => {
               e.preventDefault();
               onSubmit();

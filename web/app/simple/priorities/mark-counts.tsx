@@ -1,20 +1,29 @@
-"use client";
+'use client';
 // PV-1 One count per spot (BGD's pick, Nov 7): on the Value / effort chart, marks that would cover each other become
 // one dark mark showing their count, drawn within half a mark of their values (or just clear of a corner's name);
 // a tap opens a sheet listing its features by rank, and a row opens the one feature panel. Phone and desktop alike.
 
-import type { ReactNode } from "react";
+import type { ReactNode } from 'react';
 
-import { Sheet } from "@/components/ds";
-import { NotInGt } from "@/components/simple/FeatureName";
+import { Sheet } from '@/components/ds';
+import { NotInGt } from '@/components/simple/FeatureName';
 
-import { weeksWords } from "./plan-buckets";
+import { weeksWords } from './plan-buckets';
 
 /** A rectangle on the plot, in pixels: left, top, right, bottom. */
 export type Box = [number, number, number, number];
 type Pt = [number, number];
 /** What a count needs of a feature. */
-export type CountRow = { feature_id: string; code: string; short_code?: string | null; own_key?: string | null; title: string; rank: number; goal_value?: number | null; effort?: number | null };
+export type CountRow = {
+  feature_id: string;
+  code: string;
+  short_code?: string | null;
+  own_key?: string | null;
+  title: string;
+  rank: number;
+  goal_value?: number | null;
+  effort?: number | null;
+};
 
 /** Features drawn as one count mark, at `at`, in rank order. */
 export type Crowd<T extends CountRow> = { id: string; at: Pt; rows: T[] };
@@ -24,7 +33,7 @@ export const MARK_R = 18;
 // V-4: marks keep GAP px apart, never touching (a hollow mark's ring reads as one with its neighbour's).
 const GAP = 4;
 
-const fmt = (n: number | null | undefined) => (n == null ? "–" : Number(n.toFixed(1)).toString());
+const fmt = (n: number | null | undefined) => (n == null ? '–' : Number(n.toFixed(1)).toString());
 
 /** Marks whose real spots would touch (closer than d in both directions), grouped in rank order around the first one's spot. */
 function groups<T extends CountRow>(rows: T[], at: (r: T) => Pt, d: number): Crowd<T>[] {
@@ -42,12 +51,24 @@ function groups<T extends CountRow>(rows: T[], at: (r: T) => Pt, d: number): Cro
  * The nearest free spot to `at` for a mark of radius r (searched up to maxd px; none past it): inside the plot, GAP px
  * from every placed mark, and 3 px clear of a quadrant's name (qa4-simple-plan-9: never on its edge).
  */
-function nearest(at: Pt, r: number, w: number, h: number, placed: [number, number, number][], avoid: Box[], maxd: number): Pt | null {
+function nearest(
+  at: Pt,
+  r: number,
+  w: number,
+  h: number,
+  placed: [number, number, number][],
+  avoid: Box[],
+  maxd: number,
+): Pt | null {
   const inside = (x: number, y: number) => x >= r && x <= w - r && y >= r && y <= h - r;
   const free = (x: number, y: number) =>
     inside(x, y) &&
-    placed.every(([px, py, pr]) => Math.abs(px - x) >= pr + r + GAP || Math.abs(py - y) >= pr + r + GAP) &&
-    avoid.every((q) => x + r + 3 <= q[0] || x - r - 3 >= q[2] || y + r + 3 <= q[1] || y - r - 3 >= q[3]);
+    placed.every(
+      ([px, py, pr]) => Math.abs(px - x) >= pr + r + GAP || Math.abs(py - y) >= pr + r + GAP,
+    ) &&
+    avoid.every(
+      (q) => x + r + 3 <= q[0] || x - r - 3 >= q[2] || y + r + 3 <= q[1] || y - r - 3 >= q[3],
+    );
   const cx = Math.min(w - r, Math.max(r, at[0]));
   const cy = Math.min(h - r, Math.max(r, at[1]));
   if (free(cx, cy)) return [cx, cy];
@@ -70,7 +91,13 @@ function nearest(at: Pt, r: number, w: number, h: number, placed: [number, numbe
  * is, and it moves just clear of them. A group of one is a lone mark (`spots`); the rest are counts (`crowds`), so no
  * two marks ever overlap (qa-simple-plan-11).
  */
-export function markLayout<T extends CountRow>(rows: T[], w: number, h: number, at: (r: T) => Pt, avoid: Box[]): { spots: Map<string, Pt>; crowds: Crowd<T>[] } {
+export function markLayout<T extends CountRow>(
+  rows: T[],
+  w: number,
+  h: number,
+  at: (r: T) => Pt,
+  avoid: Box[],
+): { spots: Map<string, Pt>; crowds: Crowd<T>[] } {
   const R = MARK_R;
   if (!w || !h) return { spots: new Map(rows.map((r) => [r.feature_id, at(r)])), crowds: [] };
   const placed: [number, number, number][] = [];
@@ -78,8 +105,11 @@ export function markLayout<T extends CountRow>(rows: T[], w: number, h: number, 
   for (const g of groups(rows, at, R)) {
     const s = nearest(g.at, R, w, h, placed, avoid, R);
     // In the way: the nearest placed mark or count that could block it (closer than a mark and a half) counts it too.
-    const dist = (c: Crowd<T>) => Math.max(Math.abs(c.at[0] - g.at[0]), Math.abs(c.at[1] - g.at[1]));
-    const near = s ? undefined : out.filter((c) => dist(c) < 3 * R + GAP).sort((a, b) => dist(a) - dist(b))[0];
+    const dist = (c: Crowd<T>) =>
+      Math.max(Math.abs(c.at[0] - g.at[0]), Math.abs(c.at[1] - g.at[1]));
+    const near = s
+      ? undefined
+      : out.filter((c) => dist(c) < 3 * R + GAP).sort((a, b) => dist(a) - dist(b))[0];
     if (near) {
       near.rows.push(...g.rows);
       continue;
@@ -98,12 +128,19 @@ export function markLayout<T extends CountRow>(rows: T[], w: number, h: number, 
 export type GoalOf<T> = (r: T) => string | null;
 
 /** Whether every feature in a count has the same numbers (its title says them; the rows need not). */
-const oneSpot = (rows: CountRow[]) => new Set(rows.map((r) => `${r.effort ?? "pm"}|${r.goal_value ?? "–"}`)).size === 1;
+const oneSpot = (rows: CountRow[]) =>
+  new Set(rows.map((r) => `${r.effort ?? 'pm'}|${r.goal_value ?? '–'}`)).size === 1;
 
 // A span never breaks; lines break only at the dot.
-const span = (xs: number[]) => (Math.min(...xs) === Math.max(...xs) ? fmt(xs[0]) : `${fmt(Math.min(...xs))}⁠–⁠${fmt(Math.max(...xs))}`);
+const span = (xs: number[]) =>
+  Math.min(...xs) === Math.max(...xs)
+    ? fmt(xs[0])
+    : `${fmt(Math.min(...xs))}⁠–⁠${fmt(Math.max(...xs))}`;
 /** An effort in a lone mark's words: "effort 1 week", "effort 2 weeks", "PM-owned, no effort". */
-const effortWords = (xs: number[]) => (xs.length === 1 || Math.min(...xs) === Math.max(...xs) ? `effort ${weeksWords(xs[0])}` : `effort ${span(xs)} weeks`);
+const effortWords = (xs: number[]) =>
+  xs.length === 1 || Math.min(...xs) === Math.max(...xs)
+    ? `effort ${weeksWords(xs[0])}`
+    : `effort ${span(xs)} weeks`;
 
 /**
  * What a count's features share, in the lone marks' words: "effort 1 week · goal value 0", the span when they differ
@@ -117,10 +154,20 @@ export function crowdWhere<T extends CountRow>(rows: T[], goalOf: GoalOf<T>): st
   // A goal with no value is read by its name.
   const named = [...new Set(rows.flatMap((r) => (r.goal_value == null ? (goalOf(r) ?? []) : [])))];
   const none = rows.filter((r) => !goalOf(r)).length;
-  const effort = !e.length ? "PM-owned, no effort" : pm ? `${effortWords(e)} or PM-owned` : effortWords(e);
+  const effort = !e.length
+    ? 'PM-owned, no effort'
+    : pm
+      ? `${effortWords(e)} or PM-owned`
+      : effortWords(e);
   // Some with no goal (or none): "goal value 0 or no goal", as PM-owned work joins an effort.
   const value =
-    none === rows.length ? (v.length ? `goal value ${span(v)} · no goal` : "no goal") : [v.length ? `goal value ${span(v)}` : null, ...named, none ? "no goal" : null].filter(Boolean).join(" or ");
+    none === rows.length
+      ? v.length
+        ? `goal value ${span(v)} · no goal`
+        : 'no goal'
+      : [v.length ? `goal value ${span(v)}` : null, ...named, none ? 'no goal' : null]
+          .filter(Boolean)
+          .join(' or ');
   return `${effort} · ${value}`;
 }
 
@@ -130,37 +177,95 @@ export function crowdName<T extends CountRow>(rows: T[], goalOf: GoalOf<T>): str
     .slice(0, 3)
     // PR1: the feature's real code only, never made-up letters.
     .map((r) => (r.own_key ? `${r.own_key} ${r.title}` : r.title))
-    .join(", ");
-  return `${rows.length} features at ${crowdWhere(rows, goalOf)}: ${first}${rows.length > 3 ? ` and ${rows.length - 3} more` : ""}; show them`;
+    .join(', ');
+  return `${rows.length} features at ${crowdWhere(rows, goalOf)}: ${first}${rows.length > 3 ? ` and ${rows.length - 3} more` : ''}; show them`;
 }
 
 /** A row's own numbers in a count whose features differ: "6 · 2 weeks", "4 · PM-owned" (its mark shows whether it has a goal). */
-const rowNums = (r: CountRow) => `${fmt(r.goal_value)} · ${r.effort == null ? "PM-owned" : weeksWords(r.effort)}`;
+const rowNums = (r: CountRow) =>
+  `${fmt(r.goal_value)} · ${r.effort == null ? 'PM-owned' : weeksWords(r.effort)}`;
 
 /** One feature in a count's list: rank, its mark (`shape`: its goal's, "none" with no goal), code and name, its numbers; a tap opens the one feature panel. */
-function CountListRow<T extends CountRow>({ r, mark, shape, onOpen, nums }: { r: T; mark: (r: T) => ReactNode; shape: (r: T) => string; onOpen: (r: T) => void; nums: boolean }) {
+function CountListRow<T extends CountRow>({
+  r,
+  mark,
+  shape,
+  onOpen,
+  nums,
+}: {
+  r: T;
+  mark: (r: T) => ReactNode;
+  shape: (r: T) => string;
+  onOpen: (r: T) => void;
+  nums: boolean;
+}) {
   return (
     <li>
-      <button type="button" data-testid="vxe-crowd-row" data-code={r.code} data-shape={shape(r)} onClick={() => onOpen(r)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[15px] leading-[22px] hover:bg-surface2">
+      <button
+        type="button"
+        data-testid="vxe-crowd-row"
+        data-code={r.code}
+        data-shape={shape(r)}
+        onClick={() => onOpen(r)}
+        className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[15px] leading-[22px] hover:bg-surface2"
+      >
         <span className="w-6 flex-none text-right font-[650] tabular-nums">{r.rank}</span>
         {mark(r)}
-        {r.own_key && <span data-testid="vxe-crowd-code" className="flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1 text-[13px] font-semibold tabular-nums text-text">{r.own_key}</span>}
+        {r.own_key && (
+          <span
+            data-testid="vxe-crowd-code"
+            className="flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1 text-[13px] font-semibold tabular-nums text-text"
+          >
+            {r.own_key}
+          </span>
+        )}
         <span className="min-w-0 flex-1 truncate">{r.title}</span>
         {!r.own_key && <NotInGt />}
-        {nums && <span className="flex-none whitespace-nowrap text-[13px] tabular-nums text-text2">{rowNums(r)}</span>}
+        {nums && (
+          <span className="flex-none whitespace-nowrap text-[13px] tabular-nums text-text2">
+            {rowNums(r)}
+          </span>
+        )}
       </button>
     </li>
   );
 }
 
 /** A count's features by rank: a bottom sheet on a phone, a panel at the right edge on a wider screen. */
-export function CrowdSheet<T extends CountRow>({ crowd, mark, shape, goalOf, onOpen, onClose }: { crowd: Crowd<T> | null; mark: (r: T) => ReactNode; shape: (r: T) => string; goalOf: GoalOf<T>; onOpen: (r: T) => void; onClose: () => void }) {
+export function CrowdSheet<T extends CountRow>({
+  crowd,
+  mark,
+  shape,
+  goalOf,
+  onOpen,
+  onClose,
+}: {
+  crowd: Crowd<T> | null;
+  mark: (r: T) => ReactNode;
+  shape: (r: T) => string;
+  goalOf: GoalOf<T>;
+  onOpen: (r: T) => void;
+  onClose: () => void;
+}) {
   if (!crowd) return null;
   return (
-    <Sheet open side title={`${crowd.rows.length} features · ${crowdWhere(crowd.rows, goalOf)}`} onClose={onClose} testId="vxe-crowd-sheet">
+    <Sheet
+      open
+      side
+      title={`${crowd.rows.length} features · ${crowdWhere(crowd.rows, goalOf)}`}
+      onClose={onClose}
+      testId="vxe-crowd-sheet"
+    >
       <ul className="flex flex-col pb-2" data-testid="vxe-crowd-list">
         {crowd.rows.map((r) => (
-          <CountListRow key={r.feature_id} r={r} mark={mark} shape={shape} onOpen={onOpen} nums={!oneSpot(crowd.rows)} />
+          <CountListRow
+            key={r.feature_id}
+            r={r}
+            mark={mark}
+            shape={shape}
+            onOpen={onOpen}
+            nums={!oneSpot(crowd.rows)}
+          />
         ))}
       </ul>
     </Sheet>
@@ -171,10 +276,23 @@ export function CrowdSheet<T extends CountRow>({ crowd, mark, shape, goalOf, onO
 function CountGlyph({ n }: { n: number }) {
   const fs = n > 9 ? 12 : 13;
   return (
-    <svg width={2 * MARK_R} height={2 * MARK_R} viewBox="0 0 36 36" aria-hidden className="block flex-none overflow-visible">
+    <svg
+      width={2 * MARK_R}
+      height={2 * MARK_R}
+      viewBox="0 0 36 36"
+      aria-hidden
+      className="block flex-none overflow-visible"
+    >
       <circle cx="21" cy="15" r="13.5" fill="var(--surface)" stroke="var(--text)" strokeWidth="2" />
       <circle cx="16" cy="20" r="14" fill="var(--text)" stroke="var(--surface)" strokeWidth="2" />
-      <text x="16" y={20 + fs * 0.36} textAnchor="middle" fontSize={fs} fontWeight="700" fill="var(--bg)">
+      <text
+        x="16"
+        y={20 + fs * 0.36}
+        textAnchor="middle"
+        fontSize={fs}
+        fontWeight="700"
+        fill="var(--bg)"
+      >
         {n}
       </text>
     </svg>
@@ -182,7 +300,21 @@ function CountGlyph({ n }: { n: number }) {
 }
 
 /** A count on the plot; selected when it holds the selected feature, ringed as a lone mark is when it holds the one just moved. */
-export function CrowdMark<T extends CountRow>({ crowd, lit, moved, goalOf, onPick, buttonRef }: { crowd: Crowd<T>; lit: boolean; moved: boolean; goalOf: GoalOf<T>; onPick: () => void; buttonRef?: (el: HTMLButtonElement | null) => void }) {
+export function CrowdMark<T extends CountRow>({
+  crowd,
+  lit,
+  moved,
+  goalOf,
+  onPick,
+  buttonRef,
+}: {
+  crowd: Crowd<T>;
+  lit: boolean;
+  moved: boolean;
+  goalOf: GoalOf<T>;
+  onPick: () => void;
+  buttonRef?: (el: HTMLButtonElement | null) => void;
+}) {
   const n = crowd.rows.length;
   return (
     <button
@@ -190,12 +322,12 @@ export function CrowdMark<T extends CountRow>({ crowd, lit, moved, goalOf, onPic
       type="button"
       data-testid="vxe-crowd"
       data-count={n}
-      data-moved={moved ? "true" : undefined}
+      data-moved={moved ? 'true' : undefined}
       aria-label={crowdName(crowd.rows, goalOf)}
       aria-haspopup="dialog"
       onClick={onPick}
       style={{ left: crowd.at[0], top: crowd.at[1] }}
-      className={`absolute z-[5] -translate-x-1/2 -translate-y-1/2 rounded-full ${lit ? "ring-[3px] ring-accent ring-offset-2 ring-offset-surface" : moved ? "ring-2 ring-accent ring-offset-2 ring-offset-surface" : ""}`}
+      className={`absolute z-[5] -translate-x-1/2 -translate-y-1/2 rounded-full ${lit ? 'ring-[3px] ring-accent ring-offset-2 ring-offset-surface' : moved ? 'ring-2 ring-accent ring-offset-2 ring-offset-surface' : ''}`}
     >
       <CountGlyph n={n} />
     </button>

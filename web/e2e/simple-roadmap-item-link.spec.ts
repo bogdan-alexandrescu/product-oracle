@@ -1,6 +1,6 @@
-import { stableUuid } from "../lib/api/mock/ids";
-import { expect, test, type Page } from "./test";
-import { login } from "./helpers";
+import { stableUuid } from '../lib/api/mock/ids';
+import { expect, test, type Page } from './test';
+import { login } from './helpers';
 
 /**
  * Simple's roadmap reads ?item=<id> (train AN 1b8d555db and 775ac69ed, ported): a link to one
@@ -21,33 +21,35 @@ const itemId = (key: string) => stableUuid(`simple-item/${key}`);
 async function follow(page: Page, key: string) {
   await login(page);
   await page.goto(`/simple/roadmap?item=${encodeURIComponent(itemId(key))}`);
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
 }
 
 for (const [where, device] of [
-  ["desktop", DESKTOP],
-  ["phone", PHONE],
+  ['desktop', DESKTOP],
+  ['phone', PHONE],
 ] as const) {
   test.describe(where, () => {
     test.use(device);
 
-    test("a link to an item only a draft holds opens its feature panel", async ({ page }) => {
-      await follow(page, "setup-ideas");
-      const panel = page.getByTestId("floating-card");
+    test('a link to an item only a draft holds opens its feature panel', async ({ page }) => {
+      await follow(page, 'setup-ideas');
+      const panel = page.getByTestId('floating-card');
       await expect(panel).toBeVisible();
-      await expect(panel).toHaveAttribute("aria-label", "Team invite nudges");
+      await expect(panel).toHaveAttribute('aria-label', 'Team invite nudges');
       await expect(panel).toBeInViewport();
     });
 
-    test("a link to a planned item opens its panel once: closed, it stays closed", async ({ page }) => {
-      await follow(page, "alert-digest");
-      const panel = page.getByTestId("floating-card");
-      await expect(panel).toHaveAttribute("aria-label", "Weekly alert digest");
-      await page.keyboard.press("Escape");
+    test('a link to a planned item opens its panel once: closed, it stays closed', async ({
+      page,
+    }) => {
+      await follow(page, 'alert-digest');
+      const panel = page.getByTestId('floating-card');
+      await expect(panel).toHaveAttribute('aria-label', 'Weekly alert digest');
+      await page.keyboard.press('Escape');
       await expect(panel).toHaveCount(0);
-      await page.getByTestId("format-board").click();
-      await expect(page.getByTestId("format-board")).toHaveAttribute("aria-pressed", "true");
-      await expect(page.getByTestId("floating-card")).toHaveCount(0);
+      await page.getByTestId('format-board').click();
+      await expect(page.getByTestId('format-board')).toHaveAttribute('aria-pressed', 'true');
+      await expect(page.getByTestId('floating-card')).toHaveCount(0);
     });
   });
 }

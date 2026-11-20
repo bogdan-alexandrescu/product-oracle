@@ -42,27 +42,56 @@
  * stands for S10 having drawn one for Team invite nudges. A scheduled review has at most one
  * meeting (409 naming it).
  */
-import type { Schemas } from "@/lib/api/client";
-import { agendaOut, decidedOutsideRows, findQuestion, questionsCounts, questionsOfMeeting, questionsOut, questionsPrdReplaced, routeQuestionChanges, seedQuestions, trashQuestion, waitingOut, type QuestionsDb } from "./simple-questions";
-import type { DecisionLogRow } from "./decisions";
-import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashEntryRow } from "./trash";
-import { bundleFlow, plainFlow } from "./simple-visuals";
-import { proposeOffAgenda, seedSimpleProposal } from "./simple-changes";
-import { changeSentence } from "./simple-change-words";
-import { mockNowMs } from "./clock";
-import { companyDateInWords } from "./connections";
-import { stableUuid } from "./ids";
-import { byPrdRank, prdRanker } from "./prd-rank";
-import { nextOccurrence, type RitualsDb } from "./rituals";
-import { publishOnePager, type OnePagerDb } from "./simple-one-pager";
-import { APPROVED_KEY, draftAct, draftRoadmapOut } from "./meeting-draft";
-import { goalRank, homeRoadmapOf, roadmapId, roadmapOut, tasksWaiting, type SimpleDb } from "./simple-roadmap";
-import type { ChatMeetings, MeetingAgenda, MeetingNote } from "./simple-chat";
-import { agendaRight, agendaRowsOut, editAgenda, restoreAgendaRow, TOPIC_MINS, type AgendaCtx, type AgendaRowDb, type AgendaSheetDb } from "./simple-meeting-agenda";
-import { madeOrder } from "./made-order";
-import { reply } from "./typed";
+import type { Schemas } from '@/lib/api/client';
+import {
+  agendaOut,
+  decidedOutsideRows,
+  findQuestion,
+  questionsCounts,
+  questionsOfMeeting,
+  questionsOut,
+  questionsPrdReplaced,
+  routeQuestionChanges,
+  seedQuestions,
+  trashQuestion,
+  waitingOut,
+  type QuestionsDb,
+} from './simple-questions';
+import type { DecisionLogRow } from './decisions';
+import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashEntryRow } from './trash';
+import { bundleFlow, plainFlow } from './simple-visuals';
+import { proposeOffAgenda, seedSimpleProposal } from './simple-changes';
+import { changeSentence } from './simple-change-words';
+import { mockNowMs } from './clock';
+import { companyDateInWords } from './connections';
+import { stableUuid } from './ids';
+import { byPrdRank, prdRanker } from './prd-rank';
+import { nextOccurrence, type RitualsDb } from './rituals';
+import { publishOnePager, type OnePagerDb } from './simple-one-pager';
+import { APPROVED_KEY, draftAct, draftRoadmapOut } from './meeting-draft';
+import {
+  goalRank,
+  homeRoadmapOf,
+  roadmapId,
+  roadmapOut,
+  tasksWaiting,
+  type SimpleDb,
+} from './simple-roadmap';
+import type { ChatMeetings, MeetingAgenda, MeetingNote } from './simple-chat';
+import {
+  agendaRight,
+  agendaRowsOut,
+  editAgenda,
+  restoreAgendaRow,
+  TOPIC_MINS,
+  type AgendaCtx,
+  type AgendaRowDb,
+  type AgendaSheetDb,
+} from './simple-meeting-agenda';
+import { madeOrder } from './made-order';
+import { reply } from './typed';
 
-export const MOCK_MEETINGS_KEY = "po-mock-simple-meetings";
+export const MOCK_MEETINGS_KEY = 'po-mock-simple-meetings';
 /** "minutes-later": the minutes job ends this long after End (the production walk: 14 s). */
 export const MINUTES_LATER_MS = 20_000;
 /** meetings.MINUTES_SLOW: past this a minutes job still drafting reads "slow". */
@@ -70,13 +99,21 @@ export const MINUTES_SLOW_MS = 2 * 60_000;
 /** meetings.MINUTES_STUCK: past this a queued or running minutes job reads "failed" (Draft again). */
 export const MINUTES_STUCK_MS = 6 * 60_000;
 
-type Role = Schemas["Me"]["role"];
-type Ref = Schemas["SimplePersonRef"];
-type Minutes = Schemas["SimpleMinutes"];
+type Role = Schemas['Me']['role'];
+type Ref = Schemas['SimplePersonRef'];
+type Minutes = Schemas['SimpleMinutes'];
 /** As meetings.py stores it: each attendee's email and the Slack post with their tries and next try (ms). */
-type Try = { status: "queued" | "sent" | "retrying" | "failed"; tries: number; next_at: number | null };
-type Delivery = Omit<Schemas["SimpleDelivery"], "emails" | "email_sent"> & { email_to?: Record<string, Try>; slack_try?: Try; email_sent?: number };
-type Change = Schemas["SimpleChangeOut"];
+type Try = {
+  status: 'queued' | 'sent' | 'retrying' | 'failed';
+  tries: number;
+  next_at: number | null;
+};
+type Delivery = Omit<Schemas['SimpleDelivery'], 'emails' | 'email_sent'> & {
+  email_to?: Record<string, Try>;
+  slack_try?: Try;
+  email_sent?: number;
+};
+type Change = Schemas['SimpleChangeOut'];
 
 export interface MeetingsCtx {
   me: { id: string; role: Role };
@@ -88,7 +125,7 @@ export interface MeetingsCtx {
   /** The people's lines in a meeting's chat (S9's ./simple-chat.ts): part of its record (minutes.record). */
   chatLines?: (meetingId: string) => string[];
   /** prd-questions: the person's remembered Decisions view (preferences.simple_decisions_view). */
-  view?: () => "list" | "board" | "meetings" | null;
+  view?: () => 'list' | 'board' | 'meetings' | null;
   /**
    * edit-decisions: a decision-log call by id, the log's own row when the reader may read it
    * (GET /v1/decisions/{number}), or one in Trash: the sheet reads and writes it there, never a copy (one
@@ -107,20 +144,34 @@ export interface MeetingsCtx {
   deletedForGood?: (kind: string) => string | null;
   /** qa4-simple-prd-1: every PRD document (as the API's start options list each readable PRD by its own title). */
   /** simple-replaced-prds: `replaced_by`, the PRDs that replaced one marked replaced (never offered or filtered by in Simple). */
-  documents?: () => { id: string; slug: string; title: string; replaced_by?: Schemas["PrdRef"][] }[];
+  documents?: () => {
+    id: string;
+    slug: string;
+    title: string;
+    replaced_by?: Schemas['PrdRef'][];
+  }[];
   /** build-rundecide RD1 a: the runs' decided stops on the PRDs shown (./simple-runs.ts), for the Runs card. */
-  runs?: (prd: string | null) => Schemas["SimpleRunGroup"][];
+  runs?: (prd: string | null) => Schemas['SimpleRunGroup'][];
   /** edit-decisions: Settings › Trash, where Delete on the sheet sends a decision or a question. */
   trash?: () => TrashDb;
   /** runplan-r2: a meeting decision is a row of the decision log too (Company > Decisions), as the API's one decisions row. */
-  logDecision?: (d: { id: string; number: number; title: string; at: string; approver_id: string; subjects: { kind: string; id: string; ref?: string }[]; chosen: string; meeting_title: string }) => void;
+  logDecision?: (d: {
+    id: string;
+    number: number;
+    title: string;
+    at: string;
+    approver_id: string;
+    subjects: { kind: string; id: string; ref?: string }[];
+    chosen: string;
+    meeting_title: string;
+  }) => void;
 }
 
 interface Meeting {
   id: string;
   title: string;
   prd: string;
-  origin: Schemas["SimpleMeetingIn"]["origin"] & string;
+  origin: Schemas['SimpleMeetingIn']['origin'] & string;
   occurrence_id: string | null;
   session_id: string;
   presenter_id: string;
@@ -128,10 +179,10 @@ interface Meeting {
   absent_ids: string[];
   /** walkc-meeting r2 (5a): the presenter, then whoever pressed Join (stored meetings without it: everyone). */
   joined_ids?: string[];
-  change_mode: "everyone" | "presenter" | "named";
+  change_mode: 'everyone' | 'presenter' | 'named';
   change_people: string[];
   length_min: number;
-  status: "live" | "ended";
+  status: 'live' | 'ended';
   started_at: string;
   /** Its session's last change (simple_sessions.last_change_at): a change, accept or decline made through it. */
   last_change_at?: string | null;
@@ -140,13 +191,13 @@ interface Meeting {
   /** meet-chat-right-prd review: it ended by itself, idle past MEETING_IDLE (meetings._settle). */
   ended_by_itself?: boolean;
   minutes: Minutes | null;
-  minutes_state: "drafting" | "ready" | "sent" | null;
+  minutes_state: 'drafting' | 'ready' | 'sent' | null;
   /** The minutes job while drafting (meetings._minutes_job). */
-  minutes_job?: "drafting" | "slow" | "failed" | null;
+  minutes_job?: 'drafting' | 'slow' | 'failed' | null;
   /** When (mock clock, ms) the minutes job was queued (meetings._minutes_job's wait). */
   minutes_job_at?: number | null;
   /** "minutes-later": when (mock clock, ms) the job ends, and how. */
-  minutes_due?: { at: number; outcome: "succeeded" | "failed" } | null;
+  minutes_due?: { at: number; outcome: 'succeeded' | 'failed' } | null;
   delivery: Delivery | null;
   sent_at: string | null;
   approved: { at: string; waiting_on: string[]; blocked_by?: string[] } | null;
@@ -164,7 +215,7 @@ interface Decision {
   number: number;
   title: string;
   origin: string;
-  status: "decided" | "proposed" | "withdrawn";
+  status: 'decided' | 'proposed' | 'withdrawn';
   approver_id: string | null;
   at: string;
   subjects: { kind: string; id: string; ref?: string }[];
@@ -220,37 +271,64 @@ interface Prd {
   /** simple-replaced-prds: marked replaced; never offered or filtered by in Simple. */
   replaced?: boolean;
   /** The PRDs that replaced it (the 404 of its options and start names them, as meetings._prd). */
-  replaced_by?: Schemas["PrdRef"][];
+  replaced_by?: Schemas['PrdRef'][];
 }
 
 const iso = (t: number) => new Date(t).toISOString();
-const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+const json = (status: number, body: unknown) =>
+  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 const RANK: Record<Role, number> = { viewer: 0, commenter: 1, approver: 2, owner: 3 };
 
 function flags(): string[] {
   try {
-    return (localStorage.getItem(MOCK_MEETINGS_KEY) ?? "").split(",");
+    return (localStorage.getItem(MOCK_MEETINGS_KEY) ?? '').split(',');
   } catch {
     return [];
   }
 }
 /** The "track-owner" flag: the approver owns Guided setup's track (a decider-less PRD's editor, not its starter). */
-export const mockApproverOwnsTrack = (): boolean => flags().includes("track-owner");
-const slackState = (): Schemas["SimpleSlackState"] => (flags().includes("slack") ? { connected: true, channel: "#product-reviews" } : { connected: false, channel: null });
-const emailAvailable = () => !flags().includes("no-email");
+export const mockApproverOwnsTrack = (): boolean => flags().includes('track-owner');
+const slackState = (): Schemas['SimpleSlackState'] =>
+  flags().includes('slack')
+    ? { connected: true, channel: '#product-reviews' }
+    : { connected: false, channel: null };
+const emailAvailable = () => !flags().includes('no-email');
 
 function prds(ctx: MeetingsCtx): Prd[] {
-  const dana = ctx.members.find((m) => m.email === "dana.decider@example.com");
-  const approver = ctx.members.find((m) => m.email === "approver@example.com");
+  const dana = ctx.members.find((m) => m.email === 'dana.decider@example.com');
+  const approver = ctx.members.find((m) => m.email === 'approver@example.com');
   const docs = ctx.documents?.() ?? [];
   // qa4-simple-prd-28: a PRD is named by its document's title, as the API names it.
   const titled = (slug: string, title: string) => docs.find((d) => d.slug === slug)?.title ?? title;
   const known: Prd[] = [
-    { slug: "guided-setup", title: titled("guided-setup", "Guided setup"), id: ctx.onePager.doc.id, ids: [ctx.onePager.doc.id, stableUuid("simple-prd/onboarding-roadmap")], decider: dana?.id ?? null, reviewers: approver && !flags().includes("no-reviewers") ? [approver.id] : [] },
-    { slug: "usage-alerts", title: titled("usage-alerts", "Usage alerts"), id: stableUuid("simple-prd/alerts-roadmap"), ids: [stableUuid("simple-prd/alerts-roadmap")], decider: ctx.roadmap.prd_deciders?.["usage-alerts"] ?? null, reviewers: [] },
+    {
+      slug: 'guided-setup',
+      title: titled('guided-setup', 'Guided setup'),
+      id: ctx.onePager.doc.id,
+      ids: [ctx.onePager.doc.id, stableUuid('simple-prd/onboarding-roadmap')],
+      decider: dana?.id ?? null,
+      reviewers: approver && !flags().includes('no-reviewers') ? [approver.id] : [],
+    },
+    {
+      slug: 'usage-alerts',
+      title: titled('usage-alerts', 'Usage alerts'),
+      id: stableUuid('simple-prd/alerts-roadmap'),
+      ids: [stableUuid('simple-prd/alerts-roadmap')],
+      decider: ctx.roadmap.prd_deciders?.['usage-alerts'] ?? null,
+      reviewers: [],
+    },
   ];
   // qa4-simple-prd-1: the API starts a review of any PRD the reader reads, not only these two.
-  const more = docs.filter((d) => !known.some((k) => k.slug === d.slug || k.ids.includes(d.id))).map((d) => ({ slug: d.slug, title: d.title, id: d.id, ids: [d.id], decider: null, reviewers: [] }));
+  const more = docs
+    .filter((d) => !known.some((k) => k.slug === d.slug || k.ids.includes(d.id)))
+    .map((d) => ({
+      slug: d.slug,
+      title: d.title,
+      id: d.id,
+      ids: [d.id],
+      decider: null,
+      reviewers: [],
+    }));
   // simple-replaced-prds: any of them may be marked replaced.
   return [...known, ...more].map((x) => {
     const by = docs.find((d) => d.slug === x.slug || x.ids.includes(d.id))?.replaced_by ?? [];
@@ -259,49 +337,78 @@ function prds(ctx: MeetingsCtx): Prd[] {
 }
 
 /** simple-replaced-prds (as meetings._prd): a replaced PRD is not reviewed in Simple; the 404 names its replacements. */
-const replacedPrd = (prd: Prd) => json(404, { detail: { message: "This PRD was replaced", replaced_by: prd.replaced_by ?? [] } });
+const replacedPrd = (prd: Prd) =>
+  json(404, { detail: { message: 'This PRD was replaced', replaced_by: prd.replaced_by ?? [] } });
 
-const owners = (ctx: MeetingsCtx) => ctx.members.filter((m) => m.role === "owner").map((m) => m.id);
+const owners = (ctx: MeetingsCtx) => ctx.members.filter((m) => m.role === 'owner').map((m) => m.id);
 /** walkc-meeting r2 (5j, meetings._waits): who approves a meeting's drafts: the PRD's decider, else the company's owners. */
 const approversOf = (ctx: MeetingsCtx, p: Prd) => (p.decider ? [p.decider] : owners(ctx));
-const nameOf = (ctx: MeetingsCtx, id: string) => ctx.members.find((m) => m.id === id)?.name ?? "someone";
+const nameOf = (ctx: MeetingsCtx, id: string) =>
+  ctx.members.find((m) => m.id === id)?.name ?? 'someone';
 const ref = (ctx: MeetingsCtx, id: string): Ref => ({ id, name: nameOf(ctx, id) });
 const docRef = (p: Prd) => ({ id: p.id, slug: p.slug, title: p.title });
 /** walkc-roadmap-tasks: a decided decision as an item reads it (meetings.decided_refs): who, when, the meeting's minutes. */
-function decidedRef(ctx: MeetingsCtx, db: MeetingsDb, d: Decision): Schemas["SimpleDecidedRef"] {
+function decidedRef(ctx: MeetingsCtx, db: MeetingsDb, d: Decision): Schemas['SimpleDecidedRef'] {
   const m = d.meeting_id ? db.meetings.find((x) => x.id === d.meeting_id) : undefined;
   return {
-    id: d.id, number: d.number, title: d.title, decided_by: d.approver_id ? ref(ctx, d.approver_id) : null, decided_at: d.at,
-    meeting: d.meeting_id ? { id: d.meeting_id, title: m?.title ?? "Review meeting" } : null, minutes_url: d.meeting_id ? `/simple/meetings/${d.meeting_id}` : null,
+    id: d.id,
+    number: d.number,
+    title: d.title,
+    decided_by: d.approver_id ? ref(ctx, d.approver_id) : null,
+    decided_at: d.at,
+    meeting: d.meeting_id ? { id: d.meeting_id, title: m?.title ?? 'Review meeting' } : null,
+    minutes_url: d.meeting_id ? `/simple/meetings/${d.meeting_id}` : null,
   };
 }
 
 function items(ctx: MeetingsCtx) {
-  return roadmapOut(ctx.roadmap, "owner", new URLSearchParams())?.items ?? [];
+  return roadmapOut(ctx.roadmap, 'owner', new URLSearchParams())?.items ?? [];
 }
 
 /** Seeds on first use: a scheduled review, one past meeting whose minutes were sent, and
  * decisions outside meetings. */
 /** A commenter's proposal on Team invite nudges for a starting meeting to decide (once, unless one already waits). */
 function seedMeetingProposal(ctx: MeetingsCtx): void {
-  const commenter = ctx.members.find((m) => m.email === "commenter@example.com");
-  const item = items(ctx).find((i) => i.key === "setup-ideas");
-  if (!commenter || !item || (ctx.roadmap.changes ?? []).some((c) => c.status === "proposed" && c.target.item_id === item.id)) return;
+  const commenter = ctx.members.find((m) => m.email === 'commenter@example.com');
+  const item = items(ctx).find((i) => i.key === 'setup-ideas');
+  if (
+    !commenter ||
+    !item ||
+    (ctx.roadmap.changes ?? []).some((c) => c.status === 'proposed' && c.target.item_id === item.id)
+  )
+    return;
   const roles = Object.fromEntries(ctx.members.map((m) => [m.id, m.role]));
-  seedSimpleProposal(ctx.roadmap, { id: commenter.id, name: commenter.name, owners: owners(ctx), roles }, "change_horizon", "setup-ideas", { horizon: "next" }, { horizon: "now" }, iso(mockNowMs() - 3_600_000), "Invites matter in week one");
+  seedSimpleProposal(
+    ctx.roadmap,
+    { id: commenter.id, name: commenter.name, owners: owners(ctx), roles },
+    'change_horizon',
+    'setup-ideas',
+    { horizon: 'next' },
+    { horizon: 'now' },
+    iso(mockNowMs() - 3_600_000),
+    'Invites matter in week one',
+  );
 }
 
-export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: MeetingsCtx): MeetingsDb {
+export function ensureMeetings(
+  holder: { simple_meetings?: MeetingsDb },
+  ctx: MeetingsCtx,
+): MeetingsDb {
   if (holder.simple_meetings) return holder.simple_meetings;
   // A new company ("empty" scenario, as server.ts's MOCK_SCENARIO_KEY): no past meetings, decisions or seeded proposal.
   // Home and the rail read meetings too, so seeding here would fill every empty Home.
-  if (typeof localStorage !== "undefined" && localStorage.getItem("po-mock-scenario") === "empty") {
-    return (holder.simple_meetings = { meetings: [], decisions: [], occurrences: [], inbox_seen: {} });
+  if (typeof localStorage !== 'undefined' && localStorage.getItem('po-mock-scenario') === 'empty') {
+    return (holder.simple_meetings = {
+      meetings: [],
+      decisions: [],
+      occurrences: [],
+      inbox_seen: {},
+    });
   }
   const now = mockNowMs();
   const owner = owners(ctx)[0];
-  const approver = ctx.members.find((m) => m.email === "approver@example.com")?.id;
-  const commenter = ctx.members.find((m) => m.email === "commenter@example.com");
+  const approver = ctx.members.find((m) => m.email === 'approver@example.com')?.id;
+  const commenter = ctx.members.find((m) => m.email === 'commenter@example.com');
   const people = [owner, approver, commenter?.id].filter((x): x is string => !!x);
   // simple-replaced-prds: the past meeting was held before any PRD was marked replaced, so it
   // names its items whether or not they still feed the roadmap (first read after a replace too).
@@ -312,58 +419,147 @@ export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: Me
   const item = (key: string) => all.find((i) => i.key === key);
   const alerts = prds(ctx)[1];
   const setup = prds(ctx)[0];
-  const past = stableUuid("simple-meeting/past-alerts");
+  const past = stableUuid('simple-meeting/past-alerts');
   const day = 86_400_000;
   const startedAt = iso(now - 7 * day + 3 * 3_600_000);
-  const digest = item("alert-digest");
-  const checklist = item("setup-checklist");
+  const digest = item('alert-digest');
+  const checklist = item('setup-checklist');
   // edit-decisions: numbered after the decision log's seeded calls (one number sequence in the API).
   const base = Math.max(0, ...(ctx.logNumbers?.() ?? []));
   const d = (n: number, title: string, extra: Partial<Decision>): Decision => ({
-    id: stableUuid(`simple-meeting-decision/${n}`), number: base + n, title, origin: "manual", status: "decided", approver_id: owner ?? null,
-    at: iso(now - (10 - n) * day), subjects: [], meeting_id: null, change_ids: [], ...extra,
+    id: stableUuid(`simple-meeting-decision/${n}`),
+    number: base + n,
+    title,
+    origin: 'manual',
+    status: 'decided',
+    approver_id: owner ?? null,
+    at: iso(now - (10 - n) * day),
+    subjects: [],
+    meeting_id: null,
+    change_ids: [],
+    ...extra,
   });
   const db: MeetingsDb = {
     // Made when a review starts from a ritual's next due time (the rituals mock's are listed too).
     occurrences: [],
     decisions: [
-      d(1, "Start guided setup with the checklist", { subjects: [{ kind: "document", id: setup.id }, ...(checklist ? [{ kind: "roadmap_item", id: checklist.id, ref: checklist.key }] : [])] }),
-      d(2, "Keep the free plan's alert limit at three", { subjects: [{ kind: "document", id: alerts.id }] }),
-      d(3, "Should muted teams still get the weekly digest?", { origin: "oracle", status: "proposed", approver_id: null, subjects: [{ kind: "document", id: alerts.id }] }),
+      d(1, 'Start guided setup with the checklist', {
+        subjects: [
+          { kind: 'document', id: setup.id },
+          ...(checklist ? [{ kind: 'roadmap_item', id: checklist.id, ref: checklist.key }] : []),
+        ],
+      }),
+      d(2, "Keep the free plan's alert limit at three", {
+        subjects: [{ kind: 'document', id: alerts.id }],
+      }),
+      d(3, 'Should muted teams still get the weekly digest?', {
+        origin: 'oracle',
+        status: 'proposed',
+        approver_id: null,
+        subjects: [{ kind: 'document', id: alerts.id }],
+      }),
       // edit-decisions (ec1 b): an open decision outside meetings with every field the sheet shows.
       d(5, "Keep the free plan's five-seat limit", {
-        status: "proposed", at: iso(now - 2 * day), subjects: [{ kind: "document", id: alerts.id }], ask: "Keep the free plan's five-seat limit?",
-        context: "Raised in the weekly product review.", options: [{ key: "a", label: "Yes, this quarter" }, { key: "b", label: "Not now" }], review_at: iso(now + 26 * day).slice(0, 10), created_by: owner ?? null,
+        status: 'proposed',
+        at: iso(now - 2 * day),
+        subjects: [{ kind: 'document', id: alerts.id }],
+        ask: "Keep the free plan's five-seat limit?",
+        context: 'Raised in the weekly product review.',
+        options: [
+          { key: 'a', label: 'Yes, this quarter' },
+          { key: 'b', label: 'Not now' },
+        ],
+        review_at: iso(now + 26 * day).slice(0, 10),
+        created_by: owner ?? null,
       }),
-      d(4, `Moved ${digest?.title ?? "Alert digest"}`, { origin: "meeting", meeting_id: past, at: iso(Date.parse(startedAt) + 20 * 60_000), subjects: [...(digest ? [{ kind: "roadmap_item", id: digest.id, ref: digest.key }] : []), { kind: "document", id: alerts.id }] }),
+      d(4, `Moved ${digest?.title ?? 'Alert digest'}`, {
+        origin: 'meeting',
+        meeting_id: past,
+        at: iso(Date.parse(startedAt) + 20 * 60_000),
+        subjects: [
+          ...(digest ? [{ kind: 'roadmap_item', id: digest.id, ref: digest.key }] : []),
+          { kind: 'document', id: alerts.id },
+        ],
+      }),
       // F-26 ("long-decision" scenario): a decision whose title wraps on a phone.
-      ...(typeof localStorage !== "undefined" && localStorage.getItem("po-mock-scenario") === "long-decision"
-        ? [d(6, "Send the weekly alert digest on Monday mornings to every team on the free plan", { origin: "meeting", meeting_id: past, at: iso(Date.parse(startedAt) + 30 * 60_000), subjects: [{ kind: "document", id: alerts.id }] })]
+      ...(typeof localStorage !== 'undefined' &&
+      localStorage.getItem('po-mock-scenario') === 'long-decision'
+        ? [
+            d(6, 'Send the weekly alert digest on Monday mornings to every team on the free plan', {
+              origin: 'meeting',
+              meeting_id: past,
+              at: iso(Date.parse(startedAt) + 30 * 60_000),
+              subjects: [{ kind: 'document', id: alerts.id }],
+            }),
+          ]
         : []),
     ],
-    meetings: [{
-      id: past, title: "Review: Usage alerts", prd: "usage-alerts", origin: "one_pager", occurrence_id: null, session_id: stableUuid("simple-meeting-session/past"),
-      presenter_id: owner, attendee_ids: people, absent_ids: [], joined_ids: people, change_mode: "everyone", change_people: [], length_min: 60, status: "ended",
-      started_at: startedAt, ended_at: iso(Date.parse(startedAt) + 50 * 60_000), ended_by: owner,
-      // qa-simple-decide-1: the comment made in this meeting is a note, not a decision.
-      notes: [{ id: stableUuid("simple-meeting-note/past-comment"), kind: "comment", text: "keep quiet hours on by default", by_name: nameOf(ctx, approver ?? owner), at: iso(Date.parse(startedAt) + 35 * 60_000), card_id: null }],
-      minutes: {
-        // qa-simple-decide-6: a short prose count, never the decision's own title or a note's text.
-        summary: "1 decision taken.",
-        open_questions: [`D-${base + 3}: Should muted teams still get the weekly digest?`],
-        action_items: commenter ? [{ title: "Draft the quiet hours copy", owner_id: commenter.id, owner_name: nameOf(ctx, commenter.id), due_date: iso(now + 7 * day).slice(0, 10) }] : [],
-        // walkc-meeting r2 (5j): as meetings._waits, the wait names whom it is on.
-        waits: [{ what: "Usage alerts: the working draft is not approved yet", on: approversOf(ctx, alerts).map((i) => ref(ctx, i)) }],
-        written_by: "oracle",
+    meetings: [
+      {
+        id: past,
+        title: 'Review: Usage alerts',
+        prd: 'usage-alerts',
+        origin: 'one_pager',
+        occurrence_id: null,
+        session_id: stableUuid('simple-meeting-session/past'),
+        presenter_id: owner,
+        attendee_ids: people,
+        absent_ids: [],
+        joined_ids: people,
+        change_mode: 'everyone',
+        change_people: [],
+        length_min: 60,
+        status: 'ended',
+        started_at: startedAt,
+        ended_at: iso(Date.parse(startedAt) + 50 * 60_000),
+        ended_by: owner,
+        // qa-simple-decide-1: the comment made in this meeting is a note, not a decision.
+        notes: [
+          {
+            id: stableUuid('simple-meeting-note/past-comment'),
+            kind: 'comment',
+            text: 'keep quiet hours on by default',
+            by_name: nameOf(ctx, approver ?? owner),
+            at: iso(Date.parse(startedAt) + 35 * 60_000),
+            card_id: null,
+          },
+        ],
+        minutes: {
+          // qa-simple-decide-6: a short prose count, never the decision's own title or a note's text.
+          summary: '1 decision taken.',
+          open_questions: [`D-${base + 3}: Should muted teams still get the weekly digest?`],
+          action_items: commenter
+            ? [
+                {
+                  title: 'Draft the quiet hours copy',
+                  owner_id: commenter.id,
+                  owner_name: nameOf(ctx, commenter.id),
+                  due_date: iso(now + 7 * day).slice(0, 10),
+                },
+              ]
+            : [],
+          // walkc-meeting r2 (5j): as meetings._waits, the wait names whom it is on.
+          waits: [
+            {
+              what: 'Usage alerts: the working draft is not approved yet',
+              on: approversOf(ctx, alerts).map((i) => ref(ctx, i)),
+            },
+          ],
+          written_by: 'oracle',
+        },
+        minutes_state: 'sent',
+        delivery: seededDelivery(people, approver),
+        sent_at: iso(Date.parse(startedAt) + 55 * 60_000),
+        approved: null,
       },
-      minutes_state: "sent", delivery: seededDelivery(people, approver),
-      sent_at: iso(Date.parse(startedAt) + 55 * 60_000), approved: null,
-    }],
+    ],
     inbox_seen: {},
   };
   // The seeded decisions by their seed's id, never by their place in the list.
-  const seededDecision = (n: number) => db.decisions.find((x) => x.id === stableUuid(`simple-meeting-decision/${n}`))!;
-  if (checklist) (ctx.roadmap.decided_in ??= {})[checklist.id] = [decidedRef(ctx, db, seededDecision(1))];
+  const seededDecision = (n: number) =>
+    db.decisions.find((x) => x.id === stableUuid(`simple-meeting-decision/${n}`))!;
+  if (checklist)
+    (ctx.roadmap.decided_in ??= {})[checklist.id] = [decidedRef(ctx, db, seededDecision(1))];
   if (digest) (ctx.roadmap.decided_in ??= {})[digest.id] = [decidedRef(ctx, db, seededDecision(4))];
   // The demo proposal a meeting decides is seeded when a meeting starts (seedMeetingProposal), not here: Home and the
   // rail read meetings on every page, and a proposal made by that read changed what the roadmap and Home showed.
@@ -372,34 +568,56 @@ export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: Me
 }
 
 function mayStart(ctx: MeetingsCtx, p: Prd): boolean {
-  return ctx.me.role === "owner" || (ctx.me.id === p.decider && RANK[ctx.me.role] >= RANK.commenter);
+  return (
+    ctx.me.role === 'owner' || (ctx.me.id === p.decider && RANK[ctx.me.role] >= RANK.commenter)
+  );
 }
 
 /** meetings.may_start_ritual: owners and the ritual's owner start a ritual's review. */
 function mayStartRitual(ctx: MeetingsCtx, ritualId: string): boolean {
-  return ctx.me.role === "owner" || (ctx.rituals?.rituals.find((r) => r.id === ritualId)?.owner_id === ctx.me.id && RANK[ctx.me.role] >= RANK.commenter);
+  return (
+    ctx.me.role === 'owner' ||
+    (ctx.rituals?.rituals.find((r) => r.id === ritualId)?.owner_id === ctx.me.id &&
+      RANK[ctx.me.role] >= RANK.commenter)
+  );
 }
 
-
 function mayChange(m: Meeting, id: string): boolean {
-  if (m.status === "ended") return false;
+  if (m.status === 'ended') return false;
   if (id === m.presenter_id) return true;
-  if (m.change_mode === "everyone") return m.attendee_ids.includes(id);
-  if (m.change_mode === "named") return m.change_people.includes(id);
+  if (m.change_mode === 'everyone') return m.attendee_ids.includes(id);
+  if (m.change_mode === 'named') return m.change_people.includes(id);
   return false;
 }
 
 /** The past meeting's delivery: all sent, or ("delivery-failed") the approver's email and the Slack post failed. */
 function seededDelivery(people: string[], approver: string | undefined): Delivery {
   // As stored before each attendee carried a status (no email_to): its email failed.
-  if (flags().includes("delivery-legacy-failed")) return { decisions: true, inbox: true, email: true, email_status: "failed", email_sent: 0, slack: false, slack_status: null, slack_channel: null };
-  const failed = flags().includes("delivery-failed");
-  const sent: Try = { status: "sent", tries: 1, next_at: null };
-  const bad: Try = { status: "failed", tries: TRIES, next_at: null };
+  if (flags().includes('delivery-legacy-failed'))
+    return {
+      decisions: true,
+      inbox: true,
+      email: true,
+      email_status: 'failed',
+      email_sent: 0,
+      slack: false,
+      slack_status: null,
+      slack_channel: null,
+    };
+  const failed = flags().includes('delivery-failed');
+  const sent: Try = { status: 'sent', tries: 1, next_at: null };
+  const bad: Try = { status: 'failed', tries: TRIES, next_at: null };
   return {
-    decisions: true, inbox: true, email: true, email_status: failed ? "failed" : "sent",
-    email_to: Object.fromEntries(people.map((i) => [i, failed && i === approver ? { ...bad } : { ...sent }])),
-    slack: failed, slack_status: failed ? "failed" : null, slack_channel: failed ? "#product-reviews" : null,
+    decisions: true,
+    inbox: true,
+    email: true,
+    email_status: failed ? 'failed' : 'sent',
+    email_to: Object.fromEntries(
+      people.map((i) => [i, failed && i === approver ? { ...bad } : { ...sent }]),
+    ),
+    slack: failed,
+    slack_status: failed ? 'failed' : null,
+    slack_channel: failed ? '#product-reviews' : null,
     ...(failed ? { slack_try: { ...bad } } : {}),
   };
 }
@@ -409,17 +627,21 @@ const RETRY_AFTER_MS = [5 * 60_000, 10 * 60_000];
 const TRIES = RETRY_AFTER_MS.length + 1;
 
 function tryOnce(t: Try, now: number): Try {
-  if (!flags().includes("delivery-fails")) return { status: "sent", tries: t.tries + 1, next_at: null };
+  if (!flags().includes('delivery-fails'))
+    return { status: 'sent', tries: t.tries + 1, next_at: null };
   const tries = t.tries + 1;
-  return tries >= TRIES ? { status: "failed", tries, next_at: null } : { status: "retrying", tries, next_at: now + RETRY_AFTER_MS[tries - 1] };
+  return tries >= TRIES
+    ? { status: 'failed', tries, next_at: null }
+    : { status: 'retrying', tries, next_at: now + RETRY_AFTER_MS[tries - 1] };
 }
 
 // Strictly after its time: Retry answers "queued" (as the API, whose tick tries it later); a later read tries it.
-const pending = (t: Try | undefined, now: number) => !!t && (t.status === "queued" || t.status === "retrying") && (t.next_at ?? 0) < now;
+const pending = (t: Try | undefined, now: number) =>
+  !!t && (t.status === 'queued' || t.status === 'retrying') && (t.next_at ?? 0) < now;
 
 function emailStatus(to: Record<string, Try>): string {
   const states = new Set(Object.values(to).map((t) => t.status));
-  return (["retrying", "queued", "failed"] as const).find((x) => states.has(x)) ?? "sent";
+  return (['retrying', 'queued', 'failed'] as const).find((x) => states.has(x)) ?? 'sent';
 }
 
 /** meetings.deliver on the tick: each due email and the Slack post tried once. */
@@ -427,12 +649,14 @@ function deliverDue(m: Meeting): void {
   const d = m.delivery;
   if (!d) return;
   const now = mockNowMs();
-  if (d.email_to && (d.email_status === "queued" || d.email_status === "retrying")) {
-    for (const [k, t] of Object.entries(d.email_to)) if (pending(t, now)) d.email_to[k] = tryOnce(t, now);
+  if (d.email_to && (d.email_status === 'queued' || d.email_status === 'retrying')) {
+    for (const [k, t] of Object.entries(d.email_to))
+      if (pending(t, now)) d.email_to[k] = tryOnce(t, now);
     d.email_status = emailStatus(d.email_to);
   }
   // Queued before the post carried its tries: the old outbox posted it.
-  if (!d.slack_try && (d.slack_status === "queued" || d.slack_status === "retrying")) d.slack_status = "sent";
+  if (!d.slack_try && (d.slack_status === 'queued' || d.slack_status === 'retrying'))
+    d.slack_status = 'sent';
   if (d.slack && pending(d.slack_try, now)) {
     d.slack_try = tryOnce(d.slack_try!, now);
     d.slack_status = d.slack_try.status;
@@ -440,22 +664,31 @@ function deliverDue(m: Meeting): void {
 }
 
 /** meetings.delivery_out: each attendee's email named, with how many went. */
-function deliveryOut(ctx: MeetingsCtx, m: Meeting): Schemas["SimpleDelivery"] | null {
+function deliveryOut(ctx: MeetingsCtx, m: Meeting): Schemas['SimpleDelivery'] | null {
   deliverDue(m);
   if (!m.delivery) return null;
   const { email_to, slack_try: _slack, ...rest } = m.delivery;
   void _slack;
-  const emails = Object.entries(email_to ?? {}).map(([id, t]) => ({ person: ref(ctx, id), status: t.status }));
-  return { ...rest, emails, email_sent: email_to ? emails.filter((e) => e.status === "sent").length : (rest.email_sent ?? 0) };
+  const emails = Object.entries(email_to ?? {}).map(([id, t]) => ({
+    person: ref(ctx, id),
+    status: t.status,
+  }));
+  return {
+    ...rest,
+    emails,
+    email_sent: email_to
+      ? emails.filter((e) => e.status === 'sent').length
+      : (rest.email_sent ?? 0),
+  };
 }
 
 /** meetings.may_retry: whoever ended the meeting or an owner. */
 function mayRetry(ctx: MeetingsCtx, m: Meeting): boolean {
-  return m.minutes_state === "sent" && (ctx.me.id === m.ended_by || ctx.me.role === "owner");
+  return m.minutes_state === 'sent' && (ctx.me.id === m.ended_by || ctx.me.role === 'owner');
 }
 
 function presenterOrDecider(ctx: MeetingsCtx, m: Meeting, p: Prd): boolean {
-  return ctx.me.id === m.presenter_id || ctx.me.id === p.decider || ctx.me.role === "owner";
+  return ctx.me.id === m.presenter_id || ctx.me.id === p.decider || ctx.me.role === 'owner';
 }
 
 function prdItems(ctx: MeetingsCtx, p: Prd) {
@@ -464,7 +697,11 @@ function prdItems(ctx: MeetingsCtx, p: Prd) {
 
 /** meeting-changes-only-its-agenda (meetings._reviewed_roadmap): the roadmap a new meeting
  * reviews: the one named, else the one its PRD's items are on, else its track's roadmap. */
-function reviewedRoadmap(ctx: MeetingsCtx, p: Prd, named: string | null | undefined): string | null | Response {
+function reviewedRoadmap(
+  ctx: MeetingsCtx,
+  p: Prd,
+  named: string | null | undefined,
+): string | null | Response {
   const on = [...new Set(prdItems(ctx, p).map((i) => i.roadmap.id))];
   if (named) {
     const id = on.find((r) => r === named || roadmapId(named) === r);
@@ -490,76 +727,167 @@ function onAgenda(ctx: MeetingsCtx, m: Meeting, itemId: unknown): boolean {
   return reviewed.includes(item.roadmap.id);
 }
 
-function attendees(ctx: MeetingsCtx, m: Meeting, p: Prd): Schemas["SimpleAttendee"][] {
+function attendees(ctx: MeetingsCtx, m: Meeting, p: Prd): Schemas['SimpleAttendee'][] {
   return m.attendee_ids.map((i) => {
-    const roles: Schemas["SimpleAttendee"]["roles"] = [];
-    if (i === m.presenter_id) roles.push("presenter");
-    if (i === p.decider) roles.push("decider");
-    if (p.reviewers.includes(i)) roles.push("reviewer");
-    return { id: i, name: nameOf(ctx, i), roles, present: !m.absent_ids.includes(i), joined: i === m.presenter_id || (m.joined_ids ?? m.attendee_ids).includes(i) };
+    const roles: Schemas['SimpleAttendee']['roles'] = [];
+    if (i === m.presenter_id) roles.push('presenter');
+    if (i === p.decider) roles.push('decider');
+    if (p.reviewers.includes(i)) roles.push('reviewer');
+    return {
+      id: i,
+      name: nameOf(ctx, i),
+      roles,
+      present: !m.absent_ids.includes(i),
+      joined: i === m.presenter_id || (m.joined_ids ?? m.attendee_ids).includes(i),
+    };
   });
 }
 
-function brief(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeetingBrief"] {
+function brief(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas['SimpleMeetingBrief'] {
   const p = prds(ctx).find((x) => x.slug === m.prd)!;
   return {
-    id: m.id, title: m.title, prd: docRef(p), origin: m.origin, status: m.status, presenter: ref(ctx, m.presenter_id),
-    attendees: attendees(ctx, m, p), length_min: m.length_min, started_at: m.started_at, ended_at: m.ended_at,
-    decisions: db.decisions.filter((d) => d.meeting_id === m.id).length, minutes_state: m.minutes_state,
-    summary: m.minutes_state === "sent" ? (m.minutes?.summary ?? null) : null,
+    id: m.id,
+    title: m.title,
+    prd: docRef(p),
+    origin: m.origin,
+    status: m.status,
+    presenter: ref(ctx, m.presenter_id),
+    attendees: attendees(ctx, m, p),
+    length_min: m.length_min,
+    started_at: m.started_at,
+    ended_at: m.ended_at,
+    decisions: db.decisions.filter((d) => d.meeting_id === m.id).length,
+    minutes_state: m.minutes_state,
+    summary: m.minutes_state === 'sent' ? (m.minutes?.summary ?? null) : null,
   };
 }
 
-const newestFirst = (a: Decision, b: Decision) => (a.at === b.at ? b.number - a.number : a.at < b.at ? 1 : -1);
+const newestFirst = (a: Decision, b: Decision) =>
+  a.at === b.at ? b.number - a.number : a.at < b.at ? 1 : -1;
 
 /** As meetings.PRODUCT: Simple reads product decisions, never a run's approval (a checkpoint). */
-const product = (d: Decision): boolean => d.origin !== "checkpoint";
+const product = (d: Decision): boolean => d.origin !== 'checkpoint';
 
-function openDecisions(ctx: MeetingsCtx, db: MeetingsDb, p: Prd): Schemas["SimpleOpenDecision"][] {
+function openDecisions(ctx: MeetingsCtx, db: MeetingsDb, p: Prd): Schemas['SimpleOpenDecision'][] {
   const ids = new Set([...p.ids, ...prdItems(ctx, p).map((i) => i.id)]);
   return db.decisions
-    .filter((d) => d.status === "proposed" && product(d) && d.subjects.some((s) => ids.has(s.id)))
+    .filter((d) => d.status === 'proposed' && product(d) && d.subjects.some((s) => ids.has(s.id)))
     .sort((a, b) => b.number - a.number)
     .map((d) => ({ id: d.id, number: d.number, title: d.title }));
 }
 
 function sees(ctx: MeetingsCtx, c: Change): boolean {
-  return c.by === ctx.me.id || ctx.me.role === "owner" || c.routed_to.includes(ctx.me.id);
+  return c.by === ctx.me.id || ctx.me.role === 'owner' || c.routed_to.includes(ctx.me.id);
 }
 
 function bare(ctx: MeetingsCtx, c: Change): Change {
-  const { id, session_id, document_id, draft_ids, op, target, before, after, status, by, by_name, at, decided_by, decided_at, reason, decision_reason, routed_to, undoes_id, undone } = c;
+  const {
+    id,
+    session_id,
+    document_id,
+    draft_ids,
+    op,
+    target,
+    before,
+    after,
+    status,
+    by,
+    by_name,
+    at,
+    decided_by,
+    decided_at,
+    reason,
+    decision_reason,
+    routed_to,
+    undoes_id,
+    undone,
+  } = c;
   return {
-    id, session_id, document_id, draft_ids, op, target, before, after, status, by, by_name, at, decided_by, decided_at, reason, decision_reason, routed_to, undoes_id, undone,
-    can_decide: status === "proposed" && (ctx.me.role === "owner" || routed_to.includes(ctx.me.id)), can_undo: false,
+    id,
+    session_id,
+    document_id,
+    draft_ids,
+    op,
+    target,
+    before,
+    after,
+    status,
+    by,
+    by_name,
+    at,
+    decided_by,
+    decided_at,
+    reason,
+    decision_reason,
+    routed_to,
+    undoes_id,
+    undone,
+    can_decide: status === 'proposed' && (ctx.me.role === 'owner' || routed_to.includes(ctx.me.id)),
+    can_undo: false,
     // meeting-changes-only-its-agenda (SimpleChangeOut.from_meeting): the meeting that asked for it.
-    from_meeting: c.from_meeting ?? null, off_agenda: c.off_agenda ?? null,
+    from_meeting: c.from_meeting ?? null,
+    off_agenda: c.off_agenda ?? null,
   };
 }
 
 function proposals(ctx: MeetingsCtx, p: Prd): Change[] {
   const ids = new Set(prdItems(ctx, p).map((i) => i.id));
-  const roadmap = (ctx.roadmap.changes ?? []).filter((c) => c.status === "proposed" && ids.has(String(c.target.item_id)));
-  const lines = p.slug === ctx.onePager.doc.slug ? ctx.onePager.changes.filter((c) => c.status === "proposed") : [];
-  return madeOrder([...roadmap, ...lines], (c) => [c.at]).filter((c) => sees(ctx, c)).map((c) => bare(ctx, c));
+  const roadmap = (ctx.roadmap.changes ?? []).filter(
+    (c) => c.status === 'proposed' && ids.has(String(c.target.item_id)),
+  );
+  const lines =
+    p.slug === ctx.onePager.doc.slug
+      ? ctx.onePager.changes.filter((c) => c.status === 'proposed')
+      : [];
+  return madeOrder([...roadmap, ...lines], (c) => [c.at])
+    .filter((c) => sees(ctx, c))
+    .map((c) => bare(ctx, c));
 }
 
 /** The decider approved, and something still holds publishing (drafts.holds). */
-const held = (m: Meeting) => !!m.approved && (m.approved.waiting_on.length > 0 || (m.approved.blocked_by ?? []).length > 0);
+const held = (m: Meeting) =>
+  !!m.approved && (m.approved.waiting_on.length > 0 || (m.approved.blocked_by ?? []).length > 0);
 
-const people = (names: string[]) => (names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
+const people = (names: string[]) =>
+  names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 
-function meetingDrafts(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting, p: Prd): Schemas["SimpleDraftOut"][] {
+function meetingDrafts(
+  ctx: MeetingsCtx,
+  db: MeetingsDb,
+  m: Meeting,
+  p: Prd,
+): Schemas['SimpleDraftOut'][] {
   const made = db.decisions.filter((d) => d.meeting_id === m.id && d.change_ids.length);
   if (!made.length) return [];
-  return [{
-    id: stableUuid(`simple-meeting-draft/${m.id}`), document: docRef(p), status: m.approved ? (held(m) ? "submitted" : "approved") : "working",
-    base_version: p.slug === ctx.onePager.doc.slug ? ctx.onePager.version : 1, version: null, from_prds: [], decision_notes: [], created_by: m.presenter_id, created_at: made[made.length - 1].at,
-    participant_ids: [...new Set(made.map((d) => d.approver_id).filter((x): x is string => !!x))], changes: made.length,
-    submitted_at: m.approved?.at ?? null, submitted_by: m.approved ? m.presenter_id : null, decider_approved: !!m.approved,
-    waiting_on: m.approved?.waiting_on ?? [], approved_at: m.approved && !held(m) ? m.approved.at : null, blocked_by: m.approved?.blocked_by ?? [],
-    can_submit: false, can_resume: false, can_approve: false, can_publish: false, required_reviewers: [], change_log: [], can_withdraw: false, published: true,
-  }];
+  return [
+    {
+      id: stableUuid(`simple-meeting-draft/${m.id}`),
+      document: docRef(p),
+      status: m.approved ? (held(m) ? 'submitted' : 'approved') : 'working',
+      base_version: p.slug === ctx.onePager.doc.slug ? ctx.onePager.version : 1,
+      version: null,
+      from_prds: [],
+      decision_notes: [],
+      created_by: m.presenter_id,
+      created_at: made[made.length - 1].at,
+      participant_ids: [...new Set(made.map((d) => d.approver_id).filter((x): x is string => !!x))],
+      changes: made.length,
+      submitted_at: m.approved?.at ?? null,
+      submitted_by: m.approved ? m.presenter_id : null,
+      decider_approved: !!m.approved,
+      waiting_on: m.approved?.waiting_on ?? [],
+      approved_at: m.approved && !held(m) ? m.approved.at : null,
+      blocked_by: m.approved?.blocked_by ?? [],
+      can_submit: false,
+      can_resume: false,
+      can_approve: false,
+      can_publish: false,
+      required_reviewers: [],
+      change_log: [],
+      can_withdraw: false,
+      published: true,
+    },
+  ];
 }
 
 /** changes.MEETING_IDLE: a meeting's session closes after this long without a change. */
@@ -573,24 +901,36 @@ export const MEETING_IDLE_MS = 4 * 60 * 60_000;
  * itself (meet-chat-right-prd review, meetings.ended_by_itself).
  */
 function endIdle(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting) {
-  if (m.status !== "live") return;
+  if (m.status !== 'live') return;
   const last = Date.parse(m.last_change_at ?? m.started_at);
   if (mockNowMs() - last < MEETING_IDLE_MS) return;
-  Object.assign(m, { status: "ended", ended_at: iso(mockNowMs()), ended_by: m.presenter_id, ended_by_itself: true });
+  Object.assign(m, {
+    status: 'ended',
+    ended_at: iso(mockNowMs()),
+    ended_by: m.presenter_id,
+    ended_by_itself: true,
+  });
   m.minutes = extract(ctx, db, m);
-  m.minutes_state = "ready";
+  m.minutes_state = 'ready';
 }
 
 /** A "minutes-later" job whose time came: it answers (Oracle's minutes) or fails. */
 function settleLater(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting) {
-  if (!m.minutes_due || m.minutes_state !== "drafting" || mockNowMs() < m.minutes_due.at) return;
-  if (m.minutes_due.outcome === "failed") m.minutes_job = "failed";
+  if (!m.minutes_due || m.minutes_state !== 'drafting' || mockNowMs() < m.minutes_due.at) return;
+  if (m.minutes_due.outcome === 'failed') m.minutes_job = 'failed';
   else {
     const quick = extract(ctx, db, m);
     const n = db.decisions.filter((d) => d.meeting_id === m.id).length;
     // An empty record: the plain line, no model's words (meetings.run_job); notes and open questions count as the record.
-    m.minutes = { ...quick, summary: n || (ctx.chatLines?.(m.id) ?? []).length || (m.notes ?? []).length ? `Oracle's minutes of ${m.title}: ${n} decisions taken.` : quick.summary, written_by: "oracle" };
-    m.minutes_state = "ready";
+    m.minutes = {
+      ...quick,
+      summary:
+        n || (ctx.chatLines?.(m.id) ?? []).length || (m.notes ?? []).length
+          ? `Oracle's minutes of ${m.title}: ${n} decisions taken.`
+          : quick.summary,
+      written_by: 'oracle',
+    };
+    m.minutes_state = 'ready';
     m.minutes_job = null;
   }
   m.minutes_due = null;
@@ -600,11 +940,11 @@ function settleLater(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting) {
  * not coming (a stalled queue, a lost worker): it reads "failed", so Draft again is offered;
  * past MINUTES_SLOW_MS it reads "slow". */
 function settleStuck(m: Meeting) {
-  if (m.status !== "ended" || m.minutes_state !== "drafting" || m.minutes_job_at == null) return;
-  if (m.minutes_job !== "drafting" && m.minutes_job !== "slow") return;
+  if (m.status !== 'ended' || m.minutes_state !== 'drafting' || m.minutes_job_at == null) return;
+  if (m.minutes_job !== 'drafting' && m.minutes_job !== 'slow') return;
   const waited = mockNowMs() - m.minutes_job_at;
-  if (waited > MINUTES_STUCK_MS) m.minutes_job = "failed";
-  else if (waited > MINUTES_SLOW_MS) m.minutes_job = "slow";
+  if (waited > MINUTES_STUCK_MS) m.minutes_job = 'failed';
+  else if (waited > MINUTES_SLOW_MS) m.minutes_job = 'slow';
 }
 
 /** agenda-sheet (meetings._agenda_out's inputs): the PRD's features, its decider, and the items decided in the meeting (done). */
@@ -615,7 +955,7 @@ function agendaCtx(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting, p: Prd): Agenda
     features: prdItems(ctx, p).map((i) => ({ id: i.id, title: i.title })),
     decider: p.decider,
     skipped: (m.agenda_state?.skipped ?? []).map((x) => x.id),
-    live: m.status === "live",
+    live: m.status === 'live',
     // port-an-decisions (meetings._trash_removed): a removed item waits in Settings › Trash.
     trash: (c) => {
       const t = ctx.trash?.();
@@ -623,11 +963,27 @@ function agendaCtx(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting, p: Prd): Agenda
       const at = new Date().toISOString();
       t?.entries.push({
         out: {
-          id, root: { type: "agenda_item", id: c.id, slug: null, title: c.name, kind: "agenda_item", meeting: m.title }, items: [],
-          deleted_by: ctx.me.id, deleted_by_name: nameOf(ctx, ctx.me.id), deleted_at: at, reason: null, published: false,
+          id,
+          root: {
+            type: 'agenda_item',
+            id: c.id,
+            slug: null,
+            title: c.name,
+            kind: 'agenda_item',
+            meeting: m.title,
+          },
+          items: [],
+          deleted_by: ctx.me.id,
+          deleted_by_name: nameOf(ctx, ctx.me.id),
+          deleted_at: at,
+          reason: null,
+          published: false,
           purge_after: new Date(Date.parse(at) + 30 * 86_400_000).toISOString(),
         },
-        documents: [], versions: [], runs: [], intakes: [],
+        documents: [],
+        versions: [],
+        runs: [],
+        intakes: [],
         agenda: { meeting_id: m.id, row: c.row, at: c.at ?? 0 },
       });
       return id;
@@ -641,14 +997,25 @@ function agendaCtx(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting, p: Prd): Agenda
 
 /** port-an-decisions: Trash's Restore of a removed agenda item (meetings.restore_agenda_item); the
  * refusal's words, else null. */
-export function restoreAgendaItem(ctx: MeetingsCtx, db: MeetingsDb, entry: TrashEntryRow): string | null {
+export function restoreAgendaItem(
+  ctx: MeetingsCtx,
+  db: MeetingsDb,
+  entry: TrashEntryRow,
+): string | null {
   const a = entry.agenda!;
   const m = db.meetings.find((x) => x.id === a.meeting_id);
-  if (!m) return "Its meeting was deleted: there is no agenda to put it back on";
-  if (m.status === "ended") return "Its meeting has ended: the agenda is closed";
+  if (!m) return 'Its meeting was deleted: there is no agenda to put it back on';
+  if (m.status === 'ended') return 'Its meeting has ended: the agenda is closed';
   const p = prds(ctx).find((x) => x.slug === m.prd);
   if (!p) return "Its meeting's PRD is gone";
-  return restoreAgendaRow(agendaSheet(ctx, db, m, p), agendaCtx(ctx, db, m, p), a.row as AgendaRowDb, a.at, entry.out.id, entry.out.root.title);
+  return restoreAgendaRow(
+    agendaSheet(ctx, db, m, p),
+    agendaCtx(ctx, db, m, p),
+    a.row as AgendaRowDb,
+    a.at,
+    entry.out.id,
+    entry.out.root.title,
+  );
 }
 
 function agendaSheet(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting, p: Prd): AgendaSheetDb {
@@ -656,25 +1023,51 @@ function agendaSheet(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting, p: Prd): Agen
     m.agenda_sheet = {};
     // "meeting-agenda-sheet": a review of Usage alerts starts mid-agenda, as the owner's picked frames draw it.
     const mid = ctx.roadmap.agenda_midway;
-    if (mid && p.slug === "usage-alerts") {
+    if (mid && p.slug === 'usage-alerts') {
       const f = prdItems(ctx, p);
-      const id = (title: string) => f.find((i) => i.title === title)?.id ?? "";
-      const row = (title: string, mins = 10) => ({ id: id(title), feature_id: id(title), title: null, mins });
+      const id = (title: string) => f.find((i) => i.title === title)?.id ?? '';
+      const row = (title: string, mins = 10) => ({
+        id: id(title),
+        feature_id: id(title),
+        title: null,
+        mins,
+      });
       m.agenda_sheet = {
-        done: [id("Alert rules engine")],
-        items: [row("Alert rules engine"), row("Weekly alert digest", 15), row("Mobile alert push"), { id: crypto.randomUUID(), feature_id: null, title: mid.topic, mins: TOPIC_MINS, by: mid.by }, row("Alert history export")],
+        done: [id('Alert rules engine')],
+        items: [
+          row('Alert rules engine'),
+          row('Weekly alert digest', 15),
+          row('Mobile alert push'),
+          {
+            id: crypto.randomUUID(),
+            feature_id: null,
+            title: mid.topic,
+            mins: TOPIC_MINS,
+            by: mid.by,
+          },
+          row('Alert history export'),
+        ],
       };
-      m.agenda_state = { next: null, skipped: [{ id: id("Alert history export"), title: "Alert history export" }] };
+      m.agenda_state = {
+        next: null,
+        skipped: [{ id: id('Alert history export'), title: 'Alert history export' }],
+      };
     }
   }
-  const done = db.decisions.filter((d) => d.meeting_id === m.id).flatMap((d) => d.subjects.filter((x) => x.kind === "roadmap_item").map((x) => x.id));
+  const done = db.decisions
+    .filter((d) => d.meeting_id === m.id)
+    .flatMap((d) => d.subjects.filter((x) => x.kind === 'roadmap_item').map((x) => x.id));
   if (done.length) m.agenda_sheet.done = [...new Set([...(m.agenda_sheet.done ?? []), ...done])];
   return m.agenda_sheet;
 }
 
-function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeetingOut"] & { notes: MeetingNote[]; agenda: Schemas["SimpleAgenda"] } {
+function one(
+  ctx: MeetingsCtx,
+  db: MeetingsDb,
+  m: Meeting,
+): Schemas['SimpleMeetingOut'] & { notes: MeetingNote[]; agenda: Schemas['SimpleAgenda'] } {
   const p = prds(ctx).find((x) => x.slug === m.prd)!;
-  const deciderOrOwner = ctx.me.id === p.decider || ctx.me.role === "owner";
+  const deciderOrOwner = ctx.me.id === p.decider || ctx.me.role === 'owner';
   return {
     ...brief(ctx, db, m),
     session_id: m.session_id,
@@ -684,36 +1077,69 @@ function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeeti
     roadmap_ids: [...new Set(prdItems(ctx, p).map((i) => i.roadmap.id))].sort(),
     // qa4-simple-decide-11 (as questions._write): a question decided in the meeting is the
     // question's own decision there (its id, number and title), so it keeps its code (Q5).
-    meeting_decisions: db.decisions.filter((d) => d.meeting_id === m.id).sort(newestFirst).map((d) => {
-      const n = d.question ? Number(d.question.code.replace(/^Q/, "")) : NaN;
-      const own = d.question && Number.isFinite(n) ? { id: stableUuid(`simple-question/${n}`), number: 100 + n, title: d.question.title } : { id: d.id, number: d.number, title: d.title };
-      return { ...own, approver: ref(ctx, d.approver_id ?? ""), at: d.at, subjects: d.subjects, change_ids: d.change_ids, flow: decidedFlow(ctx, d) };
-    }),
+    meeting_decisions: db.decisions
+      .filter((d) => d.meeting_id === m.id)
+      .sort(newestFirst)
+      .map((d) => {
+        const n = d.question ? Number(d.question.code.replace(/^Q/, '')) : NaN;
+        const own =
+          d.question && Number.isFinite(n)
+            ? { id: stableUuid(`simple-question/${n}`), number: 100 + n, title: d.question.title }
+            : { id: d.id, number: d.number, title: d.title };
+        return {
+          ...own,
+          approver: ref(ctx, d.approver_id ?? ''),
+          at: d.at,
+          subjects: d.subjects,
+          change_ids: d.change_ids,
+          flow: decidedFlow(ctx, d),
+        };
+      }),
     open_decisions: openDecisions(ctx, db, p),
     // The meeting PRD's agenda (questions.due_for): the open questions blocking the soonest
     // one's milestone, whoever decides them, and those decided in this meeting (with Undo).
-    decisions_due: questionsOut(ctx, qdb(ctx, db), p.id, true).length ? agendaOut(ctx, qdb(ctx, db), { id: m.id, session_id: m.session_id, live: m.status === "live" }) : [],
+    decisions_due: questionsOut(ctx, qdb(ctx, db), p.id, true).length
+      ? agendaOut(ctx, qdb(ctx, db), {
+          id: m.id,
+          session_id: m.session_id,
+          live: m.status === 'live',
+        })
+      : [],
     pending_proposals: proposals(ctx, p),
     drafts: meetingDrafts(ctx, db, m, p),
-    waiting_people: [...new Set(meetingDrafts(ctx, db, m, p).flatMap((d) => d.waiting_on))].map((i) => ref(ctx, i)),
+    waiting_people: [...new Set(meetingDrafts(ctx, db, m, p).flatMap((d) => d.waiting_on))].map(
+      (i) => ref(ctx, i),
+    ),
     minutes: m.minutes,
-    minutes_job: m.status === "ended" && m.minutes_state === "drafting" ? (m.minutes_job ?? "drafting") : null,
+    minutes_job:
+      m.status === 'ended' && m.minutes_state === 'drafting' ? (m.minutes_job ?? 'drafting') : null,
     delivery: deliveryOut(ctx, m),
     slack: slackState(),
     email_available: emailAvailable(),
     can: {
       change: mayChange(m, ctx.me.id) && RANK[ctx.me.role] >= RANK.commenter,
-      set_rules: m.status === "live" && ctx.me.id === m.presenter_id && RANK[ctx.me.role] >= RANK.commenter,
-      approve: m.status === "live" && deciderOrOwner,
-      end: presenterOrDecider(ctx, m, p) && m.minutes_state !== "sent" && RANK[ctx.me.role] >= RANK.commenter,
-      redraft: m.status === "ended" && m.minutes_state === "drafting" && m.minutes_job === "failed" && presenterOrDecider(ctx, m, p),
+      set_rules:
+        m.status === 'live' && ctx.me.id === m.presenter_id && RANK[ctx.me.role] >= RANK.commenter,
+      approve: m.status === 'live' && deciderOrOwner,
+      end:
+        presenterOrDecider(ctx, m, p) &&
+        m.minutes_state !== 'sent' &&
+        RANK[ctx.me.role] >= RANK.commenter,
+      redraft:
+        m.status === 'ended' &&
+        m.minutes_state === 'drafting' &&
+        m.minutes_job === 'failed' &&
+        presenterOrDecider(ctx, m, p),
       retry_delivery: mayRetry(ctx, m),
-      edit_agenda: m.status === "live" && agendaRight(agendaCtx(ctx, db, m, p)) === "save",
-      propose_agenda: m.status === "live" && agendaRight(agendaCtx(ctx, db, m, p)) === "propose",
+      edit_agenda: m.status === 'live' && agendaRight(agendaCtx(ctx, db, m, p)) === 'save',
+      propose_agenda: m.status === 'live' && agendaRight(agendaCtx(ctx, db, m, p)) === 'propose',
     },
     not_approved: [],
     notes: m.notes ?? [],
-    agenda: { ...(m.agenda_state ?? { next: null, skipped: [] }), ...agendaRowsOut(agendaSheet(ctx, db, m, p), agendaCtx(ctx, db, m, p)) },
+    agenda: {
+      ...(m.agenda_state ?? { next: null, skipped: [] }),
+      ...agendaRowsOut(agendaSheet(ctx, db, m, p), agendaCtx(ctx, db, m, p)),
+    },
     // build-runplan RP2: the run's draft roadmap of the PRD (meeting_draft.draft_out).
     draft_roadmap: draftRoadmapOut(ctx.roadmap, p.ids, approvedHere(db, m, p.ids)),
   };
@@ -724,59 +1150,106 @@ function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeeti
  * read (meetings._upcoming): one row per active ritual, soonest first: its open occurrence, else its
  * next due time, however far ahead (no horizon), when no occurrence is made for it yet (occurrence_id null).
  */
-function upcoming(ctx: MeetingsCtx, db: MeetingsDb, only?: string): Schemas["SimpleUpcomingMeeting"][] {
+function upcoming(
+  ctx: MeetingsCtx,
+  db: MeetingsDb,
+  only?: string,
+): Schemas['SimpleUpcomingMeeting'][] {
   const now = mockNowMs();
   const rituals = ctx.rituals?.rituals ?? [];
-  const active = new Map(rituals.filter((r) => r.status === "active").map((r) => [r.id, r]));
+  const active = new Map(rituals.filter((r) => r.status === 'active').map((r) => [r.id, r]));
   const made: Occurrence[] = [
     ...db.occurrences,
     ...(ctx.rituals?.occurrences ?? [])
-      .filter((o) => (o.status === "scheduled" || o.status === "ready") && active.has(o.ritual_id))
+      .filter((o) => (o.status === 'scheduled' || o.status === 'ready') && active.has(o.ritual_id))
       .map((o) => {
         const r = active.get(o.ritual_id)!;
-        return { id: o.id, ritual_id: r.id, ritual_title: r.title, due_at: o.due_at, ends_at: o.ends_at ?? iso(Date.parse(o.due_at) + r.duration_min * 60_000), length_min: r.duration_min, attendee_ids: [r.owner_id, ...r.attendee_ids], ready: o.status === "ready" };
+        return {
+          id: o.id,
+          ritual_id: r.id,
+          ritual_title: r.title,
+          due_at: o.due_at,
+          ends_at: o.ends_at ?? iso(Date.parse(o.due_at) + r.duration_min * 60_000),
+          length_min: r.duration_min,
+          attendee_ids: [r.owner_id, ...r.attendee_ids],
+          ready: o.status === 'ready',
+        };
       }),
   ];
   // The walk: the ritual's real attendees add whoever was present at the last review held
   // from it, until its attendees are edited after that review (attendees_edited_at, as the
   // API: not the ritual's updated_at, which the scheduler moves).
-  const ritualOf = new Map<string, string>([...db.occurrences, ...(ctx.rituals?.occurrences ?? [])].map((o) => [o.id, o.ritual_id]));
+  const ritualOf = new Map<string, string>(
+    [...db.occurrences, ...(ctx.rituals?.occurrences ?? [])].map((o) => [o.id, o.ritual_id]),
+  );
   const held = (ritualId: string): string[] => {
-    const last = [...db.meetings].filter((m) => m.occurrence_id && ritualOf.get(m.occurrence_id) === ritualId).sort((a, b) => b.started_at.localeCompare(a.started_at))[0];
+    const last = [...db.meetings]
+      .filter((m) => m.occurrence_id && ritualOf.get(m.occurrence_id) === ritualId)
+      .sort((a, b) => b.started_at.localeCompare(a.started_at))[0];
     if (!last) return [];
     const edited = rituals.find((r) => r.id === ritualId)?.attendees_edited_at;
     if (edited && Date.parse(last.started_at) < Date.parse(edited)) return [];
     return last.attendee_ids.filter((i) => !last.absent_ids.includes(i));
   };
   const open = made
-    .filter((o) => (only ? o.id === only : Date.parse(o.ends_at) >= now && (active.has(o.ritual_id) || !rituals.some((r) => r.id === o.ritual_id))))
+    .filter((o) =>
+      only
+        ? o.id === only
+        : Date.parse(o.ends_at) >= now &&
+          (active.has(o.ritual_id) || !rituals.some((r) => r.id === o.ritual_id)),
+    )
     // Not one whose review was held (its meeting has ended): the ritual's following one is next.
-    .filter((o) => !!only || !db.meetings.some((m) => m.occurrence_id === o.id && m.status === "ended"))
+    .filter(
+      (o) => !!only || !db.meetings.some((m) => m.occurrence_id === o.id && m.status === 'ended'),
+    )
     .sort((a, b) => a.due_at.localeCompare(b.due_at))
     .filter((o, i, xs) => !!only || xs.findIndex((x) => x.ritual_id === o.ritual_id) === i);
-  const rows: Schemas["SimpleUpcomingMeeting"][] = open.map((o) => ({
-    occurrence_id: o.id, ritual_id: o.ritual_id, ritual_title: o.ritual_title, due_at: o.due_at, ends_at: o.ends_at, length_min: o.length_min,
+  const rows: Schemas['SimpleUpcomingMeeting'][] = open.map((o) => ({
+    occurrence_id: o.id,
+    ritual_id: o.ritual_id,
+    ritual_title: o.ritual_title,
+    due_at: o.due_at,
+    ends_at: o.ends_at,
+    length_min: o.length_min,
     // As the API: the ritual's owner and attendees as they are now, not as the occurrence was made.
-    attendees: [...new Set([...(active.has(o.ritual_id) ? [active.get(o.ritual_id)!.owner_id, ...active.get(o.ritual_id)!.attendee_ids] : o.attendee_ids), ...held(o.ritual_id)])].map((i) => ref(ctx, i)), meeting_id: db.meetings.find((m) => m.occurrence_id === o.id)?.id ?? null,
-    pre_read_ready: !!o.ready, can_start: mayStartRitual(ctx, o.ritual_id),
+    attendees: [
+      ...new Set([
+        ...(active.has(o.ritual_id)
+          ? [active.get(o.ritual_id)!.owner_id, ...active.get(o.ritual_id)!.attendee_ids]
+          : o.attendee_ids),
+        ...held(o.ritual_id),
+      ]),
+    ].map((i) => ref(ctx, i)),
+    meeting_id: db.meetings.find((m) => m.occurrence_id === o.id)?.id ?? null,
+    pre_read_ready: !!o.ready,
+    can_start: mayStartRitual(ctx, o.ritual_id),
   }));
   if (only) return rows;
   for (const r of active.values()) {
     if (!r.next_due_at || open.some((o) => o.ritual_id === r.id)) continue;
     rows.push({
-      occurrence_id: null, ritual_id: r.id, ritual_title: r.title, due_at: r.next_due_at, ends_at: iso(Date.parse(r.next_due_at) + r.duration_min * 60_000),
-      length_min: Math.min(Math.max(r.duration_min, 5), 240), attendees: [...new Set([r.owner_id, ...r.attendee_ids, ...held(r.id)])].map((i) => ref(ctx, i)), meeting_id: null,
-      pre_read_ready: false, can_start: mayStartRitual(ctx, r.id),
+      occurrence_id: null,
+      ritual_id: r.id,
+      ritual_title: r.title,
+      due_at: r.next_due_at,
+      ends_at: iso(Date.parse(r.next_due_at) + r.duration_min * 60_000),
+      length_min: Math.min(Math.max(r.duration_min, 5), 240),
+      attendees: [...new Set([r.owner_id, ...r.attendee_ids, ...held(r.id)])].map((i) =>
+        ref(ctx, i),
+      ),
+      meeting_id: null,
+      pre_read_ready: false,
+      can_start: mayStartRitual(ctx, r.id),
     });
   }
   // home-honest-loading: a ritual whose roadmaps are all in Trash says so (meetings.REVIEWS).
   const kindOf = new Map(rituals.map((r) => [r.id, r.kind]));
-  const inTrash = ctx.onlyInTrash?.("roadmap") ?? false;
-  const deleted = ctx.deletedForGood?.("roadmap") ?? null;
+  const inTrash = ctx.onlyInTrash?.('roadmap') ?? false;
+  const deleted = ctx.deletedForGood?.('roadmap') ?? null;
   for (const row of rows) {
-    const reviewsRoadmap = kindOf.get(row.ritual_id) === "roadmap_refresh";
-    row.reviews_in_trash = inTrash && reviewsRoadmap ? "roadmap" : null;
-    row.reviews_deleted = deleted && reviewsRoadmap ? "roadmap" : null;
+    const reviewsRoadmap = kindOf.get(row.ritual_id) === 'roadmap_refresh';
+    row.reviews_in_trash = inTrash && reviewsRoadmap ? 'roadmap' : null;
+    row.reviews_deleted = deleted && reviewsRoadmap ? 'roadmap' : null;
     row.reviews_deleted_at = reviewsRoadmap ? deleted : null;
   }
   return rows.sort((a, b) => a.due_at.localeCompare(b.due_at)).slice(0, 20);
@@ -787,8 +1260,13 @@ function upcoming(ctx: MeetingsCtx, db: MeetingsDb, only?: string): Schemas["Sim
  * row's due time when made, else made now when that is the ritual's next due time (the ritual moves
  * on); "moved" when the ritual has moved past it (a stale page: 409, never next week's review).
  */
-function occurrenceNow(ctx: MeetingsCtx, db: MeetingsDb, ritualId: string, due: string): Occurrence | "moved" | null {
-  const r = ctx.rituals?.rituals.find((x) => x.id === ritualId && x.status === "active");
+function occurrenceNow(
+  ctx: MeetingsCtx,
+  db: MeetingsDb,
+  ritualId: string,
+  due: string,
+): Occurrence | 'moved' | null {
+  const r = ctx.rituals?.rituals.find((x) => x.id === ritualId && x.status === 'active');
   if (!r) return null;
   const at = (x: string) => Date.parse(x) === Date.parse(due);
   const mine = db.occurrences.find((o) => o.ritual_id === r.id && at(o.due_at));
@@ -796,15 +1274,26 @@ function occurrenceNow(ctx: MeetingsCtx, db: MeetingsDb, ritualId: string, due: 
   const theirs = ctx.rituals?.occurrences.find((o) => o.ritual_id === r.id && at(o.due_at));
   if (theirs) {
     return {
-      id: theirs.id, ritual_id: r.id, ritual_title: r.title, due_at: theirs.due_at, ends_at: theirs.ends_at ?? iso(Date.parse(theirs.due_at) + r.duration_min * 60_000),
-      length_min: Math.min(Math.max(r.duration_min, 5), 240), attendee_ids: [r.owner_id, ...r.attendee_ids], ready: theirs.status === "ready",
+      id: theirs.id,
+      ritual_id: r.id,
+      ritual_title: r.title,
+      due_at: theirs.due_at,
+      ends_at: theirs.ends_at ?? iso(Date.parse(theirs.due_at) + r.duration_min * 60_000),
+      length_min: Math.min(Math.max(r.duration_min, 5), 240),
+      attendee_ids: [r.owner_id, ...r.attendee_ids],
+      ready: theirs.status === 'ready',
     };
   }
-  if (!r.next_due_at || !at(r.next_due_at)) return "moved";
+  if (!r.next_due_at || !at(r.next_due_at)) return 'moved';
   due = r.next_due_at;
   const o: Occurrence = {
-    id: stableUuid(`simple-occurrence/${r.id}/${due}`), ritual_id: r.id, ritual_title: r.title, due_at: due,
-    ends_at: iso(Date.parse(due) + r.duration_min * 60_000), length_min: Math.min(Math.max(r.duration_min, 5), 240), attendee_ids: [r.owner_id, ...r.attendee_ids],
+    id: stableUuid(`simple-occurrence/${r.id}/${due}`),
+    ritual_id: r.id,
+    ritual_title: r.title,
+    due_at: due,
+    ends_at: iso(Date.parse(due) + r.duration_min * 60_000),
+    length_min: Math.min(Math.max(r.duration_min, 5), 240),
+    attendee_ids: [r.owner_id, ...r.attendee_ids],
   };
   db.occurrences.push(o);
   r.next_due_at = nextOccurrence(r.schedule, new Date(due)).toISOString();
@@ -812,32 +1301,58 @@ function occurrenceNow(ctx: MeetingsCtx, db: MeetingsDb, ritualId: string, due: 
 }
 
 /** The invented bundle S10 would draw for mobile alerts (was ./simple-priorities' FLOWS). */
-const FLOWS: Record<string, Schemas["SimpleFlow"]> = {
-  "alert-mobile": plainFlow({
-    title: "Act on a pushed alert",
-    steps: ["Get the push", "Open the alert", "See what crossed the line", "Snooze or assign it"],
-    screen: { title: "Alert on a phone", regions: ["Header: rule and time", "What crossed the line", "Chart of the last day", "Snooze and Assign buttons"] },
+const FLOWS: Record<string, Schemas['SimpleFlow']> = {
+  'alert-mobile': plainFlow({
+    title: 'Act on a pushed alert',
+    steps: ['Get the push', 'Open the alert', 'See what crossed the line', 'Snooze or assign it'],
+    screen: {
+      title: 'Alert on a phone',
+      regions: [
+        'Header: rule and time',
+        'What crossed the line',
+        'Chart of the last day',
+        'Snooze and Assign buttons',
+      ],
+    },
   }),
 };
 
 /** An invented bundle S10 would draw for Team invite nudges (the "flow" flag). */
-const INVITE_FLOW: Schemas["SimpleFlow"] = plainFlow({
-  title: "Invite your team",
-  steps: ["Finish setup", "See the nudge", "Pick teammates", "Send the invites"],
-  screen: { title: "Invite step", regions: ["Header: invite your team", "Teammate emails", "Send invites button"] },
+const INVITE_FLOW: Schemas['SimpleFlow'] = plainFlow({
+  title: 'Invite your team',
+  steps: ['Finish setup', 'See the nudge', 'Pick teammates', 'Send the invites'],
+  screen: {
+    title: 'Invite step',
+    regions: ['Header: invite your team', 'Teammate emails', 'Send invites button'],
+  },
 });
 
 /** A meeting decision on a new flow or feature (a draft item): that item and its flow. */
-function decidedFlow(ctx: MeetingsCtx, d: Decision): Schemas["SimpleDecidedFlow"] | null {
+function decidedFlow(ctx: MeetingsCtx, d: Decision): Schemas['SimpleDecidedFlow'] | null {
   const item = items(ctx).find((i) => i.draft && (d.item_ids ?? []).includes(i.id));
   if (!item) return null;
-  const flow = flags().includes("flow") && item.key === "setup-ideas" ? INVITE_FLOW : (FLOWS[item.key] ?? null);
-  return { kind: "draft_item", id: item.id, title: item.title, flow: bundleFlow(ctx.roadmap.visuals, "draft_item", item.id, flow) };
+  const flow =
+    flags().includes('flow') && item.key === 'setup-ideas'
+      ? INVITE_FLOW
+      : (FLOWS[item.key] ?? null);
+  return {
+    kind: 'draft_item',
+    id: item.id,
+    title: item.title,
+    flow: bundleFlow(ctx.roadmap.visuals, 'draft_item', item.id, flow),
+  };
 }
 
 /** How many items this meeting's Approve these N dates put on the roadmap, or null: its newest such decision on the PRD, by its chosen option (meeting_draft._approved_here). */
 function approvedHere(db: MeetingsDb, m: Meeting, prdIds: string[]): number | null {
-  const d = db.decisions.filter((x) => x.meeting_id === m.id && x.chosen?.startsWith(`${APPROVED_KEY}:`) && x.subjects.some((s) => prdIds.includes(s.id))).sort(newestFirst)[0];
+  const d = db.decisions
+    .filter(
+      (x) =>
+        x.meeting_id === m.id &&
+        x.chosen?.startsWith(`${APPROVED_KEY}:`) &&
+        x.subjects.some((s) => prdIds.includes(s.id)),
+    )
+    .sort(newestFirst)[0];
   return d ? Number(d.chosen!.slice(APPROVED_KEY.length + 1)) : null;
 }
 
@@ -846,75 +1361,147 @@ function nextNumber(db: MeetingsDb, ctx: MeetingsCtx): number {
   return Math.max(0, ...db.decisions.map((d) => d.number), ...(ctx.logNumbers?.() ?? [])) + 1;
 }
 
-function record(db: MeetingsDb, ctx: MeetingsCtx, m: Meeting, title: string, subjects: Decision["subjects"], changeIds: string[], itemIds: string[] = [], chosen = "decided"): Decision {
+function record(
+  db: MeetingsDb,
+  ctx: MeetingsCtx,
+  m: Meeting,
+  title: string,
+  subjects: Decision['subjects'],
+  changeIds: string[],
+  itemIds: string[] = [],
+  chosen = 'decided',
+): Decision {
   const number = nextNumber(db, ctx);
   const d: Decision = {
-    id: crypto.randomUUID(), number, title, origin: "meeting", status: "decided", approver_id: ctx.me.id, at: iso(Math.max(mockNowMs(), ...db.decisions.map((x) => Date.parse(x.at) + 1))),
-    subjects, meeting_id: m.id, change_ids: changeIds, item_ids: itemIds, chosen,
+    id: crypto.randomUUID(),
+    number,
+    title,
+    origin: 'meeting',
+    status: 'decided',
+    approver_id: ctx.me.id,
+    at: iso(Math.max(mockNowMs(), ...db.decisions.map((x) => Date.parse(x.at) + 1))),
+    subjects,
+    meeting_id: m.id,
+    change_ids: changeIds,
+    item_ids: itemIds,
+    chosen,
   };
   db.decisions.push(d);
-  ctx.logDecision?.({ id: d.id, number: d.number, title, at: d.at, approver_id: ctx.me.id, subjects, chosen, meeting_title: m.title });
+  ctx.logDecision?.({
+    id: d.id,
+    number: d.number,
+    title,
+    at: d.at,
+    approver_id: ctx.me.id,
+    subjects,
+    chosen,
+    meeting_title: m.title,
+  });
   // The items and lines it names link to it (decided_in, a line's decisions), newest first.
   for (const s of subjects) {
     const row = { id: d.id, number: d.number, title: d.title };
-    if (s.kind === "roadmap_item") ((ctx.roadmap.decided_in ??= {})[s.id] ??= []).unshift(decidedRef(ctx, db, d));
-    if (s.kind === "section" && s.ref?.startsWith("line:")) ((ctx.onePager.decisions ??= {})[s.ref.slice(5)] ??= []).unshift(row);
+    if (s.kind === 'roadmap_item')
+      ((ctx.roadmap.decided_in ??= {})[s.id] ??= []).unshift(decidedRef(ctx, db, d));
+    if (s.kind === 'section' && s.ref?.startsWith('line:'))
+      ((ctx.onePager.decisions ??= {})[s.ref.slice(5)] ??= []).unshift(row);
   }
   return d;
 }
 
 const OP_WORDS: Record<string, string> = {
-  move_dates: "New dates for", accept_date_suggestion: "Accepted Oracle's dates for", change_horizon: "Moved", reorder: "Reordered", cut: "Cut",
-  restore: "Restored", edit_title: "Renamed", edit_outcome: "New outcome for", accept_risk: "Accepted a risk on", confirm_item: "Confirmed", edit_line: "New wording for", set_section_number: "New number in",
-  cut_with_dependents: "Cut with its dependents:",
+  move_dates: 'New dates for',
+  accept_date_suggestion: "Accepted Oracle's dates for",
+  change_horizon: 'Moved',
+  reorder: 'Reordered',
+  cut: 'Cut',
+  restore: 'Restored',
+  edit_title: 'Renamed',
+  edit_outcome: 'New outcome for',
+  accept_risk: 'Accepted a risk on',
+  confirm_item: 'Confirmed',
+  edit_line: 'New wording for',
+  set_section_number: 'New number in',
+  cut_with_dependents: 'Cut with its dependents:',
 };
 
 /** A change in words and the subjects it names (as meetings.describe). */
-const HORIZON_TO: Record<string, string> = { now: "Now", next: "Next", later: "Later" };
+const HORIZON_TO: Record<string, string> = { now: 'Now', next: 'Next', later: 'Later' };
 
 /** walkc-meeting r2 (meetings.PROPOSAL_WORDS): what a proposal asked for. */
 const PROPOSAL_WORDS: Record<string, string> = {
-  move_dates: "new dates for", accept_date_suggestion: "accept Oracle's dates for", change_horizon: "move", reorder: "reorder", cut: "cut",
-  restore: "restore", edit_title: "rename", edit_outcome: "new outcome for", accept_risk: "accept a risk on", shift_dependents: "move the dependents of",
-  move_dependency: "move the dependency of", confirm_item: "confirm", edit_line: "new wording for", set_section_number: "new number in", add_key_date: "add the key date",
-  edit_key_date: "change the key date", remove_key_date: "remove the key date", add_item: "add", merge_item: "merge",
-  keep_both: "keep beside its look-alikes:", cut_with_dependents: "cut with its dependents:", set_goals: "move to another goal:",
+  move_dates: 'new dates for',
+  accept_date_suggestion: "accept Oracle's dates for",
+  change_horizon: 'move',
+  reorder: 'reorder',
+  cut: 'cut',
+  restore: 'restore',
+  edit_title: 'rename',
+  edit_outcome: 'new outcome for',
+  accept_risk: 'accept a risk on',
+  shift_dependents: 'move the dependents of',
+  move_dependency: 'move the dependency of',
+  confirm_item: 'confirm',
+  edit_line: 'new wording for',
+  set_section_number: 'new number in',
+  add_key_date: 'add the key date',
+  edit_key_date: 'change the key date',
+  remove_key_date: 'remove the key date',
+  add_item: 'add',
+  merge_item: 'merge',
+  keep_both: 'keep beside its look-alikes:',
+  cut_with_dependents: 'cut with its dependents:',
+  set_goals: 'move to another goal:',
 };
 
-function describe(ctx: MeetingsCtx, c: Change, proposal = false): [string, Decision["subjects"]] {
-  const subjects: Decision["subjects"] = [];
-  let name = "";
+function describe(ctx: MeetingsCtx, c: Change, proposal = false): [string, Decision['subjects']] {
+  const subjects: Decision['subjects'] = [];
+  let name = '';
   const item = items(ctx).find((i) => i.id === c.target.item_id);
   if (item) {
     name = item.title;
-    subjects.push({ kind: "roadmap_item", id: item.id, ref: item.key });
+    subjects.push({ kind: 'roadmap_item', id: item.id, ref: item.key });
   }
-  if (c.op === "edit_line") {
-    name = `a line of ${ctx.onePager.doc.title}: “${String(c.after.line ?? "").slice(0, 120)}”`;
-    subjects.push({ kind: "section", id: ctx.onePager.doc.id, ref: `line:${String(c.target.line_id)}` });
-  } else if (c.op === "cut_with_dependents") {
+  if (c.op === 'edit_line') {
+    name = `a line of ${ctx.onePager.doc.title}: “${String(c.after.line ?? '').slice(0, 120)}”`;
+    subjects.push({
+      kind: 'section',
+      id: ctx.onePager.doc.id,
+      ref: `line:${String(c.target.line_id)}`,
+    });
+  } else if (c.op === 'cut_with_dependents') {
     // Review minor: every item the one change cut, the item first, each a subject.
-    const titles = Array.isArray(c.target.titles) && c.target.titles.length ? c.target.titles.map(String) : name ? [name] : [];
-    name = titles.length === 1 ? titles[0] : `${titles.slice(0, -1).join(", ")} and ${titles[titles.length - 1]}`;
+    const titles =
+      Array.isArray(c.target.titles) && c.target.titles.length
+        ? c.target.titles.map(String)
+        : name
+          ? [name]
+          : [];
+    name =
+      titles.length === 1
+        ? titles[0]
+        : `${titles.slice(0, -1).join(', ')} and ${titles[titles.length - 1]}`;
     for (const id of Object.keys(c.after)) {
       const other = id !== c.target.item_id ? items(ctx).find((i) => i.id === id) : undefined;
-      if (other) subjects.push({ kind: "roadmap_item", id: other.id, ref: other.key });
+      if (other) subjects.push({ kind: 'roadmap_item', id: other.id, ref: other.key });
     }
-  } else if (!name) name = String(c.after.title ?? c.target.title ?? "");
+  } else if (!name) name = String(c.after.title ?? c.target.title ?? '');
   const h = HORIZON_TO[String(c.after.horizon)];
   if (proposal) {
     // walkc-meeting r2 (meetings.describe): what a declined proposal asked for, never "Moved".
-    if (c.op === "change_horizon" && name && h) return [`move ${name} to ${h}`, subjects];
-    return [`${PROPOSAL_WORDS[c.op] ?? c.op.replace(/_/g, " ")} ${name}`.trim(), subjects];
+    if (c.op === 'change_horizon' && name && h) return [`move ${name} to ${h}`, subjects];
+    return [`${PROPOSAL_WORDS[c.op] ?? c.op.replace(/_/g, ' ')} ${name}`.trim(), subjects];
   }
-  const words = OP_WORDS[c.op] ?? c.op.replace(/_/g, " ");
+  const words = OP_WORDS[c.op] ?? c.op.replace(/_/g, ' ');
   // qa4-simple-decide-12 (meetings.describe): a move says where to.
-  if (c.op === "change_horizon" && name && h) return [`Moved ${name} to ${h}`, subjects];
+  if (c.op === 'change_horizon' && name && h) return [`Moved ${name} to ${h}`, subjects];
   return [`${words} ${name}`.trim(), subjects];
 }
 
 async function body(req: Request): Promise<Record<string, unknown>> {
-  return ((await req.clone().json().catch(() => ({}))) ?? {}) as Record<string, unknown>;
+  return ((await req
+    .clone()
+    .json()
+    .catch(() => ({}))) ?? {}) as Record<string, unknown>;
 }
 
 /**
@@ -922,74 +1509,143 @@ async function body(req: Request): Promise<Record<string, unknown>> {
  * session_id is checked against the meeting's rules, made by `run` (the one-pager and
  * roadmap mocks, in the caller's own session) and recorded as a meeting decision.
  */
-export async function withMeeting(db: MeetingsDb, ctx: MeetingsCtx, req: Request, p: string[], run: (r: Request) => Promise<Response | null>): Promise<Response | null> {
-  if (p[1] !== "simple" || p[2] !== "changes" || req.method !== "POST") return null;
+export async function withMeeting(
+  db: MeetingsDb,
+  ctx: MeetingsCtx,
+  req: Request,
+  p: string[],
+  run: (r: Request) => Promise<Response | null>,
+): Promise<Response | null> {
+  if (p[1] !== 'simple' || p[2] !== 'changes' || req.method !== 'POST') return null;
   // qa4-simple-decide-16 (changes_router.undo_simple_change): undoing a change made in a live
   // meeting is that meeting's decision too, "Undone: <what it did>".
-  if (p[4] === "undo") {
-    const m = db.meetings.find((x) => x.status === "live" && db.decisions.some((d) => d.meeting_id === x.id && d.change_ids.includes(p[3]!)));
+  if (p[4] === 'undo') {
+    const m = db.meetings.find(
+      (x) =>
+        x.status === 'live' &&
+        db.decisions.some((d) => d.meeting_id === x.id && d.change_ids.includes(p[3]!)),
+    );
     if (!m) return null;
     const res = await run(req);
     if (!res || !res.ok) return res;
-    const c = ((await res.clone().json()) as Schemas["SimpleChangeResult"]).change;
+    const c = ((await res.clone().json()) as Schemas['SimpleChangeResult']).change;
     m.last_change_at = iso(mockNowMs());
     const [words, subjects] = describe(ctx, c);
     const prd = prds(ctx).find((x) => x.slug === m.prd)!;
-    record(db, ctx, m, `${c.status === "declined" ? "Withdrawn" : "Undone"}: ${words}`, [...subjects, { kind: "document", id: prd.id }], [c.id], c.target.item_id ? [String(c.target.item_id)] : []);
+    record(
+      db,
+      ctx,
+      m,
+      `${c.status === 'declined' ? 'Withdrawn' : 'Undone'}: ${words}`,
+      [...subjects, { kind: 'document', id: prd.id }],
+      [c.id],
+      c.target.item_id ? [String(c.target.item_id)] : [],
+    );
     return res;
   }
   const isCreate = p.length === 3;
-  const verb = p[4] === "accept" ? "Accepted" : p[4] === "decline" ? "Declined" : null;
+  const verb = p[4] === 'accept' ? 'Accepted' : p[4] === 'decline' ? 'Declined' : null;
   if (!isCreate && !verb) return null;
   const b = await body(req);
   const m = b.session_id ? db.meetings.find((x) => x.session_id === b.session_id) : undefined;
   if (!m) return null;
-  if (m.status !== "live") return json(409, { detail: "This meeting has ended" });
-  if (isCreate && !mayChange(m, ctx.me.id)) return json(403, { detail: "The presenter has not let you change things in this meeting" });
+  if (m.status !== 'live') return json(409, { detail: 'This meeting has ended' });
+  if (isCreate && !mayChange(m, ctx.me.id))
+    return json(403, { detail: 'The presenter has not let you change things in this meeting' });
   const rest = { ...b };
   delete rest.session_id;
   // meeting-changes-only-its-agenda: an item the meeting does not review is only proposed to its
   // owner (changes.create), and the meeting does not decide such a proposal (changes.off_agenda_bar).
   const stored = verb ? (ctx.roadmap.changes ?? []).find((x) => x.id === p[3]) : undefined;
   if (verb && stored?.target.item_id && !onAgenda(ctx, m, stored.target.item_id)) {
-    const title = items(ctx).find((i) => i.id === stored.target.item_id)?.title ?? "This item";
-    return json(409, { detail: `${title} is on another roadmap: its owner decides this from their Inbox` });
+    const title = items(ctx).find((i) => i.id === stored.target.item_id)?.title ?? 'This item';
+    return json(409, {
+      detail: `${title} is on another roadmap: its owner decides this from their Inbox`,
+    });
   }
   // A new item (add_item) has no row until accepted: the roadmap it goes on.
-  const goesOn = stored && !stored.target.item_id ? (stored.target as Record<string, unknown>).roadmap_id : undefined;
+  const goesOn =
+    stored && !stored.target.item_id
+      ? (stored.target as Record<string, unknown>).roadmap_id
+      : undefined;
   const reviewed = reviewedRoadmaps(ctx, m);
-  if (verb && typeof goesOn === "string" && reviewed && !reviewed.includes(goesOn)) {
-    return json(409, { detail: `${String(stored?.after?.title ?? "This item")} is for another roadmap: its owner decides this from their Inbox` });
+  if (verb && typeof goesOn === 'string' && reviewed && !reviewed.includes(goesOn)) {
+    return json(409, {
+      detail: `${String(stored?.after?.title ?? 'This item')} is for another roadmap: its owner decides this from their Inbox`,
+    });
   }
-  if (isCreate && b.target && (b.target as Record<string, unknown>).item_id && !onAgenda(ctx, m, (b.target as Record<string, unknown>).item_id)) {
-    const who = { id: ctx.me.id, role: ctx.me.role, owners: owners(ctx), names: Object.fromEntries(ctx.members.map((x) => [x.id, x.name])), roles: Object.fromEntries(ctx.members.map((x) => [x.id, x.role])) };
-    const out = proposeOffAgenda(ctx.roadmap, who, rest as Schemas["SimpleChangeIn"], { id: m.id, title: m.title }, m.session_id);
+  if (
+    isCreate &&
+    b.target &&
+    (b.target as Record<string, unknown>).item_id &&
+    !onAgenda(ctx, m, (b.target as Record<string, unknown>).item_id)
+  ) {
+    const who = {
+      id: ctx.me.id,
+      role: ctx.me.role,
+      owners: owners(ctx),
+      names: Object.fromEntries(ctx.members.map((x) => [x.id, x.name])),
+      roles: Object.fromEntries(ctx.members.map((x) => [x.id, x.role])),
+    };
+    const out = proposeOffAgenda(
+      ctx.roadmap,
+      who,
+      rest as Schemas['SimpleChangeIn'],
+      { id: m.id, title: m.title },
+      m.session_id,
+    );
     if (out instanceof Response) return out;
     m.last_change_at = iso(mockNowMs());
     const [words, subjects] = describe(ctx, out.change, true);
     const prd = prds(ctx).find((x) => x.slug === m.prd)!;
-    record(db, ctx, m, `Proposed: ${words}`, [...subjects, { kind: "document", id: prd.id }], [out.change.id], [String(out.change.target.item_id)]);
-    return reply("/v1/simple/changes", "post", out, 201);
+    record(
+      db,
+      ctx,
+      m,
+      `Proposed: ${words}`,
+      [...subjects, { kind: 'document', id: prd.id }],
+      [out.change.id],
+      [String(out.change.target.item_id)],
+    );
+    return reply('/v1/simple/changes', 'post', out, 201);
   }
-  const inner = new Request(req.url, { method: "POST", headers: req.headers, body: JSON.stringify(rest) });
+  const inner = new Request(req.url, {
+    method: 'POST',
+    headers: req.headers,
+    body: JSON.stringify(rest),
+  });
   const res = await run(inner);
   if (!res || !res.ok) return res;
-  const out = (await res.clone().json()) as Schemas["SimpleChangeResult"];
+  const out = (await res.clone().json()) as Schemas['SimpleChangeResult'];
   const c = out.change;
   m.last_change_at = iso(mockNowMs());
-  const [words, subjects] = describe(ctx, c, verb === "Declined");
+  const [words, subjects] = describe(ctx, c, verb === 'Declined');
   // qa4-simple-decide-12 (meetings.after_change): an accepted or declined proposal says whose.
   const whose = verb && c.by_name ? `${verb} ${c.by_name}'s proposal: ` : verb ? `${verb}: ` : null;
-  const title = whose ? `${whose}${words}` : c.status === "proposed" ? `Proposed: ${words}` : words;
+  const title = whose ? `${whose}${words}` : c.status === 'proposed' ? `Proposed: ${words}` : words;
   const prd = prds(ctx).find((x) => x.slug === m.prd)!;
-  record(db, ctx, m, title, [...subjects, { kind: "document", id: prd.id }], [c.id], c.target.item_id ? [String(c.target.item_id)] : []);
+  record(
+    db,
+    ctx,
+    m,
+    title,
+    [...subjects, { kind: 'document', id: prd.id }],
+    [c.id],
+    c.target.item_id ? [String(c.target.item_id)] : [],
+  );
   const line = ctx.onePager.changes.find((x) => x.id === c.id);
   if (line) Object.assign(line, { in_meeting: true, meeting_title: m.title });
   if (isCreate && c.target.item_id) {
     // meeting-changes-only-its-agenda (SimpleChangeOut.from_meeting): a change made in it names it.
     const kept = (ctx.roadmap.changes ?? []).find((x) => x.id === c.id);
-    if (kept) Object.assign(kept, { from_meeting: { id: m.id, title: m.title }, off_agenda: false });
-    return reply("/v1/simple/changes", "post", { ...out, change: { ...c, from_meeting: { id: m.id, title: m.title }, off_agenda: false } }, res.status);
+    if (kept)
+      Object.assign(kept, { from_meeting: { id: m.id, title: m.title }, off_agenda: false });
+    return reply(
+      '/v1/simple/changes',
+      'post',
+      { ...out, change: { ...c, from_meeting: { id: m.id, title: m.title }, off_agenda: false } },
+      res.status,
+    );
   }
   return res;
 }
@@ -1000,16 +1656,17 @@ export async function withMeeting(db: MeetingsDb, ctx: MeetingsCtx, req: Request
  * titles or a note's own text.
  */
 function summarySentence(nDecisions: number, nNotes: number, nQuestions: number): string {
-  let out = `${nDecisions} ${nDecisions === 1 ? "decision" : "decisions"} taken`;
+  let out = `${nDecisions} ${nDecisions === 1 ? 'decision' : 'decisions'} taken`;
   const extra: string[] = [];
-  if (nNotes) extra.push(`${nNotes} ${nNotes === 1 ? "note" : "notes"}`);
-  if (nQuestions) extra.push(`${nQuestions} open ${nQuestions === 1 ? "question" : "questions"}`);
-  if (extra.length) out += `, ${extra.join(" and ")}`;
+  if (nNotes) extra.push(`${nNotes} ${nNotes === 1 ? 'note' : 'notes'}`);
+  if (nQuestions) extra.push(`${nQuestions} open ${nQuestions === 1 ? 'question' : 'questions'}`);
+  if (extra.length) out += `, ${extra.join(' and ')}`;
   return `${out}.`;
 }
 
 /** The chat's open questions, for the minutes' open_questions. */
-const questionsOf = (m: Meeting) => (m.notes ?? []).filter((n) => n.kind === "question").map((n) => n.text);
+const questionsOf = (m: Meeting) =>
+  (m.notes ?? []).filter((n) => n.kind === 'question').map((n) => n.text);
 
 /**
  * The review meetings as the chat (./simple-chat.ts) reads and writes them: rules, notes,
@@ -1024,8 +1681,19 @@ export function chatMeetings(open: () => { db: MeetingsDb; ctx: MeetingsCtx }): 
       // As meetings.meeting_rules: an idle meeting ends by itself when its chat is read.
       if (m) endIdle(open().ctx, meetings(), m);
       return m
-        ? { title: m.title, presenter_id: m.presenter_id, attendee_ids: m.attendee_ids, change_mode: m.change_mode, change_people: m.change_people, ended: m.status === "ended",
-            prd: m.prd, ended_at: m.ended_at, ended_by: m.ended_by, ended_by_itself: !!m.ended_by_itself, roadmaps: reviewedRoadmaps(open().ctx, m) }
+        ? {
+            title: m.title,
+            presenter_id: m.presenter_id,
+            attendee_ids: m.attendee_ids,
+            change_mode: m.change_mode,
+            change_people: m.change_people,
+            ended: m.status === 'ended',
+            prd: m.prd,
+            ended_at: m.ended_at,
+            ended_by: m.ended_by,
+            ended_by_itself: !!m.ended_by_itself,
+            roadmaps: reviewedRoadmaps(open().ctx, m),
+          }
         : null;
     },
     setMode(id, mode, people) {
@@ -1050,14 +1718,22 @@ export function chatMeetings(open: () => { db: MeetingsDb; ctx: MeetingsCtx }): 
       const m = meetingId ? find(meetingId) : undefined;
       if (m) {
         const prd = prds(ctx).find((x) => x.slug === m.prd);
-        const d = record(db, ctx, m, title, prd ? [{ kind: "document", id: prd.id }] : [], []);
+        const d = record(db, ctx, m, title, prd ? [{ kind: 'document', id: prd.id }] : [], []);
         d.approver_id = deciderId;
         return d.id;
       }
       const number = nextNumber(db, ctx);
       const d: Decision = {
-        id: crypto.randomUUID(), number, title, origin: "chat", status: "decided", approver_id: deciderId, at: iso(Math.max(mockNowMs(), ...db.decisions.map((x) => Date.parse(x.at) + 1))),
-        subjects: documentId ? [{ kind: "document", id: documentId }] : [], meeting_id: null, change_ids: [],
+        id: crypto.randomUUID(),
+        number,
+        title,
+        origin: 'chat',
+        status: 'decided',
+        approver_id: deciderId,
+        at: iso(Math.max(mockNowMs(), ...db.decisions.map((x) => Date.parse(x.at) + 1))),
+        subjects: documentId ? [{ kind: 'document', id: documentId }] : [],
+        meeting_id: null,
+        change_ids: [],
       };
       db.decisions.push(d);
       return d.id;
@@ -1075,7 +1751,8 @@ export function chatMeetings(open: () => { db: MeetingsDb; ctx: MeetingsCtx }): 
       const { ctx } = open();
       const prd = documentId ? prds(ctx).find((x) => x.ids.includes(documentId)) : undefined;
       const ids = [prd?.decider ?? null, ...owners(ctx)];
-      const may = (id: string | null) => ctx.members.find((m) => m.id === id && RANK[m.role] >= RANK.approver);
+      const may = (id: string | null) =>
+        ctx.members.find((m) => m.id === id && RANK[m.role] >= RANK.approver);
       const to = ids.map(may).find((x) => !!x);
       return to ? { id: to.id, name: to.name } : null;
     },
@@ -1085,8 +1762,16 @@ export function chatMeetings(open: () => { db: MeetingsDb; ctx: MeetingsCtx }): 
       const number = logNumber ?? nextNumber(db, ctx);
       const d: Decision = {
         // The decision log's id: its Decide or Decline (withdraw) shows here too (server.ts).
-        id: id ?? crypto.randomUUID(), number, title, origin: "chat", status: "proposed", approver_id: deciderId, at: iso(Math.max(mockNowMs(), ...db.decisions.map((x) => Date.parse(x.at) + 1))),
-        subjects: documentId ? [{ kind: "document", id: documentId }] : [], meeting_id: null, change_ids: [],
+        id: id ?? crypto.randomUUID(),
+        number,
+        title,
+        origin: 'chat',
+        status: 'proposed',
+        approver_id: deciderId,
+        at: iso(Math.max(mockNowMs(), ...db.decisions.map((x) => Date.parse(x.at) + 1))),
+        subjects: documentId ? [{ kind: 'document', id: documentId }] : [],
+        meeting_id: null,
+        change_ids: [],
       };
       db.decisions.push(d);
       return d.id;
@@ -1096,98 +1781,169 @@ export function chatMeetings(open: () => { db: MeetingsDb; ctx: MeetingsCtx }): 
 
 function extract(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Minutes {
   const p = prds(ctx).find((x) => x.slug === m.prd)!;
-  const titles = db.decisions.filter((d) => d.meeting_id === m.id).sort((a, b) => -newestFirst(a, b)).map((d) => d.title);
+  const titles = db.decisions
+    .filter((d) => d.meeting_id === m.id)
+    .sort((a, b) => -newestFirst(a, b))
+    .map((d) => d.title);
   // Only the meeting's own record (minutes.record): its decisions and its chat's lines.
   const lines = ctx.chatLines?.(m.id) ?? [];
   // Only the meeting's own record: its open questions, then the chat's questions.
   // qa-simple-decide-4 (minutes.Record.questions): each once; a chat command is not asked again with its prefix.
-  const allQuestions = [...new Map([...questionsOf(m), ...lines.filter((x) => x.trim().endsWith("?") && !/^\s*(open question|question|note)\s*:/i.test(x))].map((x) => [x.toLowerCase().split(/\s+/).join(" "), x])).values()];
-  const nNotes = (m.notes ?? []).filter((n) => n.kind === "note" && n.text).length;
+  const allQuestions = [
+    ...new Map(
+      [
+        ...questionsOf(m),
+        ...lines.filter(
+          (x) => x.trim().endsWith('?') && !/^\s*(open question|question|note)\s*:/i.test(x),
+        ),
+      ].map((x) => [x.toLowerCase().split(/\s+/).join(' '), x]),
+    ).values(),
+  ];
+  const nNotes = (m.notes ?? []).filter((n) => n.kind === 'note' && n.text).length;
   const summary = titles.length
     ? summarySentence(titles.length, nNotes, allQuestions.length)
     : lines.length || (m.notes ?? []).length
       ? `${m.title}: no decision was taken.`
       : `${m.title}: nothing was decided or recorded.`;
-  const waits: Schemas["SimpleWait"][] = [];
+  const waits: Schemas['SimpleWait'][] = [];
   for (const d of meetingDrafts(ctx, db, m, p)) {
-    if (d.status === "submitted" && d.waiting_on.length) waits.push({ what: `Publishing ${d.document.title}: their approval`, on: d.waiting_on.map((i) => ref(ctx, i)) });
-    else if (d.status === "working") waits.push({ what: `${d.document.title}: the working draft is not approved yet`, on: approversOf(ctx, p).map((i) => ref(ctx, i)) });
+    if (d.status === 'submitted' && d.waiting_on.length)
+      waits.push({
+        what: `Publishing ${d.document.title}: their approval`,
+        on: d.waiting_on.map((i) => ref(ctx, i)),
+      });
+    else if (d.status === 'working')
+      waits.push({
+        what: `${d.document.title}: the working draft is not approved yet`,
+        on: approversOf(ctx, p).map((i) => ref(ctx, i)),
+      });
   }
-  const made = new Set(db.decisions.filter((d) => d.meeting_id === m.id).flatMap((d) => d.change_ids));
+  const made = new Set(
+    db.decisions.filter((d) => d.meeting_id === m.id).flatMap((d) => d.change_ids),
+  );
   // qa4-simple-decide-3 (as meetings._waits: every proposal of the meeting's session still
   // proposed): the chat's Propose in the meeting is the meeting's too. The chat mock makes
   // its change outside the session, so a proposal on the meeting's PRD made while it ran counts.
   const ids = new Set(prdItems(ctx, p).map((i) => i.id));
-  const ran = (c: Change) => Date.parse(c.at) >= Date.parse(m.started_at) && (!m.ended_at || Date.parse(c.at) <= Date.parse(m.ended_at));
-  const ofPrd = (c: Change) => ids.has(String(c.target.item_id)) || (p.slug === ctx.onePager.doc.slug && ctx.onePager.changes.some((x) => x.id === c.id));
+  const ran = (c: Change) =>
+    Date.parse(c.at) >= Date.parse(m.started_at) &&
+    (!m.ended_at || Date.parse(c.at) <= Date.parse(m.ended_at));
+  const ofPrd = (c: Change) =>
+    ids.has(String(c.target.item_id)) ||
+    (p.slug === ctx.onePager.doc.slug && ctx.onePager.changes.some((x) => x.id === c.id));
   for (const c of [...(ctx.roadmap.changes ?? []), ...ctx.onePager.changes]) {
-    if (c.status === "proposed" && (made.has(c.id) || (ran(c) && ofPrd(c)))) waits.push({ what: `Proposal: ${describe(ctx, c)[0]}`, on: (c.routed_to.length ? c.routed_to : approversOf(ctx, p)).map((i) => ref(ctx, i)) });
+    if (c.status === 'proposed' && (made.has(c.id) || (ran(c) && ofPrd(c))))
+      waits.push({
+        what: `Proposal: ${describe(ctx, c)[0]}`,
+        on: (c.routed_to.length ? c.routed_to : approversOf(ctx, p)).map((i) => ref(ctx, i)),
+      });
   }
   return {
     summary: summary.slice(0, 4000),
     open_questions: allQuestions.slice(0, 5),
     action_items: [],
     waits,
-    written_by: "extract",
+    written_by: 'extract',
   };
 }
 
 /** Inbox rows (meetings.inbox_rows): minutes sent to me as an attendee. */
-export function meetingInboxRows(db: MeetingsDb | undefined, me: string, seen: string | null): Schemas["InboxSimpleMinutes"][] {
+export function meetingInboxRows(
+  db: MeetingsDb | undefined,
+  me: string,
+  seen: string | null,
+): Schemas['InboxSimpleMinutes'][] {
   return (db?.meetings ?? [])
-    .filter((m) => m.minutes_state === "sent" && m.attendee_ids.includes(me))
-    .sort((a, b) => ((a.sent_at ?? "") < (b.sent_at ?? "") ? 1 : -1))
+    .filter((m) => m.minutes_state === 'sent' && m.attendee_ids.includes(me))
+    .sort((a, b) => ((a.sent_at ?? '') < (b.sent_at ?? '') ? 1 : -1))
     .map((m) => ({
-      meeting_id: m.id, title: m.title, ended_at: m.ended_at, sent_at: m.sent_at, decisions: db!.decisions.filter((d) => d.meeting_id === m.id).length,
-      state: !seen || (m.sent_at ?? "") > seen ? "new" : "open",
+      meeting_id: m.id,
+      title: m.title,
+      ended_at: m.ended_at,
+      sent_at: m.sent_at,
+      decisions: db!.decisions.filter((d) => d.meeting_id === m.id).length,
+      state: !seen || (m.sent_at ?? '') > seen ? 'new' : 'open',
     }));
 }
 
-function row(ctx: MeetingsCtx, d: Decision): Schemas["SimpleDecisionRow"] {
+function row(ctx: MeetingsCtx, d: Decision): Schemas['SimpleDecisionRow'] {
   // As meeting_decisions: a question decided in a meeting is the question's own decision (its id and number).
-  const n = d.question ? Number(d.question.code.replace(/^Q/, "")) : NaN;
+  const n = d.question ? Number(d.question.code.replace(/^Q/, '')) : NaN;
   return {
-    ...(Number.isFinite(n) ? { id: stableUuid(`simple-question/${n}`), number: 100 + n } : { id: d.id, number: d.number }),
-    title: d.question?.title ?? d.title, origin: d.question ? "prd" : d.origin, status: d.status, approver: d.approver_id ? ref(ctx, d.approver_id) : null,
-    decided_at: d.status === "decided" ? d.at : null, created_at: d.at, subjects: d.subjects, flow: decidedFlow(ctx, d),
-    code: d.question?.code ?? null, chosen: d.question?.chosen ?? null,
+    ...(Number.isFinite(n)
+      ? { id: stableUuid(`simple-question/${n}`), number: 100 + n }
+      : { id: d.id, number: d.number }),
+    title: d.question?.title ?? d.title,
+    origin: d.question ? 'prd' : d.origin,
+    status: d.status,
+    approver: d.approver_id ? ref(ctx, d.approver_id) : null,
+    decided_at: d.status === 'decided' ? d.at : null,
+    created_at: d.at,
+    subjects: d.subjects,
+    flow: decidedFlow(ctx, d),
+    code: d.question?.code ?? null,
+    chosen: d.question?.chosen ?? null,
     // QA (unique codes): a PRD's question names its PRD (the meeting's, its document subject).
-    prd_title: d.question ? (prds(ctx).find((x) => d.subjects.some((s) => s.kind === "document" && s.id === x.id))?.title ?? null) : null,
+    prd_title: d.question
+      ? (prds(ctx).find((x) => d.subjects.some((s) => s.kind === 'document' && s.id === x.id))
+          ?.title ?? null)
+      : null,
     // edit-decisions (ec1 b): every field the sheet shows, what the reader may do there, its last edit.
-    question: d.ask ?? null, context: d.context ?? null, options: d.options ?? [], review_at: d.review_at ?? null, can: sheetCan(ctx, d),
-    edited_at: d.edited?.at ?? null, edited_by: d.edited ? ref(ctx, d.edited.by) : null,
+    question: d.ask ?? null,
+    context: d.context ?? null,
+    options: d.options ?? [],
+    review_at: d.review_at ?? null,
+    can: sheetCan(ctx, d),
+    edited_at: d.edited?.at ?? null,
+    edited_by: d.edited ? ref(ctx, d.edited.by) : null,
   };
 }
 
 /** decision_sheet.may_change: its creator, its decider or an owner (an open one, never a run's). */
 function maySheet(ctx: MeetingsCtx, d: Decision): boolean {
-  if (d.status !== "proposed" || d.origin === "checkpoint" || d.question) return false;
-  return ctx.me.role === "owner" || (RANK[ctx.me.role] >= RANK.commenter && (d.approver_id === ctx.me.id || d.created_by === ctx.me.id));
+  if (d.status !== 'proposed' || d.origin === 'checkpoint' || d.question) return false;
+  return (
+    ctx.me.role === 'owner' ||
+    (RANK[ctx.me.role] >= RANK.commenter &&
+      (d.approver_id === ctx.me.id || d.created_by === ctx.me.id))
+  );
 }
 
 /** decision_sheet.can: the sheet's buttons for this reader (decided ones stay as they are). */
-function sheetCan(ctx: MeetingsCtx, d: Decision): Schemas["SimpleDecisionCan"] {
+function sheetCan(ctx: MeetingsCtx, d: Decision): Schemas['SimpleDecisionCan'] {
   const none = { edit: false, propose: false, withdraw: false, delete: false, reassign: false };
-  if (d.status !== "proposed" || d.origin === "checkpoint" || d.question) return none;
+  if (d.status !== 'proposed' || d.origin === 'checkpoint' || d.question) return none;
   const change = maySheet(ctx, d);
-  return { edit: change, propose: !change && RANK[ctx.me.role] >= RANK.commenter, withdraw: change, delete: change, reassign: ctx.me.role === "owner" };
+  return {
+    edit: change,
+    propose: !change && RANK[ctx.me.role] >= RANK.commenter,
+    withdraw: change,
+    delete: change,
+    reassign: ctx.me.role === 'owner',
+  };
 }
 
 function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Response {
   const all = items(ctx);
   const ps = prds(ctx);
   const goals = new Map(all.filter((i) => i.goal).map((i) => [i.goal!.key, i.goal!]));
-  const prdQ = q.get("prd");
-  const goalQ = q.get("goal");
-  const meetingQ = q.get("meeting");
+  const prdQ = q.get('prd');
+  const goalQ = q.get('goal');
+  const meetingQ = q.get('meeting');
   const prd = prdQ ? ps.find((x) => x.slug === prdQ || x.id === prdQ) : undefined;
   // simple-replaced-prds (as decisions_page): a replaced PRD is not a filter; its past meetings stay.
-  if (prdQ && (!prd || prd.replaced)) return json(404, { detail: "No such PRD" });
-  const goal = goalQ ? [...goals.values()].find((g) => g.key === goalQ || g.id === goalQ) : undefined;
-  if (goalQ && !goal) return json(404, { detail: "No such goal" });
+  if (prdQ && (!prd || prd.replaced)) return json(404, { detail: 'No such PRD' });
+  const goal = goalQ
+    ? [...goals.values()].find((g) => g.key === goalQ || g.id === goalQ)
+    : undefined;
+  if (goalQ && !goal) return json(404, { detail: 'No such goal' });
   let match: Set<string> | null = null;
   if (prd || goal) {
-    const entries = all.filter((i) => (!prd || (i.prd && (i.prd.slug === prd.slug || prd.ids.includes(i.prd.id)))) && (!goal || i.goal?.id === goal.id));
+    const entries = all.filter(
+      (i) =>
+        (!prd || (i.prd && (i.prd.slug === prd.slug || prd.ids.includes(i.prd.id)))) &&
+        (!goal || i.goal?.id === goal.id),
+    );
     match = new Set(entries.map((i) => i.id));
     if (prd) prd.ids.forEach((i) => match!.add(i));
     if (goal) match.add(goal.id);
@@ -1195,7 +1951,8 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
   const keep = (d: Decision) => !match || d.subjects.some((s) => match!.has(s.id));
   const ms = [...db.meetings].sort((a, b) => (a.started_at < b.started_at ? 1 : -1));
   let shown = ms.filter((m) => !meetingQ || m.id === meetingQ);
-  const of = (m: Meeting) => db.decisions.filter((d) => d.meeting_id === m.id && !d.trashed).sort(newestFirst);
+  const of = (m: Meeting) =>
+    db.decisions.filter((d) => d.meeting_id === m.id && !d.trashed).sort(newestFirst);
   if (prd) shown = shown.filter((m) => m.prd === prd.slug || of(m).some(keep));
   else if (match) shown = shown.filter((m) => of(m).some(keep));
   // The questions follow the filters too (as the API): the PRD's, the goal's PRDs', the meeting's.
@@ -1203,212 +1960,391 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
   let qs = questionsOut(ctx, qd, prdQ);
   if (goal) {
     const goalPrds = all.filter((i) => i.goal?.id === goal.id && i.prd).map((i) => i.prd!.id);
-    qs = qs.filter((x) => ps.some((p) => p.ids.includes(x.prd.id) && goalPrds.some((g) => p.ids.includes(g))));
+    qs = qs.filter((x) =>
+      ps.some((p) => p.ids.includes(x.prd.id) && goalPrds.some((g) => p.ids.includes(g))),
+    );
   }
   if (meetingQ) {
     const ids = questionsOfMeeting(qd, meetingQ);
     qs = qs.filter((x) => ids.has(x.id));
   }
   // qa-simple-decide-20 (as decisions_page): an open decision a shown meeting lists as its open question ("D-3: ...") is not listed again.
-  const asked = new Set(shown.flatMap((m) => (m.minutes?.open_questions ?? []).map((x) => /^D-(\d+):/.exec(x)?.[1]).filter(Boolean)));
+  const asked = new Set(
+    shown.flatMap((m) =>
+      (m.minutes?.open_questions ?? []).map((x) => /^D-(\d+):/.exec(x)?.[1]).filter(Boolean),
+    ),
+  );
   // edit-decisions (as decisions_page, one decisions table): the decision log's open product calls are listed here too.
-  const logOpen = (ctx.logCalls?.() ?? []).filter((r) => r.status === "proposed" && r.origin !== "prd" && !db.decisions.some((x) => x.id === r.id)).map(fromLog);
-  const others = meetingQ ? [] : [...db.decisions, ...logOpen].filter((d) => !d.meeting_id && !d.trashed && product(d) && keep(d) && !(d.status !== "decided" && asked.has(String(d.number)))).sort((a, b) => b.number - a.number);
-  const out: Schemas["SimpleDecisionsOut"] = {
+  const logOpen = (ctx.logCalls?.() ?? [])
+    .filter(
+      (r) =>
+        r.status === 'proposed' && r.origin !== 'prd' && !db.decisions.some((x) => x.id === r.id),
+    )
+    .map(fromLog);
+  const others = meetingQ
+    ? []
+    : [...db.decisions, ...logOpen]
+        .filter(
+          (d) =>
+            !d.meeting_id &&
+            !d.trashed &&
+            product(d) &&
+            keep(d) &&
+            !(d.status !== 'decided' && asked.has(String(d.number))),
+        )
+        .sort((a, b) => b.number - a.number);
+  const out: Schemas['SimpleDecisionsOut'] = {
     meetings: shown.map((m) => {
       const whole = !!prd && !goal && m.prd === prd.slug;
       return {
-        meeting: brief(ctx, db, m), minutes: m.minutes, decisions: of(m).filter((d) => whole || keep(d)).map((d) => row(ctx, d)),
+        meeting: brief(ctx, db, m),
+        minutes: m.minutes,
+        decisions: of(m)
+          .filter((d) => whole || keep(d))
+          .map((d) => row(ctx, d)),
         // qa4-simple-decide-32 (as decisions_page): the meeting's notes and comments, as its minutes list them.
-        notes: (m.notes ?? []).filter((n) => n.kind === "note" || n.kind === "comment"),
-        delivery: m.minutes_state === "sent" ? deliveryOut(ctx, m) : null, can_retry_delivery: mayRetry(ctx, m),
+        notes: (m.notes ?? []).filter((n) => n.kind === 'note' || n.kind === 'comment'),
+        delivery: m.minutes_state === 'sent' ? deliveryOut(ctx, m) : null,
+        can_retry_delivery: mayRetry(ctx, m),
       };
     }),
     // A decided question taken outside meetings is listed here with its code and answer (open ones wait above).
-    other: [...(meetingQ ? [] : decidedOutsideRows(ctx, qd, qs)), ...others.map((d) => row(ctx, d)), ...(meetingQ ? [] : repeatedCodeRows())],
+    other: [
+      ...(meetingQ ? [] : decidedOutsideRows(ctx, qd, qs)),
+      ...others.map((d) => row(ctx, d)),
+      ...(meetingQ ? [] : repeatedCodeRows()),
+    ],
     // qa4-simple-decide-37 (as decisions_page: both from the PRDs the reader reads): every PRD whose questions are shown.
     // prd-order (as decisions_page): the PRD filter lists them in the company PRD order.
-    prds: [...new Map([...ps.filter((x) => !x.replaced).map((x) => [x.slug, x.title] as const), ...(questionsPrdReplaced(ctx) ? [] : questionsOut(ctx, qd, null)).map((x) => [x.prd.slug, x.prd.title] as const)])]
+    prds: [
+      ...new Map([
+        ...ps.filter((x) => !x.replaced).map((x) => [x.slug, x.title] as const),
+        ...(questionsPrdReplaced(ctx) ? [] : questionsOut(ctx, qd, null)).map(
+          (x) => [x.prd.slug, x.prd.title] as const,
+        ),
+      ]),
+    ]
       .map(([slug, title]) => ({ slug, title }))
       .sort(byPrdRank(prdRanker()))
       .map(({ slug, title }) => ({ id: slug, title })),
     // goal-order (as decisions_page): the Goal filter lists the goals in the one goal order.
-    goals: [...goals.values()].sort((a, b) => goalRank(a.key) - goalRank(b.key) || a.key.localeCompare(b.key)).map((g) => ({ id: g.key, title: g.title })),
+    goals: [...goals.values()]
+      .sort((a, b) => goalRank(a.key) - goalRank(b.key) || a.key.localeCompare(b.key))
+      .map((g) => ({ id: g.key, title: g.title })),
     // qa-simple-decide-11: the meeting's title carries its day (the company's zone) and,
     // while it is still live, " · live".
-    meeting_options: ms.map((m) => ({ id: m.id, title: `${m.title} · ${companyDateInWords(m.started_at)}${m.status === "live" ? " · live" : ""}` })),
+    meeting_options: ms.map((m) => ({
+      id: m.id,
+      title: `${m.title} · ${companyDateInWords(m.started_at)}${m.status === 'live' ? ' · live' : ''}`,
+    })),
     // prd-questions: the PRD's open questions (List and Board), counts and the remembered view.
     questions: qs,
-    ...(({ waiting_count, late_count, approvals_waiting, approvals_example }) => ({ waiting_count, late_count, approvals_waiting, approvals_example }))(questionsCounts(ctx, qd, qs)),
-    view: ctx.view?.() ?? "list",
+    ...(({ waiting_count, late_count, approvals_waiting, approvals_example }) => ({
+      waiting_count,
+      late_count,
+      approvals_waiting,
+      approvals_example,
+    }))(questionsCounts(ctx, qd, qs)),
+    view: ctx.view?.() ?? 'list',
     // build-rundecide RD1 a (as decisions_page): the runs' stops, unless a goal or a meeting is picked.
     runs: meetingQ || goal ? [] : (ctx.runs?.(prd?.slug ?? null) ?? []),
   };
-  return reply("/v1/simple/decisions", "get", out);
+  return reply('/v1/simple/decisions', 'get', out);
 }
 
 /** Handles /v1/simple/meetings… and /v1/simple/decisions; null for other routes. */
-export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
-  if (p[1] !== "simple" || (p[2] !== "meetings" && p[2] !== "decisions")) return null;
+export async function routeSimpleMeetings(
+  db: MeetingsDb,
+  ctx: MeetingsCtx,
+  req: Request,
+  p: string[],
+  q: URLSearchParams,
+): Promise<Response | null> {
+  if (p[1] !== 'simple' || (p[2] !== 'meetings' && p[2] !== 'decisions')) return null;
   const method = req.method;
-  if (p[2] === "decisions" && p[3] === "waiting") return method === "GET" ? reply("/v1/simple/decisions/waiting", "get", { ...waitingOut(ctx, qdb(ctx, db), ctx.othersWaiting?.() ?? 0), tasks: tasksWaiting(ctx.roadmap, ctx.me) }) : null;
-  if (p[2] === "decisions") return method === "GET" ? decisionsPage(ctx, db, q) : null;
+  if (p[2] === 'decisions' && p[3] === 'waiting')
+    return method === 'GET'
+      ? reply('/v1/simple/decisions/waiting', 'get', {
+          ...waitingOut(ctx, qdb(ctx, db), ctx.othersWaiting?.() ?? 0),
+          tasks: tasksWaiting(ctx.roadmap, ctx.me),
+        })
+      : null;
+  if (p[2] === 'decisions') return method === 'GET' ? decisionsPage(ctx, db, q) : null;
   const ps = prds(ctx);
   const now = iso(mockNowMs());
-  if (method !== "GET" && RANK[ctx.me.role] < RANK.commenter) return json(403, { detail: "Requires the commenter role" });
+  if (method !== 'GET' && RANK[ctx.me.role] < RANK.commenter)
+    return json(403, { detail: 'Requires the commenter role' });
   if (!p[3]) {
-    if (method === "GET") {
+    if (method === 'GET') {
       for (const m of db.meetings) endIdle(ctx, db, m);
-      const all = [...db.meetings].sort((a, b) => (a.started_at < b.started_at ? 1 : -1)).map((m) => brief(ctx, db, m));
-      return reply("/v1/simple/meetings", "get", { upcoming: upcoming(ctx, db), live: all.filter((m) => m.status === "live"), past: all.filter((m) => m.status === "ended") });
+      const all = [...db.meetings]
+        .sort((a, b) => (a.started_at < b.started_at ? 1 : -1))
+        .map((m) => brief(ctx, db, m));
+      return reply('/v1/simple/meetings', 'get', {
+        upcoming: upcoming(ctx, db),
+        live: all.filter((m) => m.status === 'live'),
+        past: all.filter((m) => m.status === 'ended'),
+      });
     }
-    if (method !== "POST") return null;
-    const b = (await body(req)) as Partial<Schemas["SimpleMeetingIn"]>;
+    if (method !== 'POST') return null;
+    const b = (await body(req)) as Partial<Schemas['SimpleMeetingIn']>;
     const prd = ps.find((x) => x.slug === b.prd || x.id === b.prd);
-    if (!prd) return json(404, { detail: "No such PRD" });
+    if (!prd) return json(404, { detail: 'No such PRD' });
     if (prd.replaced) return replacedPrd(prd);
-    if (!mayStart(ctx, prd)) return json(403, { detail: "Only an owner or the PRD's decider starts its review meeting" });
+    if (!mayStart(ctx, prd))
+      return json(403, { detail: "Only an owner or the PRD's decider starts its review meeting" });
     seedMeetingProposal(ctx);
     const members = new Set(ctx.members.map((m) => m.id));
     const att = [...new Set([ctx.me.id, ...(b.attendee_ids ?? [])])];
-    if (att.some((i) => !members.has(i))) return json(422, { detail: "Not active members" });
-    const mode = b.change_mode ?? "everyone";
+    if (att.some((i) => !members.has(i))) return json(422, { detail: 'Not active members' });
+    const mode = b.change_mode ?? 'everyone';
     let people = [...new Set(b.change_people ?? [])];
-    if (mode === "named") {
-      if (people.length < 1 || people.length > 2 || people.some((x) => !att.includes(x))) return json(422, { detail: "Name one or two people in the meeting who may change things" });
+    if (mode === 'named') {
+      if (people.length < 1 || people.length > 2 || people.some((x) => !att.includes(x)))
+        return json(422, { detail: 'Name one or two people in the meeting who may change things' });
     } else people = [];
     const length = b.length_min ?? 60;
-    if (length < 5 || length > 240) return json(422, { detail: "length_min: 5 to 240" });
+    if (length < 5 || length > 240) return json(422, { detail: 'length_min: 5 to 240' });
     let occ = b.occurrence_id ? db.occurrences.find((o) => o.id === b.occurrence_id) : undefined;
     if (b.occurrence_id && !occ) {
       const listed = upcoming(ctx, db, b.occurrence_id)[0];
-      if (listed?.occurrence_id) occ = { id: listed.occurrence_id, ritual_id: listed.ritual_id, ritual_title: listed.ritual_title, due_at: listed.due_at, ends_at: listed.ends_at, length_min: listed.length_min, attendee_ids: listed.attendees.map((a) => a.id) };
+      if (listed?.occurrence_id)
+        occ = {
+          id: listed.occurrence_id,
+          ritual_id: listed.ritual_id,
+          ritual_title: listed.ritual_title,
+          due_at: listed.due_at,
+          ends_at: listed.ends_at,
+          length_min: listed.length_min,
+          attendee_ids: listed.attendees.map((a) => a.id),
+        };
     }
-    if (b.occurrence_id && !occ) return json(404, { detail: "No such scheduled review" });
+    if (b.occurrence_id && !occ) return json(404, { detail: 'No such scheduled review' });
     if (!occ && b.ritual_id) {
-      if (!ctx.rituals?.rituals.some((r) => r.id === b.ritual_id && r.status === "active")) return json(404, { detail: "No such scheduled review" });
-      if (!mayStartRitual(ctx, b.ritual_id)) return json(403, { detail: "Only an owner or the ritual's owner starts its review" });
-      if (!b.due_at) return json(422, { detail: "due_at: the review's due time is required with ritual_id" });
+      if (!ctx.rituals?.rituals.some((r) => r.id === b.ritual_id && r.status === 'active'))
+        return json(404, { detail: 'No such scheduled review' });
+      if (!mayStartRitual(ctx, b.ritual_id))
+        return json(403, { detail: "Only an owner or the ritual's owner starts its review" });
+      if (!b.due_at)
+        return json(422, { detail: "due_at: the review's due time is required with ritual_id" });
       const got = occurrenceNow(ctx, db, b.ritual_id, b.due_at);
-      if (got === "moved") return json(409, { detail: { message: "This scheduled review has moved on: reload Upcoming", meeting_id: null } });
-      if (!got) return json(404, { detail: "No such scheduled review" });
+      if (got === 'moved')
+        return json(409, {
+          detail: {
+            message: 'This scheduled review has moved on: reload Upcoming',
+            meeting_id: null,
+          },
+        });
+      if (!got) return json(404, { detail: 'No such scheduled review' });
       occ = got;
     }
     const first = occ && db.meetings.find((x) => x.occurrence_id === occ.id);
-    if (first) return json(409, { detail: { message: "This scheduled review has its meeting already", meeting_id: first.id } });
-    const title = (b.title ?? "").trim() || (occ ? `${occ.ritual_title}: ${prd.title}` : `Review: ${prd.title}`);
+    if (first)
+      return json(409, {
+        detail: { message: 'This scheduled review has its meeting already', meeting_id: first.id },
+      });
+    const title =
+      (b.title ?? '').trim() ||
+      (occ ? `${occ.ritual_title}: ${prd.title}` : `Review: ${prd.title}`);
     const reviewed = reviewedRoadmap(ctx, prd, b.roadmap);
     if (reviewed instanceof Response) return reviewed;
     const m: Meeting = {
       roadmap_id: reviewed,
-      id: crypto.randomUUID(), title: title.slice(0, 200), prd: prd.slug, origin: occ ? "ritual" : (b.origin ?? "one_pager"), occurrence_id: occ?.id ?? null,
-      session_id: crypto.randomUUID(), presenter_id: ctx.me.id, attendee_ids: att, absent_ids: [], joined_ids: [ctx.me.id], change_mode: mode, change_people: people,
-      length_min: length, status: "live", started_at: now, ended_at: null, ended_by: null, minutes: null, minutes_state: null, delivery: null, sent_at: null, approved: null,
+      id: crypto.randomUUID(),
+      title: title.slice(0, 200),
+      prd: prd.slug,
+      origin: occ ? 'ritual' : (b.origin ?? 'one_pager'),
+      occurrence_id: occ?.id ?? null,
+      session_id: crypto.randomUUID(),
+      presenter_id: ctx.me.id,
+      attendee_ids: att,
+      absent_ids: [],
+      joined_ids: [ctx.me.id],
+      change_mode: mode,
+      change_people: people,
+      length_min: length,
+      status: 'live',
+      started_at: now,
+      ended_at: null,
+      ended_by: null,
+      minutes: null,
+      minutes_state: null,
+      delivery: null,
+      sent_at: null,
+      approved: null,
     };
     db.meetings.push(m);
-    return reply("/v1/simple/meetings", "post", one(ctx, db, m), 201);
+    return reply('/v1/simple/meetings', 'post', one(ctx, db, m), 201);
   }
-  if (p[3] === "options" && method === "GET") {
-    const prdQ = q.get("prd");
+  if (p[3] === 'options' && method === 'GET') {
+    const prdQ = q.get('prd');
     // prd-order (as the API's): every PRD in the company PRD order.
     // simple-replaced-prds (as meetings.options): a replaced PRD is never offered.
-    const list = (prdQ ? ps.filter((x) => x.slug === prdQ || x.id === prdQ) : ps.filter((x) => !x.replaced)).sort(byPrdRank(prdRanker()));
-    if (prdQ && !list.length) return json(404, { detail: "No such PRD" });
+    const list = (
+      prdQ ? ps.filter((x) => x.slug === prdQ || x.id === prdQ) : ps.filter((x) => !x.replaced)
+    ).sort(byPrdRank(prdRanker()));
+    if (prdQ && !list.length) return json(404, { detail: 'No such PRD' });
     if (prdQ && list[0].replaced) return replacedPrd(list[0]);
-    const occQ = q.get("occurrence");
+    const occQ = q.get('occurrence');
     const occ = occQ ? upcoming(ctx, db, occQ)[0] : null;
-    if (occQ && !occ) return json(404, { detail: "No such scheduled review" });
-    const out: Schemas["SimpleStartOptions"] = {
+    if (occQ && !occ) return json(404, { detail: 'No such scheduled review' });
+    const out: Schemas['SimpleStartOptions'] = {
       prds: list.map((x) => ({
-        document: docRef(x), decider: x.decider ? ref(ctx, x.decider) : null, can_start: mayStart(ctx, x),
-        starters: [...new Set([...(x.decider ? [x.decider] : []), ...owners(ctx)])].map((i) => ref(ctx, i)),
-        default_attendee_ids: [...new Set([ctx.me.id, ...(x.decider ? [x.decider] : []), ...x.reviewers])],
+        document: docRef(x),
+        decider: x.decider ? ref(ctx, x.decider) : null,
+        can_start: mayStart(ctx, x),
+        starters: [...new Set([...(x.decider ? [x.decider] : []), ...owners(ctx)])].map((i) =>
+          ref(ctx, i),
+        ),
+        default_attendee_ids: [
+          ...new Set([ctx.me.id, ...(x.decider ? [x.decider] : []), ...x.reviewers]),
+        ],
       })),
       // qa4-simple-decide-14: as the API, whether the role may change things (not a viewer).
-      members: ctx.members.map((x) => ({ id: x.id, name: x.name, can_change: x.role !== "viewer" })),
+      members: ctx.members.map((x) => ({
+        id: x.id,
+        name: x.name,
+        can_change: x.role !== 'viewer',
+      })),
       length_min: occ?.length_min ?? 60,
       occurrence: occ,
     };
-    return reply("/v1/simple/meetings/options", "get", out);
+    return reply('/v1/simple/meetings/options', 'get', out);
   }
   const m = db.meetings.find((x) => x.id === p[3]);
-  if (!m) return json(404, { detail: "No such meeting" });
+  if (!m) return json(404, { detail: 'No such meeting' });
   const prd = ps.find((x) => x.slug === m.prd)!;
   const meetingBody = () => one(ctx, db, m);
   endIdle(ctx, db, m);
   settleLater(ctx, db, m);
   settleStuck(m);
-  if (!p[4] && method === "GET") return reply("/v1/simple/meetings/{meeting_id}", "get", meetingBody());
-  if (p[4] === "join" && method === "POST") {
-    if (m.status !== "live") return json(409, { detail: "This meeting has ended" });
+  if (!p[4] && method === 'GET')
+    return reply('/v1/simple/meetings/{meeting_id}', 'get', meetingBody());
+  if (p[4] === 'join' && method === 'POST') {
+    if (m.status !== 'live') return json(409, { detail: 'This meeting has ended' });
     if (!m.attendee_ids.includes(ctx.me.id)) m.attendee_ids.push(ctx.me.id);
     m.absent_ids = m.absent_ids.filter((i) => i !== ctx.me.id);
-    if (!(m.joined_ids ?? m.attendee_ids).includes(ctx.me.id)) m.joined_ids = [...(m.joined_ids ?? m.attendee_ids), ctx.me.id];
-    return reply("/v1/simple/meetings/{meeting_id}/join", "post", meetingBody());
+    if (!(m.joined_ids ?? m.attendee_ids).includes(ctx.me.id))
+      m.joined_ids = [...(m.joined_ids ?? m.attendee_ids), ctx.me.id];
+    return reply('/v1/simple/meetings/{meeting_id}/join', 'post', meetingBody());
   }
-  if (p[4] === "rules" && method === "PATCH") {
-    if (ctx.me.id !== m.presenter_id) return json(403, { detail: "Only the presenter sets who may change things" });
-    if (m.status !== "live") return json(409, { detail: "This meeting has ended" });
-    const b = (await body(req)) as Schemas["SimpleMeetingRulesIn"];
+  if (p[4] === 'rules' && method === 'PATCH') {
+    if (ctx.me.id !== m.presenter_id)
+      return json(403, { detail: 'Only the presenter sets who may change things' });
+    if (m.status !== 'live') return json(409, { detail: 'This meeting has ended' });
+    const b = (await body(req)) as Schemas['SimpleMeetingRulesIn'];
     const mode = b.change_mode ?? m.change_mode;
     let people = [...new Set(b.change_people ?? m.change_people)];
-    if (mode === "named") {
-      if (people.length < 1 || people.length > 2 || people.some((x) => !m.attendee_ids.includes(x))) return json(422, { detail: "Name one or two people in the meeting who may change things" });
+    if (mode === 'named') {
+      if (people.length < 1 || people.length > 2 || people.some((x) => !m.attendee_ids.includes(x)))
+        return json(422, { detail: 'Name one or two people in the meeting who may change things' });
     } else people = [];
     if (b.absent_ids) {
-      if (b.absent_ids.some((i) => !m.attendee_ids.includes(i) || i === m.presenter_id)) return json(422, { detail: "Only attendees other than the presenter are marked absent" });
+      if (b.absent_ids.some((i) => !m.attendee_ids.includes(i) || i === m.presenter_id))
+        return json(422, { detail: 'Only attendees other than the presenter are marked absent' });
       m.absent_ids = [...new Set(b.absent_ids)];
     }
     m.change_mode = mode;
     m.change_people = people;
-    return reply("/v1/simple/meetings/{meeting_id}/rules", "patch", meetingBody());
+    return reply('/v1/simple/meetings/{meeting_id}/rules', 'patch', meetingBody());
   }
   // agenda-sheet (meetings.edit_agenda): one op of the Agenda sheet.
-  if (p[4] === "agenda" && method === "POST") {
-    const b = (await body(req)) as Schemas["SimpleAgendaEditIn"];
+  if (p[4] === 'agenda' && method === 'POST') {
+    const b = (await body(req)) as Schemas['SimpleAgendaEditIn'];
     const sheet = agendaSheet(ctx, db, m, prd);
     const err = editAgenda(sheet, agendaCtx(ctx, db, m, prd), b);
-    return err ? json(err.status, { detail: err.detail }) : reply("/v1/simple/meetings/{meeting_id}/agenda", "post", meetingBody());
+    return err
+      ? json(err.status, { detail: err.detail })
+      : reply('/v1/simple/meetings/{meeting_id}/agenda', 'post', meetingBody());
   }
-  if (p[4] === "comments" && method === "POST") {
-    const b = (await body(req)) as Partial<Schemas["SimpleMeetingCommentIn"]>;
-    const text = String(b.text ?? "").split(/\s+/).filter(Boolean).join(" ");
-    if (!text || text.length > 1000) return json(422, { detail: "text: 1 to 1000 characters" });
-    if (!mayChange(m, ctx.me.id) && !m.attendee_ids.includes(ctx.me.id)) return json(403, { detail: "Join the meeting to comment in it" });
-    if (m.status === "ended") return json(409, { detail: "This meeting has ended" });
+  if (p[4] === 'comments' && method === 'POST') {
+    const b = (await body(req)) as Partial<Schemas['SimpleMeetingCommentIn']>;
+    const text = String(b.text ?? '')
+      .split(/\s+/)
+      .filter(Boolean)
+      .join(' ');
+    if (!text || text.length > 1000) return json(422, { detail: 'text: 1 to 1000 characters' });
+    if (!mayChange(m, ctx.me.id) && !m.attendee_ids.includes(ctx.me.id))
+      return json(403, { detail: 'Join the meeting to comment in it' });
+    if (m.status === 'ended') return json(409, { detail: 'This meeting has ended' });
     // qa-simple-decide-1: a comment is kept as a note, not a meeting decision; it stays
     // out of meeting_decisions, the minutes and the Decisions page.
-    const note: MeetingNote = { id: `comment-${crypto.randomUUID()}`, kind: "comment", text, by_name: nameOf(ctx, ctx.me.id), at: iso(mockNowMs()), card_id: null };
+    const note: MeetingNote = {
+      id: `comment-${crypto.randomUUID()}`,
+      kind: 'comment',
+      text,
+      by_name: nameOf(ctx, ctx.me.id),
+      at: iso(mockNowMs()),
+      card_id: null,
+    };
     (m.notes ??= []).push(note);
-    return reply("/v1/simple/meetings/{meeting_id}/comments", "post", one(ctx, db, m), 201);
+    return reply('/v1/simple/meetings/{meeting_id}/comments', 'post', one(ctx, db, m), 201);
   }
   // build-runplan RP2 (meeting_draft): Change dates, Leave out and Approve these N dates on the run's draft.
-  if (p[4] === "draft-items" && method === "POST") {
-    if (m.status !== "live") return json(409, { detail: "The meeting has ended" });
-    if (!mayChange(m, ctx.me.id)) return json(403, { detail: "You cannot change things in this meeting" });
+  if (p[4] === 'draft-items' && method === 'POST') {
+    if (m.status !== 'live') return json(409, { detail: 'The meeting has ended' });
+    if (!mayChange(m, ctx.me.id))
+      return json(403, { detail: 'You cannot change things in this meeting' });
     const b = (await body(req)) as { start?: string; end?: string };
-    const act = p[5] === "approve" ? ({ kind: "approve" } as const) : p[6] === "dates" ? ({ kind: "dates", id: p[5]!, start: b.start ?? "", end: b.end ?? "" } as const) : p[6] === "leave-out" ? ({ kind: "leave", id: p[5]! } as const) : null;
+    const act =
+      p[5] === 'approve'
+        ? ({ kind: 'approve' } as const)
+        : p[6] === 'dates'
+          ? ({ kind: 'dates', id: p[5]!, start: b.start ?? '', end: b.end ?? '' } as const)
+          : p[6] === 'leave-out'
+            ? ({ kind: 'leave', id: p[5]! } as const)
+            : null;
     if (!act) return null;
     const r = draftAct(ctx.roadmap, prd.ids, act);
-    if ("status" in r) return json(r.status, { detail: r.detail });
-    if (act.kind === "approve") {
+    if ('status' in r) return json(r.status, { detail: r.detail });
+    if (act.kind === 'approve') {
       // The PRD by its slug (Company > Decisions links to it); the count in the chosen option, so the step says so after a reload (meeting_draft.approve_dates).
-      const subject = { kind: "document", id: prd.ids[0]!, ref: prd.slug };
-      record(db, ctx, m, `${prd.title} dates approved: ${r.n} item${r.n === 1 ? "" : "s"} on the roadmap`, [subject], [], [], `${APPROVED_KEY}:${r.n}`);
-      return reply("/v1/simple/meetings/{meeting_id}/draft-items/approve", "post", meetingBody());
+      const subject = { kind: 'document', id: prd.ids[0]!, ref: prd.slug };
+      record(
+        db,
+        ctx,
+        m,
+        `${prd.title} dates approved: ${r.n} item${r.n === 1 ? '' : 's'} on the roadmap`,
+        [subject],
+        [],
+        [],
+        `${APPROVED_KEY}:${r.n}`,
+      );
+      return reply('/v1/simple/meetings/{meeting_id}/draft-items/approve', 'post', meetingBody());
     }
-    return act.kind === "dates" ? reply("/v1/simple/meetings/{meeting_id}/draft-items/{item_id}/dates", "post", meetingBody()) : reply("/v1/simple/meetings/{meeting_id}/draft-items/{item_id}/leave-out", "post", meetingBody());
+    return act.kind === 'dates'
+      ? reply('/v1/simple/meetings/{meeting_id}/draft-items/{item_id}/dates', 'post', meetingBody())
+      : reply(
+          '/v1/simple/meetings/{meeting_id}/draft-items/{item_id}/leave-out',
+          'post',
+          meetingBody(),
+        );
   }
-  if (p[4] === "approve" && method === "POST") {
-    if (m.status !== "live") return json(409, { detail: "This meeting has ended" });
-    if (!(ctx.me.id === prd.decider || ctx.me.role === "owner")) return json(403, { detail: "Only the PRD's decider (or an owner) approves in the meeting" });
-    if (!db.decisions.some((d) => d.meeting_id === m.id && d.change_ids.length)) return json(422, { detail: "Nothing to approve: no change was made in this meeting" });
+  if (p[4] === 'approve' && method === 'POST') {
+    if (m.status !== 'live') return json(409, { detail: 'This meeting has ended' });
+    if (!(ctx.me.id === prd.decider || ctx.me.role === 'owner'))
+      return json(403, { detail: "Only the PRD's decider (or an owner) approves in the meeting" });
+    if (!db.decisions.some((d) => d.meeting_id === m.id && d.change_ids.length))
+      return json(422, { detail: 'Nothing to approve: no change was made in this meeting' });
     // walkc-meeting "approve-problems": the importer refuses the draft (meetings.approve_problems):
     // each problem once, in plain words with what to do and where, never "draft rejected: N problem(s)".
-    if (flags().includes("approve-problems")) {
-      const date = (d: string) => ({ what: `The date ${d} (in What we will build) is not backed by a confirmed schedule: no verified estimate, capacity or commitment for this item; record its basis on the roadmap or drop the date.`, where: null, times: 1 });
-      const problems = [...["Nov 20", "Dec 4", "Dec 18", "Jan 8", "Jan 22", "Feb 5", "Feb 19"].map(date), { what: "A source is cited twice in Why now; drop one.", where: null, times: 1 }];
-      return json(422, { detail: { code: "draft_problems", message: `Not approved: the draft has ${problems.length} problems to fix first.`, problems } });
+    if (flags().includes('approve-problems')) {
+      const date = (d: string) => ({
+        what: `The date ${d} (in What we will build) is not backed by a confirmed schedule: no verified estimate, capacity or commitment for this item; record its basis on the roadmap or drop the date.`,
+        where: null,
+        times: 1,
+      });
+      const problems = [
+        ...['Nov 20', 'Dec 4', 'Dec 18', 'Jan 8', 'Jan 22', 'Feb 5', 'Feb 19'].map(date),
+        { what: 'A source is cited twice in Why now; drop one.', where: null, times: 1 },
+      ];
+      return json(422, {
+        detail: {
+          code: 'draft_problems',
+          message: `Not approved: the draft has ${problems.length} problems to fix first.`,
+          problems,
+        },
+      });
     }
     // walkc-meeting-r2 review: as meetings.approve, present is joined and not marked away; one
     // invited who never pressed Join ("invited, not joined yet") is waited on like an absent one.
@@ -1418,104 +2354,180 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     // "section-reviewer": Guided setup's required section "What we will build" names the
     // commenter as its reviewer; absent, it is not approved over their head and the draft
     // waits on them (drafts._sections_approve, drafts._section_people).
-    const sectionReviewer = flags().includes("section-reviewer") ? ctx.members.find((x) => x.email === "commenter@example.com") : undefined;
-    if (sectionReviewer && !present.includes(sectionReviewer.id) && sectionReviewer.id !== ctx.me.id && !waiting.includes(sectionReviewer.id)) waiting.push(sectionReviewer.id);
-    const blocked = flags().includes("section-needs-reviewer") ? ["Sections What we will build need a reviewer"] : [];
+    const sectionReviewer = flags().includes('section-reviewer')
+      ? ctx.members.find((x) => x.email === 'commenter@example.com')
+      : undefined;
+    if (
+      sectionReviewer &&
+      !present.includes(sectionReviewer.id) &&
+      sectionReviewer.id !== ctx.me.id &&
+      !waiting.includes(sectionReviewer.id)
+    )
+      waiting.push(sectionReviewer.id);
+    const blocked = flags().includes('section-needs-reviewer')
+      ? ['Sections What we will build need a reviewer']
+      : [];
     m.approved = { at: now, waiting_on: waiting, blocked_by: blocked };
-    const why = [...(waiting.length ? [`Waiting on ${people(waiting.map((i) => nameOf(ctx, i)))}'s approval`] : []), ...blocked];
-    record(db, ctx, m, `Approved ${prd.title} (${why.length ? `not yet published: ${why.join(" · ")}` : "published"})`, [{ kind: "document", id: prd.id }], []);
-    if (prd.slug === ctx.onePager.doc.slug && why.length) ctx.onePager.approval = { approved_in: m.title, waiting_on: waiting.map((i) => ref(ctx, i)), blocked_by: blocked };
+    const why = [
+      ...(waiting.length
+        ? [`Waiting on ${people(waiting.map((i) => nameOf(ctx, i)))}'s approval`]
+        : []),
+      ...blocked,
+    ];
+    record(
+      db,
+      ctx,
+      m,
+      `Approved ${prd.title} (${why.length ? `not yet published: ${why.join(' · ')}` : 'published'})`,
+      [{ kind: 'document', id: prd.id }],
+      [],
+    );
+    if (prd.slug === ctx.onePager.doc.slug && why.length)
+      ctx.onePager.approval = {
+        approved_in: m.title,
+        waiting_on: waiting.map((i) => ref(ctx, i)),
+        blocked_by: blocked,
+      };
     else if (prd.slug === ctx.onePager.doc.slug) publishOnePager(ctx.onePager);
-    return reply("/v1/simple/meetings/{meeting_id}/approve", "post", meetingBody());
+    return reply('/v1/simple/meetings/{meeting_id}/approve', 'post', meetingBody());
   }
-  if (p[4] === "end" && method === "POST") {
-    if (!presenterOrDecider(ctx, m, prd)) return json(403, { detail: "Only the presenter, the PRD's decider or an owner ends it" });
-    if (m.status === "ended") return json(409, { detail: "This meeting has ended already" });
-    m.status = "ended";
+  if (p[4] === 'end' && method === 'POST') {
+    if (!presenterOrDecider(ctx, m, prd))
+      return json(403, { detail: "Only the presenter, the PRD's decider or an owner ends it" });
+    if (m.status === 'ended') return json(409, { detail: 'This meeting has ended already' });
+    m.status = 'ended';
     m.ended_at = now;
     m.ended_by = ctx.me.id;
     // As meetings.end(): the ritual's occurrence is held, so Upcoming shows the ritual's next.
-    const theirs = m.occurrence_id ? ctx.rituals?.occurrences.find((o) => o.id === m.occurrence_id) : undefined;
-    if (theirs && ["scheduled", "ready", "missed"].includes(theirs.status)) Object.assign(theirs, { status: "held", held_by: ctx.me.id, held_at: now });
+    const theirs = m.occurrence_id
+      ? ctx.rituals?.occurrences.find((o) => o.id === m.occurrence_id)
+      : undefined;
+    if (theirs && ['scheduled', 'ready', 'missed'].includes(theirs.status))
+      Object.assign(theirs, { status: 'held', held_by: ctx.me.id, held_at: now });
     m.minutes = extract(ctx, db, m);
-    const job = flags().includes("minutes-failed") ? "failed" : flags().includes("minutes-slow") ? "slow" : null;
-    const later = flags().includes("minutes-later-failed") ? "failed" : flags().includes("minutes-later") ? "succeeded" : null;
-    const stuck = !job && !later && flags().includes("minutes-stuck");
-    m.minutes_state = job || later || stuck ? "drafting" : "ready";
-    m.minutes_job = later || stuck ? "drafting" : job;
-    m.minutes_job_at = m.minutes_state === "drafting" ? mockNowMs() : null;
+    const job = flags().includes('minutes-failed')
+      ? 'failed'
+      : flags().includes('minutes-slow')
+        ? 'slow'
+        : null;
+    const later = flags().includes('minutes-later-failed')
+      ? 'failed'
+      : flags().includes('minutes-later')
+        ? 'succeeded'
+        : null;
+    const stuck = !job && !later && flags().includes('minutes-stuck');
+    m.minutes_state = job || later || stuck ? 'drafting' : 'ready';
+    m.minutes_job = later || stuck ? 'drafting' : job;
+    m.minutes_job_at = m.minutes_state === 'drafting' ? mockNowMs() : null;
     m.minutes_due = later ? { at: mockNowMs() + MINUTES_LATER_MS, outcome: later } : null;
-    return reply("/v1/simple/meetings/{meeting_id}/end", "post", meetingBody());
+    return reply('/v1/simple/meetings/{meeting_id}/end', 'post', meetingBody());
   }
-  if (p[4] === "minutes" && p[5] === "redraft" && method === "POST") {
-    if (!presenterOrDecider(ctx, m, prd)) return json(403, { detail: "Only the presenter, the PRD's decider or an owner drafts again" });
-    if (!(m.status === "ended" && m.minutes_state === "drafting" && m.minutes_job === "failed")) return json(409, { detail: "Oracle is not failing to draft these minutes" });
+  if (p[4] === 'minutes' && p[5] === 'redraft' && method === 'POST') {
+    if (!presenterOrDecider(ctx, m, prd))
+      return json(403, {
+        detail: "Only the presenter, the PRD's decider or an owner drafts again",
+      });
+    if (!(m.status === 'ended' && m.minutes_state === 'drafting' && m.minutes_job === 'failed'))
+      return json(409, { detail: 'Oracle is not failing to draft these minutes' });
     // The requeued job answers (the fake model): Oracle's minutes, ready to edit and send.
     const quick = extract(ctx, db, m);
     const n = db.decisions.filter((d) => d.meeting_id === m.id).length;
     // An empty record: the plain line, no model's words (meetings.run_job); notes and open questions count as the record.
-    m.minutes = { ...quick, summary: n || (ctx.chatLines?.(m.id) ?? []).length || (m.notes ?? []).length ? `Oracle's minutes of ${m.title}: ${n} decisions taken.` : quick.summary, written_by: "oracle" };
-    m.minutes_state = "ready";
+    m.minutes = {
+      ...quick,
+      summary:
+        n || (ctx.chatLines?.(m.id) ?? []).length || (m.notes ?? []).length
+          ? `Oracle's minutes of ${m.title}: ${n} decisions taken.`
+          : quick.summary,
+      written_by: 'oracle',
+    };
+    m.minutes_state = 'ready';
     m.minutes_job = null;
-    return reply("/v1/simple/meetings/{meeting_id}/minutes/redraft", "post", meetingBody());
+    return reply('/v1/simple/meetings/{meeting_id}/minutes/redraft', 'post', meetingBody());
   }
-  if (p[4] === "minutes" && method === "PUT") {
-    if (!presenterOrDecider(ctx, m, prd)) return json(403, { detail: "Only the presenter, the PRD's decider or an owner edits them" });
-    if (m.status !== "ended" || m.minutes_state === "sent") return json(409, { detail: "Minutes are edited after the meeting ends and before sending" });
-    const b = (await body(req)) as Partial<Schemas["SimpleMinutesIn"]>;
+  if (p[4] === 'minutes' && method === 'PUT') {
+    if (!presenterOrDecider(ctx, m, prd))
+      return json(403, { detail: "Only the presenter, the PRD's decider or an owner edits them" });
+    if (m.status !== 'ended' || m.minutes_state === 'sent')
+      return json(409, { detail: 'Minutes are edited after the meeting ends and before sending' });
+    const b = (await body(req)) as Partial<Schemas['SimpleMinutesIn']>;
     const members = new Set(ctx.members.map((x) => x.id));
     m.minutes = {
-      summary: String(b.summary ?? "").trim(),
+      summary: String(b.summary ?? '').trim(),
       open_questions: (b.open_questions ?? []).map((x) => x.trim()).filter(Boolean),
-      action_items: (b.action_items ?? []).filter((a) => a.title?.trim()).map((a) => {
-        const owner = a.owner_id && members.has(a.owner_id) ? a.owner_id : m.ended_by;
-        return { title: a.title.trim(), owner_id: owner, owner_name: owner ? nameOf(ctx, owner) : null, due_date: a.due_date ?? null, action_item_id: a.action_item_id ?? null };
-      }),
+      action_items: (b.action_items ?? [])
+        .filter((a) => a.title?.trim())
+        .map((a) => {
+          const owner = a.owner_id && members.has(a.owner_id) ? a.owner_id : m.ended_by;
+          return {
+            title: a.title.trim(),
+            owner_id: owner,
+            owner_name: owner ? nameOf(ctx, owner) : null,
+            due_date: a.due_date ?? null,
+            action_item_id: a.action_item_id ?? null,
+          };
+        }),
       waits: m.minutes?.waits ?? [],
-      written_by: "edited",
+      written_by: 'edited',
     };
-    if (m.minutes_state === "drafting") m.minutes_state = "ready";
+    if (m.minutes_state === 'drafting') m.minutes_state = 'ready';
     m.minutes_job = null;
-    return reply("/v1/simple/meetings/{meeting_id}/minutes", "put", meetingBody());
+    return reply('/v1/simple/meetings/{meeting_id}/minutes', 'put', meetingBody());
   }
-  if (p[4] === "delivery" && p[5] === "retry" && method === "POST") {
+  if (p[4] === 'delivery' && p[5] === 'retry' && method === 'POST') {
     // meetings.retry_delivery: requeue the failed emails or the Slack post for the tick.
-    if (!mayRetry(ctx, m)) return json(403, { detail: "Only whoever ended the meeting or an owner retries it" });
-    const b = (await body(req)) as Partial<Schemas["SimpleRetryDeliveryIn"]>;
+    if (!mayRetry(ctx, m))
+      return json(403, { detail: 'Only whoever ended the meeting or an owner retries it' });
+    const b = (await body(req)) as Partial<Schemas['SimpleRetryDeliveryIn']>;
     const d = m.delivery!;
-    const fresh = (): Try => ({ status: "queued", tries: 0, next_at: mockNowMs() });
-    if (b.what === "email") {
-      const failed = Object.entries(d.email_to ?? {}).filter(([, t]) => t.status === "failed");
-      if (d.email_status !== "failed" || !failed.length) return json(409, { detail: "No email is left to retry" });
+    const fresh = (): Try => ({ status: 'queued', tries: 0, next_at: mockNowMs() });
+    if (b.what === 'email') {
+      const failed = Object.entries(d.email_to ?? {}).filter(([, t]) => t.status === 'failed');
+      if (d.email_status !== 'failed' || !failed.length)
+        return json(409, { detail: 'No email is left to retry' });
       for (const [k] of failed) d.email_to![k] = fresh();
       d.email_status = emailStatus(d.email_to!);
     } else {
-      if (d.slack_status !== "failed") return json(409, { detail: "The Slack post is not left to retry" });
+      if (d.slack_status !== 'failed')
+        return json(409, { detail: 'The Slack post is not left to retry' });
       d.slack_try = fresh();
-      d.slack_status = "queued";
+      d.slack_status = 'queued';
     }
-    return reply("/v1/simple/meetings/{meeting_id}/delivery/retry", "post", one(ctx, db, m));
+    return reply('/v1/simple/meetings/{meeting_id}/delivery/retry', 'post', one(ctx, db, m));
   }
-  if (p[4] === "send" && method === "POST") {
-    if (!presenterOrDecider(ctx, m, prd)) return json(403, { detail: "Only the presenter, the PRD's decider or an owner sends them" });
-    if (m.status !== "ended") return json(409, { detail: "End the meeting first" });
-    if (m.minutes_state === "sent") return json(409, { detail: "The minutes were sent already" });
-    const b = (await body(req)) as Partial<Schemas["SimpleSendIn"]>;
+  if (p[4] === 'send' && method === 'POST') {
+    if (!presenterOrDecider(ctx, m, prd))
+      return json(403, { detail: "Only the presenter, the PRD's decider or an owner sends them" });
+    if (m.status !== 'ended') return json(409, { detail: 'End the meeting first' });
+    if (m.minutes_state === 'sent') return json(409, { detail: 'The minutes were sent already' });
+    const b = (await body(req)) as Partial<Schemas['SimpleSendIn']>;
     const slack = slackState();
-    if (b.slack && !(slack.connected && slack.channel)) return json(422, { detail: slack.connected ? "No Slack channel is set in Settings › Notifications" : "Slack is not connected" });
+    if (b.slack && !(slack.connected && slack.channel))
+      return json(422, {
+        detail: slack.connected
+          ? 'No Slack channel is set in Settings › Notifications'
+          : 'Slack is not connected',
+      });
     m.minutes ??= extract(ctx, db, m);
-    const fresh = (): Try => ({ status: "queued", tries: 0, next_at: mockNowMs() });
+    const fresh = (): Try => ({ status: 'queued', tries: 0, next_at: mockNowMs() });
     const emailing = !!b.email && emailAvailable();
     m.delivery = {
-      decisions: true, inbox: true, email: !!b.email, email_status: b.email ? (emailing ? "queued" : "unavailable") : null,
-      ...(emailing ? { email_to: Object.fromEntries(m.attendee_ids.map((i) => [i, fresh()])) } : {}),
-      slack: !!b.slack, slack_status: b.slack ? "queued" : null, slack_channel: b.slack ? slack.channel : null,
+      decisions: true,
+      inbox: true,
+      email: !!b.email,
+      email_status: b.email ? (emailing ? 'queued' : 'unavailable') : null,
+      ...(emailing
+        ? { email_to: Object.fromEntries(m.attendee_ids.map((i) => [i, fresh()])) }
+        : {}),
+      slack: !!b.slack,
+      slack_status: b.slack ? 'queued' : null,
+      slack_channel: b.slack ? slack.channel : null,
       ...(b.slack ? { slack_try: fresh() } : {}),
     };
-    m.minutes_state = "sent";
+    m.minutes_state = 'sent';
     m.minutes_job = null;
     m.sent_at = now;
-    return reply("/v1/simple/meetings/{meeting_id}/send", "post", meetingBody());
+    return reply('/v1/simple/meetings/{meeting_id}/send', 'post', meetingBody());
   }
   return null;
 }
@@ -1529,42 +2541,61 @@ function qdb(ctx: MeetingsCtx, db: MeetingsDb): QuestionsDb {
  * prd-questions: decide_question and name_decider through POST /v1/simple/changes (and their
  * undo); with a live meeting's session_id the decision lands in that meeting's minutes.
  */
-export async function routeMeetingQuestions(db: MeetingsDb, ctx: MeetingsCtx, req: Request, p: string[]): Promise<Response | null> {
-  return (await routeQuestionChanges(ctx, qdb(ctx, db), req, p, (sessionId, title, own) => {
-    const m = db.meetings.find((x) => x.session_id === sessionId);
-    if (!m) return false;
-    if (m.status !== "live") return "ended";
-    m.last_change_at = iso(mockNowMs());
-    const prd = prds(ctx).find((x) => x.slug === m.prd);
-    const d = record(db, ctx, m, title, prd ? [{ kind: "document", id: prd.id }] : [], []);
-    if (own) d.question = own;
-    return m.id;
-  })) ?? routeDecisionSheet(db, ctx, req, p);
+export async function routeMeetingQuestions(
+  db: MeetingsDb,
+  ctx: MeetingsCtx,
+  req: Request,
+  p: string[],
+): Promise<Response | null> {
+  return (
+    (await routeQuestionChanges(ctx, qdb(ctx, db), req, p, (sessionId, title, own) => {
+      const m = db.meetings.find((x) => x.session_id === sessionId);
+      if (!m) return false;
+      if (m.status !== 'live') return 'ended';
+      m.last_change_at = iso(mockNowMs());
+      const prd = prds(ctx).find((x) => x.slug === m.prd);
+      const d = record(db, ctx, m, title, prd ? [{ kind: 'document', id: prd.id }] : [], []);
+      if (own) d.question = own;
+      return m.id;
+    })) ?? routeDecisionSheet(db, ctx, req, p)
+  );
 }
 
 /** decision_sheet._clean for a decision: title, question, context, options (labels) and review day. */
 function cleanDecision(after: Record<string, unknown>): Record<string, unknown> | string {
   const outp: Record<string, unknown> = {};
-  const words = (v: unknown) => String(v ?? "").split(/\s+/).filter(Boolean).join(" ");
-  if ("title" in after) {
-    if (!words(after.title)) return "after.title: a title";
+  const words = (v: unknown) =>
+    String(v ?? '')
+      .split(/\s+/)
+      .filter(Boolean)
+      .join(' ');
+  if ('title' in after) {
+    if (!words(after.title)) return 'after.title: a title';
     outp.title = words(after.title).slice(0, 200);
   }
-  for (const k of ["question", "context"] as const) if (k in after) outp[k] = String(after[k] ?? "").trim() || null;
-  if ("options" in after) {
+  for (const k of ['question', 'context'] as const)
+    if (k in after) outp[k] = String(after[k] ?? '').trim() || null;
+  if ('options' in after) {
     const labels = (Array.isArray(after.options) ? after.options : []).map(words).filter(Boolean);
-    if (labels.length > 6) return "after.options: at most 6";
+    if (labels.length > 6) return 'after.options: at most 6';
     outp.options = labels;
   }
-  if ("review_at" in after) {
+  if ('review_at' in after) {
     const day = after.review_at ? String(after.review_at) : null;
-    if (day && (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day < iso(mockNowMs()).slice(0, 10))) return "after.review_at: a day from today on";
+    if (day && (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day < iso(mockNowMs()).slice(0, 10)))
+      return 'after.review_at: a day from today on';
     outp.review_at = day;
   }
   return outp;
 }
 
-const sheetFields = (d: Decision): Record<string, unknown> => ({ title: d.title, question: d.ask ?? null, context: d.context ?? null, options: (d.options ?? []).map((o) => o.label), review_at: d.review_at ?? null });
+const sheetFields = (d: Decision): Record<string, unknown> => ({
+  title: d.title,
+  question: d.ask ?? null,
+  context: d.context ?? null,
+  options: (d.options ?? []).map((o) => o.label),
+  review_at: d.review_at ?? null,
+});
 
 /** decision_sheet._options: an option kept where its label stays; new ones keyed after the others. */
 function withOptions(old: { key: string; label: string }[], labels: string[]) {
@@ -1577,27 +2608,57 @@ function withOptions(old: { key: string; label: string }[], labels: string[]) {
  * open decision through POST /v1/simple/changes and their Undo; DELETE /v1/simple/decisions/{id}
  * (a decision or a PRD's question) to Settings › Trash and POST .../restore.
  */
-async function routeDecisionSheet(db: MeetingsDb, ctx: MeetingsCtx, req: Request, p: string[]): Promise<Response | null> {
+async function routeDecisionSheet(
+  db: MeetingsDb,
+  ctx: MeetingsCtx,
+  req: Request,
+  p: string[],
+): Promise<Response | null> {
   const now = iso(mockNowMs());
   // GET /v1/simple/decisions/{id} (meetings_router.get_simple_decision): one decision as its Decisions row.
-  if (req.method === "GET" && p[1] === "simple" && p[2] === "decisions" && p.length === 4 && p[3] !== "waiting") {
+  if (
+    req.method === 'GET' &&
+    p[1] === 'simple' &&
+    p[2] === 'decisions' &&
+    p.length === 4 &&
+    p[3] !== 'waiting'
+  ) {
     const { d } = await sheetDecision(db, ctx, p[3]);
-    return d ? reply("/v1/simple/decisions/{decision_id}", "get", row(ctx, d)) : json(404, { detail: "No such decision" });
+    return d
+      ? reply('/v1/simple/decisions/{decision_id}', 'get', row(ctx, d))
+      : json(404, { detail: 'No such decision' });
   }
-  if (p[1] === "simple" && p[2] === "decisions" && p.length >= 4 && p[3] !== "waiting") {
+  if (p[1] === 'simple' && p[2] === 'decisions' && p.length >= 4 && p[3] !== 'waiting') {
     const trash = ctx.trash?.();
     if (!trash) return null;
-    if (RANK[ctx.me.role] < RANK.commenter) return json(403, { detail: "Requires the commenter role" });
+    if (RANK[ctx.me.role] < RANK.commenter)
+      return json(403, { detail: 'Requires the commenter role' });
     const id = p[3];
-    if (req.method === "POST" && p[4] === "restore" && p.length === 5) {
-      const entry = trash.entries.find((e) => (e.out.root.type === "decision" || e.out.root.type === "question") && e.out.root.id === id);
-      if (!entry) return json(404, { detail: "No such decision in Trash" });
-      if (!mayRestore(entry, ctx.me)) return json(403, { detail: "Only an owner, or whoever deleted it, restores this" });
-      return reply("/v1/simple/decisions/{decision_id}/restore", "post", restoreFromTrash(trash, entry, now, { items: [], sheet: [...db.decisions, ...(db.questions?.questions ?? []), ...[await ctx.logRow?.(id)].filter((r) => !!r)] }));
+    if (req.method === 'POST' && p[4] === 'restore' && p.length === 5) {
+      const entry = trash.entries.find(
+        (e) =>
+          (e.out.root.type === 'decision' || e.out.root.type === 'question') &&
+          e.out.root.id === id,
+      );
+      if (!entry) return json(404, { detail: 'No such decision in Trash' });
+      if (!mayRestore(entry, ctx.me))
+        return json(403, { detail: 'Only an owner, or whoever deleted it, restores this' });
+      return reply(
+        '/v1/simple/decisions/{decision_id}/restore',
+        'post',
+        restoreFromTrash(trash, entry, now, {
+          items: [],
+          sheet: [
+            ...db.decisions,
+            ...(db.questions?.questions ?? []),
+            ...[await ctx.logRow?.(id)].filter((r) => !!r),
+          ],
+        }),
+      );
     }
-    if (req.method !== "DELETE" || p.length !== 4) return null;
-    const reason = new URL(req.url, "http://mock").searchParams.get("reason");
-    let root: Schemas["TrashEntryOut"]["root"];
+    if (req.method !== 'DELETE' || p.length !== 4) return null;
+    const reason = new URL(req.url, 'http://mock').searchParams.get('reason');
+    let root: Schemas['TrashEntryOut']['root'];
     const q = findQuestion(qdb(ctx, db), id);
     const { d, log } = await sheetDecision(db, ctx, id);
     if (q && !q.trashed) {
@@ -1605,84 +2666,151 @@ async function routeDecisionSheet(db: MeetingsDb, ctx: MeetingsCtx, req: Request
       if (r instanceof Response) return r;
       root = r.root;
     } else if (d && product(d)) {
-      if (d.status !== "proposed") return json(409, { detail: `D-${d.number} ${d.title} is ${d.status}; only an open one goes to Trash` });
-      if (!maySheet(ctx, d)) return json(403, { detail: "Only its decider, whoever made it or an owner deletes it" });
+      if (d.status !== 'proposed')
+        return json(409, {
+          detail: `D-${d.number} ${d.title} is ${d.status}; only an open one goes to Trash`,
+        });
+      if (!maySheet(ctx, d))
+        return json(403, { detail: 'Only its decider, whoever made it or an owner deletes it' });
       d.trashed = true;
       if (log) toLog(log, d, now, ctx.me.id);
-      root = { type: "decision", id: d.id, slug: null, title: d.title, kind: "decision", code: `D-${d.number}` };
-    } else return json(404, { detail: "No such decision" });
+      root = {
+        type: 'decision',
+        id: d.id,
+        slug: null,
+        title: d.title,
+        kind: 'decision',
+        code: `D-${d.number}`,
+      };
+    } else return json(404, { detail: 'No such decision' });
     const row: TrashEntryRow = {
       out: {
-        id: crypto.randomUUID(), root, items: [], deleted_by: ctx.me.id, deleted_by_name: nameOf(ctx, ctx.me.id), deleted_at: now,
-        reason, published: false, purge_after: new Date(Date.parse(now) + 30 * 86_400_000).toISOString(),
+        id: crypto.randomUUID(),
+        root,
+        items: [],
+        deleted_by: ctx.me.id,
+        deleted_by_name: nameOf(ctx, ctx.me.id),
+        deleted_at: now,
+        reason,
+        published: false,
+        purge_after: new Date(Date.parse(now) + 30 * 86_400_000).toISOString(),
       },
-      documents: [], versions: [], runs: [], intakes: [],
+      documents: [],
+      versions: [],
+      runs: [],
+      intakes: [],
     };
     trash.entries.push(row);
-    return reply("/v1/simple/decisions/{decision_id}", "delete", { entry: entryOut(row, now, true), change: null, can_restore: true });
+    return reply('/v1/simple/decisions/{decision_id}', 'delete', {
+      entry: entryOut(row, now, true),
+      change: null,
+      can_restore: true,
+    });
   }
-  if (p[1] !== "simple" || p[2] !== "changes" || req.method !== "POST") return null;
+  if (p[1] !== 'simple' || p[2] !== 'changes' || req.method !== 'POST') return null;
   const held = (db.sheet_changes ??= []);
   const decided = held.find((x) => x.change.id === p[3]);
-  if (decided && p.length === 5 && (p[4] === "accept" || p[4] === "decline")) {
-    const why = ((await req.clone().json().catch(() => ({}))) ?? {}) as { reason?: string | null };
+  if (decided && p.length === 5 && (p[4] === 'accept' || p[4] === 'decline')) {
+    const why = ((await req
+      .clone()
+      .json()
+      .catch(() => ({}))) ?? {}) as { reason?: string | null };
     return decideSheetChange(db, ctx, decided, p[4], why.reason ?? null, now);
   }
-  if (p.length === 5 && p[4] === "undo") {
+  if (p.length === 5 && p[4] === 'undo') {
     const h = held.find((x) => x.change.id === p[3]);
     if (!h) return null;
-    if (h.change.by !== ctx.me.id && ctx.me.role !== "owner") return json(403, { detail: "Only who made it undoes it" });
-    if (h.change.undone) return json(409, { detail: "Already undone" });
+    if (h.change.by !== ctx.me.id && ctx.me.role !== 'owner')
+      return json(403, { detail: 'Only who made it undoes it' });
+    if (h.change.undone) return json(409, { detail: 'Already undone' });
     const at = db.decisions.findIndex((x) => x.id === h.was.id);
-    if (at >= 0) db.decisions[at] = { ...structuredClone(h.was), approver_id: db.decisions[at].approver_id };
+    if (at >= 0)
+      db.decisions[at] = { ...structuredClone(h.was), approver_id: db.decisions[at].approver_id };
     const log = await ctx.logRow?.(h.was.id);
-    if (log) toLog(log, { ...structuredClone(h.was), approver_id: log.approver_id }, now, ctx.me.id);
+    if (log)
+      toLog(log, { ...structuredClone(h.was), approver_id: log.approver_id }, now, ctx.me.id);
     h.change.undone = true;
     h.change.can_undo = false;
-    return reply("/v1/simple/changes/{change_id}/undo", "post", { change: { ...h.change, id: crypto.randomUUID(), status: "undone", undoes_id: h.change.id, undone: false, at: now }, flags: [] });
+    return reply('/v1/simple/changes/{change_id}/undo', 'post', {
+      change: {
+        ...h.change,
+        id: crypto.randomUUID(),
+        status: 'undone',
+        undoes_id: h.change.id,
+        undone: false,
+        at: now,
+      },
+      flags: [],
+    });
   }
   if (p.length !== 3) return null;
-  const b = ((await req.clone().json().catch(() => ({}))) ?? {}) as Schemas["SimpleChangeIn"];
-  if (b.op !== "edit_decision" && b.op !== "withdraw_decision") return null;
-  if (RANK[ctx.me.role] < RANK.commenter) return json(403, { detail: "Viewers read decisions; they do not change them" });
-  const { d, log } = await sheetDecision(db, ctx, String(b.target?.decision_id ?? ""));
-  if (!d) return json(404, { detail: "No such decision" });
-  if (d.status !== "proposed") return json(409, { detail: `D-${d.number} ${d.title} is ${d.status}; only an open one is changed` });
+  const b = ((await req
+    .clone()
+    .json()
+    .catch(() => ({}))) ?? {}) as Schemas['SimpleChangeIn'];
+  if (b.op !== 'edit_decision' && b.op !== 'withdraw_decision') return null;
+  if (RANK[ctx.me.role] < RANK.commenter)
+    return json(403, { detail: 'Viewers read decisions; they do not change them' });
+  const { d, log } = await sheetDecision(db, ctx, String(b.target?.decision_id ?? ''));
+  if (!d) return json(404, { detail: 'No such decision' });
+  if (d.status !== 'proposed')
+    return json(409, {
+      detail: `D-${d.number} ${d.title} is ${d.status}; only an open one is changed`,
+    });
   const applies = maySheet(ctx, d);
   let before: Record<string, unknown>;
   let after: Record<string, unknown>;
-  if (b.op === "withdraw_decision") {
-    if (!applies) return json(403, { detail: "Only its decider, whoever made it or an owner withdraws it" });
-    before = { status: "proposed" };
-    after = { status: "withdrawn" };
+  if (b.op === 'withdraw_decision') {
+    if (!applies)
+      return json(403, { detail: 'Only its decider, whoever made it or an owner withdraws it' });
+    before = { status: 'proposed' };
+    after = { status: 'withdrawn' };
   } else {
     const clean = cleanDecision((b.after ?? {}) as Record<string, unknown>);
-    if (typeof clean === "string") return json(422, { detail: clean });
+    if (typeof clean === 'string') return json(422, { detail: clean });
     const cur = sheetFields(d);
     before = Object.fromEntries(Object.keys(clean).map((k) => [k, cur[k]]));
     after = clean;
-    if (!Object.keys(after).length || JSON.stringify(before) === JSON.stringify(after)) return json(422, { detail: "Nothing changed" });
+    if (!Object.keys(after).length || JSON.stringify(before) === JSON.stringify(after))
+      return json(422, { detail: 'Nothing changed' });
   }
   const change: Change = {
-    id: crypto.randomUUID(), session_id: null, document_id: null, draft_ids: [], op: b.op, target: { decision_id: d.id, name: `D-${d.number} ${d.title}` },
-    before, after, status: applies ? "applied" : "proposed", by: ctx.me.id, by_name: nameOf(ctx, ctx.me.id), at: now,
-    decided_by: applies ? ctx.me.id : null, decided_at: applies ? now : null, reason: b.reason ?? null, decision_reason: null,
-    routed_to: applies ? [] : d.approver_id ? [d.approver_id] : owners(ctx).slice(0, 1), undoes_id: null, undone: false, can_decide: false, can_undo: applies,
+    id: crypto.randomUUID(),
+    session_id: null,
+    document_id: null,
+    draft_ids: [],
+    op: b.op,
+    target: { decision_id: d.id, name: `D-${d.number} ${d.title}` },
+    before,
+    after,
+    status: applies ? 'applied' : 'proposed',
+    by: ctx.me.id,
+    by_name: nameOf(ctx, ctx.me.id),
+    at: now,
+    decided_by: applies ? ctx.me.id : null,
+    decided_at: applies ? now : null,
+    reason: b.reason ?? null,
+    decision_reason: null,
+    routed_to: applies ? [] : d.approver_id ? [d.approver_id] : owners(ctx).slice(0, 1),
+    undoes_id: null,
+    undone: false,
+    can_decide: false,
+    can_undo: applies,
   };
   held.push({ change, was: structuredClone(d) });
-  if (applies && b.op === "withdraw_decision") d.status = "withdrawn";
+  if (applies && b.op === 'withdraw_decision') d.status = 'withdrawn';
   else if (applies) writeEdit(d, after, now, ctx.me.id);
   if (applies && log) toLog(log, d, now, ctx.me.id);
-  return reply("/v1/simple/changes", "post", { change, flags: [] }, 201);
+  return reply('/v1/simple/changes', 'post', { change, flags: [] }, 201);
 }
 
 /** decision_sheet._write for edit_decision: the fields as asked, and who edited it last. */
 function writeEdit(d: Decision, after: Record<string, unknown>, now: string, by: string): void {
-  if ("title" in after) d.title = String(after.title);
-  if ("question" in after) d.ask = (after.question as string | null) ?? null;
-  if ("context" in after) d.context = (after.context as string | null) ?? null;
-  if ("options" in after) d.options = withOptions(d.options ?? [], after.options as string[]);
-  if ("review_at" in after) d.review_at = (after.review_at as string | null) ?? null;
+  if ('title' in after) d.title = String(after.title);
+  if ('question' in after) d.ask = (after.question as string | null) ?? null;
+  if ('context' in after) d.context = (after.context as string | null) ?? null;
+  if ('options' in after) d.options = withOptions(d.options ?? [], after.options as string[]);
+  if ('review_at' in after) d.review_at = (after.review_at as string | null) ?? null;
   d.edited = { at: now, by };
 }
 
@@ -1691,16 +2819,23 @@ function writeEdit(d: Decision, after: Record<string, unknown>, now: string, by:
  * for this reader (an owner or the decision's decider), for GET /v1/simple/changes beside the
  * change engine's (one changes table in the API: Home's and Waiting for you's Accept).
  */
-export async function sheetProposals(db: MeetingsDb, ctx: MeetingsCtx, status: string | null): Promise<Change[]> {
+export async function sheetProposals(
+  db: MeetingsDb,
+  ctx: MeetingsCtx,
+  status: string | null,
+): Promise<Change[]> {
   const out: Change[] = [];
   for (const h of db.sheet_changes ?? []) {
     if (status && h.change.status !== status) continue;
-    const { d } = await sheetDecision(db, ctx, String(h.change.target.decision_id ?? ""));
-    const decides = ctx.me.role === "owner" || (!!d && d.approver_id === ctx.me.id);
+    const { d } = await sheetDecision(db, ctx, String(h.change.target.decision_id ?? ''));
+    const decides = ctx.me.role === 'owner' || (!!d && d.approver_id === ctx.me.id);
     if (!decides && h.change.by !== ctx.me.id) continue;
     // As changes._target: one still waiting names its decision as it is now; its words say so (change_words).
-    const target = h.change.status === "proposed" && d ? { ...h.change.target, name: `D-${d.number} ${d.title}` } : h.change.target;
-    const c = { ...h.change, target, can_decide: h.change.status === "proposed" && decides };
+    const target =
+      h.change.status === 'proposed' && d
+        ? { ...h.change.target, name: `D-${d.number} ${d.title}` }
+        : h.change.target;
+    const c = { ...h.change, target, can_decide: h.change.status === 'proposed' && decides };
     out.push({ ...c, words: changeSentence(c, c.by_name, null, c.undone) });
   }
   return out;
@@ -1711,28 +2846,48 @@ export async function sheetProposals(db: MeetingsDb, ctx: MeetingsCtx, status: s
  * longer open or changed since: 409 "outdated") or Decline of a sheet suggestion, by its decider
  * or an owner. null: not a sheet suggestion.
  */
-async function decideSheetChange(db: MeetingsDb, ctx: MeetingsCtx, h: { change: Change; was: Decision }, action: "accept" | "decline", reason: string | null, now: string): Promise<Response> {
+async function decideSheetChange(
+  db: MeetingsDb,
+  ctx: MeetingsCtx,
+  h: { change: Change; was: Decision },
+  action: 'accept' | 'decline',
+  reason: string | null,
+  now: string,
+): Promise<Response> {
   const c = h.change;
-  const { d, log } = await sheetDecision(db, ctx, String(c.target.decision_id ?? ""));
-  if (!(ctx.me.role === "owner" || (!!d && d.approver_id === ctx.me.id))) return json(403, { detail: "Only an owner or its decider decides this proposal" });
-  if (c.status !== "proposed") return json(409, { detail: `This change is ${c.status} already` });
-  if (action === "accept") {
-    if (!d) return json(404, { detail: "No such decision" });
-    if (d.status !== "proposed") return json(409, { detail: `outdated: D-${d.number} ${d.title} is ${d.status}` });
+  const { d, log } = await sheetDecision(db, ctx, String(c.target.decision_id ?? ''));
+  if (!(ctx.me.role === 'owner' || (!!d && d.approver_id === ctx.me.id)))
+    return json(403, { detail: 'Only an owner or its decider decides this proposal' });
+  if (c.status !== 'proposed') return json(409, { detail: `This change is ${c.status} already` });
+  if (action === 'accept') {
+    if (!d) return json(404, { detail: 'No such decision' });
+    if (d.status !== 'proposed')
+      return json(409, { detail: `outdated: D-${d.number} ${d.title} is ${d.status}` });
     const after = c.after as Record<string, unknown>;
-    if (c.op === "edit_decision") {
+    if (c.op === 'edit_decision') {
       const now_ = sheetFields(d);
       const current = Object.fromEntries(Object.keys(after).map((k) => [k, now_[k]]));
-      const asked = Object.fromEntries(Object.keys(after).map((k) => [k, (c.before as Record<string, unknown>)[k]]));
-      if (JSON.stringify(current) !== JSON.stringify(asked)) return json(409, { detail: { message: "outdated: changed since it was proposed", current } });
+      const asked = Object.fromEntries(
+        Object.keys(after).map((k) => [k, (c.before as Record<string, unknown>)[k]]),
+      );
+      if (JSON.stringify(current) !== JSON.stringify(asked))
+        return json(409, {
+          detail: { message: 'outdated: changed since it was proposed', current },
+        });
       writeEdit(d, after, now, c.by);
-    } else d.status = "withdrawn";
+    } else d.status = 'withdrawn';
     if (log) toLog(log, d, now, c.by);
   }
-  Object.assign(c, { status: action === "accept" ? "accepted" : "declined", decided_by: ctx.me.id, decided_at: now, decision_reason: reason, can_decide: false });
-  return action === "accept"
-    ? reply("/v1/simple/changes/{change_id}/accept", "post", { change: c, flags: [] })
-    : reply("/v1/simple/changes/{change_id}/decline", "post", { change: c, flags: [] });
+  Object.assign(c, {
+    status: action === 'accept' ? 'accepted' : 'declined',
+    decided_by: ctx.me.id,
+    decided_at: now,
+    decision_reason: reason,
+    can_decide: false,
+  });
+  return action === 'accept'
+    ? reply('/v1/simple/changes/{change_id}/accept', 'post', { change: c, flags: [] })
+    : reply('/v1/simple/changes/{change_id}/decline', 'post', { change: c, flags: [] });
 }
 
 /**
@@ -1740,24 +2895,49 @@ async function decideSheetChange(db: MeetingsDb, ctx: MeetingsCtx, h: { change: 
  * decision log's call itself (`log`, read as a sheet decision and written back by toLog; never
  * copied into Simple's store, so it keeps its one number).
  */
-async function sheetDecision(db: MeetingsDb, ctx: MeetingsCtx, id: string): Promise<{ d: Decision | null; log: DecisionLogRow | null }> {
+async function sheetDecision(
+  db: MeetingsDb,
+  ctx: MeetingsCtx,
+  id: string,
+): Promise<{ d: Decision | null; log: DecisionLogRow | null }> {
   const log = (await ctx.logRow?.(id)) ?? null;
   // A call in both (made or asked in Simple) reads as the log has it now: one row in the API.
   const copy = db.decisions.find((x) => x.id === id);
-  if (copy && log) Object.assign(copy, fromLog(log), { origin: copy.origin, at: copy.at, subjects: copy.subjects, meeting_id: copy.meeting_id, change_ids: copy.change_ids });
+  if (copy && log)
+    Object.assign(copy, fromLog(log), {
+      origin: copy.origin,
+      at: copy.at,
+      subjects: copy.subjects,
+      meeting_id: copy.meeting_id,
+      change_ids: copy.change_ids,
+    });
   const own = db.decisions.find((x) => x.id === id && !x.trashed && product(x));
   if (own) return { d: own, log };
-  if (!log || log.trashed || log.origin === "checkpoint" || db.decisions.some((x) => x.id === id)) return { d: null, log: null };
+  if (!log || log.trashed || log.origin === 'checkpoint' || db.decisions.some((x) => x.id === id))
+    return { d: null, log: null };
   return { d: fromLog(log), log };
 }
 
 /** A decision-log call as the sheet reads it (its own number, fields and last sheet edit). */
 function fromLog(r: DecisionLogRow): Decision {
   return {
-    id: r.id, number: r.number, title: r.title, origin: r.origin, status: r.status === "proposed" || r.status === "decided" ? r.status : "withdrawn",
-    approver_id: r.approver_id ?? null, at: r.created_at, subjects: (r.subjects ?? []).map((s) => ({ kind: String(s.kind), id: String(s.id) })), meeting_id: null, change_ids: [],
-    ask: r.question ?? null, context: r.context ?? null, options: (r.options ?? []).map((o) => ({ key: o.key, label: o.label })), review_at: r.review_at ?? null,
-    created_by: r.created_by ?? null, edited: r.sheet_edited ?? null, trashed: !!r.trashed,
+    id: r.id,
+    number: r.number,
+    title: r.title,
+    origin: r.origin,
+    status: r.status === 'proposed' || r.status === 'decided' ? r.status : 'withdrawn',
+    approver_id: r.approver_id ?? null,
+    at: r.created_at,
+    subjects: (r.subjects ?? []).map((s) => ({ kind: String(s.kind), id: String(s.id) })),
+    meeting_id: null,
+    change_ids: [],
+    ask: r.question ?? null,
+    context: r.context ?? null,
+    options: (r.options ?? []).map((o) => ({ key: o.key, label: o.label })),
+    review_at: r.review_at ?? null,
+    created_by: r.created_by ?? null,
+    edited: r.sheet_edited ?? null,
+    trashed: !!r.trashed,
   };
 }
 
@@ -1766,36 +2946,118 @@ function toLog(r: DecisionLogRow, d: Decision, now: string, by: string): void {
   r.title = d.title;
   r.question = d.ask ?? null;
   r.context = d.context ?? null;
-  r.options = (d.options ?? []).map((o) => r.options.find((x) => x.key === o.key && x.label === o.label) ?? { key: o.key, label: o.label, summary: null, pros: [], cons: [], evidence_ids: [], cost_if_wrong: null, recommended: false });
+  r.options = (d.options ?? []).map(
+    (o) =>
+      r.options.find((x) => x.key === o.key && x.label === o.label) ?? {
+        key: o.key,
+        label: o.label,
+        summary: null,
+        pros: [],
+        cons: [],
+        evidence_ids: [],
+        cost_if_wrong: null,
+        recommended: false,
+      },
+  );
   r.review_at = d.review_at ?? null;
-  if (d.status === "withdrawn" && r.status === "proposed") Object.assign(r, { status: "withdrawn", withdrawn_at: now, withdrawn_by: by, withdrawn_reason: null });
-  else if (d.status === "proposed" && r.status === "withdrawn") Object.assign(r, { status: "proposed", withdrawn_at: null, withdrawn_by: null, withdrawn_reason: null });
+  if (d.status === 'withdrawn' && r.status === 'proposed')
+    Object.assign(r, {
+      status: 'withdrawn',
+      withdrawn_at: now,
+      withdrawn_by: by,
+      withdrawn_reason: null,
+    });
+  else if (d.status === 'proposed' && r.status === 'withdrawn')
+    Object.assign(r, {
+      status: 'proposed',
+      withdrawn_at: null,
+      withdrawn_by: null,
+      withdrawn_reason: null,
+    });
   r.sheet_edited = d.edited ?? null;
   r.trashed = !!d.trashed;
   r.updated_at = now;
 }
 
 /** edit-decisions: a decision made in Simple (POST /v1/decisions) is listed on its Decisions page too, with every field. */
-export function sheetDecisionMade(db: MeetingsDb, made: Schemas["DecisionOut"], by: string): void {
+export function sheetDecisionMade(db: MeetingsDb, made: Schemas['DecisionOut'], by: string): void {
   if (db.decisions.some((x) => x.id === made.id)) return;
   db.decisions.push({
     // The decision log's number (one decisions table in the API, one number per decision).
-    id: made.id, number: made.number, title: made.title, origin: "manual", status: "proposed", approver_id: made.approver_id,
-    at: iso(Math.max(mockNowMs(), ...db.decisions.map((x) => Date.parse(x.at) + 1))), subjects: [], meeting_id: null, change_ids: [],
-    ask: made.question ?? null, context: made.context ?? null, options: (made.options ?? []).map((o) => ({ key: o.key, label: o.label })), review_at: made.review_at ?? null, created_by: by,
+    id: made.id,
+    number: made.number,
+    title: made.title,
+    origin: 'manual',
+    status: 'proposed',
+    approver_id: made.approver_id,
+    at: iso(Math.max(mockNowMs(), ...db.decisions.map((x) => Date.parse(x.at) + 1))),
+    subjects: [],
+    meeting_id: null,
+    change_ids: [],
+    ask: made.question ?? null,
+    context: made.context ?? null,
+    options: (made.options ?? []).map((o) => ({ key: o.key, label: o.label })),
+    review_at: made.review_at ?? null,
+    created_by: by,
   });
 }
 
 /** QA (unique codes): the "repeated-codes" scenario adds a question another PRD's run numbered q5
  * (lower case, as that run wrote it), decided outside meetings, beside Guided setup's own Q5; and
  * two runs' Q9 of one title, two different decisions. */
-export const REPEATED_CODES_SCENARIO = "repeated-codes";
-function repeatedCodeRows(): Schemas["SimpleDecisionRow"][] {
-  if (typeof localStorage === "undefined" || localStorage.getItem("po-mock-scenario") !== REPEATED_CODES_SCENARIO) return [];
+export const REPEATED_CODES_SCENARIO = 'repeated-codes';
+function repeatedCodeRows(): Schemas['SimpleDecisionRow'][] {
+  if (
+    typeof localStorage === 'undefined' ||
+    localStorage.getItem('po-mock-scenario') !== REPEATED_CODES_SCENARIO
+  )
+    return [];
   const at = iso(mockNowMs() - 3 * 86_400_000);
   return [
-    { id: stableUuid("qa-repeated-codes/q5"), number: 140, title: "Trial length for new teams", origin: "prd", status: "decided", approver: null, decided_at: at, created_at: at, subjects: [], code: "q5", chosen: "14 days", options: [], prd_title: "Team trials" },
-    { id: stableUuid("qa-repeated-codes/q9-a"), number: 142, title: "Seat price for teams", origin: "prd", status: "decided", approver: null, decided_at: at, created_at: at, subjects: [], code: "Q9", chosen: "Per seat", options: [], prd_title: "Team trials" },
-    { id: stableUuid("qa-repeated-codes/q9-b"), number: 141, title: "Seat price for teams", origin: "prd", status: "decided", approver: null, decided_at: at, created_at: at, subjects: [], code: "Q9", chosen: "Flat", options: [], prd_title: "Team billing" },
+    {
+      id: stableUuid('qa-repeated-codes/q5'),
+      number: 140,
+      title: 'Trial length for new teams',
+      origin: 'prd',
+      status: 'decided',
+      approver: null,
+      decided_at: at,
+      created_at: at,
+      subjects: [],
+      code: 'q5',
+      chosen: '14 days',
+      options: [],
+      prd_title: 'Team trials',
+    },
+    {
+      id: stableUuid('qa-repeated-codes/q9-a'),
+      number: 142,
+      title: 'Seat price for teams',
+      origin: 'prd',
+      status: 'decided',
+      approver: null,
+      decided_at: at,
+      created_at: at,
+      subjects: [],
+      code: 'Q9',
+      chosen: 'Per seat',
+      options: [],
+      prd_title: 'Team trials',
+    },
+    {
+      id: stableUuid('qa-repeated-codes/q9-b'),
+      number: 141,
+      title: 'Seat price for teams',
+      origin: 'prd',
+      status: 'decided',
+      approver: null,
+      decided_at: at,
+      created_at: at,
+      subjects: [],
+      code: 'Q9',
+      chosen: 'Flat',
+      options: [],
+      prd_title: 'Team billing',
+    },
   ];
 }

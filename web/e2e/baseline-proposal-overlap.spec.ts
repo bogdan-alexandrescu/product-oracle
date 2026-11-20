@@ -1,44 +1,46 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { login } from "./helpers";
+import { login } from './helpers';
 
 // #268: the "proposal-overlap" scenario adds two run proposals on Referral link that both set
 // its milestone (lib/api/mock/baseline.ts addOverlappingProposals).
-const FIRST = "Slice a ships in M2.";
-const SECOND = "Moved below the line after sizing.";
+const FIRST = 'Slice a ships in M2.';
+const SECOND = 'Moved below the line after sizing.';
 
 async function openProposals(page: Page) {
-  await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "proposal-overlap"));
+  await page.addInitScript(() => localStorage.setItem('po-mock-scenario', 'proposal-overlap'));
   await login(page);
-  await page.goto("/ground-truth");
-  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
-  await page.getByRole("tab", { name: /Proposals/ }).click();
-  await expect(page.getByTestId("proposal").filter({ hasText: SECOND })).toBeVisible();
+  await page.goto('/ground-truth');
+  await expect(page.getByRole('heading', { level: 1, name: 'Ground Truth' })).toBeVisible();
+  await page.getByRole('tab', { name: /Proposals/ }).click();
+  await expect(page.getByTestId('proposal').filter({ hasText: SECOND })).toBeVisible();
 }
 
 /** Accepts the first proposal; the second's card then flags the overlap and Accept warns. */
 async function acceptFirstThenOpenWarning(page: Page) {
-  const rows = page.getByTestId("proposal");
+  const rows = page.getByTestId('proposal');
   const second = rows.filter({ hasText: SECOND });
-  await expect(second.getByTestId("overlap-chip")).toHaveCount(0);
-  await rows.filter({ hasText: FIRST }).getByRole("button", { name: "Accept" }).click();
-  await expect(page.getByRole("status")).toContainText("Proposal accepted");
-  await expect(second.getByTestId("overlap-chip")).toHaveText("Changes what you just accepted");
+  await expect(second.getByTestId('overlap-chip')).toHaveCount(0);
+  await rows.filter({ hasText: FIRST }).getByRole('button', { name: 'Accept' }).click();
+  await expect(page.getByRole('status')).toContainText('Proposal accepted');
+  await expect(second.getByTestId('overlap-chip')).toHaveText('Changes what you just accepted');
 
-  await second.getByRole("button", { name: "Accept" }).click();
-  const warning = second.getByRole("group", { name: "This would undo a change" });
-  await expect(warning).toContainText(/This would undo a change you accepted (less than a minute|\d+ min) ago\./);
-  const field = warning.getByTestId("overlap-milestone");
-  await expect(field.getByTestId("overlap-now")).toHaveText("milestone now: M2");
-  await expect(field.getByTestId("overlap-proposed")).toHaveText("this proposal: Below the line");
-  await expect(warning.getByRole("button", { name: "Reject" })).toBeVisible();
+  await second.getByRole('button', { name: 'Accept' }).click();
+  const warning = second.getByRole('group', { name: 'This would undo a change' });
+  await expect(warning).toContainText(
+    /This would undo a change you accepted (less than a minute|\d+ min) ago\./,
+  );
+  const field = warning.getByTestId('overlap-milestone');
+  await expect(field.getByTestId('overlap-now')).toHaveText('milestone now: M2');
+  await expect(field.getByTestId('overlap-proposed')).toHaveText('this proposal: Below the line');
+  await expect(warning.getByRole('button', { name: 'Reject' })).toBeVisible();
   return warning;
 }
 
 async function savedCarts(page: Page) {
-  await page.getByRole("tab", { name: /Graph/ }).click();
-  await page.getByTestId("feature-F-12").getByRole("button", { name: "Referral link" }).click();
-  return page.getByRole("dialog", { name: "Referral link" });
+  await page.getByRole('tab', { name: /Graph/ }).click();
+  await page.getByTestId('feature-F-12').getByRole('button', { name: 'Referral link' }).click();
+  return page.getByRole('dialog', { name: 'Referral link' });
 }
 
 /**
@@ -47,38 +49,42 @@ async function savedCarts(page: Page) {
  * "Skip milestone, apply the rest" overwrites the milestone or leaves the other field unapplied.
  * no_claim: edges; the entity drawer (it has no Accept).
  */
-test("Ground Truth: skip the overlapping field and apply the rest", async ({ page }) => {
+test('Ground Truth: skip the overlapping field and apply the rest', async ({ page }) => {
   await openProposals(page);
   const warning = await acceptFirstThenOpenWarning(page);
-  await warning.getByRole("button", { name: "Skip milestone, apply the rest" }).click();
-  await expect(page.getByRole("status")).toContainText("Proposal accepted without milestone");
-  await expect(page.getByTestId("proposal").filter({ hasText: SECOND })).toHaveCount(0);
+  await warning.getByRole('button', { name: 'Skip milestone, apply the rest' }).click();
+  await expect(page.getByRole('status')).toContainText('Proposal accepted without milestone');
+  await expect(page.getByTestId('proposal').filter({ hasText: SECOND })).toHaveCount(0);
   const d = await savedCarts(page);
-  await expect(d.locator('[data-attr="milestone"]')).toHaveText("M2");
-  await expect(d.locator('[data-attr="effort"]')).toHaveText("XL");
+  await expect(d.locator('[data-attr="milestone"]')).toHaveText('M2');
+  await expect(d.locator('[data-attr="effort"]')).toHaveText('XL');
 });
 
-test("Ground Truth: apply anyway overwrites the field", async ({ page }) => {
+test('Ground Truth: apply anyway overwrites the field', async ({ page }) => {
   await openProposals(page);
   const warning = await acceptFirstThenOpenWarning(page);
-  await warning.getByRole("button", { name: "Apply anyway" }).click();
-  await expect(page.getByRole("status")).toContainText("Proposal accepted");
+  await warning.getByRole('button', { name: 'Apply anyway' }).click();
+  await expect(page.getByRole('status')).toContainText('Proposal accepted');
   const d = await savedCarts(page);
-  await expect(d.locator('[data-attr="milestone"]')).toHaveText("Below the line");
-  await expect(d.locator('[data-attr="effort"]')).toHaveText("XL");
+  await expect(d.locator('[data-attr="milestone"]')).toHaveText('Below the line');
+  await expect(d.locator('[data-attr="effort"]')).toHaveText('XL');
 });
 
 /**
  * protects: the warning on a phone.
  * fails_when: at 390 px the page scrolls sideways or a warning button is out of view.
  */
-test("Ground Truth: the overlap warning wraps on a phone", async ({ page }) => {
+test('Ground Truth: the overlap warning wraps on a phone', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openProposals(page);
   const warning = await acceptFirstThenOpenWarning(page);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
-  for (const name of ["Skip milestone, apply the rest", "Apply anyway", "Reject"]) {
-    const button = warning.getByRole("button", { name });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    ),
+  ).toBeLessThanOrEqual(0);
+  for (const name of ['Skip milestone, apply the rest', 'Apply anyway', 'Reject']) {
+    const button = warning.getByRole('button', { name });
     await button.scrollIntoViewIfNeeded();
     await expect(button).toBeInViewport({ ratio: 1 });
   }
@@ -89,20 +95,22 @@ test("Ground Truth: the overlap warning wraps on a phone", async ({ page }) => {
  * fails_when: the link is missing or miscounted, clicking it does not scroll to and highlight the
  * sibling card, or the link stays once the sibling is decided.
  */
-test("Ground Truth: a card links to the other open proposal on its entry", async ({ page }) => {
+test('Ground Truth: a card links to the other open proposal on its entry', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 400 });
   await openProposals(page);
-  const rows = page.getByTestId("proposal");
+  const rows = page.getByTestId('proposal');
   const first = rows.filter({ hasText: FIRST });
   const second = rows.filter({ hasText: SECOND });
-  await expect(second.getByRole("button", { name: "1 other open proposal on this entry" })).toBeVisible();
-  await expect(second).not.toHaveAttribute("data-highlighted", "true");
-  await first.getByRole("button", { name: "1 other open proposal on this entry" }).click();
-  await expect(second).toHaveAttribute("data-highlighted", "true");
+  await expect(
+    second.getByRole('button', { name: '1 other open proposal on this entry' }),
+  ).toBeVisible();
+  await expect(second).not.toHaveAttribute('data-highlighted', 'true');
+  await first.getByRole('button', { name: '1 other open proposal on this entry' }).click();
+  await expect(second).toHaveAttribute('data-highlighted', 'true');
   await expect(second).toBeInViewport();
-  await expect(first).not.toHaveAttribute("data-highlighted", "true");
+  await expect(first).not.toHaveAttribute('data-highlighted', 'true');
 
-  await first.getByRole("button", { name: "Accept" }).click();
-  await expect(page.getByRole("status")).toContainText("Proposal accepted");
-  await expect(second.getByRole("button", { name: /other open proposal/ })).toHaveCount(0);
+  await first.getByRole('button', { name: 'Accept' }).click();
+  await expect(page.getByRole('status')).toContainText('Proposal accepted');
+  await expect(second.getByRole('button', { name: /other open proposal/ })).toHaveCount(0);
 });

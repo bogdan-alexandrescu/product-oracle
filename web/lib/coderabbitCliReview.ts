@@ -8,10 +8,7 @@
 // says so; lines that are not JSON count as errors when they start with "error".
 
 export type CliReviewState =
-  | "reviewed"
-  | "did-not-review"
-  | "reviewed-nothing-applicable"
-  | "reviewed-incompletely";
+  'reviewed' | 'did-not-review' | 'reviewed-nothing-applicable' | 'reviewed-incompletely';
 
 export type CliReviewInput = {
   exitCode: number | null;
@@ -34,7 +31,8 @@ export const GATE_EXIT = 2;
 
 type Event = Record<string, unknown>;
 
-const FINISHED = /^(complete|completed|done|finished|review_complete|review_completed|summary|result)$/i;
+const FINISHED =
+  /^(complete|completed|done|finished|review_complete|review_completed|summary|result)$/i;
 const SKIPPED = /skip|ignor|not[_ ]?reviewed|limit/i;
 const PLAIN_ERROR = /^\s*(\[?error\]?\b|✖|×)/i;
 
@@ -44,10 +42,10 @@ function parse(text: string): { events: Event[]; plainErrors: string[] } {
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim();
     if (!line) continue;
-    if (line.startsWith("{")) {
+    if (line.startsWith('{')) {
       try {
         const value = JSON.parse(line);
-        if (value && typeof value === "object" && !Array.isArray(value)) {
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
           events.push(value as Event);
           continue;
         }
@@ -61,7 +59,7 @@ function parse(text: string): { events: Event[]; plainErrors: string[] } {
 }
 
 function str(v: unknown): string {
-  return typeof v === "string" ? v : "";
+  return typeof v === 'string' ? v : '';
 }
 
 function fileOf(e: Event): string {
@@ -70,11 +68,13 @@ function fileOf(e: Event): string {
 
 function fileList(v: unknown): string[] | null {
   if (!Array.isArray(v)) return null;
-  return v.map((f) => (typeof f === "string" ? f : f && typeof f === "object" ? fileOf(f as Event) : "")).filter(Boolean);
+  return v
+    .map((f) => (typeof f === 'string' ? f : f && typeof f === 'object' ? fileOf(f as Event) : ''))
+    .filter(Boolean);
 }
 
 function isError(e: Event): boolean {
-  return str(e.type).toLowerCase() === "error" || str(e.level).toLowerCase() === "error";
+  return str(e.type).toLowerCase() === 'error' || str(e.level).toLowerCase() === 'error';
 }
 
 function isFinished(e: Event): boolean {
@@ -86,7 +86,7 @@ function isSkip(e: Event): boolean {
 }
 
 function norm(path: string): string {
-  return path.replace(/^\.\//, "").replace(/^[ab]\//, "");
+  return path.replace(/^\.\//, '').replace(/^[ab]\//, '');
 }
 
 export function adjudicate(input: CliReviewInput): CliReviewVerdict {
@@ -94,7 +94,11 @@ export function adjudicate(input: CliReviewInput): CliReviewVerdict {
   const err = parse(input.stderr);
   const events = [...out.events, ...err.events];
   const errors = [
-    ...events.filter(isError).map((e) => [str(e.phase), str(e.status), str(e.message)].filter(Boolean).join(": ") || "error"),
+    ...events
+      .filter(isError)
+      .map(
+        (e) => [str(e.phase), str(e.status), str(e.message)].filter(Boolean).join(': ') || 'error',
+      ),
     ...out.plainErrors,
     ...err.plainErrors,
   ];
@@ -111,10 +115,17 @@ export function adjudicate(input: CliReviewInput): CliReviewVerdict {
       findings += 1;
       reviewed.add(norm(file));
     }
-    for (const key of ["skipped", "skippedFiles", "skipped_files", "ignored", "ignoredFiles", "ignored_files"]) {
+    for (const key of [
+      'skipped',
+      'skippedFiles',
+      'skipped_files',
+      'ignored',
+      'ignoredFiles',
+      'ignored_files',
+    ]) {
       for (const f of fileList(e[key]) ?? []) skipped.add(norm(f));
     }
-    for (const key of ["files", "reviewedFiles", "reviewed_files"]) {
+    for (const key of ['files', 'reviewedFiles', 'reviewed_files']) {
       const list = fileList(e[key]);
       if (list) {
         listed = true;
@@ -127,30 +138,39 @@ export function adjudicate(input: CliReviewInput): CliReviewVerdict {
   const exitOk = input.exitCode === 0 || (input.exitCode === GATE_EXIT && finished);
   const reasons: string[] = [];
 
-  if (diff.length === 0) reasons.push("the diff is empty");
-  if (input.exitCode === null) reasons.push("the CLI was stopped before it exited");
+  if (diff.length === 0) reasons.push('the diff is empty');
+  if (input.exitCode === null) reasons.push('the CLI was stopped before it exited');
   else if (!exitOk) reasons.push(`the CLI exited ${input.exitCode}`);
   reasons.push(...errors.map((e) => `error: ${e}`));
-  if (!finished) reasons.push("no event says the review finished");
-  if (unreviewed.length) reasons.push(`${unreviewed.length} of ${diff.length} diff files not reviewed`);
+  if (!finished) reasons.push('no event says the review finished');
+  if (unreviewed.length)
+    reasons.push(`${unreviewed.length} of ${diff.length} diff files not reviewed`);
 
-  const verdict = (state: CliReviewState): CliReviewVerdict => ({ state, findings, unreviewed, reasons });
-  if (diff.length === 0) return verdict("did-not-review");
+  const verdict = (state: CliReviewState): CliReviewVerdict => ({
+    state,
+    findings,
+    unreviewed,
+    reasons,
+  });
+  if (diff.length === 0) return verdict('did-not-review');
   // Nothing came back from a review: whatever the exit code says, it did not happen.
-  if (!finished && findings === 0) return verdict("did-not-review");
-  if (!exitOk && findings === 0) return verdict("did-not-review");
-  if (errors.length || !finished || !exitOk || unreviewed.length) return verdict("reviewed-incompletely");
-  return verdict(findings ? "reviewed" : "reviewed-nothing-applicable");
+  if (!finished && findings === 0) return verdict('did-not-review');
+  if (!exitOk && findings === 0) return verdict('did-not-review');
+  if (errors.length || !finished || !exitOk || unreviewed.length)
+    return verdict('reviewed-incompletely');
+  return verdict(findings ? 'reviewed' : 'reviewed-nothing-applicable');
 }
 
 /** 0 when the review covered the whole diff, else 1. */
 export function exitCodeFor(state: CliReviewState): number {
-  return state === "reviewed" || state === "reviewed-nothing-applicable" ? 0 : 1;
+  return state === 'reviewed' || state === 'reviewed-nothing-applicable' ? 0 : 1;
 }
 
 export function formatVerdict(v: CliReviewVerdict): string {
-  const lines = [`coderabbit review: ${v.state} (${v.findings} finding${v.findings === 1 ? "" : "s"})`];
+  const lines = [
+    `coderabbit review: ${v.state} (${v.findings} finding${v.findings === 1 ? '' : 's'})`,
+  ];
   for (const r of v.reasons) lines.push(`  - ${r}`);
   for (const f of v.unreviewed) lines.push(`  not reviewed: ${f}`);
-  return lines.join("\n");
+  return lines.join('\n');
 }

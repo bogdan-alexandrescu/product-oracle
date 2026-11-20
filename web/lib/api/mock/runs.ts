@@ -4,45 +4,64 @@
  * overrun pause. Agents "finish" a segment on POST /v1/internal/tick, at 90% of its
  * estimate, as the API's FakeRuntime does.
  */
-import { SHOP_BRIEFS } from "./engcheck-shop";
-import type { Schemas } from "@/lib/api/client";
-import { rawReply, reply } from "./typed";
-import { mockName as displayName } from "./people";
+import { SHOP_BRIEFS } from './engcheck-shop';
+import type { Schemas } from '@/lib/api/client';
+import { rawReply, reply } from './typed';
+import { mockName as displayName } from './people';
 
-import { AGENT_RUN, baselineReviewStatus } from "./baseline";
-import { companyDayInWords, companyDayIso, companyStamp } from "./connections";
-import { FORMULAS, ranking } from "./lane-f";
-import type { RowTally } from "./from-run";
-import { fileItems } from "./checkpoint-review";
-import { agentQuestionsOut, seedAgentQuestions, type StoredAgentQuestion } from "./agent-questions";
-import { readableRefusal } from "./refusal";
-import { mockNowMs } from "./clock";
-import { answerCode, applySuggestion, latestScope, problemRef, REF_MARK, prepareScope, recheck as recheckScope, routeScopes, SCOPE_EDIT_FIELDS, scopeEdits, scopeSendBack, type StoredScope } from "./scope";
+import { AGENT_RUN, baselineReviewStatus } from './baseline';
+import { companyDayInWords, companyDayIso, companyStamp } from './connections';
+import { FORMULAS, ranking } from './lane-f';
+import type { RowTally } from './from-run';
+import { fileItems } from './checkpoint-review';
+import { agentQuestionsOut, seedAgentQuestions, type StoredAgentQuestion } from './agent-questions';
+import { readableRefusal } from './refusal';
+import { mockNowMs } from './clock';
+import {
+  answerCode,
+  applySuggestion,
+  latestScope,
+  problemRef,
+  REF_MARK,
+  prepareScope,
+  recheck as recheckScope,
+  routeScopes,
+  SCOPE_EDIT_FIELDS,
+  scopeEdits,
+  scopeSendBack,
+  type StoredScope,
+} from './scope';
 
-type RunOut = Schemas["RunOut"];
-type SegmentOut = Schemas["SegmentOut"];
-type CheckpointOut = Schemas["CheckpointOut"];
-type FeatureSetCheck = Schemas["FeatureSetCheck"];
-type PrdScopeOut = Schemas["PrdScopeOut"];
-type PriorityCheck = Schemas["PriorityCheck"];
-type SnapshotRow = Schemas["PrioritySnapshotOut"];
-type Method = Schemas["PriorityRanking"]["method"];
-type RunDecision = Schemas["RunDecision"];
-type FeedbackRow = Omit<Schemas["FeedbackItemOut"], "state" | "staged_for_version" | "staged_for_agents"> & {
+type RunOut = Schemas['RunOut'];
+type SegmentOut = Schemas['SegmentOut'];
+type CheckpointOut = Schemas['CheckpointOut'];
+type FeatureSetCheck = Schemas['FeatureSetCheck'];
+type PrdScopeOut = Schemas['PrdScopeOut'];
+type PriorityCheck = Schemas['PriorityCheck'];
+type SnapshotRow = Schemas['PrioritySnapshotOut'];
+type Method = Schemas['PriorityRanking']['method'];
+type RunDecision = Schemas['RunDecision'];
+type FeedbackRow = Omit<
+  Schemas['FeedbackItemOut'],
+  'state' | 'staged_for_version' | 'staged_for_agents'
+> & {
   /** D12: staged for the agents (when, by whom); open items only count. */
   staged_for_agents_at?: string | null;
   staged_for_agents_by?: string | null;
 };
-type DocumentRow = Pick<Schemas["DocumentSummary"], "id" | "slug" | "title" | "kind" | "template" | "theme">;
-type VersionSource = Schemas["VersionSource"];
-type Kind = DocumentRow["kind"];
+type DocumentRow = Pick<
+  Schemas['DocumentSummary'],
+  'id' | 'slug' | 'title' | 'kind' | 'template' | 'theme'
+>;
+type VersionSource = Schemas['VersionSource'];
+type Kind = DocumentRow['kind'];
 
 /** D8: one stored action of a checkpoint's shared draft (people by member id). */
-type DraftActionRow = Omit<Schemas["ReviewAction"], "created_by" | "updated_by" | "question"> & {
+type DraftActionRow = Omit<Schemas['ReviewAction'], 'created_by' | 'updated_by' | 'question'> & {
   created_by: string | null;
   updated_by: string | null;
   /** G4: staged from a discussion (row actions have none), and whether it was private then. */
-  origin?: "row" | "discussion";
+  origin?: 'row' | 'discussion';
   discussion_id?: string | null;
   discussion_change_id?: string | null;
   from_private?: boolean;
@@ -97,13 +116,15 @@ export interface BaselineReviewOf {
 /** B1's Set up step: when the last Build the baseline run finished, or null when none succeeded. */
 export function lastBaselineBuild(db: RunsDb | undefined): string | null {
   if (!db) return null;
-  const done = db.runs.filter((r) => r.flow === "baseline" && r.status === "succeeded").map((r) => r.finished_at ?? r.created_at);
+  const done = db.runs
+    .filter((r) => r.flow === 'baseline' && r.status === 'succeeded')
+    .map((r) => r.finished_at ?? r.created_at);
   return done.sort().pop() ?? db.baseline_built_at ?? null;
 }
 
 /** The last Build the baseline run that succeeded, the latest created (as rebuild.block reads it), or null. */
 export function lastBaselineRun(db: RunsDb | undefined): { id: string; created_at: string } | null {
-  const done = (db?.runs ?? []).filter((r) => r.flow === "baseline" && r.status === "succeeded");
+  const done = (db?.runs ?? []).filter((r) => r.flow === 'baseline' && r.status === 'succeeded');
   return done.sort((a, b) => a.created_at.localeCompare(b.created_at)).pop() ?? null;
 }
 
@@ -113,10 +134,10 @@ export interface RunsContext {
   /** The signed-in member's email: who decided, on a decision not delivered yet. */
   userName?: string | null;
   /** The signed-in member's role: who decided, as the run's agents read it (D11). */
-  userRole?: Schemas["Me"]["role"] | null;
+  userRole?: Schemas['Me']['role'] | null;
   /** D8: the signed-in member (who stages or suggests), and every member by id (names). */
-  member?: { id: string; email: string; role: Schemas["Me"]["role"] } | null;
-  members?: { id: string; email: string; role: Schemas["Me"]["role"]; name?: string | null }[];
+  member?: { id: string; email: string; role: Schemas['Me']['role'] } | null;
+  members?: { id: string; email: string; role: Schemas['Me']['role']; name?: string | null }[];
   /**
    * D8: a test's "another reviewer changed the draft" (MOCK_REVIEW_CHANGE_KEY): the email of
    * who changed it, read once (the key is cleared). The next decide bumps the draft by one
@@ -128,7 +149,12 @@ export interface RunsContext {
    * store (their Inbox's row) and returns the question's id; `asked` reads it back (its status
    * and answer); `withdraw` withdraws it while nobody answered. Absent: the action holds it.
    */
-  ask?: (q: { asked_to: string; prompt: string; checkpoint_id: string; item_ref: string }) => string;
+  ask?: (q: {
+    asked_to: string;
+    prompt: string;
+    checkpoint_id: string;
+    item_ref: string;
+  }) => string;
   asked?: (id: string) => { status: string; answer: string | null } | null;
   withdraw?: (id: string) => void;
   /**
@@ -136,9 +162,9 @@ export interface RunsContext {
    * oracle.members.leads.may_decide (the engineering stops go to the leads and owners once
    * one is named). Absent: anyone may, as the mock had it.
    */
-  mayDecide?: (c: Pick<CheckpointOut, "kind" | "approver_role">, flow: RunOut["flow"]) => boolean;
+  mayDecide?: (c: Pick<CheckpointOut, 'kind' | 'approver_role'>, flow: RunOut['flow']) => boolean;
   /** As oracle.members.leads.lead_stop: an engineering stop outside prd_to_spec once a lead is named. */
-  leadStop?: (c: Pick<CheckpointOut, "kind">, flow: RunOut["flow"]) => boolean;
+  leadStop?: (c: Pick<CheckpointOut, 'kind'>, flow: RunOut['flow']) => boolean;
   /** As the API's draft_items.run_retried: a retried prd_draft_items run re-opens its draft roadmap. */
   draftItemsRetried?: (runId: string) => void;
   /** F4: Approve at the Engineering check sets a feature's effort (a person's edit, locked). */
@@ -148,7 +174,7 @@ export interface RunsContext {
   /** D10: the designated decider of the document a run review reviews (its review policy), if any. */
   reviewDecider?: (c: CheckpointOut) => string | null;
   /** H11 (oracle.autonomy_drafts): why a run may not draft a document of this kind, at Observe. */
-  draftRefusal?: (flow: RunOut["flow"], kind: string | null | undefined) => string | null;
+  draftRefusal?: (flow: RunOut['flow'], kind: string | null | undefined) => string | null;
   /**
    * The "undelivered" scenario: SwarmCloud does not take a checkpoint decision until the
    * next tick. The decision is recorded (and final) but the decide call answers 503, as the
@@ -177,19 +203,24 @@ export interface RunsContext {
    * Absent: Oracle never saves an order at a stop that is on.
    */
   autonomy?: {
-    level: () => "observe" | "draft" | "recommend" | "act";
+    level: () => 'observe' | 'draft' | 'recommend' | 'act';
     limits: () => { max_rank_move?: number } | null;
-    acted: (a: { summary: string; subject: Record<string, unknown>; undo: null; notify: string[] }) => void;
+    acted: (a: {
+      summary: string;
+      subject: Record<string, unknown>;
+      undo: null;
+      notify: string[];
+    }) => void;
   };
   feedback: FeedbackRow[];
   documents: DocumentRow[];
   /** #260: the confirmed goals a Baseline to PRD run may name. */
-  confirmedGoals?: () => Schemas["TargetGoal"][];
+  confirmedGoals?: () => Schemas['TargetGoal'][];
   /** "Add it to a PRD": the Ground Truth features (not rejected) a Baseline to PRD run may add. */
-  groundTruthFeatures?: () => Schemas["TargetFeature"][];
+  groundTruthFeatures?: () => Schemas['TargetFeature'][];
   latestVersion: (documentId: string) => number | null;
   /** The status of Oracle's live suggestion on a feedback item, if it has one. */
-  suggestionStatus?: (feedbackId: string) => Schemas["SuggestionOut"]["status"] | null;
+  suggestionStatus?: (feedbackId: string) => Schemas['SuggestionOut']['status'] | null;
   /** C1e: the item's accepted suggestion is staged for the next draft (not open feedback). */
   staged?: (feedbackId: string) => boolean;
   /** D10: the staged suggestion's text a send-back carries as accepted_text. */
@@ -203,7 +234,10 @@ export interface RunsContext {
   /** The approved version of a document a run reads (the one named, else the latest approved), or why not. */
   sourceVersion: (documentId: string, number: number | null) => VersionSource | string;
   /** E1 part B: the PRD version's draft items a Build roadmap run may reuse, or null. */
-  draftItemsToReuse?: (documentId: string, version: number) => { version: number; ready_at: string | null } | null;
+  draftItemsToReuse?: (
+    documentId: string,
+    version: number,
+  ) => { version: number; ready_at: string | null } | null;
   /**
    * The title the person typed on the brief a run was started from (Draft with Oracle), the one
    * its import gives a new document: as the API's _Refs.pending. Absent or null: no brief.
@@ -212,10 +246,10 @@ export interface RunsContext {
   /** Imports a run's draft as the document's next version. */
   importDraft: (
     slug: string,
-    run: Pick<RunOut, "id" | "document_kind" | "source" | "template" | "theme">,
+    run: Pick<RunOut, 'id' | 'document_kind' | 'source' | 'template' | 'theme'>,
     /** A person's Retry import: the version's `imported_again`. */
     again?: string,
-  ) => Omit<NonNullable<SegmentOut["draft_import"]>, "warnings" | "problems" | "code_names">;
+  ) => Omit<NonNullable<SegmentOut['draft_import']>, 'warnings' | 'problems' | 'code_names'>;
   /** The run's open baseline proposals (RunOut.open_proposals). */
   openProposals?: (runId: string) => number;
   /** B6: the confirmed and proposed goals not measurable (an approved baseline_confirm's vague_goals). */
@@ -227,7 +261,11 @@ export interface RunsContext {
    * rows) join the baseline as proposed, and the live ranking; `by` null when Oracle saved the
    * order itself. Absent: nothing is added (older mock data).
    */
-  acceptNewFeatures?: (snap: SnapshotRow, by: string | null, scope: PrdScopeOut["features"]) => void;
+  acceptNewFeatures?: (
+    snap: SnapshotRow,
+    by: string | null,
+    scope: PrdScopeOut['features'],
+  ) => void;
   /** The baseline's non-rejected goal keys (api run_order.Known.goals): only these count as a new feature's goal. Absent: any named goal counts (older mock data). */
   goalKeys?: () => string[];
   /** A goal's title in the baseline, rejected ones too (api stale_goals names a rejected goal by it). */
@@ -237,165 +275,304 @@ export interface RunsContext {
 }
 
 /** A3: the engineering stops (the check and the dates), as oracle.members.leads.ENGINEERING_KINDS. */
-export const ENGINEERING_KINDS: readonly string[] = ["eng_review", "eng_dates"];
-const LEAD_ONLY = "Only an engineering lead or an owner decides the engineering stops";
+export const ENGINEERING_KINDS: readonly string[] = ['eng_review', 'eng_dates'];
+const LEAD_ONLY = 'Only an engineering lead or an owner decides the engineering stops';
 /** F4, as flows.SegmentDef.skip_when_off: with its stop off, the whole segment is skipped. */
-const SKIP_WHEN_OFF = ["eng_review", "eng_dates"];
-const OFF_NOTE = "Turned off when the run started.";
-const skippedOff = (s: Pick<SegmentOut, "name" | "checkpoint_on">) => SKIP_WHEN_OFF.includes(s.name) && !s.checkpoint_on;
+const SKIP_WHEN_OFF = ['eng_review', 'eng_dates'];
+const OFF_NOTE = 'Turned off when the run started.';
+const skippedOff = (s: Pick<SegmentOut, 'name' | 'checkpoint_on'>) =>
+  SKIP_WHEN_OFF.includes(s.name) && !s.checkpoint_on;
 
-const ROLES: Schemas["AgentRoleOut"][] = [
-  { key: "researcher", title: "Researcher", description: "Gathers and weighs evidence", base_usd: 4 },
-  { key: "analyst", title: "Analyst", description: "Turns evidence into structured claims", base_usd: 3 },
-  { key: "architect", title: "Architect", description: "Dependencies and high-level design", base_usd: 5 },
-  { key: "prioritizer", title: "Prioritizer", description: "Goal-weighted priority order", base_usd: 2.5 },
-  { key: "writer", title: "Writer", description: "Writes the PRD draft", base_usd: 6 },
-  { key: "critic", title: "Critic", description: "Checks traceability and citations", base_usd: 3 },
+const ROLES: Schemas['AgentRoleOut'][] = [
+  {
+    key: 'researcher',
+    title: 'Researcher',
+    description: 'Gathers and weighs evidence',
+    base_usd: 4,
+  },
+  {
+    key: 'analyst',
+    title: 'Analyst',
+    description: 'Turns evidence into structured claims',
+    base_usd: 3,
+  },
+  {
+    key: 'architect',
+    title: 'Architect',
+    description: 'Dependencies and high-level design',
+    base_usd: 5,
+  },
+  {
+    key: 'prioritizer',
+    title: 'Prioritizer',
+    description: 'Goal-weighted priority order',
+    base_usd: 2.5,
+  },
+  { key: 'writer', title: 'Writer', description: 'Writes the PRD draft', base_usd: 6 },
+  { key: 'critic', title: 'Critic', description: 'Checks traceability and citations', base_usd: 3 },
 ];
-const READ = ["read:sources", "read:baseline"];
+const READ = ['read:sources', 'read:baseline'];
 
 // The baseline segment: Baseline to PRD's first and the whole of Build the baseline (B1).
-const BASELINE_SEGMENT: Schemas["FlowSegmentOut"] = {
-  name: "baseline",
-  title: "Ground Truth proposal",
-  roles: ["researcher", "analyst"],
-  scopes: [...READ, "write:proposals"],
-  outputs: ["baseline.yaml", "summary.md"],
-  checkpoint: "baseline_confirm",
-  approver_role: "approver",
-  decider: "role",
+const BASELINE_SEGMENT: Schemas['FlowSegmentOut'] = {
+  name: 'baseline',
+  title: 'Ground Truth proposal',
+  roles: ['researcher', 'analyst'],
+  scopes: [...READ, 'write:proposals'],
+  outputs: ['baseline.yaml', 'summary.md'],
+  checkpoint: 'baseline_confirm',
+  approver_role: 'approver',
+  decider: 'role',
 };
 
 /** E1: the draft-items flow (the generated Flow literal gains it when the schema is regenerated). */
-export const DRAFT_ITEMS_FLOW: Schemas["FlowOut"]["key"] = "prd_draft_items";
+export const DRAFT_ITEMS_FLOW: Schemas['FlowOut']['key'] = 'prd_draft_items';
 
 /**
  * The outputs Oracle imports as a document's next version (the API's imports_draft segments);
  * "{draft}" is the strategy draft's, named by the document it writes.
  */
-export const DRAFT_OUTPUTS = ["prd.md", "roadmap.md", "update.md", "pricing.md", "{draft}"];
-export const importsDraft = (outputs: readonly string[]) => outputs.some((o) => DRAFT_OUTPUTS.includes(o));
+export const DRAFT_OUTPUTS = ['prd.md', 'roadmap.md', 'update.md', 'pricing.md', '{draft}'];
+export const importsDraft = (outputs: readonly string[]) =>
+  outputs.some((o) => DRAFT_OUTPUTS.includes(o));
 
-export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
+export const FLOW_CATALOG: Schemas['FlowCatalog'] = {
   flows: [
     {
-      key: "baseline_to_prd",
-      title: "Ground Truth to PRD",
-      description: "Ground Truth proposal, feature set and design, priority order, PRD draft.",
+      key: 'baseline_to_prd',
+      title: 'Ground Truth to PRD',
+      description: 'Ground Truth proposal, feature set and design, priority order, PRD draft.',
       requires_document: false,
-      target_kind: "prd",
+      target_kind: 'prd',
       source_kind: null,
       // C4: a PRD starts at New PRD (the brief, then Draft with Oracle); the API and MCP keep the flow.
       in_new_run_dialog: false,
-      starts_from: { label: "New PRD · PRDs", href: "/documents/new?kind=prd" },
+      starts_from: { label: 'New PRD · PRDs', href: '/documents/new?kind=prd' },
       writes_document: true,
       segments: [
         BASELINE_SEGMENT,
-        { name: "feature_set", title: "Feature set, dependencies and design", roles: ["analyst", "architect"], scopes: [...READ, "write:proposals"], outputs: ["feature_set.yaml", "design.md"], checkpoint: "feature_set", approver_role: "approver", decider: "role" },
+        {
+          name: 'feature_set',
+          title: 'Feature set, dependencies and design',
+          roles: ['analyst', 'architect'],
+          scopes: [...READ, 'write:proposals'],
+          outputs: ['feature_set.yaml', 'design.md'],
+          checkpoint: 'feature_set',
+          approver_role: 'approver',
+          decider: 'role',
+        },
         // F4: the Engineering check, on by default; off, the whole segment is skipped.
-        { name: "eng_review", title: "Engineering check", roles: ["architect"], scopes: [...READ, "read:documents"], outputs: ["tech_briefs.yaml"], checkpoint: "eng_review", approver_role: "approver", decider: "engineering_lead" },
-        { name: "priority", title: "Priority order", roles: ["prioritizer"], scopes: ["read:baseline", "write:proposals"], outputs: ["priority.yaml"], checkpoint: "priority_order", approver_role: "approver", decider: "role" },
-        { name: "prd_draft", title: "PRD draft", roles: ["writer", "critic"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["prd.md"], checkpoint: "prd_review", approver_role: "approver", decider: "role" },
+        {
+          name: 'eng_review',
+          title: 'Engineering check',
+          roles: ['architect'],
+          scopes: [...READ, 'read:documents'],
+          outputs: ['tech_briefs.yaml'],
+          checkpoint: 'eng_review',
+          approver_role: 'approver',
+          decider: 'engineering_lead',
+        },
+        {
+          name: 'priority',
+          title: 'Priority order',
+          roles: ['prioritizer'],
+          scopes: ['read:baseline', 'write:proposals'],
+          outputs: ['priority.yaml'],
+          checkpoint: 'priority_order',
+          approver_role: 'approver',
+          decider: 'role',
+        },
+        {
+          name: 'prd_draft',
+          title: 'PRD draft',
+          roles: ['writer', 'critic'],
+          scopes: [...READ, 'read:documents', 'write:drafts'],
+          outputs: ['prd.md'],
+          checkpoint: 'prd_review',
+          approver_role: 'approver',
+          decider: 'role',
+        },
         // F4 lane B: the Engineering dates, on by default; off, the whole segment is skipped.
-        { name: "eng_dates", title: "Engineering dates", roles: ["architect"], scopes: [...READ, "read:documents"], outputs: ["eng_dates.yaml"], checkpoint: "eng_dates", approver_role: "approver", decider: "engineering_lead" },
+        {
+          name: 'eng_dates',
+          title: 'Engineering dates',
+          roles: ['architect'],
+          scopes: [...READ, 'read:documents'],
+          outputs: ['eng_dates.yaml'],
+          checkpoint: 'eng_dates',
+          approver_role: 'approver',
+          decider: 'engineering_lead',
+        },
       ],
     },
     {
-      key: "feedback_loop",
-      title: "Feedback loop",
-      description: "Pull open feedback on a PRD or roadmap, write the next draft, review it.",
+      key: 'feedback_loop',
+      title: 'Feedback loop',
+      description: 'Pull open feedback on a PRD or roadmap, write the next draft, review it.',
       requires_document: true,
       target_kind: null,
       source_kind: null,
       // D12: started from Build next draft on a document, never from the New run dialog.
       in_new_run_dialog: false,
-      starts_from: { label: "Build next draft · open a PRD or roadmap and use Build next draft", href: null },
+      starts_from: {
+        label: 'Build next draft · open a PRD or roadmap and use Build next draft',
+        href: null,
+      },
       writes_document: true,
       segments: [
-        { name: "next_draft", title: "Next draft", roles: ["analyst", "writer"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["prd.md"], checkpoint: "prd_review", approver_role: "approver", decider: "role" },
+        {
+          name: 'next_draft',
+          title: 'Next draft',
+          roles: ['analyst', 'writer'],
+          scopes: [...READ, 'read:documents', 'write:drafts'],
+          outputs: ['prd.md'],
+          checkpoint: 'prd_review',
+          approver_role: 'approver',
+          decider: 'role',
+        },
       ],
     },
     {
-      key: "prd_to_roadmap",
-      title: "Roadmap from an approved PRD",
-      description: "Roadmap items from an approved PRD version (horizon, milestone, dependencies, priority), then a roadmap draft in the chosen template.",
+      key: 'prd_to_roadmap',
+      title: 'Roadmap from an approved PRD',
+      description:
+        'Roadmap items from an approved PRD version (horizon, milestone, dependencies, priority), then a roadmap draft in the chosen template.',
       requires_document: false,
-      target_kind: "roadmap",
-      source_kind: "prd",
+      target_kind: 'roadmap',
+      source_kind: 'prd',
       in_new_run_dialog: false,
-      starts_from: { label: "PRD to roadmap · Plan › Roadmap documents", href: "/plan/documents" },
+      starts_from: { label: 'PRD to roadmap · Plan › Roadmap documents', href: '/plan/documents' },
       writes_document: true,
       segments: [
-        { name: "roadmap_items", title: "Roadmap items", roles: ["analyst", "prioritizer"], scopes: [...READ, "read:documents"], outputs: ["roadmap_items.yaml"], checkpoint: "roadmap_items", approver_role: "approver", decider: "role" },
-        { name: "roadmap_draft", title: "Roadmap draft", roles: ["writer", "critic"], scopes: [...READ, "read:documents"], outputs: ["roadmap.md"], checkpoint: "roadmap_review", approver_role: "approver", decider: "role" },
+        {
+          name: 'roadmap_items',
+          title: 'Roadmap items',
+          roles: ['analyst', 'prioritizer'],
+          scopes: [...READ, 'read:documents'],
+          outputs: ['roadmap_items.yaml'],
+          checkpoint: 'roadmap_items',
+          approver_role: 'approver',
+          decider: 'role',
+        },
+        {
+          name: 'roadmap_draft',
+          title: 'Roadmap draft',
+          roles: ['writer', 'critic'],
+          scopes: [...READ, 'read:documents'],
+          outputs: ['roadmap.md'],
+          checkpoint: 'roadmap_review',
+          approver_role: 'approver',
+          decider: 'role',
+        },
       ],
     },
     {
       // E1: every PRD draft's items-only roadmap; started by Oracle's ticker (or Derive on the
       // Roadmap tab), never from the New run dialog. Writes no document; no checkpoint waits.
       key: DRAFT_ITEMS_FLOW,
-      title: "Roadmap items for a PRD draft",
-      description: "Roadmap items (horizon, milestone, dependencies, priority) proposed from one PRD draft; shown on that version's Roadmap tab.",
+      title: 'Roadmap items for a PRD draft',
+      description:
+        "Roadmap items (horizon, milestone, dependencies, priority) proposed from one PRD draft; shown on that version's Roadmap tab.",
       requires_document: false,
       target_kind: null,
-      source_kind: "prd",
+      source_kind: 'prd',
       in_new_run_dialog: false,
       starts_from: null,
       writes_document: false,
       segments: [
-        { name: "roadmap_items", title: "Roadmap items", roles: ["analyst", "prioritizer"], scopes: [...READ, "read:documents"], outputs: ["roadmap_items.yaml"], checkpoint: "roadmap_items", approver_role: "approver", decider: "role" },
+        {
+          name: 'roadmap_items',
+          title: 'Roadmap items',
+          roles: ['analyst', 'prioritizer'],
+          scopes: [...READ, 'read:documents'],
+          outputs: ['roadmap_items.yaml'],
+          checkpoint: 'roadmap_items',
+          approver_role: 'approver',
+          decider: 'role',
+        },
       ],
     },
     {
       // F5 lane 3: requested from an approved item in the Plan's inspector or from a PRD's
       // overview (POST /v1/spec-requests), never from the New run dialog.
-      key: "prd_to_spec",
-      title: "Engineering spec from an approved PRD",
-      description: "A technical brief or full engineering spec for a feature's requirements, with SVG user flows and low-fidelity wireframes of 2-4 key screens, each linked to its PRD sections and requirement ids.",
+      key: 'prd_to_spec',
+      title: 'Engineering spec from an approved PRD',
+      description:
+        "A technical brief or full engineering spec for a feature's requirements, with SVG user flows and low-fidelity wireframes of 2-4 key screens, each linked to its PRD sections and requirement ids.",
       requires_document: false,
-      target_kind: "spec",
-      source_kind: "prd",
-      entry: "POST /v1/spec-requests",
+      target_kind: 'spec',
+      source_kind: 'prd',
+      entry: 'POST /v1/spec-requests',
       in_new_run_dialog: false,
-      starts_from: { label: "Request spec · Plan, an approved item, or a PRD's overview", href: "/plan" },
+      starts_from: {
+        label: "Request spec · Plan, an approved item, or a PRD's overview",
+        href: '/plan',
+      },
       writes_document: true,
       segments: [
-        { name: "spec_draft", title: "Spec, flows and wireframes", roles: ["architect", "designer", "critic"], scopes: [...READ, "read:documents"], outputs: ["spec.md", "design.json"], checkpoint: "eng_review", approver_role: "approver", decider: "role" },
+        {
+          name: 'spec_draft',
+          title: 'Spec, flows and wireframes',
+          roles: ['architect', 'designer', 'critic'],
+          scopes: [...READ, 'read:documents'],
+          outputs: ['spec.md', 'design.json'],
+          checkpoint: 'eng_review',
+          approver_role: 'approver',
+          decider: 'role',
+        },
       ],
     },
     {
-      key: "strategy_draft",
-      title: "Vision or strategy draft",
-      description: "Oracle drafts the product vision or the product strategy from the confirmed goals, approved documents, decisions and outcomes; an owner reviews it.",
+      key: 'strategy_draft',
+      title: 'Vision or strategy draft',
+      description:
+        'Oracle drafts the product vision or the product strategy from the confirmed goals, approved documents, decisions and outcomes; an owner reviews it.',
       requires_document: true,
       writes_document: true,
       target_kind: null,
       source_kind: null,
       // H4: started from Company › Strategy, never from the New run dialog.
       in_new_run_dialog: false,
-      starts_from: { label: "Vision or strategy · Company › Strategy, New vision or Draft next version", href: "/company/strategy" },
+      starts_from: {
+        label: 'Vision or strategy · Company › Strategy, New vision or Draft next version',
+        href: '/company/strategy',
+      },
       segments: [
-        { name: "strategy_draft", title: "Vision or strategy draft", roles: ["researcher", "writer", "critic"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["{draft}"], checkpoint: "strategy_review", approver_role: "owner", decider: "role" },
+        {
+          name: 'strategy_draft',
+          title: 'Vision or strategy draft',
+          roles: ['researcher', 'writer', 'critic'],
+          scopes: [...READ, 'read:documents', 'write:drafts'],
+          outputs: ['{draft}'],
+          checkpoint: 'strategy_review',
+          approver_role: 'owner',
+          decider: 'role',
+        },
       ],
     },
     {
-      key: "baseline",
-      title: "Build the Ground Truth",
-      description: "Read the sources and propose goals, products, features, constraints and evidence for you to review.",
+      key: 'baseline',
+      title: 'Build the Ground Truth',
+      description:
+        'Read the sources and propose goals, products, features, constraints and evidence for you to review.',
       requires_document: false,
       writes_document: false,
       target_kind: null,
       source_kind: null,
       // D12: started from the Baseline page, never from the New run dialog.
       in_new_run_dialog: false,
-      starts_from: { label: "Build the Ground Truth · Ground Truth", href: "/ground-truth?build=1" },
+      starts_from: {
+        label: 'Build the Ground Truth · Ground Truth',
+        href: '/ground-truth?build=1',
+      },
       segments: [BASELINE_SEGMENT],
     },
     {
       // H8: an owner drafts a board or investor update from Company › Updates (New update).
-      key: "update_draft",
-      title: "Update draft",
-      description: "Draft a board or investor update for its period: metrics first, verified dates only, Asks left to the owner.",
+      key: 'update_draft',
+      title: 'Update draft',
+      description:
+        'Draft a board or investor update for its period: metrics first, verified dates only, Asks left to the owner.',
       requires_document: true,
       writes_document: true,
       target_kind: null,
@@ -404,22 +581,44 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       // Started from New update on Company › Updates only (owners); the New run dialog does not point at it.
       starts_from: null,
       segments: [
-        { name: "update_draft", title: "Update draft", roles: ["analyst", "writer"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["update.md"], checkpoint: "update_review", approver_role: "owner", decider: "role" },
+        {
+          name: 'update_draft',
+          title: 'Update draft',
+          roles: ['analyst', 'writer'],
+          scopes: [...READ, 'read:documents', 'write:drafts'],
+          outputs: ['update.md'],
+          checkpoint: 'update_review',
+          approver_role: 'owner',
+          decider: 'role',
+        },
       ],
     },
     {
       // H9: an approver or owner drafts a pricing memo from Company › Market › Pricing (New pricing memo).
-      key: "pricing_memo",
-      title: "Pricing memo",
-      description: "Draft a pricing options memo from willingness-to-pay and win and loss evidence; the pricing owner decides.",
+      key: 'pricing_memo',
+      title: 'Pricing memo',
+      description:
+        'Draft a pricing options memo from willingness-to-pay and win and loss evidence; the pricing owner decides.',
       requires_document: true,
       writes_document: true,
       target_kind: null,
       source_kind: null,
       in_new_run_dialog: false,
-      starts_from: { label: "Draft with Oracle · Company › Market › Pricing", href: "/company/market?tab=pricing" },
+      starts_from: {
+        label: 'Draft with Oracle · Company › Market › Pricing',
+        href: '/company/market?tab=pricing',
+      },
       segments: [
-        { name: "pricing_memo", title: "Pricing memo", roles: ["researcher", "writer"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["pricing.md"], checkpoint: "pricing_review", approver_role: "owner", decider: "role" },
+        {
+          name: 'pricing_memo',
+          title: 'Pricing memo',
+          roles: ['researcher', 'writer'],
+          scopes: [...READ, 'read:documents', 'write:drafts'],
+          outputs: ['pricing.md'],
+          checkpoint: 'pricing_review',
+          approver_role: 'owner',
+          decider: 'role',
+        },
       ],
     },
   ],
@@ -427,34 +626,39 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
   depths: { quick: 0.5, standard: 1, deep: 2 },
   approval_threshold_usd: 50,
   overrun_factor: 1.5,
-  runtime: "fake",
-  runtime_notes: ["Test mode: each step finishes at once with a sample draft."],
+  runtime: 'fake',
+  runtime_notes: ['Test mode: each step finishes at once with a sample draft.'],
 };
 
 const THRESHOLD = 50;
 const KIND_NAME: Record<Kind, string> = {
-  prd: "PRD",
-  roadmap: "roadmap",
-  spec: "engineering spec",
-  vision: "vision",
-  strategy: "product strategy",
-  update: "update",
-  pricing: "pricing memo",
+  prd: 'PRD',
+  roadmap: 'roadmap',
+  spec: 'engineering spec',
+  vision: 'vision',
+  strategy: 'product strategy',
+  update: 'update',
+  pricing: 'pricing memo',
 };
 // O4: a roadmap starts from Now / Next / Later on the roadmap board unless a run names others.
-const ROADMAP_DEFAULTS = { template: "now-next-later", theme: "roadmap-board" };
+const ROADMAP_DEFAULTS = { template: 'now-next-later', theme: 'roadmap-board' };
 // C4: a Baseline to PRD run with no template gets the built-in goal-traced PRD.
-const PRD_DEFAULT_TEMPLATE = "oracle-default";
+const PRD_DEFAULT_TEMPLATE = 'oracle-default';
 const FACTOR = 1.5;
-const FINAL = ["succeeded", "failed", "cancelled"];
+const FINAL = ['succeeded', 'failed', 'cancelled'];
 // B1: a Build the baseline run in these states is under way; another is refused.
-export const BUILD_UNDER_WAY: RunOut["status"][] = ["awaiting_approval", "running", "awaiting_checkpoint", "paused_overrun"];
+export const BUILD_UNDER_WAY: RunOut['status'][] = [
+  'awaiting_approval',
+  'running',
+  'awaiting_checkpoint',
+  'paused_overrun',
+];
 
 /** As the API: one baseline build at a time (409 naming the one under way). */
 function buildUnderWay(ctx: RunsContext, flowKey: string): Response | null {
-  if (flowKey !== "baseline") return null;
+  if (flowKey !== 'baseline') return null;
   const first = ctx.db.runs
-    .filter((r) => r.flow === "baseline" && BUILD_UNDER_WAY.includes(r.status))
+    .filter((r) => r.flow === 'baseline' && BUILD_UNDER_WAY.includes(r.status))
     .sort((a, b) => a.created_at.localeCompare(b.created_at))[0];
   return first ? fail(409, `A Ground Truth build is already under way (run ${first.id})`) : null;
 }
@@ -471,24 +675,28 @@ const monthDay = (iso: string) => companyDayInWords(iso);
  * The "new-run-prd" scenario keeps Baseline to PRD in the New run dialog, as a catalog from
  * before C4 did: the dialog's PRD document field (#257) stays reachable for its spec.
  */
-export const NEW_RUN_PRD_SCENARIO = "new-run-prd";
+export const NEW_RUN_PRD_SCENARIO = 'new-run-prd';
 
 /**
  * QD2: the "roadmap-over-limit" scenario prices a roadmap run from a track at four times the
  * usual ($58.00, over the $50 approval limit), so Draft roadmap's dialog shows its owner step.
  */
-export const ROADMAP_OVER_LIMIT_SCENARIO = "roadmap-over-limit";
+export const ROADMAP_OVER_LIMIT_SCENARIO = 'roadmap-over-limit';
 const overLimit = (r: { segments: { name: string }[] }) =>
-  typeof localStorage !== "undefined" &&
-  localStorage.getItem("po-mock-scenario") === ROADMAP_OVER_LIMIT_SCENARIO &&
-  r.segments.some((s) => s.name === "roadmap_items");
+  typeof localStorage !== 'undefined' &&
+  localStorage.getItem('po-mock-scenario') === ROADMAP_OVER_LIMIT_SCENARIO &&
+  r.segments.some((s) => s.name === 'roadmap_items');
 
-function flowCatalog(): Schemas["FlowCatalog"] {
-  const inDialog = typeof localStorage !== "undefined" && localStorage.getItem("po-mock-scenario") === NEW_RUN_PRD_SCENARIO;
+function flowCatalog(): Schemas['FlowCatalog'] {
+  const inDialog =
+    typeof localStorage !== 'undefined' &&
+    localStorage.getItem('po-mock-scenario') === NEW_RUN_PRD_SCENARIO;
   if (!inDialog) return FLOW_CATALOG;
   return {
     ...FLOW_CATALOG,
-    flows: FLOW_CATALOG.flows.map((f) => (f.key === "baseline_to_prd" ? { ...f, in_new_run_dialog: true, starts_from: null } : f)),
+    flows: FLOW_CATALOG.flows.map((f) =>
+      f.key === 'baseline_to_prd' ? { ...f, in_new_run_dialog: true, starts_from: null } : f,
+    ),
   };
 }
 
@@ -502,7 +710,10 @@ function segEstimate(roles: string[], depth: string): number {
 }
 
 function json(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  });
 }
 const fail = (status: number, detail: string) => json(status, { detail });
 
@@ -514,13 +725,25 @@ function docTitle(ctx: RunsContext, r: { id: string; document_id?: string | null
 }
 
 /** A proposal's run (the API's ProposalRun), with the title of the document its source codes come from. */
-export function proposalRun(ctx: Pick<RunsContext, "documents">, r: RunOut): Schemas["ProposalRun"] {
+export function proposalRun(
+  ctx: Pick<RunsContext, 'documents'>,
+  r: RunOut,
+): Schemas['ProposalRun'] {
   // codes-and-chips: the source version's document, else the run's own document, else none.
-  const own = r.document_id ? (ctx.documents.find((d) => d.id === r.document_id)?.title ?? null) : null;
-  return { id: r.id, flow: r.flow, flow_title: r.flow_title, status: r.status, created_at: r.created_at, source_title: r.source?.title ?? own };
+  const own = r.document_id
+    ? (ctx.documents.find((d) => d.id === r.document_id)?.title ?? null)
+    : null;
+  return {
+    id: r.id,
+    flow: r.flow,
+    flow_title: r.flow_title,
+    status: r.status,
+    created_at: r.created_at,
+    source_title: r.source?.title ?? own,
+  };
 }
 
-function summary(r: RunOut): Schemas["RunSummary"] {
+function summary(r: RunOut): Schemas['RunSummary'] {
   return {
     id: r.id,
     flow: r.flow,
@@ -541,7 +764,7 @@ function summary(r: RunOut): Schemas["RunSummary"] {
     finished_at: r.finished_at,
     waiting_on: r.waiting_on,
     review_link: r.review_link ?? null,
-    error: readableRefusal(r.error, r.status === "failed"),
+    error: readableRefusal(r.error, r.status === 'failed'),
     stuck: r.stuck,
     queue_wait: r.queue_wait ?? null,
     can_retry: r.can_retry,
@@ -561,13 +784,15 @@ function summary(r: RunOut): Schemas["RunSummary"] {
 }
 
 /** C4: `reuse_baseline` (B1 "Reuse base"): true asks to reuse; stored as the review it reuses. */
-type Reuse = Schemas["ReusedBaseline"];
-type KnobsIn = Partial<Omit<Schemas["KnobsIn"], "reuse_baseline">> & { reuse_baseline?: boolean | Reuse | null };
-type Knobs = RunOut["knobs"];
+type Reuse = Schemas['ReusedBaseline'];
+type KnobsIn = Partial<Omit<Schemas['KnobsIn'], 'reuse_baseline'>> & {
+  reuse_baseline?: boolean | Reuse | null;
+};
+type Knobs = RunOut['knobs'];
 
 /** The review a Baseline to PRD run reuses, or false (C4). */
-export function reusedReview(r: Pick<RunOut, "flow" | "knobs">): Reuse | false {
-  if (r.flow !== "baseline_to_prd") return false;
+export function reusedReview(r: Pick<RunOut, 'flow' | 'knobs'>): Reuse | false {
+  if (r.flow !== 'baseline_to_prd') return false;
   return r.knobs.reuse_baseline ?? false;
 }
 
@@ -575,19 +800,23 @@ export function reusedReview(r: Pick<RunOut, "flow" | "knobs">): Reuse | false {
 function notReusable(r: RunOut): Response | null {
   if (!reusedReview(r)) return null;
   const status = baselineReviewStatus();
-  return status.reusable ? null : json(409, { detail: { code: "baseline_not_reusable", reason: status.reason } });
+  return status.reusable
+    ? null
+    : json(409, { detail: { code: 'baseline_not_reusable', reason: status.reason } });
 }
 
-function reuseKnob(raw: KnobsIn["reuse_baseline"]): Reuse | null {
+function reuseKnob(raw: KnobsIn['reuse_baseline']): Reuse | null {
   if (!raw) return null;
-  if (typeof raw === "object") return raw;
+  if (typeof raw === 'object') return raw;
   const status = baselineReviewStatus();
-  return status.checkpoint_id && status.last_approved_at ? { checkpoint_id: status.checkpoint_id, approved_at: status.last_approved_at } : null;
+  return status.checkpoint_id && status.last_approved_at
+    ? { checkpoint_id: status.checkpoint_id, approved_at: status.last_approved_at }
+    : null;
 }
 
-function resolveKnobs(flowKey: string, raw: KnobsIn | undefined): RunOut["knobs"] | string {
+function resolveKnobs(flowKey: string, raw: KnobsIn | undefined): RunOut['knobs'] | string {
   const flow = flowOf(flowKey);
-  const depth = raw?.depth ?? "standard";
+  const depth = raw?.depth ?? 'standard';
   const roles: Record<string, string[]> = {};
   for (const s of flow.segments) {
     const chosen = raw?.roles?.[s.name] ?? s.roles;
@@ -595,20 +824,34 @@ function resolveKnobs(flowKey: string, raw: KnobsIn | undefined): RunOut["knobs"
     roles[s.name] = [...chosen];
   }
   const checkpoints: Record<string, boolean> = {};
-  for (const s of flow.segments) if (s.checkpoint) checkpoints[s.checkpoint] = raw?.checkpoints?.[s.checkpoint] ?? true;
-  const knobs: Knobs = { depth, roles, checkpoints, budget_usd: raw?.budget_usd ?? null, goals: [], features: [] };
-  if (flowKey === "baseline_to_prd" && raw?.reuse_baseline) knobs.reuse_baseline = reuseKnob(raw.reuse_baseline);
-  if (flowKey === "prd_to_roadmap") knobs.reuse_draft_items = raw?.reuse_draft_items !== false;
+  for (const s of flow.segments)
+    if (s.checkpoint) checkpoints[s.checkpoint] = raw?.checkpoints?.[s.checkpoint] ?? true;
+  const knobs: Knobs = {
+    depth,
+    roles,
+    checkpoints,
+    budget_usd: raw?.budget_usd ?? null,
+    goals: [],
+    features: [],
+  };
+  if (flowKey === 'baseline_to_prd' && raw?.reuse_baseline)
+    knobs.reuse_baseline = reuseKnob(raw.reuse_baseline);
+  if (flowKey === 'prd_to_roadmap') knobs.reuse_draft_items = raw?.reuse_draft_items !== false;
   return knobs;
 }
 
 /** #260, as the API: the confirmed goals (ids or keys) a Baseline to PRD run names; null: none named. */
-function targetGoals(ctx: Omit<RunsContext, "db">, flowKey: string, raw: string[] | null | undefined): Schemas["TargetGoal"][] | string | null {
+function targetGoals(
+  ctx: Omit<RunsContext, 'db'>,
+  flowKey: string,
+  raw: string[] | null | undefined,
+): Schemas['TargetGoal'][] | string | null {
   if (raw == null) return null;
   if (!raw.length) return [];
-  if (flowKey !== "baseline_to_prd") return "only a Ground Truth to PRD run names the goals it serves";
+  if (flowKey !== 'baseline_to_prd')
+    return 'only a Ground Truth to PRD run names the goals it serves';
   const confirmed = ctx.confirmedGoals?.() ?? [];
-  const out: Schemas["TargetGoal"][] = [];
+  const out: Schemas['TargetGoal'][] = [];
   for (const ref of raw) {
     const goal = confirmed.find((g) => g.id === ref || g.key === ref);
     if (!goal) return `not a confirmed goal: ${ref}`;
@@ -618,12 +861,17 @@ function targetGoals(ctx: Omit<RunsContext, "db">, flowKey: string, raw: string[
 }
 
 /** "Add it to a PRD", as the API: the Ground Truth features (ids or keys) a Baseline to PRD run adds; null: none named. */
-function targetFeatures(ctx: Omit<RunsContext, "db">, flowKey: string, raw: string[] | null | undefined): Schemas["TargetFeature"][] | string | null {
+function targetFeatures(
+  ctx: Omit<RunsContext, 'db'>,
+  flowKey: string,
+  raw: string[] | null | undefined,
+): Schemas['TargetFeature'][] | string | null {
   if (raw == null) return null;
   if (!raw.length) return [];
-  if (flowKey !== "baseline_to_prd") return "only a Ground Truth to PRD run adds features to its PRD";
+  if (flowKey !== 'baseline_to_prd')
+    return 'only a Ground Truth to PRD run adds features to its PRD';
   const known = ctx.groundTruthFeatures?.() ?? [];
-  const out: Schemas["TargetFeature"][] = [];
+  const out: Schemas['TargetFeature'][] = [];
   for (const ref of raw) {
     const feature = known.find((f) => f.id === ref || f.key === ref);
     if (!feature) return `not a Ground Truth feature: ${ref}`;
@@ -633,30 +881,34 @@ function targetFeatures(ctx: Omit<RunsContext, "db">, flowKey: string, raw: stri
 }
 
 /** As the API: a failed run whose spend is over its ceiling stopped at its budget; it is not retried. */
-const BUDGET_STOPPED = "This run stopped at its budget; start it again with a new estimate";
+const BUDGET_STOPPED = 'This run stopped at its budget; start it again with a new estimate';
 function budgetStopped(r: RunOut): boolean {
-  return r.status === "failed" && r.overrun_ceiling_usd != null && (r.spent_usd ?? 0) > r.overrun_ceiling_usd;
+  return (
+    r.status === 'failed' &&
+    r.overrun_ceiling_usd != null &&
+    (r.spent_usd ?? 0) > r.overrun_ceiling_usd
+  );
 }
 
 /** The segment a failed run stopped at (its last failed one), as the API's retry_segment reads it. */
 function retrySegmentOf(r: RunOut): SegmentOut | undefined {
-  if (r.status !== "failed" || budgetStopped(r)) return undefined;
-  return [...r.segments].sort((a, b) => b.seq - a.seq).find((s) => s.status === "failed");
+  if (r.status !== 'failed' || budgetStopped(r)) return undefined;
+  return [...r.segments].sort((a, b) => b.seq - a.seq).find((s) => s.status === 'failed');
 }
 
 /** As the API: an owner retries any run, an approver only a run they created. */
 function mayRetrySegment(ctx: RunsContext, r: RunOut): boolean {
-  if (ctx.userRole == null || ctx.userRole === "owner") return true;
-  return ctx.userRole === "approver" && r.created_by === ctx.userId;
+  if (ctx.userRole == null || ctx.userRole === 'owner') return true;
+  return ctx.userRole === 'approver' && r.created_by === ctx.userId;
 }
 
-function segmentsFor(flowKey: string, knobs: RunOut["knobs"], uuid: () => string): SegmentOut[] {
+function segmentsFor(flowKey: string, knobs: RunOut['knobs'], uuid: () => string): SegmentOut[] {
   return flowOf(flowKey).segments.map((s, i) => ({
     id: uuid(),
     seq: i + 1,
     name: s.name,
     title: s.title,
-    status: "pending",
+    status: 'pending',
     roles: knobs.roles[s.name],
     scopes: s.scopes,
     checkpoint: s.checkpoint,
@@ -684,13 +936,19 @@ function segmentsFor(flowKey: string, knobs: RunOut["knobs"], uuid: () => string
 }
 
 /** Segments done of the total and what the run does now, as GET /v1/runs serves them. */
-function progressOf(r: RunOut): Schemas["RunProgress"] {
-  const now = r.segments.find((s) => s.status === "running") ?? r.segments.find((s) => s.status === "pending");
-  return { done: r.segments.filter((s) => s.status === "succeeded").length, total: r.segments.length, now: now?.title ?? null };
+function progressOf(r: RunOut): Schemas['RunProgress'] {
+  const now =
+    r.segments.find((s) => s.status === 'running') ??
+    r.segments.find((s) => s.status === 'pending');
+  return {
+    done: r.segments.filter((s) => s.status === 'succeeded').length,
+    total: r.segments.length,
+    now: now?.title ?? null,
+  };
 }
 
 /** Whose answer the revision applies when Oracle sent a refused draft back itself (the API's SENT_BACK_BY). */
-const SENT_BACK_BY = "Oracle";
+const SENT_BACK_BY = 'Oracle';
 
 /**
  * As the API: Oracle sent the segment's refused draft back to the writer itself (its own
@@ -700,7 +958,12 @@ const SENT_BACK_BY = "Oracle";
  */
 function sentBack(r: RunOut, s: SegmentOut): boolean {
   const a = s.attempts[s.attempts.length - 1];
-  return !FINAL.includes(r.status) && !!s.draft_import?.error && a?.note_by === SENT_BACK_BY && a.state === "running";
+  return (
+    !FINAL.includes(r.status) &&
+    !!s.draft_import?.error &&
+    a?.note_by === SENT_BACK_BY &&
+    a.state === 'running'
+  );
 }
 
 /**
@@ -711,66 +974,86 @@ function sentBack(r: RunOut, s: SegmentOut): boolean {
 function refused(r: RunOut, revising: boolean): string | null {
   // A run that succeeded past the refusal reads neither (owner, 2026-10-25): if it finished
   // with no document, its owners' Inbox says so (noDocument).
-  if (r.status === "succeeded") return null;
-  const imp = r.segments.find((s) => s.draft_import?.error && sentBack(r, s) === revising)?.draft_import;
+  if (r.status === 'succeeded') return null;
+  const imp = r.segments.find(
+    (s) => s.draft_import?.error && sentBack(r, s) === revising,
+  )?.draft_import;
   return imp ? (imp.summary ?? imp.error ?? null) : null;
 }
 
 /** The open review of a segment, if the run waits at it. */
 function reviewOf(r: RunOut, s: SegmentOut): CheckpointOut | undefined {
-  if (r.status !== "awaiting_checkpoint") return undefined;
-  return r.checkpoints.find((c) => c.status === "pending" && c.segment_seq === s.seq);
+  if (r.status !== 'awaiting_checkpoint') return undefined;
+  return r.checkpoints.find((c) => c.status === 'pending' && c.segment_seq === s.seq);
 }
 
 /** As the API: approving is refused while the draft its segment left is not imported. */
-const NOT_IMPORTED = "the draft was not imported: retry import, or send it back to the writer";
+const NOT_IMPORTED = 'the draft was not imported: retry import, or send it back to the writer';
 /** As the API's not_imported (Nov 3): the refusal names what is wrong in plain words, the summary's causes. */
 function notImported(summary: string | null | undefined): string {
-  const causes = (summary ?? "").match(/^Oracle (?:refused|could not import) [^:]+: (.+)\.$/)?.[1];
-  return causes ? `the draft was not imported: ${causes.split(". ").join("; ")}; retry import, or send it back to the writer` : NOT_IMPORTED;
+  const causes = (summary ?? '').match(/^Oracle (?:refused|could not import) [^:]+: (.+)\.$/)?.[1];
+  return causes
+    ? `the draft was not imported: ${causes.split('. ').join('; ')}; retry import, or send it back to the writer`
+    : NOT_IMPORTED;
 }
 /** As the API: blocking problems are the approve gate's (D3, gateOf), the feature set's and the priority order's included. */
 function cannotApprove(c: CheckpointOut): string | null {
-  if (c.status !== "pending") return null;
-  const payload = c.payload as { import?: { error?: string | null; summary?: string | null } } | undefined;
+  if (c.status !== 'pending') return null;
+  const payload = c.payload as
+    { import?: { error?: string | null; summary?: string | null } } | undefined;
   return payload?.import?.error ? notImported(payload.import.summary) : null;
 }
 
 /** As oracle.runs.gate (D3): a date reason is never waived; file-level problems never are. */
-const DATE_CODES = ["unverified_date", "date_outside_now", "undated_source", "invalid_date"];
-const DATE_NOT_WAIVED = "a date is never waived: remove it or add a date source";
-const FILE_NOT_WAIVED = "a problem of the whole file is never waived: send it back to the agents";
+const DATE_CODES = ['unverified_date', 'date_outside_now', 'undated_source', 'invalid_date'];
+const DATE_NOT_WAIVED = 'a date is never waived: remove it or add a date source';
+const FILE_NOT_WAIVED = 'a problem of the whole file is never waived: send it back to the agents';
 /** As oracle.runs.gate.message. */
-const gateMessage = (n: number) => `${n} blocking problem${n === 1 ? "" : "s"} left: fix or waive them, or send back to the agents`;
+const gateMessage = (n: number) =>
+  `${n} blocking problem${n === 1 ? '' : 's'} left: fix or waive them, or send back to the agents`;
 /** As service.CONSOLE_BLOCKED: a console approval held while blocking problems are open. */
-export const CONSOLE_HELD = "Blocking problems are open: fix or waive them, then confirm";
+export const CONSOLE_HELD = 'Blocking problems are open: fix or waive them, then confirm';
 
 /** As oracle.runs.gate (C6): a key the baseline does not know is fixed, never waived. */
-const UNKNOWN_CODES = ["unknown_feature", "unknown_requirement", "unknown_goal", "unknown_dependency"];
-const UNKNOWN_NOT_WAIVED = "This cannot be waived; leave it out or send it back";
+const UNKNOWN_CODES = [
+  'unknown_feature',
+  'unknown_requirement',
+  'unknown_goal',
+  'unknown_dependency',
+];
+const UNKNOWN_NOT_WAIVED = 'This cannot be waived; leave it out or send it back';
 /** As oracle.runs.feature_set.FILE_PROBLEMS: problems of the file itself. */
-const FEATURE_SET_FILE_PROBLEMS = ["unreadable_yaml", "missing_file", "wrong_version", "wrong_document"];
+const FEATURE_SET_FILE_PROBLEMS = [
+  'unreadable_yaml',
+  'missing_file',
+  'wrong_version',
+  'wrong_document',
+];
 
 /** As oracle.runs.gate.waivable: what each kind's spec lets a waiver answer (C8: nothing). */
 function waivable(kind: string, code: string): boolean {
-  if (kind === "baseline_confirm") return code === "goal_undecided";
-  if (kind === "roadmap_items") return !DATE_CODES.includes(code);
-  if (kind === "feature_set") return !UNKNOWN_CODES.includes(code) && !FEATURE_SET_FILE_PROBLEMS.includes(code) && code !== "no_features";
+  if (kind === 'baseline_confirm') return code === 'goal_undecided';
+  if (kind === 'roadmap_items') return !DATE_CODES.includes(code);
+  if (kind === 'feature_set')
+    return (
+      !UNKNOWN_CODES.includes(code) &&
+      !FEATURE_SET_FILE_PROBLEMS.includes(code) &&
+      code !== 'no_features'
+    );
   return false;
 }
 
-
 // As oracle.runs.gate._LETTERS: a key's letters spelt out (ASCII and the Latin letters), never \w,
 // so a message splits here as the API splits it.
-const LETTERS = "A-Za-z0-9_\\u00c0-\\u00d6\\u00d8-\\u00f6\\u00f8-\\u024f";
+const LETTERS = 'A-Za-z0-9_\\u00c0-\\u00d6\\u00d8-\\u00f6\\u00f8-\\u024f';
 const GATE_TOKEN = new RegExp(
   `(?<![${LETTERS}-])(?:(requirement key|requirement|goal) )?(?<![${LETTERS}-])(#[0-9]+|[${LETTERS}][${LETTERS}.]*(?:-[${LETTERS}.]+)*)(?![${LETTERS}-])`,
-  "g",
+  'g',
 );
 // As oracle.runs.gate._CODE: a key that is itself a code ("G-B"), shown beside its name.
 const GATE_CODE = /^(?:[A-Z][A-Z0-9]*(?:[-.][A-Z0-9]+)+[a-j]?|[A-Z]{1,4}\d+)$/;
 const keyWords = (key: string) => {
-  const words = key.replace(/[-_]+/g, " ").trim();
+  const words = key.replace(/[-_]+/g, ' ').trim();
   return words.charAt(0).toUpperCase() + words.slice(1);
 };
 
@@ -788,15 +1071,19 @@ function gateLabel(
   goals: Record<string, string> = {},
 ): string {
   if (!message) return message;
-  const features = new Set([...Object.keys(titles), ...keys, ...[...message.matchAll(/\bdepends on (\S+?)(?=,|\s|$)/g)].map((m) => m[1])]);
+  const features = new Set([
+    ...Object.keys(titles),
+    ...keys,
+    ...[...message.matchAll(/\bdepends on (\S+?)(?=,|\s|$)/g)].map((m) => m[1]),
+  ]);
   const text = message.replace(GATE_TOKEN, (whole, kind: string | undefined, t: string) => {
-    const lead = kind ? `${kind} ` : "";
-    if (t.startsWith("#")) return lead + t.slice(1);
-    const own = kind ? (kind === "goal" ? goals : requirements) : {};
+    const lead = kind ? `${kind} ` : '';
+    if (t.startsWith('#')) return lead + t.slice(1);
+    const own = kind ? (kind === 'goal' ? goals : requirements) : {};
     if (Object.hasOwn(own, t)) {
       const name = own[t] || keyWords(t);
       const shown = GATE_CODE.test(t) && name !== t ? `${name} (${t})` : name;
-      return lead + (kind === "goal" ? shown : `"${shown}"`);
+      return lead + (kind === 'goal' ? shown : `"${shown}"`);
     }
     if (features.has(t) && /^[\p{Ll}\p{Nd}]/u.test(t)) return lead + (titles[t] || keyWords(t));
     return whole;
@@ -805,20 +1092,34 @@ function gateLabel(
 }
 
 /** As oracle.runs.gate.BLOCKING_SOURCES: each kind's stored blocking reasons and file-level problems. */
-export type GateReason = Pick<ItemReason, "item" | "item_title" | "code" | "severity" | "label"> & { fixes?: ItemReason["fixes"]; ref?: string };
+export type GateReason = Pick<ItemReason, 'item' | 'item_title' | 'code' | 'severity' | 'label'> & {
+  fixes?: ItemReason['fixes'];
+  ref?: string;
+};
 
-function blockingOf(cp: CheckpointOut, live?: GateReason[]): { reasons: GateReason[]; files: number } | null {
+function blockingOf(
+  cp: CheckpointOut,
+  live?: GateReason[],
+): { reasons: GateReason[]; files: number } | null {
   // B2: Confirm the baseline's reasons are read live (a goal confirmed anywhere clears its own).
-  if (cp.kind === "baseline_confirm") return live ? { reasons: live, files: 0 } : null;
-  if (cp.kind === "roadmap_items") {
+  if (cp.kind === 'baseline_confirm') return live ? { reasons: live, files: 0 } : null;
+  if (cp.kind === 'roadmap_items') {
     const check = (cp.payload?.items_check ?? null) as ItemsCheck | null;
     return { reasons: check?.reasons ?? [], files: check?.file_problems ?? 0 };
   }
-  const payload = cp.payload as { feature_set_check?: FeatureSetCheck | null; priority_check?: PriorityCheck | null } | undefined;
-  const check = cp.kind === "feature_set" ? payload?.feature_set_check : cp.kind === "priority_order" ? payload?.priority_check : undefined;
+  const payload = cp.payload as
+    | { feature_set_check?: FeatureSetCheck | null; priority_check?: PriorityCheck | null }
+    | undefined;
+  const check =
+    cp.kind === 'feature_set'
+      ? payload?.feature_set_check
+      : cp.kind === 'priority_order'
+        ? payload?.priority_check
+        : undefined;
   if (check === undefined) return null;
   const problems = (check?.problems ?? []).filter((p) => p.blocking !== false);
-  const fileLevel = (p: (typeof problems)[number]) => !p.feature || (cp.kind === "feature_set" && FEATURE_SET_FILE_PROBLEMS.includes(p.code));
+  const fileLevel = (p: (typeof problems)[number]) =>
+    !p.feature || (cp.kind === 'feature_set' && FEATURE_SET_FILE_PROBLEMS.includes(p.code));
   // As oracle.runs.gate._problems: every feature of the file has a title or a problem of its own.
   const keys = (check?.problems ?? []).flatMap((p) => (p.feature ? [p.feature] : []));
   const reasons = problems
@@ -832,7 +1133,7 @@ function blockingOf(cp: CheckpointOut, live?: GateReason[]): { reasons: GateReas
         item_title: titles[p.feature!] ?? null,
         code: p.code,
         ref: problemRef(p),
-        severity: "blocking",
+        severity: 'blocking',
         label: gateLabel(p.message, titles, keys, fs?.requirement_names, fs?.goal_names),
       };
     });
@@ -844,12 +1145,18 @@ function blockingOf(cp: CheckpointOut, live?: GateReason[]): { reasons: GateReas
  * waives. A waiver names them, never covers them by naming none, and is its own action (field
  * "owner"), so an approver's waiver on the same item neither replaces it nor is replaced by it.
  */
-const OWNER_WAIVES = ["stopped_but_planned"];
+const OWNER_WAIVES = ['stopped_but_planned'];
 
-type Answering = { item_key?: string; kind: string; field?: string | null; value?: unknown; answers?: string[] | null };
+type Answering = {
+  item_key?: string;
+  kind: string;
+  field?: string | null;
+  value?: unknown;
+  answers?: string[] | null;
+};
 
 type Answered = { item?: string; code?: string; data?: unknown; fixes?: ReasonFix[] };
-const HORIZON_ORDER = ["now", "next", "later"];
+const HORIZON_ORDER = ['now', 'next', 'later'];
 
 /**
  * As oracle.runs.reasons.is_its_fix: an edit naming a reason's code answers it only when it is
@@ -859,28 +1166,51 @@ const HORIZON_ORDER = ["now", "next", "later"];
  * move to the dependency's horizon or after it.
  */
 const isItsFix = (a: Answering, x?: Answered) => {
-  if (a.kind !== "edit" || !x) return true;
+  if (a.kind !== 'edit' || !x) return true;
   const data = (x.data ?? {}) as { dependency?: unknown; dependency_horizon?: unknown };
-  if (a.item_key === x.item && typeof data.dependency === "string") {
+  if (a.item_key === x.item && typeof data.dependency === 'string') {
     const removed = (a.value as { remove?: unknown } | null | undefined)?.remove;
-    if (a.field === "depends_on" && Array.isArray(removed) && removed.includes(data.dependency)) return true;
+    if (a.field === 'depends_on' && Array.isArray(removed) && removed.includes(data.dependency))
+      return true;
     const at = (h: unknown) => HORIZON_ORDER.indexOf(String(h));
-    if (x.code === "horizon_breaks_dependency" && a.field === "horizon" && at(a.value) >= 0 && at(data.dependency_horizon) >= 0) return at(a.value) >= at(data.dependency_horizon);
+    if (
+      x.code === 'horizon_breaks_dependency' &&
+      a.field === 'horizon' &&
+      at(a.value) >= 0 &&
+      at(data.dependency_horizon) >= 0
+    )
+      return at(a.value) >= at(data.dependency_horizon);
   }
-  const mine = (x.fixes ?? []).filter((f) => f.action.item === a.item_key && f.action.kind === a.kind && (f.action.field ?? null) === (a.field ?? null));
-  return !mine.length || mine.some((f) => JSON.stringify(f.action.value ?? null) === JSON.stringify(a.value ?? null));
+  const mine = (x.fixes ?? []).filter(
+    (f) =>
+      f.action.item === a.item_key &&
+      f.action.kind === a.kind &&
+      (f.action.field ?? null) === (a.field ?? null),
+  );
+  return (
+    !mine.length ||
+    mine.some((f) => JSON.stringify(f.action.value ?? null) === JSON.stringify(a.value ?? null))
+  );
 };
 
 /** As the API: an action answers a reason it names, every reason of its item when it names none, but a waiver naming none never an owner's. */
 const answersCode = (a: Answering, code: string, x?: Answered) =>
-  a.kind !== "question" && (a.answers?.length ? a.answers.includes(code) && isItsFix(a, x) : a.kind !== "waive" || !OWNER_WAIVES.includes(code));
+  a.kind !== 'question' &&
+  (a.answers?.length
+    ? a.answers.includes(code) && isItsFix(a, x)
+    : a.kind !== 'waive' || !OWNER_WAIVES.includes(code));
 
 /** As the API: waiving another reason of the item adds it to the staged waiver before (naming none covers them all). */
-function mergedAnswers(a: { kind: string; answers?: string[] | null }, existing?: { state: string; answers?: string[] | null }): string[] {
+function mergedAnswers(
+  a: { kind: string; answers?: string[] | null },
+  existing?: { state: string; answers?: string[] | null },
+): string[] {
   const named = a.answers ?? [];
-  if (a.kind !== "waive" || existing?.state !== "staged") return named;
+  if (a.kind !== 'waive' || existing?.state !== 'staged') return named;
   const before = existing.answers ?? [];
-  return before.length && named.length ? [...before, ...named.filter((c) => !before.includes(c))] : [];
+  return before.length && named.length
+    ? [...before, ...named.filter((c) => !before.includes(c))]
+    : [];
 }
 
 /**
@@ -890,35 +1220,84 @@ function mergedAnswers(a: { kind: string; answers?: string[] | null }, existing?
  * A console approval applies no edits, so its gate is read without them. B2: `live`, the
  * reasons read live (Confirm the baseline's undecided goals).
  */
-function gateOf(cp: CheckpointOut, actions: DraftActionRow[], edits = true, live?: GateReason[]): Schemas["Gate"] | null {
+function gateOf(
+  cp: CheckpointOut,
+  actions: DraftActionRow[],
+  edits = true,
+  live?: GateReason[],
+): Schemas['Gate'] | null {
   const blocking =
-    cp.status !== "pending" ? null : cp.kind === "eng_review" ? engReasons(cp, actions) : cp.kind === "eng_dates" ? datesReasons(cp, actions) : blockingOf(cp, live);
+    cp.status !== 'pending'
+      ? null
+      : cp.kind === 'eng_review'
+        ? engReasons(cp, actions)
+        : cp.kind === 'eng_dates'
+          ? datesReasons(cp, actions)
+          : blockingOf(cp, live);
   if (!blocking) return null;
   const waives = (x: GateReason) =>
     waivable(cp.kind, x.code) &&
-    actions.some((a) => a.state === "staged" && a.kind === "waive" && a.item_key === x.item && (!a.answers?.length || a.answers.includes(x.code) || (!!x.ref && a.answers.includes(x.ref))));
+    actions.some(
+      (a) =>
+        a.state === 'staged' &&
+        a.kind === 'waive' &&
+        a.item_key === x.item &&
+        (!a.answers?.length ||
+          a.answers.includes(x.code) ||
+          (!!x.ref && a.answers.includes(x.ref))),
+    );
   const applied = edits ? editsOf(cp, actions) : [];
-  const fixed = (x: GateReason) => applied.some((a) => (a.kind === "drop" && a.item_key === x.item) || (x.fixes ?? []).some((f) => isFix(a, f)));
+  const fixed = (x: GateReason) =>
+    applied.some(
+      (a) =>
+        (a.kind === 'drop' && a.item_key === x.item) || (x.fixes ?? []).some((f) => isFix(a, f)),
+    );
   const left = blocking.reasons
-    .filter((x) => x.severity === "blocking" && !waives(x) && !fixed(x))
-    .map((x) => ({ item: x.item, item_title: x.item_title ?? null, code: x.code, ref: x.ref ?? x.code, label: x.label, waivable: waivable(cp.kind, x.code) }));
+    .filter((x) => x.severity === 'blocking' && !waives(x) && !fixed(x))
+    .map((x) => ({
+      item: x.item,
+      item_title: x.item_title ?? null,
+      code: x.code,
+      ref: x.ref ?? x.code,
+      label: x.label,
+      waivable: waivable(cp.kind, x.code),
+    }));
   const files = blocking.files;
-  return { open: left.length === 0 && files === 0, blocking_open: left.length, file_problems: files, left };
+  return {
+    open: left.length === 0 && files === 0,
+    blocking_open: left.length,
+    file_problems: files,
+    left,
+  };
 }
 
 /** As oracle.priorities.service (the compare read): not imported, else the closed gate's message. */
 export function cannotApproveNow(db: RunsDb | undefined, cp: CheckpointOut): string | null {
   const gate = gateOf(cp, db?.drafts?.[cp.id]?.actions ?? []);
-  return cannotApprove(cp) ?? (gate && !gate.open ? gateMessage(gate.blocking_open + gate.file_problems) : null);
+  return (
+    cannotApprove(cp) ??
+    (gate && !gate.open ? gateMessage(gate.blocking_open + gate.file_problems) : null)
+  );
 }
 
 /** B2: the goals from the run nobody decided, at Confirm the baseline (the gate's live reasons). */
-function liveOf(ctx: RunsContext, cp: CheckpointOut, actions: DraftActionRow[]): GateReason[] | undefined {
-  return cp.kind === "baseline_confirm" ? ctx.baselineReview?.(cp.run_id, actions).goals : undefined;
+function liveOf(
+  ctx: RunsContext,
+  cp: CheckpointOut,
+  actions: DraftActionRow[],
+): GateReason[] | undefined {
+  return cp.kind === 'baseline_confirm'
+    ? ctx.baselineReview?.(cp.run_id, actions).goals
+    : undefined;
 }
 
 /** The gate of `cp` now, with its live reasons. */
-function gateNow(ctx: RunsContext, cp: CheckpointOut, actions: DraftActionRow[], edits = true): Schemas["Gate"] | null {
+function gateNow(
+  ctx: RunsContext,
+  cp: CheckpointOut,
+  actions: DraftActionRow[],
+  edits = true,
+): Schemas['Gate'] | null {
   // As the API's _live_reasons: an order's stale-goal problem is read as of now (gone once its goal is back).
   recheckOrderGoals(ctx, cp, false);
   return gateOf(cp, actions, edits, liveOf(ctx, cp, actions));
@@ -928,16 +1307,21 @@ function gateNow(ctx: RunsContext, cp: CheckpointOut, actions: DraftActionRow[],
  * B2 (3.1 (7)): a Confirm the baseline send-back's note: the staged look-again actions, each
  * with its item and note, then the shared draft's note as "General".
  */
-function lookAgainNote(ctx: RunsContext, cp: CheckpointOut, staged: DraftActionRow[], note: string | null): string | null {
-  const looks = staged.filter((a) => a.kind === "look_again");
-  if (cp.kind !== "baseline_confirm" || !looks.length) return note;
+function lookAgainNote(
+  ctx: RunsContext,
+  cp: CheckpointOut,
+  staged: DraftActionRow[],
+  note: string | null,
+): string | null {
+  const looks = staged.filter((a) => a.kind === 'look_again');
+  if (cp.kind !== 'baseline_confirm' || !looks.length) return note;
   const titles = ctx.baselineReview?.(cp.run_id, staged).titles ?? {};
   const lines = looks.map((a) => {
     const [type, key] = a.item_key.split(/:(.*)/);
-    const said = (a.value as { note?: string } | null)?.note ?? a.note ?? "";
-    return `- ${type} ${key} (${titles[a.item_key] ?? key})${said ? `: ${said}` : ""}`;
+    const said = (a.value as { note?: string } | null)?.note ?? a.note ?? '';
+    return `- ${type} ${key} (${titles[a.item_key] ?? key})${said ? `: ${said}` : ''}`;
   });
-  return ["Look again at these items:", ...lines, ...(note ? [`General: ${note}`] : [])].join("\n");
+  return ['Look again at these items:', ...lines, ...(note ? [`General: ${note}`] : [])].join('\n');
 }
 
 /**
@@ -948,117 +1332,171 @@ function gated(ctx: RunsContext, cp: CheckpointOut): CheckpointOut {
   const actions = ctx.db.drafts?.[cp.id]?.actions ?? [];
   const gate = gateNow(ctx, cp, actions);
   const closed = gate && !gate.open ? gateMessage(gate.blocking_open + gate.file_problems) : null;
-  return { ...cp, gate, cannot_approve: cp.cannot_approve ?? closed, approve_label: approveLabel(editsOf(cp, actions).length), needs_agents: needsAgentsOf(cp, actions) };
+  return {
+    ...cp,
+    gate,
+    cannot_approve: cp.cannot_approve ?? closed,
+    approve_label: approveLabel(editsOf(cp, actions).length),
+    needs_agents: needsAgentsOf(cp, actions),
+  };
 }
 
 // ---------------------------------------------------------------- D7 approve with edits
 
 /** Staged actions Oracle applies to the file on Approve (they count in "Approve with {n} edits"). */
-const APPLIED_KINDS = ["edit", "drop", "restore"];
+const APPLIED_KINDS = ['edit', 'drop', 'restore'];
 /** Staged actions only the agents carry out: Approve waits until they are sent back or removed. */
-const AGENT_KINDS = ["split", "merge", "question"];
+const AGENT_KINDS = ['split', 'merge', 'question'];
 
 /** The staged edits Oracle applies at a pending Roadmap items checkpoint. */
 function editsOf(cp: CheckpointOut, actions: DraftActionRow[]): DraftActionRow[] {
-  if (cp.kind !== "roadmap_items" || cp.status !== "pending") return [];
-  return actions.filter((a) => a.state === "staged" && APPLIED_KINDS.includes(a.kind));
+  if (cp.kind !== 'roadmap_items' || cp.status !== 'pending') return [];
+  return actions.filter((a) => a.state === 'staged' && APPLIED_KINDS.includes(a.kind));
 }
 
 /** As CheckpointOut.needs_agents: staged split, merge or (unanswered) question actions. */
-function needsAgentsOf(cp: CheckpointOut, actions: DraftActionRow[]): Schemas["NeedsAgents"][] {
-  if (cp.status !== "pending") return [];
-  return actions.filter((a) => a.state === "staged" && AGENT_KINDS.includes(a.kind)).map((a) => ({ action_id: a.id, item: a.item_key, kind: a.kind }));
+function needsAgentsOf(cp: CheckpointOut, actions: DraftActionRow[]): Schemas['NeedsAgents'][] {
+  if (cp.status !== 'pending') return [];
+  return actions
+    .filter((a) => a.state === 'staged' && AGENT_KINDS.includes(a.kind))
+    .map((a) => ({ action_id: a.id, item: a.item_key, kind: a.kind }));
 }
 
-const approveLabel = (n: number) => (n === 0 ? "Approve" : `Approve with ${n} edit${n === 1 ? "" : "s"}`);
+const approveLabel = (n: number) =>
+  n === 0 ? 'Approve' : `Approve with ${n} edit${n === 1 ? '' : 's'}`;
 
-const needsAgentsMessage = (list: Schemas["NeedsAgents"][]) =>
-  list.map((x) => `${x.kind.charAt(0).toUpperCase()}${x.kind.slice(1)} on ${x.item} needs the agents: send back, or remove it to approve.`).join(" ");
+const needsAgentsMessage = (list: Schemas['NeedsAgents'][]) =>
+  list
+    .map(
+      (x) =>
+        `${x.kind.charAt(0).toUpperCase()}${x.kind.slice(1)} on ${x.item} needs the agents: send back, or remove it to approve.`,
+    )
+    .join(' ');
 
-const ITEM_LINE = (id: string) => new RegExp(`^\\s*- \\{?id: ${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[,}\\s]`);
-const itemIds = (lines: string[]) => lines.map((l) => /^\s*- \{?id: ([\w-]+)/.exec(l)?.[1]).filter((x): x is string => !!x);
-const dependsOf = (line: string) => (/depends_on: \[([^\]]*)\]/.exec(line)?.[1] ?? "").split(",").map((x) => x.trim()).filter(Boolean);
-const withDepends = (line: string, ids: string[]) => line.replace(/depends_on: \[[^\]]*\]/, `depends_on: [${ids.join(", ")}]`);
+const ITEM_LINE = (id: string) =>
+  new RegExp(`^\\s*- \\{?id: ${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[,}\\s]`);
+const itemIds = (lines: string[]) =>
+  lines.map((l) => /^\s*- \{?id: ([\w-]+)/.exec(l)?.[1]).filter((x): x is string => !!x);
+const dependsOf = (line: string) =>
+  (/depends_on: \[([^\]]*)\]/.exec(line)?.[1] ?? '')
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean);
+const withDepends = (line: string, ids: string[]) =>
+  line.replace(/depends_on: \[[^\]]*\]/, `depends_on: [${ids.join(', ')}]`);
 
 /**
  * As oracle.runs.apply_edits.apply, over the mock's file of one flow-style item per line: the
  * staged edits in a fixed order (changes, restores, then drops), with the applied entries and
  * what the result leaves wrong (a dependency on an item not in the file).
  */
-function applyEdits(text: string, edits: DraftActionRow[], reasons: ItemReason[]): { text: string; applied: Record<string, unknown>[]; problems: string[] } {
-  const lines = text.split("\n");
+function applyEdits(
+  text: string,
+  edits: DraftActionRow[],
+  reasons: ItemReason[],
+): { text: string; applied: Record<string, unknown>[]; problems: string[] } {
+  const lines = text.split('\n');
   const at = (id: string) => lines.findIndex((l) => ITEM_LINE(id).test(l));
   const applied: Record<string, unknown>[] = [];
-  const rank = (a: DraftActionRow) => ["edit", "restore", "drop"].indexOf(a.kind);
+  const rank = (a: DraftActionRow) => ['edit', 'restore', 'drop'].indexOf(a.kind);
   for (const a of [...edits].sort((x, y) => rank(x) - rank(y))) {
     const id = a.item_key;
     const i = at(id);
-    if (a.kind === "drop") {
+    if (a.kind === 'drop') {
       if (i < 0) continue;
       lines.splice(i, 1);
-      for (let j = 0; j < lines.length; j++) if (dependsOf(lines[j]).includes(id)) lines[j] = withDepends(lines[j], dependsOf(lines[j]).filter((x) => x !== id));
-      applied.push({ id, action: "drop", text: `${id} dropped` });
+      for (let j = 0; j < lines.length; j++)
+        if (dependsOf(lines[j]).includes(id))
+          lines[j] = withDepends(
+            lines[j],
+            dependsOf(lines[j]).filter((x) => x !== id),
+          );
+      applied.push({ id, action: 'drop', text: `${id} dropped` });
       continue;
     }
-    if (a.kind === "restore") {
+    if (a.kind === 'restore') {
       if (i >= 0) continue;
       const title = reasons.find((x) => x.item === id)?.item_title ?? id;
-      const end = lines.length && lines[lines.length - 1] === "" ? lines.length - 1 : lines.length;
+      const end = lines.length && lines[lines.length - 1] === '' ? lines.length - 1 : lines.length;
       lines.splice(end, 0, `  - {id: ${id}, title: ${title}}`);
-      applied.push({ id, action: "restore", text: `${id} restored from the comparison base` });
+      applied.push({ id, action: 'restore', text: `${id} restored from the comparison base` });
       continue;
     }
     if (i < 0) continue;
-    const field = a.field ?? "";
+    const field = a.field ?? '';
     let line = lines[i];
     let said: string;
-    if (field === "milestone_date") {
-      line = line.replace(/, date: [^,}]+/, "").replace(/, date_source: [^,}]+/, "");
+    if (field === 'milestone_date') {
+      line = line.replace(/, date: [^,}]+/, '').replace(/, date_source: [^,}]+/, '');
       said = `${id} milestone date removed`;
-    } else if (field === "depends_on") {
+    } else if (field === 'depends_on') {
       const v = (a.value ?? {}) as { add?: string[]; remove?: string[] };
       const had = dependsOf(line);
-      const now = [...had.filter((x) => !(v.remove ?? []).includes(x)), ...(v.add ?? []).filter((x) => !had.includes(x))];
-      line = /depends_on: \[/.test(line) ? withDepends(line, now) : line.replace(/\}\s*$/, `, depends_on: [${now.join(", ")}]}`);
-      said = `${id} depends_on [${had.join(", ")}] → [${now.join(", ")}]`;
-    } else if (field.startsWith("clear:")) {
-      line = line.replace(new RegExp(`, ${field.slice(6)}: (\\{[^}]*\\}|\\[[^\\]]*\\]|[^,}]+)`), "");
-      said = `${id} ${field.slice(6).replace("_", " ")} cleared`;
+      const now = [
+        ...had.filter((x) => !(v.remove ?? []).includes(x)),
+        ...(v.add ?? []).filter((x) => !had.includes(x)),
+      ];
+      line = /depends_on: \[/.test(line)
+        ? withDepends(line, now)
+        : line.replace(/\}\s*$/, `, depends_on: [${now.join(', ')}]}`);
+      said = `${id} depends_on [${had.join(', ')}] → [${now.join(', ')}]`;
+    } else if (field.startsWith('clear:')) {
+      line = line.replace(
+        new RegExp(`, ${field.slice(6)}: (\\{[^}]*\\}|\\[[^\\]]*\\]|[^,}]+)`),
+        '',
+      );
+      said = `${id} ${field.slice(6).replace('_', ' ')} cleared`;
     } else {
-      const value = String(a.value ?? "");
+      const value = String(a.value ?? '');
       const was = new RegExp(`\\b${field}: ([^,}]+)`).exec(line)?.[1] ?? null;
-      line = was != null ? line.replace(new RegExp(`\\b${field}: [^,}]+`), `${field}: ${value}`) : line.replace(/\}\s*$/, `, ${field}: ${value}}`);
-      said = `${id} ${field.replace("_", " ")} ${was ?? "none"} → ${value}`;
+      line =
+        was != null
+          ? line.replace(new RegExp(`\\b${field}: [^,}]+`), `${field}: ${value}`)
+          : line.replace(/\}\s*$/, `, ${field}: ${value}}`);
+      said = `${id} ${field.replace('_', ' ')} ${was ?? 'none'} → ${value}`;
     }
     lines[i] = line;
-    applied.push({ id, action: "change", field, value: a.value ?? null, text: said });
+    applied.push({ id, action: 'change', field, value: a.value ?? null, text: said });
   }
   const known = itemIds(lines);
   const problems = lines.flatMap((l) => {
     const id = /^\s*- \{?id: ([\w-]+)/.exec(l)?.[1];
-    return id ? dependsOf(l).filter((d) => !known.includes(d)).map((d) => `${id} depends on ${d}, which is not in the file`) : [];
+    return id
+      ? dependsOf(l)
+          .filter((d) => !known.includes(d))
+          .map((d) => `${id} depends on ${d}, which is not in the file`)
+      : [];
   });
-  return { text: lines.join("\n"), applied, problems };
+  return { text: lines.join('\n'), applied, problems };
 }
 
 /** As decide_checkpoint's re-check: the items check of the edited file (fixed reasons gone). */
 function recheck(check: ItemsCheck, text: string, edits: DraftActionRow[]): ItemsCheck {
-  const ids = itemIds(text.split("\n"));
-  const dropped = edits.filter((a) => a.kind === "drop").map((a) => a.item_key);
-  const fixed = (x: ItemReason) => dropped.includes(x.item) || x.fixes.some((f) => edits.some((a) => isFix(a, f)));
+  const ids = itemIds(text.split('\n'));
+  const dropped = edits.filter((a) => a.kind === 'drop').map((a) => a.item_key);
+  const fixed = (x: ItemReason) =>
+    dropped.includes(x.item) || x.fixes.some((f) => edits.some((a) => isFix(a, f)));
   const reasons = check.reasons.filter((x) => !fixed(x));
   const gone = check.reasons.filter(fixed);
-  const problems = check.problems.filter((p) => !p.item || (!dropped.includes(p.item) && !gone.some((x) => x.item === p.item && x.code === p.code)));
+  const problems = check.problems.filter(
+    (p) =>
+      !p.item ||
+      (!dropped.includes(p.item) && !gone.some((x) => x.item === p.item && x.code === p.code)),
+  );
   const by_horizon: Record<string, number> = { now: 0, next: 0, later: 0 };
-  for (const l of text.split("\n")) {
+  for (const l of text.split('\n')) {
     const h = /^\s*- \{?id: .*\bhorizon: (\w+)/.exec(l)?.[1];
     if (h) by_horizon[h] = (by_horizon[h] ?? 0) + 1;
   }
-  return withReasons({ items: ids.length, by_horizon: by_horizon as ItemsCheck["by_horizon"], problems }, reasons, check.base);
+  return withReasons(
+    { items: ids.length, by_horizon: by_horizon as ItemsCheck['by_horizon'], problems },
+    reasons,
+    check.base,
+  );
 }
 
 /** A staged action is this reason's fix: the same item, kind, field and value. */
-function isFix(a: DraftActionRow, f: ItemReason["fixes"][number]): boolean {
+function isFix(a: DraftActionRow, f: ItemReason['fixes'][number]): boolean {
   return (
     f.action.kind === a.kind &&
     f.action.item === a.item_key &&
@@ -1069,7 +1507,10 @@ function isFix(a: DraftActionRow, f: ItemReason["fixes"][number]): boolean {
 
 /** As the API's _run_version: a version this run imported (any segment or review), as "slug vN". */
 function runVersion(r: RunOut): string | null {
-  const imports = [...r.segments.map((s) => s.draft_import), ...r.checkpoints.map((c) => (c.payload as { import?: SegmentOut["draft_import"] }).import)];
+  const imports = [
+    ...r.segments.map((s) => s.draft_import),
+    ...r.checkpoints.map((c) => (c.payload as { import?: SegmentOut['draft_import'] }).import),
+  ];
   const imp = imports.find((i) => i && i.version != null && !i.error);
   return imp ? `${imp.slug} v${imp.version}` : null;
 }
@@ -1080,7 +1521,7 @@ function oneVersion(version: string): string {
 }
 
 /** As the API's NO_DOCUMENT_SINCE (#583 review): runs that finished before the No document row shipped get none. */
-export const NO_DOCUMENT_SINCE = "2026-10-25T00:00:00Z";
+export const NO_DOCUMENT_SINCE = '2026-10-25T00:00:00Z';
 
 /**
  * As the API (owner, 2026-10-25): a run that finished with no document, why and what to do; else null.
@@ -1089,29 +1530,37 @@ export const NO_DOCUMENT_SINCE = "2026-10-25T00:00:00Z";
  */
 function noDocument(ctx: RunsContext, r: RunOut): string | null {
   const s = r.segments.find((x) => x.draft_import?.error);
-  if (r.status !== "succeeded" || !s || runVersion(r)) return null;
+  if (r.status !== 'succeeded' || !s || runVersion(r)) return null;
   if (!r.finished_at || Date.parse(r.finished_at) < Date.parse(NO_DOCUMENT_SINCE)) return null;
-  if (ctx.versionAfter?.(r.document_id ?? null, r.document_slug ?? null, r.finished_at)) return null;
+  if (ctx.versionAfter?.(r.document_id ?? null, r.document_slug ?? null, r.finished_at))
+    return null;
   const imp = s.draft_import!;
   const action = s.can_retry_draft_import
-    ? "Open the run and use Retry import once the problems are fixed, or start a new run."
-    : "Start a new run to draft it again.";
+    ? 'Open the run and use Retry import once the problems are fixed, or start a new run.'
+    : 'Start a new run to draft it again.';
   const what = r.document_slug ?? `The ${r.flow_title} run`;
   return `${what} finished without a document: Oracle refused its draft (${imp.summary ?? imp.error}) and the run was approved past it. ${action}`;
 }
 
 /** The decided review of a finished run's segment whose draft was refused (owners retry it). */
 function finishedReview(r: RunOut, s: SegmentOut): CheckpointOut | undefined {
-  if (r.status !== "succeeded" || r.segments.some((x) => x.draft_import && !x.draft_import.error)) return undefined;
-  return r.checkpoints.filter((c) => c.segment_seq === s.seq && c.status !== "pending").pop();
+  if (r.status !== 'succeeded' || r.segments.some((x) => x.draft_import && !x.draft_import.error))
+    return undefined;
+  return r.checkpoints.filter((c) => c.segment_seq === s.seq && c.status !== 'pending').pop();
 }
 
 /** D10: the kinds decided in their version (as oracle.runs.review_link.KINDS). */
-const RUN_REVIEW_KINDS: readonly string[] = ["prd_review", "roadmap_review"];
+const RUN_REVIEW_KINDS: readonly string[] = ['prd_review', 'roadmap_review'];
 
 /** D10: the version a run review checkpoint reviews (`payload.import`), when its draft was imported. */
-export function reviewedVersion(c: Pick<CheckpointOut, "kind" | "payload">): { document_id: string; slug: string; version: number } | null {
-  const imp = (c.payload as { import?: { document_id?: string | null; slug?: string | null; version?: number | null } }).import;
+export function reviewedVersion(
+  c: Pick<CheckpointOut, 'kind' | 'payload'>,
+): { document_id: string; slug: string; version: number } | null {
+  const imp = (
+    c.payload as {
+      import?: { document_id?: string | null; slug?: string | null; version?: number | null };
+    }
+  ).import;
   return RUN_REVIEW_KINDS.includes(c.kind) && imp?.document_id && imp.slug && imp.version
     ? { document_id: imp.document_id, slug: imp.slug, version: imp.version }
     : null;
@@ -1123,8 +1572,17 @@ function reviewLink(c: CheckpointOut): string | null {
 }
 
 /** D10: the document's feedback a Send back carries (open items and staged changes). */
-export function sendBackEntries(ctx: Pick<RunsContext, "feedback" | "staged">, documentId: string, version: number): number {
-  return ctx.feedback.filter((f) => f.document_id === documentId && f.raised_on_version <= version && (f.status === "open" || ctx.staged?.(f.id))).length;
+export function sendBackEntries(
+  ctx: Pick<RunsContext, 'feedback' | 'staged'>,
+  documentId: string,
+  version: number,
+): number {
+  return ctx.feedback.filter(
+    (f) =>
+      f.document_id === documentId &&
+      f.raised_on_version <= version &&
+      (f.status === 'open' || ctx.staged?.(f.id)),
+  ).length;
 }
 
 /**
@@ -1134,12 +1592,16 @@ export function sendBackEntries(ctx: Pick<RunsContext, "feedback" | "staged">, d
 export function approveRunReview(ctx: RunsContext, runId: string, checkpointId: string) {
   const r = ctx.db.runs.find((x) => x.id === runId);
   const cp = r?.checkpoints.find((c) => c.id === checkpointId);
-  if (!r || !cp || cp.status !== "pending" || r.status !== "awaiting_checkpoint") return;
+  if (!r || !cp || cp.status !== 'pending' || r.status !== 'awaiting_checkpoint') return;
   // As the API: the signed-in member decided.
   const by = ctx.member?.id ?? ctx.userId;
-  Object.assign(cp, { status: "approved", note: null, decided_by: by, decided_at: ctx.now() });
-  cp.payload = { ...cp.payload, decided: { role: ctx.userRole ?? null, via: "oracle", by } };
-  next(ctx, r, r.segments.find((x) => x.seq === cp.segment_seq)!);
+  Object.assign(cp, { status: 'approved', note: null, decided_by: by, decided_at: ctx.now() });
+  cp.payload = { ...cp.payload, decided: { role: ctx.userRole ?? null, via: 'oracle', by } };
+  next(
+    ctx,
+    r,
+    r.segments.find((x) => x.seq === cp.segment_seq)!,
+  );
   refresh(r);
 }
 
@@ -1149,19 +1611,30 @@ function refresh(r: RunOut) {
   r.sent_back = refused(r, true);
   for (const s of r.segments) s.sent_back = sentBack(r, s);
   r.spent_usd = knownSum(r.segments.map((s) => s.cost_usd));
-  r.waiting_on = r.checkpoints.find((c) => c.status === "pending")?.kind ?? null;
+  r.waiting_on = r.checkpoints.find((c) => c.status === 'pending')?.kind ?? null;
   // As the API: waiting on its checkpoint, a decision recorded there and not delivered yet.
   // Oracle's send-back means no decision is owed: Revising wins.
-  r.delivering = r.status === "awaiting_checkpoint" && !r.sent_back ? (r.checkpoints.find((c) => c.delivery)?.kind ?? null) : null;
-  for (const c of r.checkpoints) Object.assign(c, { can_decide: c.status === "pending", cannot_approve: cannotApprove(c), review_link: reviewLink(c) });
+  r.delivering =
+    r.status === 'awaiting_checkpoint' && !r.sent_back
+      ? (r.checkpoints.find((c) => c.delivery)?.kind ?? null)
+      : null;
+  for (const c of r.checkpoints)
+    Object.assign(c, {
+      can_decide: c.status === 'pending',
+      cannot_approve: cannotApprove(c),
+      review_link: reviewLink(c),
+    });
   // D10: a run waiting at its PRD or roadmap review is decided in the version.
-  r.review_link = r.checkpoints.find((c) => c.status === "pending")?.review_link ?? null;
+  r.review_link = r.checkpoints.find((c) => c.status === 'pending')?.review_link ?? null;
   // As the API: a refused draft whose file is kept, while the run waits at its review.
-  const file = r.document_kind === "roadmap" ? "roadmap.md" : "prd.md";
+  const file = r.document_kind === 'roadmap' ? 'roadmap.md' : 'prd.md';
   for (const s of r.segments) {
-    s.can_retry_draft_import = !!s.draft_import?.error && s.artifacts.includes(file) && !!(reviewOf(r, s) ?? finishedReview(r, s));
+    s.can_retry_draft_import =
+      !!s.draft_import?.error &&
+      s.artifacts.includes(file) &&
+      !!(reviewOf(r, s) ?? finishedReview(r, s));
   }
-  const version = r.status === "succeeded" ? runVersion(r) : null;
+  const version = r.status === 'succeeded' ? runVersion(r) : null;
   for (const s of r.segments) {
     const why = version && s.draft_import?.error ? oneVersion(version) : null;
     s.draft_retry_refused = why && why[0].toUpperCase() + why.slice(1);
@@ -1172,31 +1645,41 @@ function refresh(r: RunOut) {
 function keepPrevious(ctx: RunsContext, r: RunOut, s: SegmentOut) {
   const last = s.attempts[s.attempts.length - 1];
   if (!last || s.artifacts.length === 0) return;
-  for (const name of s.previous_attempt?.artifacts ?? []) delete ctx.db.artifacts[`${r.id}|${s.seq}|${name}|${s.previous_attempt!.attempt}`];
-  for (const name of s.artifacts) ctx.db.artifacts[`${r.id}|${s.seq}|${name}|${last.attempt}`] = ctx.db.artifacts[`${r.id}|${s.seq}|${name}`];
+  for (const name of s.previous_attempt?.artifacts ?? [])
+    delete ctx.db.artifacts[`${r.id}|${s.seq}|${name}|${s.previous_attempt!.attempt}`];
+  for (const name of s.artifacts)
+    ctx.db.artifacts[`${r.id}|${s.seq}|${name}|${last.attempt}`] =
+      ctx.db.artifacts[`${r.id}|${s.seq}|${name}`];
   s.previous_attempt = { attempt: last.attempt, artifacts: [...s.artifacts] };
 }
 
 function submit(ctx: RunsContext, r: RunOut, s: SegmentOut, note: string | null = null) {
   if (note) keepPrevious(ctx, r, s);
-  s.status = "running";
+  s.status = 'running';
   s.workflow_id = `mock-wf-${ctx.uuid().slice(0, 8)}`;
   s.started_at ??= ctx.now();
   s.finished_at = null;
   Object.assign(s, { agents: [], checked_at: null, proposals_written: 0 });
-  s.attempts.push({ attempt: s.attempts.length + 1, workflow_id: s.workflow_id, submitted_at: ctx.now(), cost_usd: null, note, state: "running" });
-  r.status = "running";
+  s.attempts.push({
+    attempt: s.attempts.length + 1,
+    workflow_id: s.workflow_id,
+    submitted_at: ctx.now(),
+    cost_usd: null,
+    note,
+    state: 'running',
+  });
+  r.status = 'running';
 }
 
-function finish(ctx: RunsContext, r: RunOut, status: RunOut["status"]) {
+function finish(ctx: RunsContext, r: RunOut, status: RunOut['status']) {
   r.status = status;
   r.finished_at = ctx.now();
 }
 
 function next(ctx: RunsContext, r: RunOut, s: SegmentOut) {
-  const later = r.segments.find((x) => x.seq > s.seq && x.status !== "skipped");
+  const later = r.segments.find((x) => x.seq > s.seq && x.status !== 'skipped');
   if (later) submit(ctx, r, later);
-  else finish(ctx, r, "succeeded");
+  else finish(ctx, r, 'succeeded');
 }
 
 /** A feature set as feature_set.yaml lists it (C6, oracle.runs.feature_set). */
@@ -1217,64 +1700,100 @@ interface FeatureSetSpec {
 const LOCAL_FEATURE_SET: FeatureSetSpec = {
   features: [
     {
-      key: "price-early",
-      title: "Show the price early",
-      summary: "Buyers see the full price before checkout",
-      goals: [{ key: "g.activation", contribution: 2 }],
+      key: 'price-early',
+      title: 'Show the price early',
+      summary: 'Buyers see the full price before checkout',
+      goals: [{ key: 'g.activation', contribution: 2 }],
       depends_on: [],
       confidence: 0.8,
-      requirements: [{ key: "price-early-total", text: "The cart shows the total with delivery before checkout", acceptance: ["Delivery cost is included"] }],
+      requirements: [
+        {
+          key: 'price-early-total',
+          text: 'The cart shows the total with delivery before checkout',
+          acceptance: ['Delivery cost is included'],
+        },
+      ],
     },
     {
-      key: "public-signup",
-      title: "Public signup",
-      summary: "First-time buyers pay without an account",
-      goals: [{ key: "g.activation", contribution: 3 }],
-      depends_on: ["price-early"],
+      key: 'public-signup',
+      title: 'Public signup',
+      summary: 'First-time buyers pay without an account',
+      goals: [{ key: 'g.activation', contribution: 3 }],
+      depends_on: ['price-early'],
       confidence: 0.7,
-      requirements: [{ key: "public-signup-email", text: "A guest gives an email address only", acceptance: ["No password is asked for"] }],
+      requirements: [
+        {
+          key: 'public-signup-email',
+          text: 'A guest gives an email address only',
+          acceptance: ['No password is asked for'],
+        },
+      ],
     },
     {
-      key: "order-tracking",
-      title: "Order tracking",
-      summary: "Buyers follow their order after paying",
-      goals: [{ key: "g.activation", contribution: 1 }],
+      key: 'order-tracking',
+      title: 'Order tracking',
+      summary: 'Buyers follow their order after paying',
+      goals: [{ key: 'g.activation', contribution: 1 }],
       depends_on: [],
       confidence: 0.6,
-      requirements: [{ key: "order-tracking-link", text: "The confirmation email links to the order's status", acceptance: ["The link works without signing in"] }],
+      requirements: [
+        {
+          key: 'order-tracking-link',
+          text: "The confirmation email links to the order's status",
+          acceptance: ['The link works without signing in'],
+        },
+      ],
     },
   ],
-  excluded: [{ key: "gift-wrapping", reason: "Serves no confirmed goal" }],
+  excluded: [{ key: 'gift-wrapping', reason: 'Serves no confirmed goal' }],
 };
 
-const flow = (items: string[]) => `[${items.map((x) => JSON.stringify(x)).join(", ")}]`;
+const flow = (items: string[]) => `[${items.map((x) => JSON.stringify(x)).join(', ')}]`;
 
 /** feature_set.yaml (version 1) for a set. */
-function featureSetYaml(spec: FeatureSetSpec, document: string | null | undefined,segment: string, attempt: number): string {
-  const lines = [`# ${segmentLabel(segment)} (attempt ${attempt})`, "version: 1", `document: ${document ?? "example-prd"}`, "features:"];
+function featureSetYaml(
+  spec: FeatureSetSpec,
+  document: string | null | undefined,
+  segment: string,
+  attempt: number,
+): string {
+  const lines = [
+    `# ${segmentLabel(segment)} (attempt ${attempt})`,
+    'version: 1',
+    `document: ${document ?? 'example-prd'}`,
+    'features:',
+  ];
   for (const f of spec.features) {
     lines.push(
       `  - key: ${f.key}`,
       `    title: ${f.title}`,
       `    summary: ${f.summary}`,
-      `    goals: [${f.goals.map((g) => `{key: ${g.key}, contribution: ${g.contribution}}`).join(", ")}]`,
+      `    goals: [${f.goals.map((g) => `{key: ${g.key}, contribution: ${g.contribution}}`).join(', ')}]`,
       `    depends_on: ${flow(f.depends_on)}`,
       `    confidence: ${f.confidence}`,
-      "    requirements:",
+      '    requirements:',
     );
-    for (const r of f.requirements) lines.push(`      - key: ${r.key}`, `        text: ${r.text}`, `        acceptance: ${flow(r.acceptance)}`);
+    for (const r of f.requirements)
+      lines.push(
+        `      - key: ${r.key}`,
+        `        text: ${r.text}`,
+        `        acceptance: ${flow(r.acceptance)}`,
+      );
   }
-  lines.push("excluded:");
+  lines.push('excluded:');
   for (const e of spec.excluded) lines.push(`  - key: ${e.key}`, `    reason: ${e.reason}`);
-  return `${lines.join("\n")}\n`;
+  return `${lines.join('\n')}\n`;
 }
 
 /** The counts of a set's check, with the problems and flags given. */
 function checkOf(
   spec: FeatureSetSpec,
-  problems: FeatureSetCheck["problems"] = [],
-  flags: FeatureSetCheck["flags"] = {},
-  names: Pick<FeatureSetCheck, "requirement_names" | "goal_names"> = { requirement_names: {}, goal_names: {} },
+  problems: FeatureSetCheck['problems'] = [],
+  flags: FeatureSetCheck['flags'] = {},
+  names: Pick<FeatureSetCheck, 'requirement_names' | 'goal_names'> = {
+    requirement_names: {},
+    goal_names: {},
+  },
 ): FeatureSetCheck {
   return {
     features: spec.features.length,
@@ -1288,17 +1807,26 @@ function checkOf(
 }
 
 /** The proposed scope a feature-set segment's attempt writes (oracle.runs.feature_set.write_scope). */
-function proposeScope(ctx: Pick<RunsContext, "db" | "uuid">, r: RunOut, seq: number, attempt: number, spec: FeatureSetSpec, check: FeatureSetCheck) {
+function proposeScope(
+  ctx: Pick<RunsContext, 'db' | 'uuid'>,
+  r: RunOut,
+  seq: number,
+  attempt: number,
+  spec: FeatureSetSpec,
+  check: FeatureSetCheck,
+) {
   const scopes = ((ctx.db.scopes ??= {})[r.id] ??= []);
   // Any other proposed scope of the run is superseded.
-  for (const x of scopes) if (x.status === "proposed") Object.assign(x, { status: "superseded", lock_version: x.lock_version + 1 });
-  const feature = (key: string): PrdScopeOut["features"][number] => ({
+  for (const x of scopes)
+    if (x.status === 'proposed')
+      Object.assign(x, { status: 'superseded', lock_version: x.lock_version + 1 });
+  const feature = (key: string): PrdScopeOut['features'][number] => ({
     id: ctx.uuid(),
     key,
     title: key,
-    decision: "include",
+    decision: 'include',
     decision_reason: null,
-    origin: "agent",
+    origin: 'agent',
     goals: [],
     depends_on: [],
     blocker_keys: [],
@@ -1314,7 +1842,7 @@ function proposeScope(ctx: Pick<RunsContext, "db" | "uuid">, r: RunOut, seq: num
     document_id: r.document_id,
     segment_seq: seq,
     attempt,
-    status: "proposed",
+    status: 'proposed',
     check,
     features: [
       ...spec.features.map((f) => ({
@@ -1330,14 +1858,18 @@ function proposeScope(ctx: Pick<RunsContext, "db" | "uuid">, r: RunOut, seq: num
           title: q.text,
           text: q.text,
           acceptance: q.acceptance,
-          decision: "keep" as const,
+          decision: 'keep' as const,
           decision_reason: null,
-          origin: "agent" as const,
+          origin: 'agent' as const,
           entity_id: null,
           proposal_id: null,
         })),
       })),
-      ...spec.excluded.map((e) => ({ ...feature(e.key), decision: "exclude" as const, decision_reason: e.reason })),
+      ...spec.excluded.map((e) => ({
+        ...feature(e.key),
+        decision: 'exclude' as const,
+        decision_reason: e.reason,
+      })),
     ],
     approved_by: null,
     approved_at: null,
@@ -1346,18 +1878,29 @@ function proposeScope(ctx: Pick<RunsContext, "db" | "uuid">, r: RunOut, seq: num
 }
 
 /** As the API at the feature-set stop: approving approves the run's proposed scope (`by` null: the stop was off), requesting changes supersedes it. */
-function decideScope(ctx: Pick<RunsContext, "db" | "now">, r: RunOut, decision: "approved" | "changes_requested", by: string | null) {
-  const scope = (ctx.db.scopes?.[r.id] ?? []).filter((x) => x.status === "proposed").pop();
+function decideScope(
+  ctx: Pick<RunsContext, 'db' | 'now'>,
+  r: RunOut,
+  decision: 'approved' | 'changes_requested',
+  by: string | null,
+) {
+  const scope = (ctx.db.scopes?.[r.id] ?? []).filter((x) => x.status === 'proposed').pop();
   if (!scope) return;
-  if (decision === "changes_requested") {
-    Object.assign(scope, { status: "superseded", lock_version: scope.lock_version + 1 });
+  if (decision === 'changes_requested') {
+    Object.assign(scope, { status: 'superseded', lock_version: scope.lock_version + 1 });
     return;
   }
-  Object.assign(scope, { status: "approved", approved_by: by, approved_at: ctx.now(), lock_version: scope.lock_version + 1 });
+  Object.assign(scope, {
+    status: 'approved',
+    approved_by: by,
+    approved_at: ctx.now(),
+    lock_version: scope.lock_version + 1,
+  });
   // A document has one approved scope.
   if (!scope.document_id) return;
   for (const x of Object.values(ctx.db.scopes ?? {}).flat()) {
-    if (x !== scope && x.status === "approved" && x.document_id === scope.document_id) Object.assign(x, { status: "superseded", lock_version: x.lock_version + 1 });
+    if (x !== scope && x.status === 'approved' && x.document_id === scope.document_id)
+      Object.assign(x, { status: 'superseded', lock_version: x.lock_version + 1 });
   }
 }
 
@@ -1384,38 +1927,58 @@ interface OrderEntry {
   effort?: number;
 }
 
-const NEW_INPUTS = ["goal", "weight", "contribution", "confidence", "effort"] as const;
+const NEW_INPUTS = ['goal', 'weight', 'contribution', 'confidence', 'effort'] as const;
 
 /** The local runtime's order of its feature set: clean. */
 const LOCAL_ORDER: OrderSpec = {
-  method: "goal_weighted",
+  method: 'goal_weighted',
   order: [
-    { key: "price-early", score: 4.8, explanation: "G1 weight 3 x contribution 2 x confidence 0.8 / effort 1" },
-    { key: "public-signup", score: 6.3, explanation: "Needs price-early first; G1 weight 3 x contribution 3 x 0.7 / 1" },
-    { key: "order-tracking", score: 1.8, explanation: "G1 weight 3 x contribution 1 x 0.6 / 1" },
+    {
+      key: 'price-early',
+      score: 4.8,
+      explanation: 'G1 weight 3 x contribution 2 x confidence 0.8 / effort 1',
+    },
+    {
+      key: 'public-signup',
+      score: 6.3,
+      explanation: 'Needs price-early first; G1 weight 3 x contribution 3 x 0.7 / 1',
+    },
+    { key: 'order-tracking', score: 1.8, explanation: 'G1 weight 3 x contribution 1 x 0.6 / 1' },
   ],
 };
 
 /** priority.yaml (version 1) for an order. */
 function priorityYaml(spec: OrderSpec, segment: string, attempt: number): string {
-  const lines = [`# ${segmentLabel(segment)} (attempt ${attempt})`, "version: 1", `method: ${spec.method}`, "order:"];
+  const lines = [
+    `# ${segmentLabel(segment)} (attempt ${attempt})`,
+    'version: 1',
+    `method: ${spec.method}`,
+    'order:',
+  ];
   spec.order.forEach((o, i) => {
-    lines.push(`  - key: ${o.key}`, `    rank: ${i + 1}`, `    score: ${o.score}`, `    explanation: ${JSON.stringify(o.explanation)}`);
+    lines.push(
+      `  - key: ${o.key}`,
+      `    rank: ${i + 1}`,
+      `    score: ${o.score}`,
+      `    explanation: ${JSON.stringify(o.explanation)}`,
+    );
     for (const n of NEW_INPUTS) if (o[n] != null) lines.push(`    ${n}: ${o[n]}`);
   });
-  return `${lines.join("\n")}\n`;
+  return `${lines.join('\n')}\n`;
 }
 
 /** The approved PRD scope a run's order must rank (C6), else null. */
-function scopeOf(ctx: Pick<RunsContext, "db">, r: RunOut): PrdScopeOut["features"] | null {
+function scopeOf(ctx: Pick<RunsContext, 'db'>, r: RunOut): PrdScopeOut['features'] | null {
   const scope = approvedScope(ctx, r);
-  return scope ? scope.features.filter((f) => f.decision === "include") : null;
+  return scope ? scope.features.filter((f) => f.decision === 'include') : null;
 }
 
-const approvedScope = (ctx: Pick<RunsContext, "db">, r: RunOut) => (ctx.db.scopes?.[r.id] ?? []).filter((x) => x.status === "approved").pop();
+const approvedScope = (ctx: Pick<RunsContext, 'db'>, r: RunOut) =>
+  (ctx.db.scopes?.[r.id] ?? []).filter((x) => x.status === 'approved').pop();
 
 /** The baseline's non-rejected goal keys, when the context knows them (api run_order.Known.goals). */
-const goalSet = (ctx: Pick<RunsContext, "goalKeys">) => (ctx.goalKeys ? new Set(ctx.goalKeys()) : null);
+const goalSet = (ctx: Pick<RunsContext, 'goalKeys'>) =>
+  ctx.goalKeys ? new Set(ctx.goalKeys()) : null;
 
 /**
  * As oracle.priorities.run_order.unknown_goal_message: a new feature names a goal that is not one
@@ -1433,35 +1996,63 @@ function unknownGoalMessage(feature: string, goal: string | undefined | null): s
  * new_feature_no_goal, unknown_goal (blocking); differs_from_live, no_goal (advisory). The live ranking is the mock's
  * (./lane-f.ts), restricted to the ranked features.
  */
-function checkOrder(given: OrderSpec, scope: PrdScopeOut["features"] | null, goals: Set<string> | null, goalTitle?: (key: string) => string | undefined): PriorityCheck {
+function checkOrder(
+  given: OrderSpec,
+  scope: PrdScopeOut['features'] | null,
+  goals: Set<string> | null,
+  goalTitle?: (key: string) => string | undefined,
+): PriorityCheck {
   const live = ranking(given.method).features;
-  const titleOf = (k: string) => live.find((f) => f.key === k)?.title ?? (scope ?? []).find((f) => f.key === k)?.title ?? given.order.find((o) => o.key === k && o.title)?.title ?? k;
+  const titleOf = (k: string) =>
+    live.find((f) => f.key === k)?.title ??
+    (scope ?? []).find((f) => f.key === k)?.title ??
+    given.order.find((o) => o.key === k && o.title)?.title ??
+    k;
   // As the API's _feature (detailed-b 2): "F-08 Usage dashboard" for a code-shaped key, else the name.
   const feature = (k: string) => {
     const t = titleOf(k).trim();
-    return !t || t === k ? k : /^(?:[A-Z][A-Z0-9]*(?:[-.][A-Z0-9]+)+[a-j]?|[A-Z]{1,4}\d+)$/.test(k) ? `${k} ${t}` : t;
+    return !t || t === k
+      ? k
+      : /^(?:[A-Z][A-Z0-9]*(?:[-.][A-Z0-9]+)+[a-j]?|[A-Z]{1,4}\d+)$/.test(k)
+        ? `${k} ${t}`
+        : t;
   };
   // A key ranked twice is checked once, at its first entry (api: duplicate_key).
   const times = new Map<string, number>();
   for (const o of given.order) times.set(o.key, (times.get(o.key) ?? 0) + 1);
-  const spec: OrderSpec = { ...given, order: given.order.filter((o, i) => given.order.findIndex((x) => x.key === o.key) === i) };
+  const spec: OrderSpec = {
+    ...given,
+    order: given.order.filter((o, i) => given.order.findIndex((x) => x.key === o.key) === i),
+  };
   const keys = spec.order.map((o) => o.key);
   const restricted = live.filter((f) => keys.includes(f.key)).map((f) => f.key);
   const rank = Object.fromEntries(keys.map((k, i) => [k, i + 1]));
-  const deps: Record<string, string[]> = Object.fromEntries(live.map((f) => [f.key, [...f.depends_on]]));
+  const deps: Record<string, string[]> = Object.fromEntries(
+    live.map((f) => [f.key, [...f.depends_on]]),
+  );
   for (const f of scope ?? []) deps[f.key] = [...(deps[f.key] ?? []), ...f.depends_on];
   // The run's own proposals (new in this PRD) are known, as the scope's are in the API.
   const proposed = new Set(spec.order.filter((o) => o.title).map((o) => o.key));
   for (const o of spec.order) if (o.title) deps[o.key] = [...(o.depends_on ?? [])];
-  const problems: PriorityCheck["problems"] = [];
-  const add = (code: string, feature: string, message: string, blocking = true) => problems.push({ code, blocking, feature, message });
-  for (const [k, n] of times) if (n > 1) add("duplicate_key", k, `${titleOf(k)} is ranked ${n} times`);
+  const problems: PriorityCheck['problems'] = [];
+  const add = (code: string, feature: string, message: string, blocking = true) =>
+    problems.push({ code, blocking, feature, message });
+  for (const [k, n] of times)
+    if (n > 1) add('duplicate_key', k, `${titleOf(k)} is ranked ${n} times`);
   const inScope = new Set((scope ?? []).map((f) => f.key));
   for (const k of keys) {
-    if (!live.some((f) => f.key === k) && !inScope.has(k) && !proposed.has(k)) add("unknown_feature", k, `${k} is not a feature of the Ground Truth or the scope`);
-    else if (scope && !inScope.has(k)) add("not_in_scope", k, `${k} is not included in the approved PRD scope`);
+    if (!live.some((f) => f.key === k) && !inScope.has(k) && !proposed.has(k))
+      add('unknown_feature', k, `${k} is not a feature of the Ground Truth or the scope`);
+    else if (scope && !inScope.has(k))
+      add('not_in_scope', k, `${k} is not included in the approved PRD scope`);
   }
-  for (const f of scope ?? []) if (!(f.key in rank)) add("missing_feature", f.key, `${f.title || f.key} is in the approved PRD scope and not ranked`);
+  for (const f of scope ?? [])
+    if (!(f.key in rank))
+      add(
+        'missing_feature',
+        f.key,
+        `${f.title || f.key} is in the approved PRD scope and not ranked`,
+      );
   // A feature new in this PRD names a goal it serves, in its row or its feature-set entry: a goal
   // of the baseline (not rejected), 0 from either source meaning it does not serve (api _check_new_goals).
   for (const o of spec.order) {
@@ -1472,27 +2063,49 @@ function checkOrder(given: OrderSpec, scope: PrdScopeOut["features"] | null, goa
     const keys = named.flatMap((g) => (g.key ? [g.key] : []));
     const zero = new Set(named.filter((g) => g.key && g.contribution === 0).map((g) => g.key!));
     const unknown = goals ? [...new Set(keys)].filter((k) => !goals.has(k)) : [];
-    for (const g of unknown) add("unknown_goal", o.key, unknownGoalMessage(title, goalTitle?.(g)));
-    if (!unknown.length && !keys.some((k) => (!goals || goals.has(k)) && !zero.has(k))) add("new_feature_no_goal", o.key, `${title} is new and names no goal it serves: the run must name one`);
+    for (const g of unknown) add('unknown_goal', o.key, unknownGoalMessage(title, goalTitle?.(g)));
+    if (!unknown.length && !keys.some((k) => (!goals || goals.has(k)) && !zero.has(k)))
+      add(
+        'new_feature_no_goal',
+        o.key,
+        `${title} is new and names no goal it serves: the run must name one`,
+      );
   }
   for (const k of keys) {
     for (const d of [...new Set(deps[k] ?? [])].sort()) {
-      if (d in rank && rank[d] > rank[k]) add("before_prerequisite", k, `${feature(k)} is ranked ${rank[k]}, above ${feature(d)} (rank ${rank[d]}), which it depends on`);
+      if (d in rank && rank[d] > rank[k])
+        add(
+          'before_prerequisite',
+          k,
+          `${feature(k)} is ranked ${rank[k]}, above ${feature(d)} (rank ${rank[d]}), which it depends on`,
+        );
     }
   }
   const order = spec.order.map((o, i) => {
     const at = restricted.indexOf(o.key);
     const inputs = Object.fromEntries(NEW_INPUTS.filter((n) => o[n] != null).map((n) => [n, o[n]]));
-    return { key: o.key, rank: i + 1, score: o.score, explanation: o.explanation, live_rank: at < 0 ? null : at + 1, ...inputs };
+    return {
+      key: o.key,
+      rank: i + 1,
+      score: o.score,
+      explanation: o.explanation,
+      live_rank: at < 0 ? null : at + 1,
+      ...inputs,
+    };
   });
   // Where each sits among the live features the order ranks (api run_order.check_order): new features ranked above it do not move it.
   const position = new Map(order.filter((o) => o.live_rank != null).map((o, i) => [o.key, i + 1]));
   for (const o of order) {
     if (o.live_rank != null && Math.abs(o.live_rank - position.get(o.key)!) > 2) {
-      add("differs_from_live", o.key, `${o.key} is ranked ${o.rank} here and ${o.live_rank} in the live ranking`, false);
+      add(
+        'differs_from_live',
+        o.key,
+        `${o.key} is ranked ${o.rank} here and ${o.live_rank} in the live ranking`,
+        false,
+      );
     }
-    if (live.find((f) => f.key === o.key)?.flags.includes("no_confirmed_goal")) {
-      add("no_goal", o.key, `${o.key} serves no confirmed goal in the live ranking`, false);
+    if (live.find((f) => f.key === o.key)?.flags.includes('no_confirmed_goal')) {
+      add('no_goal', o.key, `${o.key} serves no confirmed goal in the live ranking`, false);
     }
   }
   return { method: spec.method, features: order.length, problems, order };
@@ -1502,10 +2115,14 @@ function checkOrder(given: OrderSpec, scope: PrdScopeOut["features"] | null, goa
  * The PRD a run's order is for: its document (by id, else the one its slug names), else the
  * slug the run writes with the brief's title, the title the import gives it.
  */
-function orderDocument(ctx: Pick<RunsContext, "documents">, r: RunOut): SnapshotRow["document"] {
-  const doc = r.document_id ? ctx.documents.find((d) => d.id === r.document_id) : ctx.documents.find((d) => d.slug === r.document_slug);
+function orderDocument(ctx: Pick<RunsContext, 'documents'>, r: RunOut): SnapshotRow['document'] {
+  const doc = r.document_id
+    ? ctx.documents.find((d) => d.id === r.document_id)
+    : ctx.documents.find((d) => d.slug === r.document_slug);
   if (doc) return { id: doc.id, slug: doc.slug, title: doc.title };
-  return r.document_slug ? { id: null, slug: r.document_slug, title: r.document_title ?? null } : null;
+  return r.document_slug
+    ? { id: null, slug: r.document_slug, title: r.document_title ?? null }
+    : null;
 }
 
 /**
@@ -1513,16 +2130,35 @@ function orderDocument(ctx: Pick<RunsContext, "documents">, r: RunOut): Snapshot
  * becomes the run's proposed snapshot; the run's other proposed one is discarded, one for
  * the same attempt is replaced.
  */
-function proposeOrder(ctx: Pick<RunsContext, "db" | "uuid" | "now" | "documents" | "goalTitle">, r: RunOut, seq: number, attempt: number, spec: OrderSpec, check: PriorityCheck): SnapshotRow {
+function proposeOrder(
+  ctx: Pick<RunsContext, 'db' | 'uuid' | 'now' | 'documents' | 'goalTitle'>,
+  r: RunOut,
+  seq: number,
+  attempt: number,
+  spec: OrderSpec,
+  check: PriorityCheck,
+): SnapshotRow {
   const all = (ctx.db.priority_snapshots ??= []);
-  const same = all.find((x) => x.run_id === r.id && x.status === "proposed" && x.params.segment_seq === seq && x.params.attempt === attempt);
-  for (const x of all) if (x !== same && x.run_id === r.id && x.status === "proposed") Object.assign(x, { status: "discarded", decided_at: ctx.now() });
+  const same = all.find(
+    (x) =>
+      x.run_id === r.id &&
+      x.status === 'proposed' &&
+      x.params.segment_seq === seq &&
+      x.params.attempt === attempt,
+  );
+  for (const x of all)
+    if (x !== same && x.run_id === r.id && x.status === 'proposed')
+      Object.assign(x, { status: 'discarded', decided_at: ctx.now() });
   const live = Object.fromEntries(ranking(spec.method).features.map((f) => [f.key, f]));
   const titles = Object.fromEntries(spec.order.filter((o) => o.title).map((o) => [o.key, o]));
   const liveRows = Object.values(live);
-  const rows = check.order!.filter((o) => live[o.key] || titles[o.key]).map((o) =>
-    live[o.key] ? { ...live[o.key], rank: o.rank, live_rank: o.live_rank, run_explanation: o.explanation } : newFeature(titles[o.key], o.rank, spec.method, liveRows, spec.order, ctx.goalTitle),
-  );
+  const rows = check
+    .order!.filter((o) => live[o.key] || titles[o.key])
+    .map((o) =>
+      live[o.key]
+        ? { ...live[o.key], rank: o.rank, live_rank: o.live_rank, run_explanation: o.explanation }
+        : newFeature(titles[o.key], o.rank, spec.method, liveRows, spec.order, ctx.goalTitle),
+    );
   const snap: SnapshotRow = {
     id: same?.id ?? ctx.uuid(),
     method: spec.method,
@@ -1532,7 +2168,7 @@ function proposeOrder(ctx: Pick<RunsContext, "db" | "uuid" | "now" | "documents"
     feature_count: rows.length,
     top: rows.slice(0, 5).map((f) => f.key),
     top_titles: rows.slice(0, 5).map((f) => f.title),
-    status: "proposed",
+    status: 'proposed',
     run_id: r.id,
     document: orderDocument(ctx, r),
     decided_by: null,
@@ -1557,46 +2193,79 @@ const num = (v: number) => String(Number(v.toFixed(4)));
  * what waits on it, are the edges the run's feature set gives (`depends_on`). Its goal reads by the
  * Ground Truth's name for it, rejected goals too (api Known.goal_names), else the live ranking's.
  */
-function newFeature(o: OrderEntry, rank: number, method: Method, live: SnapshotRow["ranking"], order: OrderEntry[], goalName?: (key: string) => string | undefined): SnapshotRow["ranking"][number] {
-  const goalTitle = (o.goal ? goalName?.(o.goal) : undefined) ?? live.flatMap((f) => f.explanation.goals).find((g) => g.goal === o.goal)?.title ?? o.goal ?? "";
-  const goals: SnapshotRow["ranking"][number]["explanation"]["goals"] = [];
+function newFeature(
+  o: OrderEntry,
+  rank: number,
+  method: Method,
+  live: SnapshotRow['ranking'],
+  order: OrderEntry[],
+  goalName?: (key: string) => string | undefined,
+): SnapshotRow['ranking'][number] {
+  const goalTitle =
+    (o.goal ? goalName?.(o.goal) : undefined) ??
+    live.flatMap((f) => f.explanation.goals).find((g) => g.goal === o.goal)?.title ??
+    o.goal ??
+    '';
+  const goals: SnapshotRow['ranking'][number]['explanation']['goals'] = [];
   const steps: string[] = [];
   const missing: string[] = [];
   let score: number | null = o.score;
   let value: number | null = null;
   if (o.goal != null) {
     // A goal named with no weight takes the goal's live weight, with no contribution the scorer's default: either then assumed.
-    const liveWeight = live.flatMap((f) => f.explanation.goals).find((g) => g.goal === o.goal && !g.weight_assumed)?.weight ?? null;
+    const liveWeight =
+      live.flatMap((f) => f.explanation.goals).find((g) => g.goal === o.goal && !g.weight_assumed)
+        ?.weight ?? null;
     const weight = o.weight ?? liveWeight ?? 1;
     const contribution = o.contribution ?? 1;
     value = weight * contribution;
-    goals.push({ goal: o.goal, title: goalTitle, weight, weight_assumed: o.weight == null && liveWeight == null, contribution, contribution_assumed: o.contribution == null, link_status: "proposed", term: value });
+    goals.push({
+      goal: o.goal,
+      title: goalTitle,
+      weight,
+      weight_assumed: o.weight == null && liveWeight == null,
+      contribution,
+      contribution_assumed: o.contribution == null,
+      link_status: 'proposed',
+      term: value,
+    });
     // In the scorer's words, so the page shows them as every row's (confidence as a percent, two decimals).
     steps.push(`goal value = ${num(weight)}×${num(contribution)} (${goalTitle}) = ${num(value)}`);
     if (o.confidence != null && o.effort) {
       score = Math.round((value * o.confidence * 10000) / o.effort) / 10000;
       steps.push(`score = ${num(value)} × ${num(o.confidence)} ÷ ${num(o.effort)} = ${num(score)}`);
     }
-  } else missing.push("goal");
-  if (o.confidence == null) missing.push("confidence");
-  if (o.effort == null) missing.push("effort");
+  } else missing.push('goal');
+  if (o.confidence == null) missing.push('confidence');
+  if (o.effort == null) missing.push('effort');
   return {
     rank,
     score_rank: rank,
-    entity_id: "",
+    entity_id: '',
     key: o.key,
     title: o.title!,
-    status: "proposed",
+    status: 'proposed',
     score,
     serves_goal: goals.length > 0,
     flags: [],
     depends_on: [...new Set(o.depends_on ?? [])].filter((k) => k !== o.key).sort(),
-    dependents: order.filter((x) => x.key !== o.key && x.depends_on?.includes(o.key)).map((x) => x.key).sort(),
+    dependents: order
+      .filter((x) => x.key !== o.key && x.depends_on?.includes(o.key))
+      .map((x) => x.key)
+      .sort(),
     explanation: {
       method,
       formula: FORMULAS[method],
-      inputs: { effort: { value: o.effort ?? null, attr: "effort", raw: o.effort ?? null }, goal_value: { value, terms: goals } },
-      confidence: { value: o.confidence ?? 0, source: o.confidence != null ? "attrs" : "default", explain: "Set by the run: new in this PRD, no evidence yet", evidence: [] },
+      inputs: {
+        effort: { value: o.effort ?? null, attr: 'effort', raw: o.effort ?? null },
+        goal_value: { value, terms: goals },
+      },
+      confidence: {
+        value: o.confidence ?? 0,
+        source: o.confidence != null ? 'attrs' : 'default',
+        explain: 'Set by the run: new in this PRD, no evidence yet',
+        evidence: [],
+      },
       goals,
       missing,
       steps,
@@ -1613,29 +2282,49 @@ function newFeature(o: OrderEntry, rank: number, method: Method, live: SnapshotR
  * was off); requesting changes discards it. RP1: approving also adds the order's new features
  * to the baseline as proposed (and the live ranking), for both the person's and Oracle's save.
  */
-function decideOrder(ctx: Pick<RunsContext, "db" | "now" | "documents" | "acceptNewFeatures">, r: RunOut, cp: CheckpointOut, decision: "approved" | "changes_requested", by: string | null) {
-  const snap = (ctx.db.priority_snapshots ?? []).find((x) => x.id === cp.payload.priority_snapshot_id && x.status === "proposed");
+function decideOrder(
+  ctx: Pick<RunsContext, 'db' | 'now' | 'documents' | 'acceptNewFeatures'>,
+  r: RunOut,
+  cp: CheckpointOut,
+  decision: 'approved' | 'changes_requested',
+  by: string | null,
+) {
+  const snap = (ctx.db.priority_snapshots ?? []).find(
+    (x) => x.id === cp.payload.priority_snapshot_id && x.status === 'proposed',
+  );
   if (!snap) return;
-  Object.assign(snap, { status: decision === "approved" ? "saved" : "discarded", decided_by: by, decided_at: ctx.now() });
-  if (decision === "approved") {
+  Object.assign(snap, {
+    status: decision === 'approved' ? 'saved' : 'discarded',
+    decided_by: by,
+    decided_at: ctx.now(),
+  });
+  if (decision === 'approved') {
     snap.document = orderDocument(ctx, r) ?? snap.document;
     // The approved feature set the order was checked against (api: snapshot.scope_id).
-    const scope = Object.values(ctx.db.scopes ?? {}).flat().find((x) => x.id === snap.scope_id);
-    ctx.acceptNewFeatures?.(snap, by, (scope?.features ?? []).filter((f) => f.decision === "include"));
+    const scope = Object.values(ctx.db.scopes ?? {})
+      .flat()
+      .find((x) => x.id === snap.scope_id);
+    ctx.acceptNewFeatures?.(
+      snap,
+      by,
+      (scope?.features ?? []).filter((f) => f.decision === 'include'),
+    );
   }
 }
 
-type OrderProblem = PriorityCheck["problems"][number] & { stale_goal?: string };
+type OrderProblem = PriorityCheck['problems'][number] & { stale_goal?: string };
 /** As run_order._OLD_WORDS: a goal problem stored before the goal's name was said, by its key. */
 const OLD_GOAL_WORDS = /^.* names the goal (\S+), which is not a goal (?:in|of) the baseline\b/;
 /** As run_order._old_goal: the goal key an unknown_goal problem in the old words names. */
-const oldGoal = (p: OrderProblem) => (p.code === "unknown_goal" ? (p.message.match(OLD_GOAL_WORDS)?.[1] ?? null) : null);
+const oldGoal = (p: OrderProblem) =>
+  p.code === 'unknown_goal' ? (p.message.match(OLD_GOAL_WORDS)?.[1] ?? null) : null;
 /** As run_order._is_stale: a problem stale_goals added (marked), one stored before the mark, or one in the old words. */
-const isStale = (p: OrderProblem) => !!p.stale_goal || p.message.includes("after the order was checked") || oldGoal(p) !== null;
+const isStale = (p: OrderProblem) =>
+  !!p.stale_goal || p.message.includes('after the order was checked') || oldGoal(p) !== null;
 /** As run_order._stale_key: a stale problem's feature and goal key, when it names one. */
 const staleKey = (p: OrderProblem) => {
   const goal = p.stale_goal ?? oldGoal(p);
-  return goal ? `${p.feature ?? ""}|${goal}` : null;
+  return goal ? `${p.feature ?? ''}|${goal}` : null;
 };
 
 /**
@@ -1647,11 +2336,25 @@ const staleKey = (p: OrderProblem) => {
  * words or by its feature and goal (one in older words is said again in today's). Returns the
  * stale-goal problems open now.
  */
-function recheckOrderGoals(ctx: Pick<RunsContext, "db" | "goalKeys" | "goalTitle">, cp: CheckpointOut, add = true): PriorityCheck["problems"] {
+function recheckOrderGoals(
+  ctx: Pick<RunsContext, 'db' | 'goalKeys' | 'goalTitle'>,
+  cp: CheckpointOut,
+  add = true,
+): PriorityCheck['problems'] {
   const goals = goalSet(ctx);
-  const snap = cp.status === "pending" && cp.kind === "priority_order" ? (ctx.db.priority_snapshots ?? []).find((x) => x.id === cp.payload.priority_snapshot_id && x.status === "proposed") : undefined;
+  const snap =
+    cp.status === 'pending' && cp.kind === 'priority_order'
+      ? (ctx.db.priority_snapshots ?? []).find(
+          (x) => x.id === cp.payload.priority_snapshot_id && x.status === 'proposed',
+        )
+      : undefined;
   if (!goals || !snap) return [];
-  const check = snap.check_result ?? { method: snap.method, features: snap.ranking.length, problems: [], order: [] };
+  const check = snap.check_result ?? {
+    method: snap.method,
+    features: snap.ranking.length,
+    problems: [],
+    order: [],
+  };
   const problems = check.problems as OrderProblem[];
   const kept = problems.filter((p) => !isStale(p));
   const before = new Set(problems.filter(isStale).map((p) => p.message));
@@ -1667,9 +2370,19 @@ function recheckOrderGoals(ctx: Pick<RunsContext, "db" | "goalKeys" | "goalTitle
       const message = title
         ? `${row.title} serves the goal ${title}, which was rejected after the order was checked: the run must name a goal of the Ground Truth`
         : unknownGoalMessage(row.title, g.title && g.title !== key ? g.title : null);
-      if (said.has(message) || (!add && !before.has(message) && !beforeGoals.has(`${row.key}|${key}`))) continue;
+      if (
+        said.has(message) ||
+        (!add && !before.has(message) && !beforeGoals.has(`${row.key}|${key}`))
+      )
+        continue;
       said.add(message);
-      stale.push({ code: "unknown_goal", blocking: true, feature: row.key, message, stale_goal: key });
+      stale.push({
+        code: 'unknown_goal',
+        blocking: true,
+        feature: row.key,
+        message,
+        stale_goal: key,
+      });
     }
   }
   const next = [...kept, ...stale];
@@ -1684,15 +2397,22 @@ function recheckOrderGoals(ctx: Pick<RunsContext, "db" | "goalKeys" | "goalTitle
  * As the API's compare read (oracle.priorities.service.compare): the order's stale-goal problems
  * as of now, before the band reads them.
  */
-export function refreshOrderGoals(ctx: Pick<RunsContext, "db" | "goalKeys" | "goalTitle">, snap: { checkpoint_id?: string | null; run_id?: string | null }) {
-  const cp = ctx.db.runs.find((r) => r.id === snap.run_id)?.checkpoints.find((c) => c.id === snap.checkpoint_id);
+export function refreshOrderGoals(
+  ctx: Pick<RunsContext, 'db' | 'goalKeys' | 'goalTitle'>,
+  snap: { checkpoint_id?: string | null; run_id?: string | null },
+) {
+  const cp = ctx.db.runs
+    .find((r) => r.id === snap.run_id)
+    ?.checkpoints.find((c) => c.id === snap.checkpoint_id);
   if (cp) recheckOrderGoals(ctx, cp, false);
 }
 
 /** The priority stop's note when Oracle saved the order itself (H11 ``priorities`` at Act). */
-const ORDER_SAVED_BY_ORACLE = "Oracle saved this order: Order priorities is set to Act within limits.";
+const ORDER_SAVED_BY_ORACLE =
+  'Oracle saved this order: Order priorities is set to Act within limits.';
 
-const goalsOf = (row: SnapshotRow["ranking"][number]) => new Set((row.explanation?.goals ?? []).map((g) => String(g.goal)));
+const goalsOf = (row: SnapshotRow['ranking'][number]) =>
+  new Set((row.explanation?.goals ?? []).map((g) => String(g.goal)));
 
 /**
  * As oracle.priorities.run_order.outside_limits: why an order is outside the limits, or null.
@@ -1700,16 +2420,18 @@ const goalsOf = (row: SnapshotRow["ranking"][number]) => new Set((row.explanatio
  * `most` places, or passes one that shares no goal with it. Features the live ranking does
  * not hold are not moves.
  */
-function outsideLimits(rows: SnapshotRow["ranking"], most: number): string | null {
+function outsideLimits(rows: SnapshotRow['ranking'], most: number): string | null {
   const ranked = rows.filter((r) => r.live_rank != null).sort((a, b) => a.rank - b.rank);
   for (const [i, r] of ranked.entries()) {
     const moved = Math.abs(i + 1 - r.live_rank!);
-    if (moved > most) return `${r.key} moves ${moved === 1 ? "1 place" : `${moved} places`}, more than ${most}`;
+    if (moved > most)
+      return `${r.key} moves ${moved === 1 ? '1 place' : `${moved} places`}, more than ${most}`;
   }
   for (const [i, a] of ranked.entries()) {
     for (const b of ranked.slice(i + 1)) {
       const ga = goalsOf(a);
-      if (a.live_rank! > b.live_rank! && ![...goalsOf(b)].some((g) => ga.has(g))) return `${a.key} passes ${b.key}, which serves another goal`;
+      if (a.live_rank! > b.live_rank! && ![...goalsOf(b)].some((g) => ga.has(g)))
+        return `${a.key} passes ${b.key}, which serves another goal`;
     }
   }
   return null;
@@ -1718,7 +2440,7 @@ function outsideLimits(rows: SnapshotRow["ranking"], most: number): string | nul
 /** As the API's _oracle_saves_order: ``priorities`` at Act, nothing blocking, every move within one goal and the limit. */
 function oracleSavesOrder(ctx: RunsContext, check: PriorityCheck, snap: SnapshotRow): boolean {
   const a = ctx.autonomy;
-  if (!a || a.level() !== "act") return false;
+  if (!a || a.level() !== 'act') return false;
   if (check.problems.some((p) => p.blocking ?? true)) return false;
   const limits = a.limits();
   if (!limits) return false;
@@ -1728,10 +2450,10 @@ function oracleSavesOrder(ctx: RunsContext, check: PriorityCheck, snap: Snapshot
 /** As the API's _tell_order_saved: the run's starter gets an "Oracle did" row, with no Undo. */
 function tellOrderSaved(ctx: RunsContext, r: RunOut) {
   const doc = r.document_id ? ctx.documents.find((d) => d.id === r.document_id) : undefined;
-  const name = doc?.title ?? r.document_slug ?? "this run";
+  const name = doc?.title ?? r.document_slug ?? 'this run';
   ctx.autonomy?.acted({
     summary: `Saved the priority order of ${name}, within one goal and your limit`,
-    subject: { kind: "run", key: r.id, href: `/runs/${r.id}` },
+    subject: { kind: 'run', key: r.id, href: `/runs/${r.id}` },
     undo: null,
     notify: r.created_by ? [r.created_by] : [],
   });
@@ -1748,53 +2470,76 @@ function segmentLabel(segment: string): string {
 
 function fileContent(name: string, key: string, attempt: number, document?: string | null): string {
   const segment = segmentLabel(key);
-  if (name === "tech_briefs.yaml") return briefsYaml(LOCAL_BRIEFS, attempt);
-  if (name === "eng_dates.yaml") return datesYaml({ ...LOCAL_DATES, prd: null, problems: [] }, attempt);
-  if (name === "feature_set.yaml") return featureSetYaml(LOCAL_FEATURE_SET, document, key, attempt);
-  if (name === "priority.yaml") return priorityYaml(LOCAL_ORDER, key, attempt);
-  if (name === "prd.md") return `---\ntitle: Example product PRD\n---\n\n# Example product PRD {#title}\n\nDraft ${attempt}, a sample.\n`;
-  if (name === "roadmap.md") return `---\ntitle: Example product roadmap\nkind: roadmap\n---\n\n# Example product roadmap {#roadmap}\n\nDraft ${attempt}, a sample.\n`;
-  if (name === "roadmap_items.yaml") {
+  if (name === 'tech_briefs.yaml') return briefsYaml(LOCAL_BRIEFS, attempt);
+  if (name === 'eng_dates.yaml')
+    return datesYaml({ ...LOCAL_DATES, prd: null, problems: [] }, attempt);
+  if (name === 'feature_set.yaml') return featureSetYaml(LOCAL_FEATURE_SET, document, key, attempt);
+  if (name === 'priority.yaml') return priorityYaml(LOCAL_ORDER, key, attempt);
+  if (name === 'prd.md')
+    return `---\ntitle: Example product PRD\n---\n\n# Example product PRD {#title}\n\nDraft ${attempt}, a sample.\n`;
+  if (name === 'roadmap.md')
+    return `---\ntitle: Example product roadmap\nkind: roadmap\n---\n\n# Example product roadmap {#roadmap}\n\nDraft ${attempt}, a sample.\n`;
+  if (name === 'roadmap_items.yaml') {
     return `# ${segment} (sample, attempt ${attempt})\nversion: 1\nitems:\n  - id: price-early\n    title: Show the price early\n    outcome: Fewer buyers drop off at checkout\n    horizon: now\n    milestone: Beta\n    confidence: medium\n    prd_section: features\n`;
   }
-  if (name.endsWith(".yaml")) return `# ${segment} (attempt ${attempt})\nitems:\n  - key: g1\n    title: Raise first-order completion to 70%\n    confidence: 0.82\n`;
+  if (name.endsWith('.yaml'))
+    return `# ${segment} (attempt ${attempt})\nitems:\n  - key: g1\n    title: Raise first-order completion to 70%\n    confidence: 0.82\n`;
   return `# ${segment}\n\nA sample draft (attempt ${attempt}).\n`;
 }
 
 function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
   const def = flowOf(r.flow).segments.find((x) => x.name === s.name)!;
   const attempt = s.attempts.length;
-  for (const name of def.outputs) ctx.db.artifacts[`${r.id}|${s.seq}|${name}`] = fileContent(name, s.name, attempt, r.document_slug);
+  for (const name of def.outputs)
+    ctx.db.artifacts[`${r.id}|${s.seq}|${name}`] = fileContent(
+      name,
+      s.name,
+      attempt,
+      r.document_slug,
+    );
   s.artifacts = [...def.outputs].sort();
   // The local runtime's one item cites PRD section "features", as the API's FakeRuntime does.
-  if (def.outputs.includes("roadmap_items.yaml")) {
+  if (def.outputs.includes('roadmap_items.yaml')) {
     const known = r.source ? ctx.sectionKeys(r.source.version_id) : [];
-    s.items_check = localItemsCheck(known.includes("features"), r.source ?? null);
+    s.items_check = localItemsCheck(known.includes('features'), r.source ?? null);
   }
   // C6: the local runtime's feature set checks clean, and its attempt writes a proposed scope.
-  if (def.outputs.includes("feature_set.yaml")) {
+  if (def.outputs.includes('feature_set.yaml')) {
     s.feature_set_check = checkOf(LOCAL_FEATURE_SET);
     proposeScope(ctx, r, s.seq, attempt, LOCAL_FEATURE_SET, s.feature_set_check);
   }
   // C8: the local runtime's order checks against the approved scope, and becomes a proposed snapshot.
   let snapshot: SnapshotRow | null = null;
   // F4: the architect's briefs, one per feature of the run's feature set, checked as the stop reads them.
-  const briefs = def.outputs.includes("tech_briefs.yaml") ? briefsCheckOf(r.id === ENG_CHECK_RUN ? SEEDED_BRIEFS : LOCAL_BRIEFS) : null;
+  const briefs = def.outputs.includes('tech_briefs.yaml')
+    ? briefsCheckOf(r.id === ENG_CHECK_RUN ? SEEDED_BRIEFS : LOCAL_BRIEFS)
+    : null;
   // F4 lane B: the architect's dates for the draft's Now items, checked as the stop reads them.
-  const dates = def.outputs.includes("eng_dates.yaml") ? datesCheckOf(r, r.id === ENG_DATES_RUN ? SEEDED_DATES : LOCAL_DATES) : null;
+  const dates = def.outputs.includes('eng_dates.yaml')
+    ? datesCheckOf(r, r.id === ENG_DATES_RUN ? SEEDED_DATES : LOCAL_DATES)
+    : null;
   if (dates) ctx.db.artifacts[`${r.id}|${s.seq}|eng_dates.yaml`] = datesYaml(dates, attempt);
-  if (def.outputs.includes("priority.yaml")) {
+  if (def.outputs.includes('priority.yaml')) {
     s.priority_check = checkOrder(LOCAL_ORDER, scopeOf(ctx, r), goalSet(ctx), ctx.goalTitle);
     snapshot = proposeOrder(ctx, r, s.seq, attempt, LOCAL_ORDER, s.priority_check);
   }
   // The mock writes no strategy draft ("{draft}"): Company › Strategy keeps its own store.
-  if (importsDraft(def.outputs.filter((o) => o !== "{draft}")) && r.document_slug) {
+  if (importsDraft(def.outputs.filter((o) => o !== '{draft}')) && r.document_slug) {
     const imp = ctx.importDraft(r.document_slug, r);
-    s.draft_import = { ...imp, created: true, warnings: [], error: null, problems: [], code_names: [], summary: null };
+    s.draft_import = {
+      ...imp,
+      created: true,
+      warnings: [],
+      error: null,
+      problems: [],
+      code_names: [],
+      summary: null,
+    };
     r.document_id = imp.document_id ?? null;
     // As the API (fill_document): once the draft imports, the run's scopes and orders name the document.
     for (const x of ctx.db.scopes?.[r.id] ?? []) x.document_id ??= r.document_id;
-    for (const x of ctx.db.priority_snapshots ?? []) if (x.run_id === r.id && !x.document?.id) x.document = orderDocument(ctx, r);
+    for (const x of ctx.db.priority_snapshots ?? [])
+      if (x.run_id === r.id && !x.document?.id) x.document = orderDocument(ctx, r);
   }
   const payload = {
     segment_seq: s.seq,
@@ -1806,7 +2551,16 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
     ...(briefs ? { briefs_check: briefs } : {}),
     ...(dates ? { dates_check: dates } : {}),
     // As the API: the review of an imported draft names its version.
-    ...(s.draft_import?.version ? { import: { document_id: s.draft_import.document_id, slug: s.draft_import.slug, kind: r.document_kind, version: s.draft_import.version } } : {}),
+    ...(s.draft_import?.version
+      ? {
+          import: {
+            document_id: s.draft_import.document_id,
+            slug: s.draft_import.slug,
+            kind: r.document_kind,
+            version: s.draft_import.version,
+          },
+        }
+      : {}),
   };
   if (!def.checkpoint) {
     // No stop (F5-2's code_map index): the run goes on, or ends.
@@ -1817,24 +2571,27 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
   // H11 ``priorities`` at Act: Oracle saves an order inside the limits itself.
   const oracleOrders = stopOn && !!snapshot && oracleSavesOrder(ctx, s.priority_check!, snapshot);
   const on = stopOn && !oracleOrders;
-  if (!stopOn && s.feature_set_check) decideScope(ctx, r, "approved", null);
+  if (!stopOn && s.feature_set_check) decideScope(ctx, r, 'approved', null);
   const cp: CheckpointOut = {
     id: ctx.uuid(),
     run_id: r.id,
     // As the API: the feedback loop on a roadmap is a roadmap review.
-    kind: def.checkpoint === "prd_review" && r.document_kind === "roadmap" ? "roadmap_review" : def.checkpoint,
-    status: on ? "pending" : "skipped",
+    kind:
+      def.checkpoint === 'prd_review' && r.document_kind === 'roadmap'
+        ? 'roadmap_review'
+        : def.checkpoint,
+    status: on ? 'pending' : 'skipped',
     approver_role: def.approver_role,
     segment_seq: s.seq,
     decided_by: null,
     decided_at: on ? null : ctx.now(),
-    note: on ? null : oracleOrders ? ORDER_SAVED_BY_ORACLE : "Turned off when the run started.",
+    note: on ? null : oracleOrders ? ORDER_SAVED_BY_ORACLE : 'Turned off when the run started.',
     payload,
     created_at: ctx.now(),
     can_decide: on,
     lead_stop: false,
     cannot_approve: null,
-    approve_label: "Approve",
+    approve_label: 'Approve',
     needs_agents: [],
   };
   r.checkpoints.push(cp);
@@ -1843,25 +2600,33 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
     // Rule 5: a clean order is saved by Oracle; a blocking one fails the run.
     const blocking = (s.priority_check?.problems ?? []).filter((p) => p.blocking);
     if (blocking.length) {
-      r.error = `priority.yaml was rejected: ${blocking.slice(0, 5).map((p) => `[${p.code}] ${p.message}`).join("; ")}`;
-      return finish(ctx, r, "failed");
+      r.error = `priority.yaml was rejected: ${blocking
+        .slice(0, 5)
+        .map((p) => `[${p.code}] ${p.message}`)
+        .join('; ')}`;
+      return finish(ctx, r, 'failed');
     }
-    decideOrder(ctx, r, cp, "approved", null);
+    decideOrder(ctx, r, cp, 'approved', null);
     if (oracleOrders) tellOrderSaved(ctx, r);
   }
-  if (on) r.status = "awaiting_checkpoint";
+  if (on) r.status = 'awaiting_checkpoint';
   else next(ctx, r, s);
 }
 
 /** Runs a check counts as at work: an ended run it could not read is still named. */
-const TICK_ACTIVE = new Set<string>(["running", "awaiting_checkpoint", "awaiting_approval", "paused_overrun"]);
+const TICK_ACTIVE = new Set<string>([
+  'running',
+  'awaiting_checkpoint',
+  'awaiting_approval',
+  'paused_overrun',
+]);
 
 /** Tests: a count of runs every check reports it could not read, or "running": every running run. */
-export const MOCK_TICK_ERRORS_KEY = "po-mock-tick-errors";
+export const MOCK_TICK_ERRORS_KEY = 'po-mock-tick-errors';
 /** Tests (artifact-skip-refused): a file name SwarmCloud refuses to send (422) from every running step. */
-export const MOCK_TICK_REFUSED_KEY = "po-mock-tick-refused";
+export const MOCK_TICK_REFUSED_KEY = 'po-mock-tick-refused';
 
-function tick(ctx: RunsContext, ticker = false): Schemas["TickOut"] {
+function tick(ctx: RunsContext, ticker = false): Schemas['TickOut'] {
   const out = {
     runs_checked: 0,
     segments_finished: 0,
@@ -1870,7 +2635,7 @@ function tick(ctx: RunsContext, ticker = false): Schemas["TickOut"] {
     errors: [] as string[],
     member_follow_ups: 0,
     active_runs: 0,
-    unchecked: [] as Schemas["TickUnchecked"][],
+    unchecked: [] as Schemas['TickUnchecked'][],
   };
   // Decisions recorded and not delivered yet: SwarmCloud takes them now, and the run goes on
   // (its next segment runs from the next tick).
@@ -1882,7 +2647,7 @@ function tick(ctx: RunsContext, ticker = false): Schemas["TickOut"] {
     delete wait.posting;
     Object.assign(owed, { delivery: null, payload: { ...owed.payload, wait } });
     const s = r.segments.find((x) => x.seq === owed.segment_seq)!;
-    if (owed.status === "approved") next(ctx, r, s);
+    if (owed.status === 'approved') next(ctx, r, s);
     else submit(ctx, r, s, owed.note);
     startedInCheck(ctx, r);
     refresh(r);
@@ -1891,17 +2656,23 @@ function tick(ctx: RunsContext, ticker = false): Schemas["TickOut"] {
   }
   // Tests: runs the check could not read (the API lists each with its error, and rolls back their pass).
   // Only the ticker's own check (POST /v1/internal/tick), never the ticks that seed the mock's runs.
-  const failing = !ticker || typeof localStorage === "undefined" ? null : localStorage.getItem(MOCK_TICK_ERRORS_KEY);
+  const failing =
+    !ticker || typeof localStorage === 'undefined'
+      ? null
+      : localStorage.getItem(MOCK_TICK_ERRORS_KEY);
   // As the API: ended runs Oracle still watches (a cancel winding down), named with why.
   // "running": every running run, the one a test started included.
   const unread = !failing
     ? []
-    : failing === "running"
-      ? ctx.db.runs.filter((r) => r.status === "running" && r.flow !== DRAFT_ITEMS_FLOW)
-      : [...ctx.db.runs.filter((r) => !TICK_ACTIVE.has(r.status)), ...ctx.db.runs.filter((r) => TICK_ACTIVE.has(r.status))].slice(0, Number(failing));
+    : failing === 'running'
+      ? ctx.db.runs.filter((r) => r.status === 'running' && r.flow !== DRAFT_ITEMS_FLOW)
+      : [
+          ...ctx.db.runs.filter((r) => !TICK_ACTIVE.has(r.status)),
+          ...ctx.db.runs.filter((r) => TICK_ACTIVE.has(r.status)),
+        ].slice(0, Number(failing));
   const unreadIds = new Set(unread.map((r) => r.id));
   for (const r of ctx.db.runs) {
-    if (r.status !== "running" || delivered.has(r.id)) continue;
+    if (r.status !== 'running' || delivered.has(r.id)) continue;
     // E1: a draft's items run is finished by the draft roadmap's own tick (./draft-roadmap.ts).
     if (r.flow === DRAFT_ITEMS_FLOW) continue;
     out.runs_checked += 1;
@@ -1910,14 +2681,14 @@ function tick(ctx: RunsContext, ticker = false): Schemas["TickOut"] {
     out.active_runs += 1;
     if ((ctx.slowAgents || ctx.quietAgents || ctx.stuckAgents) && agentsWorking(ctx, r)) continue;
     if (ctx.stuckAgents) {
-      const s = r.segments.find((x) => x.status === "running");
+      const s = r.segments.find((x) => x.status === 'running');
       if (s) s.checked_at = ctx.now();
       continue;
     }
     if (r.waiting_for) {
       // F4 lane B, as the API re-checks each tick: the version's roadmap items are ready
       // now, so the Engineering dates step starts (a workflow of its own).
-      const waiting = r.segments.find((x) => x.status === "pending" && x.name === "eng_dates");
+      const waiting = r.segments.find((x) => x.status === 'pending' && x.name === 'eng_dates');
       r.waiting_for = null;
       if (waiting) submit(ctx, r, waiting);
       refresh(r);
@@ -1925,40 +2696,47 @@ function tick(ctx: RunsContext, ticker = false): Schemas["TickOut"] {
     }
     // As the API: a refused file the step's import needs holds the step; the check says so and
     // the run carries one note per file.
-    const refused = typeof localStorage === "undefined" ? null : localStorage.getItem(MOCK_TICK_REFUSED_KEY);
-    const step = r.segments.find((x) => x.status === "running");
+    const refused =
+      typeof localStorage === 'undefined' ? null : localStorage.getItem(MOCK_TICK_REFUSED_KEY);
+    const step = r.segments.find((x) => x.status === 'running');
     if (refused && step) {
-      const why = "422 validation_error: artifact name not allowed";
+      const why = '422 validation_error: artifact name not allowed';
       out.errors.push(
         `run ${r.id}: SwarmCloud refused to send ${refused} (${why}), which the ${step.title} step needs to import its results`,
       );
       const note =
         `SwarmCloud refused to send ${refused} (${why}), the file this step's results are imported from, so they ` +
-        "were not imported. Oracle asks again each minute; if SwarmCloud keeps refusing it, ask whoever runs SwarmCloud why " +
+        'were not imported. Oracle asks again each minute; if SwarmCloud keeps refusing it, ask whoever runs SwarmCloud why ' +
         "it refuses this file: it goes by the file's name, so running the step again will not help.";
       if (!r.notes.includes(note)) r.notes.push(note);
       continue;
     }
     const done = finishRunning(ctx, r);
-    if (done === "none") continue;
+    if (done === 'none') continue;
     out.segments_finished += 1;
-    if (done === "paused") out.runs_paused += 1;
+    if (done === 'paused') out.runs_paused += 1;
     else out.runs_advanced += 1;
     startedInCheck(ctx, r);
   }
   for (const r of unread) {
     // As the API: SwarmCloud's 503, in words (the error keeps what SwarmCloud said).
-    out.errors.push(`run ${r.id}: SwarmCloud refused GET /v1/workflows/${r.id}: HTTP 503 unavailable`);
-    const reason = "SwarmCloud had a problem on its side; the next check tries again";
-    out.unchecked.push({ run_id: r.id, title: [r.document_title, r.flow_title].filter(Boolean).join(" · "), reason });
-    if (r.status !== "running" || r.flow === DRAFT_ITEMS_FLOW) out.runs_checked += 1;
+    out.errors.push(
+      `run ${r.id}: SwarmCloud refused GET /v1/workflows/${r.id}: HTTP 503 unavailable`,
+    );
+    const reason = 'SwarmCloud had a problem on its side; the next check tries again';
+    out.unchecked.push({
+      run_id: r.id,
+      title: [r.document_title, r.flow_title].filter(Boolean).join(' · '),
+      reason,
+    });
+    if (r.status !== 'running' || r.flow === DRAFT_ITEMS_FLOW) out.runs_checked += 1;
   }
   return out;
 }
 
 /** #258: a segment that started during this check shows what the check read of its agents. */
 function startedInCheck(ctx: RunsContext, r: RunOut) {
-  const s = r.segments.find((x) => x.status === "running");
+  const s = r.segments.find((x) => x.status === 'running');
   if (!s || s.checked_at) return;
   if (ctx.slowAgents || ctx.quietAgents || ctx.stuckAgents) agentsWorking(ctx, r);
   else s.checked_at = ctx.now();
@@ -1966,19 +2744,37 @@ function startedInCheck(ctx: RunsContext, r: RunOut) {
 
 /** #258 "slow-agents": the first tick of a running segment reads its agents working; true if it did. */
 function agentsWorking(ctx: RunsContext, r: RunOut): boolean {
-  const s = r.segments.find((x) => x.status === "running");
+  const s = r.segments.find((x) => x.status === 'running');
   if (!s || s.checked_at) return false;
-  const each = round2(((s.estimate_usd ?? 0) / 3) / Math.max(s.roles.length, 1));
+  const each = round2((s.estimate_usd ?? 0) / 3 / Math.max(s.roles.length, 1));
   const now = ctx.now();
   if (ctx.quietAgents) {
     // run-progress: no heartbeat and no cost reported, but 12 proposals written 30s ago.
     const wrote = new Date(new Date(now).getTime() - 30_000).toISOString();
     const started = new Date(new Date(now).getTime() - 5 * 60_000).toISOString();
-    s.agents = s.roles.map((role) => ({ role, state: "running", started_at: started, heartbeat_at: null, cost_usd: null, event_at: null, last_work_at: wrote, last_work: "proposals" }));
+    s.agents = s.roles.map((role) => ({
+      role,
+      state: 'running',
+      started_at: started,
+      heartbeat_at: null,
+      cost_usd: null,
+      event_at: null,
+      last_work_at: wrote,
+      last_work: 'proposals',
+    }));
     Object.assign(s, { checked_at: now, proposals_written: 12 });
     return true;
   }
-  s.agents = s.roles.map((role) => ({ role, state: "running", started_at: s.started_at, heartbeat_at: now, cost_usd: each, event_at: null, last_work_at: now, last_work: "heartbeat" }));
+  s.agents = s.roles.map((role) => ({
+    role,
+    state: 'running',
+    started_at: s.started_at,
+    heartbeat_at: now,
+    cost_usd: each,
+    event_at: null,
+    last_work_at: now,
+    last_work: 'heartbeat',
+  }));
   s.checked_at = now;
   const a = s.attempts[s.attempts.length - 1];
   a.cost_usd = round2(each * s.roles.length);
@@ -1988,29 +2784,29 @@ function agentsWorking(ctx: RunsContext, r: RunOut): boolean {
 }
 
 /** The agents finish the run's running segment (at 90% of its estimate), and the run goes on. */
-function finishRunning(ctx: RunsContext, r: RunOut): "none" | "paused" | "advanced" {
-  const s = r.segments.find((x) => x.status === "running");
-  if (!s) return "none";
+function finishRunning(ctx: RunsContext, r: RunOut): 'none' | 'paused' | 'advanced' {
+  const s = r.segments.find((x) => x.status === 'running');
+  if (!s) return 'none';
   const a = s.attempts[s.attempts.length - 1];
   a.cost_usd = round2((s.estimate_usd ?? 0) * 0.9);
-  a.state = "succeeded";
+  a.state = 'succeeded';
   s.cost_usd = knownSum(s.attempts.map((x) => x.cost_usd));
-  s.status = "succeeded";
+  s.status = 'succeeded';
   s.finished_at = ctx.now();
   Object.assign(s, { agents: [], checked_at: null, proposals_written: 0 });
   refresh(r);
   if (r.overrun_ceiling_usd != null && (r.spent_usd ?? 0) > r.overrun_ceiling_usd) {
-    r.status = "paused_overrun";
-    return "paused";
+    r.status = 'paused_overrun';
+    return 'paused';
   }
   advance(ctx, r, s);
   refresh(r);
-  return "advanced";
+  return 'advanced';
 }
 
 /** E1 part B: the draft items a Build roadmap run's items step reuses, unless it derives them again. */
 function itemsReuse(ctx: RunsContext, r: RunOut) {
-  if (r.flow !== "prd_to_roadmap" || r.knobs.reuse_draft_items === false || !r.source) return null;
+  if (r.flow !== 'prd_to_roadmap' || r.knobs.reuse_draft_items === false || !r.source) return null;
   return ctx.draftItemsToReuse?.(r.source.document_id, r.source.version) ?? null;
 }
 
@@ -2023,63 +2819,113 @@ const estimated = (r: RunOut) => r as RunOut & { draft_items_reused?: ItemsReuse
 function itemsChanged(ctx: RunsContext, r: RunOut): Response | null {
   const knob = estimated(r).draft_items_reused;
   if (!knob || JSON.stringify(itemsReuse(ctx, r)) === JSON.stringify(knob)) return null;
-  return fail(409, "the PRD version's draft roadmap items changed since the estimate: estimate the run again");
+  return fail(
+    409,
+    "the PRD version's draft roadmap items changed since the estimate: estimate the run again",
+  );
 }
 
 /** "Reused: the roadmap items of v3, derived 20 Oct", as the API: the Company time zone's day. */
 function itemsReusedNote(reuse: ItemsReused) {
-  const on = reuse.ready_at ? monthDay(reuse.ready_at).split(" ").reverse().join(" ") : null;
-  return `Reused: the roadmap items of v${reuse.version}${on ? `, derived ${on}` : ""}`;
+  const on = reuse.ready_at ? monthDay(reuse.ready_at).split(' ').reverse().join(' ') : null;
+  return `Reused: the roadmap items of v${reuse.version}${on ? `, derived ${on}` : ''}`;
 }
 
 function launch(ctx: RunsContext, r: RunOut) {
   r.started_at = ctx.now();
   r.overrun_ceiling_usd = round2((r.estimate_usd ?? 0) * FACTOR);
-  for (const s of r.segments.filter(skippedOff)) Object.assign(s, { status: "skipped", cost_usd: 0, estimate_usd: 0, note: OFF_NOTE, finished_at: ctx.now() });
+  for (const s of r.segments.filter(skippedOff))
+    Object.assign(s, {
+      status: 'skipped',
+      cost_usd: 0,
+      estimate_usd: 0,
+      note: OFF_NOTE,
+      finished_at: ctx.now(),
+    });
   const reused = reusedReview(r);
   const first = r.segments[0];
-  if (reused && first?.name === "baseline") {
+  if (reused && first?.name === 'baseline') {
     // C4: the reused baseline segment runs no step and costs nothing; its stop is skipped.
     const on = monthDay(reused.approved_at);
-    Object.assign(first, { status: "skipped", cost_usd: 0, estimate_usd: 0, reused, note: `Reused the Ground Truth approved ${on}`, started_at: ctx.now(), finished_at: ctx.now() });
+    Object.assign(first, {
+      status: 'skipped',
+      cost_usd: 0,
+      estimate_usd: 0,
+      reused,
+      note: `Reused the Ground Truth approved ${on}`,
+      started_at: ctx.now(),
+      finished_at: ctx.now(),
+    });
     r.checkpoints.push({
-      id: ctx.uuid(), run_id: r.id, kind: "baseline_confirm", status: "skipped", approver_role: "approver",
-      segment_seq: first.seq, decided_by: null, decided_at: ctx.now(), note: `Reused the Ground Truth approved ${on}`, payload: {},
-      created_at: ctx.now(), can_decide: false, lead_stop: false, cannot_approve: null, approve_label: "Approve", needs_agents: [],
+      id: ctx.uuid(),
+      run_id: r.id,
+      kind: 'baseline_confirm',
+      status: 'skipped',
+      approver_role: 'approver',
+      segment_seq: first.seq,
+      decided_by: null,
+      decided_at: ctx.now(),
+      note: `Reused the Ground Truth approved ${on}`,
+      payload: {},
+      created_at: ctx.now(),
+      can_decide: false,
+      lead_stop: false,
+      cannot_approve: null,
+      approve_label: 'Approve',
+      needs_agents: [],
     });
     submit(ctx, r, r.segments[1]);
     return;
   }
   const items = estimated(r).draft_items_reused;
-  if (items && first?.name === "roadmap_items") {
+  if (items && first?.name === 'roadmap_items') {
     // E1 part B: the items step runs nothing and costs nothing; its stop opens at once.
-    Object.assign(first, { status: "succeeded", cost_usd: 0, estimate_usd: 0, note: itemsReusedNote(items), started_at: ctx.now(), finished_at: ctx.now() });
-    first.attempts.push({ attempt: first.attempts.length + 1, workflow_id: null, submitted_at: ctx.now(), cost_usd: 0, note: null, state: "succeeded" });
-    r.status = "running";
+    Object.assign(first, {
+      status: 'succeeded',
+      cost_usd: 0,
+      estimate_usd: 0,
+      note: itemsReusedNote(items),
+      started_at: ctx.now(),
+      finished_at: ctx.now(),
+    });
+    first.attempts.push({
+      attempt: first.attempts.length + 1,
+      workflow_id: null,
+      submitted_at: ctx.now(),
+      cost_usd: 0,
+      note: null,
+      state: 'succeeded',
+    });
+    r.status = 'running';
     advance(ctx, r, first);
     return;
   }
   submit(ctx, r, first);
 }
 
-function inbox(ctx: RunsContext): Schemas["InboxOut"] {
+function inbox(ctx: RunsContext): Schemas['InboxOut'] {
   const mine = (c: CheckpointOut, r: RunOut) => !ctx.mayDecide || ctx.mayDecide(c, r.flow);
-  const checkpoints = ctx.db.runs.flatMap((r) =>
-    r.checkpoints
-      .filter((c) => c.status === "pending" && mine(c, r))
-      .map((c) => ({
-        ...gated(ctx, c),
-        // As the API's may_decide: by the stop's role (an engineering stop as `mine` says).
-        can_decide: ctx.userRole == null || atLeast(ctx.userRole, c.approver_role) || (!!ctx.mayDecide && ENGINEERING_KINDS.includes(c.kind)),
-        flow: r.flow,
-        flow_title: r.flow_title,
-        document_slug: r.document_slug,
-        document_title: docTitle(ctx, r),
-        segment_title: r.segments.find((s) => s.seq === c.segment_seq)?.title ?? null,
-        // D9: what it needs of me and how much, from the same review read.
-        summary: inboxSummary(ctx, r, c),
-      })),
-  ).filter((c) => c.can_decide); // qa-company-4: as the API's inbox, only the stops I may decide.
+  const checkpoints = ctx.db.runs
+    .flatMap((r) =>
+      r.checkpoints
+        .filter((c) => c.status === 'pending' && mine(c, r))
+        .map((c) => ({
+          ...gated(ctx, c),
+          // As the API's may_decide: by the stop's role (an engineering stop as `mine` says).
+          can_decide:
+            ctx.userRole == null ||
+            atLeast(ctx.userRole, c.approver_role) ||
+            (!!ctx.mayDecide && ENGINEERING_KINDS.includes(c.kind)),
+          flow: r.flow,
+          flow_title: r.flow_title,
+          document_slug: r.document_slug,
+          document_title: docTitle(ctx, r),
+          segment_title: r.segments.find((s) => s.seq === c.segment_seq)?.title ?? null,
+          // D9: what it needs of me and how much, from the same review read.
+          summary: inboxSummary(ctx, r, c),
+        })),
+    )
+    .filter((c) => c.can_decide); // qa-company-4: as the API's inbox, only the stops I may decide.
   // Decided, not delivered to the run yet: shown, nothing to decide, not in the total.
   const deliveries = ctx.db.runs.flatMap((r) =>
     r.checkpoints
@@ -2095,13 +2941,22 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
       })),
   );
   // The inbox embeds summaries without their progress, as the API does.
-  const bare = (r: RunOut) => ({ ...summary(r), document_title: docTitle(ctx, r), progress: null, delivering: null });
+  const bare = (r: RunOut) => ({
+    ...summary(r),
+    document_title: docTitle(ctx, r),
+    progress: null,
+    delivering: null,
+  });
   // qa-company-4: as the API, cost approvals and overruns wait on owners only.
-  const owner = ctx.userRole == null || ctx.userRole === "owner";
-  const approvals = owner ? ctx.db.runs.filter((r) => r.status === "awaiting_approval").map(bare) : [];
-  const overruns = owner ? ctx.db.runs.filter((r) => r.status === "paused_overrun").map(bare) : [];
+  const owner = ctx.userRole == null || ctx.userRole === 'owner';
+  const approvals = owner
+    ? ctx.db.runs.filter((r) => r.status === 'awaiting_approval').map(bare)
+    : [];
+  const overruns = owner ? ctx.db.runs.filter((r) => r.status === 'paused_overrun').map(bare) : [];
   const byDoc = new Map<string, FeedbackRow[]>();
-  for (const f of ctx.feedback.filter((x) => x.status === "open" && !ctx.staged?.(x.id)).sort((a, b) => b.created_at.localeCompare(a.created_at))) {
+  for (const f of ctx.feedback
+    .filter((x) => x.status === 'open' && !ctx.staged?.(x.id))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))) {
     byDoc.set(f.document_id, [...(byDoc.get(f.document_id) ?? []), f]);
   }
   const feedback = [...byDoc.entries()].flatMap(([docId, items]) => {
@@ -2113,12 +2968,25 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
     for (const f of items) {
       const s = status(f);
       counts[
-        s === "open" ? "suggestions" : s === "accepted" ? "accepted" : f.kind === "comment" ? "comments" : f.kind === "section_review" ? "verdicts" : "other"
+        s === 'open'
+          ? 'suggestions'
+          : s === 'accepted'
+            ? 'accepted'
+            : f.kind === 'comment'
+              ? 'comments'
+              : f.kind === 'section_review'
+                ? 'verdicts'
+                : 'other'
       ]++;
     }
     const first = items
       .filter((f) => f.section_key)
-      .sort((a, b) => a.raised_on_version - b.raised_on_version || a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))[0];
+      .sort(
+        (a, b) =>
+          a.raised_on_version - b.raised_on_version ||
+          a.created_at.localeCompare(b.created_at) ||
+          a.id.localeCompare(b.id),
+      )[0];
     return [
       {
         document_id: d.id,
@@ -2135,7 +3003,7 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
           section_key: f.section_key ?? null,
           raised_on_version: f.raised_on_version,
           created_at: f.created_at,
-          state: "open" as const,
+          state: 'open' as const,
           staged_for_agents: false,
           suggestion_status: status(f),
         })),
@@ -2143,9 +3011,14 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
     ];
   });
   // Runs whose output Oracle stopped trying to import (owners: Retry).
-  const imports = ctx.db.runs.filter((r) => r.can_retry_import && !FINAL.includes(r.status)).map((r) => ({ ...summary(r), document_title: docTitle(ctx, r) }));
+  const imports = ctx.db.runs
+    .filter((r) => r.can_retry_import && !FINAL.includes(r.status))
+    .map((r) => ({ ...summary(r), document_title: docTitle(ctx, r) }));
   // Owners only: runs that finished with no document (owner, 2026-10-25).
-  const finished = ctx.userRole === "owner" || ctx.userRole == null ? ctx.db.runs.filter((r) => r.status === "succeeded") : [];
+  const finished =
+    ctx.userRole === 'owner' || ctx.userRole == null
+      ? ctx.db.runs.filter((r) => r.status === 'succeeded')
+      : [];
   for (const r of finished) refresh(r);
   const no_documents = finished.flatMap((r) => {
     const why = noDocument(ctx, r);
@@ -2153,8 +3026,12 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
   });
   // Runs that wait on their owner (stuck: Retry, Stop cancelling, Retry lookup, Cancel again,
   // Dismiss), and work given up on that is still looked for (shown only, not in the total).
-  const lookups = ctx.db.runs.filter((r) => r.stuck).map((r) => ({ ...summary(r), document_title: docTitle(ctx, r) }));
-  const searches = ctx.db.runs.filter((r) => r.searching).map((r) => ({ ...summary(r), document_title: docTitle(ctx, r) }));
+  const lookups = ctx.db.runs
+    .filter((r) => r.stuck)
+    .map((r) => ({ ...summary(r), document_title: docTitle(ctx, r) }));
+  const searches = ctx.db.runs
+    .filter((r) => r.searching)
+    .map((r) => ({ ...summary(r), document_title: docTitle(ctx, r) }));
   // Refused drafts Oracle sent back to the writer itself, being revised: the review's state,
   // shown only (nothing to decide, not in the total).
   const revising = ctx.db.runs.filter((r) => r.segments.some((s) => sentBack(r, s))).map(bare);
@@ -2210,7 +3087,13 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
     report_failures: [],
     oracle_actions: [],
     // Every new or open item (C1e, 2026-10-20): the server adds the feedback items' New + Open (./next-draft.ts).
-    total: checkpoints.length + approvals.length + overruns.length + lookups.length + imports.length + no_documents.length,
+    total:
+      checkpoints.length +
+      approvals.length +
+      overruns.length +
+      lookups.length +
+      imports.length +
+      no_documents.length,
     // Feedback states (C1e) are added by the server, which holds the suggestions (./next-draft.ts).
     items: [],
     counts: { new: 0, open: 0, staged: 0, declined: 0, done: 0 },
@@ -2221,75 +3104,98 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
 }
 
 /** Handles /v1/flows, /v1/runs/*, /v1/inbox and /v1/internal/tick; null for anything else. */
-export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Promise<Response | null> {
+export async function routeRuns(
+  ctx: RunsContext,
+  req: Request,
+  p: string[],
+): Promise<Response | null> {
   const m = req.method;
-  const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
+  const body = async <T>() => JSON.parse((await req.text()) || 'null') as T;
 
-  if (p[1] === "flows" && m === "GET") return reply("/v1/flows", "get", flowCatalog());
-  if (p[1] === "inbox" && m === "GET") {
+  if (p[1] === 'flows' && m === 'GET') return reply('/v1/flows', 'get', flowCatalog());
+  if (p[1] === 'inbox' && m === 'GET') {
     for (const r of ctx.db.runs) recheckBriefs(ctx.db, r, (x) => docTitle(ctx, x));
-    return reply("/v1/inbox", "get", inbox(ctx));
+    return reply('/v1/inbox', 'get', inbox(ctx));
   }
-  if (p[1] === "internal" && p[2] === "tick" && m === "POST") return reply("/v1/internal/tick", "post", tick(ctx, true));
+  if (p[1] === 'internal' && p[2] === 'tick' && m === 'POST')
+    return reply('/v1/internal/tick', 'post', tick(ctx, true));
   // C6: the document's approved PRD scope, by id or slug (a new PRD's run names it by slug).
-  if (p[1] === "documents" && p.length === 4 && p[3] === "scope" && m === "GET") {
+  if (p[1] === 'documents' && p.length === 4 && p[3] === 'scope' && m === 'GET') {
     const doc = ctx.documents.find((d) => d.id === p[2] || d.slug === p[2]);
     const ofDoc = (x: PrdScopeOut) => {
       const run = ctx.db.runs.find((y) => y.id === x.run_id);
-      return (!!doc && (x.document_id === doc.id || run?.document_id === doc.id)) || run?.document_slug === p[2] || x.document_id === p[2];
+      return (
+        (!!doc && (x.document_id === doc.id || run?.document_id === doc.id)) ||
+        run?.document_slug === p[2] ||
+        x.document_id === p[2]
+      );
     };
     const found = Object.values(ctx.db.scopes ?? {})
       .flat()
-      .filter((x) => x.status === "approved" && ofDoc(x))
-      .sort((a, b) => (b.approved_at ?? "").localeCompare(a.approved_at ?? ""))[0];
-    return found ? reply("/v1/documents/{doc}/scope", "get", found) : fail(404, `document ${p[2]} has no approved PRD scope`);
+      .filter((x) => x.status === 'approved' && ofDoc(x))
+      .sort((a, b) => (b.approved_at ?? '').localeCompare(a.approved_at ?? ''))[0];
+    return found
+      ? reply('/v1/documents/{doc}/scope', 'get', found)
+      : fail(404, `document ${p[2]} has no approved PRD scope`);
   }
   // C7: the feature-set stop's rows (./scope.ts), and a run's latest scope.
   const scoped = await routeScopes(ctx, req, p);
   if (scoped) return scoped;
-  if (p[1] !== "runs") return null;
+  if (p[1] !== 'runs') return null;
 
-  if (p.length === 2 && m === "GET") {
-    const status = new URL(req.url).searchParams.get("status");
+  if (p.length === 2 && m === 'GET') {
+    const status = new URL(req.url).searchParams.get('status');
     return reply(
-      "/v1/runs",
-      "get",
+      '/v1/runs',
+      'get',
       ctx.db.runs
         .filter((r) => !status || r.status === status)
         .sort((a, b) => b.created_at.localeCompare(a.created_at))
         .map((r) => {
           // As the API: the row's Decide follows the run page's can_decide for its waiting checkpoint.
-          const cp = r.checkpoints.find((c) => c.status === "pending");
-          return { ...summary(r), document_title: docTitle(ctx, r), can_decide: !!cp && mayStage(ctx, r, cp, ctx.userRole ?? null) };
+          const cp = r.checkpoints.find((c) => c.status === 'pending');
+          return {
+            ...summary(r),
+            document_title: docTitle(ctx, r),
+            can_decide: !!cp && mayStage(ctx, r, cp, ctx.userRole ?? null),
+          };
         }),
     );
   }
-  if (p.length === 2 && m === "POST") {
-    const input = await body<Schemas["RunCreate"]>();
+  if (p.length === 2 && m === 'POST') {
+    const input = await body<Schemas['RunCreate']>();
     const flow = flowOf(input.flow);
     // H8: only an owner drafts an update.
-    if (input.flow === "update_draft" && ctx.userRole !== "owner") return fail(403, "Only an owner can draft an update");
+    if (input.flow === 'update_draft' && ctx.userRole !== 'owner')
+      return fail(403, 'Only an owner can draft an update');
     // H9: approvers and owners draft a pricing memo.
-    if (input.flow === "pricing_memo" && ctx.userRole !== "owner" && ctx.userRole !== "approver") return fail(403, "Requires the approver role");
+    if (input.flow === 'pricing_memo' && ctx.userRole !== 'owner' && ctx.userRole !== 'approver')
+      return fail(403, 'Requires the approver role');
     const knobs = resolveKnobs(input.flow, input.knobs);
-    if (typeof knobs === "string") return fail(422, knobs);
+    if (typeof knobs === 'string') return fail(422, knobs);
     const goals = targetGoals(ctx, input.flow, input.knobs?.goals);
-    if (typeof goals === "string") return fail(422, goals);
+    if (typeof goals === 'string') return fail(422, goals);
     knobs.goals = goals ?? [];
     const features = targetFeatures(ctx, input.flow, input.knobs?.features);
-    if (typeof features === "string") return fail(422, features);
+    if (typeof features === 'string') return fail(422, features);
     knobs.features = features ?? [];
     const refused = buildUnderWay(ctx, input.flow);
     if (refused) return refused;
     // A flow that writes no document names none, reads none and takes no template.
     const noDocument = !flow.writes_document;
-    if (noDocument && [input.document, input.source, input.source_version, input.template, input.theme].some((v) => v != null)) {
+    if (
+      noDocument &&
+      [input.document, input.source, input.source_version, input.template, input.theme].some(
+        (v) => v != null,
+      )
+    ) {
       return fail(422, `the ${flow.title} flow writes no document`);
     }
     const find = (ref: string) => ctx.documents.find((d) => d.slug === ref || d.id === ref);
     // C4: a Baseline to PRD run takes a PRD template; the feedback loop still refuses one.
-    const templated = flow.target_kind === "roadmap" || input.flow === "baseline_to_prd";
-    if (!templated && (input.template || input.theme)) return fail(422, `the ${flow.title} flow takes no template or theme`);
+    const templated = flow.target_kind === 'roadmap' || input.flow === 'baseline_to_prd';
+    if (!templated && (input.template || input.theme))
+      return fail(422, `the ${flow.title} flow takes no template or theme`);
     // prd_to_roadmap reads an approved PRD version (422 when there is none).
     let source: VersionSource | null = null;
     if (flow.source_kind) {
@@ -2297,9 +3203,10 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       if (!input.source) return fail(422, `name the approved ${name} to build from`);
       const from = find(input.source);
       if (!from) return fail(422, `document '${input.source}' not found`);
-      if (from.kind !== flow.source_kind) return fail(422, `document '${input.source}' is a ${KIND_NAME[from.kind]}, not a ${name}`);
+      if (from.kind !== flow.source_kind)
+        return fail(422, `document '${input.source}' is a ${KIND_NAME[from.kind]}, not a ${name}`);
       const found = ctx.sourceVersion(from.id, input.source_version ?? null);
-      if (typeof found === "string") return fail(422, found);
+      if (typeof found === 'string') return fail(422, found);
       source = found;
     } else if (input.source || input.source_version != null) {
       return fail(422, `the ${flow.title} flow reads no source document`);
@@ -2311,43 +3218,70 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       ref = base;
       for (let n = 2; find(ref) && find(ref)!.kind !== flow.target_kind; n++) ref = `${base}-${n}`;
     }
-    if (!ref && !noDocument) return fail(422, "name the PRD: an existing document, or a new slug to create");
+    if (!ref && !noDocument)
+      return fail(422, 'name the PRD: an existing document, or a new slug to create');
     const doc = ref ? find(ref) : undefined;
     if (flow.requires_document && !doc) return fail(422, `document '${ref}' not found`);
-    if (input.flow === "pricing_memo" && doc && doc.kind !== "pricing") {
-      return fail(422, `document '${ref}' is a ${KIND_NAME[doc.kind]}; the ${flow.title} flow drafts a pricing memo`);
+    if (input.flow === 'pricing_memo' && doc && doc.kind !== 'pricing') {
+      return fail(
+        422,
+        `document '${ref}' is a ${KIND_NAME[doc.kind]}; the ${flow.title} flow drafts a pricing memo`,
+      );
     }
-    if (input.flow === "strategy_draft" && doc && doc.kind !== "vision" && doc.kind !== "strategy") {
-      return fail(422, `document '${ref}' is a ${KIND_NAME[doc.kind]}; the ${flow.title} flow drafts a vision or a product strategy`);
+    if (
+      input.flow === 'strategy_draft' &&
+      doc &&
+      doc.kind !== 'vision' &&
+      doc.kind !== 'strategy'
+    ) {
+      return fail(
+        422,
+        `document '${ref}' is a ${KIND_NAME[doc.kind]}; the ${flow.title} flow drafts a vision or a product strategy`,
+      );
     }
     // As the API (oracle.strategy.brief): the brief from Company › Strategy fits its document.
     const brief = input.strategy_brief;
     if (brief) {
-      if (input.flow !== "strategy_draft" || !doc) return fail(422, "only a Vision or strategy draft run takes a brief");
-      if (doc.kind === "vision" && (brief.horizon_from || brief.horizon_to)) return fail(422, "a vision's horizon is in years");
-      if (doc.kind === "strategy" && brief.horizon_years != null) return fail(422, "a product strategy's horizon is its dates");
-      if (brief.horizon_from && brief.horizon_to && brief.horizon_to <= brief.horizon_from) return fail(422, "the horizon ends before it starts");
-      if (brief.from_approved && typeof ctx.sourceVersion(doc.id, null) === "string") {
+      if (input.flow !== 'strategy_draft' || !doc)
+        return fail(422, 'only a Vision or strategy draft run takes a brief');
+      if (doc.kind === 'vision' && (brief.horizon_from || brief.horizon_to))
+        return fail(422, "a vision's horizon is in years");
+      if (doc.kind === 'strategy' && brief.horizon_years != null)
+        return fail(422, "a product strategy's horizon is its dates");
+      if (brief.horizon_from && brief.horizon_to && brief.horizon_to <= brief.horizon_from)
+        return fail(422, 'the horizon ends before it starts');
+      if (brief.from_approved && typeof ctx.sourceVersion(doc.id, null) === 'string') {
         return fail(422, `the ${KIND_NAME[doc.kind]} has no approved version to start from`);
       }
     }
     const observing = doc ? ctx.draftRefusal?.(input.flow, doc.kind) : null;
     if (observing) return fail(409, observing);
     if (doc && flow.target_kind && doc.kind !== flow.target_kind) {
-      return fail(422, `document '${ref}' is a ${KIND_NAME[doc.kind]}, not a ${KIND_NAME[flow.target_kind]}`);
+      return fail(
+        422,
+        `document '${ref}' is a ${KIND_NAME[doc.kind]}, not a ${KIND_NAME[flow.target_kind]}`,
+      );
     }
-    const roadmap = flow.target_kind === "roadmap";
+    const roadmap = flow.target_kind === 'roadmap';
     const run: RunOut = {
       id: ctx.uuid(),
       flow: input.flow,
       flow_title: flow.title,
-      status: "draft",
+      status: 'draft',
       document_id: doc?.id ?? null,
       document_slug: doc?.slug ?? ref ?? null,
       document_kind: doc?.kind ?? flow.target_kind ?? null,
       source,
-      template: roadmap ? (input.template ?? doc?.template ?? ROADMAP_DEFAULTS.template) : templated ? (input.template ?? doc?.template ?? PRD_DEFAULT_TEMPLATE) : null,
-      theme: roadmap ? (input.theme ?? doc?.theme ?? ROADMAP_DEFAULTS.theme) : templated ? (input.theme ?? doc?.theme ?? null) : null,
+      template: roadmap
+        ? (input.template ?? doc?.template ?? ROADMAP_DEFAULTS.template)
+        : templated
+          ? (input.template ?? doc?.template ?? PRD_DEFAULT_TEMPLATE)
+          : null,
+      theme: roadmap
+        ? (input.theme ?? doc?.theme ?? ROADMAP_DEFAULTS.theme)
+        : templated
+          ? (input.theme ?? doc?.theme ?? null)
+          : null,
       estimate_usd: null,
       spent_usd: null,
       created_by: ctx.member?.id ?? ctx.userId,
@@ -2370,7 +3304,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       approved_at: null,
       needs_approval: false,
       overrun_ceiling_usd: null,
-      runtime: "fake",
+      runtime: 'fake',
       notes: FLOW_CATALOG.runtime_notes,
       note_refs: [],
       segments: segmentsFor(input.flow, knobs, ctx.uuid),
@@ -2379,7 +3313,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       open_proposals: 0,
     };
     ctx.db.runs.push(run);
-    return reply("/v1/runs", "post", run, 201);
+    return reply('/v1/runs', 'post', run, 201);
   }
 
   const r = ctx.db.runs.find((x) => x.id === p[2]);
@@ -2394,9 +3328,13 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       ...gated(ctx, c),
       can_decide:
         c.can_decide &&
-        (ctx.mayDecide && ENGINEERING_KINDS.includes(c.kind) ? ctx.mayDecide(c, r.flow) : atLeast(ctx.userRole, c.approver_role)),
+        (ctx.mayDecide && ENGINEERING_KINDS.includes(c.kind)
+          ? ctx.mayDecide(c, r.flow)
+          : atLeast(ctx.userRole, c.approver_role)),
       // B6: Oracle offers a goals interview once the baseline is approved; it starts nothing itself.
-      ...(c.kind === "baseline_confirm" && c.status === "approved" && ctx.vagueGoals ? { vague_goals: ctx.vagueGoals() } : {}),
+      ...(c.kind === 'baseline_confirm' && c.status === 'approved' && ctx.vagueGoals
+        ? { vague_goals: ctx.vagueGoals() }
+        : {}),
       lead_stop: !!ctx.leadStop?.(c, r.flow),
     }));
     // As the API (#556, #561 review): stored errors read in words, a failed one in the past.
@@ -2404,33 +3342,46 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     const retryable = mayRetrySegment(ctx, r) ? retrySegmentOf(r)?.seq : undefined;
     const segments = r.segments.map((s) => ({
       ...s,
-      ...(s.error ? { error: readableRefusal(s.error, s.status === "failed") } : {}),
+      ...(s.error ? { error: readableRefusal(s.error, s.status === 'failed') } : {}),
       can_retry: s.seq === retryable,
     }));
-    const can_decide = checkpoints.some((c) => c.status === "pending" && c.can_decide);
-    return reply("/v1/runs/{run_id}", "get", { ...r, document_title: docTitle(ctx, r), error: readableRefusal(r.error, r.status === "failed"), segments, checkpoints, can_decide, open_proposals: ctx.openProposals?.(r.id) ?? 0 });
+    const can_decide = checkpoints.some((c) => c.status === 'pending' && c.can_decide);
+    return reply('/v1/runs/{run_id}', 'get', {
+      ...r,
+      document_title: docTitle(ctx, r),
+      error: readableRefusal(r.error, r.status === 'failed'),
+      segments,
+      checkpoints,
+      can_decide,
+      open_proposals: ctx.openProposals?.(r.id) ?? 0,
+    });
   };
 
-  if (p.length === 3 && m === "GET") return done();
-  if (p.length === 4 && p[3] === "scope" && m === "GET") {
+  if (p.length === 3 && m === 'GET') return done();
+  if (p.length === 4 && p[3] === 'scope' && m === 'GET') {
     // C6: the run's latest scope, any status.
-    const latest = [...(ctx.db.scopes?.[r.id] ?? [])].sort((a, b) => a.segment_seq - b.segment_seq || a.attempt - b.attempt).pop();
-    return latest ? reply("/v1/runs/{run_id}/scope", "get", latest) : fail(404, `run ${r.id} has no PRD scope`);
+    const latest = [...(ctx.db.scopes?.[r.id] ?? [])]
+      .sort((a, b) => a.segment_seq - b.segment_seq || a.attempt - b.attempt)
+      .pop();
+    return latest
+      ? reply('/v1/runs/{run_id}/scope', 'get', latest)
+      : fail(404, `run ${r.id} has no PRD scope`);
   }
-  if (p.length === 3 && m === "PATCH") {
-    if (r.status !== "draft") return fail(409, "only a draft run can be changed");
-    const patch = await body<Schemas["RunPatch"]>();
+  if (p.length === 3 && m === 'PATCH') {
+    if (r.status !== 'draft') return fail(409, 'only a draft run can be changed');
+    const patch = await body<Schemas['RunPatch']>();
     if (patch.knobs) {
       const knobs = resolveKnobs(r.flow, patch.knobs);
-      if (typeof knobs === "string") return fail(422, knobs);
+      if (typeof knobs === 'string') return fail(422, knobs);
       const goals = targetGoals(ctx, r.flow, patch.knobs.goals);
-      if (typeof goals === "string") return fail(422, goals);
+      if (typeof goals === 'string') return fail(422, goals);
       knobs.goals = goals ?? r.knobs.goals ?? [];
       const features = targetFeatures(ctx, r.flow, patch.knobs.features);
-      if (typeof features === "string") return fail(422, features);
+      if (typeof features === 'string') return fail(422, features);
       knobs.features = features ?? r.knobs.features ?? [];
       // As the API: an omitted reuse_draft_items keeps the run's choice.
-      if (r.flow === "prd_to_roadmap" && patch.knobs.reuse_draft_items == null) knobs.reuse_draft_items = r.knobs.reuse_draft_items;
+      if (r.flow === 'prd_to_roadmap' && patch.knobs.reuse_draft_items == null)
+        knobs.reuse_draft_items = r.knobs.reuse_draft_items;
       r.knobs = knobs;
     }
     if (patch.document) {
@@ -2438,7 +3389,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       r.document_id = doc?.id ?? null;
       r.document_slug = doc?.slug ?? patch.document;
     }
-    if (r.document_kind === "roadmap" || r.flow === "baseline_to_prd") {
+    if (r.document_kind === 'roadmap' || r.flow === 'baseline_to_prd') {
       if (patch.template) r.template = patch.template;
       if (patch.theme) r.theme = patch.theme;
     }
@@ -2451,8 +3402,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   }
 
   const action = p[3];
-  if (action === "estimate" && m === "POST") {
-    if (r.status !== "draft") return fail(409, "only a draft run can be estimated");
+  if (action === 'estimate' && m === 'POST') {
+    if (r.status !== 'draft') return fail(409, 'only a draft run can be estimated');
     const stale = notReusable(r);
     if (stale) return stale;
     // C4: a reused baseline segment does not run, so it costs nothing.
@@ -2460,24 +3411,39 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     // E1 part B: a Build roadmap run reusing the draft items runs no items step.
     const items = itemsReuse(ctx, r);
     estimated(r).draft_items_reused = items;
-    const free = (name: string) => (!!reused && name === "baseline") || (!!items && name === "roadmap_items");
+    const free = (name: string) =>
+      (!!reused && name === 'baseline') || (!!items && name === 'roadmap_items');
     const times = overLimit(r) ? 4 : 1;
-    for (const s of r.segments) s.estimate_usd = free(s.name) || skippedOff(s) ? 0 : round2(segEstimate(s.roles, r.knobs.depth) * times);
+    for (const s of r.segments)
+      s.estimate_usd =
+        free(s.name) || skippedOff(s) ? 0 : round2(segEstimate(s.roles, r.knobs.depth) * times);
     const total = round2(r.segments.reduce((sum, s) => sum + (s.estimate_usd ?? 0), 0));
     r.estimate_usd = total;
     r.needs_approval = total > THRESHOLD;
     const budget = r.knobs.budget_usd ?? null;
-    return reply("/v1/runs/{run_id}/estimate", "post", {
+    return reply('/v1/runs/{run_id}/estimate', 'post', {
       run_id: r.id,
       depth: r.knobs.depth,
       total_usd: total,
       segments: r.segments.map((s) => {
-        const skip = !!reused && s.name === "baseline";
-        const fromDraft = items && s.name === "roadmap_items" ? items : null;
+        const skip = !!reused && s.name === 'baseline';
+        const fromDraft = items && s.name === 'roadmap_items' ? items : null;
         return {
-          seq: s.seq, name: s.name, title: s.title, roles: s.roles, estimate_usd: s.estimate_usd ?? 0, reused: skip || !!fromDraft,
+          seq: s.seq,
+          name: s.name,
+          title: s.title,
+          roles: s.roles,
+          estimate_usd: s.estimate_usd ?? 0,
+          reused: skip || !!fromDraft,
           reused_from_version: fromDraft?.version ?? null,
-          note: skip && reused ? `Current Ground Truth, approved ${monthDay(reused.approved_at)}` : fromDraft ? itemsReusedNote(fromDraft) : skippedOff(s) ? OFF_NOTE : null,
+          note:
+            skip && reused
+              ? `Current Ground Truth, approved ${monthDay(reused.approved_at)}`
+              : fromDraft
+                ? itemsReusedNote(fromDraft)
+                : skippedOff(s)
+                  ? OFF_NOTE
+                  : null,
         };
       }),
       approval_threshold_usd: THRESHOLD,
@@ -2486,24 +3452,30 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       within_budget: budget == null || total <= budget,
     });
   }
-  if (action === "start" && m === "POST") {
-    if (r.status !== "draft") return fail(409, `run is ${r.status}, not a draft`);
-    if (r.estimate_usd == null) return fail(409, "estimate the run first");
+  if (action === 'start' && m === 'POST') {
+    if (r.status !== 'draft') return fail(409, `run is ${r.status}, not a draft`);
+    if (r.estimate_usd == null) return fail(409, 'estimate the run first');
     const stale = notReusable(r) ?? itemsChanged(ctx, r);
     if (stale) return stale;
     const refused = buildUnderWay(ctx, r.flow);
     if (refused) return refused;
-    if (r.knobs.budget_usd != null && r.estimate_usd > r.knobs.budget_usd) return fail(422, "the estimate is over the budget");
+    if (r.knobs.budget_usd != null && r.estimate_usd > r.knobs.budget_usd)
+      return fail(422, 'the estimate is over the budget');
     r.snapshot_id = ctx.uuid();
     r.snapshot_as_of = ctx.now();
-    if (r.estimate_usd > THRESHOLD) r.status = "awaiting_approval";
+    if (r.estimate_usd > THRESHOLD) r.status = 'awaiting_approval';
     else launch(ctx, r);
     // H8, H9: the local runtime writes an update or pricing memo draft at once, so it opens on it.
-    if ((r.flow === "update_draft" || r.flow === "pricing_memo") && (r.status as RunOut["status"]) === "running") finishRunning(ctx, r);
+    if (
+      (r.flow === 'update_draft' || r.flow === 'pricing_memo') &&
+      (r.status as RunOut['status']) === 'running'
+    )
+      finishRunning(ctx, r);
     return done();
   }
-  if (action === "approve" && m === "POST") {
-    if (r.status !== "awaiting_approval") return fail(409, `run is ${r.status}, not awaiting approval`);
+  if (action === 'approve' && m === 'POST') {
+    if (r.status !== 'awaiting_approval')
+      return fail(409, `run is ${r.status}, not awaiting approval`);
     const changed = itemsChanged(ctx, r);
     if (changed) return changed;
     r.approved_by = ctx.member?.id ?? ctx.userId;
@@ -2511,265 +3483,421 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     launch(ctx, r);
     return done();
   }
-  if (action === "resume" && m === "POST") {
-    if (r.status !== "paused_overrun") return fail(409, `run is ${r.status}, not paused on overrun`);
+  if (action === 'resume' && m === 'POST') {
+    if (r.status !== 'paused_overrun')
+      return fail(409, `run is ${r.status}, not paused on overrun`);
     r.overrun_ceiling_usd = round2((r.spent_usd ?? 0) + (r.estimate_usd ?? 0) * (FACTOR - 1));
-    r.status = "running";
-    const last = [...r.segments].reverse().find((s) => s.status === "succeeded");
-    if (!r.segments.some((s) => s.status === "running") && last && !r.checkpoints.some((c) => c.segment_seq === last.seq)) {
+    r.status = 'running';
+    const last = [...r.segments].reverse().find((s) => s.status === 'succeeded');
+    if (
+      !r.segments.some((s) => s.status === 'running') &&
+      last &&
+      !r.checkpoints.some((c) => c.segment_seq === last.seq)
+    ) {
       advance(ctx, r, last);
     }
     return done();
   }
-  if (action === "cancel" && m === "POST") {
+  if (action === 'cancel' && m === 'POST') {
     if (FINAL.includes(r.status)) return fail(409, `run is already ${r.status}`);
-    for (const s of r.segments) if (s.status === "running" || s.status === "pending") s.status = "cancelled";
+    for (const s of r.segments)
+      if (s.status === 'running' || s.status === 'pending') s.status = 'cancelled';
     for (const c of r.checkpoints) {
-      if (c.status === "pending") Object.assign(c, { status: "skipped", note: "Run cancelled.", decided_at: ctx.now() });
+      if (c.status === 'pending')
+        Object.assign(c, { status: 'skipped', note: 'Run cancelled.', decided_at: ctx.now() });
     }
-    finish(ctx, r, "cancelled");
+    finish(ctx, r, 'cancelled');
     // A run cancelled from the Inbox no longer waits on its lost submission or its 404s.
-    Object.assign(r, { can_retry: false, can_stop_cancelling: false, can_retry_lookup: false, stuck: null, queue_wait: null });
+    Object.assign(r, {
+      can_retry: false,
+      can_stop_cancelling: false,
+      can_retry_lookup: false,
+      stuck: null,
+      queue_wait: null,
+    });
     // Nothing waits in SwarmCloud's queue once the run ended (api: queue_wait is a running run's).
     for (const s of r.segments) s.queue_wait = null;
     return done();
   }
-  if (action === "retry" && m === "POST") {
-    if (!r.can_retry) return fail(409, "nothing to retry: no lost submission of this run is past the lookup cap");
+  if (action === 'retry' && m === 'POST') {
+    if (!r.can_retry)
+      return fail(409, 'nothing to retry: no lost submission of this run is past the lookup cap');
     Object.assign(r, { can_retry: false, stuck: null });
     return done();
   }
   // As the API (retry_segment): a failed run runs again from the segment it stopped at; the
   // segments before it and their approved checkpoints stay. The mock has no queue: it runs at once.
-  if (action === "segments" && p[5] === "retry" && m === "POST") {
+  if (action === 'segments' && p[5] === 'retry' && m === 'POST') {
     const s = r.segments.find((x) => x.seq === Number(p[4]));
     if (!s) return fail(404, `run ${r.id} has no segment ${p[4]}`);
-    if (!mayRetrySegment(ctx, r)) return fail(403, "Only an owner or the approver who created the run can retry it");
+    if (!mayRetrySegment(ctx, r))
+      return fail(403, 'Only an owner or the approver who created the run can retry it');
     if (budgetStopped(r)) return fail(409, BUDGET_STOPPED);
-    if (retrySegmentOf(r)?.seq !== s.seq) return fail(409, "nothing to retry: only the segment a failed run stopped at can be retried");
-    Object.assign(s, { status: "running", error: null, finished_at: null, started_at: ctx.now() });
-    Object.assign(r, { status: "running", error: null, finished_at: null });
+    if (retrySegmentOf(r)?.seq !== s.seq)
+      return fail(409, 'nothing to retry: only the segment a failed run stopped at can be retried');
+    Object.assign(s, { status: 'running', error: null, finished_at: null, started_at: ctx.now() });
+    Object.assign(r, { status: 'running', error: null, finished_at: null });
     if (r.flow === DRAFT_ITEMS_FLOW) ctx.draftItemsRetried?.(r.id);
     return done();
   }
-  if (action === "stop-cancelling" && m === "POST") {
-    if (!r.can_stop_cancelling) return fail(409, "nothing to stop: no cancel of this run waits on SwarmCloud's 404s");
+  if (action === 'stop-cancelling' && m === 'POST') {
+    if (!r.can_stop_cancelling)
+      return fail(409, "nothing to stop: no cancel of this run waits on SwarmCloud's 404s");
     Object.assign(r, { can_stop_cancelling: false, stuck: null });
     if (!FINAL.includes(r.status)) {
       // P3d: Stop cancelling on a run that has not ended ends it.
-      for (const s of r.segments) if (s.status === "running" || s.status === "pending") s.status = "cancelled";
+      for (const s of r.segments)
+        if (s.status === 'running' || s.status === 'pending') s.status = 'cancelled';
       for (const c of r.checkpoints) {
-        if (c.status === "pending") Object.assign(c, { status: "skipped", note: "Run ended: an approver stopped cancelling its workflow.", decided_at: ctx.now() });
+        if (c.status === 'pending')
+          Object.assign(c, {
+            status: 'skipped',
+            note: 'Run ended: an approver stopped cancelling its workflow.',
+            decided_at: ctx.now(),
+          });
       }
-      finish(ctx, r, "cancelled");
-      r.error = "Stop cancelling ended the run: its spend still counts on the run until SwarmCloud stops it.";
+      finish(ctx, r, 'cancelled');
+      r.error =
+        'Stop cancelling ended the run: its spend still counts on the run until SwarmCloud stops it.';
     }
     return done();
   }
-  if (action === "retry-lookup" && m === "POST") {
-    if (!r.can_retry_lookup) return fail(409, "nothing to look up: no workflow of this run has an unknown cost");
+  if (action === 'retry-lookup' && m === 'POST') {
+    if (!r.can_retry_lookup)
+      return fail(409, 'nothing to look up: no workflow of this run has an unknown cost');
     Object.assign(r, { can_retry_lookup: false, stuck: null });
     return done();
   }
-  if (action === "retry-import" && m === "POST") {
-    if (!r.can_retry_import) return fail(409, "nothing to retry: no import of this run has stopped");
-    for (const s of r.segments) if (s.status === "failed") Object.assign(s, { status: "succeeded", error: null });
+  if (action === 'retry-import' && m === 'POST') {
+    if (!r.can_retry_import)
+      return fail(409, 'nothing to retry: no import of this run has stopped');
+    for (const s of r.segments)
+      if (s.status === 'failed') Object.assign(s, { status: 'succeeded', error: null });
     Object.assign(r, { can_retry_import: false, import_failed: null });
     return done();
   }
-  if (action === "cancel-again" && m === "POST") {
-    const { workflow_id } = await body<Schemas["CancelAgain"]>();
+  if (action === 'cancel-again' && m === 'POST') {
+    const { workflow_id } = await body<Schemas['CancelAgain']>();
     if (!(r.cancel_again ?? []).includes(workflow_id)) {
       // #396: the refusal a person reads names no workflow id; the id stays in refs, as in the API.
-      return json(409, { detail: "nothing to cancel again: that workflow is not one Oracle stopped cancelling for this run", refs: { workflow: workflow_id } });
+      return json(409, {
+        detail:
+          'nothing to cancel again: that workflow is not one Oracle stopped cancelling for this run',
+        refs: { workflow: workflow_id },
+      });
     }
     r.cancel_again = (r.cancel_again ?? []).filter((w) => w !== workflow_id);
     return done();
   }
-  if (action === "dismiss-overrun" && m === "POST") {
-    if (!r.can_dismiss_overrun) return fail(409, "nothing to dismiss: no overrun of this run is shown, or a workflow of it is still read");
+  if (action === 'dismiss-overrun' && m === 'POST') {
+    if (!r.can_dismiss_overrun)
+      return fail(
+        409,
+        'nothing to dismiss: no overrun of this run is shown, or a workflow of it is still read',
+      );
     Object.assign(r, { can_dismiss_overrun: false, stuck: null });
     return done();
   }
-  if (action === "checkpoints" && p[5] === "review.yaml" && m === "GET") {
+  if (action === 'checkpoints' && p[5] === 'review.yaml' && m === 'GET') {
     const cp = r.checkpoints.find((c) => c.id === p[4]);
     if (!cp) return fail(404, `checkpoint ${p[4]} not found`);
-    if (cp.status === "pending" || !cp.review || cp.review.kind === "edits") return fail(404, "no review was sent back at this checkpoint");
-    return rawReply("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review.yaml", "get", new Response(renderReview(cp.review, cp.decided_at), { status: 200, headers: { "content-type": "text/plain; charset=utf-8" } }));
+    if (cp.status === 'pending' || !cp.review || cp.review.kind === 'edits')
+      return fail(404, 'no review was sent back at this checkpoint');
+    return rawReply(
+      '/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review.yaml',
+      'get',
+      new Response(renderReview(cp.review, cp.decided_at), {
+        status: 200,
+        headers: { 'content-type': 'text/plain; charset=utf-8' },
+      }),
+    );
   }
-  if (action === "checkpoints" && p[4] && p[5] !== "decide") {
+  if (action === 'checkpoints' && p[4] && p[5] !== 'decide') {
     const cp = r.checkpoints.find((c) => c.id === p[4]);
     if (!cp) return fail(404, `checkpoint ${p[4]} not found`);
     return routeDraft(ctx, r, cp, req, p.slice(5));
   }
-  if (action === "checkpoints" && p[5] === "decide" && m === "POST") {
+  if (action === 'checkpoints' && p[5] === 'decide' && m === 'POST') {
     const cp = r.checkpoints.find((c) => c.id === p[4]);
-    if (!cp) return fail(404, "checkpoint not found");
-    if (cp.status === "approved" || cp.status === "changes_requested") {
+    if (!cp) return fail(404, 'checkpoint not found');
+    if (cp.status === 'approved' || cp.status === 'changes_requested') {
       // A recorded decision is final, delivered to the run or not yet.
-      return fail(409, `already decided: this checkpoint is ${cp.status.replace("_", " ")}; a recorded decision is final`);
+      return fail(
+        409,
+        `already decided: this checkpoint is ${cp.status.replace('_', ' ')}; a recorded decision is final`,
+      );
     }
-    if (cp.status !== "pending" || r.status !== "awaiting_checkpoint") return fail(409, `checkpoint is ${cp.status}`);
-    if (!mayStage(ctx, r, cp, ctx.userRole ?? null)) return fail(403, ENGINEERING_KINDS.includes(cp.kind) && ctx.mayDecide ? LEAD_ONLY : `Requires the ${cp.approver_role} role`);
+    if (cp.status !== 'pending' || r.status !== 'awaiting_checkpoint')
+      return fail(409, `checkpoint is ${cp.status}`);
+    if (!mayStage(ctx, r, cp, ctx.userRole ?? null))
+      return fail(
+        403,
+        ENGINEERING_KINDS.includes(cp.kind) && ctx.mayDecide
+          ? LEAD_ONLY
+          : `Requires the ${cp.approver_role} role`,
+      );
     // H8: an update's review stop is an owner's to decide.
-    if (cp.approver_role === "owner" && ctx.userRole !== "owner") return fail(403, "Only an owner can decide this stop");
+    if (cp.approver_role === 'owner' && ctx.userRole !== 'owner')
+      return fail(403, 'Only an owner can decide this stop');
     // D10: a run review's Approve draft and Send back are the designated decider's.
     const decider = ctx.reviewDecider?.(cp);
-    if (decider && decider !== ctx.member?.id) return fail(403, "Only the designated decider decides this run review");
-    const { decision, note, expected_revision } = await body<Schemas["CheckpointDecision"]>();
+    if (decider && decider !== ctx.member?.id)
+      return fail(403, 'Only the designated decider decides this run review');
+    const { decision, note, expected_revision } = await body<Schemas['CheckpointDecision']>();
     const draft = draftOf(ctx, cp.id);
     const changedBy = ctx.reviewChange?.();
     if (changedBy) bump(draft, displayName(changedBy));
-    if (expected_revision != null && expected_revision !== draft.revision) return json(409, { detail: reviewChanged(draft, expected_revision) });
+    if (expected_revision != null && expected_revision !== draft.revision)
+      return json(409, { detail: reviewChanged(draft, expected_revision) });
     // As the API (_recheck_order_goals): a goal a new feature serves, rejected since the order was checked, refuses Approve, named.
-    const stale = decision === "approved" && cp.kind === "priority_order" ? recheckOrderGoals(ctx, cp) : [];
+    const stale =
+      decision === 'approved' && cp.kind === 'priority_order' ? recheckOrderGoals(ctx, cp) : [];
     if (stale.length) {
       const gate = gateNow(ctx, cp, draft.actions, true);
-      return json(409, { detail: { code: "blocking_open", message: stale.map((x) => x.message).join("; "), left: gate?.left ?? [] } });
+      return json(409, {
+        detail: {
+          code: 'blocking_open',
+          message: stale.map((x) => x.message).join('; '),
+          left: gate?.left ?? [],
+        },
+      });
     }
     const blocked = cannotApprove(cp);
-    if (decision === "approved" && blocked) return fail(409, blocked);
+    if (decision === 'approved' && blocked) return fail(409, blocked);
     // D7: split, merge and open questions need the agents; Approve waits until they are removed.
-    const agents = decision === "approved" ? needsAgentsOf(cp, draft.actions) : [];
-    if (agents.length) return json(409, { detail: { code: "needs_agents", message: needsAgentsMessage(agents), actions: agents.map((x) => x.action_id) } });
-    const edits = decision === "approved" ? editsOf(cp, draft.actions) : [];
+    const agents = decision === 'approved' ? needsAgentsOf(cp, draft.actions) : [];
+    if (agents.length)
+      return json(409, {
+        detail: {
+          code: 'needs_agents',
+          message: needsAgentsMessage(agents),
+          actions: agents.map((x) => x.action_id),
+        },
+      });
+    const edits = decision === 'approved' ? editsOf(cp, draft.actions) : [];
     // W5: confirming a console approval decides it as an approval (the console's MERGE).
-    const confirming = decision === "confirm" && cp.console?.needs === "confirm" && cp.console.verdict === "MERGE";
-    if (decision === "confirm" && !confirming) return fail(422, "nothing recorded in SwarmCloud's console waits to be confirmed here");
+    const confirming =
+      decision === 'confirm' && cp.console?.needs === 'confirm' && cp.console.verdict === 'MERGE';
+    if (decision === 'confirm' && !confirming)
+      return fail(422, "nothing recorded in SwarmCloud's console waits to be confirmed here");
     // W5: a console approval applies no staged edits, so its gate reads none.
     const gate = gateNow(ctx, cp, draft.actions, !confirming);
-    if ((decision === "approved" || confirming) && gate && !gate.open) {
+    if ((decision === 'approved' || confirming) && gate && !gate.open) {
       const n = gate.blocking_open + gate.file_problems;
       if (edits.length) {
         // D7: re-checked after the edits; nothing changes (the edits stay staged).
-        const what = gate.left.map((x) => `${x.item_title ?? x.item}: ${x.label}`).join("; ");
-        const message = `After the edits, ${n} blocking problem${n === 1 ? " is" : "s are"} left${what ? `: ${what}` : ""}`;
-        return json(409, { detail: { code: "edits_leave_problems", message, left: gate.left } });
+        const what = gate.left.map((x) => `${x.item_title ?? x.item}: ${x.label}`).join('; ');
+        const message = `After the edits, ${n} blocking problem${n === 1 ? ' is' : 's are'} left${what ? `: ${what}` : ''}`;
+        return json(409, { detail: { code: 'edits_leave_problems', message, left: gate.left } });
       }
-      return json(409, { detail: { code: "blocking_open", message: gateMessage(n), left: gate.left } });
+      return json(409, {
+        detail: { code: 'blocking_open', message: gateMessage(n), left: gate.left },
+      });
     }
     const fileKey = `${r.id}|${cp.segment_seq}|roadmap_items.yaml`;
     const edited = edits.length
-      ? applyEdits(ctx.db.artifacts[fileKey] ?? "", edits, r.segments.find((x) => x.seq === cp.segment_seq)?.items_check?.reasons ?? [])
+      ? applyEdits(
+          ctx.db.artifacts[fileKey] ?? '',
+          edits,
+          r.segments.find((x) => x.seq === cp.segment_seq)?.items_check?.reasons ?? [],
+        )
       : null;
     if (edited?.problems.length) {
       const n = edited.problems.length;
-      const message = `After the edits, ${n} blocking problem${n === 1 ? " is" : "s are"} left: ${edited.problems.join("; ")}`;
-      return json(409, { detail: { code: "edits_leave_problems", message, left: [] } });
+      const message = `After the edits, ${n} blocking problem${n === 1 ? ' is' : 's are'} left: ${edited.problems.join('; ')}`;
+      return json(409, { detail: { code: 'edits_leave_problems', message, left: [] } });
     }
     // D8: the note defaults to the shared draft's.
     const general = (note ?? draft.note)?.trim() || null;
     // D4: a send-back says something: a staged action or a note.
-    const staged = draft.actions.filter((a) => a.state === "staged");
+    const staged = draft.actions.filter((a) => a.state === 'staged');
     // B2: Confirm the baseline sends its staged look-again actions as one structured note.
-    const text = decision === "changes_requested" ? lookAgainNote(ctx, cp, staged, general) : general;
+    const text =
+      decision === 'changes_requested' ? lookAgainNote(ctx, cp, staged, general) : general;
     // D10: a run review sends back the document's own feedback; the note is optional.
     const reviewed = reviewedVersion(cp);
-    if (decision === "changes_requested" && !text && reviewed && !sendBackEntries(ctx, reviewed.document_id, reviewed.version)) {
-      return fail(422, "Nothing to send back: comment, request changes on a section, or write a note.");
+    if (
+      decision === 'changes_requested' &&
+      !text &&
+      reviewed &&
+      !sendBackEntries(ctx, reviewed.document_id, reviewed.version)
+    ) {
+      return fail(
+        422,
+        'Nothing to send back: comment, request changes on a section, or write a note.',
+      );
     }
     // D4: any other send-back says something: a staged action or a note.
     // C7: a feature set's edits and adds are its rows (counted as edits), never staged actions.
-    const sent = staged.filter((a) => cp.kind !== "feature_set" || (a.kind !== "edit" && a.kind !== "add"));
-    const scopeEdited = cp.kind === "feature_set" ? scopeEdits(ctx.db, r.id) : 0;
+    const sent = staged.filter(
+      (a) => cp.kind !== 'feature_set' || (a.kind !== 'edit' && a.kind !== 'add'),
+    );
+    const scopeEdited = cp.kind === 'feature_set' ? scopeEdits(ctx.db, r.id) : 0;
     // As the API (Nov 3): a refused draft goes back with its import problems; no note is needed.
-    const refusedDraft = !!(cp.payload as { import?: { error?: string | null } } | undefined)?.import?.error;
-    if (decision === "changes_requested" && !text && !reviewed && !sent.length && !scopeEdited && !refusedDraft) return fail(422, "Stage a change, ask a question, or write a note to send back.");
-    const status = confirming ? "approved" : (decision as "approved" | "changes_requested");
+    const refusedDraft = !!(cp.payload as { import?: { error?: string | null } } | undefined)
+      ?.import?.error;
+    if (
+      decision === 'changes_requested' &&
+      !text &&
+      !reviewed &&
+      !sent.length &&
+      !scopeEdited &&
+      !refusedDraft
+    )
+      return fail(422, 'Stage a change, ask a question, or write a note to send back.');
+    const status = confirming ? 'approved' : (decision as 'approved' | 'changes_requested');
     // A confirmed console answer is its author's, as the API names it, not the confirmer's.
-    const answerer = confirming ? (ctx.members ?? []).find((x) => x.email === cp.console?.answered_by) : undefined;
+    const answerer = confirming
+      ? (ctx.members ?? []).find((x) => x.email === cp.console?.answered_by)
+      : undefined;
     // As the API: the signed-in member decided (and confirmed a console answer).
     const me = ctx.member?.id ?? ctx.userId;
     const author = confirming ? (answerer?.id ?? null) : me;
     Object.assign(cp, { status, note: text, decided_by: me, decided_at: ctx.now(), console: null });
-    if (decision === "changes_requested") cp.review = reviewed ? documentReview(ctx, r, cp, reviewed, text) : buildReview(ctx, r, cp, staged, text);
+    if (decision === 'changes_requested')
+      cp.review = reviewed
+        ? documentReview(ctx, r, cp, reviewed, text)
+        : buildReview(ctx, r, cp, staged, text);
     if (edited) {
       // D7: the edited file replaces the agents' (kept for ?agents=1), and its check is re-run.
-      const role = ctx.userRole ?? "approver";
+      const role = ctx.userRole ?? 'approver';
       const attempt = (cp.payload?.attempt as number | undefined) ?? 1;
       const header = [
-        `# roadmap_items.yaml, edited at the Roadmap items checkpoint on ${ctx.now().slice(0, 10)} by ${/^[aeiou]/.test(role) ? "an" : "a"} ${role}`,
-        `# (${displayName(ctx.userName ?? "admin@example.com")}): ${edits.length} edit${edits.length === 1 ? "" : "s"} applied by Oracle; no agent ran. The agents' attempt ${attempt} is kept.`,
-      ].join("\n");
+        `# roadmap_items.yaml, edited at the Roadmap items checkpoint on ${ctx.now().slice(0, 10)} by ${/^[aeiou]/.test(role) ? 'an' : 'a'} ${role}`,
+        `# (${displayName(ctx.userName ?? 'admin@example.com')}): ${edits.length} edit${edits.length === 1 ? '' : 's'} applied by Oracle; no agent ran. The agents' attempt ${attempt} is kept.`,
+      ].join('\n');
       ctx.db.artifacts[`${fileKey}|agents`] = ctx.db.artifacts[fileKey];
       ctx.db.artifacts[fileKey] = `${header}\n${edited.text}`;
-      cp.review = { kind: "edits", file: "roadmap_items.yaml", applied: edited.applied, revision: 1, edits: edits.length };
+      cp.review = {
+        kind: 'edits',
+        file: 'roadmap_items.yaml',
+        applied: edited.applied,
+        revision: 1,
+        edits: edits.length,
+      };
       const seg = r.segments.find((x) => x.seq === cp.segment_seq);
       if (seg?.items_check) {
         seg.items_check = recheck(seg.items_check, edited.text, edits);
         cp.payload = { ...cp.payload, items_check: seg.items_check };
       }
     }
-    if (cp.kind === "feature_set") {
+    if (cp.kind === 'feature_set') {
       // C7: Approve with edits writes the requirements a person added to the baseline as theirs.
       const scope = latestScope(ctx.db, r.id);
-      if (status === "approved" && scope?.status === "proposed") ctx.scopeApproved?.(scope, me);
+      if (status === 'approved' && scope?.status === 'proposed') ctx.scopeApproved?.(scope, me);
       decideScope(ctx, r, status, me);
     }
-    if (cp.kind === "priority_order" && (decision === "approved" || decision === "changes_requested")) decideOrder(ctx, r, cp, decision, me);
-    if (cp.kind === "eng_review" && decision === "approved") approveEngCheck(ctx, r, cp, staged);
-    if (cp.kind === "eng_dates" && decision === "approved") approveEngDates(cp, staged);
-    cp.payload = { ...cp.payload, decided: { role: (confirming ? answerer?.role : ctx.userRole) ?? null, via: confirming ? "swarmcloud_console" : "oracle", by: author } };
+    if (
+      cp.kind === 'priority_order' &&
+      (decision === 'approved' || decision === 'changes_requested')
+    )
+      decideOrder(ctx, r, cp, decision, me);
+    if (cp.kind === 'eng_review' && decision === 'approved') approveEngCheck(ctx, r, cp, staged);
+    if (cp.kind === 'eng_dates' && decision === 'approved') approveEngDates(cp, staged);
+    cp.payload = {
+      ...cp.payload,
+      decided: {
+        role: (confirming ? answerer?.role : ctx.userRole) ?? null,
+        via: confirming ? 'swarmcloud_console' : 'oracle',
+        by: author,
+      },
+    };
     if (ctx.undelivered) {
       // Recorded, and final; SwarmCloud did not take it: the tick delivers it.
       const at = ctx.now();
-      const error = "SwarmCloud HTTP 503 unavailable";
-      cp.payload = { ...cp.payload, wait: { ...((cp.payload.wait as object | undefined) ?? {}), posting: { redo: false, at, tries: 1, error, tried_at: at } } };
-      cp.delivery = { decided_by_name: ctx.userName ?? null, since: at, tries: 1, last_error: error, last_tried_at: at };
+      const error = 'SwarmCloud HTTP 503 unavailable';
+      cp.payload = {
+        ...cp.payload,
+        wait: {
+          ...((cp.payload.wait as object | undefined) ?? {}),
+          posting: { redo: false, at, tries: 1, error, tried_at: at },
+        },
+      };
+      cp.delivery = {
+        decided_by_name: ctx.userName ?? null,
+        since: at,
+        tries: 1,
+        last_error: error,
+        last_tried_at: at,
+      };
       refresh(r);
       return fail(
         503,
-        "SwarmCloud did not confirm the decision (SwarmCloud refused POST /v1/workflows/mock-wf/steps/review/answer: HTTP 503 unavailable); " +
-          "the decision is recorded and Oracle posts it again on its next tick, there is no need to decide again",
+        'SwarmCloud did not confirm the decision (SwarmCloud refused POST /v1/workflows/mock-wf/steps/review/answer: HTTP 503 unavailable); ' +
+          'the decision is recorded and Oracle posts it again on its next tick, there is no need to decide again',
       );
     }
     const s = r.segments.find((x) => x.seq === cp.segment_seq)!;
-    if (status === "approved") next(ctx, r, s);
+    if (status === 'approved') next(ctx, r, s);
     else submit(ctx, r, s, text ?? (reviewed ? "Sent back with the document's feedback." : null));
     return done();
   }
-  if (action === "segments" && p[5] === "retry-draft-import" && m === "POST") {
+  if (action === 'segments' && p[5] === 'retry-draft-import' && m === 'POST') {
     const s = r.segments.find((x) => x.seq === Number(p[4]));
     if (!s) return fail(404, `run ${r.id} has no segment ${p[4]}`);
     refresh(r);
     const review = reviewOf(r, s) ?? finishedReview(r, s);
     if (!s.can_retry_draft_import || !review || !r.document_slug) {
-      const version = r.status === "succeeded" ? runVersion(r) : null;
-      return fail(409, `nothing to retry: ${version ? oneVersion(version) : `no refused draft of ${s.name} waits at its review`}`);
+      const version = r.status === 'succeeded' ? runVersion(r) : null;
+      return fail(
+        409,
+        `nothing to retry: ${version ? oneVersion(version) : `no refused draft of ${s.name} waits at its review`}`,
+      );
     }
     // Imported as at segment end; the review stays open for a person. The version stays the
     // run creator's; its history says who imported it again, and when (owner, 2026-10-25).
-    const again = `imported again by ${displayName(ctx.userName ?? "admin@example.com")} on ${companyStamp(ctx.now())}`;
+    const again = `imported again by ${displayName(ctx.userName ?? 'admin@example.com')} on ${companyStamp(ctx.now())}`;
     const imp = ctx.importDraft(r.document_slug, r, again);
-    s.draft_import = { ...imp, created: true, warnings: [], error: null, problems: [], code_names: [], summary: null };
+    s.draft_import = {
+      ...imp,
+      created: true,
+      warnings: [],
+      error: null,
+      problems: [],
+      code_names: [],
+      summary: null,
+    };
     r.document_id = imp.document_id ?? null;
     review.payload = { ...review.payload, import: s.draft_import };
     return done();
   }
-  if (action === "decisions" && m === "GET") return reply("/v1/runs/{run_id}/decisions", "get", decisionsOf(ctx, r));
-  if (action === "segments" && p[5] === "artifacts" && m === "GET") {
+  if (action === 'decisions' && m === 'GET')
+    return reply('/v1/runs/{run_id}/decisions', 'get', decisionsOf(ctx, r));
+  if (action === 'segments' && p[5] === 'artifacts' && m === 'GET') {
     const s = r.segments.find((x) => x.seq === Number(p[4]));
-    const raw = new URL(req.url).searchParams.get("attempt");
+    const raw = new URL(req.url).searchParams.get('attempt');
     const current = s?.attempts[s.attempts.length - 1]?.attempt;
     let key = `${r.id}|${p[4]}|${p[6]}`;
     // D7: the agents' original of a file an approver's edits replaced.
-    const agents = ["1", "true"].includes(new URL(req.url).searchParams.get("agents") ?? "");
+    const agents = ['1', 'true'].includes(new URL(req.url).searchParams.get('agents') ?? '');
     if (agents) {
       const original = ctx.db.artifacts[`${key}|agents`];
-      if (original == null) return fail(404, `no edits were applied to '${p[6]}': the file served is the agents'`);
-      return rawReply("/v1/runs/{run_id}/segments/{seq}/artifacts/{name}", "get", new Response(original, { headers: { "content-type": "text/plain" } }));
+      if (original == null)
+        return fail(404, `no edits were applied to '${p[6]}': the file served is the agents'`);
+      return rawReply(
+        '/v1/runs/{run_id}/segments/{seq}/artifacts/{name}',
+        'get',
+        new Response(original, { headers: { 'content-type': 'text/plain' } }),
+      );
     }
     if (raw != null && Number(raw) !== current) {
       if (Number(raw) !== s?.previous_attempt?.attempt) {
-        return fail(404, `attempt ${raw} of segment ${p[4]} is not kept: only the current and the previous attempt are kept`);
+        return fail(
+          404,
+          `attempt ${raw} of segment ${p[4]} is not kept: only the current and the previous attempt are kept`,
+        );
       }
       key = `${key}|${raw}`;
     }
     const content = ctx.db.artifacts[key];
     if (content == null) return fail(404, `artifact '${p[6]}' not found`);
-    return rawReply("/v1/runs/{run_id}/segments/{seq}/artifacts/{name}", "get", new Response(content, { headers: { "content-type": "text/plain" } }));
+    return rawReply(
+      '/v1/runs/{run_id}/segments/{seq}/artifacts/{name}',
+      'get',
+      new Response(content, { headers: { 'content-type': 'text/plain' } }),
+    );
   }
-  return fail(404, "Route not found");
+  return fail(404, 'Route not found');
 }
 
 /**
@@ -2785,10 +3913,20 @@ function seedClock() {
 }
 
 /** A seeded draft run, estimated, added to `db`. */
-function seedRun(ctx: Omit<RunsContext, "db">, db: RunsDb, flow: RunOut["flow"], document: string, knobs: KnobsIn, created_at: string): RunOut {
+function seedRun(
+  ctx: Omit<RunsContext, 'db'>,
+  db: RunsDb,
+  flow: RunOut['flow'],
+  document: string,
+  knobs: KnobsIn,
+  created_at: string,
+): RunOut {
   const doc = ctx.documents.find((d) => d.slug === document);
   // Seeded runs stand for runs started before F4: no Engineering check or dates unless they name them.
-  const k = resolveKnobs(flow, { ...knobs, checkpoints: { eng_review: false, eng_dates: false, ...knobs.checkpoints } }) as RunOut["knobs"];
+  const k = resolveKnobs(flow, {
+    ...knobs,
+    checkpoints: { eng_review: false, eng_dates: false, ...knobs.checkpoints },
+  }) as RunOut['knobs'];
   const segments = segmentsFor(flow, k, ctx.uuid)
     .filter((s) => !skippedOff(s))
     .map((s, i) => ({ ...s, seq: i + 1 }));
@@ -2798,10 +3936,10 @@ function seedRun(ctx: Omit<RunsContext, "db">, db: RunsDb, flow: RunOut["flow"],
     id: ctx.uuid(),
     flow,
     flow_title: flowOf(flow).title,
-    status: "draft",
+    status: 'draft',
     document_id: doc?.id ?? null,
     document_slug: doc?.slug ?? document,
-    document_kind: doc?.kind ?? "prd",
+    document_kind: doc?.kind ?? 'prd',
     source: null,
     template: null,
     theme: null,
@@ -2827,7 +3965,7 @@ function seedRun(ctx: Omit<RunsContext, "db">, db: RunsDb, flow: RunOut["flow"],
     approved_at: null,
     needs_approval: estimate > THRESHOLD,
     overrun_ceiling_usd: null,
-    runtime: "fake",
+    runtime: 'fake',
     notes: FLOW_CATALOG.runtime_notes,
     note_refs: [],
     segments,
@@ -2840,32 +3978,35 @@ function seedRun(ctx: Omit<RunsContext, "db">, db: RunsDb, flow: RunOut["flow"],
 }
 
 /** D11: how a decision reads for the run's agents (as api/oracle/runs/service.py). */
-const CHECKPOINT_TITLES: Record<CheckpointOut["kind"], string> = {
-  baseline_confirm: "Ground Truth",
-  feature_set: "Feature set",
-  priority_order: "Priority order",
-  prd_review: "PRD review",
-  eng_review: "Engineering review",
-  eng_dates: "Engineering dates",
-  roadmap_items: "Roadmap items",
-  roadmap_review: "Roadmap review",
-  strategy_review: "Vision or strategy review",
-  request_triage: "Request triage",
-  launch_review: "Launch kit review",
-  update_review: "Update review",
-  pricing_review: "Pricing memo review",
+const CHECKPOINT_TITLES: Record<CheckpointOut['kind'], string> = {
+  baseline_confirm: 'Ground Truth',
+  feature_set: 'Feature set',
+  priority_order: 'Priority order',
+  prd_review: 'PRD review',
+  eng_review: 'Engineering review',
+  eng_dates: 'Engineering dates',
+  roadmap_items: 'Roadmap items',
+  roadmap_review: 'Roadmap review',
+  strategy_review: 'Vision or strategy review',
+  request_triage: 'Request triage',
+  launch_review: 'Launch kit review',
+  update_review: 'Update review',
+  pricing_review: 'Pricing memo review',
 };
 
-function decisionSummary(d: Omit<RunDecision, "summary">): string {
-  let what = d.status.replace("_", " ");
-  const role = d.decided_by_role ? `${/^[aeiou]/.test(d.decided_by_role) ? "an" : "a"} ${d.decided_by_role}` : null;
-  if (d.decided_by_name) what += role ? ` by ${d.decided_by_name}, ${role}` : ` by ${d.decided_by_name}`;
+function decisionSummary(d: Omit<RunDecision, 'summary'>): string {
+  let what = d.status.replace('_', ' ');
+  const role = d.decided_by_role
+    ? `${/^[aeiou]/.test(d.decided_by_role) ? 'an' : 'a'} ${d.decided_by_role}`
+    : null;
+  if (d.decided_by_name)
+    what += role ? ` by ${d.decided_by_name}, ${role}` : ` by ${d.decided_by_name}`;
   else if (role) what += ` by ${role}`;
-  if (d.via === "swarmcloud_console") what += " in SwarmCloud's console";
+  if (d.via === 'swarmcloud_console') what += " in SwarmCloud's console";
   const parts = [CHECKPOINT_TITLES[d.kind] ?? d.kind, what];
   if (d.note) parts.push(`note: ${d.note}`);
-  if (d.delivered === false) parts.push("not delivered to the run yet");
-  return parts.join(" · ");
+  if (d.delivered === false) parts.push('not delivered to the run yet');
+  return parts.join(' · ');
 }
 
 /**
@@ -2876,22 +4017,27 @@ function decisionsOf(ctx: RunsContext, r: RunOut): RunDecision[] {
   const flow = FLOW_CATALOG.flows.find((f) => f.key === r.flow);
   const people = new Map((ctx.members ?? []).map((x) => [x.id, x.name?.trim() || x.email]));
   const out = r.checkpoints
-    .filter((c) => c.status !== "pending")
+    .filter((c) => c.status !== 'pending')
     .map((c) => {
-      const decided = c.payload.decided as { role?: RunDecision["decided_by_role"]; via?: RunDecision["via"]; by?: string | null } | undefined;
-      const by = decided && "by" in decided ? decided.by : c.decided_by;
-      const extra = (c.payload.review ?? {}) as { edits?: RunDecision["edits"]; review?: RunDecision["review"] };
-      const d: Omit<RunDecision, "summary"> = {
+      const decided = c.payload.decided as
+        | { role?: RunDecision['decided_by_role']; via?: RunDecision['via']; by?: string | null }
+        | undefined;
+      const by = decided && 'by' in decided ? decided.by : c.decided_by;
+      const extra = (c.payload.review ?? {}) as {
+        edits?: RunDecision['edits'];
+        review?: RunDecision['review'];
+      };
+      const d: Omit<RunDecision, 'summary'> = {
         checkpoint_id: c.id,
         kind: c.kind,
         segment_seq: c.segment_seq ?? null,
         segment_title: flow?.segments.find((s) => s.name === c.payload.segment)?.title ?? null,
         attempt: (c.payload.attempt as number | undefined) ?? null,
-        status: c.status as RunDecision["status"],
+        status: c.status as RunDecision['status'],
         decided_at: c.decided_at ?? null,
         decided_by_role: decided?.role ?? null,
         decided_by_name: (by && people.get(by)) || null,
-        via: decided?.via ?? "oracle",
+        via: decided?.via ?? 'oracle',
         note: c.note ?? null,
         edits: extra.edits ?? null,
         review: extra.review ?? null,
@@ -2900,64 +4046,140 @@ function decisionsOf(ctx: RunsContext, r: RunOut): RunDecision[] {
       };
       return { ...d, summary: decisionSummary(d) };
     });
-  return out.sort((a, b) => (a.segment_seq ?? 0) - (b.segment_seq ?? 0) || (a.decided_at ?? "~").localeCompare(b.decided_at ?? "~"));
+  return out.sort(
+    (a, b) =>
+      (a.segment_seq ?? 0) - (b.segment_seq ?? 0) ||
+      (a.decided_at ?? '~').localeCompare(b.decided_at ?? '~'),
+  );
 }
 
 /** Seeded runs: one waiting at a checkpoint, one over the approval threshold, one paused on overrun, one done. */
-export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
-  const db: RunsDb = { runs: [], artifacts: {}, scopes: {}, baseline_built_at: "2026-10-20T16:00:00Z" };
+export function seedRuns(ctx: Omit<RunsContext, 'db'>): RunsDb {
+  const db: RunsDb = {
+    runs: [],
+    artifacts: {},
+    scopes: {},
+    baseline_built_at: '2026-10-20T16:00:00Z',
+  };
   const { from, now } = seedClock();
   const full = { ...ctx, db, now };
-  const make = (flow: RunOut["flow"], document: string, knobs: KnobsIn, created_at: string) => seedRun(ctx, db, flow, document, knobs, created_at);
+  const make = (flow: RunOut['flow'], document: string, knobs: KnobsIn, created_at: string) =>
+    seedRun(ctx, db, flow, document, knobs, created_at);
 
   // Waiting for the baseline to be confirmed.
-  const waiting = make("baseline_to_prd", "team-onboarding", {}, "2026-10-17T08:00:00Z");
+  const waiting = make('baseline_to_prd', 'team-onboarding', {}, '2026-10-17T08:00:00Z');
   from(waiting.created_at);
   launch(full, waiting);
   tick(full);
 
   // Over $50: waits for an owner.
-  const big = make("baseline_to_prd", "usage-alerts-v2", { depth: "deep" }, "2026-10-17T08:30:00Z");
-  big.status = "awaiting_approval";
+  const big = make('baseline_to_prd', 'usage-alerts-v2', { depth: 'deep' }, '2026-10-17T08:30:00Z');
+  big.status = 'awaiting_approval';
 
   // Spent past 1.5x its estimate.
-  const over = make("feedback_loop", "team-invites", {}, "2026-10-16T17:00:00Z");
+  const over = make('feedback_loop', 'team-invites', {}, '2026-10-16T17:00:00Z');
   from(over.created_at);
   launch(full, over);
   over.overrun_ceiling_usd = 13.5;
   over.segments[0].attempts[0].cost_usd = 14.2;
   over.segments[0].cost_usd = 14.2;
-  over.segments[0].status = "succeeded";
-  over.status = "paused_overrun";
+  over.segments[0].status = 'succeeded';
+  over.status = 'paused_overrun';
 
   // A finished feedback loop.
-  const done = make("feedback_loop", "annual-billing", { checkpoints: { prd_review: false } }, "2026-10-16T09:00:00Z");
-  done.segments[0].attempts.push({ attempt: 1, workflow_id: "mock-wf-done", submitted_at: "2026-10-16T09:00:00Z", cost_usd: 8.1, note: null, state: "succeeded" });
-  Object.assign(done.segments[0], {
-    status: "succeeded",
+  const done = make(
+    'feedback_loop',
+    'annual-billing',
+    { checkpoints: { prd_review: false } },
+    '2026-10-16T09:00:00Z',
+  );
+  done.segments[0].attempts.push({
+    attempt: 1,
+    workflow_id: 'mock-wf-done',
+    submitted_at: '2026-10-16T09:00:00Z',
     cost_usd: 8.1,
-    artifacts: ["prd.md"],
-    draft_import: { document_id: done.document_id, slug: "annual-billing", version: 2, created: true, warnings: [], error: null, problems: [], code_names: [], summary: null },
+    note: null,
+    state: 'succeeded',
   });
-  db.artifacts[`${done.id}|1|prd.md`] = fileContent("prd.md", "next_draft", 1);
+  Object.assign(done.segments[0], {
+    status: 'succeeded',
+    cost_usd: 8.1,
+    artifacts: ['prd.md'],
+    draft_import: {
+      document_id: done.document_id,
+      slug: 'annual-billing',
+      version: 2,
+      created: true,
+      warnings: [],
+      error: null,
+      problems: [],
+      code_names: [],
+      summary: null,
+    },
+  });
+  db.artifacts[`${done.id}|1|prd.md`] = fileContent('prd.md', 'next_draft', 1);
   done.checkpoints.push({
-    id: ctx.uuid(), run_id: done.id, kind: "prd_review", status: "skipped", approver_role: "approver", segment_seq: 1,
-    decided_by: null, decided_at: "2026-10-16T09:20:00Z", note: "Turned off when the run started.", payload: {}, created_at: "2026-10-16T09:20:00Z", can_decide: false, lead_stop: false, cannot_approve: null,
-    approve_label: "Approve", needs_agents: [],
+    id: ctx.uuid(),
+    run_id: done.id,
+    kind: 'prd_review',
+    status: 'skipped',
+    approver_role: 'approver',
+    segment_seq: 1,
+    decided_by: null,
+    decided_at: '2026-10-16T09:20:00Z',
+    note: 'Turned off when the run started.',
+    payload: {},
+    created_at: '2026-10-16T09:20:00Z',
+    can_decide: false,
+    lead_stop: false,
+    cannot_approve: null,
+    approve_label: 'Approve',
+    needs_agents: [],
   });
-  Object.assign(done, { status: "succeeded", started_at: "2026-10-16T09:00:00Z", finished_at: "2026-10-16T09:20:00Z", overrun_ceiling_usd: 13.5 });
+  Object.assign(done, {
+    status: 'succeeded',
+    started_at: '2026-10-16T09:00:00Z',
+    finished_at: '2026-10-16T09:20:00Z',
+    overrun_ceiling_usd: 13.5,
+  });
 
   // A finished Baseline to PRD run whose agents proposed baseline changes (./baseline.ts).
-  const off = { baseline_confirm: false, feature_set: false, priority_order: false, prd_review: false };
-  const proposer = make("baseline_to_prd", "referral-link", { checkpoints: off }, "2026-10-16T08:00:00Z");
+  const off = {
+    baseline_confirm: false,
+    feature_set: false,
+    priority_order: false,
+    prd_review: false,
+  };
+  const proposer = make(
+    'baseline_to_prd',
+    'referral-link',
+    { checkpoints: off },
+    '2026-10-16T08:00:00Z',
+  );
   proposer.id = AGENT_RUN;
   from(proposer.created_at);
   for (const seg of proposer.segments) {
     const at = now();
-    seg.attempts.push({ attempt: 1, workflow_id: `mock-wf-b3-${seg.seq}`, submitted_at: at, cost_usd: seg.estimate_usd ?? 0, note: null, state: "succeeded" });
-    Object.assign(seg, { status: "succeeded", cost_usd: seg.estimate_usd ?? 0, started_at: at, finished_at: now() });
+    seg.attempts.push({
+      attempt: 1,
+      workflow_id: `mock-wf-b3-${seg.seq}`,
+      submitted_at: at,
+      cost_usd: seg.estimate_usd ?? 0,
+      note: null,
+      state: 'succeeded',
+    });
+    Object.assign(seg, {
+      status: 'succeeded',
+      cost_usd: seg.estimate_usd ?? 0,
+      started_at: at,
+      finished_at: now(),
+    });
   }
-  Object.assign(proposer, { status: "succeeded", started_at: proposer.created_at, finished_at: now() });
+  Object.assign(proposer, {
+    status: 'succeeded',
+    started_at: proposer.created_at,
+    finished_at: now(),
+  });
 
   for (const r of db.runs) refresh(r);
   return db;
@@ -2967,12 +4189,40 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
  * #561 review, the "stored-refusals" scenario: a feedback loop on annual-billing that failed
  * on Oct 18, its segment and the run on a refusal stored before #403's wording.
  */
-export function seedStoredRefusalRun(db: RunsDb, ctx: Omit<RunsContext, "db">, error: string): RunOut {
-  const run = seedRun(ctx, db, "feedback_loop", "annual-billing", { checkpoints: { prd_review: false } }, "2026-10-18T23:00:00Z");
-  const at = "2026-10-18T23:12:00Z";
-  run.segments[0].attempts.push({ attempt: 1, workflow_id: null, submitted_at: "2026-10-18T23:00:00Z", cost_usd: 0, note: null, state: "failed" });
-  Object.assign(run.segments[0], { status: "failed", started_at: "2026-10-18T23:00:00Z", finished_at: at, error });
-  Object.assign(run, { status: "failed", started_at: "2026-10-18T23:00:00Z", finished_at: at, error });
+export function seedStoredRefusalRun(
+  db: RunsDb,
+  ctx: Omit<RunsContext, 'db'>,
+  error: string,
+): RunOut {
+  const run = seedRun(
+    ctx,
+    db,
+    'feedback_loop',
+    'annual-billing',
+    { checkpoints: { prd_review: false } },
+    '2026-10-18T23:00:00Z',
+  );
+  const at = '2026-10-18T23:12:00Z';
+  run.segments[0].attempts.push({
+    attempt: 1,
+    workflow_id: null,
+    submitted_at: '2026-10-18T23:00:00Z',
+    cost_usd: 0,
+    note: null,
+    state: 'failed',
+  });
+  Object.assign(run.segments[0], {
+    status: 'failed',
+    started_at: '2026-10-18T23:00:00Z',
+    finished_at: at,
+    error,
+  });
+  Object.assign(run, {
+    status: 'failed',
+    started_at: '2026-10-18T23:00:00Z',
+    finished_at: at,
+    error,
+  });
   refresh(run);
   return run;
 }
@@ -2985,99 +4235,183 @@ export const KEY_RENEWED_NOTE =
  * The "key-renewed" scenario: a SwarmCloud feedback loop on annual-billing whose first step waited in
  * SwarmCloud's queue past its key, was parked, and went on once Oracle renewed the key.
  */
-export function seedKeyRenewedRun(db: RunsDb, ctx: Omit<RunsContext, "db">): RunOut {
-  const run = seedRun(ctx, db, "feedback_loop", "annual-billing", { checkpoints: { prd_review: false } }, "2026-10-20T03:00:00Z");
-  run.segments[0].attempts.push({ attempt: 1, workflow_id: "mock-wf-key-renewed", submitted_at: "2026-10-20T03:00:00Z", cost_usd: null, note: null, state: "running" });
-  Object.assign(run.segments[0], { status: "running", started_at: "2026-10-20T03:00:00Z" });
-  Object.assign(run, { status: "running", started_at: "2026-10-20T03:00:00Z", runtime: "swarmcloud", notes: [KEY_RENEWED_NOTE] });
+export function seedKeyRenewedRun(db: RunsDb, ctx: Omit<RunsContext, 'db'>): RunOut {
+  const run = seedRun(
+    ctx,
+    db,
+    'feedback_loop',
+    'annual-billing',
+    { checkpoints: { prd_review: false } },
+    '2026-10-20T03:00:00Z',
+  );
+  run.segments[0].attempts.push({
+    attempt: 1,
+    workflow_id: 'mock-wf-key-renewed',
+    submitted_at: '2026-10-20T03:00:00Z',
+    cost_usd: null,
+    note: null,
+    state: 'running',
+  });
+  Object.assign(run.segments[0], { status: 'running', started_at: '2026-10-20T03:00:00Z' });
+  Object.assign(run, {
+    status: 'running',
+    started_at: '2026-10-20T03:00:00Z',
+    runtime: 'swarmcloud',
+    notes: [KEY_RENEWED_NOTE],
+  });
   refresh(run);
   return run;
 }
 
 /** The run the "feature-set" scenario seeds (C6). */
-export const FEATURE_SET_RUN = "7a11c0de-0000-4000-8000-0000000000f5";
+export const FEATURE_SET_RUN = '7a11c0de-0000-4000-8000-0000000000f5';
 
 /** Bulk import from a spreadsheet: 6 features, 14 requirements, 2 left out; bulk edit depends on one left out. */
 const SAVED_ADDRESSES: FeatureSetSpec = {
   features: [
     {
-      key: "bulk-import",
-      title: "Bulk import",
-      summary: "Returning buyers pick an imported row at checkout",
-      goals: [{ key: "repeat-checkout", contribution: 3 }],
-      depends_on: ["address-lookup"],
+      key: 'bulk-import',
+      title: 'Bulk import',
+      summary: 'Returning buyers pick an imported row at checkout',
+      goals: [{ key: 'repeat-checkout', contribution: 3 }],
+      depends_on: ['address-lookup'],
       confidence: 0.8,
       requirements: [
-        { key: "bulk-import-pick", text: "The buyer picks one of up to five imported rows", acceptance: ["Five addresses at most", "The last used one is preselected"] },
-        { key: "bulk-import-save", text: "A new address can be saved while paying", acceptance: ["Saving is opt-in"] },
-        { key: "bulk-import-remove", text: "The buyer removes an imported row from their account", acceptance: ["Removed addresses are gone at the next checkout"] },
+        {
+          key: 'bulk-import-pick',
+          text: 'The buyer picks one of up to five imported rows',
+          acceptance: ['Five addresses at most', 'The last used one is preselected'],
+        },
+        {
+          key: 'bulk-import-save',
+          text: 'A new address can be saved while paying',
+          acceptance: ['Saving is opt-in'],
+        },
+        {
+          key: 'bulk-import-remove',
+          text: 'The buyer removes an imported row from their account',
+          acceptance: ['Removed addresses are gone at the next checkout'],
+        },
       ],
     },
     {
-      key: "address-lookup",
-      title: "Address lookup",
-      summary: "The buyer finds their address from a postcode",
-      goals: [{ key: "repeat-checkout", contribution: 1 }, { key: "fewer-failed-deliveries", contribution: 2 }],
+      key: 'address-lookup',
+      title: 'Address lookup',
+      summary: 'The buyer finds their address from a postcode',
+      goals: [
+        { key: 'repeat-checkout', contribution: 1 },
+        { key: 'fewer-failed-deliveries', contribution: 2 },
+      ],
       depends_on: [],
       confidence: 0.75,
       requirements: [
-        { key: "address-lookup-postcode", text: "A postcode lists the matching addresses", acceptance: ["Results show within a second"] },
-        { key: "address-lookup-manual", text: "The buyer can type the address by hand", acceptance: ["Manual entry is one tap away"] },
-        { key: "address-lookup-validate", text: "An address that cannot be delivered to is flagged before paying", acceptance: ["The flag says why"] },
+        {
+          key: 'address-lookup-postcode',
+          text: 'A postcode lists the matching addresses',
+          acceptance: ['Results show within a second'],
+        },
+        {
+          key: 'address-lookup-manual',
+          text: 'The buyer can type the address by hand',
+          acceptance: ['Manual entry is one tap away'],
+        },
+        {
+          key: 'address-lookup-validate',
+          text: 'An address that cannot be delivered to is flagged before paying',
+          acceptance: ['The flag says why'],
+        },
       ],
     },
     {
-      key: "checkout-address-step",
-      title: "One-step address at checkout",
-      summary: "Address and delivery choice on one screen",
-      goals: [{ key: "repeat-checkout", contribution: 2 }],
-      depends_on: ["bulk-import"],
+      key: 'checkout-address-step',
+      title: 'One-step address at checkout',
+      summary: 'Address and delivery choice on one screen',
+      goals: [{ key: 'repeat-checkout', contribution: 2 }],
+      depends_on: ['bulk-import'],
       confidence: 0.6,
       requirements: [
-        { key: "checkout-address-one-screen", text: "Address and delivery option are chosen on one screen", acceptance: ["No extra page load"] },
-        { key: "checkout-address-summary", text: "The chosen address shows in the order summary", acceptance: ["It can be changed from the summary"] },
+        {
+          key: 'checkout-address-one-screen',
+          text: 'Address and delivery option are chosen on one screen',
+          acceptance: ['No extra page load'],
+        },
+        {
+          key: 'checkout-address-summary',
+          text: 'The chosen address shows in the order summary',
+          acceptance: ['It can be changed from the summary'],
+        },
       ],
     },
     {
-      key: "address-edit",
-      title: "Edit an imported row",
-      summary: "Buyers correct an imported row without retyping it",
-      goals: [{ key: "fewer-failed-deliveries", contribution: 2 }],
-      depends_on: ["bulk-import"],
+      key: 'address-edit',
+      title: 'Edit an imported row',
+      summary: 'Buyers correct an imported row without retyping it',
+      goals: [{ key: 'fewer-failed-deliveries', contribution: 2 }],
+      depends_on: ['bulk-import'],
       confidence: 0.7,
       requirements: [
-        { key: "address-edit-inline", text: "An imported row is edited in place at checkout", acceptance: ["Changes apply to this order"] },
-        { key: "address-edit-history", text: "Orders already placed keep the address they were sent to", acceptance: ["Past orders do not change"] },
+        {
+          key: 'address-edit-inline',
+          text: 'An imported row is edited in place at checkout',
+          acceptance: ['Changes apply to this order'],
+        },
+        {
+          key: 'address-edit-history',
+          text: 'Orders already placed keep the address they were sent to',
+          acceptance: ['Past orders do not change'],
+        },
       ],
     },
     {
-      key: "bulk-address-edit",
-      title: "Bulk address edit",
-      summary: "Business buyers update many imported rows at once",
+      key: 'bulk-address-edit',
+      title: 'Bulk address edit',
+      summary: 'Business buyers update many imported rows at once',
       goals: [],
-      depends_on: ["bulk-import", "shared-address-book-export"],
+      depends_on: ['bulk-import', 'shared-address-book-export'],
       confidence: 0.3,
       requirements: [
-        { key: "bulk-address-edit-import", text: "A buyer uploads a file of address changes", acceptance: ["Up to 200 rows"] },
-        { key: "bulk-address-edit-review", text: "The buyer reviews each change before it is saved", acceptance: ["Rejected rows are listed"] },
+        {
+          key: 'bulk-address-edit-import',
+          text: 'A buyer uploads a file of address changes',
+          acceptance: ['Up to 200 rows'],
+        },
+        {
+          key: 'bulk-address-edit-review',
+          text: 'The buyer reviews each change before it is saved',
+          acceptance: ['Rejected rows are listed'],
+        },
       ],
     },
     {
-      key: "address-labels",
-      title: "Address labels",
-      summary: "Buyers name imported rows (Home, Work)",
-      goals: [{ key: "repeat-checkout", contribution: 1 }],
-      depends_on: ["bulk-import"],
+      key: 'address-labels',
+      title: 'Address labels',
+      summary: 'Buyers name imported rows (Home, Work)',
+      goals: [{ key: 'repeat-checkout', contribution: 1 }],
+      depends_on: ['bulk-import'],
       confidence: 0.65,
       requirements: [
-        { key: "address-labels-name", text: "An imported row takes a short label", acceptance: ["Labels are 20 characters at most"] },
-        { key: "address-labels-show", text: "Labels show first in the address picker", acceptance: ["Unlabelled addresses show the street"] },
+        {
+          key: 'address-labels-name',
+          text: 'An imported row takes a short label',
+          acceptance: ['Labels are 20 characters at most'],
+        },
+        {
+          key: 'address-labels-show',
+          text: 'Labels show first in the address picker',
+          acceptance: ['Unlabelled addresses show the street'],
+        },
       ],
     },
   ],
   excluded: [
-    { key: "shared-address-book-export", reason: "Serves no confirmed goal; business accounts come later" },
-    { key: "address-sharing", reason: "Sharing addresses between buyers needs a privacy review first" },
+    {
+      key: 'shared-address-book-export',
+      reason: 'Serves no confirmed goal; business accounts come later',
+    },
+    {
+      key: 'address-sharing',
+      reason: 'Sharing addresses between buyers needs a privacy review first',
+    },
   ],
 };
 
@@ -3101,40 +4435,49 @@ Returning buyers pick an imported row at checkout instead of typing it again.
  * waiting at its feature set, whose check found one blocking problem (bulk-address-edit
  * depends on a feature left out) and two flags, so Approve is refused until it is sent back.
  */
-export function seedFeatureSetRun(db: RunsDb, ctx: Omit<RunsContext, "db">, twoOfOne = false, named = false): RunOut {
+export function seedFeatureSetRun(
+  db: RunsDb,
+  ctx: Omit<RunsContext, 'db'>,
+  twoOfOne = false,
+  named = false,
+): RunOut {
   const { from, now } = seedClock();
   // Its own runs list, so the ticks below move this run only.
   const own: RunsDb = { runs: [], artifacts: db.artifacts, scopes: (db.scopes ??= {}) };
   const full = { ...ctx, db: own, now };
-  const r = seedRun(ctx, own, "baseline_to_prd", "bulk-import", {}, "2026-10-17T09:00:00Z");
+  const r = seedRun(ctx, own, 'baseline_to_prd', 'bulk-import', {}, '2026-10-17T09:00:00Z');
   r.id = FEATURE_SET_RUN;
   from(r.created_at);
   launch(full, r);
   tick(full);
   // The baseline was confirmed; the feature set ran once.
   const [baseline, featureSet] = r.segments;
-  Object.assign(r.checkpoints[0], { status: "approved", decided_by: ctx.userId, decided_at: now() });
+  Object.assign(r.checkpoints[0], {
+    status: 'approved',
+    decided_by: ctx.userId,
+    decided_at: now(),
+  });
   next(full, r, baseline);
   tick(full);
   const check = checkOf(
     SAVED_ADDRESSES,
     [
       {
-        code: "depends_on_excluded",
+        code: 'depends_on_excluded',
         blocking: true,
-        feature: "bulk-address-edit",
+        feature: 'bulk-address-edit',
         requirement: null,
-        message: "bulk-address-edit depends on shared-address-book-export, which is excluded",
+        message: 'bulk-address-edit depends on shared-address-book-export, which is excluded',
       },
       // "feature-set-two": a second problem of the same code on the same feature, waived on its own.
       ...(twoOfOne
         ? [
             {
-              code: "depends_on_excluded",
+              code: 'depends_on_excluded',
               blocking: true,
-              feature: "bulk-address-edit",
+              feature: 'bulk-address-edit',
               requirement: null,
-              message: "bulk-address-edit depends on address-sharing, which is excluded",
+              message: 'bulk-address-edit depends on address-sharing, which is excluded',
             },
           ]
         : []),
@@ -3142,30 +4485,54 @@ export function seedFeatureSetRun(db: RunsDb, ctx: Omit<RunsContext, "db">, twoO
       ...(named
         ? [
             {
-              code: "unknown_requirement",
+              code: 'unknown_requirement',
               blocking: true,
-              feature: "bulk-import",
-              requirement: "bulk-import-pick",
-              message: "requirement bulk-import-pick of bulk-import is neither a Ground Truth requirement nor one this run proposed",
+              feature: 'bulk-import',
+              requirement: 'bulk-import-pick',
+              message:
+                'requirement bulk-import-pick of bulk-import is neither a Ground Truth requirement nor one this run proposed',
             },
-            { code: "unknown_goal", blocking: true, feature: "bulk-import", requirement: null, message: "bulk-import: goal retention-rate is not a confirmed goal" },
-            { code: "unknown_dependency", blocking: true, feature: "address-labels", requirement: null, message: "address-labels needs café-pickup, which is not in the feature set or the Ground Truth" },
+            {
+              code: 'unknown_goal',
+              blocking: true,
+              feature: 'bulk-import',
+              requirement: null,
+              message: 'bulk-import: goal retention-rate is not a confirmed goal',
+            },
+            {
+              code: 'unknown_dependency',
+              blocking: true,
+              feature: 'address-labels',
+              requirement: null,
+              message:
+                'address-labels needs café-pickup, which is not in the feature set or the Ground Truth',
+            },
           ]
         : []),
     ],
-    { "bulk-address-edit": ["serves_no_goal", "low_confidence"], "bulk-import": ["new_feature"] },
+    { 'bulk-address-edit': ['serves_no_goal', 'low_confidence'], 'bulk-import': ['new_feature'] },
     named
-      ? { requirement_names: { "bulk-import-pick": "The buyer picks one of up to five imported rows" }, goal_names: { "retention-rate": "Retention rate" } }
+      ? {
+          requirement_names: {
+            'bulk-import-pick': 'The buyer picks one of up to five imported rows',
+          },
+          goal_names: { 'retention-rate': 'Retention rate' },
+        }
       : undefined,
   );
-  if (named) check.titles["café-pickup"] = "Café pickup";
+  if (named) check.titles['café-pickup'] = 'Café pickup';
   featureSet.feature_set_check = check;
-  featureSet.artifacts = ["design.md", "feature_set.yaml"];
-  db.artifacts[`${r.id}|${featureSet.seq}|feature_set.yaml`] = featureSetYaml(SAVED_ADDRESSES, r.document_slug, featureSet.name, 1);
+  featureSet.artifacts = ['design.md', 'feature_set.yaml'];
+  db.artifacts[`${r.id}|${featureSet.seq}|feature_set.yaml`] = featureSetYaml(
+    SAVED_ADDRESSES,
+    r.document_slug,
+    featureSet.name,
+    1,
+  );
   db.artifacts[`${r.id}|${featureSet.seq}|design.md`] = SAVED_ADDRESSES_DESIGN;
   own.scopes![r.id] = [];
   proposeScope(full, r, featureSet.seq, 1, SAVED_ADDRESSES, check);
-  const cp = r.checkpoints.find((c) => c.kind === "feature_set")!;
+  const cp = r.checkpoints.find((c) => c.kind === 'feature_set')!;
   cp.payload = { ...cp.payload, feature_set_check: check };
   refresh(r);
   db.runs.push(r);
@@ -3173,51 +4540,67 @@ export function seedFeatureSetRun(db: RunsDb, ctx: Omit<RunsContext, "db">, twoO
 }
 
 /** The run the "eng-review" scenario seeds (A3). */
-export const ENG_REVIEW_RUN = "7a11c0de-0000-4000-8000-0000000000e3";
+export const ENG_REVIEW_RUN = '7a11c0de-0000-4000-8000-0000000000e3';
 
 /**
  * The "eng-review" scenario (A3): a Baseline to PRD run for a new PRD (offline-sync) waiting
  * at an Engineering review stop. No flow creates one yet (F4 Engineering review stop adds the
  * check and the dates to Baseline to PRD): its first stop is made one, as the API tests do.
  */
-export function seedEngReviewRun(db: RunsDb, ctx: Omit<RunsContext, "db">): RunOut {
+export function seedEngReviewRun(db: RunsDb, ctx: Omit<RunsContext, 'db'>): RunOut {
   const { from, now } = seedClock();
   const own: RunsDb = { runs: [], artifacts: db.artifacts, scopes: (db.scopes ??= {}) };
   const full = { ...ctx, db: own, now };
-  const r = seedRun(ctx, own, "baseline_to_prd", "offline-sync", {}, "2026-10-17T10:00:00Z");
+  const r = seedRun(ctx, own, 'baseline_to_prd', 'offline-sync', {}, '2026-10-17T10:00:00Z');
   r.id = ENG_REVIEW_RUN;
   from(r.created_at);
   launch(full, r);
   tick(full);
-  const cp = r.checkpoints.find((c) => c.status === "pending")!;
-  Object.assign(cp, { kind: "eng_review", approver_role: "approver" });
+  const cp = r.checkpoints.find((c) => c.status === 'pending')!;
+  Object.assign(cp, { kind: 'eng_review', approver_role: 'approver' });
   refresh(r);
   db.runs.push(r);
   return r;
 }
 
 /** The run the "eng-check" scenario seeds (F4). */
-export const ENG_CHECK_RUN = "7a11c0de-0000-4000-8000-0000000000f4";
+export const ENG_CHECK_RUN = '7a11c0de-0000-4000-8000-0000000000f4';
 
 /**
  * The "eng-check" scenario (F4): a Baseline to PRD run for a new PRD (guided-onboarding),
  * its baseline and feature set approved, waiting at its Engineering check with three briefs
  * on the baseline's features, one with a blocking question.
  */
-export function seedEngCheckRun(db: RunsDb, ctx: Omit<RunsContext, "db">): RunOut {
+export function seedEngCheckRun(db: RunsDb, ctx: Omit<RunsContext, 'db'>): RunOut {
   const { from, now } = seedClock();
-  const own: RunsDb = { runs: [], artifacts: db.artifacts, scopes: (db.scopes ??= {}), drafts: (db.drafts ??= {}) };
+  const own: RunsDb = {
+    runs: [],
+    artifacts: db.artifacts,
+    scopes: (db.scopes ??= {}),
+    drafts: (db.drafts ??= {}),
+  };
   const full = { ...ctx, db: own, now };
-  const r = seedRun(ctx, own, "baseline_to_prd", "guided-onboarding", { checkpoints: { eng_review: true } }, "2026-10-17T11:00:00Z");
+  const r = seedRun(
+    ctx,
+    own,
+    'baseline_to_prd',
+    'guided-onboarding',
+    { checkpoints: { eng_review: true } },
+    '2026-10-17T11:00:00Z',
+  );
   r.id = ENG_CHECK_RUN;
   from(r.created_at);
   launch(full, r);
-  for (const kind of ["baseline_confirm", "feature_set"]) {
+  for (const kind of ['baseline_confirm', 'feature_set']) {
     tick(full);
-    const cp = r.checkpoints.find((c) => c.status === "pending" && c.kind === kind)!;
-    Object.assign(cp, { status: "approved", decided_by: ctx.userId, decided_at: now() });
-    if (kind === "feature_set") decideScope(full, r, "approved", ctx.userId);
-    next(full, r, r.segments.find((x) => x.seq === cp.segment_seq)!);
+    const cp = r.checkpoints.find((c) => c.status === 'pending' && c.kind === kind)!;
+    Object.assign(cp, { status: 'approved', decided_by: ctx.userId, decided_at: now() });
+    if (kind === 'feature_set') decideScope(full, r, 'approved', ctx.userId);
+    next(
+      full,
+      r,
+      r.segments.find((x) => x.seq === cp.segment_seq)!,
+    );
   }
   tick(full);
   refresh(r);
@@ -3230,15 +4613,25 @@ export function seedEngCheckRun(db: RunsDb, ctx: Omit<RunsContext, "db">): RunOu
  * by `by` with one answer recorded by its question's id only (no question text), as an older
  * check recorded it.
  */
-export function seedEngCheckAnsweredByIdRun(db: RunsDb, ctx: Omit<RunsContext, "db">, by: string): RunOut {
+export function seedEngCheckAnsweredByIdRun(
+  db: RunsDb,
+  ctx: Omit<RunsContext, 'db'>,
+  by: string,
+): RunOut {
   const r = seedEngCheckRun(db, ctx);
-  const cp = r.checkpoints.find((c) => c.status === "pending" && c.kind === "eng_review")!;
-  const at = "2026-10-17T15:20:00Z";
+  const cp = r.checkpoints.find((c) => c.status === 'pending' && c.kind === 'eng_review')!;
+  const at = '2026-10-17T15:20:00Z';
   const answers: Record<string, EngAnswer[]> = {
-    "f.setup-checklist": [{ question_id: "q1", answer: "Yes, the sandbox takes test orders.", by, at }],
+    'f.setup-checklist': [
+      { question_id: 'q1', answer: 'Yes, the sandbox takes test orders.', by, at },
+    ],
   };
-  Object.assign(cp, { status: "approved", decided_by: by, decided_at: at });
-  cp.payload = { ...cp.payload, briefs: { verdicts: {}, sizes: {}, answers }, decided: { role: "commenter", via: "oracle", by } };
+  Object.assign(cp, { status: 'approved', decided_by: by, decided_at: at });
+  cp.payload = {
+    ...cp.payload,
+    briefs: { verdicts: {}, sizes: {}, answers },
+    decided: { role: 'commenter', via: 'oracle', by },
+  };
   refresh(r);
   return r;
 }
@@ -3247,34 +4640,66 @@ export function seedEngCheckAnsweredByIdRun(db: RunsDb, ctx: Omit<RunsContext, "
  * The "eng-check-unmapped" scenario: the "eng-check" run whose maps cover example/shop-app and
  * example/shop-api while the features cite ids of example/shop-web, which has no map.
  */
-export function seedEngCheckUnmappedRun(db: RunsDb, ctx: Omit<RunsContext, "db">, named = true): RunOut {
+export function seedEngCheckUnmappedRun(
+  db: RunsDb,
+  ctx: Omit<RunsContext, 'db'>,
+  named = true,
+): RunOut {
   const r = seedEngCheckRun(db, ctx);
-  const cp = r.checkpoints.find((c) => c.kind === "eng_review" && c.status === "pending")!;
+  const cp = r.checkpoints.find((c) => c.kind === 'eng_review' && c.status === 'pending')!;
   const file: BriefsMaps = {
     cites: {
-      "f.setup-checklist": [["module:onboarding", "touches[0].ref"], ["module:storefront", "touches[1].ref"]],
-      "f.sample-data": [["module:storefront", "touches[0].ref"], ["model:catalogue", "reuse"]],
-      "f.referral-link": [["module:storefront", "reuse"]],
+      'f.setup-checklist': [
+        ['module:onboarding', 'touches[0].ref'],
+        ['module:storefront', 'touches[1].ref'],
+      ],
+      'f.sample-data': [
+        ['module:storefront', 'touches[0].ref'],
+        ['model:catalogue', 'reuse'],
+      ],
+      'f.referral-link': [['module:storefront', 'reuse']],
     },
-    repos: ["https://github.com/example/shop-app.git"],
-    unmapped: named ? ["example/shop-web"] : [],
+    repos: ['https://github.com/example/shop-app.git'],
+    unmapped: named ? ['example/shop-web'] : [],
   };
-  const maps: RunMaps = { ids: ["module:onboarding", "module:checkout"], repos: ["example/shop-app", "example/shop-api"] };
+  const maps: RunMaps = {
+    ids: ['module:onboarding', 'module:checkout'],
+    repos: ['example/shop-app', 'example/shop-api'],
+  };
   cp.payload = { ...cp.payload, briefs_check: briefsCheckOf(SEEDED_BRIEFS, file, maps) };
   return r;
 }
 
 /** The runs the "eng-dates" scenario seeds (F4 lane B). */
-export const ENG_DATES_RUN = "7a11c0de-0000-4000-8000-0000000000d4";
-export const ENG_DATES_WAITING_RUN = "7a11c0de-0000-4000-8000-0000000000d5";
+export const ENG_DATES_RUN = '7a11c0de-0000-4000-8000-0000000000d4';
+export const ENG_DATES_WAITING_RUN = '7a11c0de-0000-4000-8000-0000000000d5';
 
 /** A Baseline to PRD run with only the Engineering dates on, its PRD draft imported (v2 of `document`). */
-function seedDatesRun(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, document: string, created_at: string) {
+function seedDatesRun(
+  db: RunsDb,
+  ctx: Omit<RunsContext, 'db'>,
+  id: string,
+  document: string,
+  created_at: string,
+) {
   const { from, now } = seedClock();
-  const own: RunsDb = { runs: [], artifacts: db.artifacts, scopes: (db.scopes ??= {}), drafts: (db.drafts ??= {}), priority_snapshots: (db.priority_snapshots ??= []) };
+  const own: RunsDb = {
+    runs: [],
+    artifacts: db.artifacts,
+    scopes: (db.scopes ??= {}),
+    drafts: (db.drafts ??= {}),
+    priority_snapshots: (db.priority_snapshots ??= []),
+  };
   const full = { ...ctx, db: own, now };
-  const off = { baseline_confirm: false, feature_set: false, priority_order: false, prd_review: false, eng_review: false, eng_dates: true };
-  const r = seedRun(ctx, own, "baseline_to_prd", document, { checkpoints: off }, created_at);
+  const off = {
+    baseline_confirm: false,
+    feature_set: false,
+    priority_order: false,
+    prd_review: false,
+    eng_review: false,
+    eng_dates: true,
+  };
+  const r = seedRun(ctx, own, 'baseline_to_prd', document, { checkpoints: off }, created_at);
   r.id = id;
   from(r.created_at);
   launch(full, r);
@@ -3286,52 +4711,69 @@ function seedDatesRun(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, docu
  * at its Engineering dates with four Now items (three with a proposed date), two Next and one
  * Later; and one for Visit reminders whose PRD review is done, waiting for v2's roadmap items.
  */
-export function seedEngDatesRuns(db: RunsDb, ctx: Omit<RunsContext, "db">): RunOut[] {
-  const waiting = seedDatesRun(db, ctx, ENG_DATES_RUN, "usage-alerts", "2026-10-22T08:00:00Z");
-  for (let i = 0; i < 10 && waiting.r.status !== "awaiting_checkpoint"; i++) tick(waiting.full);
+export function seedEngDatesRuns(db: RunsDb, ctx: Omit<RunsContext, 'db'>): RunOut[] {
+  const waiting = seedDatesRun(db, ctx, ENG_DATES_RUN, 'usage-alerts', '2026-10-22T08:00:00Z');
+  for (let i = 0; i < 10 && waiting.r.status !== 'awaiting_checkpoint'; i++) tick(waiting.full);
   refresh(waiting.r);
-  const later = seedDatesRun(db, ctx, ENG_DATES_WAITING_RUN, "visit-reminders", "2026-10-22T09:00:00Z");
-  const dates = () => later.r.segments.find((x) => x.name === "eng_dates")!;
-  for (let i = 0; i < 10 && dates().status !== "running"; i++) tick(later.full);
+  const later = seedDatesRun(
+    db,
+    ctx,
+    ENG_DATES_WAITING_RUN,
+    'visit-reminders',
+    '2026-10-22T09:00:00Z',
+  );
+  const dates = () => later.r.segments.find((x) => x.name === 'eng_dates')!;
+  for (let i = 0; i < 10 && dates().status !== 'running'; i++) tick(later.full);
   // As the API: the dates step waits for the draft's roadmap items before it runs.
-  Object.assign(dates(), { status: "pending", attempts: [], workflow_id: null, started_at: null, agents: [], checked_at: null });
-  const imp = later.r.segments.find((x) => x.name === "prd_draft")?.draft_import;
-  later.r.waiting_for = { kind: "draft_items", version: imp?.version ?? 1 };
+  Object.assign(dates(), {
+    status: 'pending',
+    attempts: [],
+    workflow_id: null,
+    started_at: null,
+    agents: [],
+    checked_at: null,
+  });
+  const imp = later.r.segments.find((x) => x.name === 'prd_draft')?.draft_import;
+  later.r.waiting_for = { kind: 'draft_items', version: imp?.version ?? 1 };
   refresh(later.r);
   db.runs.push(waiting.r, later.r);
   return [waiting.r, later.r];
 }
 
 /** The run the "baseline-review" scenarios seed (B2). */
-export const BASELINE_REVIEW_RUN = "7a11c0de-0000-4000-8000-0000000000b2";
+export const BASELINE_REVIEW_RUN = '7a11c0de-0000-4000-8000-0000000000b2';
 
 /**
  * The "baseline-review" scenarios (B2): a Build the baseline run of Oct 20 waiting at Confirm
  * the baseline (./from-run.ts seeds what it wrote to the baseline). `consoleHeld`: approved in
  * SwarmCloud's console while its goals are undecided, so Oracle holds it (D3 "Console gate").
  */
-export function seedBaselineReviewRun(db: RunsDb, ctx: Omit<RunsContext, "db">, consoleHeld = false): RunOut {
+export function seedBaselineReviewRun(
+  db: RunsDb,
+  ctx: Omit<RunsContext, 'db'>,
+  consoleHeld = false,
+): RunOut {
   const { from, now } = seedClock();
   const own: RunsDb = { runs: [], artifacts: db.artifacts, scopes: (db.scopes ??= {}) };
   const full = { ...ctx, db: own, now };
-  const r = seedRun(ctx, own, "baseline", "", {}, "2026-10-20T16:14:00Z");
+  const r = seedRun(ctx, own, 'baseline', '', {}, '2026-10-20T16:14:00Z');
   r.id = BASELINE_REVIEW_RUN;
   Object.assign(r, { document_id: null, document_slug: null });
   from(r.created_at);
   launch(full, r);
   tick(full);
-  const cp = r.checkpoints.find((c) => c.status === "pending")!;
+  const cp = r.checkpoints.find((c) => c.status === 'pending')!;
   cp.run_id = r.id;
   if (consoleHeld) {
     cp.console = {
-      answered_by: "lead@example.com",
-      answered_at: "2026-10-20T17:00:00Z",
+      answered_by: 'lead@example.com',
+      answered_at: '2026-10-20T17:00:00Z',
       via: null,
-      verdict: "MERGE",
+      verdict: 'MERGE',
       findings: [],
       counted: true,
       reason: CONSOLE_HELD,
-      needs: "confirm",
+      needs: 'confirm',
       revise: false,
       can_redo: false,
     };
@@ -3343,73 +4785,146 @@ export function seedBaselineReviewRun(db: RunsDb, ctx: Omit<RunsContext, "db">, 
 }
 
 /** D10 "run-review" scenario: a Baseline to PRD run waiting at its PRD review of the Usage alerts PRD's v2. */
-export const RUN_REVIEW_RUN = "7a11c0de-0000-4000-8000-0000000000da";
+export const RUN_REVIEW_RUN = '7a11c0de-0000-4000-8000-0000000000da';
 
-export function seedRunReviewRun(db: RunsDb, ctx: Omit<RunsContext, "db">): RunOut {
+export function seedRunReviewRun(db: RunsDb, ctx: Omit<RunsContext, 'db'>): RunOut {
   const { from, now } = seedClock();
-  const own: RunsDb = { runs: [], artifacts: db.artifacts, scopes: (db.scopes ??= {}), priority_snapshots: (db.priority_snapshots ??= []) };
+  const own: RunsDb = {
+    runs: [],
+    artifacts: db.artifacts,
+    scopes: (db.scopes ??= {}),
+    priority_snapshots: (db.priority_snapshots ??= []),
+  };
   const full = { ...ctx, db: own, now };
-  const off = { baseline_confirm: false, feature_set: false, priority_order: false, eng_review: false };
-  const r = seedRun(ctx, own, "baseline_to_prd", "usage-alerts", { checkpoints: off }, "2026-10-21T08:00:00Z");
+  const off = {
+    baseline_confirm: false,
+    feature_set: false,
+    priority_order: false,
+    eng_review: false,
+  };
+  const r = seedRun(
+    ctx,
+    own,
+    'baseline_to_prd',
+    'usage-alerts',
+    { checkpoints: off },
+    '2026-10-21T08:00:00Z',
+  );
   r.id = RUN_REVIEW_RUN;
   from(r.created_at);
   launch(full, r);
-  for (let i = 0; i < 8 && r.status !== "awaiting_checkpoint"; i++) tick(full);
+  for (let i = 0; i < 8 && r.status !== 'awaiting_checkpoint'; i++) tick(full);
   refresh(r);
   db.runs.push(r);
   return r;
 }
 
 /** The runs the "no-document" scenario seeds (#583 review): a new one and one from before the row shipped. */
-export const NO_DOCUMENT_RUN = "7a11c0de-0000-4000-8000-0000000000e1";
-export const OLD_NO_DOCUMENT_RUN = "7a11c0de-0000-4000-8000-0000000000e2";
+export const NO_DOCUMENT_RUN = '7a11c0de-0000-4000-8000-0000000000e1';
+export const OLD_NO_DOCUMENT_RUN = '7a11c0de-0000-4000-8000-0000000000e2';
 
 /**
  * The "no-document" scenario (#583 review): two Baseline to PRD runs approved past a refused PRD
  * draft, so they finished with no document: public-signup's just now, and old-checkout's on
  * Oct 1, before the No document row shipped (NO_DOCUMENT_SINCE), which gets no Inbox row.
  */
-export function seedNoDocumentRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
-  const off = { baseline_confirm: false, feature_set: false, priority_order: false, eng_review: false };
-  const error = "prd.md was rejected: [invalid_citation] citation #1 (o-g1) is invalid: source";
+export function seedNoDocumentRuns(db: RunsDb, ctx: Omit<RunsContext, 'db'>) {
+  const off = {
+    baseline_confirm: false,
+    feature_set: false,
+    priority_order: false,
+    eng_review: false,
+  };
+  const error = 'prd.md was rejected: [invalid_citation] citation #1 (o-g1) is invalid: source';
   const summary = "Oracle refused prd.md: 1 citation uses source 'o', which isn't accepted.";
   const make = (id: string, document: string, at: string) => {
-    const r = seedRun(ctx, db, "baseline_to_prd", document, { checkpoints: off }, at);
+    const r = seedRun(ctx, db, 'baseline_to_prd', document, { checkpoints: off }, at);
     r.id = id;
     for (const s of r.segments) {
-      s.attempts.push({ attempt: 1, workflow_id: `mock-wf-nodoc-${s.seq}`, submitted_at: at, cost_usd: 1, note: null, state: "succeeded" });
-      Object.assign(s, { status: "succeeded", cost_usd: 1, started_at: at, finished_at: at });
-      if (s.name !== "prd_draft") continue;
-      s.artifacts = ["prd.md"];
-      s.draft_import = { document_id: null, slug: null, kind: null, version: null, created: null, warnings: [], error, problems: [], code_names: [], summary, source: null, prd_links: null };
-      db.artifacts[`${id}|${s.seq}|prd.md`] = fileContent("prd.md", s.name, 1, document);
+      s.attempts.push({
+        attempt: 1,
+        workflow_id: `mock-wf-nodoc-${s.seq}`,
+        submitted_at: at,
+        cost_usd: 1,
+        note: null,
+        state: 'succeeded',
+      });
+      Object.assign(s, { status: 'succeeded', cost_usd: 1, started_at: at, finished_at: at });
+      if (s.name !== 'prd_draft') continue;
+      s.artifacts = ['prd.md'];
+      s.draft_import = {
+        document_id: null,
+        slug: null,
+        kind: null,
+        version: null,
+        created: null,
+        warnings: [],
+        error,
+        problems: [],
+        code_names: [],
+        summary,
+        source: null,
+        prd_links: null,
+      };
+      db.artifacts[`${id}|${s.seq}|prd.md`] = fileContent('prd.md', s.name, 1, document);
       r.checkpoints.push({
-        id: ctx.uuid(), run_id: id, kind: "prd_review", status: "approved", approver_role: "approver", segment_seq: s.seq,
-        decided_by: null, decided_at: at, note: null, created_at: at, can_decide: false, lead_stop: false, cannot_approve: null,
-        payload: { segment_seq: s.seq, segment: s.name, attempt: 1, artifacts: ["prd.md"], import: { error, problems: [], summary } },
-        approve_label: "Approve", needs_agents: [],
+        id: ctx.uuid(),
+        run_id: id,
+        kind: 'prd_review',
+        status: 'approved',
+        approver_role: 'approver',
+        segment_seq: s.seq,
+        decided_by: null,
+        decided_at: at,
+        note: null,
+        created_at: at,
+        can_decide: false,
+        lead_stop: false,
+        cannot_approve: null,
+        payload: {
+          segment_seq: s.seq,
+          segment: s.name,
+          attempt: 1,
+          artifacts: ['prd.md'],
+          import: { error, problems: [], summary },
+        },
+        approve_label: 'Approve',
+        needs_agents: [],
       });
     }
-    Object.assign(r, { status: "succeeded", document_id: null, started_at: at, finished_at: at, waiting_on: null });
+    Object.assign(r, {
+      status: 'succeeded',
+      document_id: null,
+      started_at: at,
+      finished_at: at,
+      waiting_on: null,
+    });
     refresh(r);
   };
-  make(OLD_NO_DOCUMENT_RUN, "old-checkout", "2026-10-01T09:00:00Z");
-  make(NO_DOCUMENT_RUN, "public-signup", new Date().toISOString());
+  make(OLD_NO_DOCUMENT_RUN, 'old-checkout', '2026-10-01T09:00:00Z');
+  make(NO_DOCUMENT_RUN, 'public-signup', new Date().toISOString());
 }
 
 /** B2: the run's Confirm the baseline stop as GET /v1/baseline/from-run reads it, or null. */
-export function fromRunCheckpoint(ctx: RunsContext, runId: string): { run: Schemas["ProposalRun"]; checkpoint: Schemas["FromRunCheckpoint"] | null; actions: Schemas["ReviewAction"][] } | null {
+export function fromRunCheckpoint(
+  ctx: RunsContext,
+  runId: string,
+): {
+  run: Schemas['ProposalRun'];
+  checkpoint: Schemas['FromRunCheckpoint'] | null;
+  actions: Schemas['ReviewAction'][];
+} | null {
   const r = ctx.db.runs.find((x) => x.id === runId);
   if (!r) return null;
   const run = proposalRun(ctx, r);
-  const cp = r.checkpoints.filter((c) => c.kind === "baseline_confirm").pop();
+  const cp = r.checkpoints.filter((c) => c.kind === 'baseline_confirm').pop();
   if (!cp) return { run, checkpoint: null, actions: [] };
   const role = ctx.member?.role ?? ctx.userRole ?? null;
   const draft = draftOf(ctx, cp.id);
   const review = reviewOut(ctx, r, cp, draft, role);
   const people = new Map((ctx.members ?? []).map((x) => [x.id, x]));
   const decider = cp.decided_by ? people.get(cp.decided_by) : undefined;
-  const pending = cp.status === "pending";
+  const pending = cp.status === 'pending';
   return {
     run,
     checkpoint: {
@@ -3424,21 +4939,23 @@ export function fromRunCheckpoint(ctx: RunsContext, runId: string): { run: Schem
       gate: review.gate,
       note: draft.note,
       wait: review.wait,
-      decided_by_name: cp.decided_by ? displayName(decider?.email ?? ctx.userName ?? "admin@example.com") : null,
+      decided_by_name: cp.decided_by
+        ? displayName(decider?.email ?? ctx.userName ?? 'admin@example.com')
+        : null,
       decided_at: cp.decided_at ?? null,
-      review_note: !pending && cp.status === "changes_requested" ? (cp.note ?? null) : null,
+      review_note: !pending && cp.status === 'changes_requested' ? (cp.note ?? null) : null,
     },
     actions: pending ? review.items.flatMap((i) => i.actions) : [],
   };
 }
 
 /** The runs the "priority-order" scenario seeds (C8). */
-export const PRIORITY_RUN = "7a11c0de-0000-4000-8000-0000000000c8";
-export const PRIORITY_BLOCKED_RUN = "7a11c0de-0000-4000-8000-0000000000c9";
-export const PRIORITY_NO_GOAL_RUN = "7a11c0de-0000-4000-8000-0000000000ca";
-export const PRIORITY_ROWLESS_RUN = "7a11c0de-0000-4000-8000-0000000000cb";
-export const PRIORITY_DUPLICATE_RUN = "7a11c0de-0000-4000-8000-0000000000cc";
-export const PRIORITY_STALE_GOAL_RUN = "7a11c0de-0000-4000-8000-0000000000cd";
+export const PRIORITY_RUN = '7a11c0de-0000-4000-8000-0000000000c8';
+export const PRIORITY_BLOCKED_RUN = '7a11c0de-0000-4000-8000-0000000000c9';
+export const PRIORITY_NO_GOAL_RUN = '7a11c0de-0000-4000-8000-0000000000ca';
+export const PRIORITY_ROWLESS_RUN = '7a11c0de-0000-4000-8000-0000000000cb';
+export const PRIORITY_DUPLICATE_RUN = '7a11c0de-0000-4000-8000-0000000000cc';
+export const PRIORITY_STALE_GOAL_RUN = '7a11c0de-0000-4000-8000-0000000000cd';
 
 /**
  * Bulk import: one feature ranked well above the live ranking (differs_from_live,
@@ -3446,84 +4963,223 @@ export const PRIORITY_STALE_GOAL_RUN = "7a11c0de-0000-4000-8000-0000000000cd";
  * same formula and ranked among the rest (RP1, invented).
  */
 const SAVED_ADDRESSES_ORDER: OrderSpec = {
-  method: "goal_weighted",
+  method: 'goal_weighted',
   order: [
-    { key: "F-07", score: 1.8, explanation: "Bulk import read the lookup first; G1 weight 3 x contribution 1 x 0.6 / 3" },
-    { key: "F-08", score: 0.6, explanation: "Alerts keep teams active; ranked early on purpose: G2 weight 2 x contribution 1 x 0.3 / 1" },
-    { key: "F-02", score: 8.1, explanation: "Needs F-07 first; G1 weight 3 x contribution 3 x 0.9 / 1" },
-    { key: "N-1", title: "Address book per account", goal: "g.activation", weight: 3, contribution: 2, confidence: 0.7, effort: 1, score: 4.2, explanation: "New in this PRD. Every other address feature needs the book first." },
-    { key: "N-2", title: "Default delivery address", depends_on: ["N-1"], goal: "g.activation", weight: 3, contribution: 3, confidence: 0.6, effort: 2, score: 2.7, explanation: "New in this PRD. Asked for in 14 interviews." },
-    { key: "N-3", title: "Address check at checkout", depends_on: ["N-1"], goal: "g.paid-conversion", weight: 2, contribution: 2, confidence: 0.6, effort: 1, score: 2.4, explanation: "New in this PRD. Wrong addresses are the top reason a paid order fails." },
-    { key: "F-01", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
-    { key: "N-4", title: "Import addresses from a spreadsheet, with a preview before saving", depends_on: ["N-1"], goal: "g.activation", weight: 3, contribution: 2, confidence: 0.6, effort: 2, score: 1.8, explanation: "New in this PRD. Large customers keep addresses in sheets." },
+    {
+      key: 'F-07',
+      score: 1.8,
+      explanation: 'Bulk import read the lookup first; G1 weight 3 x contribution 1 x 0.6 / 3',
+    },
+    {
+      key: 'F-08',
+      score: 0.6,
+      explanation:
+        'Alerts keep teams active; ranked early on purpose: G2 weight 2 x contribution 1 x 0.3 / 1',
+    },
+    {
+      key: 'F-02',
+      score: 8.1,
+      explanation: 'Needs F-07 first; G1 weight 3 x contribution 3 x 0.9 / 1',
+    },
+    {
+      key: 'N-1',
+      title: 'Address book per account',
+      goal: 'g.activation',
+      weight: 3,
+      contribution: 2,
+      confidence: 0.7,
+      effort: 1,
+      score: 4.2,
+      explanation: 'New in this PRD. Every other address feature needs the book first.',
+    },
+    {
+      key: 'N-2',
+      title: 'Default delivery address',
+      depends_on: ['N-1'],
+      goal: 'g.activation',
+      weight: 3,
+      contribution: 3,
+      confidence: 0.6,
+      effort: 2,
+      score: 2.7,
+      explanation: 'New in this PRD. Asked for in 14 interviews.',
+    },
+    {
+      key: 'N-3',
+      title: 'Address check at checkout',
+      depends_on: ['N-1'],
+      goal: 'g.paid-conversion',
+      weight: 2,
+      contribution: 2,
+      confidence: 0.6,
+      effort: 1,
+      score: 2.4,
+      explanation: 'New in this PRD. Wrong addresses are the top reason a paid order fails.',
+    },
+    { key: 'F-01', score: 2.25, explanation: 'G1 weight 3 x contribution 2 x 0.75 / 2' },
+    {
+      key: 'N-4',
+      title: 'Import addresses from a spreadsheet, with a preview before saving',
+      depends_on: ['N-1'],
+      goal: 'g.activation',
+      weight: 3,
+      contribution: 2,
+      confidence: 0.6,
+      effort: 2,
+      score: 1.8,
+      explanation: 'New in this PRD. Large customers keep addresses in sheets.',
+    },
     // Its goal named with no contribution: Approve order proposes the link, the contribution assumed.
-    { key: "N-5", title: "Shared team addresses", goal: "g.paid-conversion", weight: 2, confidence: 0.6, effort: 1, score: 1.2, explanation: "New in this PRD. Teams re-type the same office address." },
-    { key: "F-12", score: 1, explanation: "G2 weight 2 x contribution 2 x 0.5 / 2" },
-    { key: "N-6", title: "Address labels and notes", goal: "g.paid-conversion", weight: 2, contribution: 3, confidence: 0.3, effort: 4, score: 0.45, explanation: "New in this PRD. A guess: no evidence yet." },
+    {
+      key: 'N-5',
+      title: 'Shared team addresses',
+      goal: 'g.paid-conversion',
+      weight: 2,
+      confidence: 0.6,
+      effort: 1,
+      score: 1.2,
+      explanation: 'New in this PRD. Teams re-type the same office address.',
+    },
+    { key: 'F-12', score: 1, explanation: 'G2 weight 2 x contribution 2 x 0.5 / 2' },
+    {
+      key: 'N-6',
+      title: 'Address labels and notes',
+      goal: 'g.paid-conversion',
+      weight: 2,
+      contribution: 3,
+      confidence: 0.3,
+      effort: 4,
+      score: 0.45,
+      explanation: 'New in this PRD. A guess: no evidence yet.',
+    },
   ],
 };
 
 /** Usage alerts: F-02 ranked above F-07, which it depends on (before_prerequisite, blocking). */
 const USAGE_ALERTS_ORDER: OrderSpec = {
-  method: "goal_weighted",
+  method: 'goal_weighted',
   order: [
-    { key: "F-02", score: 8.1, explanation: "G1 weight 3 x contribution 3 x 0.9 / 1" },
-    { key: "F-07", score: 1.8, explanation: "G1 weight 3 x contribution 1 x 0.6 / 3" },
-    { key: "F-01", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
+    { key: 'F-02', score: 8.1, explanation: 'G1 weight 3 x contribution 3 x 0.9 / 1' },
+    { key: 'F-07', score: 1.8, explanation: 'G1 weight 3 x contribution 1 x 0.6 / 3' },
+    { key: 'F-01', score: 2.25, explanation: 'G1 weight 3 x contribution 2 x 0.75 / 2' },
   ],
 };
 
 /** Gift notes: a new feature whose row names no goal (new_feature_no_goal), one naming a goal the baseline lacks (unknown_goal): both blocking. */
 const GIFT_NOTES_ORDER: OrderSpec = {
-  method: "goal_weighted",
+  method: 'goal_weighted',
   order: [
-    { key: "F-01", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
-    { key: "N-7", title: "Gift notes at checkout", confidence: 0.5, effort: 1, score: 0.5, explanation: "New in this PRD. Buyers ask to add a note to a gift." },
-    { key: "N-8", title: "Gift wrap choice", goal: "g.no-such-goal", weight: 1, contribution: 2, confidence: 0.5, effort: 1, score: 1, explanation: "New in this PRD. Buyers pick a wrap." },
+    { key: 'F-01', score: 2.25, explanation: 'G1 weight 3 x contribution 2 x 0.75 / 2' },
+    {
+      key: 'N-7',
+      title: 'Gift notes at checkout',
+      confidence: 0.5,
+      effort: 1,
+      score: 0.5,
+      explanation: 'New in this PRD. Buyers ask to add a note to a gift.',
+    },
+    {
+      key: 'N-8',
+      title: 'Gift wrap choice',
+      goal: 'g.no-such-goal',
+      weight: 1,
+      contribution: 2,
+      confidence: 0.5,
+      effort: 1,
+      score: 1,
+      explanation: 'New in this PRD. Buyers pick a wrap.',
+    },
   ],
 };
 
 /** Gift receipts: a new feature naming a goal the baseline lacks (unknown_goal, on its row) and a feature of the approved scope left unranked (missing_feature, on no row). */
 const GIFT_RECEIPTS_ORDER: OrderSpec = {
-  method: "goal_weighted",
+  method: 'goal_weighted',
   order: [
-    { key: "F-01", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
-    { key: "N-8", title: "Gift wrap choice", goal: "g.no-such-goal", weight: 1, contribution: 2, confidence: 0.5, effort: 1, score: 1, explanation: "New in this PRD. Buyers pick a wrap." },
+    { key: 'F-01', score: 2.25, explanation: 'G1 weight 3 x contribution 2 x 0.75 / 2' },
+    {
+      key: 'N-8',
+      title: 'Gift wrap choice',
+      goal: 'g.no-such-goal',
+      weight: 1,
+      contribution: 2,
+      confidence: 0.5,
+      effort: 1,
+      score: 1,
+      explanation: 'New in this PRD. Buyers pick a wrap.',
+    },
   ],
 };
 
 /** The approved feature set the Gift receipts order is checked against: Gift receipt by email is in it and not ranked. */
-const scopeFeature = (key: string, title: string): PrdScopeOut["features"][number] => ({
-  id: `scope-${key}`, key, title, decision: "include", origin: "agent", goals: [], depends_on: [], blocker_keys: [], flags: [], requirements: [],
+const scopeFeature = (key: string, title: string): PrdScopeOut['features'][number] => ({
+  id: `scope-${key}`,
+  key,
+  title,
+  decision: 'include',
+  origin: 'agent',
+  goals: [],
+  depends_on: [],
+  blocker_keys: [],
+  flags: [],
+  requirements: [],
 });
-const GIFT_RECEIPTS_SCOPE = [scopeFeature("F-01", "Setup checklist"), scopeFeature("N-8", "Gift wrap choice"), scopeFeature("N-9", "Gift receipt by email")];
+const GIFT_RECEIPTS_SCOPE = [
+  scopeFeature('F-01', 'Setup checklist'),
+  scopeFeature('N-8', 'Gift wrap choice'),
+  scopeFeature('N-9', 'Gift receipt by email'),
+];
 
 /** Gift cards: Setup checklist ranked twice (duplicate_key): one problem, said once. */
 const GIFT_CARDS_ORDER: OrderSpec = {
-  method: "goal_weighted",
+  method: 'goal_weighted',
   order: [
-    { key: "F-01", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
-    { key: "F-07", score: 1.8, explanation: "G1 weight 3 x contribution 1 x 0.6 / 3" },
-    { key: "F-01", score: 2.25, explanation: "Ranked again by mistake" },
+    { key: 'F-01', score: 2.25, explanation: 'G1 weight 3 x contribution 2 x 0.75 / 2' },
+    { key: 'F-07', score: 1.8, explanation: 'G1 weight 3 x contribution 1 x 0.6 / 3' },
+    { key: 'F-01', score: 2.25, explanation: 'Ranked again by mistake' },
   ],
 };
 
 /** Gift boxes: clean; its new feature serves Cut early churn, a proposed goal a person may reject before Approve. */
 const GIFT_BOXES_ORDER: OrderSpec = {
-  method: "goal_weighted",
+  method: 'goal_weighted',
   order: [
-    { key: "F-01", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
-    { key: "N-10", title: "Gift box sizes", goal: "g.early-churn", weight: 0.2, contribution: 1, confidence: 0.5, effort: 1, score: 0.1, explanation: "New in this PRD. Buyers pick a box that fits." },
+    { key: 'F-01', score: 2.25, explanation: 'G1 weight 3 x contribution 2 x 0.75 / 2' },
+    {
+      key: 'N-10',
+      title: 'Gift box sizes',
+      goal: 'g.early-churn',
+      weight: 0.2,
+      contribution: 1,
+      confidence: 0.5,
+      effort: 1,
+      score: 0.1,
+      explanation: 'New in this PRD. Buyers pick a box that fits.',
+    },
   ],
 };
 
 /** A Baseline to PRD run for `document`, its baseline and feature set approved, waiting at the priority stop with `spec`. */
-function seedAtPriority(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, document: string, created_at: string, spec: OrderSpec, briefTitle?: string, scope?: PrdScopeOut["features"]): RunOut {
+function seedAtPriority(
+  db: RunsDb,
+  ctx: Omit<RunsContext, 'db'>,
+  id: string,
+  document: string,
+  created_at: string,
+  spec: OrderSpec,
+  briefTitle?: string,
+  scope?: PrdScopeOut['features'],
+): RunOut {
   const { from, now } = seedClock();
   // Its own runs list, so the ticks below move this run only.
-  const own: RunsDb = { runs: [], artifacts: db.artifacts, scopes: (db.scopes ??= {}), priority_snapshots: (db.priority_snapshots ??= []) };
+  const own: RunsDb = {
+    runs: [],
+    artifacts: db.artifacts,
+    scopes: (db.scopes ??= {}),
+    priority_snapshots: (db.priority_snapshots ??= []),
+  };
   const full = { ...ctx, db: own, now };
-  const r = seedRun(ctx, own, "baseline_to_prd", document, {}, created_at);
+  const r = seedRun(ctx, own, 'baseline_to_prd', document, {}, created_at);
   r.id = id;
   // A PRD not imported yet: the brief's title, the one the import gives it (as the API's).
   if (briefTitle) r.document_title = briefTitle;
@@ -3532,18 +5188,18 @@ function seedAtPriority(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, do
   for (const seq of [1, 2]) {
     tick(full);
     const cp = r.checkpoints.find((c) => c.segment_seq === seq)!;
-    Object.assign(cp, { status: "approved", decided_by: ctx.userId, decided_at: now() });
+    Object.assign(cp, { status: 'approved', decided_by: ctx.userId, decided_at: now() });
     next(full, r, r.segments[seq - 1]);
   }
   // Its feature set came from an earlier scope: the order is checked against `scope` when given.
   own.scopes![r.id] = [];
   tick(full);
-  const priority = r.segments.find((s) => s.name === "priority")!;
+  const priority = r.segments.find((s) => s.name === 'priority')!;
   const check = checkOrder(spec, scope ?? null, goalSet(ctx), ctx.goalTitle);
   priority.priority_check = check;
   db.artifacts[`${r.id}|${priority.seq}|priority.yaml`] = priorityYaml(spec, priority.name, 1);
   const snap = proposeOrder(full, r, priority.seq, 1, spec, check);
-  const cp = r.checkpoints.find((c) => c.kind === "priority_order")!;
+  const cp = r.checkpoints.find((c) => c.kind === 'priority_order')!;
   cp.payload = { ...cp.payload, priority_check: check, priority_snapshot_id: snap.id };
   snap.checkpoint_id = cp.id;
   refresh(r);
@@ -3557,31 +5213,93 @@ function seedAtPriority(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, do
  * blocking before_prerequisite (Usage alerts), and a run order saved earlier for the
  * Annual billing PRD.
  */
-export function seedPriorityRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
-  seedAtPriority(db, ctx, PRIORITY_RUN, "bulk-import", "2026-10-18T09:00:00Z", SAVED_ADDRESSES_ORDER);
+export function seedPriorityRuns(db: RunsDb, ctx: Omit<RunsContext, 'db'>) {
+  seedAtPriority(
+    db,
+    ctx,
+    PRIORITY_RUN,
+    'bulk-import',
+    '2026-10-18T09:00:00Z',
+    SAVED_ADDRESSES_ORDER,
+  );
   // Its PRD is not imported yet (no document has the slug): the order names it by the brief's title.
-  seedAtPriority(db, ctx, PRIORITY_BLOCKED_RUN, "usage-alerts-pilot", "2026-10-18T10:00:00Z", USAGE_ALERTS_ORDER, "Example Co · Usage alerts");
-  seedAtPriority(db, ctx, PRIORITY_NO_GOAL_RUN, "gift-notes", "2026-10-18T08:00:00Z", GIFT_NOTES_ORDER, "Gift notes");
-  seedAtPriority(db, ctx, PRIORITY_ROWLESS_RUN, "gift-receipts", "2026-10-18T07:00:00Z", GIFT_RECEIPTS_ORDER, "Gift receipts", GIFT_RECEIPTS_SCOPE);
-  seedAtPriority(db, ctx, PRIORITY_DUPLICATE_RUN, "gift-cards", "2026-10-18T06:00:00Z", GIFT_CARDS_ORDER, "Gift cards");
-  seedAtPriority(db, ctx, PRIORITY_STALE_GOAL_RUN, "gift-boxes", "2026-10-18T05:00:00Z", GIFT_BOXES_ORDER, "Gift boxes");
-  const checkout = ctx.documents.find((d) => d.slug === "annual-billing");
-  const earlier = db.runs.find((r) => r.document_slug === "annual-billing") ?? db.runs[0];
-  const spec: OrderSpec = { method: "goal_weighted", order: ranking("goal_weighted").features.slice(0, 4).map((f) => ({ key: f.key, score: f.score ?? 0, explanation: "As the live ranking" })) };
+  seedAtPriority(
+    db,
+    ctx,
+    PRIORITY_BLOCKED_RUN,
+    'usage-alerts-pilot',
+    '2026-10-18T10:00:00Z',
+    USAGE_ALERTS_ORDER,
+    'Example Co · Usage alerts',
+  );
+  seedAtPriority(
+    db,
+    ctx,
+    PRIORITY_NO_GOAL_RUN,
+    'gift-notes',
+    '2026-10-18T08:00:00Z',
+    GIFT_NOTES_ORDER,
+    'Gift notes',
+  );
+  seedAtPriority(
+    db,
+    ctx,
+    PRIORITY_ROWLESS_RUN,
+    'gift-receipts',
+    '2026-10-18T07:00:00Z',
+    GIFT_RECEIPTS_ORDER,
+    'Gift receipts',
+    GIFT_RECEIPTS_SCOPE,
+  );
+  seedAtPriority(
+    db,
+    ctx,
+    PRIORITY_DUPLICATE_RUN,
+    'gift-cards',
+    '2026-10-18T06:00:00Z',
+    GIFT_CARDS_ORDER,
+    'Gift cards',
+  );
+  seedAtPriority(
+    db,
+    ctx,
+    PRIORITY_STALE_GOAL_RUN,
+    'gift-boxes',
+    '2026-10-18T05:00:00Z',
+    GIFT_BOXES_ORDER,
+    'Gift boxes',
+  );
+  const checkout = ctx.documents.find((d) => d.slug === 'annual-billing');
+  const earlier = db.runs.find((r) => r.document_slug === 'annual-billing') ?? db.runs[0];
+  const spec: OrderSpec = {
+    method: 'goal_weighted',
+    order: ranking('goal_weighted')
+      .features.slice(0, 4)
+      .map((f) => ({ key: f.key, score: f.score ?? 0, explanation: 'As the live ranking' })),
+  };
   const check = checkOrder(spec, null, goalSet(ctx), ctx.goalTitle);
   const snap = proposeOrder({ ...ctx, db }, earlier, 0, 1, spec, check);
   Object.assign(snap, {
-    status: "saved",
-    created_at: "2026-10-12T09:00:00Z",
+    status: 'saved',
+    created_at: '2026-10-12T09:00:00Z',
     decided_by: ctx.userId,
-    decided_at: "2026-10-12T10:00:00Z",
+    decided_at: '2026-10-12T10:00:00Z',
     document: checkout ? { id: checkout.id, slug: checkout.slug, title: checkout.title } : null,
   });
   // A feature dropped from the feature set since: in no ranking on screen, so its Top names
   // it from the snapshot's own ranking (top_titles), as the API's (walk-docs-priorities 3).
-  const dropped = { ...snap.ranking[snap.ranking.length - 1], key: "F-41", title: "Gift wrap at checkout", rank: snap.ranking.length + 1 };
+  const dropped = {
+    ...snap.ranking[snap.ranking.length - 1],
+    key: 'F-41',
+    title: 'Gift wrap at checkout',
+    rank: snap.ranking.length + 1,
+  };
   snap.ranking = [...snap.ranking, dropped];
-  Object.assign(snap, { feature_count: snap.ranking.length, top: snap.ranking.slice(0, 5).map((f) => f.key), top_titles: snap.ranking.slice(0, 5).map((f) => f.title) });
+  Object.assign(snap, {
+    feature_count: snap.ranking.length,
+    top: snap.ranking.slice(0, 5).map((f) => f.key),
+    top_titles: snap.ranking.slice(0, 5).map((f) => f.title),
+  });
 }
 
 /**
@@ -3590,7 +5308,7 @@ export function seedPriorityRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
  * line), the others are running their second segment.
  */
 export function enlargeRuns(db: RunsDb, uuid: () => string, count: number) {
-  const model = db.runs.find((r) => r.status === "awaiting_checkpoint")!;
+  const model = db.runs.find((r) => r.status === 'awaiting_checkpoint')!;
   for (let i = 0; i < count; i++) {
     const r: RunOut = JSON.parse(JSON.stringify(model));
     r.id = uuid();
@@ -3601,8 +5319,8 @@ export function enlargeRuns(db: RunsDb, uuid: () => string, count: number) {
       for (const c of r.checkpoints) Object.assign(c, { id: uuid(), run_id: r.id });
     } else {
       r.checkpoints = [];
-      r.status = "running";
-      r.segments[1].status = "running";
+      r.status = 'running';
+      r.segments[1].status = 'running';
     }
     refresh(r);
     db.runs.push(r);
@@ -3611,25 +5329,39 @@ export function enlargeRuns(db: RunsDb, uuid: () => string, count: number) {
 
 // --------------------------------------------------------------------------- roadmap review
 
-type ItemsCheck = NonNullable<SegmentOut["items_check"]>;
-type ItemReason = ItemsCheck["reasons"][number];
-type ReasonFix = ItemReason["fixes"][number];
+type ItemsCheck = NonNullable<SegmentOut['items_check']>;
+type ItemReason = ItemsCheck['reasons'][number];
+type ReasonFix = ItemReason['fixes'][number];
 
-const fix = (label: string, kind: ReasonFix["action"]["kind"], item: string, field: string | null = null, value: unknown = null): ReasonFix => ({
+const fix = (
+  label: string,
+  kind: ReasonFix['action']['kind'],
+  item: string,
+  field: string | null = null,
+  value: unknown = null,
+): ReasonFix => ({
   label,
   action: { kind, item, field, value },
 });
-const accept = (item: string, label = "Accept") => fix(label, "accept", item);
-const drop = (item: string) => fix("Drop", "drop", item);
-const moveTo = (item: string, horizon: string, label = `Move to ${horizon[0].toUpperCase()}${horizon.slice(1)}`) => fix(label, "edit", item, "horizon", horizon);
+const accept = (item: string, label = 'Accept') => fix(label, 'accept', item);
+const drop = (item: string) => fix('Drop', 'drop', item);
+const moveTo = (
+  item: string,
+  horizon: string,
+  label = `Move to ${horizon[0].toUpperCase()}${horizon.slice(1)}`,
+) => fix(label, 'edit', item, 'horizon', horizon);
 
 /** As oracle.runs.reasons.summarize: the check with its reasons and their counts. */
-function withReasons(check: Pick<ItemsCheck, "items" | "by_horizon" | "problems">, reasons: ItemReason[], base: ItemsCheck["base"] = null): ItemsCheck {
+function withReasons(
+  check: Pick<ItemsCheck, 'items' | 'by_horizon' | 'problems'>,
+  reasons: ItemReason[],
+  base: ItemsCheck['base'] = null,
+): ItemsCheck {
   return {
     ...check,
     reasons,
-    blocking: reasons.filter((r) => r.severity === "blocking").length,
-    to_confirm: reasons.filter((r) => r.severity === "confirm").length,
+    blocking: reasons.filter((r) => r.severity === 'blocking').length,
+    to_confirm: reasons.filter((r) => r.severity === 'confirm').length,
     file_problems: check.problems.filter((p) => !p.item).length,
     base,
     reasons_partial: false,
@@ -3638,31 +5370,38 @@ function withReasons(check: Pick<ItemsCheck, "items" | "by_horizon" | "problems"
 
 /** The local runtime's one item, as the API checks it: its unknown PRD section is its one blocking reason. */
 function localItemsCheck(known: boolean, source: VersionSource | null): ItemsCheck {
-  if (known) return withReasons({ items: 1, by_horizon: { now: 1, next: 0, later: 0 }, problems: [] }, []);
-  const item = "price-early";
+  if (known)
+    return withReasons({ items: 1, by_horizon: { now: 1, next: 0, later: 0 }, problems: [] }, []);
+  const item = 'price-early';
   return withReasons(
     {
       items: 1,
       by_horizon: { now: 1, next: 0, later: 0 },
-      problems: [{ code: "unknown_prd_section", message: `item ${item}: PRD section 'features' is not in the PRD version`, item }],
+      problems: [
+        {
+          code: 'unknown_prd_section',
+          message: `item ${item}: PRD section 'features' is not in the PRD version`,
+          item,
+        },
+      ],
     },
     [
       {
         item,
-        item_title: "Show the price early",
-        code: "unknown_prd_section",
-        severity: "blocking",
-        label: "No PRD section",
-        text: `Section features is not in ${source ? `${source.title} v${source.version}` : "the PRD version"}.`,
-        data: { section: "features" },
-        fixes: [fix("Link section", "edit", item, "prd_section")],
+        item_title: 'Show the price early',
+        code: 'unknown_prd_section',
+        severity: 'blocking',
+        label: 'No PRD section',
+        text: `Section features is not in ${source ? `${source.title} v${source.version}` : 'the PRD version'}.`,
+        data: { section: 'features' },
+        fixes: [fix('Link section', 'edit', item, 'prd_section')],
       },
     ],
   );
 }
 
 /** The seeded roadmap review run (seedRoadmapReview in e2e/helpers.ts). */
-export const ROADMAP_REVIEW_RUN_ID = "7a11c0de-0000-4000-8000-0000000000d2";
+export const ROADMAP_REVIEW_RUN_ID = '7a11c0de-0000-4000-8000-0000000000d2';
 
 const REVIEW_ITEMS = `version: 1
 prd: {document: usage-alerts, version: 1}
@@ -3679,7 +5418,16 @@ items:
 `;
 
 function reviewReasons(): ItemReason[] {
-  const r = (item: string, item_title: string, code: string, severity: ItemReason["severity"], label: string, text: string, fixes: ReasonFix[], data: Record<string, unknown> = {}): ItemReason => ({
+  const r = (
+    item: string,
+    item_title: string,
+    code: string,
+    severity: ItemReason['severity'],
+    label: string,
+    text: string,
+    fixes: ReasonFix[],
+    data: Record<string, unknown> = {},
+  ): ItemReason => ({
     item,
     item_title,
     code,
@@ -3689,36 +5437,121 @@ function reviewReasons(): ItemReason[] {
     data,
     fixes,
   });
-  const base = "roadmap v1";
+  const base = 'roadmap v1';
   return [
-    r("slack-alerts", "Slack alerts", "unverified_date", "blocking", "Date unverified", "No verified estimate, capacity or commitment supports Nov 30, 2026.", [fix("Remove date", "edit", "slack-alerts", "milestone_date")], { date: "2026-11-30" }),
-    r("anomaly-detection", "Anomaly detection", "low_confidence", "confirm", "Low confidence", "Confidence low, under the company's low threshold (0.4).", [accept("anomaly-detection"), drop("anomaly-detection")], { confidence: "low", low: 0.4 }),
     r(
-      "budget-caps",
-      "Budget caps",
-      "horizon_breaks_dependency",
-      "blocking",
-      "Depends on a later item",
-      "Needs Anomaly detection, which is in Later. An item cannot ship before what it depends on.",
-      [moveTo("budget-caps", "later"), moveTo("anomaly-detection", "now", "Pull dependency to Now"), fix("Remove dependency", "edit", "budget-caps", "depends_on", { remove: ["anomaly-detection"] })],
-      { dependency: "anomaly-detection", dependency_horizon: "later" },
+      'slack-alerts',
+      'Slack alerts',
+      'unverified_date',
+      'blocking',
+      'Date unverified',
+      'No verified estimate, capacity or commitment supports Nov 30, 2026.',
+      [fix('Remove date', 'edit', 'slack-alerts', 'milestone_date')],
+      { date: '2026-11-30' },
     ),
-    r("usage-export", "Usage export", "unknown_prd_section", "blocking", "No PRD section", "Section export is not in Usage alerts PRD v1.", [fix("Link section", "edit", "usage-export", "prd_section")], { section: "export" }),
-    r("cost-forecast", "Cost forecast", "horizon_changed", "confirm", `Moved from Now (${base})`, `It was in Now in ${base}.`, [accept("cost-forecast"), moveTo("cost-forecast", "now", "Keep in Now")], { from: "now", to: "next" }),
-    r("weekly-digest", "Weekly digest", "dropped_item", "confirm", `Dropped since ${base}`, `It was in ${base} and is not in this file.`, [accept("weekly-digest", "Accept drop"), fix("Keep", "restore", "weekly-digest")]),
-    r("mobile-push", "Mobile push", "serves_no_goal", "confirm", "Serves no goal", "Mobile push supports no confirmed goal.", [accept("mobile-push"), drop("mobile-push")], { feature: "mobile-push" }),
-    r("sso-login", "Single sign-on", "new_item", "confirm", `New since ${base}`, `Not in ${base}.`, [accept("sso-login"), drop("sso-login")]),
-    r("invoice-pdf", "Invoice PDF", "rank_vs_horizon", "confirm", "Top priority in Later", "Ranked 2 but placed in Later.", [accept("invoice-pdf"), moveTo("invoice-pdf", "next")], { rank: 2 }),
-    r("webhooks", "Webhooks", "linked_blocker", "confirm", "Open blocker", "Vendor rate limit is open.", [accept("webhooks"), moveTo("webhooks", "later")], { blocker: "vendor-rate-limit", status: "open" }),
     r(
-      "webhooks",
-      "Webhooks",
-      "stale_section",
-      "confirm",
-      "PRD section changed",
-      "4.6 Webhooks changed in Usage alerts PRD v2 after this item was derived from v1.",
-      [accept("webhooks")],
-      { section: "alerts-webhooks", version: 2, gone: false, send_back: true },
+      'anomaly-detection',
+      'Anomaly detection',
+      'low_confidence',
+      'confirm',
+      'Low confidence',
+      "Confidence low, under the company's low threshold (0.4).",
+      [accept('anomaly-detection'), drop('anomaly-detection')],
+      { confidence: 'low', low: 0.4 },
+    ),
+    r(
+      'budget-caps',
+      'Budget caps',
+      'horizon_breaks_dependency',
+      'blocking',
+      'Depends on a later item',
+      'Needs Anomaly detection, which is in Later. An item cannot ship before what it depends on.',
+      [
+        moveTo('budget-caps', 'later'),
+        moveTo('anomaly-detection', 'now', 'Pull dependency to Now'),
+        fix('Remove dependency', 'edit', 'budget-caps', 'depends_on', {
+          remove: ['anomaly-detection'],
+        }),
+      ],
+      { dependency: 'anomaly-detection', dependency_horizon: 'later' },
+    ),
+    r(
+      'usage-export',
+      'Usage export',
+      'unknown_prd_section',
+      'blocking',
+      'No PRD section',
+      'Section export is not in Usage alerts PRD v1.',
+      [fix('Link section', 'edit', 'usage-export', 'prd_section')],
+      { section: 'export' },
+    ),
+    r(
+      'cost-forecast',
+      'Cost forecast',
+      'horizon_changed',
+      'confirm',
+      `Moved from Now (${base})`,
+      `It was in Now in ${base}.`,
+      [accept('cost-forecast'), moveTo('cost-forecast', 'now', 'Keep in Now')],
+      { from: 'now', to: 'next' },
+    ),
+    r(
+      'weekly-digest',
+      'Weekly digest',
+      'dropped_item',
+      'confirm',
+      `Dropped since ${base}`,
+      `It was in ${base} and is not in this file.`,
+      [accept('weekly-digest', 'Accept drop'), fix('Keep', 'restore', 'weekly-digest')],
+    ),
+    r(
+      'mobile-push',
+      'Mobile push',
+      'serves_no_goal',
+      'confirm',
+      'Serves no goal',
+      'Mobile push supports no confirmed goal.',
+      [accept('mobile-push'), drop('mobile-push')],
+      { feature: 'mobile-push' },
+    ),
+    r(
+      'sso-login',
+      'Single sign-on',
+      'new_item',
+      'confirm',
+      `New since ${base}`,
+      `Not in ${base}.`,
+      [accept('sso-login'), drop('sso-login')],
+    ),
+    r(
+      'invoice-pdf',
+      'Invoice PDF',
+      'rank_vs_horizon',
+      'confirm',
+      'Top priority in Later',
+      'Ranked 2 but placed in Later.',
+      [accept('invoice-pdf'), moveTo('invoice-pdf', 'next')],
+      { rank: 2 },
+    ),
+    r(
+      'webhooks',
+      'Webhooks',
+      'linked_blocker',
+      'confirm',
+      'Open blocker',
+      'Vendor rate limit is open.',
+      [accept('webhooks'), moveTo('webhooks', 'later')],
+      { blocker: 'vendor-rate-limit', status: 'open' },
+    ),
+    r(
+      'webhooks',
+      'Webhooks',
+      'stale_section',
+      'confirm',
+      'PRD section changed',
+      '4.6 Webhooks changed in Usage alerts PRD v2 after this item was derived from v1.',
+      [accept('webhooks')],
+      { section: 'alerts-webhooks', version: 2, gone: false, send_back: true },
     ),
   ];
 }
@@ -3726,53 +5559,88 @@ function reviewReasons(): ItemReason[] {
 /** A prd_to_roadmap run waiting at its Roadmap items checkpoint, with a reason of every code on its nine items. */
 function roadmapReviewRun(): RunOut {
   const id = ROADMAP_REVIEW_RUN_ID;
-  const at = "2026-10-20T09:00:00Z";
-  const flow = flowOf("prd_to_roadmap");
-  const knobs = resolveKnobs("prd_to_roadmap", {}) as RunOut["knobs"];
+  const at = '2026-10-20T09:00:00Z';
+  const flow = flowOf('prd_to_roadmap');
+  const knobs = resolveKnobs('prd_to_roadmap', {}) as RunOut['knobs'];
   let n = 0;
-  const ids = () => `7a11c0de-0000-4000-8000-0000000d2${String(++n).padStart(3, "0")}`;
-  const segments = segmentsFor("prd_to_roadmap", knobs, ids);
+  const ids = () => `7a11c0de-0000-4000-8000-0000000d2${String(++n).padStart(3, '0')}`;
+  const segments = segmentsFor('prd_to_roadmap', knobs, ids);
   for (const s of segments) s.estimate_usd = segEstimate(s.roles, knobs.depth);
   const [items] = segments;
-  const problems: ItemsCheck["problems"] = [
-    { code: "unverified_date", message: "item slack-alerts: no verified estimate, capacity or commitment of this PRD (for this item) named in date_source ('a guess') supports 2026-11-30; drop the date or record the basis", item: "slack-alerts" },
-    { code: "unknown_prd_section", message: "item usage-export: PRD section 'export' is not in the PRD version", item: "usage-export" },
-    { code: "horizon_breaks_dependency", message: "item budget-caps is in now but depends on anomaly-detection in later", item: "budget-caps" },
+  const problems: ItemsCheck['problems'] = [
+    {
+      code: 'unverified_date',
+      message:
+        "item slack-alerts: no verified estimate, capacity or commitment of this PRD (for this item) named in date_source ('a guess') supports 2026-11-30; drop the date or record the basis",
+      item: 'slack-alerts',
+    },
+    {
+      code: 'unknown_prd_section',
+      message: "item usage-export: PRD section 'export' is not in the PRD version",
+      item: 'usage-export',
+    },
+    {
+      code: 'horizon_breaks_dependency',
+      message: 'item budget-caps is in now but depends on anomaly-detection in later',
+      item: 'budget-caps',
+    },
   ];
   Object.assign(items, {
-    status: "succeeded",
+    status: 'succeeded',
     cost_usd: 4.9,
-    workflow_id: "mock-wf-roadmap-items",
-    artifacts: ["roadmap_items.yaml"],
+    workflow_id: 'mock-wf-roadmap-items',
+    artifacts: ['roadmap_items.yaml'],
     started_at: at,
-    finished_at: "2026-10-20T09:04:00Z",
-    attempts: [{ attempt: 1, workflow_id: "mock-wf-roadmap-items", submitted_at: at, cost_usd: 4.9, note: null, note_by: null, state: "succeeded" }],
-    items_check: withReasons({ items: 9, by_horizon: { now: 4, next: 2, later: 3 }, problems }, reviewReasons(), {
-      kind: "roadmap_version",
-      label: "roadmap v1",
-      version: 1,
-      attempt: null,
-    }),
+    finished_at: '2026-10-20T09:04:00Z',
+    attempts: [
+      {
+        attempt: 1,
+        workflow_id: 'mock-wf-roadmap-items',
+        submitted_at: at,
+        cost_usd: 4.9,
+        note: null,
+        note_by: null,
+        state: 'succeeded',
+      },
+    ],
+    items_check: withReasons(
+      { items: 9, by_horizon: { now: 4, next: 2, later: 3 }, problems },
+      reviewReasons(),
+      {
+        kind: 'roadmap_version',
+        label: 'roadmap v1',
+        version: 1,
+        attempt: null,
+      },
+    ),
   });
   const estimate = round2(segments.reduce((sum, s) => sum + (s.estimate_usd ?? 0), 0));
   const run: RunOut = {
     id,
-    flow: "prd_to_roadmap",
+    flow: 'prd_to_roadmap',
     flow_title: flow.title,
-    status: "awaiting_checkpoint",
+    status: 'awaiting_checkpoint',
     document_id: null,
-    document_slug: "usage-alerts-roadmap",
-    document_kind: "roadmap",
-    source: { document_id: "7a11c0de-0000-4000-8000-0000000d2a01", slug: "usage-alerts", title: "Usage alerts PRD", kind: "prd", version: 1, version_id: "7a11c0de-0000-4000-8000-0000000d2a02", approved_at: "2026-10-19T12:00:00Z" },
+    document_slug: 'usage-alerts-roadmap',
+    document_kind: 'roadmap',
+    source: {
+      document_id: '7a11c0de-0000-4000-8000-0000000d2a01',
+      slug: 'usage-alerts',
+      title: 'Usage alerts PRD',
+      kind: 'prd',
+      version: 1,
+      version_id: '7a11c0de-0000-4000-8000-0000000d2a02',
+      approved_at: '2026-10-19T12:00:00Z',
+    },
     template: ROADMAP_DEFAULTS.template,
     theme: ROADMAP_DEFAULTS.theme,
     estimate_usd: estimate,
     spent_usd: 4.9,
-    created_by: "mock-user",
+    created_by: 'mock-user',
     created_at: at,
     started_at: at,
     finished_at: null,
-    waiting_on: "roadmap_items",
+    waiting_on: 'roadmap_items',
     error: null,
     can_retry: false,
     can_stop_cancelling: false,
@@ -3788,7 +5656,7 @@ function roadmapReviewRun(): RunOut {
     approved_at: null,
     needs_approval: false,
     overrun_ceiling_usd: round2(estimate * FACTOR),
-    runtime: "fake",
+    runtime: 'fake',
     notes: FLOW_CATALOG.runtime_notes,
     note_refs: [],
     segments,
@@ -3796,27 +5664,30 @@ function roadmapReviewRun(): RunOut {
       {
         id: ids(),
         run_id: id,
-        kind: "roadmap_items",
-        status: "pending",
-        approver_role: "approver",
+        kind: 'roadmap_items',
+        status: 'pending',
+        approver_role: 'approver',
         segment_seq: 1,
         decided_by: null,
         decided_at: null,
         note: null,
         payload: {
           segment_seq: 1,
-          segment: "roadmap_items",
+          segment: 'roadmap_items',
           attempt: 1,
-          artifacts: ["roadmap_items.yaml"],
+          artifacts: ['roadmap_items.yaml'],
           items_check: items.items_check,
           // D8: the step waits in SwarmCloud, 19 h 30 min left when seeded (the header's time chip).
-          wait: { workflow_id: "mock-wf-roadmap-items", expires_at: new Date(mockNowMs() + (19 * 60 + 30) * 60_000).toISOString() },
+          wait: {
+            workflow_id: 'mock-wf-roadmap-items',
+            expires_at: new Date(mockNowMs() + (19 * 60 + 30) * 60_000).toISOString(),
+          },
         },
-        created_at: "2026-10-20T09:04:00Z",
+        created_at: '2026-10-20T09:04:00Z',
         can_decide: true,
         lead_stop: false,
         cannot_approve: null,
-        approve_label: "Approve",
+        approve_label: 'Approve',
         needs_agents: [],
       },
     ],
@@ -3828,7 +5699,7 @@ function roadmapReviewRun(): RunOut {
 }
 
 /** The seeded roadmap-items-console-held run (seedConsoleHeld in e2e/helpers.ts). */
-export const CONSOLE_HELD_RUN_ID = "7a11c0de-0000-4000-8000-0000000000d4";
+export const CONSOLE_HELD_RUN_ID = '7a11c0de-0000-4000-8000-0000000000d4';
 
 /**
  * D3 "Console gate": the roadmap review run's twin, approved in SwarmCloud's console by a
@@ -3836,14 +5707,20 @@ export const CONSOLE_HELD_RUN_ID = "7a11c0de-0000-4000-8000-0000000000d4";
  * open, so Oracle holds it: pending, console.needs "confirm", nothing delivered.
  */
 function consoleHeldRun(): RunOut {
-  const run = JSON.parse(JSON.stringify(roadmapReviewRun()).replaceAll("0000000d2", "0000000d4")) as RunOut;
+  const run = JSON.parse(
+    JSON.stringify(roadmapReviewRun()).replaceAll('0000000d2', '0000000d4'),
+  ) as RunOut;
   run.id = CONSOLE_HELD_RUN_ID;
-  run.document_slug = "usage-alerts-roadmap-2";
+  run.document_slug = 'usage-alerts-roadmap-2';
   const [items] = run.segments;
   const check = items.items_check!;
-  const keep = (code: string) => !["unverified_date", "horizon_breaks_dependency"].includes(code);
+  const keep = (code: string) => !['unverified_date', 'horizon_breaks_dependency'].includes(code);
   items.items_check = withReasons(
-    { items: check.items, by_horizon: check.by_horizon, problems: check.problems.filter((x) => keep(x.code)) },
+    {
+      items: check.items,
+      by_horizon: check.by_horizon,
+      problems: check.problems.filter((x) => keep(x.code)),
+    },
     check.reasons.filter((x) => keep(x.code)),
     check.base,
   );
@@ -3851,14 +5728,14 @@ function consoleHeldRun(): RunOut {
   cp.run_id = run.id;
   cp.payload = { ...cp.payload, items_check: items.items_check };
   cp.console = {
-    answered_by: "approver@example.com",
-    answered_at: "2026-10-20T10:00:00Z",
+    answered_by: 'approver@example.com',
+    answered_at: '2026-10-20T10:00:00Z',
     via: null,
-    verdict: "MERGE",
+    verdict: 'MERGE',
     findings: [],
     counted: true,
     reason: CONSOLE_HELD,
-    needs: "confirm",
+    needs: 'confirm',
     revise: false,
     can_redo: false,
   };
@@ -3874,14 +5751,15 @@ export const CONSOLE_HELD_RUN: { run: RunOut; artifacts: Record<string, string> 
 };
 
 /** The seeded roadmap review run's attempt 2 (seedRoadmapAttempt2 in e2e/helpers.ts, D6). */
-export const ROADMAP_ATTEMPT2_RUN_ID = "7a11c0de-0000-4000-8000-0000000000d6";
+export const ROADMAP_ATTEMPT2_RUN_ID = '7a11c0de-0000-4000-8000-0000000000d6';
 
 // Attempt 2: the date removed, the dependency removed, the section linked (done); mobile-push
 // kept in Later (declined); sso-login kept although the agents said they dropped it; invoice-pdf's
 // outcome changed without being asked.
-const ATTEMPT2_NOTE = "Push waits for the mobile app release next quarter, so it stays in Later until the app ships to every owner";
+const ATTEMPT2_NOTE =
+  'Push waits for the mobile app release next quarter, so it stays in Later until the app ships to every owner';
 const REVIEW_ITEMS_2 = REVIEW_ITEMS.replace(
-  "items:\n",
+  'items:\n',
   `resolutions:
   - {id: slack-alerts, action: change, status: done}
   - {id: budget-caps, action: change, status: done}
@@ -3890,10 +5768,16 @@ const REVIEW_ITEMS_2 = REVIEW_ITEMS.replace(
   - {id: sso-login, action: drop, status: done}
 items:\n`,
 )
-  .replace(", milestone: {name: Beta, date: 2026-11-30, date_source: a guess}", ", milestone: {name: Beta}")
-  .replace(", depends_on: [anomaly-detection]", "")
-  .replace("prd_section: export,", "prd_section: alerts-export,")
-  .replace("outcome: Finance downloads each invoice,", "outcome: Finance downloads every invoice as a PDF,");
+  .replace(
+    ', milestone: {name: Beta, date: 2026-11-30, date_source: a guess}',
+    ', milestone: {name: Beta}',
+  )
+  .replace(', depends_on: [anomaly-detection]', '')
+  .replace('prd_section: export,', 'prd_section: alerts-export,')
+  .replace(
+    'outcome: Finance downloads each invoice,',
+    'outcome: Finance downloads every invoice as a PDF,',
+  );
 
 /**
  * D6 "Per-item resolutions": the roadmap review run sent back with a five-entry review; attempt 2
@@ -3901,59 +5785,77 @@ items:\n`,
  * (blocking, so Approve stays disabled) and one unrequested change.
  */
 function roadmapAttempt2Run(): RunOut {
-  const run = JSON.parse(JSON.stringify(roadmapReviewRun()).replaceAll("0000000d2", "0000000d6")) as RunOut;
+  const run = JSON.parse(
+    JSON.stringify(roadmapReviewRun()).replaceAll('0000000d2', '0000000d6'),
+  ) as RunOut;
   run.id = ROADMAP_ATTEMPT2_RUN_ID;
-  run.document_slug = "usage-alerts-roadmap-3";
+  run.document_slug = 'usage-alerts-roadmap-3';
   const [items] = run.segments;
   const first = items.attempts[0];
   items.attempts = [
     { ...first, note: null },
-    { ...first, attempt: 2, workflow_id: "mock-wf-roadmap-items-2", submitted_at: "2026-10-20T10:00:00Z", cost_usd: 3.1 },
+    {
+      ...first,
+      attempt: 2,
+      workflow_id: 'mock-wf-roadmap-items-2',
+      submitted_at: '2026-10-20T10:00:00Z',
+      cost_usd: 3.1,
+    },
   ];
   items.cost_usd = 8;
-  items.previous_attempt = { attempt: 1, artifacts: ["roadmap_items.yaml"] };
+  items.previous_attempt = { attempt: 1, artifacts: ['roadmap_items.yaml'] };
   const before = items.items_check!;
-  const fixed = ["unverified_date", "horizon_breaks_dependency", "unknown_prd_section"];
+  const fixed = ['unverified_date', 'horizon_breaks_dependency', 'unknown_prd_section'];
   const declined: ItemReason = {
-    item: "mobile-push",
-    item_title: "Mobile push",
-    code: "declined_change",
-    severity: "confirm",
-    label: "Change declined",
+    item: 'mobile-push',
+    item_title: 'Mobile push',
+    code: 'declined_change',
+    severity: 'confirm',
+    label: 'Change declined',
     text: `Declined: ${ATTEMPT2_NOTE}`,
-    data: { action: "change", said: "declined", note: ATTEMPT2_NOTE },
-    fixes: [accept("mobile-push", "Accept decline"), fix("Apply it myself", "edit", "mobile-push", "horizon", "next")],
+    data: { action: 'change', said: 'declined', note: ATTEMPT2_NOTE },
+    fixes: [
+      accept('mobile-push', 'Accept decline'),
+      fix('Apply it myself', 'edit', 'mobile-push', 'horizon', 'next'),
+    ],
   };
   const notApplied: ItemReason = {
-    item: "sso-login",
-    item_title: "Single sign-on",
-    code: "change_not_applied",
-    severity: "blocking",
-    label: "Change not applied",
-    text: "The agents said done, but sso-login is still in the file.",
-    data: { action: "drop", said: "done", note: null },
-    fixes: [fix("Apply it myself", "drop", "sso-login"), fix("Waive…", "waive", "sso-login")],
+    item: 'sso-login',
+    item_title: 'Single sign-on',
+    code: 'change_not_applied',
+    severity: 'blocking',
+    label: 'Change not applied',
+    text: 'The agents said done, but sso-login is still in the file.',
+    data: { action: 'drop', said: 'done', note: null },
+    fixes: [fix('Apply it myself', 'drop', 'sso-login'), fix('Waive…', 'waive', 'sso-login')],
   };
   const unrequested: ItemReason = {
-    item: "invoice-pdf",
-    item_title: "Invoice PDF",
-    code: "unrequested_change",
-    severity: "confirm",
-    label: "Unrequested change",
-    text: "Changed without being asked: outcome Finance downloads each invoice → Finance downloads every invoice as a PDF",
-    data: { field: "outcome", from: "Finance downloads each invoice", to: "Finance downloads every invoice as a PDF" },
-    fixes: [accept("invoice-pdf"), fix("Revert", "edit", "invoice-pdf", "outcome", "Finance downloads each invoice")],
+    item: 'invoice-pdf',
+    item_title: 'Invoice PDF',
+    code: 'unrequested_change',
+    severity: 'confirm',
+    label: 'Unrequested change',
+    text: 'Changed without being asked: outcome Finance downloads each invoice → Finance downloads every invoice as a PDF',
+    data: {
+      field: 'outcome',
+      from: 'Finance downloads each invoice',
+      to: 'Finance downloads every invoice as a PDF',
+    },
+    fixes: [
+      accept('invoice-pdf'),
+      fix('Revert', 'edit', 'invoice-pdf', 'outcome', 'Finance downloads each invoice'),
+    ],
   };
   const kept = before.reasons.filter((r) => !fixed.includes(r.code));
   const at = (item: string) => kept.findIndex((r) => r.item === item);
-  kept.splice(at("mobile-push") + 1, 0, declined);
-  kept.splice(at("sso-login"), 0, notApplied);
-  kept.splice(at("invoice-pdf") + 1, 0, unrequested);
+  kept.splice(at('mobile-push') + 1, 0, declined);
+  kept.splice(at('sso-login'), 0, notApplied);
+  kept.splice(at('invoice-pdf') + 1, 0, unrequested);
   const done = (id: string, field: string, requested: unknown, current: unknown) => ({
     id,
-    action: "change",
-    outcome: "done" as const,
-    said: "done" as const,
+    action: 'change',
+    outcome: 'done' as const,
+    said: 'done' as const,
     note: null,
     fields: [{ field, requested, applied: true, current }],
   });
@@ -3963,22 +5865,61 @@ function roadmapAttempt2Run(): RunOut {
       review_attempt: 1,
       attempt: 2,
       entries: [
-        done("slack-alerts", "milestone.date", null, null),
-        done("budget-caps", "depends_on", { remove: ["anomaly-detection"] }, []),
-        done("usage-export", "prd_section", "alerts-export", "alerts-export"),
-        { id: "mobile-push", action: "change", outcome: "declined", said: "declined", note: ATTEMPT2_NOTE, fields: [{ field: "horizon", requested: "next", applied: false, current: "later" }] },
-        { id: "sso-login", action: "drop", outcome: "not_applied", said: "done", note: null, fields: [] },
+        done('slack-alerts', 'milestone.date', null, null),
+        done('budget-caps', 'depends_on', { remove: ['anomaly-detection'] }, []),
+        done('usage-export', 'prd_section', 'alerts-export', 'alerts-export'),
+        {
+          id: 'mobile-push',
+          action: 'change',
+          outcome: 'declined',
+          said: 'declined',
+          note: ATTEMPT2_NOTE,
+          fields: [{ field: 'horizon', requested: 'next', applied: false, current: 'later' }],
+        },
+        {
+          id: 'sso-login',
+          action: 'drop',
+          outcome: 'not_applied',
+          said: 'done',
+          note: null,
+          fields: [],
+        },
       ],
       counts: { done: 3, declined: 1, not_applied: 1, unrequested: 1 },
-      unrequested: [{ id: "invoice-pdf", field: "outcome", from: "Finance downloads each invoice", to: "Finance downloads every invoice as a PDF" }],
+      unrequested: [
+        {
+          id: 'invoice-pdf',
+          field: 'outcome',
+          from: 'Finance downloads each invoice',
+          to: 'Finance downloads every invoice as a PDF',
+        },
+      ],
     },
     diff: {
       against_attempt: 1,
       items: [
-        { id: "slack-alerts", changes: [{ field: "milestone.date", from: "2026-11-30", to: null }] },
-        { id: "budget-caps", changes: [{ field: "depends_on", from: ["anomaly-detection"], to: [] }] },
-        { id: "usage-export", changes: [{ field: "prd_section", from: "export", to: "alerts-export" }] },
-        { id: "invoice-pdf", changes: [{ field: "outcome", from: "Finance downloads each invoice", to: "Finance downloads every invoice as a PDF" }] },
+        {
+          id: 'slack-alerts',
+          changes: [{ field: 'milestone.date', from: '2026-11-30', to: null }],
+        },
+        {
+          id: 'budget-caps',
+          changes: [{ field: 'depends_on', from: ['anomaly-detection'], to: [] }],
+        },
+        {
+          id: 'usage-export',
+          changes: [{ field: 'prd_section', from: 'export', to: 'alerts-export' }],
+        },
+        {
+          id: 'invoice-pdf',
+          changes: [
+            {
+              field: 'outcome',
+              from: 'Finance downloads each invoice',
+              to: 'Finance downloads every invoice as a PDF',
+            },
+          ],
+        },
       ],
       added: [],
       removed: [],
@@ -3987,14 +5928,14 @@ function roadmapAttempt2Run(): RunOut {
   const [cp] = run.checkpoints;
   const sent: CheckpointOut = {
     ...cp,
-    id: "7a11c0de-0000-4000-8000-0000000d6c01",
-    status: "changes_requested",
-    decided_by: "mock-user",
-    decided_at: "2026-10-20T09:30:00Z",
+    id: '7a11c0de-0000-4000-8000-0000000d6c01',
+    status: 'changes_requested',
+    decided_by: 'mock-user',
+    decided_at: '2026-10-20T09:30:00Z',
     payload: { ...cp.payload, wait: undefined },
   };
   cp.run_id = run.id;
-  cp.created_at = "2026-10-20T10:04:00Z";
+  cp.created_at = '2026-10-20T10:04:00Z';
   cp.payload = { ...cp.payload, attempt: 2, items_check: items.items_check };
   run.checkpoints = [sent, cp];
   refresh(run);
@@ -4011,10 +5952,10 @@ export const ROADMAP_REVIEW_RUN_ATTEMPT2: { run: RunOut; artifacts: Record<strin
 };
 
 /** The seeded roadmap review run whose attempt 2 also changed Webhooks' dependencies unasked (seedRoadmapDepsChanged in e2e/helpers.ts). */
-export const ROADMAP_DEPS_CHANGED_RUN_ID = "7a11c0de-0000-4000-8000-0000000000dc";
+export const ROADMAP_DEPS_CHANGED_RUN_ID = '7a11c0de-0000-4000-8000-0000000000dc';
 
-const DEPS_FROM = ["slack-alerts", "budget-caps"];
-const DEPS_TO = ["slack-alerts", "usage-export"];
+const DEPS_FROM = ['slack-alerts', 'budget-caps'];
+const DEPS_TO = ['slack-alerts', 'usage-export'];
 
 /**
  * Attempt 2's twin where the agents also swapped Webhooks' dependency on Budget caps for one on
@@ -4022,32 +5963,53 @@ const DEPS_TO = ["slack-alerts", "usage-export"];
  * a dependency back ({add: [budget-caps], remove: [usage-export]}), as oracle.runs.reasons._revert.
  */
 function roadmapDepsChangedRun(): RunOut {
-  const run = JSON.parse(JSON.stringify(roadmapAttempt2Run()).replaceAll("0000000d6", "0000000dc")) as RunOut;
+  const run = JSON.parse(
+    JSON.stringify(roadmapAttempt2Run()).replaceAll('0000000d6', '0000000dc'),
+  ) as RunOut;
   run.id = ROADMAP_DEPS_CHANGED_RUN_ID;
-  run.document_slug = "usage-alerts-roadmap-7";
+  run.document_slug = 'usage-alerts-roadmap-7';
   const [items] = run.segments;
   const check = items.items_check!;
   const unrequested: ItemReason = {
-    item: "webhooks",
-    item_title: "Webhooks",
-    code: "unrequested_change",
-    severity: "confirm",
-    label: "Unrequested change",
-    text: `Changed without being asked: dependencies ${DEPS_FROM.join(", ")} → ${DEPS_TO.join(", ")}`,
-    data: { field: "depends_on", from: DEPS_FROM, to: DEPS_TO },
-    fixes: [accept("webhooks"), fix("Revert", "edit", "webhooks", "depends_on", { add: ["budget-caps"], remove: ["usage-export"] })],
+    item: 'webhooks',
+    item_title: 'Webhooks',
+    code: 'unrequested_change',
+    severity: 'confirm',
+    label: 'Unrequested change',
+    text: `Changed without being asked: dependencies ${DEPS_FROM.join(', ')} → ${DEPS_TO.join(', ')}`,
+    data: { field: 'depends_on', from: DEPS_FROM, to: DEPS_TO },
+    fixes: [
+      accept('webhooks'),
+      fix('Revert', 'edit', 'webhooks', 'depends_on', {
+        add: ['budget-caps'],
+        remove: ['usage-export'],
+      }),
+    ],
   };
   const reasons = [...check.reasons];
-  reasons.splice(reasons.findLastIndex((r) => r.item === "webhooks") + 1, 0, unrequested);
+  reasons.splice(reasons.findLastIndex((r) => r.item === 'webhooks') + 1, 0, unrequested);
   const resolution = check.resolution!;
   items.items_check = {
-    ...withReasons({ items: check.items, by_horizon: check.by_horizon, problems: check.problems }, reasons, check.base),
+    ...withReasons(
+      { items: check.items, by_horizon: check.by_horizon, problems: check.problems },
+      reasons,
+      check.base,
+    ),
     resolution: {
       ...resolution,
       counts: { ...resolution.counts, unrequested: 2 },
-      unrequested: [...resolution.unrequested, { id: "webhooks", field: "depends_on", from: DEPS_FROM, to: DEPS_TO }],
+      unrequested: [
+        ...resolution.unrequested,
+        { id: 'webhooks', field: 'depends_on', from: DEPS_FROM, to: DEPS_TO },
+      ],
     },
-    diff: { ...check.diff!, items: [...check.diff!.items, { id: "webhooks", changes: [{ field: "depends_on", from: DEPS_FROM, to: DEPS_TO }] }] },
+    diff: {
+      ...check.diff!,
+      items: [
+        ...check.diff!.items,
+        { id: 'webhooks', changes: [{ field: 'depends_on', from: DEPS_FROM, to: DEPS_TO }] },
+      ],
+    },
   };
   const cp = run.checkpoints[run.checkpoints.length - 1];
   cp.payload = { ...cp.payload, items_check: items.items_check };
@@ -4058,8 +6020,14 @@ function roadmapDepsChangedRun(): RunOut {
 export const ROADMAP_DEPS_CHANGED_RUN: { run: RunOut; artifacts: Record<string, string> } = {
   run: roadmapDepsChangedRun(),
   artifacts: {
-    [`${ROADMAP_DEPS_CHANGED_RUN_ID}|1|roadmap_items.yaml`]: REVIEW_ITEMS_2.replace("prd_section: alerts-webhooks,", `prd_section: alerts-webhooks, depends_on: [${DEPS_TO.join(", ")}],`),
-    [`${ROADMAP_DEPS_CHANGED_RUN_ID}|1|roadmap_items.yaml|1`]: REVIEW_ITEMS.replace("prd_section: alerts-webhooks,", `prd_section: alerts-webhooks, depends_on: [${DEPS_FROM.join(", ")}],`),
+    [`${ROADMAP_DEPS_CHANGED_RUN_ID}|1|roadmap_items.yaml`]: REVIEW_ITEMS_2.replace(
+      'prd_section: alerts-webhooks,',
+      `prd_section: alerts-webhooks, depends_on: [${DEPS_TO.join(', ')}],`,
+    ),
+    [`${ROADMAP_DEPS_CHANGED_RUN_ID}|1|roadmap_items.yaml|1`]: REVIEW_ITEMS.replace(
+      'prd_section: alerts-webhooks,',
+      `prd_section: alerts-webhooks, depends_on: [${DEPS_FROM.join(', ')}],`,
+    ),
   },
 };
 
@@ -4078,15 +6046,27 @@ export const ROADMAP_REVIEW_HELD_RUN: typeof ROADMAP_REVIEW_RUN = {
   run: {
     ...ROADMAP_REVIEW_RUN.run,
     checkpoints: ROADMAP_REVIEW_RUN.run.checkpoints.map((c, i) =>
-      i === 0 ? { ...c, console: { needs: "confirm", answered_by: "Sam Lee", verdict: "MERGE", counted: false, findings: [], revise: false, can_redo: false } } : c,
+      i === 0
+        ? {
+            ...c,
+            console: {
+              needs: 'confirm',
+              answered_by: 'Sam Lee',
+              verdict: 'MERGE',
+              counted: false,
+              findings: [],
+              revise: false,
+              can_redo: false,
+            },
+          }
+        : c,
     ),
   },
   artifacts: ROADMAP_REVIEW_RUN.artifacts,
 };
 
-
 /** The roadmap review run measured against an approved product strategy (seedRoadmapDrift in e2e/helpers.ts, H4 §5). */
-export const ROADMAP_DRIFT_RUN_ID = "7a11c0de-0000-4000-8000-0000000000d8";
+export const ROADMAP_DRIFT_RUN_ID = '7a11c0de-0000-4000-8000-0000000000d8';
 
 /**
  * H4 §5: the roadmap review run's twin with drift reasons, as the API's reasons word them:
@@ -4094,37 +6074,71 @@ export const ROADMAP_DRIFT_RUN_ID = "7a11c0de-0000-4000-8000-0000000000d8";
  * Mobile push serves a goal under no focus choice. Advisory: both are to confirm, acted on or waived with a reason.
  */
 function roadmapDriftRun(): RunOut {
-  const run = JSON.parse(JSON.stringify(roadmapReviewRun()).replaceAll("0000000d2", "0000000d8")) as RunOut;
+  const run = JSON.parse(
+    JSON.stringify(roadmapReviewRun()).replaceAll('0000000d2', '0000000d8'),
+  ) as RunOut;
   run.id = ROADMAP_DRIFT_RUN_ID;
-  run.document_slug = "usage-alerts-roadmap-5";
+  run.document_slug = 'usage-alerts-roadmap-5';
   const [items] = run.segments;
   const reasons = [...(items.items_check?.reasons ?? [])];
-  const waive = (item: string): ReasonFix => fix("Waive…", "waive", item);
-  const drift = (item: string, item_title: string, code: string, label: string, text: string, fixes: ReasonFix[], data: Record<string, unknown>): ItemReason =>
-    ({ item, item_title, code, severity: "confirm", label, text, data, fixes });
+  const waive = (item: string): ReasonFix => fix('Waive…', 'waive', item);
+  const drift = (
+    item: string,
+    item_title: string,
+    code: string,
+    label: string,
+    text: string,
+    fixes: ReasonFix[],
+    data: Record<string, unknown>,
+  ): ItemReason => ({ item, item_title, code, severity: 'confirm', label, text, data, fixes });
   const after = (key: string, extra: ItemReason) => {
     let at = reasons.findLastIndex((x) => x.item === key);
     if (at < 0) at = reasons.length - 1;
     reasons.splice(at + 1, 0, extra);
   };
   after(
-    "mobile-push",
-    drift("mobile-push", "Mobile push", "outside_strategy", "Outside the strategy", "Retention is under no focus choice of the product strategy.",
-      [drop("mobile-push"), waive("mobile-push")], { severity: "warning", choices: [], goals: ["retention"] }),
+    'mobile-push',
+    drift(
+      'mobile-push',
+      'Mobile push',
+      'outside_strategy',
+      'Outside the strategy',
+      'Retention is under no focus choice of the product strategy.',
+      [drop('mobile-push'), waive('mobile-push')],
+      { severity: 'warning', choices: [], goals: ['retention'] },
+    ),
   );
   after(
-    "sso-login",
-    drift("sso-login", "Single sign-on", "stopped_but_planned", "Stopped in the strategy", "The product strategy stops Enterprise SSO, and this item is in Next.",
-      [moveTo("sso-login", "later"), drop("sso-login"), waive("sso-login")], { severity: "high", choices: ["enterprise-sso"], goals: [] }),
+    'sso-login',
+    drift(
+      'sso-login',
+      'Single sign-on',
+      'stopped_but_planned',
+      'Stopped in the strategy',
+      'The product strategy stops Enterprise SSO, and this item is in Next.',
+      [moveTo('sso-login', 'later'), drop('sso-login'), waive('sso-login')],
+      { severity: 'high', choices: ['enterprise-sso'], goals: [] },
+    ),
   );
   // Review #581: an item both stopped and outside the strategy (the API's payment step).
   after(
-    "sso-login",
-    drift("sso-login", "Single sign-on", "outside_strategy", "Outside the strategy", "Enterprise readiness is under no focus choice of the product strategy.",
-      [drop("sso-login"), waive("sso-login")], { severity: "warning", choices: [], goals: ["enterprise-readiness"] }),
+    'sso-login',
+    drift(
+      'sso-login',
+      'Single sign-on',
+      'outside_strategy',
+      'Outside the strategy',
+      'Enterprise readiness is under no focus choice of the product strategy.',
+      [drop('sso-login'), waive('sso-login')],
+      { severity: 'warning', choices: [], goals: ['enterprise-readiness'] },
+    ),
   );
   items.items_check = withReasons(
-    { items: items.items_check!.items, by_horizon: items.items_check!.by_horizon, problems: items.items_check!.problems },
+    {
+      items: items.items_check!.items,
+      by_horizon: items.items_check!.by_horizon,
+      problems: items.items_check!.problems,
+    },
     reasons,
     items.items_check!.base,
   );
@@ -4141,7 +6155,7 @@ export const ROADMAP_DRIFT_RUN: { run: RunOut; artifacts: Record<string, string>
 };
 
 /** The roadmap review run whose Budget caps also waits on another PRD's feature (seedRoadmapCrossPrd in e2e/helpers.ts). */
-export const ROADMAP_CROSS_PRD_RUN_ID = "7a11c0de-0000-4000-8000-0000000000db";
+export const ROADMAP_CROSS_PRD_RUN_ID = '7a11c0de-0000-4000-8000-0000000000db';
 
 /**
  * The owner, Nov 4: an item may depend on another PRD's feature on the company roadmap. Budget
@@ -4150,29 +6164,50 @@ export const ROADMAP_CROSS_PRD_RUN_ID = "7a11c0de-0000-4000-8000-0000000000db";
  * as oracle.runs.reasons words them.
  */
 function roadmapCrossPrdRun(): RunOut {
-  const run = JSON.parse(JSON.stringify(roadmapReviewRun()).replaceAll("0000000d2", "0000000db")) as RunOut;
+  const run = JSON.parse(
+    JSON.stringify(roadmapReviewRun()).replaceAll('0000000d2', '0000000db'),
+  ) as RunOut;
   run.id = ROADMAP_CROSS_PRD_RUN_ID;
-  run.document_slug = "usage-alerts-roadmap-6";
+  run.document_slug = 'usage-alerts-roadmap-6';
   const [items] = run.segments;
   const reasons = [...(items.items_check?.reasons ?? [])];
-  const at = reasons.findIndex((x) => x.item === "budget-caps" && x.code === "horizon_breaks_dependency");
+  const at = reasons.findIndex(
+    (x) => x.item === 'budget-caps' && x.code === 'horizon_breaks_dependency',
+  );
   reasons.splice(at, 0, {
-    item: "budget-caps",
-    item_title: "Budget caps",
-    code: "horizon_breaks_dependency",
-    severity: "blocking",
-    label: "Depends on a later item",
-    text: "Needs Account health ledger (Safety PRD), which is in Next. An item cannot ship before what it depends on.",
-    data: { dependency: "account-health-ledger", dependency_horizon: "next", dependency_title: "Account health ledger (Safety PRD)" },
-    fixes: [moveTo("budget-caps", "next"), fix("Remove dependency", "edit", "budget-caps", "depends_on", { remove: ["account-health-ledger"] })],
+    item: 'budget-caps',
+    item_title: 'Budget caps',
+    code: 'horizon_breaks_dependency',
+    severity: 'blocking',
+    label: 'Depends on a later item',
+    text: 'Needs Account health ledger (Safety PRD), which is in Next. An item cannot ship before what it depends on.',
+    data: {
+      dependency: 'account-health-ledger',
+      dependency_horizon: 'next',
+      dependency_title: 'Account health ledger (Safety PRD)',
+    },
+    fixes: [
+      moveTo('budget-caps', 'next'),
+      fix('Remove dependency', 'edit', 'budget-caps', 'depends_on', {
+        remove: ['account-health-ledger'],
+      }),
+    ],
   });
   const problems = [...(items.items_check?.problems ?? [])];
   problems.splice(
-    problems.findIndex((p) => p.code === "horizon_breaks_dependency"),
+    problems.findIndex((p) => p.code === 'horizon_breaks_dependency'),
     0,
-    { code: "horizon_breaks_dependency", message: "Budget caps is in Now but waits on Account health ledger (Safety PRD) in Next", item: "budget-caps" },
+    {
+      code: 'horizon_breaks_dependency',
+      message: 'Budget caps is in Now but waits on Account health ledger (Safety PRD) in Next',
+      item: 'budget-caps',
+    },
   );
-  items.items_check = withReasons({ items: items.items_check!.items, by_horizon: items.items_check!.by_horizon, problems }, reasons, items.items_check!.base);
+  items.items_check = withReasons(
+    { items: items.items_check!.items, by_horizon: items.items_check!.by_horizon, problems },
+    reasons,
+    items.items_check!.base,
+  );
   const [cp] = run.checkpoints;
   cp.run_id = run.id;
   cp.payload = { ...cp.payload, items_check: items.items_check };
@@ -4183,21 +6218,36 @@ function roadmapCrossPrdRun(): RunOut {
 export const ROADMAP_CROSS_PRD_RUN: { run: RunOut; artifacts: Record<string, string> } = {
   run: roadmapCrossPrdRun(),
   artifacts: {
-    [`${ROADMAP_CROSS_PRD_RUN_ID}|1|roadmap_items.yaml`]: REVIEW_ITEMS.replace("depends_on: [anomaly-detection]", "depends_on: [account-health-ledger, anomaly-detection]"),
+    [`${ROADMAP_CROSS_PRD_RUN_ID}|1|roadmap_items.yaml`]: REVIEW_ITEMS.replace(
+      'depends_on: [anomaly-detection]',
+      'depends_on: [account-health-ledger, anomaly-detection]',
+    ),
   },
 };
 
 /** The roadmap review run whose file cannot be read as items (seedRoadmapFileProblem in e2e/helpers.ts, D1). */
-export const ROADMAP_FILE_PROBLEM_RUN_ID = "7a11c0de-0000-4000-8000-0000000000d7";
+export const ROADMAP_FILE_PROBLEM_RUN_ID = '7a11c0de-0000-4000-8000-0000000000d7';
 
 /** D1: the roadmap review run's twin whose roadmap_items.yaml is not valid YAML: one file-level problem, no items. */
 function roadmapFileProblemRun(): RunOut {
-  const run = JSON.parse(JSON.stringify(roadmapReviewRun()).replaceAll("0000000d2", "0000000d7")) as RunOut;
+  const run = JSON.parse(
+    JSON.stringify(roadmapReviewRun()).replaceAll('0000000d2', '0000000d7'),
+  ) as RunOut;
   run.id = ROADMAP_FILE_PROBLEM_RUN_ID;
-  run.document_slug = "usage-alerts-roadmap-4";
+  run.document_slug = 'usage-alerts-roadmap-4';
   const [items] = run.segments;
   items.items_check = withReasons(
-    { items: 0, by_horizon: { now: 0, next: 0, later: 0 }, problems: [{ code: "unreadable_yaml", message: "roadmap_items.yaml is not valid YAML: line 3 has a tab where spaces belong", item: null }] },
+    {
+      items: 0,
+      by_horizon: { now: 0, next: 0, later: 0 },
+      problems: [
+        {
+          code: 'unreadable_yaml',
+          message: 'roadmap_items.yaml is not valid YAML: line 3 has a tab where spaces belong',
+          item: null,
+        },
+      ],
+    },
     [],
     null,
   );
@@ -4210,33 +6260,115 @@ function roadmapFileProblemRun(): RunOut {
 
 export const ROADMAP_FILE_PROBLEM_RUN: { run: RunOut; artifacts: Record<string, string> } = {
   run: roadmapFileProblemRun(),
-  artifacts: { [`${ROADMAP_FILE_PROBLEM_RUN_ID}|1|roadmap_items.yaml`]: "version: 1\nitems:\n\t- {id: slack-alerts\n" },
+  artifacts: {
+    [`${ROADMAP_FILE_PROBLEM_RUN_ID}|1|roadmap_items.yaml`]:
+      'version: 1\nitems:\n\t- {id: slack-alerts\n',
+  },
 };
 
 // ---------------------------------------------------------------- F4 Engineering check
 
-type Brief = { key: string; title: string; approach: string; size: string; depends_on: string[]; questions: { id: string; question: string; blocking: boolean }[] };
-type BriefsCheck = { features: Brief[]; problems: { code: string; message: string; feature?: string | null; features?: string[]; entity?: string }[]; code_map_used: boolean; unmapped_repos: string[]; unnamed_repo: boolean; elsewhere?: Record<string, string> };
-const SIZES = ["xs", "s", "m", "l", "xl"];
-const VERDICTS = ["feasible", "feasible_with_changes", "not_feasible"];
-const VERDICT_WORDS: Record<string, string> = { feasible: "Feasible", feasible_with_changes: "Feasible with changes", not_feasible: "Not feasible as scoped" };
+type Brief = {
+  key: string;
+  title: string;
+  approach: string;
+  size: string;
+  depends_on: string[];
+  questions: { id: string; question: string; blocking: boolean }[];
+};
+type BriefsCheck = {
+  features: Brief[];
+  problems: {
+    code: string;
+    message: string;
+    feature?: string | null;
+    features?: string[];
+    entity?: string;
+  }[];
+  code_map_used: boolean;
+  unmapped_repos: string[];
+  unnamed_repo: boolean;
+  elsewhere?: Record<string, string>;
+};
+const SIZES = ['xs', 's', 'm', 'l', 'xl'];
+const VERDICTS = ['feasible', 'feasible_with_changes', 'not_feasible'];
+const VERDICT_WORDS: Record<string, string> = {
+  feasible: 'Feasible',
+  feasible_with_changes: 'Feasible with changes',
+  not_feasible: 'Not feasible as scoped',
+};
 
 /** The local runtime's briefs: one per feature of its feature set (LOCAL_FEATURE_SET). */
 const LOCAL_BRIEFS: Brief[] = [
-  { key: "price-early", title: "Show the price early", approach: "Compute the total on the cart page from the existing pricing call.", size: "m", depends_on: [], questions: [{ id: "q1", question: "Can the pricing call answer within 200 ms?", blocking: true }] },
-  { key: "public-signup", title: "Public signup", approach: "A guest session that carries the cart to payment.", size: "l", depends_on: ["price-early"], questions: [] },
-  { key: "saved-cards", title: "Plan limits", approach: "Store the payment provider's card token on the account.", size: "s", depends_on: [], questions: [] },
+  {
+    key: 'price-early',
+    title: 'Show the price early',
+    approach: 'Compute the total on the cart page from the existing pricing call.',
+    size: 'm',
+    depends_on: [],
+    questions: [
+      { id: 'q1', question: 'Can the pricing call answer within 200 ms?', blocking: true },
+    ],
+  },
+  {
+    key: 'public-signup',
+    title: 'Public signup',
+    approach: 'A guest session that carries the cart to payment.',
+    size: 'l',
+    depends_on: ['price-early'],
+    questions: [],
+  },
+  {
+    key: 'saved-cards',
+    title: 'Plan limits',
+    approach: "Store the payment provider's card token on the account.",
+    size: 's',
+    depends_on: [],
+    questions: [],
+  },
 ];
 
 /** The "eng-check" scenario's briefs, on the baseline's own features (their efforts M, S, L). */
 const SEEDED_BRIEFS: Brief[] = [
-  { key: "f.setup-checklist", title: "Setup checklist", approach: "Reuse the onboarding checklist and add the test-order step.", size: "m", depends_on: [], questions: [{ id: "q1", question: "Does the payment sandbox take test orders without a live account?", blocking: true }, { id: "q2", question: "Show the checklist on phones too?", blocking: false }] },
-  { key: "f.sample-data", title: "Sample data import", approach: "A fixed catalogue copied into the new store on first sign-in.", size: "s", depends_on: [], questions: [] },
-  { key: "f.referral-link", title: "Referral link", approach: "A referral link per owner, kept on the server and shown in setup.", size: "l", depends_on: ["f.setup-checklist"], questions: [] },
+  {
+    key: 'f.setup-checklist',
+    title: 'Setup checklist',
+    approach: 'Reuse the onboarding checklist and add the test-order step.',
+    size: 'm',
+    depends_on: [],
+    questions: [
+      {
+        id: 'q1',
+        question: 'Does the payment sandbox take test orders without a live account?',
+        blocking: true,
+      },
+      { id: 'q2', question: 'Show the checklist on phones too?', blocking: false },
+    ],
+  },
+  {
+    key: 'f.sample-data',
+    title: 'Sample data import',
+    approach: 'A fixed catalogue copied into the new store on first sign-in.',
+    size: 's',
+    depends_on: [],
+    questions: [],
+  },
+  {
+    key: 'f.referral-link',
+    title: 'Referral link',
+    approach: 'A referral link per owner, kept on the server and shown in setup.',
+    size: 'l',
+    depends_on: ['f.setup-checklist'],
+    questions: [],
+  },
 ];
 
 /** What a brief file says of the code maps: the ids each feature cites (with where: touches[i].ref or reuse) and the repositories it names. */
-type BriefsMaps = { cites: Record<string, [string, string][]>; repos: string[]; unmapped: string[] };
+type BriefsMaps = {
+  cites: Record<string, [string, string][]>;
+  repos: string[];
+  unmapped: string[];
+};
 /** The "eng-check-shop" scenarios' check: the first `n` invented shop features, a code map read. */
 export function shopBriefsCheck(n: number): BriefsCheck {
   return { ...briefsCheckOf(SHOP_BRIEFS.slice(0, n)), code_map_used: true };
@@ -4277,21 +6409,41 @@ export function briefsCheckOf(
   const problems = Object.keys(cited)
     .sort()
     .map((ref) => {
-      const by = Object.entries(cited[ref]).map(([key, places]) => (places.length ? `${key} (${places.join(", ")})` : key));
-      return { code: "unknown_ref", feature: null, features: Object.keys(cited[ref]), message: `'${ref}' is not in the code map this run used: cited by ${by.join(", ")}` };
+      const by = Object.entries(cited[ref]).map(([key, places]) =>
+        places.length ? `${key} (${places.join(', ')})` : key,
+      );
+      return {
+        code: 'unknown_ref',
+        feature: null,
+        features: Object.keys(cited[ref]),
+        message: `'${ref}' is not in the code map this run used: cited by ${by.join(', ')}`,
+      };
     });
   const mapped = new Set((maps?.repos ?? []).map(repoKey));
-  const unmapped_repos = [...new Set([...(file?.repos ?? []), ...(file?.unmapped ?? [])])].filter((r) => r.trim() && !mapped.has(repoKey(r)));
+  const unmapped_repos = [...new Set([...(file?.repos ?? []), ...(file?.unmapped ?? [])])].filter(
+    (r) => r.trim() && !mapped.has(repoKey(r)),
+  );
   const keys = new Set(briefs.map((b) => b.key));
   const named: Record<string, string> = {};
-  const unknown: BriefsCheck["problems"] = [];
-  const inNoPrd: BriefsCheck["problems"] = [];
+  const unknown: BriefsCheck['problems'] = [];
+  const inNoPrd: BriefsCheck['problems'] = [];
   for (const b of briefs) {
     for (const d of b.depends_on) {
       if (keys.has(d)) continue;
       if (d in elsewhere) named[d] = elsewhere[d];
-      else if (d in noPrd) inNoPrd.push({ code: "dependency_in_no_prd", feature: b.key, entity: noPrd[d].entity, message: `${noPrd[d].name} is in no PRD yet: ${b.title} depends on it` });
-      else unknown.push({ code: "unknown_dependency", feature: b.key, message: `${b.title.trim() ? `${b.title.trim()} (${b.key})` : b.key} depends on "${d}", a feature Oracle cannot find in any PRD or in Ground Truth` });
+      else if (d in noPrd)
+        inNoPrd.push({
+          code: 'dependency_in_no_prd',
+          feature: b.key,
+          entity: noPrd[d].entity,
+          message: `${noPrd[d].name} is in no PRD yet: ${b.title} depends on it`,
+        });
+      else
+        unknown.push({
+          code: 'unknown_dependency',
+          feature: b.key,
+          message: `${b.title.trim() ? `${b.title.trim()} (${b.key})` : b.key} depends on "${d}", a feature Oracle cannot find in any PRD or in Ground Truth`,
+        });
     }
   }
   return {
@@ -4309,20 +6461,33 @@ function repoKey(name: string): string {
   const key = name
     .trim()
     .toLowerCase()
-    .replace(/\/+$/, "")
-    .replace(/^[a-z][a-z0-9+.-]*:\/\/[^/]+\//, "")
-    .replace(/^[^/@\s]+@[^:/]+:/, "");
-  return key.replace(/\.git$/, "").replace(/^\/+|\/+$/g, "");
+    .replace(/\/+$/, '')
+    .replace(/^[a-z][a-z0-9+.-]*:\/\/[^/]+\//, '')
+    .replace(/^[^/@\s]+@[^:/]+:/, '');
+  return key.replace(/\.git$/, '').replace(/^\/+|\/+$/g, '');
 }
 
 function briefsYaml(briefs: Brief[], attempt: number): string {
-  const lines = [`# eng_review (sample, attempt ${attempt})`, "version: 1", "code_map: {used: false, repos: []}", "features:"];
+  const lines = [
+    `# eng_review (sample, attempt ${attempt})`,
+    'version: 1',
+    'code_map: {used: false, repos: []}',
+    'features:',
+  ];
   for (const b of briefs) {
-    lines.push(`  - feature: ${b.key}`, `    title: ${b.title}`, `    approach: ${b.approach}`, `    size: ${b.size}`, `    depends_on: [${b.depends_on.join(", ")}]`, "    questions:");
-    for (const q of b.questions) lines.push(`      - {id: ${q.id}, question: "${q.question}", blocking: ${q.blocking}}`);
-    if (!b.questions.length) lines[lines.length - 1] = "    questions: []";
+    lines.push(
+      `  - feature: ${b.key}`,
+      `    title: ${b.title}`,
+      `    approach: ${b.approach}`,
+      `    size: ${b.size}`,
+      `    depends_on: [${b.depends_on.join(', ')}]`,
+      '    questions:',
+    );
+    for (const q of b.questions)
+      lines.push(`      - {id: ${q.id}, question: "${q.question}", blocking: ${q.blocking}}`);
+    if (!b.questions.length) lines[lines.length - 1] = '    questions: []';
   }
-  return lines.join("\n") + "\n";
+  return lines.join('\n') + '\n';
 }
 
 /**
@@ -4330,15 +6495,28 @@ function briefsYaml(briefs: Brief[], attempt: number): string {
  * problem a later rule may answer is checked again as the rules now are (its other problems
  * stay as they were), so the stop's page and its gate count the same problems.
  */
-export function recheckBriefs(db: RunsDb, r: RunOut, title: (r: RunOut) => string | null = (x) => x.document_title ?? null) {
-  const STALE = ["unknown_dependency", "dependency_in_no_prd"];
+export function recheckBriefs(
+  db: RunsDb,
+  r: RunOut,
+  title: (r: RunOut) => string | null = (x) => x.document_title ?? null,
+) {
+  const STALE = ['unknown_dependency', 'dependency_in_no_prd'];
   for (const cp of r.checkpoints) {
-    const check = cp.kind === "eng_review" && cp.status === "pending" ? briefsOf(cp) : null;
+    const check = cp.kind === 'eng_review' && cp.status === 'pending' ? briefsOf(cp) : null;
     if (!check?.problems.some((p) => STALE.includes(p.code))) continue;
     const known = { ...beingAdded(db, r, title), ...(db.roadmap_features ?? {}) };
-    const deps = briefsCheckOf(check.features, undefined, undefined, known, db.no_prd_features ?? {});
+    const deps = briefsCheckOf(
+      check.features,
+      undefined,
+      undefined,
+      known,
+      db.no_prd_features ?? {},
+    );
     const problems = [...deps.problems, ...check.problems.filter((p) => !STALE.includes(p.code))];
-    cp.payload = { ...cp.payload, briefs_check: { ...check, problems, elsewhere: { ...check.elsewhere, ...deps.elsewhere } } };
+    cp.payload = {
+      ...cp.payload,
+      briefs_check: { ...check, problems, elsewhere: { ...check.elsewhere, ...deps.elsewhere } },
+    };
   }
 }
 
@@ -4347,91 +6525,156 @@ export function recheckBriefs(db: RunsDb, r: RunOut, title: (r: RunOut) => strin
  * run other than `r` was started to add to its PRD, each named with that PRD; a draft or a
  * stopped run adds nothing.
  */
-function beingAdded(db: RunsDb, r: RunOut, title: (r: RunOut) => string | null): Record<string, string> {
+function beingAdded(
+  db: RunsDb,
+  r: RunOut,
+  title: (r: RunOut) => string | null,
+): Record<string, string> {
   const out: Record<string, string> = {};
-  const live = ["awaiting_approval", "running", "awaiting_checkpoint", "paused_overrun"];
+  const live = ['awaiting_approval', 'running', 'awaiting_checkpoint', 'paused_overrun'];
   for (const run of [...db.runs].sort((a, b) => a.created_at.localeCompare(b.created_at))) {
-    if (run.id === r.id || run.flow !== "baseline_to_prd" || !live.includes(run.status)) continue;
-    const prd = title(run) ?? (run.document_slug ? run.document_slug.replace(/[-_]/g, " ").replace(/^./, (c) => c.toUpperCase()) : null);
+    if (run.id === r.id || run.flow !== 'baseline_to_prd' || !live.includes(run.status)) continue;
+    const prd =
+      title(run) ??
+      (run.document_slug
+        ? run.document_slug.replace(/[-_]/g, ' ').replace(/^./, (c) => c.toUpperCase())
+        : null);
     // "Safety PRD", with PRD after the title when it does not say so (as OnRoadmap.prd_name).
-    const name = !prd ? "a new PRD" : /prd$/i.test(prd) ? prd : `${prd} PRD`;
+    const name = !prd ? 'a new PRD' : /prd$/i.test(prd) ? prd : `${prd} PRD`;
     for (const f of run.knobs.features ?? []) out[f.key] ??= `${f.title} (being added to ${name})`;
   }
   return out;
 }
 
-const briefsOf = (cp: CheckpointOut) => ((cp.payload as { briefs_check?: BriefsCheck } | undefined)?.briefs_check ?? null);
-const stagedEdit = (actions: DraftActionRow[], key: string, field: string) => actions.find((a) => a.state === "staged" && a.kind === "edit" && a.item_key === key && a.field === field);
+const briefsOf = (cp: CheckpointOut) =>
+  (cp.payload as { briefs_check?: BriefsCheck } | undefined)?.briefs_check ?? null;
+const stagedEdit = (actions: DraftActionRow[], key: string, field: string) =>
+  actions.find(
+    (a) => a.state === 'staged' && a.kind === 'edit' && a.item_key === key && a.field === field,
+  );
 
 /** As oracle.engineering.check.reasons: a verdict per feature and an answer per blocking question, never waived. */
-function engReasons(cp: CheckpointOut, actions: DraftActionRow[]): { reasons: GateReason[]; files: number } | null {
+function engReasons(
+  cp: CheckpointOut,
+  actions: DraftActionRow[],
+): { reasons: GateReason[]; files: number } | null {
   const check = briefsOf(cp);
   if (!check) return null;
   const reasons: GateReason[] = [];
   for (const f of check.features) {
-    if (!stagedEdit(actions, f.key, "verdict")) reasons.push({ item: f.key, item_title: f.title, code: "no_verdict", severity: "blocking", label: "No verdict yet" });
+    if (!stagedEdit(actions, f.key, 'verdict'))
+      reasons.push({
+        item: f.key,
+        item_title: f.title,
+        code: 'no_verdict',
+        severity: 'blocking',
+        label: 'No verdict yet',
+      });
     for (const q of f.questions) {
-      if (q.blocking && !stagedEdit(actions, f.key, `answer:${q.id}`)) reasons.push({ item: f.key, item_title: f.title, code: "blocking_question", severity: "blocking", label: "Blocking question unanswered" });
+      if (q.blocking && !stagedEdit(actions, f.key, `answer:${q.id}`))
+        reasons.push({
+          item: f.key,
+          item_title: f.title,
+          code: 'blocking_question',
+          severity: 'blocking',
+          label: 'Blocking question unanswered',
+        });
     }
   }
   return { reasons, files: check.problems.length };
 }
 
 /** As oracle.engineering.check.validate: the Engineering check's vocabulary; the refusal, or null. */
-function engInvalid(cp: CheckpointOut, a: Schemas["ActionIn"]): string | null {
+function engInvalid(cp: CheckpointOut, a: Schemas['ActionIn']): string | null {
   const f = briefsOf(cp)?.features.find((x) => x.key === a.item_key);
   if (!f) return `${a.item_key} is not a feature of the briefs`;
-  if (a.kind === "question") return null;
-  if (a.kind !== "edit") return "an engineering check takes edit (verdict, size, answer:<id>) or question";
-  if (a.field === "verdict") {
+  if (a.kind === 'question') return null;
+  if (a.kind !== 'edit')
+    return 'an engineering check takes edit (verdict, size, answer:<id>) or question';
+  if (a.field === 'verdict') {
     const v = (a.value ?? {}) as { verdict?: string; note?: string | null };
-    if (!VERDICTS.includes(v.verdict ?? "")) return "verdict is feasible, feasible_with_changes or not_feasible";
-    if (v.verdict !== "feasible" && !(v.note ?? "").trim()) return `${VERDICT_WORDS[v.verdict!]} needs a note saying why`;
+    if (!VERDICTS.includes(v.verdict ?? ''))
+      return 'verdict is feasible, feasible_with_changes or not_feasible';
+    if (v.verdict !== 'feasible' && !(v.note ?? '').trim())
+      return `${VERDICT_WORDS[v.verdict!]} needs a note saying why`;
     return null;
   }
-  if (a.field === "size") return SIZES.includes(a.value as string) ? null : `size is one of ${SIZES.join(", ")}`;
-  if (a.field?.startsWith("answer:")) {
-    const id = a.field.slice("answer:".length);
+  if (a.field === 'size')
+    return SIZES.includes(a.value as string) ? null : `size is one of ${SIZES.join(', ')}`;
+  if (a.field?.startsWith('answer:')) {
+    const id = a.field.slice('answer:'.length);
     if (!f.questions.some((q) => q.id === id)) return `${a.item_key} has no question ${id}`;
-    return typeof a.value === "string" && a.value.trim() ? null : "an answer is text of 1 to 2000 characters";
+    return typeof a.value === 'string' && a.value.trim()
+      ? null
+      : 'an answer is text of 1 to 2000 characters';
   }
-  return "edit takes the field verdict, size or answer:<question id>";
+  return 'edit takes the field verdict, size or answer:<question id>';
 }
 
 /** An answer to an architect's question as the approved check records it (who answered and when). */
-type EngAnswer = { question_id: string; question?: string | null; answer: unknown; by: string | null; at: string };
+type EngAnswer = {
+  question_id: string;
+  question?: string | null;
+  answer: unknown;
+  by: string | null;
+  at: string;
+};
 
 /**
  * As oracle.runs.stop_answers: the questions answered at a decided stop, the architect's at the
  * Engineering check and the agents' on the Questions from the agents cards, each with who and when.
  */
-function stopAnswers(ctx: RunsContext, c: CheckpointOut, people: Map<string, string>): RunDecision["answers"] {
+function stopAnswers(
+  ctx: RunsContext,
+  c: CheckpointOut,
+  people: Map<string, string>,
+): RunDecision['answers'] {
   // A stop sent back keeps its answered cards (carried into the next attempt); only an approved
   // check decides the architect's questions.
-  if (c.status !== "approved" && c.status !== "changes_requested") return [];
-  const out: NonNullable<RunDecision["answers"]> = [];
-  const check = c.status === "approved" ? briefsOf(c) : null;
-  const recorded = (c.payload.briefs as { answers?: Record<string, EngAnswer[]> } | undefined)?.answers ?? {};
+  if (c.status !== 'approved' && c.status !== 'changes_requested') return [];
+  const out: NonNullable<RunDecision['answers']> = [];
+  const check = c.status === 'approved' ? briefsOf(c) : null;
+  const recorded =
+    (c.payload.briefs as { answers?: Record<string, EngAnswer[]> } | undefined)?.answers ?? {};
   for (const [key, listed] of Object.entries(check ? recorded : {})) {
     const feature = check?.features.find((f) => f.key === key);
     const title = feature?.title;
     for (const a of listed) {
       // As the API: a non-text answer is dropped, a text one stripped; an answer recorded
       // without its question's text reads it from the feature by the question's id.
-      const answer = typeof a.answer === "string" ? a.answer.trim() : "";
-      const question = a.question || feature?.questions.find((q) => q.id === a.question_id)?.question;
+      const answer = typeof a.answer === 'string' ? a.answer.trim() : '';
+      const question =
+        a.question || feature?.questions.find((q) => q.id === a.question_id)?.question;
       if (!question || !answer) continue;
       const by = a.by ?? c.decided_by ?? null;
-      out.push({ question, answer, feature_key: key, feature_title: title && title !== key ? title : null, answered_by_name: (by && people.get(by)) || null, answered_at: a.at ?? c.decided_at ?? null });
+      out.push({
+        question,
+        answer,
+        feature_key: key,
+        feature_title: title && title !== key ? title : null,
+        answered_by_name: (by && people.get(by)) || null,
+        answered_at: a.at ?? c.decided_at ?? null,
+      });
     }
   }
   // A card names its feature by key: its name is the run's feature set's (the latest scope listing it).
-  const titled = (key: string) => [...(ctx.db.scopes?.[c.run_id] ?? [])].reverse().flatMap((s) => s.features).find((f) => f.key === key)?.title;
+  const titled = (key: string) =>
+    [...(ctx.db.scopes?.[c.run_id] ?? [])]
+      .reverse()
+      .flatMap((s) => s.features)
+      .find((f) => f.key === key)?.title;
   for (const q of ctx.db.agent_questions?.[c.id] ?? []) {
     if (!q.answer) continue;
     const label = q.options.find((o) => o.key === q.answer!.option)?.label ?? q.answer.option;
     const title = q.feature ? titled(q.feature) : undefined;
-    out.push({ question: q.question, answer: q.answer.note ? `${label}. Note: ${q.answer.note}` : label, feature_key: q.feature ?? null, feature_title: title && title !== q.feature ? title : null, answered_by_name: q.answer.by?.name ?? null, answered_at: q.answer.at });
+    out.push({
+      question: q.question,
+      answer: q.answer.note ? `${label}. Note: ${q.answer.note}` : label,
+      feature_key: q.feature ?? null,
+      feature_title: title && title !== q.feature ? title : null,
+      answered_by_name: q.answer.by?.name ?? null,
+      answered_at: q.answer.at,
+    });
   }
   return out;
 }
@@ -4444,13 +6687,24 @@ function approveEngCheck(ctx: RunsContext, r: RunOut, cp: CheckpointOut, staged:
   const sizes: Record<string, string> = {};
   const answers: Record<string, EngAnswer[]> = {};
   for (const f of check.features) {
-    const v = stagedEdit(staged, f.key, "verdict");
-    if (v) verdicts[f.key] = { value: (v.value as { verdict: string }).verdict, note: (v.value as { note?: string | null }).note ?? null };
-    sizes[f.key] = (stagedEdit(staged, f.key, "size")?.value as string | undefined) ?? f.size;
+    const v = stagedEdit(staged, f.key, 'verdict');
+    if (v)
+      verdicts[f.key] = {
+        value: (v.value as { verdict: string }).verdict,
+        note: (v.value as { note?: string | null }).note ?? null,
+      };
+    sizes[f.key] = (stagedEdit(staged, f.key, 'size')?.value as string | undefined) ?? f.size;
     ctx.setEffort?.(f.key, sizes[f.key], r.id);
     for (const q of f.questions) {
       const a = stagedEdit(staged, f.key, `answer:${q.id}`);
-      if (a) (answers[f.key] ??= []).push({ question_id: q.id, question: q.question, answer: a.value, by: a.updated_by ?? a.created_by, at: a.updated_at ?? ctx.now() });
+      if (a)
+        (answers[f.key] ??= []).push({
+          question_id: q.id,
+          question: q.question,
+          answer: a.value,
+          by: a.updated_by ?? a.created_by,
+          at: a.updated_at ?? ctx.now(),
+        });
     }
   }
   cp.payload = { ...cp.payload, briefs: { verdicts, sizes, answers } };
@@ -4458,95 +6712,196 @@ function approveEngCheck(ctx: RunsContext, r: RunOut, cp: CheckpointOut, staged:
 
 // ---------------------------------------------------------------- F4 lane B Engineering dates
 
-type DateBasis = { kind: "estimate" | "capacity" | "commitment"; reference: string; supports_date: string };
+type DateBasis = {
+  kind: 'estimate' | 'capacity' | 'commitment';
+  reference: string;
+  supports_date: string;
+};
 type DateItem = {
   key: string;
   title: string;
   section: string | null;
   size: string | null;
   proposed: DateBasis | null;
-  confidence: "low" | "medium" | "high" | null;
+  confidence: 'low' | 'medium' | 'high' | null;
   assumptions: string[];
   no_date_reason: string | null;
 };
-type DatesSpec = { items: DateItem[]; others: { key: string; title: string; horizon: "next" | "later" }[] };
-type DatesCheck = DatesSpec & { prd: { document: string; version: number } | null; problems: { code: string; message: string }[] };
-const BASIS_KINDS = ["estimate", "capacity", "commitment"];
+type DatesSpec = {
+  items: DateItem[];
+  others: { key: string; title: string; horizon: 'next' | 'later' }[];
+};
+type DatesCheck = DatesSpec & {
+  prd: { document: string; version: number } | null;
+  problems: { code: string; message: string }[];
+};
+const BASIS_KINDS = ['estimate', 'capacity', 'commitment'];
 
 /** The local runtime's dates: the draft's Now items (LOCAL_FEATURE_SET's), one dated. */
 const LOCAL_DATES: DatesSpec = {
   items: [
-    { key: "price-early", title: "Show the price early", section: "features", size: "m", proposed: { kind: "estimate", reference: "est-price-early", supports_date: "2026-11-27" }, confidence: "medium", assumptions: ["The pricing call answers within 200 ms"], no_date_reason: null },
-    { key: "public-signup", title: "Public signup", section: "features", size: "l", proposed: null, confidence: null, assumptions: [], no_date_reason: "Sized once the price step ships" },
+    {
+      key: 'price-early',
+      title: 'Show the price early',
+      section: 'features',
+      size: 'm',
+      proposed: { kind: 'estimate', reference: 'est-price-early', supports_date: '2026-11-27' },
+      confidence: 'medium',
+      assumptions: ['The pricing call answers within 200 ms'],
+      no_date_reason: null,
+    },
+    {
+      key: 'public-signup',
+      title: 'Public signup',
+      section: 'features',
+      size: 'l',
+      proposed: null,
+      confidence: null,
+      assumptions: [],
+      no_date_reason: 'Sized once the price step ships',
+    },
   ],
-  others: [{ key: "saved-cards", title: "Plan limits", horizon: "next" }],
+  others: [{ key: 'saved-cards', title: 'Plan limits', horizon: 'next' }],
 };
 
 /** The "eng-dates" scenario's dates: four Now items (three dated), two Next, one Later. */
 const SEEDED_DATES: DatesSpec = {
   items: [
-    { key: "shipping-step", title: "Shipping step", section: "shipping", size: "m", proposed: { kind: "estimate", reference: "est-shipping-step", supports_date: "2026-11-30" }, confidence: "medium", assumptions: ["The carrier rates API stays as it is"], no_date_reason: null },
-    { key: "price-early", title: "Show the price early", section: "pricing", size: "s", proposed: { kind: "estimate", reference: "est-price-early", supports_date: "2026-11-20" }, confidence: "high", assumptions: [], no_date_reason: null },
-    { key: "bulk-import", title: "Bulk import", section: "addresses", size: "l", proposed: { kind: "capacity", reference: "cap-q4-checkout", supports_date: "2026-12-11" }, confidence: "low", assumptions: ["Two engineers from Nov 16", "No change to the address lookup"], no_date_reason: null },
-    { key: "cart-review", title: "Cart review step", section: null, size: "m", proposed: null, confidence: null, assumptions: [], no_date_reason: "Waits on the provider's sandbox" },
+    {
+      key: 'shipping-step',
+      title: 'Shipping step',
+      section: 'shipping',
+      size: 'm',
+      proposed: { kind: 'estimate', reference: 'est-shipping-step', supports_date: '2026-11-30' },
+      confidence: 'medium',
+      assumptions: ['The carrier rates API stays as it is'],
+      no_date_reason: null,
+    },
+    {
+      key: 'price-early',
+      title: 'Show the price early',
+      section: 'pricing',
+      size: 's',
+      proposed: { kind: 'estimate', reference: 'est-price-early', supports_date: '2026-11-20' },
+      confidence: 'high',
+      assumptions: [],
+      no_date_reason: null,
+    },
+    {
+      key: 'bulk-import',
+      title: 'Bulk import',
+      section: 'addresses',
+      size: 'l',
+      proposed: { kind: 'capacity', reference: 'cap-q4-checkout', supports_date: '2026-12-11' },
+      confidence: 'low',
+      assumptions: ['Two engineers from Nov 16', 'No change to the address lookup'],
+      no_date_reason: null,
+    },
+    {
+      key: 'cart-review',
+      title: 'Cart review step',
+      section: null,
+      size: 'm',
+      proposed: null,
+      confidence: null,
+      assumptions: [],
+      no_date_reason: "Waits on the provider's sandbox",
+    },
   ],
   others: [
-    { key: "public-signup", title: "Public signup", horizon: "next" },
-    { key: "saved-cards", title: "Plan limits", horizon: "next" },
-    { key: "gift-wrap", title: "Gift wrap", horizon: "later" },
+    { key: 'public-signup', title: 'Public signup', horizon: 'next' },
+    { key: 'saved-cards', title: 'Plan limits', horizon: 'next' },
+    { key: 'gift-wrap', title: 'Gift wrap', horizon: 'later' },
   ],
 };
 
 /** The PRD version the dates are for: the one the run's PRD draft imported. */
 function datesCheckOf(r: RunOut, spec: DatesSpec): DatesCheck {
-  const imp = r.segments.find((x) => x.name === "prd_draft")?.draft_import;
-  const prd = r.document_slug && imp?.version ? { document: r.document_slug, version: imp.version } : null;
+  const imp = r.segments.find((x) => x.name === 'prd_draft')?.draft_import;
+  const prd =
+    r.document_slug && imp?.version ? { document: r.document_slug, version: imp.version } : null;
   return { prd, items: spec.items, others: spec.others, problems: [] };
 }
 
 function datesYaml(check: DatesCheck, attempt: number): string {
-  const lines = [`# eng_dates (sample, attempt ${attempt})`, "version: 1", `prd: {document: ${check.prd?.document ?? "null"}, version: ${check.prd?.version ?? "null"}}`, "items:"];
+  const lines = [
+    `# eng_dates (sample, attempt ${attempt})`,
+    'version: 1',
+    `prd: {document: ${check.prd?.document ?? 'null'}, version: ${check.prd?.version ?? 'null'}}`,
+    'items:',
+  ];
   for (const i of check.items) {
     lines.push(`  - item: ${i.key}`);
-    if (i.proposed) lines.push(`    estimate: {kind: ${i.proposed.kind}, reference: ${i.proposed.reference}, supports_date: ${i.proposed.supports_date}}`, `    confidence: ${i.confidence}`);
-    else lines.push(`    no_date_reason: "${i.no_date_reason ?? ""}"`);
-    lines.push(`    assumptions: [${i.assumptions.map((a) => `"${a}"`).join(", ")}]`);
+    if (i.proposed)
+      lines.push(
+        `    estimate: {kind: ${i.proposed.kind}, reference: ${i.proposed.reference}, supports_date: ${i.proposed.supports_date}}`,
+        `    confidence: ${i.confidence}`,
+      );
+    else lines.push(`    no_date_reason: "${i.no_date_reason ?? ''}"`);
+    lines.push(`    assumptions: [${i.assumptions.map((a) => `"${a}"`).join(', ')}]`);
   }
-  return lines.join("\n") + "\n";
+  return lines.join('\n') + '\n';
 }
 
-const datesOf = (cp: CheckpointOut) => ((cp.payload as { dates_check?: DatesCheck } | undefined)?.dates_check ?? null);
+const datesOf = (cp: CheckpointOut) =>
+  (cp.payload as { dates_check?: DatesCheck } | undefined)?.dates_check ?? null;
 /** A date choice: Accept, a changed estimate, or No date. */
-const isDateChoice = (a: Pick<DraftActionRow, "kind" | "field">) => a.kind === "accept" || (a.kind === "edit" && (a.field === "estimate" || a.field === "no_date"));
-const validDay = (v: unknown) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`)) && new Date(`${v}T00:00:00Z`).toISOString().startsWith(v);
+const isDateChoice = (a: Pick<DraftActionRow, 'kind' | 'field'>) =>
+  a.kind === 'accept' || (a.kind === 'edit' && (a.field === 'estimate' || a.field === 'no_date'));
+const validDay = (v: unknown) =>
+  typeof v === 'string' &&
+  /^\d{4}-\d{2}-\d{2}$/.test(v) &&
+  !Number.isNaN(Date.parse(`${v}T00:00:00Z`)) &&
+  new Date(`${v}T00:00:00Z`).toISOString().startsWith(v);
 
 /** As oracle.engineering.dates.reasons: each proposed date needs a staged choice, never waived. */
-function datesReasons(cp: CheckpointOut, actions: DraftActionRow[]): { reasons: GateReason[]; files: number } | null {
+function datesReasons(
+  cp: CheckpointOut,
+  actions: DraftActionRow[],
+): { reasons: GateReason[]; files: number } | null {
   const check = datesOf(cp);
   if (!check) return null;
   const reasons: GateReason[] = check.items
-    .filter((i) => i.proposed && !actions.some((a) => a.state === "staged" && a.item_key === i.key && isDateChoice(a)))
-    .map((i) => ({ item: i.key, item_title: i.title, code: "date_undecided", severity: "blocking", label: "Date not decided yet" }));
+    .filter(
+      (i) =>
+        i.proposed &&
+        !actions.some((a) => a.state === 'staged' && a.item_key === i.key && isDateChoice(a)),
+    )
+    .map((i) => ({
+      item: i.key,
+      item_title: i.title,
+      code: 'date_undecided',
+      severity: 'blocking',
+      label: 'Date not decided yet',
+    }));
   return { reasons, files: check.problems.length };
 }
 
 /** As oracle.engineering.dates.validate: the Engineering dates' vocabulary; the refusal, or null. */
-function datesInvalid(cp: CheckpointOut, a: Schemas["ActionIn"]): string | null {
+function datesInvalid(cp: CheckpointOut, a: Schemas['ActionIn']): string | null {
   const item = datesOf(cp)?.items.find((x) => x.key === a.item_key);
   if (!item) return `${a.item_key} is not a Now item of the draft`;
-  if (a.kind === "question") return null;
-  if (a.kind === "accept") return item.proposed ? null : `${a.item_key} has no proposed date to accept`;
-  if (a.kind !== "edit") return "the Engineering dates take accept, edit (estimate, no_date) or question";
-  if (a.field === "estimate") {
+  if (a.kind === 'question') return null;
+  if (a.kind === 'accept')
+    return item.proposed ? null : `${a.item_key} has no proposed date to accept`;
+  if (a.kind !== 'edit')
+    return 'the Engineering dates take accept, edit (estimate, no_date) or question';
+  if (a.field === 'estimate') {
     const v = (a.value ?? {}) as Partial<DateBasis>;
-    if (!BASIS_KINDS.includes(v.kind ?? "") || !(v.reference ?? "").trim() || !v.supports_date) return "an estimate needs a kind, a reference and a date";
+    if (!BASIS_KINDS.includes(v.kind ?? '') || !(v.reference ?? '').trim() || !v.supports_date)
+      return 'an estimate needs a kind, a reference and a date';
     return validDay(v.supports_date) ? null : `not a date: ${v.supports_date}`;
   }
-  if (a.field === "no_date") return ((a.value ?? {}) as { reason?: string }).reason?.trim() ? null : "No date needs a reason";
-  return "edit takes the field estimate or no_date";
+  if (a.field === 'no_date')
+    return ((a.value ?? {}) as { reason?: string }).reason?.trim()
+      ? null
+      : 'No date needs a reason';
+  return 'edit takes the field estimate or no_date';
 }
 
-type DateDecision = { decision: "accepted" | "changed"; estimate: DateBasis } | { decision: "no_date"; reason: string; removed?: true };
+type DateDecision =
+  | { decision: 'accepted' | 'changed'; estimate: DateBasis }
+  | { decision: 'no_date'; reason: string; removed?: true };
 
 /**
  * As oracle.engineering.dates.decisions, on Approve: each item's last staged choice (a
@@ -4560,30 +6915,47 @@ function approveEngDates(cp: CheckpointOut, staged: DraftActionRow[]) {
   for (const i of check.items) {
     const a = staged.filter((x) => x.item_key === i.key && isDateChoice(x)).pop();
     if (!a) {
-      if (i.no_date_reason) dates[i.key] = { decision: "no_date", reason: i.no_date_reason };
-    } else if (a.kind === "accept" && i.proposed) dates[i.key] = { decision: "accepted", estimate: i.proposed };
-    else if (a.field === "estimate") dates[i.key] = { decision: "changed", estimate: a.value as DateBasis };
-    else if (a.field === "no_date") dates[i.key] = { decision: "no_date", reason: (a.value as { reason: string }).reason, ...(i.proposed ? { removed: true as const } : {}) };
+      if (i.no_date_reason) dates[i.key] = { decision: 'no_date', reason: i.no_date_reason };
+    } else if (a.kind === 'accept' && i.proposed)
+      dates[i.key] = { decision: 'accepted', estimate: i.proposed };
+    else if (a.field === 'estimate')
+      dates[i.key] = { decision: 'changed', estimate: a.value as DateBasis };
+    else if (a.field === 'no_date')
+      dates[i.key] = {
+        decision: 'no_date',
+        reason: (a.value as { reason: string }).reason,
+        ...(i.proposed ? { removed: true as const } : {}),
+      };
   }
   cp.payload = { ...cp.payload, dates };
 }
 
 /** Who stages at the checkpoint (and so decides): A3's rule at an engineering stop, else its role floor. */
-function mayStage(ctx: RunsContext, r: RunOut, cp: CheckpointOut, role: Schemas["Me"]["role"] | null): boolean {
+function mayStage(
+  ctx: RunsContext,
+  r: RunOut,
+  cp: CheckpointOut,
+  role: Schemas['Me']['role'] | null,
+): boolean {
   if (ENGINEERING_KINDS.includes(cp.kind) && ctx.mayDecide) return ctx.mayDecide(cp, r.flow);
   return atLeast(role, cp.approver_role);
 }
 
 // ---------------------------------------------------------------- D8 shared draft decision
 
-const RANK: Record<Schemas["Me"]["role"], number> = { viewer: 0, commenter: 1, approver: 2, owner: 3 };
+const RANK: Record<Schemas['Me']['role'], number> = {
+  viewer: 0,
+  commenter: 1,
+  approver: 2,
+  owner: 3,
+};
 /** `role` is `min` or above (lib/me hasRole); an unknown caller has every role (the seed owner). */
-function atLeast(role: Schemas["Me"]["role"] | null | undefined, min: string): boolean {
-  return role == null || RANK[role] >= (RANK[min as Schemas["Me"]["role"]] ?? 0);
+function atLeast(role: Schemas['Me']['role'] | null | undefined, min: string): boolean {
+  return role == null || RANK[role] >= (RANK[min as Schemas['Me']['role']] ?? 0);
 }
 
 /** As oracle.runs.actions.QUESTION_STOPS (discussions.changes): the stops Ask asks at. */
-const QUESTION_STOPS = ["roadmap_items", "feature_set", "eng_review"];
+const QUESTION_STOPS = ['roadmap_items', 'feature_set', 'eng_review'];
 
 /**
  * G4, as oracle.runs.actions.put_action with a source: a discussion change's D8 action at a
@@ -4595,22 +6967,24 @@ const QUESTION_STOPS = ["roadmap_items", "feature_set", "eng_review"];
 export function putDiscussionAction(
   ctx: RunsContext,
   at: { run_id: string; checkpoint_id: string },
-  a: Schemas["ActionIn"],
+  a: Schemas['ActionIn'],
   source: { discussion_id: string; change_id: string; from_private: boolean },
-  mode: "stage" | "suggest" | "auto",
+  mode: 'stage' | 'suggest' | 'auto',
 ): { id: string; question_id: string | null } | Response {
   const r = ctx.db.runs.find((x) => x.id === at.run_id);
   const cp = r?.checkpoints.find((c) => c.id === at.checkpoint_id);
   if (!r || !cp) return fail(404, `checkpoint ${at.checkpoint_id} not found`);
-  if (cp.status !== "pending") return fail(409, "this checkpoint is decided");
+  if (cp.status !== 'pending') return fail(409, 'this checkpoint is decided');
   const me = ctx.member ?? null;
   const role = me?.role ?? ctx.userRole ?? null;
   const may = mayStage(ctx, r, cp, role);
-  if (mode === "stage" && !may) return fail(403, `Requires the ${cp.approver_role} role`);
-  const stages = may && mode !== "suggest";
+  if (mode === 'stage' && !may) return fail(403, `Requires the ${cp.approver_role} role`);
+  const stages = may && mode !== 'suggest';
   const draft = draftOf(ctx, cp.id);
   const who = me?.id ?? ctx.userId;
-  const existing = draft.actions.find((x) => x.item_key === a.item_key && x.kind === a.kind && (x.field ?? "") === (a.field ?? ""));
+  const existing = draft.actions.find(
+    (x) => x.item_key === a.item_key && x.kind === a.kind && (x.field ?? '') === (a.field ?? ''),
+  );
   const row: DraftActionRow = {
     id: existing?.id ?? ctx.uuid(),
     item_key: a.item_key,
@@ -4619,30 +6993,42 @@ export function putDiscussionAction(
     value: a.value ?? null,
     answers: a.answers ?? [],
     note: a.note ?? null,
-    state: stages ? "staged" : "suggested",
+    state: stages ? 'staged' : 'suggested',
     created_by: who,
     updated_by: who,
     updated_at: ctx.now(),
-    origin: "discussion",
+    origin: 'discussion',
     discussion_id: source.discussion_id,
     discussion_change_id: source.change_id,
     from_private: source.from_private,
     question_id: null,
   };
-  if (a.kind === "question" && ctx.ask) {
+  if (a.kind === 'question' && ctx.ask) {
     if (existing?.question_id) ctx.withdraw?.(existing.question_id);
     const v = (a.value ?? {}) as { asked_to?: string; text?: string };
-    row.question_id = ctx.ask({ asked_to: v.asked_to ?? "", prompt: v.text ?? "", checkpoint_id: cp.id, item_ref: a.item_key });
+    row.question_id = ctx.ask({
+      asked_to: v.asked_to ?? '',
+      prompt: v.text ?? '',
+      checkpoint_id: cp.id,
+      item_ref: a.item_key,
+    });
   }
-  draft.actions = existing ? draft.actions.map((x) => (x === existing ? row : x)) : [...draft.actions, row];
-  bump(draft, displayName(me?.email ?? ctx.userName ?? "admin@example.com"));
+  draft.actions = existing
+    ? draft.actions.map((x) => (x === existing ? row : x))
+    : [...draft.actions, row];
+  bump(draft, displayName(me?.email ?? ctx.userName ?? 'admin@example.com'));
   return { id: row.id, question_id: row.question_id ?? null };
 }
 
 /** Whether Ask on this stop is its D8 question action (a waiting stop that takes questions). */
-export function asksAtStop(ctx: Pick<RunsContext, "db">, at: { run_id: string; checkpoint_id: string }): boolean {
-  const cp = ctx.db.runs.find((x) => x.id === at.run_id)?.checkpoints.find((c) => c.id === at.checkpoint_id);
-  return !!cp && cp.status === "pending" && QUESTION_STOPS.includes(cp.kind);
+export function asksAtStop(
+  ctx: Pick<RunsContext, 'db'>,
+  at: { run_id: string; checkpoint_id: string },
+): boolean {
+  const cp = ctx.db.runs
+    .find((x) => x.id === at.run_id)
+    ?.checkpoints.find((c) => c.id === at.checkpoint_id);
+  return !!cp && cp.status === 'pending' && QUESTION_STOPS.includes(cp.kind);
 }
 
 /**
@@ -4654,21 +7040,25 @@ export function asksAtStop(ctx: Pick<RunsContext, "db">, at: { run_id: string; c
  * (the API links a row to the entity of its key).
  */
 export function scopeStop(
-  ctx: Pick<RunsContext, "db">,
+  ctx: Pick<RunsContext, 'db'>,
   named: string | null,
   own: { run_id: string | null; checkpoint_id?: string | null; item_key?: string | null },
   keysOf: (entityId: string) => string[] = () => [],
 ): { run_id: string; checkpoint_id: string; item_key: string } | null {
   const keys = named === null ? [] : keysOf(named);
-  const names = (row: { id: string; key: string; entity_id?: string | null }) => row.id === named || row.entity_id === named || keys.includes(row.key);
-  const runs = [...ctx.db.runs].sort((x, y) => Number(y.id === own.run_id) - Number(x.id === own.run_id));
+  const names = (row: { id: string; key: string; entity_id?: string | null }) =>
+    row.id === named || row.entity_id === named || keys.includes(row.key);
+  const runs = [...ctx.db.runs].sort(
+    (x, y) => Number(y.id === own.run_id) - Number(x.id === own.run_id),
+  );
   for (const r of runs) {
-    const cp = r.checkpoints.find((c) => c.kind === "feature_set" && c.status === "pending");
-    const scope = (ctx.db.scopes?.[r.id] ?? []).filter((x) => x.status === "proposed").pop();
+    const cp = r.checkpoints.find((c) => c.kind === 'feature_set' && c.status === 'pending');
+    const scope = (ctx.db.scopes?.[r.id] ?? []).filter((x) => x.status === 'proposed').pop();
     if (!cp || !scope) continue;
     if (named === null && cp.id !== own.checkpoint_id) continue;
     for (const f of scope.features) {
-      if (named === null ? f.key === own.item_key : names(f)) return { run_id: r.id, checkpoint_id: cp.id, item_key: f.key };
+      if (named === null ? f.key === own.item_key : names(f))
+        return { run_id: r.id, checkpoint_id: cp.id, item_key: f.key };
       const req = named === null ? undefined : f.requirements.find(names);
       if (req) return { run_id: r.id, checkpoint_id: cp.id, item_key: req.key };
     }
@@ -4690,69 +7080,125 @@ function reviewChanged(draft: DraftRow, expected: number) {
   const since = draft.log.filter((l) => l.revision > expected);
   const by = [...new Set(since.map((l) => l.by))];
   const changes = Math.max(draft.revision - expected, 0) || since.length;
-  const who = by.length < 2 ? by.join("") : `${by.slice(0, -1).join(", ")} and ${by[by.length - 1]}`;
-  const message = `The review changed since you loaded it (${changes} change${changes === 1 ? "" : "s"}${who ? ` by ${who}` : ""}): look again, then decide.`;
-  return { code: "review_changed", revision: draft.revision, changes, by, message };
+  const who =
+    by.length < 2 ? by.join('') : `${by.slice(0, -1).join(', ')} and ${by[by.length - 1]}`;
+  const message = `The review changed since you loaded it (${changes} change${changes === 1 ? '' : 's'}${who ? ` by ${who}` : ''}): look again, then decide.`;
+  return { code: 'review_changed', revision: draft.revision, changes, by, message };
 }
 
 /** As oracle.runs.actions.wait_info: the SwarmCloud wait the checkpoint's step is parked in. */
-function waitOf(payload: CheckpointOut["payload"]): Schemas["WaitInfo"] {
-  const wait = (payload?.wait ?? {}) as { workflow_id?: string; expires_at?: string; ended?: string };
-  if (!wait.workflow_id && !wait.expires_at && !wait.ended) return { state: "none", ends_at: null, seconds_left: null };
-  if (wait.ended) return { state: "ended", ends_at: null, seconds_left: null };
-  if (!wait.expires_at) return { state: "open", ends_at: null, seconds_left: null };
+function waitOf(payload: CheckpointOut['payload']): Schemas['WaitInfo'] {
+  const wait = (payload?.wait ?? {}) as {
+    workflow_id?: string;
+    expires_at?: string;
+    ended?: string;
+  };
+  if (!wait.workflow_id && !wait.expires_at && !wait.ended)
+    return { state: 'none', ends_at: null, seconds_left: null };
+  if (wait.ended) return { state: 'ended', ends_at: null, seconds_left: null };
+  if (!wait.expires_at) return { state: 'open', ends_at: null, seconds_left: null };
   const left = Math.floor((Date.parse(wait.expires_at) - Date.now()) / 1000);
-  if (left <= 0) return { state: "ended", ends_at: null, seconds_left: null };
-  return { state: "open", ends_at: wait.expires_at, seconds_left: left };
+  if (left <= 0) return { state: 'ended', ends_at: null, seconds_left: null };
+  return { state: 'open', ends_at: wait.expires_at, seconds_left: left };
 }
 
-const KINDS = ["accept", "edit", "drop", "restore", "split", "merge", "question", "waive", "look_again", "add"];
+const KINDS = [
+  'accept',
+  'edit',
+  'drop',
+  'restore',
+  'split',
+  'merge',
+  'question',
+  'waive',
+  'look_again',
+  'add',
+];
 
 /**
  * AQ1, as oracle.runs.agent_questions: GET …/agent-questions (any member) and PUT
  * …/agent-questions/{id}/answer (the stop's approver role or above, while it is pending).
  */
-async function routeAgentQuestions(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: Request, rest: string[], role: Schemas["Me"]["role"] | null): Promise<Response> {
+async function routeAgentQuestions(
+  ctx: RunsContext,
+  r: RunOut,
+  cp: CheckpointOut,
+  req: Request,
+  rest: string[],
+  role: Schemas['Me']['role'] | null,
+): Promise<Response> {
   const stored = ctx.db.agent_questions?.[cp.id] ?? [];
   const me = ctx.member?.id ?? ctx.userId;
   const seq = cp.segment_seq;
   // The step after the stop's segment that runs (one whose stop is off is skipped).
-  const next = seq != null ? (r.segments.find((s) => s.seq > seq && s.status !== "skipped")?.title ?? null) : null;
+  const next =
+    seq != null
+      ? (r.segments.find((s) => s.seq > seq && s.status !== 'skipped')?.title ?? null)
+      : null;
   const may = mayStage(ctx, r, cp, role);
-  const out = () => reply("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/agent-questions", "get", agentQuestionsOut(stored, me, next, cp.status === "pending" && may));
-  if (rest.length === 1 && req.method === "GET") return out();
-  if (rest.length !== 3 || rest[2] !== "answer" || req.method !== "PUT") return fail(404, "Not Found");
+  const out = () =>
+    reply(
+      '/v1/runs/{run_id}/checkpoints/{checkpoint_id}/agent-questions',
+      'get',
+      agentQuestionsOut(stored, me, next, cp.status === 'pending' && may),
+    );
+  if (rest.length === 1 && req.method === 'GET') return out();
+  if (rest.length !== 3 || rest[2] !== 'answer' || req.method !== 'PUT')
+    return fail(404, 'Not Found');
   if (!may) return fail(403, `Requires the ${cp.approver_role} role`);
-  if (cp.status !== "pending") return fail(409, "this checkpoint is decided");
+  if (cp.status !== 'pending') return fail(409, 'this checkpoint is decided');
   const q = stored.find((x) => x.id === decodeURIComponent(rest[1]));
   if (!q) return fail(404, `question ${rest[1]} not found`);
-  const body = JSON.parse((await req.text()) || "{}") as Schemas["AgentAnswerIn"];
-  if (!q.options.some((o) => o.key === body.option)) return fail(422, `${body.option} is not an option of this question`);
-  const name = displayName(ctx.member?.email ?? ctx.userName ?? "admin@example.com");
-  q.answer = { option: body.option, note: body.note?.trim() || null, by: { id: me, name, role }, at: new Date(mockNowMs()).toISOString() };
+  const body = JSON.parse((await req.text()) || '{}') as Schemas['AgentAnswerIn'];
+  if (!q.options.some((o) => o.key === body.option))
+    return fail(422, `${body.option} is not an option of this question`);
+  const name = displayName(ctx.member?.email ?? ctx.userName ?? 'admin@example.com');
+  q.answer = {
+    option: body.option,
+    note: body.note?.trim() || null,
+    by: { id: me, name, role },
+    at: new Date(mockNowMs()).toISOString(),
+  };
   return out();
 }
 
 /** GET .../review and the four writes (oracle.runs.actions), over the stored items check. */
-async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: Request, rest: string[]): Promise<Response> {
+async function routeDraft(
+  ctx: RunsContext,
+  r: RunOut,
+  cp: CheckpointOut,
+  req: Request,
+  rest: string[],
+): Promise<Response> {
   const m = req.method;
   const me = ctx.member ?? null;
   const role = me?.role ?? ctx.userRole ?? null;
-  if (rest[0] === "agent-questions") return routeAgentQuestions(ctx, r, cp, req, rest, role);
+  if (rest[0] === 'agent-questions') return routeAgentQuestions(ctx, r, cp, req, rest, role);
   const draft = draftOf(ctx, cp.id);
-  const out = () => reply("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review", "get", reviewOut(ctx, r, cp, draft, role));
-  if (rest[0] === "review" && rest.length === 1 && m === "GET") return out();
-  const stage = (rest[0] === "actions" && rest[2] === "stage") || rest[0] === "note";
+  const out = () =>
+    reply(
+      '/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review',
+      'get',
+      reviewOut(ctx, r, cp, draft, role),
+    );
+  if (rest[0] === 'review' && rest.length === 1 && m === 'GET') return out();
+  const stage = (rest[0] === 'actions' && rest[2] === 'stage') || rest[0] === 'note';
   const stages = mayStage(ctx, r, cp, role);
-  if (stage && !stages) return fail(403, ENGINEERING_KINDS.includes(cp.kind) && ctx.mayDecide ? LEAD_ONLY : `Requires the ${cp.approver_role} role`);
-  if (!atLeast(role, "commenter")) return fail(403, "Requires the commenter role");
-  if (cp.status !== "pending") return fail(409, "this checkpoint is decided");
+  if (stage && !stages)
+    return fail(
+      403,
+      ENGINEERING_KINDS.includes(cp.kind) && ctx.mayDecide
+        ? LEAD_ONLY
+        : `Requires the ${cp.approver_role} role`,
+    );
+  if (!atLeast(role, 'commenter')) return fail(403, 'Requires the commenter role');
+  if (cp.status !== 'pending') return fail(409, 'this checkpoint is decided');
   const who = me?.id ?? ctx.userId;
-  const name = displayName(me?.email ?? ctx.userName ?? "admin@example.com");
-  const body = async <T,>() => JSON.parse((await req.text()) || "null") as T;
-  if (rest[0] === "note" && m === "PUT") {
-    const { note } = await body<Schemas["DraftNoteIn"]>();
-    if (note != null && note.length > 10_000) return fail(422, "note: at most 10,000 characters");
+  const name = displayName(me?.email ?? ctx.userName ?? 'admin@example.com');
+  const body = async <T>() => JSON.parse((await req.text()) || 'null') as T;
+  if (rest[0] === 'note' && m === 'PUT') {
+    const { note } = await body<Schemas['DraftNoteIn']>();
+    if (note != null && note.length > 10_000) return fail(422, 'note: at most 10,000 characters');
     const next = note?.trim() ? note : null;
     if (next !== draft.note) {
       draft.note = next;
@@ -4760,57 +7206,82 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
     }
     return out();
   }
-  if (rest[0] === "actions" && rest.length === 1 && m === "POST") {
-    const a = await body<Schemas["ActionIn"]>();
-    if (!KINDS.includes(a.kind)) return fail(422, `unknown action kind ${a.kind}: one of ${KINDS.join(", ")}`);
-    if (cp.kind === "eng_review") {
+  if (rest[0] === 'actions' && rest.length === 1 && m === 'POST') {
+    const a = await body<Schemas['ActionIn']>();
+    if (!KINDS.includes(a.kind))
+      return fail(422, `unknown action kind ${a.kind}: one of ${KINDS.join(', ')}`);
+    if (cp.kind === 'eng_review') {
       const invalid = engInvalid(cp, a);
       if (invalid) return fail(422, invalid);
     }
-    if (cp.kind === "eng_dates") {
+    if (cp.kind === 'eng_dates') {
       const invalid = datesInvalid(cp, a);
       if (invalid) return fail(422, invalid);
     }
     // C7: the feature set's vocabulary: edit a field of a row, add a requirement, accept, waive, question.
-    if (cp.kind === "feature_set") {
-      if (!["edit", "add", "accept", "waive", "question"].includes(a.kind)) return fail(422, `a feature set takes edit, add, accept, waive or question, not ${a.kind}`);
-      if (a.kind === "edit" && !SCOPE_EDIT_FIELDS.includes(a.field ?? "")) return fail(422, `field: one of ${SCOPE_EDIT_FIELDS.join(", ")}`);
+    if (cp.kind === 'feature_set') {
+      if (!['edit', 'add', 'accept', 'waive', 'question'].includes(a.kind))
+        return fail(422, `a feature set takes edit, add, accept, waive or question, not ${a.kind}`);
+      if (a.kind === 'edit' && !SCOPE_EDIT_FIELDS.includes(a.field ?? ''))
+        return fail(422, `field: one of ${SCOPE_EDIT_FIELDS.join(', ')}`);
     }
-    if (a.kind === "waive") {
+    if (a.kind === 'waive') {
       // As oracle.runs.actions._waive_reason: a roadmap item's or a feature's waiver carries its reason.
-      if ((cp.kind === "roadmap_items" || cp.kind === "feature_set") && !(a.value as { reason?: string } | null)?.reason?.trim()) return fail(422, "waive needs a reason");
+      if (
+        (cp.kind === 'roadmap_items' || cp.kind === 'feature_set') &&
+        !(a.value as { reason?: string } | null)?.reason?.trim()
+      )
+        return fail(422, 'waive needs a reason');
       // D3: never a date or the whole file; the approver's alone (a commenter cannot suggest one).
-      if (a.item_key === "*") return fail(422, FILE_NOT_WAIVED);
-      if (cp.kind === "priority_order") return fail(422, "a priority order checkpoint takes no item actions");
-      if ((a.answers ?? []).some((code) => !waivable(cp.kind, answerCode(code)))) return fail(422, cp.kind === "feature_set" ? UNKNOWN_NOT_WAIVED : DATE_NOT_WAIVED);
+      if (a.item_key === '*') return fail(422, FILE_NOT_WAIVED);
+      if (cp.kind === 'priority_order')
+        return fail(422, 'a priority order checkpoint takes no item actions');
+      if ((a.answers ?? []).some((code) => !waivable(cp.kind, answerCode(code))))
+        return fail(422, cp.kind === 'feature_set' ? UNKNOWN_NOT_WAIVED : DATE_NOT_WAIVED);
       if (!stages) return fail(403, `Only the ${cp.approver_role} role or above waives a problem`);
       // H4 §5, as the API: only an owner waives a planned item the product strategy stops.
-      if (cp.kind === "roadmap_items" && (a.answers ?? []).includes("stopped_but_planned") && !atLeast(role, "owner")) {
-        return fail(403, "Only an owner waives an item the product strategy stops");
+      if (
+        cp.kind === 'roadmap_items' &&
+        (a.answers ?? []).includes('stopped_but_planned') &&
+        !atLeast(role, 'owner')
+      ) {
+        return fail(403, 'Only an owner waives an item the product strategy stops');
       }
       // B2: Leave proposed is for a goal from this run nobody decided, with a reason.
-      if (cp.kind === "baseline_confirm") {
-        if (!liveOf(ctx, cp, draft.actions)?.some((x) => x.item === a.item_key)) return fail(422, "only an undecided goal from this run is waived (Leave proposed)");
-        if (!(a.value as { reason?: string } | null)?.reason?.trim()) return fail(422, "a waiver needs a reason");
+      if (cp.kind === 'baseline_confirm') {
+        if (!liveOf(ctx, cp, draft.actions)?.some((x) => x.item === a.item_key))
+          return fail(422, 'only an undecided goal from this run is waived (Leave proposed)');
+        if (!(a.value as { reason?: string } | null)?.reason?.trim())
+          return fail(422, 'a waiver needs a reason');
       }
     }
     // As the API: an owner's waiver of Stopped in the strategy is its own action; a feature set's Keep (or a roadmap item's Accept) of one reason is that reason's own.
     const field =
-      a.kind === "waive" && cp.kind === "roadmap_items"
+      a.kind === 'waive' && cp.kind === 'roadmap_items'
         ? (a.answers ?? []).some((c) => OWNER_WAIVES.includes(c))
-          ? "owner"
+          ? 'owner'
           : null
-        : a.kind === "waive" && (a.answers ?? []).length === 1 && a.answers![0].includes(REF_MARK)
+        : a.kind === 'waive' && (a.answers ?? []).length === 1 && a.answers![0].includes(REF_MARK)
           ? // As the API: one problem waived by its own ref is its own action, with its own reason.
             a.answers![0]
-          : a.kind === "accept" && (cp.kind === "feature_set" || cp.kind === "roadmap_items") && (a.answers ?? []).length === 1
-          ? a.answers![0]
-          : (a.field ?? null);
-    const existing = draft.actions.find((x) => x.item_key === a.item_key && x.kind === a.kind && (x.field ?? "") === (field ?? ""));
-    if (existing && !stages && existing.created_by !== who) return fail(403, "Only its author or an approver can change this action");
-    if (cp.kind === "feature_set" && stages && (a.kind === "edit" || a.kind === "add")) {
+          : a.kind === 'accept' &&
+              (cp.kind === 'feature_set' || cp.kind === 'roadmap_items') &&
+              (a.answers ?? []).length === 1
+            ? a.answers![0]
+            : (a.field ?? null);
+    const existing = draft.actions.find(
+      (x) => x.item_key === a.item_key && x.kind === a.kind && (x.field ?? '') === (field ?? ''),
+    );
+    if (existing && !stages && existing.created_by !== who)
+      return fail(403, 'Only its author or an approver can change this action');
+    if (cp.kind === 'feature_set' && stages && (a.kind === 'edit' || a.kind === 'add')) {
       // C7, as the API: an approver's own edit or add changes the row at once (nothing staged).
-      const refused = applySuggestion(ctx, r.id, { ...a, field: a.field ?? null, value: a.value ?? null } as DraftActionRow, who);
+      const refused = applySuggestion(
+        ctx,
+        r.id,
+        { ...a, field: a.field ?? null, value: a.value ?? null } as DraftActionRow,
+        who,
+      );
       if (refused) return refused;
       draft.actions = draft.actions.filter((x) => x !== existing);
       bump(draft, name);
@@ -4824,111 +7295,180 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
       value: a.value ?? null,
       answers: mergedAnswers(a, existing),
       note: a.note ?? null,
-      state: stages ? "staged" : "suggested",
+      state: stages ? 'staged' : 'suggested',
       created_by: who,
       updated_by: who,
       updated_at: ctx.now(),
       // As the API's keep_origin: Undo of part of it keeps where it came from (a discussion's change).
       ...(a.keep_origin && existing?.discussion_id
-        ? { origin: existing.origin, discussion_id: existing.discussion_id, discussion_change_id: existing.discussion_change_id, from_private: existing.from_private }
+        ? {
+            origin: existing.origin,
+            discussion_id: existing.discussion_id,
+            discussion_change_id: existing.discussion_change_id,
+            from_private: existing.from_private,
+          }
         : {}),
     };
-    if (a.kind === "question" && ctx.ask) {
+    if (a.kind === 'question' && ctx.ask) {
       // C2: asked through the questions store; a changed question withdraws the one before.
       if (existing?.question_id) ctx.withdraw?.(existing.question_id);
       const v = (a.value ?? {}) as { asked_to?: string; text?: string };
-      row.question_id = ctx.ask({ asked_to: v.asked_to ?? "", prompt: v.text ?? "", checkpoint_id: cp.id, item_ref: a.item_key });
+      row.question_id = ctx.ask({
+        asked_to: v.asked_to ?? '',
+        prompt: v.text ?? '',
+        checkpoint_id: cp.id,
+        item_ref: a.item_key,
+      });
     }
-    draft.actions = existing ? draft.actions.map((x) => (x === existing ? row : x)) : [...draft.actions, row];
+    draft.actions = existing
+      ? draft.actions.map((x) => (x === existing ? row : x))
+      : [...draft.actions, row];
     bump(draft, name);
     return out();
   }
   const action = draft.actions.find((x) => x.id === rest[1]);
-  if (rest[0] === "actions" && !action) return fail(404, `action ${rest[1]} not found`);
-  if (action && rest[2] === "stage" && m === "POST") {
+  if (rest[0] === 'actions' && !action) return fail(404, `action ${rest[1]} not found`);
+  if (action && rest[2] === 'stage' && m === 'POST') {
     // C7: an approver's Accept of a suggested edit or add applies it to the scope row, and the action goes.
-    if (cp.kind === "feature_set" && action.state === "suggested" && (action.kind === "edit" || action.kind === "add")) {
+    if (
+      cp.kind === 'feature_set' &&
+      action.state === 'suggested' &&
+      (action.kind === 'edit' || action.kind === 'add')
+    ) {
       const refused = applySuggestion(ctx, r.id, action, who);
       if (refused) return refused;
       draft.actions = draft.actions.filter((x) => x !== action);
       bump(draft, name);
       return out();
     }
-    if (action.state !== "staged") {
-      Object.assign(action, { state: "staged", updated_by: who, updated_at: ctx.now() });
+    if (action.state !== 'staged') {
+      Object.assign(action, { state: 'staged', updated_by: who, updated_at: ctx.now() });
       bump(draft, name);
     }
     return out();
   }
-  if (action && rest.length === 2 && m === "DELETE") {
-    if (action.created_by !== who && !stages) return fail(403, "Only its author or an approver can undo this action");
+  if (action && rest.length === 2 && m === 'DELETE') {
+    if (action.created_by !== who && !stages)
+      return fail(403, 'Only its author or an approver can undo this action');
     if (action.question_id) ctx.withdraw?.(action.question_id);
     draft.actions = draft.actions.filter((x) => x !== action);
     bump(draft, name);
     return out();
   }
-  return fail(404, "Route not found");
+  return fail(404, 'Route not found');
 }
 
-function reviewOut(ctx: RunsContext, r: RunOut, cp: CheckpointOut, draft: DraftRow, role: Schemas["Me"]["role"] | null): Schemas["CheckpointReview"] {
+function reviewOut(
+  ctx: RunsContext,
+  r: RunOut,
+  cp: CheckpointOut,
+  draft: DraftRow,
+  role: Schemas['Me']['role'] | null,
+): Schemas['CheckpointReview'] {
   const people = new Map((ctx.members ?? []).map((x) => [x.id, x]));
-  const person = (id: string | null): Schemas["ReviewPerson"] | null => {
+  const person = (id: string | null): Schemas['ReviewPerson'] | null => {
     if (!id) return null;
     const found = people.get(id);
-    return { id, name: found ? displayName(found.email) : "Someone", role: found?.role ?? null };
+    return { id, name: found ? displayName(found.email) : 'Someone', role: found?.role ?? null };
   };
   const seg = r.segments.find((s) => s.seq === cp.segment_seq);
-  const check = cp.kind === "roadmap_items" ? (seg?.items_check ?? null) : null;
+  const check = cp.kind === 'roadmap_items' ? (seg?.items_check ?? null) : null;
   const reasons = check?.reasons ?? [];
   // D1: the file's items first, in order, with their fields (as oracle.runs.actions reads the
   // checked file); then the items only the reasons or the actions name (no position).
-  const file = check ? fileItems(ctx.db.artifacts[`${r.id}|${cp.segment_seq}|roadmap_items.yaml`] ?? "") : [];
+  const file = check
+    ? fileItems(ctx.db.artifacts[`${r.id}|${cp.segment_seq}|roadmap_items.yaml`] ?? '')
+    : [];
   const inFile = new Map(file.map((f) => [f.key, f]));
-  const keys = [...new Set([...file.map((f) => f.key), ...reasons.map((x) => x.item), ...draft.actions.map((a) => a.item_key)])];
-  const waiting = new Map<string, Schemas["WaitingOn"]>();
+  const keys = [
+    ...new Set([
+      ...file.map((f) => f.key),
+      ...reasons.map((x) => x.item),
+      ...draft.actions.map((a) => a.item_key),
+    ]),
+  ];
+  const waiting = new Map<string, Schemas['WaitingOn']>();
   // A question action's stakeholder question (C2): asked of a member, answered in value.answer.
-  const questionOf = (a: DraftActionRow): Schemas["ReviewQuestion"] | null => {
-    if (a.kind !== "question") return null;
-    const v = (a.value ?? {}) as { asked_to?: string; text?: string; answer?: string | null; answered_by?: string | null };
+  const questionOf = (a: DraftActionRow): Schemas['ReviewQuestion'] | null => {
+    if (a.kind !== 'question') return null;
+    const v = (a.value ?? {}) as {
+      asked_to?: string;
+      text?: string;
+      answer?: string | null;
+      answered_by?: string | null;
+    };
     const to = person(v.asked_to ?? null);
     const stored = a.question_id ? ctx.asked?.(a.question_id) : null;
     if (stored) {
       return {
         id: a.question_id!,
-        status: stored.status === "answered" ? "answered" : stored.status === "withdrawn" ? "withdrawn" : "open",
-        text: v.text ?? "",
+        status:
+          stored.status === 'answered'
+            ? 'answered'
+            : stored.status === 'withdrawn'
+              ? 'withdrawn'
+              : 'open',
+        text: v.text ?? '',
         asked_to: to ? { id: to.id, name: to.name } : null,
-        answer: stored.answer ? { kind: "answer", body: stored.answer, answered_by: to ? { id: to.id, name: to.name } : null } : null,
+        answer: stored.answer
+          ? {
+              kind: 'answer',
+              body: stored.answer,
+              answered_by: to ? { id: to.id, name: to.name } : null,
+            }
+          : null,
       };
     }
     return {
       id: a.id,
-      status: v.answer ? "answered" : "open",
-      text: v.text ?? "",
+      status: v.answer ? 'answered' : 'open',
+      text: v.text ?? '',
       asked_to: to ? { id: to.id, name: to.name } : null,
-      answer: v.answer ? { kind: "text", body: v.answer, answered_by: to ? { id: to.id, name: to.name } : null } : null,
+      answer: v.answer
+        ? { kind: 'text', body: v.answer, answered_by: to ? { id: to.id, name: to.name } : null }
+        : null,
     };
   };
-  const tally: Schemas["ReviewTally"] = { need_you: 0, handled: 0, blocking_open: 0, to_confirm_open: 0, waiting_on: [], suggested: 0 };
-  const items: Schemas["ReviewItem"][] = keys.map((key) => {
+  const tally: Schemas['ReviewTally'] = {
+    need_you: 0,
+    handled: 0,
+    blocking_open: 0,
+    to_confirm_open: 0,
+    waiting_on: [],
+    suggested: 0,
+  };
+  const items: Schemas['ReviewItem'][] = keys.map((key) => {
     const mine = draft.actions.filter((a) => a.item_key === key);
     const theirs = reasons.filter((x) => x.item === key);
     const answered = (x: (typeof reasons)[number]) =>
-      mine.some((a) => a.state === "staged" && answersCode(a, x.code, x));
+      mine.some((a) => a.state === 'staged' && answersCode(a, x.code, x));
     const open = theirs.filter((x) => !answered(x));
-    const asked = mine.map(questionOf).filter((q): q is Schemas["ReviewQuestion"] => q?.status === "open");
+    const asked = mine
+      .map(questionOf)
+      .filter((q): q is Schemas['ReviewQuestion'] => q?.status === 'open');
     for (const q of asked) {
       if (!q.asked_to?.id) continue;
-      const row = waiting.get(q.asked_to.id) ?? { user_id: q.asked_to.id, name: q.asked_to.name, count: 0 };
+      const row = waiting.get(q.asked_to.id) ?? {
+        user_id: q.asked_to.id,
+        name: q.asked_to.name,
+        count: 0,
+      };
       row.count += 1;
       waiting.set(q.asked_to.id, row);
     }
-    const state = theirs.length === 0 ? "fine" : open.length === 0 ? "handled" : asked.length ? "waiting" : "needs_you";
-    tally.need_you += state === "needs_you" ? 1 : 0;
-    tally.handled += state === "handled" ? 1 : 0;
-    tally.blocking_open += open.filter((x) => x.severity === "blocking").length;
-    tally.to_confirm_open += open.filter((x) => x.severity === "confirm").length;
-    tally.suggested += mine.filter((a) => a.state === "suggested").length;
+    const state =
+      theirs.length === 0
+        ? 'fine'
+        : open.length === 0
+          ? 'handled'
+          : asked.length
+            ? 'waiting'
+            : 'needs_you';
+    tally.need_you += state === 'needs_you' ? 1 : 0;
+    tally.handled += state === 'handled' ? 1 : 0;
+    tally.blocking_open += open.filter((x) => x.severity === 'blocking').length;
+    tally.to_confirm_open += open.filter((x) => x.severity === 'confirm').length;
+    tally.suggested += mine.filter((a) => a.state === 'suggested').length;
     const item = inFile.get(key);
     return {
       key,
@@ -4963,7 +7503,7 @@ function reviewOut(ctx: RunsContext, r: RunOut, cp: CheckpointOut, draft: DraftR
     };
   });
   tally.waiting_on = [...waiting.values()];
-  const pending = cp.status === "pending";
+  const pending = cp.status === 'pending';
   const stages = pending && mayStage(ctx, r, cp, role);
   return {
     checkpoint_id: cp.id,
@@ -4974,15 +7514,18 @@ function reviewOut(ctx: RunsContext, r: RunOut, cp: CheckpointOut, draft: DraftR
     attempt: (cp.payload?.attempt as number | undefined) ?? null,
     revision: draft.revision,
     wait: waitOf(cp.payload),
-    file: check ? { name: "roadmap_items.yaml", seq: cp.segment_seq ?? 1 } : null,
+    file: check ? { name: 'roadmap_items.yaml', seq: cp.segment_seq ?? 1 } : null,
     file_problems: (check?.problems ?? []).filter((x) => !x.item),
     items,
     tally,
     note: draft.note,
     sent_review: pending ? null : (cp.review ?? null),
-    sent_review_yaml: !pending && cp.review && cp.review.kind !== "edits" ? renderReview(cp.review, cp.decided_at) : null,
+    sent_review_yaml:
+      !pending && cp.review && cp.review.kind !== 'edits'
+        ? renderReview(cp.review, cp.decided_at)
+        : null,
     can_read: true,
-    can_suggest: pending && atLeast(role, "commenter"),
+    can_suggest: pending && atLeast(role, 'commenter'),
     can_stage: stages,
     can_decide: stages,
     gate: gateNow(ctx, cp, draft.actions),
@@ -4993,39 +7536,85 @@ function reviewOut(ctx: RunsContext, r: RunOut, cp: CheckpointOut, draft: DraftR
 // --------------------------------------------------------------------------- review file (D4)
 
 type Review = Record<string, unknown> & { items: Record<string, unknown>[] };
-const REVIEW_KEYS = ["version", "checkpoint", "run", "segment", "attempt", "file", "items", "unchanged", "problems_open", "waived", "general_note"];
+const REVIEW_KEYS = [
+  'version',
+  'checkpoint',
+  'run',
+  'segment',
+  'attempt',
+  'file',
+  'items',
+  'unchanged',
+  'problems_open',
+  'waived',
+  'general_note',
+];
 // Written after the fixed keys when a review has them: D10's locked sections.
-const REVIEW_OPTIONAL_KEYS = ["locked_sections"];
-const RENAMED: Record<string, [string, string]> = { milestone_date: ["milestone", "date"], milestone_name: ["milestone", "name"] };
+const REVIEW_OPTIONAL_KEYS = ['locked_sections'];
+const RENAMED: Record<string, [string, string]> = {
+  milestone_date: ['milestone', 'date'],
+  milestone_name: ['milestone', 'name'],
+};
 
 /** As oracle.runs.review_file.build_review, for roadmap_items (other kinds: the note alone). */
-function buildReview(ctx: RunsContext, r: RunOut, cp: CheckpointOut, staged: DraftActionRow[], note: string | null): Review {
+function buildReview(
+  ctx: RunsContext,
+  r: RunOut,
+  cp: CheckpointOut,
+  staged: DraftActionRow[],
+  note: string | null,
+): Review {
   const seg = r.segments.find((s) => s.seq === cp.segment_seq);
-  const items = cp.kind === "roadmap_items" ? [...(ctx.db.artifacts[`${r.id}|${cp.segment_seq}|roadmap_items.yaml`] ?? "").matchAll(/^\s*- \{?id: ([\w-]+)/gm)].map((x) => x[1]) : [];
-  const reasons = cp.kind === "roadmap_items" ? (seg?.items_check?.reasons ?? []) : [];
+  const items =
+    cp.kind === 'roadmap_items'
+      ? [
+          ...(ctx.db.artifacts[`${r.id}|${cp.segment_seq}|roadmap_items.yaml`] ?? '').matchAll(
+            /^\s*- \{?id: ([\w-]+)/gm,
+          ),
+        ].map((x) => x[1])
+      : [];
+  const reasons = cp.kind === 'roadmap_items' ? (seg?.items_check?.reasons ?? []) : [];
   const entries: Record<string, unknown>[] = [];
   const waived: Record<string, unknown>[] = [];
-  if (cp.kind === "roadmap_items") {
-    const keys = [...new Set(staged.map((a) => a.item_key))].sort((x, y) => (items.indexOf(x) + 1 || 1e9) - (items.indexOf(y) + 1 || 1e9));
+  if (cp.kind === 'roadmap_items') {
+    const keys = [...new Set(staged.map((a) => a.item_key))].sort(
+      (x, y) => (items.indexOf(x) + 1 || 1e9) - (items.indexOf(y) + 1 || 1e9),
+    );
     for (const key of keys) {
       const mine = staged.filter((a) => a.item_key === key);
-      const edits = mine.filter((a) => a.kind === "edit");
+      const edits = mine.filter((a) => a.kind === 'edit');
       for (const a of mine) {
-        if (a.kind === "waive") {
-          const codes = a.answers?.length ? a.answers : reasons.filter((x) => x.item === key && !OWNER_WAIVES.includes(x.code)).map((x) => x.code);
-          for (const code of codes.length ? codes : [null]) waived.push({ id: key, code, reason: (a.value as { reason?: string } | null)?.reason ?? null });
+        if (a.kind === 'waive') {
+          const codes = a.answers?.length
+            ? a.answers
+            : reasons
+                .filter((x) => x.item === key && !OWNER_WAIVES.includes(x.code))
+                .map((x) => x.code);
+          for (const code of codes.length ? codes : [null])
+            waived.push({
+              id: key,
+              code,
+              reason: (a.value as { reason?: string } | null)?.reason ?? null,
+            });
           continue;
         }
-        if (a.kind === "edit" && a !== edits[0]) continue;
-        const group = a.kind === "edit" ? edits : [a];
-        const entry: Record<string, unknown> = { id: key, action: a.kind === "edit" ? "change" : a.kind };
-        if (a.kind === "edit") {
+        if (a.kind === 'edit' && a !== edits[0]) continue;
+        const group = a.kind === 'edit' ? edits : [a];
+        const entry: Record<string, unknown> = {
+          id: key,
+          action: a.kind === 'edit' ? 'change' : a.kind,
+        };
+        if (a.kind === 'edit') {
           const changes: Record<string, unknown> = {};
           for (const e of edits) {
-            const f = e.field ?? "";
-            if (f === "order") entry.reorder = true;
-            else if (f.startsWith("clear:")) changes[f.slice(6)] = null;
-            else if (RENAMED[f]) changes[RENAMED[f][0]] = { ...((changes[RENAMED[f][0]] as object | undefined) ?? {}), [RENAMED[f][1]]: e.value };
+            const f = e.field ?? '';
+            if (f === 'order') entry.reorder = true;
+            else if (f.startsWith('clear:')) changes[f.slice(6)] = null;
+            else if (RENAMED[f])
+              changes[RENAMED[f][0]] = {
+                ...((changes[RENAMED[f][0]] as object | undefined) ?? {}),
+                [RENAMED[f][1]]: e.value,
+              };
             else changes[f] = e.value;
           }
           if (Object.keys(changes).length) entry.changes = changes;
@@ -5033,14 +7622,16 @@ function buildReview(ctx: RunsContext, r: RunOut, cp: CheckpointOut, staged: Dra
         const answers = [...new Set(group.flatMap((g) => g.answers ?? []))];
         if (answers.length) entry.answers = answers;
         const notes = group.map((g) => g.note).filter(Boolean);
-        if (notes.length) entry.note = notes.join(" ");
+        if (notes.length) entry.note = notes.join(' ');
         entries.push(entry);
       }
     }
   }
-  const open = reasons.filter((x) => !staged.some((a) => a.item_key === x.item && answersCode(a, x.code, x)));
+  const open = reasons.filter(
+    (x) => !staged.some((a) => a.item_key === x.item && answersCode(a, x.code, x)),
+  );
   // qa-work-1: a feature set sends the rows a person changed (as the API's sent_review).
-  const scoped = cp.kind === "feature_set" ? scopeSendBack(ctx.db, r.id, staged) : null;
+  const scoped = cp.kind === 'feature_set' ? scopeSendBack(ctx.db, r.id, staged) : null;
   if (scoped) {
     entries.push(...scoped.entries);
     waived.push(...scoped.waived);
@@ -5053,10 +7644,12 @@ function buildReview(ctx: RunsContext, r: RunOut, cp: CheckpointOut, staged: Dra
     run: r.id,
     segment: seg?.name ?? null,
     attempt: (cp.payload?.attempt as number | undefined) ?? null,
-    file: cp.kind === "roadmap_items" ? "roadmap_items.yaml" : scoped ? "feature_set.yaml" : null,
+    file: cp.kind === 'roadmap_items' ? 'roadmap_items.yaml' : scoped ? 'feature_set.yaml' : null,
     items: entries,
     unchanged: items.filter((k) => !entered.has(k) && !open.some((x) => x.item === k)),
-    problems_open: open.filter((x) => x.severity === "blocking").map((x) => ({ id: x.item, code: x.code, text: x.text })),
+    problems_open: open
+      .filter((x) => x.severity === 'blocking')
+      .map((x) => ({ id: x.item, code: x.code, text: x.text })),
     waived,
     general_note: note,
   };
@@ -5067,16 +7660,29 @@ function buildReview(ctx: RunsContext, r: RunOut, cp: CheckpointOut, staged: Dra
  * review_file.document_review): one entry per open or staged feedback item, the version's
  * locked sections, the note as general_note.
  */
-function documentReview(ctx: RunsContext, r: RunOut, cp: CheckpointOut, reviewed: { document_id: string; version: number }, note: string | null): Review {
-  const mine = ctx.feedback.filter((f) => f.document_id === reviewed.document_id && f.raised_on_version <= reviewed.version);
-  const entry = (f: FeedbackRow) => ({ id: f.id, section: f.section_key ?? "general", action: "change", summary: f.summary });
+function documentReview(
+  ctx: RunsContext,
+  r: RunOut,
+  cp: CheckpointOut,
+  reviewed: { document_id: string; version: number },
+  note: string | null,
+): Review {
+  const mine = ctx.feedback.filter(
+    (f) => f.document_id === reviewed.document_id && f.raised_on_version <= reviewed.version,
+  );
+  const entry = (f: FeedbackRow) => ({
+    id: f.id,
+    section: f.section_key ?? 'general',
+    action: 'change',
+    summary: f.summary,
+  });
   const staged = mine.filter((f) => ctx.staged?.(f.id));
-  const kind = ctx.documents.find((d) => d.id === reviewed.document_id)?.kind ?? "prd";
+  const kind = ctx.documents.find((d) => d.id === reviewed.document_id)?.kind ?? 'prd';
   return {
     ...buildReview(ctx, r, cp, [], note),
     file: `${kind}.md`,
     items: [
-      ...mine.filter((f) => f.status === "open" && !ctx.staged?.(f.id)).map(entry),
+      ...mine.filter((f) => f.status === 'open' && !ctx.staged?.(f.id)).map(entry),
       ...staged.map((f) => ({ ...entry(f), accepted_text: ctx.stagedText?.(f.id) ?? null })),
     ],
     locked_sections: ctx.lockedSections?.(reviewed.document_id, reviewed.version) ?? [],
@@ -5084,38 +7690,56 @@ function documentReview(ctx: RunsContext, r: RunOut, cp: CheckpointOut, reviewed
 }
 
 function yamlScalar(v: unknown): string {
-  if (v === null || v === undefined) return "null";
-  if (typeof v === "string") return /^[\w][\w .,/-]*$/.test(v) && !/^(true|false|null|yes|no|on|off|[\d.+-]+)$/i.test(v) ? v : JSON.stringify(v);
+  if (v === null || v === undefined) return 'null';
+  if (typeof v === 'string')
+    return /^[\w][\w .,/-]*$/.test(v) && !/^(true|false|null|yes|no|on|off|[\d.+-]+)$/i.test(v)
+      ? v
+      : JSON.stringify(v);
   return String(v);
 }
 
 function yamlLines(v: unknown, indent: string): string[] {
   if (Array.isArray(v)) {
     return v.flatMap((x) => {
-      if (x && typeof x === "object") {
-        const [first, ...rest] = yamlLines(x, indent + "  ");
+      if (x && typeof x === 'object') {
+        const [first, ...rest] = yamlLines(x, indent + '  ');
         return [`${indent}- ${first.trimStart()}`, ...rest];
       }
       return [`${indent}- ${yamlScalar(x)}`];
     });
   }
   return Object.entries(v as Record<string, unknown>).flatMap(([k, x]) => {
-    if (Array.isArray(x)) return x.length ? [`${indent}${k}:`, ...yamlLines(x, indent)] : [`${indent}${k}: []`];
-    if (x && typeof x === "object") return Object.keys(x).length ? [`${indent}${k}:`, ...yamlLines(x, indent + "  ")] : [`${indent}${k}: {}`];
+    if (Array.isArray(x))
+      return x.length ? [`${indent}${k}:`, ...yamlLines(x, indent)] : [`${indent}${k}: []`];
+    if (x && typeof x === 'object')
+      return Object.keys(x).length
+        ? [`${indent}${k}:`, ...yamlLines(x, indent + '  ')]
+        : [`${indent}${k}: {}`];
     return [`${indent}${k}: ${yamlScalar(x)}`];
   });
 }
 
 /** As oracle.runs.review_file.render_yaml: the two header comments, then the fixed keys. */
-function renderReview(review: Record<string, unknown>, decidedAt: string | null | undefined): string {
-  const words: Record<string, string> = { roadmap_items: "Roadmap items" };
+function renderReview(
+  review: Record<string, unknown>,
+  decidedAt: string | null | undefined,
+): string {
+  const words: Record<string, string> = { roadmap_items: 'Roadmap items' };
   const kind = String(review.checkpoint);
   const what = (review.file as string | null) ?? `the ${review.segment ?? kind} output`;
-  const attempt = review.attempt ? `, attempt ${review.attempt}` : "";
-  const on = decidedAt ? ` on ${companyDayIso(decidedAt)}` : "";
-  const label = words[kind] ?? kind.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
-  const ordered = Object.fromEntries([...REVIEW_KEYS.map((k) => [k, review[k] ?? null]), ...REVIEW_OPTIONAL_KEYS.filter((k) => k in review).map((k) => [k, review[k]])]);
-  return [`# Review of ${what}${attempt}, at the ${label} checkpoint.`, `# Sent back by an approver${on}. Apply each entry; answer each in resolutions.`, ...yamlLines(ordered, ""), ""].join("\n");
+  const attempt = review.attempt ? `, attempt ${review.attempt}` : '';
+  const on = decidedAt ? ` on ${companyDayIso(decidedAt)}` : '';
+  const label = words[kind] ?? kind.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
+  const ordered = Object.fromEntries([
+    ...REVIEW_KEYS.map((k) => [k, review[k] ?? null]),
+    ...REVIEW_OPTIONAL_KEYS.filter((k) => k in review).map((k) => [k, review[k]]),
+  ]);
+  return [
+    `# Review of ${what}${attempt}, at the ${label} checkpoint.`,
+    `# Sent back by an approver${on}. Apply each entry; answer each in resolutions.`,
+    ...yamlLines(ordered, ''),
+    '',
+  ].join('\n');
 }
 
 // ---------------------------------------------------------------- D9 Inbox checkpoint counts
@@ -5124,49 +7748,82 @@ const SEVERITY = { blocking: 0, confirm: 1 } as const;
 
 /** As oracle.runs.actions._determined: a fix that only stages, needs no text and one click undoes. */
 function determined(kind: string, field: string | null | undefined, value: unknown): boolean {
-  if (kind === "accept") return true;
-  if (kind !== "edit") return false;
+  if (kind === 'accept') return true;
+  if (kind !== 'edit') return false;
   const v = value as Record<string, unknown> | null;
-  if (field === "horizon") return ["now", "next", "later"].includes(value as string);
-  if (field === "milestone_date") return value == null;
-  if (field === "depends_on") return !!v && Object.keys(v).join() === "remove" && Array.isArray(v.remove) && v.remove.length > 0;
-  if (field === "order") return value == null || (!!v && Object.keys(v).join() === "after" && typeof v.after === "string" && !!v.after);
+  if (field === 'horizon') return ['now', 'next', 'later'].includes(value as string);
+  if (field === 'milestone_date') return value == null;
+  if (field === 'depends_on')
+    return (
+      !!v && Object.keys(v).join() === 'remove' && Array.isArray(v.remove) && v.remove.length > 0
+    );
+  if (field === 'order')
+    return (
+      value == null ||
+      (!!v && Object.keys(v).join() === 'after' && typeof v.after === 'string' && !!v.after)
+    );
   return false;
 }
 
 /** As oracle.runs.actions.inbox_summary: the review's tally and up to three items still needing me, blocking first. */
-function inboxSummary(ctx: RunsContext, r: RunOut, cp: CheckpointOut): Schemas["InboxSummary"] | null {
-  if (cp.kind !== "roadmap_items" && cp.kind !== "baseline_confirm") return null;
+function inboxSummary(
+  ctx: RunsContext,
+  r: RunOut,
+  cp: CheckpointOut,
+): Schemas['InboxSummary'] | null {
+  if (cp.kind !== 'roadmap_items' && cp.kind !== 'baseline_confirm') return null;
   const role = ctx.member?.role ?? ctx.userRole ?? null;
   const draft = ctx.db.drafts?.[cp.id] ?? { revision: 0, note: null, actions: [], log: [] };
   const review = reviewOut(ctx, r, cp, draft, role);
-  if (cp.kind === "baseline_confirm") {
+  if (cp.kind === 'baseline_confirm') {
     // B2: Confirm the baseline's counts, read from the run's rows.
     const t = ctx.baselineReview?.(r.id, draft.actions).summary;
     if (!t) return null;
-    const none = { waiting_on: 0, children: [], more: 0, title: null, source: null, sections: null };
-    return { ...t, ...none, wait: review.wait, console_held: cp.console?.needs === "confirm" && t.blocking > 0 };
+    const none = {
+      waiting_on: 0,
+      children: [],
+      more: 0,
+      title: null,
+      source: null,
+      sections: null,
+    };
+    return {
+      ...t,
+      ...none,
+      wait: review.wait,
+      console_held: cp.console?.needs === 'confirm' && t.blocking > 0,
+    };
   }
-  const answers = (a: Schemas["ReviewAction"], x: ItemReason) =>
-    a.state === "staged" && answersCode(a, x.code, x);
-  const first = (xs: ItemReason[]) => [...xs].sort((a, b) => SEVERITY[a.severity] - SEVERITY[b.severity])[0];
-  const rows: { order: [number, number]; child: Schemas["InboxChild"] }[] = [];
+  const answers = (a: Schemas['ReviewAction'], x: ItemReason) =>
+    a.state === 'staged' && answersCode(a, x.code, x);
+  const first = (xs: ItemReason[]) =>
+    [...xs].sort((a, b) => SEVERITY[a.severity] - SEVERITY[b.severity])[0];
+  const rows: { order: [number, number]; child: Schemas['InboxChild'] }[] = [];
   for (const it of review.items) {
     const reasons = it.reasons ?? [];
     const acts = it.actions ?? [];
     // An item fixed earlier (handled) never takes a slot.
-    if (!reasons.length || it.state !== "needs_you") continue;
+    if (!reasons.length || it.state !== 'needs_you') continue;
     const shown = first(reasons.filter((x) => !acts.some((a) => answers(a, x))));
-    const fix = (shown.fixes ?? []).find((f) => f.action.item === it.key && determined(f.action.kind, f.action.field, f.action.value)) ?? null;
+    const fix =
+      (shown.fixes ?? []).find(
+        (f) =>
+          f.action.item === it.key && determined(f.action.kind, f.action.field, f.action.value),
+      ) ?? null;
     rows.push({
       order: [SEVERITY[shown.severity], it.position ?? 1e6],
       child: {
         item: it.key,
         title: it.title ?? null,
-        reason: { code: shown.code, severity: shown.severity, label: shown.label, text: shown.text },
+        reason: {
+          code: shown.code,
+          severity: shown.severity,
+          label: shown.label,
+          text: shown.text,
+        },
         fix,
         staged: null,
-        suggested: acts.find((a) => a.state === "suggested" && a.kind !== "question") ?? null,
+        suggested: acts.find((a) => a.state === 'suggested' && a.kind !== 'question') ?? null,
       },
     });
   }
@@ -5179,14 +7836,14 @@ function inboxSummary(ctx: RunsContext, r: RunOut, cp: CheckpointOut): Schemas["
     blocking: t.blocking_open ?? 0,
     to_confirm: t.to_confirm_open ?? 0,
     handled: t.handled ?? 0,
-    waiting_on: review.items.filter((i) => i.state === "waiting").length,
+    waiting_on: review.items.filter((i) => i.state === 'waiting').length,
     wait: review.wait,
     children: shown.map((x) => x.child),
     more: (t.need_you ?? 0) - shown.length,
     title: doc?.title ?? null,
     source: r.source ? { title: r.source.title, version: r.source.version } : null,
     sections: null,
-    console_held: cp.console?.needs === "confirm" && (t.blocking_open ?? 0) > 0,
+    console_held: cp.console?.needs === 'confirm' && (t.blocking_open ?? 0) > 0,
   };
 }
 
@@ -5199,25 +7856,44 @@ function inboxSummary(ctx: RunsContext, r: RunOut, cp: CheckpointOut): Schemas["
  */
 export function startDraftItemsRun(
   db: RunsDb,
-  args: { uuid: () => string; now: string; createdBy: string; source: VersionSource; depth?: "quick" | "standard" | "deep" },
+  args: {
+    uuid: () => string;
+    now: string;
+    createdBy: string;
+    source: VersionSource;
+    depth?: 'quick' | 'standard' | 'deep';
+  },
 ): RunOut {
   const flow = flowOf(DRAFT_ITEMS_FLOW);
-  const knobs = resolveKnobs(DRAFT_ITEMS_FLOW, { depth: args.depth ?? "standard", checkpoints: { roadmap_items: false } }) as RunOut["knobs"];
+  const knobs = resolveKnobs(DRAFT_ITEMS_FLOW, {
+    depth: args.depth ?? 'standard',
+    checkpoints: { roadmap_items: false },
+  }) as RunOut['knobs'];
   const segments = segmentsFor(DRAFT_ITEMS_FLOW, knobs, args.uuid);
   for (const s of segments) s.estimate_usd = segEstimate(s.roles, knobs.depth);
   const [items] = segments;
   Object.assign(items, {
-    status: "running",
+    status: 'running',
     started_at: args.now,
     workflow_id: `mock-wf-${args.uuid().slice(0, 8)}`,
-    attempts: [{ attempt: 1, workflow_id: "mock-wf-draft-items", submitted_at: args.now, cost_usd: null, note: null, note_by: null, state: "running" }],
+    attempts: [
+      {
+        attempt: 1,
+        workflow_id: 'mock-wf-draft-items',
+        submitted_at: args.now,
+        cost_usd: null,
+        note: null,
+        note_by: null,
+        state: 'running',
+      },
+    ],
   });
   const estimate = round2(segments.reduce((sum, s) => sum + (s.estimate_usd ?? 0), 0));
   const run: RunOut = {
     id: args.uuid(),
     flow: DRAFT_ITEMS_FLOW,
     flow_title: flow.title,
-    status: "running",
+    status: 'running',
     document_id: null,
     document_slug: null,
     document_kind: null,
@@ -5246,7 +7922,7 @@ export function startDraftItemsRun(
     approved_at: null,
     needs_approval: false,
     overrun_ceiling_usd: round2(estimate * FACTOR),
-    runtime: "fake",
+    runtime: 'fake',
     notes: FLOW_CATALOG.runtime_notes,
     note_refs: [],
     segments,
@@ -5260,163 +7936,266 @@ export function startDraftItemsRun(
 }
 
 /** E1: the agents finish a draft's items run (90% of its estimate); its checkpoint is recorded skipped. */
-export function finishDraftItemsRun(db: RunsDb, runId: string | null, args: { uuid: () => string; now: string }) {
+export function finishDraftItemsRun(
+  db: RunsDb,
+  runId: string | null,
+  args: { uuid: () => string; now: string },
+) {
   const run = db.runs.find((r) => r.id === runId);
-  if (!run || run.status !== "running") return;
+  if (!run || run.status !== 'running') return;
   const [s] = run.segments;
   const a = s.attempts[s.attempts.length - 1];
-  if (a) Object.assign(a, { cost_usd: round2((s.estimate_usd ?? 0) * 0.9), state: "succeeded" });
-  Object.assign(s, { status: "succeeded", cost_usd: round2((s.estimate_usd ?? 0) * 0.9), artifacts: ["roadmap_items.yaml"], finished_at: args.now });
-  run.checkpoints.push({
-    id: args.uuid(), run_id: run.id, kind: "roadmap_items", status: "skipped", approver_role: "approver",
-    segment_seq: s.seq, decided_by: null, decided_at: args.now, note: "No checkpoint: draft items are reviewed on the Roadmap tab", payload: {},
-    created_at: args.now, can_decide: false, lead_stop: false, cannot_approve: null, approve_label: "Approve", needs_agents: [],
+  if (a) Object.assign(a, { cost_usd: round2((s.estimate_usd ?? 0) * 0.9), state: 'succeeded' });
+  Object.assign(s, {
+    status: 'succeeded',
+    cost_usd: round2((s.estimate_usd ?? 0) * 0.9),
+    artifacts: ['roadmap_items.yaml'],
+    finished_at: args.now,
   });
-  Object.assign(run, { status: "succeeded", finished_at: args.now });
+  run.checkpoints.push({
+    id: args.uuid(),
+    run_id: run.id,
+    kind: 'roadmap_items',
+    status: 'skipped',
+    approver_role: 'approver',
+    segment_seq: s.seq,
+    decided_by: null,
+    decided_at: args.now,
+    note: 'No checkpoint: draft items are reviewed on the Roadmap tab',
+    payload: {},
+    created_at: args.now,
+    can_decide: false,
+    lead_stop: false,
+    cannot_approve: null,
+    approve_label: 'Approve',
+    needs_agents: [],
+  });
+  Object.assign(run, { status: 'succeeded', finished_at: args.now });
   refresh(run);
 }
 
 // --------------------------------------------------------------------------- C7 scope review
 
 /** The runs the "scope-review" scenario seeds (C7): attempt 1, attempt 2, and a held console approval. */
-export const SCOPE_REVIEW_RUN = "7a11c0de-0000-4000-8000-0000000000f6";
-export const SCOPE_ATTEMPT2_RUN = "7a11c0de-0000-4000-8000-0000000000f7";
-export const SCOPE_CONSOLE_RUN = "7a11c0de-0000-4000-8000-0000000000f8";
+export const SCOPE_REVIEW_RUN = '7a11c0de-0000-4000-8000-0000000000f6';
+export const SCOPE_ATTEMPT2_RUN = '7a11c0de-0000-4000-8000-0000000000f7';
+export const SCOPE_CONSOLE_RUN = '7a11c0de-0000-4000-8000-0000000000f8';
 
-type SpecFeature = FeatureSetSpec["features"][number];
+type SpecFeature = FeatureSetSpec['features'][number];
 const req = (key: string, text: string, acceptance: string[]) => ({ key, text, acceptance });
 const SAVED: SpecFeature = {
-  key: "bulk-import",
-  title: "Bulk import",
-  summary: "Returning buyers pick an imported row at checkout",
-  goals: [{ key: "g.paid-conversion", contribution: 3 }],
-  depends_on: ["address-lookup"],
+  key: 'bulk-import',
+  title: 'Bulk import',
+  summary: 'Returning buyers pick an imported row at checkout',
+  goals: [{ key: 'g.paid-conversion', contribution: 3 }],
+  depends_on: ['address-lookup'],
   confidence: 0.8,
   requirements: [
-    req("bulk-import-pick", "The buyer picks one of up to five imported rows", ["Five addresses at most", "The last used one is preselected"]),
-    req("bulk-import-save", "A new address can be saved while paying", ["Saving is opt-in"]),
-    req("bulk-import-remove", "The buyer removes an imported row from their account", ["Removed addresses are gone at the next checkout"]),
+    req('bulk-import-pick', 'The buyer picks one of up to five imported rows', [
+      'Five addresses at most',
+      'The last used one is preselected',
+    ]),
+    req('bulk-import-save', 'A new address can be saved while paying', ['Saving is opt-in']),
+    req('bulk-import-remove', 'The buyer removes an imported row from their account', [
+      'Removed addresses are gone at the next checkout',
+    ]),
   ],
 };
 const LOOKUP: SpecFeature = {
-  key: "address-lookup",
-  title: "Address lookup",
-  summary: "The buyer finds their address from a postcode",
-  goals: [{ key: "g.activation", contribution: 2 }],
+  key: 'address-lookup',
+  title: 'Address lookup',
+  summary: 'The buyer finds their address from a postcode',
+  goals: [{ key: 'g.activation', contribution: 2 }],
   depends_on: [],
   confidence: 0.75,
   requirements: [
-    req("address-lookup-postcode", "A postcode lists the matching addresses", ["Results show within a second"]),
-    req("address-lookup-manual", "The buyer can type the address by hand", ["Manual entry is one tap away"]),
+    req('address-lookup-postcode', 'A postcode lists the matching addresses', [
+      'Results show within a second',
+    ]),
+    req('address-lookup-manual', 'The buyer can type the address by hand', [
+      'Manual entry is one tap away',
+    ]),
   ],
 };
 const BULK: SpecFeature = {
-  key: "bulk-edit",
-  title: "Bulk edit",
-  summary: "Business buyers update many imported rows at once",
-  goals: [{ key: "g.paid-conversion", contribution: 1 }],
-  depends_on: ["bulk-import", "address-book-export"],
+  key: 'bulk-edit',
+  title: 'Bulk edit',
+  summary: 'Business buyers update many imported rows at once',
+  goals: [{ key: 'g.paid-conversion', contribution: 1 }],
+  depends_on: ['bulk-import', 'address-book-export'],
   confidence: 0.7,
   requirements: [
-    req("bulk-edit-import", "A buyer uploads a file of address changes", ["Up to 200 rows"]),
-    req("bulk-edit-review", "The buyer reviews each change before it is saved", ["Rejected rows are listed"]),
+    req('bulk-edit-import', 'A buyer uploads a file of address changes', ['Up to 200 rows']),
+    req('bulk-edit-review', 'The buyer reviews each change before it is saved', [
+      'Rejected rows are listed',
+    ]),
   ],
 };
 const LABELS: SpecFeature = {
-  key: "address-labels",
-  title: "Address labels",
-  summary: "Buyers name imported rows (Home, Work)",
+  key: 'address-labels',
+  title: 'Address labels',
+  summary: 'Buyers name imported rows (Home, Work)',
   goals: [],
-  depends_on: ["bulk-import"],
+  depends_on: ['bulk-import'],
   confidence: 0.65,
   requirements: [
-    req("address-labels-name", "An imported row takes a short label", ["Labels are 20 characters at most"]),
-    req("address-labels-show", "Labels show first in the address picker", ["Unlabelled addresses show the street"]),
+    req('address-labels-name', 'An imported row takes a short label', [
+      'Labels are 20 characters at most',
+    ]),
+    req('address-labels-show', 'Labels show first in the address picker', [
+      'Unlabelled addresses show the street',
+    ]),
   ],
 };
 const PICK: SpecFeature = {
-  key: "pick-address",
-  title: "Pick address in one step",
-  summary: "Address and delivery choice on one screen",
-  goals: [{ key: "g.activation", contribution: 2 }],
-  depends_on: ["bulk-import"],
+  key: 'pick-address',
+  title: 'Pick address in one step',
+  summary: 'Address and delivery choice on one screen',
+  goals: [{ key: 'g.activation', contribution: 2 }],
+  depends_on: ['bulk-import'],
   confidence: 0.35,
   requirements: [
-    req("pick-address-one-screen", "Address and delivery option are chosen on one screen", ["No extra page load"]),
-    req("pick-address-summary", "The chosen address shows in the order summary", ["It can be changed from the summary"]),
+    req('pick-address-one-screen', 'Address and delivery option are chosen on one screen', [
+      'No extra page load',
+    ]),
+    req('pick-address-summary', 'The chosen address shows in the order summary', [
+      'It can be changed from the summary',
+    ]),
   ],
 };
 const EDIT: SpecFeature = {
-  key: "address-edit",
-  title: "Edit an imported row",
-  summary: "Buyers correct an imported row without retyping it",
-  goals: [{ key: "g.early-churn", contribution: 1 }],
-  depends_on: ["bulk-import"],
+  key: 'address-edit',
+  title: 'Edit an imported row',
+  summary: 'Buyers correct an imported row without retyping it',
+  goals: [{ key: 'g.early-churn', contribution: 1 }],
+  depends_on: ['bulk-import'],
   confidence: 0.7,
-  requirements: [req("address-edit-inline", "An imported row is edited in place at checkout and ships in stage 2 of rollout (proposed in stage 3, awaiting the founder, stage 3 Q8.)", ["Changes apply to this order"])],
-};
-const NOTES: SpecFeature = {
-  key: "delivery-notes",
-  title: "Delivery notes",
-  summary: "Buyers leave a note for the courier on an imported row",
-  goals: [{ key: "g.early-churn", contribution: 1 }],
-  depends_on: ["bulk-import"],
-  confidence: 0.7,
-  requirements: [req("delivery-notes-text", "An imported row keeps a note for the courier", ["Notes are 140 characters at most"])],
-};
-/** The goals the baseline links the rows left out to (walk-eng-check 5). */
-const SCOPE_BASELINE_GOALS: Record<string, string[]> = { "address-book-export": ["g.activation"], "address-sharing": ["g.paid-conversion"] };
-/** Evidence by its source's name (walk-eng-check 6). */
-const SCOPE_EVIDENCE: Record<string, { id: string; title: string; url: string | null }[]> = {
-  "bulk-import": [
-    { id: "58a87cc0-0000-4000-8000-0000000000e1", title: "Checkout interviews, September", url: "https://example.com/research/checkout-interviews" },
-    { id: "58a87cc0-0000-4000-8000-0000000000e2", title: "Support tickets: retyped addresses", url: null },
+  requirements: [
+    req(
+      'address-edit-inline',
+      'An imported row is edited in place at checkout and ships in stage 2 of rollout (proposed in stage 3, awaiting the founder, stage 3 Q8.)',
+      ['Changes apply to this order'],
+    ),
   ],
 };
-const EXPORT_OUT = { key: "address-book-export", reason: "not_now" };
-const SHARING_OUT = { key: "address-sharing", reason: "out_of_scope" };
+const NOTES: SpecFeature = {
+  key: 'delivery-notes',
+  title: 'Delivery notes',
+  summary: 'Buyers leave a note for the courier on an imported row',
+  goals: [{ key: 'g.early-churn', contribution: 1 }],
+  depends_on: ['bulk-import'],
+  confidence: 0.7,
+  requirements: [
+    req('delivery-notes-text', 'An imported row keeps a note for the courier', [
+      'Notes are 140 characters at most',
+    ]),
+  ],
+};
+/** The goals the baseline links the rows left out to (walk-eng-check 5). */
+const SCOPE_BASELINE_GOALS: Record<string, string[]> = {
+  'address-book-export': ['g.activation'],
+  'address-sharing': ['g.paid-conversion'],
+};
+/** Evidence by its source's name (walk-eng-check 6). */
+const SCOPE_EVIDENCE: Record<string, { id: string; title: string; url: string | null }[]> = {
+  'bulk-import': [
+    {
+      id: '58a87cc0-0000-4000-8000-0000000000e1',
+      title: 'Checkout interviews, September',
+      url: 'https://example.com/research/checkout-interviews',
+    },
+    {
+      id: '58a87cc0-0000-4000-8000-0000000000e2',
+      title: 'Support tickets: retyped addresses',
+      url: null,
+    },
+  ],
+};
+const EXPORT_OUT = { key: 'address-book-export', reason: 'not_now' };
+const SHARING_OUT = { key: 'address-sharing', reason: 'out_of_scope' };
 
 /** Attempt 1: three rows need a person (a blocking dependency, no goal, low confidence). */
-const SCOPE_REVIEW_SET: FeatureSetSpec = { features: [SAVED, LOOKUP, BULK, LABELS, PICK, EDIT], excluded: [EXPORT_OUT, SHARING_OUT] };
+const SCOPE_REVIEW_SET: FeatureSetSpec = {
+  features: [SAVED, LOOKUP, BULK, LABELS, PICK, EDIT],
+  excluded: [EXPORT_OUT, SHARING_OUT],
+};
 /** Attempt 2 after a send-back: Bulk edit is back in, Delivery notes is new, a requirement of Bulk import went. */
 const SCOPE_ATTEMPT2_SET: FeatureSetSpec = {
   features: [
     { ...SAVED, requirements: SAVED.requirements.slice(0, 2) },
     LOOKUP,
-    { ...BULK, depends_on: ["bulk-import"] },
-    { ...LABELS, goals: [{ key: "g.early-churn", contribution: 1 }] },
+    { ...BULK, depends_on: ['bulk-import'] },
+    { ...LABELS, goals: [{ key: 'g.early-churn', contribution: 1 }] },
     { ...PICK, confidence: 0.7 },
     NOTES,
   ],
   excluded: [EXPORT_OUT],
 };
 /** The held console approval: one blocking row (Bulk edit depends on the export left out). */
-const SCOPE_CONSOLE_SET: FeatureSetSpec = { features: [SAVED, LOOKUP, BULK], excluded: [EXPORT_OUT] };
+const SCOPE_CONSOLE_SET: FeatureSetSpec = {
+  features: [SAVED, LOOKUP, BULK],
+  excluded: [EXPORT_OUT],
+};
 
-function seedScopeRun(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, slug: string, created_at: string, spec: FeatureSetSpec, attempt: number, flags: Record<string, string[]> = {}): { run: RunOut; scope: StoredScope; cp: CheckpointOut } {
+function seedScopeRun(
+  db: RunsDb,
+  ctx: Omit<RunsContext, 'db'>,
+  id: string,
+  slug: string,
+  created_at: string,
+  spec: FeatureSetSpec,
+  attempt: number,
+  flags: Record<string, string[]> = {},
+): { run: RunOut; scope: StoredScope; cp: CheckpointOut } {
   const { from, now } = seedClock();
-  const own: RunsDb = { runs: [], artifacts: db.artifacts, scopes: (db.scopes ??= {}), drafts: (db.drafts ??= {}) };
+  const own: RunsDb = {
+    runs: [],
+    artifacts: db.artifacts,
+    scopes: (db.scopes ??= {}),
+    drafts: (db.drafts ??= {}),
+  };
   const full = { ...ctx, db: own, now };
-  const r = seedRun(ctx, own, "baseline_to_prd", slug, {}, created_at);
+  const r = seedRun(ctx, own, 'baseline_to_prd', slug, {}, created_at);
   r.id = id;
   for (const c of r.checkpoints) c.run_id = id;
   from(r.created_at);
   launch(full, r);
   tick(full);
   const [baseline, featureSet] = r.segments;
-  Object.assign(r.checkpoints[0], { status: "approved", decided_by: ctx.userId, decided_at: now() });
+  Object.assign(r.checkpoints[0], {
+    status: 'approved',
+    decided_by: ctx.userId,
+    decided_at: now(),
+  });
   next(full, r, baseline);
   tick(full);
   if (attempt > 1) {
     const first = featureSet.attempts[featureSet.attempts.length - 1];
-    featureSet.attempts.push({ ...first, attempt, note: "Bring bulk edit back without the export; drop removing addresses for now" });
-    featureSet.previous_attempt = { attempt: attempt - 1, artifacts: ["design.md", "feature_set.yaml"] };
+    featureSet.attempts.push({
+      ...first,
+      attempt,
+      note: 'Bring bulk edit back without the export; drop removing addresses for now',
+    });
+    featureSet.previous_attempt = {
+      attempt: attempt - 1,
+      artifacts: ['design.md', 'feature_set.yaml'],
+    };
   }
-  featureSet.artifacts = ["design.md", "feature_set.yaml"];
-  db.artifacts[`${r.id}|${featureSet.seq}|feature_set.yaml`] = featureSetYaml(spec, r.document_slug, featureSet.name, attempt);
+  featureSet.artifacts = ['design.md', 'feature_set.yaml'];
+  db.artifacts[`${r.id}|${featureSet.seq}|feature_set.yaml`] = featureSetYaml(
+    spec,
+    r.document_slug,
+    featureSet.name,
+    attempt,
+  );
   db.artifacts[`${r.id}|${featureSet.seq}|design.md`] = SAVED_ADDRESSES_DESIGN;
   if (attempt > 1) {
-    db.artifacts[`${r.id}|${featureSet.seq}|feature_set.yaml|${attempt - 1}`] = featureSetYaml(SCOPE_REVIEW_SET, r.document_slug, featureSet.name, attempt - 1);
+    db.artifacts[`${r.id}|${featureSet.seq}|feature_set.yaml|${attempt - 1}`] = featureSetYaml(
+      SCOPE_REVIEW_SET,
+      r.document_slug,
+      featureSet.name,
+      attempt - 1,
+    );
     db.artifacts[`${r.id}|${featureSet.seq}|design.md|${attempt - 1}`] = SAVED_ADDRESSES_DESIGN;
   }
   own.scopes![r.id] = [];
@@ -5429,17 +8208,21 @@ function seedScopeRun(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, slug
     const s = spec.features.find((x) => x.key === f.key);
     if (s) f.text = s.summary;
     // A row the set leaves out reads as a name ("Address book export"), as the agents titled it.
-    if (f.title === f.key) f.title = f.key.charAt(0).toUpperCase() + f.key.slice(1).replace(/-/g, " ");
+    if (f.title === f.key)
+      f.title = f.key.charAt(0).toUpperCase() + f.key.slice(1).replace(/-/g, ' ');
     f.flags = [...(flags[f.key] ?? [])];
     // walk-eng-check 5, 6: a row left out keeps the goal it serves in the baseline; evidence by its source's name.
     const served = SCOPE_BASELINE_GOALS[f.key];
-    f.baseline_goals = served && !f.goals.length ? served.map((key) => ({ key, goal_id: goals.get(key) ?? null, contribution: null })) : [];
+    f.baseline_goals =
+      served && !f.goals.length
+        ? served.map((key) => ({ key, goal_id: goals.get(key) ?? null, contribution: null }))
+        : [];
     const ev = SCOPE_EVIDENCE[f.key];
     f.evidence = ev ?? [];
     f.evidence_ids = (ev ?? []).map((e) => e.id);
   }
   prepareScope(scope);
-  const cp = r.checkpoints.find((c) => c.kind === "feature_set")!;
+  const cp = r.checkpoints.find((c) => c.kind === 'feature_set')!;
   if (attempt > 1) cp.payload = { ...cp.payload, attempt };
   recheckScope(own, scope);
   refresh(r);
@@ -5455,18 +8238,37 @@ function seedScopeRun(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, slug
  * blocking row is open, so the approval is held). With `kept`, that row is also new and a likely
  * duplicate, both kept by one call staged before each reason had its own.
  */
-export function seedScopeReviewRuns(db: RunsDb, ctx: Omit<RunsContext, "db">, kept = false, manyQuestions = false, otherPrd = false) {
+export function seedScopeReviewRuns(
+  db: RunsDb,
+  ctx: Omit<RunsContext, 'db'>,
+  kept = false,
+  manyQuestions = false,
+  otherPrd = false,
+) {
   // Pick address in one step is new as well as low in confidence: one feature, two calls.
-  const first = seedScopeRun(db, ctx, SCOPE_REVIEW_RUN, "bulk-import", "2026-10-17T09:00:00Z", SCOPE_REVIEW_SET, 1, { "pick-address": ["new_feature"] });
+  const first = seedScopeRun(
+    db,
+    ctx,
+    SCOPE_REVIEW_RUN,
+    'bulk-import',
+    '2026-10-17T09:00:00Z',
+    SCOPE_REVIEW_SET,
+    1,
+    { 'pick-address': ['new_feature'] },
+  );
   if (otherPrd) {
     // The owner, Nov 4: Address lookup needs Address verification, the Trust PRD's feature on the company roadmap.
-    first.scope.elsewhere = { "address-verification": { title: "Address verification", prd: "Trust PRD" } };
-    first.scope.features.find((f) => f.key === "address-lookup")!.depends_on = ["address-verification"];
+    first.scope.elsewhere = {
+      'address-verification': { title: 'Address verification', prd: 'Trust PRD' },
+    };
+    first.scope.features.find((f) => f.key === 'address-lookup')!.depends_on = [
+      'address-verification',
+    ];
     recheckScope(db, first.scope);
   }
   // AQ1: the analyst's and architect's questions at this stop; the hard case asks eleven.
   (db.agent_questions ??= {})[first.cp.id] = seedAgentQuestions(manyQuestions);
-  const commenter = (ctx.members ?? []).find((x) => x.email === "commenter@example.com");
+  const commenter = (ctx.members ?? []).find((x) => x.email === 'commenter@example.com');
   if (commenter) {
     db.drafts![first.cp.id] = {
       revision: 1,
@@ -5474,36 +8276,61 @@ export function seedScopeReviewRuns(db: RunsDb, ctx: Omit<RunsContext, "db">, ke
       actions: [
         {
           id: ctx.uuid(),
-          item_key: "address-edit",
-          kind: "edit",
-          field: "decision",
-          value: { decision: "exclude", reason: "not_now" },
+          item_key: 'address-edit',
+          kind: 'edit',
+          field: 'decision',
+          value: { decision: 'exclude', reason: 'not_now' },
           answers: [],
           note: null,
-          state: "suggested",
+          state: 'suggested',
           created_by: commenter.id,
           updated_by: commenter.id,
-          updated_at: "2026-10-17T09:30:00Z",
+          updated_at: '2026-10-17T09:30:00Z',
         },
       ],
       log: [{ revision: 1, by: displayName(commenter.email) }],
     };
   }
-  const second = seedScopeRun(db, ctx, SCOPE_ATTEMPT2_RUN, "bulk-import-next", "2026-10-17T08:00:00Z", SCOPE_ATTEMPT2_SET, 2);
-  second.scope.previous = { "bulk-import": "include", "address-lookup": "include", "bulk-edit": "exclude", "address-labels": "include", "pick-address": "include", "address-book-export": "exclude", "address-sharing": "exclude" };
+  const second = seedScopeRun(
+    db,
+    ctx,
+    SCOPE_ATTEMPT2_RUN,
+    'bulk-import-next',
+    '2026-10-17T08:00:00Z',
+    SCOPE_ATTEMPT2_SET,
+    2,
+  );
+  second.scope.previous = {
+    'bulk-import': 'include',
+    'address-lookup': 'include',
+    'bulk-edit': 'exclude',
+    'address-labels': 'include',
+    'pick-address': 'include',
+    'address-book-export': 'exclude',
+    'address-sharing': 'exclude',
+  };
   second.scope.previous_requirements = {
-    "bulk-import": ["bulk-import-pick", "bulk-import-save", "bulk-import-remove"],
-    "address-lookup": ["address-lookup-postcode", "address-lookup-manual"],
-    "bulk-edit": ["bulk-edit-import", "bulk-edit-review"],
-    "address-labels": ["address-labels-name", "address-labels-show"],
-    "pick-address": ["pick-address-one-screen", "pick-address-summary"],
-    "address-book-export": [],
-    "address-sharing": [],
+    'bulk-import': ['bulk-import-pick', 'bulk-import-save', 'bulk-import-remove'],
+    'address-lookup': ['address-lookup-postcode', 'address-lookup-manual'],
+    'bulk-edit': ['bulk-edit-import', 'bulk-edit-review'],
+    'address-labels': ['address-labels-name', 'address-labels-show'],
+    'pick-address': ['pick-address-one-screen', 'pick-address-summary'],
+    'address-book-export': [],
+    'address-sharing': [],
   };
   // kept: Bulk edit is new and a likely duplicate as well as blocked, both kept with one call
   // staged before each reason had its own (field-less, answering both), as an older draft holds it.
-  const held = seedScopeRun(db, ctx, SCOPE_CONSOLE_RUN, "address-book", "2026-10-17T07:00:00Z", SCOPE_CONSOLE_SET, 1, kept ? { "bulk-edit": ["new_feature", "duplicate_of_existing"] } : {});
-  const approver = (ctx.members ?? []).find((x) => x.email === "approver@example.com");
+  const held = seedScopeRun(
+    db,
+    ctx,
+    SCOPE_CONSOLE_RUN,
+    'address-book',
+    '2026-10-17T07:00:00Z',
+    SCOPE_CONSOLE_SET,
+    1,
+    kept ? { 'bulk-edit': ['new_feature', 'duplicate_of_existing'] } : {},
+  );
+  const approver = (ctx.members ?? []).find((x) => x.email === 'approver@example.com');
   if (kept && approver) {
     db.drafts![held.cp.id] = {
       revision: 1,
@@ -5511,30 +8338,30 @@ export function seedScopeReviewRuns(db: RunsDb, ctx: Omit<RunsContext, "db">, ke
       actions: [
         {
           id: ctx.uuid(),
-          item_key: "bulk-edit",
-          kind: "accept",
+          item_key: 'bulk-edit',
+          kind: 'accept',
           field: null,
           value: null,
-          answers: ["new_feature", "duplicate_of_existing"],
+          answers: ['new_feature', 'duplicate_of_existing'],
           note: null,
-          state: "staged",
+          state: 'staged',
           created_by: approver.id,
           updated_by: approver.id,
-          updated_at: "2026-10-17T07:30:00Z",
+          updated_at: '2026-10-17T07:30:00Z',
         },
       ],
       log: [{ revision: 1, by: displayName(approver.email) }],
     };
   }
   held.cp.console = {
-    answered_by: "lead@example.com",
-    answered_at: "2026-10-17T07:40:00Z",
+    answered_by: 'lead@example.com',
+    answered_at: '2026-10-17T07:40:00Z',
     via: null,
-    verdict: "MERGE",
+    verdict: 'MERGE',
     findings: [],
     counted: true,
     reason: CONSOLE_HELD,
-    needs: "confirm",
+    needs: 'confirm',
     revise: false,
     can_redo: false,
   };
@@ -5543,41 +8370,120 @@ export function seedScopeReviewRuns(db: RunsDb, ctx: Omit<RunsContext, "db">, ke
 }
 
 /** A Build the baseline run that succeeded at `created_at` (the Baseline rebuild scenarios' last build). */
-export function seedFinishedBaselineBuild(ctx: Omit<RunsContext, "db">, db: RunsDb, created_at: string): RunOut {
-  const run = seedRun(ctx, db, "baseline", "", {}, created_at);
-  Object.assign(run, { document_id: null, document_slug: null, status: "succeeded", started_at: created_at, finished_at: created_at, spent_usd: run.estimate_usd ?? 0 });
-  for (const s of run.segments) Object.assign(s, { status: "succeeded", cost_usd: s.estimate_usd ?? 0 });
+export function seedFinishedBaselineBuild(
+  ctx: Omit<RunsContext, 'db'>,
+  db: RunsDb,
+  created_at: string,
+): RunOut {
+  const run = seedRun(ctx, db, 'baseline', '', {}, created_at);
+  Object.assign(run, {
+    document_id: null,
+    document_slug: null,
+    status: 'succeeded',
+    started_at: created_at,
+    finished_at: created_at,
+    spent_usd: run.estimate_usd ?? 0,
+  });
+  for (const s of run.segments)
+    Object.assign(s, { status: 'succeeded', cost_usd: s.estimate_usd ?? 0 });
   return run;
 }
 
 /** build-rundecide "run-decisions" scenario: one finished stop of a seeded run, as a person decided it. */
-type DecidedStop = { kind: CheckpointOut["kind"]; seq: number; status: "approved" | "changes_requested"; by: string; role: "owner" | "approver"; at: string; note?: string; attempt?: number; dates?: Record<string, DateDecision> };
+type DecidedStop = {
+  kind: CheckpointOut['kind'];
+  seq: number;
+  status: 'approved' | 'changes_requested';
+  by: string;
+  role: 'owner' | 'approver';
+  at: string;
+  note?: string;
+  attempt?: number;
+  dates?: Record<string, DateDecision>;
+};
 
 /**
  * build-rundecide RD1 a, the "run-decisions" scenarios: Baseline to PRD runs on PRDs whose
  * stops people decided (one sent back, then approved), for Simple › Decisions' Runs card.
  * `many`: three more runs on other PRDs. `people`: the owner's and an approver's member ids.
  */
-export function seedRunDecisions(db: RunsDb, ctx: Omit<RunsContext, "db">, people: { owner: string; approver: string }, many = false): RunOut[] {
+export function seedRunDecisions(
+  db: RunsDb,
+  ctx: Omit<RunsContext, 'db'>,
+  people: { owner: string; approver: string },
+  many = false,
+): RunOut[] {
   const { owner, approver } = people;
-  const o = (kind: DecidedStop["kind"], seq: number, at: string, note?: string): DecidedStop => ({ kind, seq, status: "approved", by: owner, role: "owner", at, note });
-  const a = (kind: DecidedStop["kind"], seq: number, at: string, note?: string, status: DecidedStop["status"] = "approved", attempt = 1): DecidedStop => ({ kind, seq, status, by: approver, role: "approver", at, note, attempt });
+  const o = (kind: DecidedStop['kind'], seq: number, at: string, note?: string): DecidedStop => ({
+    kind,
+    seq,
+    status: 'approved',
+    by: owner,
+    role: 'owner',
+    at,
+    note,
+  });
+  const a = (
+    kind: DecidedStop['kind'],
+    seq: number,
+    at: string,
+    note?: string,
+    status: DecidedStop['status'] = 'approved',
+    attempt = 1,
+  ): DecidedStop => ({ kind, seq, status, by: approver, role: 'approver', at, note, attempt });
   const plans: { doc: string; created_at: string; stops: DecidedStop[] }[] = [
     {
-      doc: "usage-alerts",
-      created_at: "2026-10-19T16:00:00Z",
+      doc: 'usage-alerts',
+      created_at: '2026-10-19T16:00:00Z',
       stops: [
-        o("feature_set", 2, "2026-10-20T17:00:00Z", "Keep the weekly digest; leave text messages for later."),
-        a("eng_review", 3, "2026-10-21T17:00:00Z", "Quiet hours need a time zone per workspace, not one for the company.", "changes_requested"),
-        a("eng_review", 3, "2026-10-22T17:00:00Z", "Quiet hours now follow each workspace's time zone.", "approved", 2),
-        o("priority_order", 4, "2026-10-22T19:00:00Z"),
-        a("prd_review", 5, "2026-10-26T17:00:00Z", "Good to build from version 3."),
+        o(
+          'feature_set',
+          2,
+          '2026-10-20T17:00:00Z',
+          'Keep the weekly digest; leave text messages for later.',
+        ),
+        a(
+          'eng_review',
+          3,
+          '2026-10-21T17:00:00Z',
+          'Quiet hours need a time zone per workspace, not one for the company.',
+          'changes_requested',
+        ),
+        a(
+          'eng_review',
+          3,
+          '2026-10-22T17:00:00Z',
+          "Quiet hours now follow each workspace's time zone.",
+          'approved',
+          2,
+        ),
+        o('priority_order', 4, '2026-10-22T19:00:00Z'),
+        a('prd_review', 5, '2026-10-26T17:00:00Z', 'Good to build from version 3.'),
         // The approver changed one date at the stop and accepted the other (approveEngDates).
         {
-          ...o("eng_dates", 6, "2026-10-27T17:00:00Z", "Weekly alert digest moved from Nov 20 to Dec 4."),
+          ...o(
+            'eng_dates',
+            6,
+            '2026-10-27T17:00:00Z',
+            'Weekly alert digest moved from Nov 20 to Dec 4.',
+          ),
           dates: {
-            "R-1": { decision: "changed", estimate: { kind: "estimate", reference: "Digest sizing", supports_date: "2026-12-04" } },
-            "R-2": { decision: "accepted", estimate: { kind: "estimate", reference: "Alert rules sizing", supports_date: "2026-11-13" } },
+            'R-1': {
+              decision: 'changed',
+              estimate: {
+                kind: 'estimate',
+                reference: 'Digest sizing',
+                supports_date: '2026-12-04',
+              },
+            },
+            'R-2': {
+              decision: 'accepted',
+              estimate: {
+                kind: 'estimate',
+                reference: 'Alert rules sizing',
+                supports_date: '2026-11-13',
+              },
+            },
           },
         },
       ],
@@ -5586,34 +8492,76 @@ export function seedRunDecisions(db: RunsDb, ctx: Omit<RunsContext, "db">, peopl
   if (many)
     plans.push(
       {
-        doc: "referral-link",
-        created_at: "2026-10-11T16:00:00Z",
-        stops: [o("feature_set", 2, "2026-10-12T17:00:00Z", "Checklist first, sample project second."), a("eng_review", 3, "2026-10-13T17:00:00Z"), o("priority_order", 4, "2026-10-14T17:00:00Z"), a("prd_review", 5, "2026-10-16T17:00:00Z"), o("eng_dates", 6, "2026-10-17T17:00:00Z")],
-      },
-      {
-        doc: "team-invites",
-        created_at: "2026-10-23T16:00:00Z",
+        doc: 'referral-link',
+        created_at: '2026-10-11T16:00:00Z',
         stops: [
-          o("feature_set", 2, "2026-10-24T17:00:00Z", "Seats only; no usage pricing this quarter."),
-          a("eng_review", 3, "2026-10-25T17:00:00Z", "Proration needs the new invoice service first.", "changes_requested"),
-          a("eng_review", 3, "2026-10-28T17:00:00Z", undefined, "approved", 2),
-          o("priority_order", 4, "2026-10-29T17:00:00Z"),
+          o('feature_set', 2, '2026-10-12T17:00:00Z', 'Checklist first, sample project second.'),
+          a('eng_review', 3, '2026-10-13T17:00:00Z'),
+          o('priority_order', 4, '2026-10-14T17:00:00Z'),
+          a('prd_review', 5, '2026-10-16T17:00:00Z'),
+          o('eng_dates', 6, '2026-10-17T17:00:00Z'),
         ],
       },
       {
-        doc: "annual-billing",
-        created_at: "2026-10-26T16:00:00Z",
-        stops: [o("feature_set", 2, "2026-10-27T17:00:00Z"), a("eng_review", 3, "2026-10-28T17:00:00Z", "Host it ourselves, behind the same sign-in."), o("priority_order", 4, "2026-10-29T17:00:00Z"), a("prd_review", 5, "2026-10-30T17:00:00Z")],
+        doc: 'team-invites',
+        created_at: '2026-10-23T16:00:00Z',
+        stops: [
+          o('feature_set', 2, '2026-10-24T17:00:00Z', 'Seats only; no usage pricing this quarter.'),
+          a(
+            'eng_review',
+            3,
+            '2026-10-25T17:00:00Z',
+            'Proration needs the new invoice service first.',
+            'changes_requested',
+          ),
+          a('eng_review', 3, '2026-10-28T17:00:00Z', undefined, 'approved', 2),
+          o('priority_order', 4, '2026-10-29T17:00:00Z'),
+        ],
+      },
+      {
+        doc: 'annual-billing',
+        created_at: '2026-10-26T16:00:00Z',
+        stops: [
+          o('feature_set', 2, '2026-10-27T17:00:00Z'),
+          a('eng_review', 3, '2026-10-28T17:00:00Z', 'Host it ourselves, behind the same sign-in.'),
+          o('priority_order', 4, '2026-10-29T17:00:00Z'),
+          a('prd_review', 5, '2026-10-30T17:00:00Z'),
+        ],
       },
     );
   return plans.map((p) => {
-    const r = seedRun(ctx, db, "baseline_to_prd", p.doc, { checkpoints: { eng_review: true, eng_dates: true } }, p.created_at);
+    const r = seedRun(
+      ctx,
+      db,
+      'baseline_to_prd',
+      p.doc,
+      { checkpoints: { eng_review: true, eng_dates: true } },
+      p.created_at,
+    );
     r.checkpoints = p.stops.map((s) => ({
-      id: ctx.uuid(), run_id: r.id, kind: s.kind, status: s.status, approver_role: "approver", segment_seq: s.seq,
-      decided_by: s.by, decided_at: s.at, note: s.note ?? null, payload: { segment_seq: s.seq, attempt: s.attempt ?? 1, decided: { role: s.role, by: s.by, via: "oracle" }, ...(s.dates ? { dates: s.dates } : {}) }, created_at: s.at, can_decide: false, lead_stop: false, cannot_approve: null,
-      approve_label: "Approve", needs_agents: [],
+      id: ctx.uuid(),
+      run_id: r.id,
+      kind: s.kind,
+      status: s.status,
+      approver_role: 'approver',
+      segment_seq: s.seq,
+      decided_by: s.by,
+      decided_at: s.at,
+      note: s.note ?? null,
+      payload: {
+        segment_seq: s.seq,
+        attempt: s.attempt ?? 1,
+        decided: { role: s.role, by: s.by, via: 'oracle' },
+        ...(s.dates ? { dates: s.dates } : {}),
+      },
+      created_at: s.at,
+      can_decide: false,
+      lead_stop: false,
+      cannot_approve: null,
+      approve_label: 'Approve',
+      needs_agents: [],
     }));
-    Object.assign(r, { status: "running", started_at: p.created_at });
+    Object.assign(r, { status: 'running', started_at: p.created_at });
     return r;
   });
 }

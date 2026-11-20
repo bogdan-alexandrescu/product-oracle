@@ -1,22 +1,23 @@
-"use client";
+'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
-import { Button, confirmInPage, Icon, Sheet } from "@/components/ds";
-import { INPUT } from "@/components/ui";
-import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
-import { errorMessage } from "@/lib/use-query";
+import { Button, confirmInPage, Icon, Sheet } from '@/components/ds';
+import { INPUT } from '@/components/ui';
+import { api, ApiError, unwrap, type Schemas } from '@/lib/api/client';
+import { errorMessage } from '@/lib/use-query';
 
-type Gate = Schemas["Gate"];
-type ConsoleAnswer = Schemas["ConsoleAnswer"];
+type Gate = Schemas['Gate'];
+type ConsoleAnswer = Schemas['ConsoleAnswer'];
 
 /** A staged change in the bar: removing it undoes it. */
 export type StagedChip = { key: string; label: string; onRemove?: () => Promise<void> | void };
 
 export const NOTE_MAX = 2000;
-export const CONSOLE_HELD_LINE = "Approved in the console: blocking problems are open: fix or waive them, then confirm";
+export const CONSOLE_HELD_LINE =
+  'Approved in the console: blocking problems are open: fix or waive them, then confirm';
 
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 /**
  * What still blocks Approve, counted as the review's tally counts it: the items with a blocking
@@ -29,7 +30,7 @@ export function blockingLeft(gate: Gate): number {
 }
 
 /** "1 blocking problem left": the tally's line, and the gate's reason as Approve's tooltip and the line beside it. */
-export const blockingLeftText = (n: number) => `${plural(n, "blocking problem")} left`;
+export const blockingLeftText = (n: number) => `${plural(n, 'blocking problem')} left`;
 
 /** The gate's reason, as the Approve button's tooltip and the line beside it ("1 blocking problem left"). */
 export function gateReason(gate: Gate | null | undefined): string | null {
@@ -41,11 +42,11 @@ export function gateReason(gate: Gate | null | undefined): string | null {
 function usePhone(): boolean {
   const [phone, setPhone] = useState(false);
   useEffect(() => {
-    const mq = window.matchMedia("(max-width: 600px)");
+    const mq = window.matchMedia('(max-width: 600px)');
     const on = () => setPhone(mq.matches);
     on();
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
   }, []);
   return phone;
 }
@@ -70,12 +71,13 @@ function useKeepScroll() {
   useEffect(() => {
     const on = () => (seen.current = { x: window.scrollX, y: window.scrollY });
     on();
-    window.addEventListener("scroll", on, { passive: true });
-    return () => window.removeEventListener("scroll", on);
+    window.addEventListener('scroll', on, { passive: true });
+    return () => window.removeEventListener('scroll', on);
   }, []);
   return () => {
     const at = seen.current;
-    if (at && (window.scrollY !== at.y || window.scrollX !== at.x)) window.scrollTo({ left: at.x, top: at.y, behavior: "instant" });
+    if (at && (window.scrollY !== at.y || window.scrollX !== at.x))
+      window.scrollTo({ left: at.x, top: at.y, behavior: 'instant' });
   };
 }
 
@@ -94,7 +96,7 @@ export function DecisionBar({
   canNote,
   onDecided,
   onReload,
-  title = "Feature set",
+  title = 'Feature set',
   approveBlocked = null,
   sendBackSummary = null,
   decidedBy = null,
@@ -115,7 +117,7 @@ export function DecisionBar({
   /** Approvers and owners decide; commenters and viewers read the tally only. */
   canDecide: boolean;
   canNote: boolean;
-  onDecided: (decision: "approved" | "changes_requested" | "confirm") => void;
+  onDecided: (decision: 'approved' | 'changes_requested' | 'confirm') => void;
   onReload: () => Promise<void>;
   /** The screen's name, in the phone's decide sheet ("Decide: Roadmap items"). */
   title?: string;
@@ -130,16 +132,20 @@ export function DecisionBar({
 }) {
   const phone = usePhone();
   const [open, setOpen] = useState(false);
-  const [note, setNote] = useState(savedNote ?? "");
+  const [note, setNote] = useState(savedNote ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [changed, setChanged] = useState<string | null>(null);
-  const held = answer?.needs === "confirm" && answer.verdict === "MERGE";
-  const blocked = [gateReason(gate), approveBlocked].filter(Boolean).join(" · ") || null;
+  const held = answer?.needs === 'confirm' && answer.verdict === 'MERGE';
+  const blocked = [gateReason(gate), approveBlocked].filter(Boolean).join(' · ') || null;
   const [confirming, setConfirming] = useState(false);
   const tooLong = note.length > NOTE_MAX;
   const canSend = (changes > 0 || !!note.trim()) && !tooLong;
-  const approveLabel = held ? "Confirm" : edits > 0 ? `Approve with ${plural(edits, "edit")}` : "Approve";
+  const approveLabel = held
+    ? 'Confirm'
+    : edits > 0
+      ? `Approve with ${plural(edits, 'edit')}`
+      : 'Approve';
 
   // qa-work-14/31: the page's scroll padding at the bottom is the bar's height (and, on a phone,
   // the tab bar's under it), so a row scrolled or tabbed into view stops clear of both bars.
@@ -152,7 +158,9 @@ export function DecisionBar({
     const root = document.documentElement;
     const before = root.style.scrollPaddingBottom;
     const fit = () => {
-      const tab = phone ? parseFloat(getComputedStyle(root).getPropertyValue("--phone-tab-bar")) || 0 : 0;
+      const tab = phone
+        ? parseFloat(getComputedStyle(root).getPropertyValue('--phone-tab-bar')) || 0
+        : 0;
       root.style.scrollPaddingBottom = `${Math.ceil(el.getBoundingClientRect().height + tab)}px`;
     };
     fit();
@@ -174,21 +182,24 @@ export function DecisionBar({
   // would scroll the page, so the page is put back.
   const keepScroll = useKeepScroll();
   const bumped = useRef<{ from: number | null; to: number } | null>(null);
-  const expected = () => (bumped.current && bumped.current.from === revision ? bumped.current.to : revision);
+  const expected = () =>
+    bumped.current && bumped.current.from === revision ? bumped.current.to : revision;
   /** The note's save in flight, if any: the decision waits for it. */
   const saving = useRef<Promise<void> | null>(null);
 
   function saveNote(): Promise<void> {
-    if (!canNote || tooLong || (note.trim() || null) === (savedNote?.trim() || null)) return Promise.resolve();
+    if (!canNote || tooLong || (note.trim() || null) === (savedNote?.trim() || null))
+      return Promise.resolve();
     const known = expected();
     const save = unwrap(
-      api.PUT("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/note", {
+      api.PUT('/v1/runs/{run_id}/checkpoints/{checkpoint_id}/note', {
         params: { path: { run_id: runId, checkpoint_id: checkpointId } },
         body: { note: note.trim() ? note : null },
       }),
     )
       .then((r) => {
-        if (known != null && r.revision === known + 1) bumped.current = { from: revision, to: r.revision };
+        if (known != null && r.revision === known + 1)
+          bumped.current = { from: revision, to: r.revision };
       })
       .catch((e) => setError(errorMessage(e)))
       .finally(() => {
@@ -199,11 +210,16 @@ export function DecisionBar({
   }
 
   async function approve() {
-    if (!held && approveAsk && !(await confirmInPage({ action: approveLabel, message: approveAsk }))) return;
-    await decide(held ? "confirm" : "approved");
+    if (
+      !held &&
+      approveAsk &&
+      !(await confirmInPage({ action: approveLabel, message: approveAsk }))
+    )
+      return;
+    await decide(held ? 'confirm' : 'approved');
   }
 
-  async function decide(decision: "approved" | "changes_requested" | "confirm") {
+  async function decide(decision: 'approved' | 'changes_requested' | 'confirm') {
     setBusy(true);
     setError(null);
     setChanged(null);
@@ -211,7 +227,7 @@ export function DecisionBar({
       if (saving.current) await saving.current;
       await saveNote();
       await unwrap(
-        api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/decide", {
+        api.POST('/v1/runs/{run_id}/checkpoints/{checkpoint_id}/decide', {
           params: { path: { run_id: runId, checkpoint_id: checkpointId } },
           body: { decision, note: note.trim() || null, expected_revision: expected() },
         }),
@@ -220,7 +236,7 @@ export function DecisionBar({
       setConfirming(false);
       onDecided(decision);
     } catch (e) {
-      if (e instanceof ApiError && e.code === "review_changed") setChanged(e.message);
+      if (e instanceof ApiError && e.code === 'review_changed') setChanged(e.message);
       else setError(errorMessage(e));
     } finally {
       setBusy(false);
@@ -233,9 +249,17 @@ export function DecisionBar({
         {tally}
       </p>
       {chips.length > 0 && (
-        <ul className="flex min-w-0 flex-wrap gap-1.5" aria-label="Staged changes" data-testid="staged-chips">
+        <ul
+          className="flex min-w-0 flex-wrap gap-1.5"
+          aria-label="Staged changes"
+          data-testid="staged-chips"
+        >
           {chips.map((c) => (
-            <li key={c.key} className="flex max-w-full items-center gap-1 rounded-full bg-accent-soft py-0.5 pr-1 pl-2.5 text-sm text-accent-ink" data-testid="staged-chip">
+            <li
+              key={c.key}
+              className="flex max-w-full items-center gap-1 rounded-full bg-accent-soft py-0.5 pr-1 pl-2.5 text-sm text-accent-ink"
+              data-testid="staged-chip"
+            >
               <span className="min-w-0 truncate">{c.label}</span>
               {c.onRemove && canDecide && (
                 <button
@@ -253,14 +277,24 @@ export function DecisionBar({
         </ul>
       )}
       {held && (
-        <p className="rounded-button bg-warn-bg px-3 py-2 text-sm text-warn" data-testid="console-held">
+        <p
+          className="rounded-button bg-warn-bg px-3 py-2 text-sm text-warn"
+          data-testid="console-held"
+        >
           {CONSOLE_HELD_LINE}
         </p>
       )}
       {changed && (
-        <div className="flex flex-wrap items-center gap-2 rounded-button bg-warn-bg px-3 py-2 text-sm text-warn" role="alert" data-testid="review-changed">
+        <div
+          className="flex flex-wrap items-center gap-2 rounded-button bg-warn-bg px-3 py-2 text-sm text-warn"
+          role="alert"
+          data-testid="review-changed"
+        >
           <span className="min-w-0 flex-1 break-words">{changed}</span>
-          <Button className="h-8 px-2.5 text-sm" onClick={() => void onReload().then(() => setChanged(null))}>
+          <Button
+            className="h-8 px-2.5 text-sm"
+            onClick={() => void onReload().then(() => setChanged(null))}
+          >
             Reload
           </Button>
         </div>
@@ -289,10 +323,10 @@ export function DecisionBar({
           </label>
           <Button
             disabled={busy || !canSend}
-            title={canSend ? undefined : "Change a row or write a note to send back"}
+            title={canSend ? undefined : 'Change a row or write a note to send back'}
             onClick={() => {
               // On a phone the decide sheet closes first: the confirmation is the one sheet open.
-              if (!sendBackSummary) return void decide("changes_requested");
+              if (!sendBackSummary) return void decide('changes_requested');
               setOpen(false);
               setConfirming(true);
             }}
@@ -305,7 +339,13 @@ export function DecisionBar({
                 {blocked}
               </span>
             )}
-            <Button variant="solid" icon="check" disabled={busy || !!blocked} title={blocked ?? undefined} onClick={() => void approve()}>
+            <Button
+              variant="solid"
+              icon="check"
+              disabled={busy || !!blocked}
+              title={blocked ?? undefined}
+              onClick={() => void approve()}
+            >
               {approveLabel}
             </Button>
           </span>
@@ -321,15 +361,22 @@ export function DecisionBar({
 
   // Outside the sticky bar: its stacking context would put the sheet under the app's rail.
   const confirmSheet = (
-    <Sheet open={confirming} title="Send back to agents" onClose={() => setConfirming(false)} testId="sheet-send-back">
+    <Sheet
+      open={confirming}
+      title="Send back to agents"
+      onClose={() => setConfirming(false)}
+      testId="sheet-send-back"
+    >
       <div className="flex flex-col gap-3 px-4 py-3">
         <p className="text-sm">{sendBackSummary}</p>
         {/* qa-work-1: whether a note goes with it, said before it is sent. */}
         <p className="text-sm text-text2" data-testid="send-back-note">
-          {note.trim() ? "With your note to the agents." : "No note to the agents: write one in the bar to say what to change."}
+          {note.trim()
+            ? 'With your note to the agents.'
+            : 'No note to the agents: write one in the bar to say what to change.'}
         </p>
         <span className="flex gap-2">
-          <Button variant="solid" disabled={busy} onClick={() => void decide("changes_requested")}>
+          <Button variant="solid" disabled={busy} onClick={() => void decide('changes_requested')}>
             Send back
           </Button>
           <Button onClick={() => setConfirming(false)}>Cancel</Button>
@@ -343,17 +390,31 @@ export function DecisionBar({
       <>
         {confirmSheet}
         {/* rirs-4: outside the sticky bar, whose stacking context put the sheet under the phone tab bar. */}
-        <Sheet open={open} title={`Decide: ${title}`} onClose={() => setOpen(false)} testId="sheet-decide">
+        <Sheet
+          open={open}
+          title={`Decide: ${title}`}
+          onClose={() => setOpen(false)}
+          testId="sheet-decide"
+        >
           <div className="px-4 py-3">{body}</div>
         </Sheet>
-        <div ref={setBar} className="sticky bottom-[68px] z-20 -mx-2.5 border-t border-line bg-surface px-2.5 py-2" data-testid="decision-bar" data-collapsed="true">
+        <div
+          ref={setBar}
+          className="sticky bottom-[68px] z-20 -mx-2.5 border-t border-line bg-surface px-2.5 py-2"
+          data-testid="decision-bar"
+          data-collapsed="true"
+        >
           {/* rirs-5: while blocking problems are open the collapsed bar says so and does not look like Approve. */}
-          <Button className="h-auto! min-h-8 w-full justify-center py-1 whitespace-normal!" variant={canDecide && !blocked ? "solid" : "secondary"} onClick={() => setOpen(true)}>
+          <Button
+            className="h-auto! min-h-8 w-full justify-center py-1 whitespace-normal!"
+            variant={canDecide && !blocked ? 'solid' : 'secondary'}
+            onClick={() => setOpen(true)}
+          >
             {canDecide
               ? blocked
                 ? `${blocked} · Review and decide`
-                : `${plural(changes, "change")} · ${held ? "Confirm" : "Approve"}`
-              : `${plural(changes, "change")} · Details`}
+                : `${plural(changes, 'change')} · ${held ? 'Confirm' : 'Approve'}`
+              : `${plural(changes, 'change')} · Details`}
           </Button>
         </div>
       </>
@@ -362,7 +423,11 @@ export function DecisionBar({
   return (
     <>
       {confirmSheet}
-      <div ref={setBar} className="sticky bottom-0 z-20 border-t border-line bg-surface px-4 py-3 shadow-panel" data-testid="decision-bar">
+      <div
+        ref={setBar}
+        className="sticky bottom-0 z-20 border-t border-line bg-surface px-4 py-3 shadow-panel"
+        data-testid="decision-bar"
+      >
         {body}
       </div>
     </>

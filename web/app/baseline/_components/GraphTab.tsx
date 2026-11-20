@@ -1,17 +1,34 @@
-"use client";
+'use client';
 
-import { Fragment, useState, type CSSProperties, type FormEvent, type MouseEvent, type ReactNode } from "react";
+import {
+  Fragment,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+  type MouseEvent,
+  type ReactNode,
+} from 'react';
 
-import { Button, Chip, CodeChip, confirmInPage, DataTable, Icon, InfoTip, Panel, type Column } from "@/components/ds";
-import type { EdgeOut, EntityOut, GraphOut, TraceFeature, TraceReport } from "@/lib/api/client";
-import { named, namedText, type Named } from "@/lib/codes";
-import { formatPercent } from "@/lib/format";
-import { assess, goalViews, type GoalView } from "@/app/home/_goals";
-import { GoalNum } from "@/components/simple/GoalOrder";
-import { goalNumbers, goalTree } from "@/lib/goal-tree";
-import { shownTitle } from "@/lib/placeholders";
+import {
+  Button,
+  Chip,
+  CodeChip,
+  confirmInPage,
+  DataTable,
+  Icon,
+  InfoTip,
+  Panel,
+  type Column,
+} from '@/components/ds';
+import type { EdgeOut, EntityOut, GraphOut, TraceFeature, TraceReport } from '@/lib/api/client';
+import { named, namedText, type Named } from '@/lib/codes';
+import { formatPercent } from '@/lib/format';
+import { assess, goalViews, type GoalView } from '@/app/home/_goals';
+import { GoalNum } from '@/components/simple/GoalOrder';
+import { goalNumbers, goalTree } from '@/lib/goal-tree';
+import { shownTitle } from '@/lib/placeholders';
 
-import type { AddKind } from "./AddItem";
+import type { AddKind } from './AddItem';
 import {
   ConfidenceRing,
   contributionOf,
@@ -23,9 +40,19 @@ import {
   formatValue,
   LockMark,
   sortedGoals,
-} from "./common";
-import { figure, fillable, gapLabel, horizonLabel, missingTip, OwnerName, targetText, typedTarget, useOwners } from "./goal-fields";
-import { byTitle } from "./order";
+} from './common';
+import {
+  figure,
+  fillable,
+  gapLabel,
+  horizonLabel,
+  missingTip,
+  OwnerName,
+  targetText,
+  typedTarget,
+  useOwners,
+} from './goal-fields';
+import { byTitle } from './order';
 
 type Props = {
   graph: GraphOut;
@@ -67,7 +94,7 @@ function AddSubgoal({
   onAdd: (title: string) => void;
   onCancel: () => void;
 }) {
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState('');
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (title.trim()) onAdd(title.trim());
@@ -80,9 +107,7 @@ function AddSubgoal({
       className="flex flex-wrap items-end gap-2 pt-1"
     >
       <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm">
-        <span className="text-text2">
-          Subgoal of {namedText(parent)}
-        </span>
+        <span className="text-text2">Subgoal of {namedText(parent)}</span>
         <input
           autoFocus
           value={title}
@@ -105,19 +130,29 @@ function AddSubgoal({
  * A goal row's actions: one width on a wide screen, so they line up (qa-plan-39); on a phone tighter
  * padding, so Make measurable, Confirm, Rename's pencil and Add subgoal share one row at 390 px (qa-plan-26).
  */
-const PHONE_ACTION = "min-[601px]:w-28 max-[600px]:px-1.5!";
+const PHONE_ACTION = 'min-[601px]:w-28 max-[600px]:px-1.5!';
 /** Make measurable is a ghost (no outline), so on a phone it can go tighter still. */
-const PHONE_GHOST = "min-[601px]:w-28 max-[600px]:px-1!";
+const PHONE_GHOST = 'min-[601px]:w-28 max-[600px]:px-1!';
 /** Rename on a phone: its pencil only, a square button. */
-const PHONE_ICON = "min-[601px]:w-28 max-[600px]:w-7 max-[600px]:px-0!";
+const PHONE_ICON = 'min-[601px]:w-28 max-[600px]:w-7 max-[600px]:px-0!';
 
 /** A goal's typed cell, or its text in grey with the tooltip saying it is not checked yet. */
 function TextFallback({ attr, text }: { attr: string; text: unknown }) {
-  if (text == null || text === "") return <span data-attr={attr} className="text-text2">–</span>;
+  if (text == null || text === '')
+    return (
+      <span data-attr={attr} className="text-text2">
+        –
+      </span>
+    );
   // A target in words takes the typed targets' symbols: "< 8%", never "below 8%" beside "≥ 45%" (qa-plan-24).
-  const shown = attr === "target" ? targetText(String(text)) : String(text);
+  const shown = attr === 'target' ? targetText(String(text)) : String(text);
   return (
-    <span data-attr={attr} data-text="true" className="truncate text-text2" title="Not checked yet: fill from text or edit">
+    <span
+      data-attr={attr}
+      data-text="true"
+      className="truncate text-text2"
+      title="Not checked yet: fill from text or edit"
+    >
       {shown}
     </span>
   );
@@ -127,7 +162,7 @@ function TextFallback({ attr, text }: { attr: string; text: unknown }) {
 function TitleButton({
   entity,
   onOpen,
-  className = "",
+  className = '',
   name,
 }: {
   entity: EntityOut;
@@ -143,7 +178,7 @@ function TitleButton({
         e.stopPropagation();
         onOpen(entity.id);
       }}
-      className={`${className.includes("min-w-") ? "" : "min-w-0"} ${className.includes("line-clamp") ? "" : "truncate"} text-left hover:underline ${className}`}
+      className={`${className.includes('min-w-') ? '' : 'min-w-0'} ${className.includes('line-clamp') ? '' : 'truncate'} text-left hover:underline ${className}`}
       title={name ?? shownTitle(entity)}
     >
       {name ?? shownTitle(entity)}
@@ -152,7 +187,8 @@ function TitleButton({
 }
 
 /** Spaces that must not break: "≥ 45%" and "Jun 30" stay on one line (qa4-plan-50). */
-export const keepTogether = (text: string) => text.replace(/([≥≤<>=]) /g, "$1\u00a0").replace(/([A-Z][a-z]{2}) (\d)/g, "$1\u00a0$2");
+export const keepTogether = (text: string) =>
+  text.replace(/([≥≤<>=]) /g, '$1\u00a0').replace(/([A-Z][a-z]{2}) (\d)/g, '$1\u00a0$2');
 
 /**
  * Progress in words, in Plan's one method (qa4-plan-42): the distance to the target in the
@@ -160,29 +196,40 @@ export const keepTogether = (text: string) => text.replace(/([≥≤<>=]) /g, "$
  * measured from ("9.4% now"). A parent without its own value: "60% of the way to target, from
  * subgoals". Only a goal Plan cannot measure falls back to its share of the way.
  */
-export function progressWords(g: EntityOut, view?: GoalView): { value: string; words: string; tip: string } | null {
+export function progressWords(
+  g: EntityOut,
+  view?: GoalView,
+): { value: string; words: string; tip: string } | null {
   const p = g.progress;
   const a = g.attrs ?? {};
-  const unit = typeof a.unit === "string" && a.unit ? a.unit : null;
-  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  const unit = typeof a.unit === 'string' && a.unit ? a.unit : null;
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
   const [start, current, target] = [num(a.start), num(a.current), num(a.target)];
-  const fig = (v: number) => (unit && unit !== "count" ? figure(v, unit) : String(v));
-  const goal = typedTarget(a)?.short ?? (target != null ? fig(target) : "target");
+  const fig = (v: number) => (unit && unit !== 'count' ? figure(v, unit) : String(v));
+  const goal = typedTarget(a)?.short ?? (target != null ? fig(target) : 'target');
   // In the cell, "≥ 45%" never breaks after its sign; the tip keeps plain spaces.
   const shown = keepTogether(goal);
-  if (p?.source !== "subgoals" && view) {
+  if (p?.source !== 'subgoals' && view) {
     const d = assess(view);
-    if (d.state === "togo" || d.state === "met" || d.state === "short") {
-      const now = view.currentText ? `${view.currentText} now` : "";
-      return { value: d.text, words: now ? `(${now.replace(" now", "\u00a0now")})` : "", tip: `${now ? `${now}, ` : ""}target ${goal}: ${d.text}` };
+    if (d.state === 'togo' || d.state === 'met' || d.state === 'short') {
+      const now = view.currentText ? `${view.currentText} now` : '';
+      return {
+        value: d.text,
+        words: now ? `(${now.replace(' now', '\u00a0now')})` : '',
+        tip: `${now ? `${now}, ` : ''}target ${goal}: ${d.text}`,
+      };
     }
   }
   if (p?.value == null) return null;
   const pct = formatPercent(p.value);
-  if (p.source === "subgoals") {
-    return { value: pct, words: `of the way to ${shown}, from subgoals`, tip: `${pct} of the way to ${goal}, rolled up from its subgoals` };
+  if (p.source === 'subgoals') {
+    return {
+      value: pct,
+      words: `of the way to ${shown}, from subgoals`,
+      tip: `${pct} of the way to ${goal}, rolled up from its subgoals`,
+    };
   }
-  const now = current != null ? `; ${fig(current)} now` : "";
+  const now = current != null ? `; ${fig(current)} now` : '';
   if (start != null && target != null && start !== target) {
     return {
       value: pct,
@@ -194,10 +241,12 @@ export function progressWords(g: EntityOut, view?: GoalView): { value: string; w
 }
 
 /** The goals interview's button, in plain words (qa-plan-40): "Ask Oracle to sharpen 2 goals". */
-export const sharpenLabel = (n: number) => `Ask Oracle to sharpen ${n} ${n === 1 ? "goal" : "goals"}`;
+export const sharpenLabel = (n: number) =>
+  `Ask Oracle to sharpen ${n} ${n === 1 ? 'goal' : 'goals'}`;
 
 /** Fill from text's button and its question's action, saying what it does (qa4-plan-52): "Fill targets from the goal's wording (1)". */
-export const fillLabel = (n: number) => `Fill targets from the ${n === 1 ? "goal's" : "goals'"} wording (${n})`;
+export const fillLabel = (n: number) =>
+  `Fill targets from the ${n === 1 ? "goal's" : "goals'"} wording (${n})`;
 
 /** Fill from text's question: which goals it saves to, and what it reads. */
 function fillAsk(goals: EntityOut[]) {
@@ -205,13 +254,20 @@ function fillAsk(goals: EntityOut[]) {
     .filter((g) => fillable([g]) > 0)
     .map((g) => {
       const texts = Object.entries(g.attrs ?? {})
-        .filter(([k, v]) => k.endsWith("_text") && k !== "owner_text" && g.attrs?.[k.slice(0, -5)] == null && v != null && v !== "")
-        .map(([k, v]) => `${k.slice(0, -5).replaceAll("_", " ")} “${String(v)}”`);
-      return texts.length ? `${shownTitle(g)} (${texts.join(", ")})` : shownTitle(g);
+        .filter(
+          ([k, v]) =>
+            k.endsWith('_text') &&
+            k !== 'owner_text' &&
+            g.attrs?.[k.slice(0, -5)] == null &&
+            v != null &&
+            v !== '',
+        )
+        .map(([k, v]) => `${k.slice(0, -5).replaceAll('_', ' ')} “${String(v)}”`);
+      return texts.length ? `${shownTitle(g)} (${texts.join(', ')})` : shownTitle(g);
     });
   return {
     action: fillLabel(names.length),
-    message: `Oracle reads the text and saves it as typed fields on ${names.join("; ")}. A locked goal gets a proposal instead; ranges and owner names stay as text.`,
+    message: `Oracle reads the text and saves it as typed fields on ${names.join('; ')}. A locked goal gets a proposal instead; ranges and owner names stay as text.`,
   };
 }
 
@@ -221,9 +277,27 @@ function fillAsk(goals: EntityOut[]) {
  * On a phone the grid becomes a list: each feature's title, then its goal links as small
  * G-tags with their strength.
  */
-export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags, onOpen, onConfirm, onAdd, onFill, onMakeMeasurable, vague = 0, onInterviewVague, goalsNote, onAddSubgoal, onRename }: Props) {
+export function GraphTab({
+  graph,
+  trace,
+  canWrite,
+  meId,
+  busy,
+  selectedId,
+  tags,
+  onOpen,
+  onConfirm,
+  onAdd,
+  onFill,
+  onMakeMeasurable,
+  vague = 0,
+  onInterviewVague,
+  goalsNote,
+  onAddSubgoal,
+  onRename,
+}: Props) {
   const low = trace?.low ?? DEFAULT_LOW;
-  const live = graph.entities.filter((e) => e.status !== "rejected");
+  const live = graph.entities.filter((e) => e.status !== 'rejected');
   const goals = sortedGoals(graph);
   // #345: the goals table is a tree; a goal's subgoals fold under it.
   const tree = new Map(goalTree(graph.entities).map((n) => [n.goal.id, n]));
@@ -243,52 +317,57 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
       else next.add(id);
       return next;
     });
-  const products = live.filter((e) => e.type === "product").sort(byTitle);
-  const features = live.filter((e) => e.type === "feature").sort(byTitle);
+  const products = live.filter((e) => e.type === 'product').sort(byTitle);
+  const features = live.filter((e) => e.type === 'feature').sort(byTitle);
   const traceById = new Map((trace?.features ?? []).map((f) => [f.id, f]));
   const coverage = new Map((trace?.goals ?? []).map((g) => [g.id, g]));
-  const owners = useOwners(goals.map((g) => g.attrs?.owner).filter((x): x is string => typeof x === "string"));
+  const owners = useOwners(
+    goals.map((g) => g.attrs?.owner).filter((x): x is string => typeof x === 'string'),
+  );
   const toFill = fillable(goals);
   // qa4-plan-42: each goal as Plan reads it, so Progress gives Plan's distance to go.
   const views = new Map(goalViews(graph.entities).map((v) => [v.id, v]));
 
   const productOf = new Map<string, string>();
   for (const e of graph.edges) {
-    if (e.type !== "part_of" || e.status === "rejected") continue;
-    if (products.some((p) => p.id === e.dst_id) && !productOf.has(e.src_id)) productOf.set(e.src_id, e.dst_id);
+    if (e.type !== 'part_of' || e.status === 'rejected') continue;
+    if (products.some((p) => p.id === e.dst_id) && !productOf.has(e.src_id))
+      productOf.set(e.src_id, e.dst_id);
   }
   // C7: a feature's requirements (part_of the feature), each under its feature.
   const requirementsOf = new Map<string, EntityOut[]>();
   for (const e of graph.edges) {
-    if (e.type !== "part_of" || e.status === "rejected") continue;
-    const r = live.find((x) => x.id === e.src_id && x.type === "requirement");
+    if (e.type !== 'part_of' || e.status === 'rejected') continue;
+    const r = live.find((x) => x.id === e.src_id && x.type === 'requirement');
     if (r) requirementsOf.set(e.dst_id, [...(requirementsOf.get(e.dst_id) ?? []), r]);
   }
   /** feature id -> goal id -> its supports edge */
   const links = new Map<string, Map<string, EdgeOut>>();
   for (const e of graph.edges) {
-    if (e.type !== "supports" || e.status === "rejected") continue;
+    if (e.type !== 'supports' || e.status === 'rejected') continue;
     if (!links.has(e.src_id)) links.set(e.src_id, new Map());
     links.get(e.src_id)!.set(e.dst_id, e);
   }
-  const groups: { id: string; product: EntityOut | null; features: EntityOut[] }[] = products.map((p) => ({
-    id: p.id,
-    product: p,
-    features: features.filter((f) => productOf.get(f.id) === p.id),
-  }));
+  const groups: { id: string; product: EntityOut | null; features: EntityOut[] }[] = products.map(
+    (p) => ({
+      id: p.id,
+      product: p,
+      features: features.filter((f) => productOf.get(f.id) === p.id),
+    }),
+  );
   const unassigned = features.filter((f) => !productOf.has(f.id));
-  if (unassigned.length > 0) groups.push({ id: "unassigned", product: null, features: unassigned });
+  if (unassigned.length > 0) groups.push({ id: 'unassigned', product: null, features: unassigned });
 
   const goalCols: Column<EntityOut>[] = [
     {
-      key: "goal",
-      header: "Goal",
+      key: 'goal',
+      header: 'Goal',
       wrap: true,
       cell: (g) => {
         const vague = g.goal_check?.measurable === false;
-        const indent = tree.get(g.id)?.depth ? "pl-6" : "";
+        const indent = tree.get(g.id)?.depth ? 'pl-6' : '';
         // The gap in plain words: "No owner" when only the owner is missing (qa-plan-9).
-        const chip = (testId = "not-measurable") => (
+        const chip = (testId = 'not-measurable') => (
           <Chip kind="warn" title={missingTip(g.goal_check)} data-testid={testId}>
             {gapLabel(g.goal_check)}
           </Chip>
@@ -299,14 +378,14 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
               <button
                 type="button"
                 aria-expanded={!folded.has(g.id)}
-                aria-label={`${folded.has(g.id) ? "Show" : "Hide"} subgoals of ${namedText(tree.get(g.id)!)}`}
+                aria-label={`${folded.has(g.id) ? 'Show' : 'Hide'} subgoals of ${namedText(tree.get(g.id)!)}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   fold(g.id);
                 }}
                 className="-ml-1 flex size-6 flex-none items-center justify-center rounded text-text2 hover:bg-surface2"
               >
-                {folded.has(g.id) ? "▸" : "▾"}
+                {folded.has(g.id) ? '▸' : '▾'}
               </button>
             )}
             <GoalNum n={numbers.get(g.id)} />
@@ -316,7 +395,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
               entityKey={g.key}
               title={shownTitle(g)}
               code={tree.get(g.id)?.code}
-              proposed={g.status === "proposed"}
+              proposed={g.status === 'proposed'}
               codeOnly
             />
             {/* The name gets the room first (qa-plan-2): it wraps to two lines, then ends in an
@@ -332,7 +411,9 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
               <NodeStatusBadge status={g.status} />
             </span>
             {vague && !onMakeMeasurable && <span className="flex-none">{chip()}</span>}
-            {vague && onMakeMeasurable && <span className="hidden flex-none max-[600px]:inline-flex">{chip("phone-gap")}</span>}
+            {vague && onMakeMeasurable && (
+              <span className="hidden flex-none max-[600px]:inline-flex">{chip('phone-gap')}</span>
+            )}
             <LockMark entity={g} meId={meId} />
           </span>
         );
@@ -342,12 +423,18 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
         // measurable comes in when the capabilities load (#370), and the row's title must not be
         // mounted again then (#520: phone-tables saw a row's button lose its box mid-check).
         return (
-          <span className={measurable ? "flex min-w-0 flex-col gap-1 py-1 max-[600px]:py-0" : "contents"}>
+          <span
+            className={
+              measurable ? 'flex min-w-0 flex-col gap-1 py-1 max-[600px]:py-0' : 'contents'
+            }
+          >
             {head}
             {measurable && (
               // Wraps when there is no room beside it, never under the row's actions (qa-plan-16).
               // On a phone the chip is on the title's line and the button in the row's actions.
-              <span className={`flex min-w-0 flex-wrap items-center gap-1 max-[600px]:hidden ${indent}`}>
+              <span
+                className={`flex min-w-0 flex-wrap items-center gap-1 max-[600px]:hidden ${indent}`}
+              >
                 <span className="flex-none">{chip()}</span>
                 <Button
                   variant="ghost"
@@ -358,7 +445,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
                     onMakeMeasurable(g);
                   }}
                 >
-                  {gapLabel(g.goal_check) === "No owner" ? "Name an owner" : "Make measurable"}
+                  {gapLabel(g.goal_check) === 'No owner' ? 'Name an owner' : 'Make measurable'}
                 </Button>
               </span>
             )}
@@ -367,23 +454,23 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
       },
     },
     {
-      key: "status",
+      key: 'status',
       // Its review state (proposed, confirmed); the Feature × goal table's Delivery is another thing (qa-plan-44).
-      header: "Review",
-      width: "112px",
+      header: 'Review',
+      width: '112px',
       // On a phone the badge stands on the title's line instead (qa-plan-26).
-      phone: "hide",
+      phone: 'hide',
       cell: (g) => <NodeStatusBadge status={g.status} />,
     },
     {
-      key: "metric",
-      header: "Metric",
-      width: "150px",
+      key: 'metric',
+      header: 'Metric',
+      width: '150px',
       // A phone keeps it, labelled, as it keeps Owner and Horizon (qa4-plan-43).
-      phoneLabel: "Metric",
+      phoneLabel: 'Metric',
       // Kept at a laptop's width: Weight and Features go first (under 1320 px), Metric only beside
       // a drawer (under 1000 px). A long metric wraps rather than taking the goal's name's room.
-      narrow: "mid",
+      narrow: 'mid',
       wrap: true,
       cell: (g) => (
         <span data-attr="metric" title={formatValue(g.attrs?.metric)} className="block text-text2">
@@ -392,13 +479,14 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
       ),
     },
     {
-      key: "target",
-      header: "Target",
-      width: "100px",
-      phoneLabel: "Target",
+      key: 'target',
+      header: 'Target',
+      width: '100px',
+      phoneLabel: 'Target',
       cell: (g) => {
         const t = typedTarget(g.attrs ?? {});
-        if (!t) return <TextFallback attr="target" text={g.attrs?.target_text ?? g.attrs?.target} />;
+        if (!t)
+          return <TextFallback attr="target" text={g.attrs?.target_text ?? g.attrs?.target} />;
         return (
           <span data-attr="target" className="tnum font-semibold whitespace-nowrap" title={t.words}>
             {t.short}
@@ -407,19 +495,25 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
       },
     },
     {
-      key: "progress",
-      header: "Progress",
-      width: "120px",
+      key: 'progress',
+      header: 'Progress',
+      width: '120px',
       // "60% from subgoals" takes a second line rather than an ellipsis.
       wrap: true,
-      phoneLabel: "Progress",
+      phoneLabel: 'Progress',
       cell: (g) => {
         const p = progressWords(g, views.get(g.id));
         return p ? (
-          <span data-attr="progress" data-source={g.progress?.source} className="tnum" title={p.tip}>
+          <span
+            data-attr="progress"
+            data-source={g.progress?.source}
+            className="tnum"
+            title={p.tip}
+          >
             {/* Plan's figure and what it is measured from (qa4-plan-42): "2.6 pts to go (9.4% now)";
                 a parent's roll-up: "60% of the way to target, from subgoals". */}
-            <span className="whitespace-nowrap">{p.value}</span> <span className="text-sm text-text2">{p.words}</span>
+            <span className="whitespace-nowrap">{p.value}</span>{' '}
+            <span className="text-sm text-text2">{p.words}</span>
           </span>
         ) : (
           <span data-attr="progress" className="text-text2">
@@ -429,17 +523,18 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
       },
     },
     {
-      key: "horizon",
-      header: "Horizon",
+      key: 'horizon',
+      header: 'Horizon',
       // "Medium · Jun 30" whole: a second line rather than an ellipsis (qa-plan-23).
-      width: "120px",
+      width: '120px',
       wrap: true,
-      phoneLabel: "Horizon",
+      phoneLabel: 'Horizon',
       // A drawer beside the table drops Horizon, Owner and Confidence before the goal's name (qa-plan-3).
-      narrow: "mid",
+      narrow: 'mid',
       cell: (g) => {
         const h = horizonLabel(g.attrs ?? {});
-        if (!h) return <TextFallback attr="horizon" text={g.attrs?.horizon_text ?? g.attrs?.horizon} />;
+        if (!h)
+          return <TextFallback attr="horizon" text={g.attrs?.horizon_text ?? g.attrs?.horizon} />;
         return (
           // It may break after the "·", never inside the date (qa4-plan-50).
           <span data-attr="horizon" className="tnum" title={h}>
@@ -449,20 +544,20 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
       },
     },
     {
-      key: "owner",
-      header: "Owner",
-      width: "120px",
-      phoneLabel: "Owner",
-      narrow: "mid",
+      key: 'owner',
+      header: 'Owner',
+      width: '120px',
+      phoneLabel: 'Owner',
+      narrow: 'mid',
       cell: (g) => <OwnerName id={g.attrs?.owner} owners={owners} />,
     },
     {
-      key: "weight",
-      header: "Weight",
-      width: "76px",
-      align: "right",
+      key: 'weight',
+      header: 'Weight',
+      width: '76px',
+      align: 'right',
       hideOnPhone: true,
-      narrow: "wide",
+      narrow: 'wide',
       cell: (g) => (
         <span data-attr="weight" className="tnum">
           {formatValue(g.attrs?.weight)}
@@ -470,39 +565,41 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
       ),
     },
     {
-      key: "features",
-      header: "Features",
-      width: "84px",
-      align: "right",
+      key: 'features',
+      header: 'Features',
+      width: '84px',
+      align: 'right',
       hideOnPhone: true,
-      narrow: "wide",
-      cell: (g) => <span className="tnum">{coverage.get(g.id)?.features.length ?? "–"}</span>,
+      narrow: 'wide',
+      cell: (g) => <span className="tnum">{coverage.get(g.id)?.features.length ?? '–'}</span>,
     },
     {
-      key: "confidence",
-      header: "Confidence",
-      width: "96px",
-      align: "center",
+      key: 'confidence',
+      header: 'Confidence',
+      width: '96px',
+      align: 'center',
       hideOnPhone: true,
-      narrow: "mid",
+      narrow: 'mid',
       // A score is built on evidence: none, no score (qa-plan-8).
-      cell: (g) => <ConfidenceRing value={g.confidence} evidence={g.evidence_count} low={low} size={32} />,
+      cell: (g) => (
+        <ConfidenceRing value={g.confidence} evidence={g.evidence_count} low={low} size={32} />
+      ),
     },
   ];
   // A commenter's Make measurable has a phone row of its own too; on a wide screen it stays
   // under the goal's name, so their column there is a sliver.
   if (canWrite || onMakeMeasurable) {
     goalCols.push({
-      key: "act",
+      key: 'act',
       header: <span className="sr-only">Action</span>,
       // The whole button: nothing in the action column truncates. One button a line, so the
       // column stays narrow and the goal's name keeps the room (qa-plan-2); each the same width,
       // right-aligned, so Confirm and Add subgoal line up row to row (qa-plan-39).
-      width: canWrite ? "136px" : "8px",
+      width: canWrite ? '136px' : '8px',
       // On a phone: the row's last line, every action in one row under target and progress (qa-plan-26).
-      className: "overflow-visible max-[600px]:order-5! max-[600px]:ml-0! max-[600px]:basis-full!",
-      align: "right",
-      phone: "action",
+      className: 'overflow-visible max-[600px]:order-5! max-[600px]:ml-0! max-[600px]:basis-full!',
+      align: 'right',
+      phone: 'action',
       cell: (g) => (
         <span className="flex flex-col items-end gap-1.5 py-1 max-[600px]:flex-row max-[600px]:flex-wrap max-[600px]:justify-start max-[600px]:gap-1 max-[600px]:py-0 max-[600px]:empty:hidden">
           {g.goal_check?.measurable === false && onMakeMeasurable && (
@@ -517,11 +614,11 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
                   onMakeMeasurable(g);
                 }}
               >
-                {gapLabel(g.goal_check) === "No owner" ? "Name an owner" : "Make measurable"}
+                {gapLabel(g.goal_check) === 'No owner' ? 'Name an owner' : 'Make measurable'}
               </Button>
             </span>
           )}
-          {canWrite && g.status === "proposed" && (
+          {canWrite && g.status === 'proposed' && (
             <Button
               disabled={busy}
               className={PHONE_ACTION}
@@ -585,33 +682,36 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
         tools={
           <>
             <InfoTip label="Feature × goal">
-              Each bar group is a feature&apos;s contribution to a goal. Bars: how much a feature moves a goal, none to strong (0 to 3).
-              Rings: confidence, 0 to 100%, from the item&apos;s evidence. A dot: no link.
+              Each bar group is a feature&apos;s contribution to a goal. Bars: how much a feature
+              moves a goal, none to strong (0 to 3). Rings: confidence, 0 to 100%, from the
+              item&apos;s evidence. A dot: no link.
             </InfoTip>
-            {add("feature")}
+            {add('feature')}
           </>
         }
       >
         {groups.length === 0 ? (
           // qa-shell-9: the next step, only for a role that can take it.
           <p className="px-4 py-8 text-center text-text2" data-testid="features-empty">
-            {canWrite ? "No features yet. Add one, or draft them from your sources with Build the Ground Truth." : "No features yet. They appear here once someone adds one."}
+            {canWrite
+              ? 'No features yet. Add one, or draft them from your sources with Build the Ground Truth.'
+              : 'No features yet. They appear here once someone adds one.'}
           </p>
         ) : (
           <>
-          <Ledger
-            goals={goals}
-            groups={groups}
-            tags={tags}
-            codes={codes}
-            links={links}
-            requirementsOf={requirementsOf}
-            traceById={traceById}
-            low={low}
-            meId={meId}
-            selectedId={selectedId}
-            onOpen={onOpen}
-          />
+            <Ledger
+              goals={goals}
+              groups={groups}
+              tags={tags}
+              codes={codes}
+              links={links}
+              requirementsOf={requirementsOf}
+              traceById={traceById}
+              low={low}
+              meId={meId}
+              selectedId={selectedId}
+              onOpen={onOpen}
+            />
           </>
         )}
       </Panel>
@@ -627,70 +727,77 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
                   {sharpenLabel(vague)}
                 </Button>
                 <InfoTip label="the goals interview">
-                  Oracle asks one question at a time in a discussion on the goal and proposes measurable versions; an
-                  approver confirms any change. Nothing runs until you start.
+                  Oracle asks one question at a time in a discussion on the goal and proposes
+                  measurable versions; an approver confirms any change. Nothing runs until you
+                  start.
                 </InfoTip>
               </>
             )}
-            {add("goal")}
+            {add('goal')}
             {canWrite && onFill && toFill > 0 && (
               <>
-              <Button
-                disabled={busy}
-                onClick={async () => {
-                  // It saves to the goals: say which and ask first (qa-plan-47).
-                  if (await confirmInPage(fillAsk(goals))) onFill();
-                }}
-              >
-                {fillLabel(toFill)}
-              </Button>
-              <InfoTip label="Fill from text">
-                Oracle reads the goals&apos; targets, values and horizons still written as text, with the rules Home uses. A
-                locked goal gets a proposal instead. Ranges and owner names stay as text.
-              </InfoTip>
+                <Button
+                  disabled={busy}
+                  onClick={async () => {
+                    // It saves to the goals: say which and ask first (qa-plan-47).
+                    if (await confirmInPage(fillAsk(goals))) onFill();
+                  }}
+                >
+                  {fillLabel(toFill)}
+                </Button>
+                <InfoTip label="Fill from text">
+                  Oracle reads the goals&apos; targets, values and horizons still written as text,
+                  with the rules Home uses. A locked goal gets a proposal instead. Ranges and owner
+                  names stay as text.
+                </InfoTip>
               </>
             )}
           </>
         }
       >
         {goalsNote && vague > 0 && (
-          <p className="border-b border-line px-4 py-3 text-sm text-text2 max-[600px]:px-3" data-testid="goals-observe">
+          <p
+            className="border-b border-line px-4 py-3 text-sm text-text2 max-[600px]:px-3"
+            data-testid="goals-observe"
+          >
             {goalsNote}
           </p>
         )}
         {goals.length === 0 ? (
           // No table to draw yet: a header band over nothing would stop short of the panel (qa-onboarding-26).
           <p className="px-4 py-8 text-center text-text2" data-testid="table-empty">
-            {canWrite ? "No goals yet. Add one, or draft them from your sources with Build the Ground Truth." : "No goals yet. They appear here once someone adds one."}
+            {canWrite
+              ? 'No goals yet. Add one, or draft them from your sources with Build the Ground Truth.'
+              : 'No goals yet. They appear here once someone adds one.'}
           </p>
         ) : (
-        <DataTable
-          label="Goals"
-          columns={goalCols}
-          rows={goalRows}
-          rowKey={(g) => g.id}
-          selected={selectedId}
-          onSelect={(id) => onOpen(id)}
-          rowProps={(g) => ({ "data-testid": `goal-${g.key}` })}
-          // qa-plan-37: Add subgoal opens right under the goal it is for, not above the table.
-          detail={(g) =>
-            adding?.id === g.id && onAddSubgoal ? (
-              <AddSubgoal
-                key={adding.id}
-                parent={tree.get(adding.id) ?? named(shownTitle(adding), adding.key)}
-                busy={busy}
-                onCancel={() => setAdding(null)}
-                onAdd={async (title) => {
-                  if (await onAddSubgoal(adding, title)) {
-                    fold(adding.id, true);
-                    setAdding(null);
-                  }
-                }}
-              />
-            ) : null
-          }
-          empty="No goals yet"
-        />
+          <DataTable
+            label="Goals"
+            columns={goalCols}
+            rows={goalRows}
+            rowKey={(g) => g.id}
+            selected={selectedId}
+            onSelect={(id) => onOpen(id)}
+            rowProps={(g) => ({ 'data-testid': `goal-${g.key}` })}
+            // qa-plan-37: Add subgoal opens right under the goal it is for, not above the table.
+            detail={(g) =>
+              adding?.id === g.id && onAddSubgoal ? (
+                <AddSubgoal
+                  key={adding.id}
+                  parent={tree.get(adding.id) ?? named(shownTitle(adding), adding.key)}
+                  busy={busy}
+                  onCancel={() => setAdding(null)}
+                  onAdd={async (title) => {
+                    if (await onAddSubgoal(adding, title)) {
+                      fold(adding.id, true);
+                      setAdding(null);
+                    }
+                  }}
+                />
+              ) : null
+            }
+            empty="No goals yet"
+          />
         )}
       </Panel>
     </div>
@@ -702,7 +809,7 @@ function goalTarget(g: EntityOut): string | null {
   const typed = typedTarget(g.attrs ?? {});
   if (typed) return typed.short;
   const text = g.attrs?.target_text ?? g.attrs?.target;
-  return text == null || text === "" ? null : targetText(formatValue(text));
+  return text == null || text === '' ? null : targetText(formatValue(text));
 }
 
 function Ledger({
@@ -732,19 +839,23 @@ function Ledger({
   onOpen: (id: string) => void;
 }) {
   const cols = 3 + goals.length;
-  const th = "bg-surface2 px-2 text-[13px] leading-4 font-semibold text-text2";
+  const th = 'bg-surface2 px-2 text-[13px] leading-4 font-semibold text-text2';
   // The Feature column stays in view while the goals scroll by, with a line at its edge so no goal
   // slides under it unseen; a phone stacks the row instead.
-  const pin = "sticky left-0 z-[1] shadow-[inset_-1px_0_0_var(--line)] max-[600px]:static max-[600px]:shadow-none";
+  const pin =
+    'sticky left-0 z-[1] shadow-[inset_-1px_0_0_var(--line)] max-[600px]:static max-[600px]:shadow-none';
   return (
     // A container: beside an open drawer the columns narrow before the feature's name does (qa-plan-7).
     // Many goals (visual QA GT-1): the table keeps the Feature column's room and each goal's width,
     // and scrolls sideways with the Feature column pinned.
-    <div className="@container min-w-0 overflow-x-auto max-[600px]:overflow-clip" data-testid="ledger-scroll">
+    <div
+      className="@container min-w-0 overflow-x-auto max-[600px]:overflow-clip"
+      data-testid="ledger-scroll"
+    >
       <table
         aria-label="Feature × goal"
         role="table"
-        style={{ "--goals": goals.length } as CSSProperties}
+        style={{ '--goals': goals.length } as CSSProperties}
         className="w-full min-w-[calc(220px+228px+var(--goals)*var(--goal-w))] table-fixed border-collapse text-[15px] leading-[22px] [--goal-w:148px] @max-[900px]:[--goal-w:96px] max-[600px]:block max-[600px]:min-w-0"
       >
         <colgroup>
@@ -759,7 +870,10 @@ function Ledger({
             every label at the same height, then a thin row with each goal's target, labelled on the left. */}
         <thead className="max-[600px]:sr-only">
           <tr>
-            <th scope="col" className={`${th} ${pin} h-9 pl-4 text-left align-middle max-[600px]:pl-3`}>
+            <th
+              scope="col"
+              className={`${th} ${pin} h-9 pl-4 text-left align-middle max-[600px]:pl-3`}
+            >
               Feature
             </th>
             <th scope="col" className={`${th} text-left align-middle max-[600px]:hidden`}>
@@ -779,7 +893,15 @@ function Ledger({
                 >
                   <span className="flex min-w-0 items-center gap-1.5 max-[600px]:justify-center">
                     <span className="flex-none @max-[900px]:hidden max-[600px]:hidden">
-                      <CodeChip kind="goal" entityId={g.id} entityKey={g.key} title={shownTitle(g)} code={codes.get(g.id)} proposed={g.status === "proposed"} codeOnly />
+                      <CodeChip
+                        kind="goal"
+                        entityId={g.id}
+                        entityKey={g.key}
+                        title={shownTitle(g)}
+                        code={codes.get(g.id)}
+                        proposed={g.status === 'proposed'}
+                        codeOnly
+                      />
                     </span>
                     <button
                       type="button"
@@ -797,14 +919,20 @@ function Ledger({
           {goals.some((g) => goalTarget(g)) && (
             <tr data-testid="ledger-targets">
               {/* Pinned with the Feature column, so no goal's target shows under it without its name. */}
-              <th scope="row" className={`${th} ${pin} h-7 pl-4 text-left align-middle font-medium max-[600px]:hidden`}>
+              <th
+                scope="row"
+                className={`${th} ${pin} h-7 pl-4 text-left align-middle font-medium max-[600px]:hidden`}
+              >
                 Targets
               </th>
               <td colSpan={2} className={`${th} max-[600px]:hidden`} />
               {goals.map((g) => (
-                <td key={g.id} className={`${th} h-7 border-l border-line text-left align-middle font-medium last:pr-4 max-[600px]:hidden`}>
+                <td
+                  key={g.id}
+                  className={`${th} h-7 border-l border-line text-left align-middle font-medium last:pr-4 max-[600px]:hidden`}
+                >
                   <b className="tnum font-semibold text-text" data-testid="ledger-target">
-                    {goalTarget(g) ?? "–"}
+                    {goalTarget(g) ?? '–'}
                   </b>
                 </td>
               ))}
@@ -814,8 +942,8 @@ function Ledger({
         {groups.map((group) => (
           <tbody
             key={group.id}
-            data-testid={group.product ? `product-${group.product.key}` : "product-unassigned"}
-            aria-label={`Features of ${group.product?.title ?? "Unassigned"}`}
+            data-testid={group.product ? `product-${group.product.key}` : 'product-unassigned'}
+            aria-label={`Features of ${group.product?.title ?? 'Unassigned'}`}
             role="rowgroup"
             className="max-[600px]:block"
           >
@@ -836,41 +964,58 @@ function Ledger({
                       >
                         {group.product.title}
                       </button>
-                      {group.product.status === "proposed" && <Chip kind="warn">Proposed</Chip>}
+                      {group.product.status === 'proposed' && <Chip kind="warn">Proposed</Chip>}
                       <LockMark entity={group.product} meId={meId} />
                     </>
                   ) : (
-                    <span className="font-display tracking-heading font-bold text-text2">Unassigned</span>
+                    <span className="font-display tracking-heading font-bold text-text2">
+                      Unassigned
+                    </span>
                   )}
-                  <span className="tnum ml-auto text-sm font-semibold text-text2">{group.features.length}</span>
+                  <span className="tnum ml-auto text-sm font-semibold text-text2">
+                    {group.features.length}
+                  </span>
                 </span>
               </th>
             </tr>
             {group.features.map((f) => (
               <Fragment key={f.id}>
-              <FeatureRow
-                key={f.id}
-                feature={f}
-                goals={goals}
-                codes={codes}
-                links={links.get(f.id)}
-                trace={traceById.get(f.id)}
-                low={low}
-                meId={meId}
-                selected={selectedId === f.id}
-                onOpen={onOpen}
-              />
-              {(requirementsOf.get(f.id) ?? []).map((r) => (
-                <tr key={r.id} role="row" data-testid={`requirement-${r.key}`} className="border-t border-line max-[600px]:block">
-                  <td role="cell" colSpan={cols} className="px-2 py-1.5 pl-10 text-sm max-[600px]:block max-[600px]:pl-6">
-                    <span className="flex min-w-0 items-center gap-2 min-[601px]:sticky min-[601px]:left-10 min-[601px]:max-w-[calc(100cqw-3rem)]">
-                      <span className="text-text2">Requirement</span>
-                      <TitleButton entity={r} onOpen={onOpen} className="max-[600px]:whitespace-normal" />
-                      <LockMark entity={r} meId={meId} />
-                    </span>
-                  </td>
-                </tr>
-              ))}
+                <FeatureRow
+                  key={f.id}
+                  feature={f}
+                  goals={goals}
+                  codes={codes}
+                  links={links.get(f.id)}
+                  trace={traceById.get(f.id)}
+                  low={low}
+                  meId={meId}
+                  selected={selectedId === f.id}
+                  onOpen={onOpen}
+                />
+                {(requirementsOf.get(f.id) ?? []).map((r) => (
+                  <tr
+                    key={r.id}
+                    role="row"
+                    data-testid={`requirement-${r.key}`}
+                    className="border-t border-line max-[600px]:block"
+                  >
+                    <td
+                      role="cell"
+                      colSpan={cols}
+                      className="px-2 py-1.5 pl-10 text-sm max-[600px]:block max-[600px]:pl-6"
+                    >
+                      <span className="flex min-w-0 items-center gap-2 min-[601px]:sticky min-[601px]:left-10 min-[601px]:max-w-[calc(100cqw-3rem)]">
+                        <span className="text-text2">Requirement</span>
+                        <TitleButton
+                          entity={r}
+                          onOpen={onOpen}
+                          className="max-[600px]:whitespace-normal"
+                        />
+                        <LockMark entity={r} meId={meId} />
+                      </span>
+                    </td>
+                  </tr>
+                ))}
               </Fragment>
             ))}
           </tbody>
@@ -909,7 +1054,7 @@ function FeatureRow({
       onClick={() => onOpen(feature.id)}
       role="row"
       className={`group h-12 cursor-pointer border-t border-line hover:bg-surface2 max-[600px]:flex max-[600px]:h-auto max-[600px]:flex-wrap max-[600px]:items-center max-[600px]:gap-x-2 max-[600px]:gap-y-1.5 max-[600px]:px-3 max-[600px]:py-2.5 ${
-        selected ? "bg-accent-soft shadow-[inset_4px_0_0_var(--accent)] hover:bg-accent-soft" : ""
+        selected ? 'bg-accent-soft shadow-[inset_4px_0_0_var(--accent)] hover:bg-accent-soft' : ''
       }`}
     >
       {/* Pinned while the goals scroll by (visual QA GT-1): it carries the row's own background and
@@ -918,8 +1063,8 @@ function FeatureRow({
         role="cell"
         className={`sticky left-0 z-[1] px-2 py-1.5 pl-4 max-[600px]:static max-[600px]:block max-[600px]:basis-full max-[600px]:bg-transparent max-[600px]:p-0 ${
           selected
-            ? "bg-accent-soft shadow-[inset_4px_0_0_var(--accent),inset_-1px_0_0_var(--line)] max-[600px]:shadow-none"
-            : "bg-surface shadow-[inset_-1px_0_0_var(--line)] group-hover:bg-surface2 max-[600px]:shadow-none"
+            ? 'bg-accent-soft shadow-[inset_4px_0_0_var(--accent),inset_-1px_0_0_var(--line)] max-[600px]:shadow-none'
+            : 'bg-surface shadow-[inset_-1px_0_0_var(--line)] group-hover:bg-surface2 max-[600px]:shadow-none'
         }`}
       >
         {/* The name keeps the room (qa-plan-7): it wraps whole words to two lines, and the lock,
@@ -933,7 +1078,7 @@ function FeatureRow({
           />
           <LockMark entity={feature} meId={meId} />
           {/* A phone keeps Proposed beside the name too (qa4-plan-43). */}
-          {feature.status === "proposed" && (
+          {feature.status === 'proposed' && (
             <span className="flex-none">
               <Chip kind="warn">Proposed</Chip>
             </span>
@@ -946,10 +1091,18 @@ function FeatureRow({
         </span>
       </td>
       {/* A phone keeps the delivery state and confidence, labelled, on the feature's second line (qa-plan-50). */}
-      <td role="cell" data-testid="phone-feature-delivery" className="truncate px-2 py-1.5 max-[600px]:block max-[600px]:overflow-visible max-[600px]:p-0">
+      <td
+        role="cell"
+        data-testid="phone-feature-delivery"
+        className="truncate px-2 py-1.5 max-[600px]:block max-[600px]:overflow-visible max-[600px]:p-0"
+      >
         <DeliveryChip value={feature.attrs?.status} />
       </td>
-      <td role="cell" data-testid="phone-feature-confidence" className="px-2 py-1.5 text-center max-[600px]:flex max-[600px]:items-center max-[600px]:gap-1 max-[600px]:p-0">
+      <td
+        role="cell"
+        data-testid="phone-feature-confidence"
+        className="px-2 py-1.5 text-center max-[600px]:flex max-[600px]:items-center max-[600px]:gap-1 max-[600px]:p-0"
+      >
         <span className="hidden text-sm text-text2 max-[600px]:inline">Confidence</span>
         <ConfidenceRing value={feature.confidence} low={low} size={32} />
       </td>
@@ -960,14 +1113,27 @@ function FeatureRow({
             key={g.id}
             role="cell"
             className={`border-l border-line px-2 py-1.5 text-center max-[600px]:border-0 max-[600px]:p-0 ${
-              e ? "max-[600px]:block" : "max-[600px]:hidden"
+              e ? 'max-[600px]:block' : 'max-[600px]:hidden'
             }`}
           >
-            <span className="max-[600px]:hidden">{e ? <LinkCell edge={e} low={low} /> : <Dot />}</span>
+            <span className="max-[600px]:hidden">
+              {e ? <LinkCell edge={e} low={low} /> : <Dot />}
+            </span>
             {e && (
               <span className="hidden items-center gap-1.5 rounded-goal border border-line py-0.5 pr-2 pl-1.5 max-[600px]:inline-flex">
-                <CodeChip kind="goal" entityId={g.id} entityKey={g.key} title={shownTitle(g)} code={codes.get(g.id)} proposed={g.status === "proposed"} wrap />
-                <ContributionPips value={contributionOf(e.attrs)} proposed={e.status === "proposed"} />
+                <CodeChip
+                  kind="goal"
+                  entityId={g.id}
+                  entityKey={g.key}
+                  title={shownTitle(g)}
+                  code={codes.get(g.id)}
+                  proposed={g.status === 'proposed'}
+                  wrap
+                />
+                <ContributionPips
+                  value={contributionOf(e.attrs)}
+                  proposed={e.status === 'proposed'}
+                />
               </span>
             )}
           </td>
@@ -979,12 +1145,19 @@ function FeatureRow({
 
 /** A supports link: its confidence ring when scored, else its contribution 0-3. */
 function LinkCell({ edge, low }: { edge: EdgeOut; low: number }): ReactNode {
-  if (edge.confidence != null) return <ConfidenceRing value={edge.confidence} low={low} size={32} what="Link confidence" />;
-  return <ContributionPips value={contributionOf(edge.attrs)} proposed={edge.status === "proposed"} />;
+  if (edge.confidence != null)
+    return <ConfidenceRing value={edge.confidence} low={low} size={32} what="Link confidence" />;
+  return (
+    <ContributionPips value={contributionOf(edge.attrs)} proposed={edge.status === 'proposed'} />
+  );
 }
 
 function Dot() {
   return (
-    <span className="inline-block size-1.5 rounded-full bg-line-strong align-middle" aria-label="No link" role="img" />
+    <span
+      className="inline-block size-1.5 rounded-full bg-line-strong align-middle"
+      aria-label="No link"
+      role="img"
+    />
   );
 }

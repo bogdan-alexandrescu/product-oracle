@@ -1,32 +1,57 @@
-import type { ChipKind } from "@/components/ds";
-import type { Schemas } from "@/lib/api/client";
-import { addDays, dayIn } from "@/lib/dates";
-import { formatDay } from "@/lib/format";
+import type { ChipKind } from '@/components/ds';
+import type { Schemas } from '@/lib/api/client';
+import { addDays, dayIn } from '@/lib/dates';
+import { formatDay } from '@/lib/format';
 
-export type Metric = Schemas["MetricOut"];
-export type MetricDetail = Schemas["MetricDetail"];
-export type Variance = Schemas["VarianceOut"];
+export type Metric = Schemas['MetricOut'];
+export type MetricDetail = Schemas['MetricDetail'];
+export type Variance = Schemas['VarianceOut'];
 
-export const KIND_LABEL: Record<Metric["kind"], string> = { output: "Result", input: "Driver" };
-export const SOURCE_LABEL: Record<Metric["source"], string> = { posthog: "PostHog", manual: "By hand", api: "By API" };
-export const DIRECTION_LABEL: Record<Metric["direction"], string> = { up: "Up is good", down: "Down is good" };
-export const STATUS_LABEL: Record<Metric["status"], string> = { active: "Active", paused: "Paused", error: "Not read", archived: "Archived" };
-export const STATUS_KIND: Record<Metric["status"], ChipKind> = { active: "pass", paused: "na", error: "crit", archived: "na" };
-export const VARIANCE_LABEL = { better: "Better", worse: "Worse" } as const;
-export const VARIANCE_KIND: Record<"better" | "worse", ChipKind> = { better: "pass", worse: "crit" };
-export const VARIANCE_STATE: Record<Variance["status"], string> = { open: "Open", explained: "Explained", unknown: "Don't know yet", noise: "Noise" };
+export const KIND_LABEL: Record<Metric['kind'], string> = { output: 'Result', input: 'Driver' };
+export const SOURCE_LABEL: Record<Metric['source'], string> = {
+  posthog: 'PostHog',
+  manual: 'By hand',
+  api: 'By API',
+};
+export const DIRECTION_LABEL: Record<Metric['direction'], string> = {
+  up: 'Up is good',
+  down: 'Down is good',
+};
+export const STATUS_LABEL: Record<Metric['status'], string> = {
+  active: 'Active',
+  paused: 'Paused',
+  error: 'Not read',
+  archived: 'Archived',
+};
+export const STATUS_KIND: Record<Metric['status'], ChipKind> = {
+  active: 'pass',
+  paused: 'na',
+  error: 'crit',
+  archived: 'na',
+};
+export const VARIANCE_LABEL = { better: 'Better', worse: 'Worse' } as const;
+export const VARIANCE_KIND: Record<'better' | 'worse', ChipKind> = {
+  better: 'pass',
+  worse: 'crit',
+};
+export const VARIANCE_STATE: Record<Variance['status'], string> = {
+  open: 'Open',
+  explained: 'Explained',
+  unknown: "Don't know yet",
+  noise: 'Noise',
+};
 
 /** The share of the week before that makes a change a variance when a metric sets none (oracle.metrics.variance.DEFAULT_THRESHOLD_PCT). */
 export const DEFAULT_THRESHOLD_PCT = 10;
 
 /** The goal units (B5): a percentage, a currency, a duration, or a counted noun typed in. */
-export const UNITS = ["%", "USD", "EUR", "GBP", "ms", "s", "min", "h", "days"];
+export const UNITS = ['%', 'USD', 'EUR', 'GBP', 'ms', 's', 'min', 'h', 'days'];
 
 /** 412 → "412 teams"; 9.5 → "9.5%". */
 export function valueText(v: number | null | undefined, unit: string): string {
-  if (v == null) return "—";
+  if (v == null) return '—';
   const n = Number.isInteger(v) ? String(v) : String(Math.round(v * 100) / 100);
-  return unit === "%" ? `${n}%` : `${n} ${unit}`;
+  return unit === '%' ? `${n}%` : `${n} ${unit}`;
 }
 
 /** +37 (+9.9%). */

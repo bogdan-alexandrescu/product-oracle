@@ -5,159 +5,236 @@
  */
 type Values = Record<string, unknown>;
 
-const HORIZON_WORDS: Record<string, string> = { now: "Now", next: "Next", later: "Later" };
+const HORIZON_WORDS: Record<string, string> = { now: 'Now', next: 'Next', later: 'Later' };
 
 function quoted(value: unknown, limit = 80): string | null {
-  const text = String(value ?? "").split(/\s+/).filter(Boolean).join(" ");
+  const text = String(value ?? '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(' ');
   if (!text) return null;
-  return `“${text.slice(0, limit)}${text.length > limit ? "…" : ""}”`;
+  return `“${text.slice(0, limit)}${text.length > limit ? '…' : ''}”`;
 }
 
 function keyDate(before: Values, after: Values): string {
   const kd = (after.key_date ?? before.key_date ?? {}) as Values;
-  const name = quoted(kd && typeof kd === "object" ? kd.name : null);
-  return name ? `the key date ${name}` : "a key date";
+  const name = quoted(kd && typeof kd === 'object' ? kd.name : null);
+  return name ? `the key date ${name}` : 'a key date';
 }
 
 /** What was done, without who: "changed the estimate of F-08 Billing page". */
-export function changePhrase(op: string, target: Values, before: Values, after: Values, item: string | null): string {
-  const x = item ?? quoted(after.title ?? target.title) ?? "an item";
-  const on = item ? ` on ${item}` : "";
+export function changePhrase(
+  op: string,
+  target: Values,
+  before: Values,
+  after: Values,
+  item: string | null,
+): string {
+  const x = item ?? quoted(after.title ?? target.title) ?? 'an item';
+  const on = item ? ` on ${item}` : '';
   const title = quoted(after.title);
-  const status = after.status ? String(after.status).replace(/_/g, " ") : null;
+  const status = after.status ? String(after.status).replace(/_/g, ' ') : null;
   switch (op) {
-    case "move_dates": return `moved the dates of ${x}`;
-    case "accept_date_suggestion": return `accepted Oracle's dates for ${x}`;
-    case "change_horizon": {
+    case 'move_dates':
+      return `moved the dates of ${x}`;
+    case 'accept_date_suggestion':
+      return `accepted Oracle's dates for ${x}`;
+    case 'change_horizon': {
       const h = HORIZON_WORDS[String(after.horizon)];
       return h ? `moved ${x} to ${h}` : `moved ${x} to another horizon`;
     }
-    case "reorder": return `reordered ${x}`;
-    case "cut": return `cut ${x}`;
-    case "restore": return `restored ${x}`;
-    case "cut_with_dependents": {
+    case 'reorder':
+      return `reordered ${x}`;
+    case 'cut':
+      return `cut ${x}`;
+    case 'restore':
+      return `restored ${x}`;
+    case 'cut_with_dependents': {
       const rest = ((target.titles as string[] | undefined) ?? []).slice(1);
       if (!rest.length) return `cut ${x} and its dependents`;
-      return `cut ${x} and its dependents ${rest.length === 1 ? rest[0] : `${rest.slice(0, -1).join(", ")} and ${rest[rest.length - 1]}`}`;
+      return `cut ${x} and its dependents ${rest.length === 1 ? rest[0] : `${rest.slice(0, -1).join(', ')} and ${rest[rest.length - 1]}`}`;
     }
-    case "edit_track": {
+    case 'edit_track': {
       // tracks-goal: one PRD put on or taken off a track (plan_changes.phrase).
       const names = (target.prd_titles ?? {}) as Record<string, string>;
       const one = (after.add_prd_id ?? after.remove_prd_id) as string | undefined;
-      if (one) return `${after.add_prd_id ? "put" : "took"} ${names[one] ?? "a PRD"} ${after.add_prd_id ? "on" : "off"} ${target.title ?? "a track"}`;
-      return `changed the track ${target.title ?? ""}`.trim();
+      if (one)
+        return `${after.add_prd_id ? 'put' : 'took'} ${names[one] ?? 'a PRD'} ${after.add_prd_id ? 'on' : 'off'} ${target.title ?? 'a track'}`;
+      return `changed the track ${target.title ?? ''}`.trim();
     }
-    case "edit_title": return title ? `renamed ${x} to ${title}` : `renamed ${x}`;
-    case "edit_outcome": return `changed the outcome of ${x}`;
-    case "edit_note": return `changed the notes of ${x}`;
-    case "accept_risk": return `accepted a risk on ${x}`;
-    case "shift_dependents": return `moved ${x} and its dependents after what it depends on`;
-    case "move_dependency": return `moved what ${x} depends on`;
-    case "override_priority": return `changed the priority of ${x}`;
-    case "add_item_task": return title ? `added the task ${title} to ${x}` : `added a task to ${x}`;
-    case "edit_item_task": return `changed a task on ${x}`;
-    case "set_item_task_status": return status ? `marked a task on ${x} ${status}` : `changed a task on ${x}`;
-    case "add_action_item": return title ? `added the action item ${title}${on}` : `added an action item${on}`;
-    case "edit_action_item": return `changed an action item${on}`;
-    case "set_action_item_status": return status ? `marked an action item${on} ${status}` : `changed an action item${on}`;
-    case "add_launch_task": return title ? `added the launch task ${title} to ${x}` : `added a launch task to ${x}`;
-    case "set_launch_task_status": return status ? `marked a launch task of ${x} ${status}` : `changed a launch task of ${x}`;
-    case "estimate_feature": return `changed the estimate of ${x}`;
-    case "confirm_item": return `confirmed ${x}`;
-    case "edit_line": {
+    case 'edit_title':
+      return title ? `renamed ${x} to ${title}` : `renamed ${x}`;
+    case 'edit_outcome':
+      return `changed the outcome of ${x}`;
+    case 'edit_note':
+      return `changed the notes of ${x}`;
+    case 'accept_risk':
+      return `accepted a risk on ${x}`;
+    case 'shift_dependents':
+      return `moved ${x} and its dependents after what it depends on`;
+    case 'move_dependency':
+      return `moved what ${x} depends on`;
+    case 'override_priority':
+      return `changed the priority of ${x}`;
+    case 'add_item_task':
+      return title ? `added the task ${title} to ${x}` : `added a task to ${x}`;
+    case 'edit_item_task':
+      return `changed a task on ${x}`;
+    case 'set_item_task_status':
+      return status ? `marked a task on ${x} ${status}` : `changed a task on ${x}`;
+    case 'add_action_item':
+      return title ? `added the action item ${title}${on}` : `added an action item${on}`;
+    case 'edit_action_item':
+      return `changed an action item${on}`;
+    case 'set_action_item_status':
+      return status ? `marked an action item${on} ${status}` : `changed an action item${on}`;
+    case 'add_launch_task':
+      return title ? `added the launch task ${title} to ${x}` : `added a launch task to ${x}`;
+    case 'set_launch_task_status':
+      return status ? `marked a launch task of ${x} ${status}` : `changed a launch task of ${x}`;
+    case 'estimate_feature':
+      return `changed the estimate of ${x}`;
+    case 'confirm_item':
+      return `confirmed ${x}`;
+    case 'edit_line': {
       const line = quoted(after.line);
-      return line ? `edited a one-pager line to ${line}` : "edited a one-pager line";
+      return line ? `edited a one-pager line to ${line}` : 'edited a one-pager line';
     }
-    case "set_section_number": {
+    case 'set_section_number': {
       // As change_words._number_sentence: "set the count in “Later” to 6", naming the section.
-      const key = String(target.section ?? "");
+      const key = String(target.section ?? '');
       const sec = ((before.sections ?? {}) as Record<string, { heading?: string }>)[key] ?? {};
-      const name = String(sec.heading ?? "").replace(/\s*(?:·\s*\d+\s+items?|\(\s*\d+\s+items?\s*\))\s*$/i, "").trim();
-      const what = target.part === "heading" ? "the count" : "the number";
-      const where = name ? ` in “${name}”` : " in a PRD section";
-      const n = String(after.number ?? "");
+      const name = String(sec.heading ?? '')
+        .replace(/\s*(?:·\s*\d+\s+items?|\(\s*\d+\s+items?\s*\))\s*$/i, '')
+        .trim();
+      const what = target.part === 'heading' ? 'the count' : 'the number';
+      const where = name ? ` in “${name}”` : ' in a PRD section';
+      const n = String(after.number ?? '');
       return n ? `set ${what}${where} to ${n}` : `set ${what}${where}`;
     }
-    case "add_key_date": return `added ${keyDate(before, after)}`;
-    case "edit_key_date": return `changed ${keyDate(before, after)}`;
-    case "remove_key_date": return `removed ${keyDate(before, after)}`;
-    case "add_item": return `added ${x}`;
-    case "merge_item": {
-      const into = [target.code, target.title].map((v) => String(v ?? "")).join(" ").trim();
+    case 'add_key_date':
+      return `added ${keyDate(before, after)}`;
+    case 'edit_key_date':
+      return `changed ${keyDate(before, after)}`;
+    case 'remove_key_date':
+      return `removed ${keyDate(before, after)}`;
+    case 'add_item':
+      return `added ${x}`;
+    case 'merge_item': {
+      const into = [target.code, target.title]
+        .map((v) => String(v ?? ''))
+        .join(' ')
+        .trim();
       return into ? `merged ${x} into ${into}` : `merged ${x}`;
     }
-    case "keep_both": return `kept ${x} beside its look-alikes`;
-    case "set_milestone": {
+    case 'keep_both':
+      return `kept ${x} beside its look-alikes`;
+    case 'set_milestone': {
       const m = after.milestone as Values | null | undefined;
-      if (m === null && "milestone" in after) return `cleared the milestone of ${x}`;
-      const name = m && typeof m === "object" ? quoted(m.name) : null;
+      if (m === null && 'milestone' in after) return `cleared the milestone of ${x}`;
+      const name = m && typeof m === 'object' ? quoted(m.name) : null;
       return name ? `set the milestone of ${x} to ${name}` : `set the milestone of ${x}`;
     }
-    case "set_goals": return `moved ${x} to another goal`;
-    case "add_feature_ask": return title ? `filed the feature ask ${title}` : "filed a feature ask";
-    case "set_owner": return `changed the owner of ${x}`;
-    case "set_confidence": return `changed the confidence of ${x}`;
-    case "set_track": return `changed the track of ${x}`;
-    case "set_prd": return `changed the PRD of ${x}`;
-    case "set_goal": return `changed the goal of ${x}`;
-    case "set_code": return target.code ? `gave ${x} the code ${target.code}` : `took the code off ${x}`;
-    case "set_parent": {
-      const parent = [target.code, target.title].map((v) => String(v ?? "")).join(" ").trim();
-      return after.parent_key ? `made ${x} part of ${parent || "another feature"}` : `took ${x} out of ${parent || "the feature it was part of"}`;
+    case 'set_goals':
+      return `moved ${x} to another goal`;
+    case 'add_feature_ask':
+      return title ? `filed the feature ask ${title}` : 'filed a feature ask';
+    case 'set_owner':
+      return `changed the owner of ${x}`;
+    case 'set_confidence':
+      return `changed the confidence of ${x}`;
+    case 'set_track':
+      return `changed the track of ${x}`;
+    case 'set_prd':
+      return `changed the PRD of ${x}`;
+    case 'set_goal':
+      return `changed the goal of ${x}`;
+    case 'set_code':
+      return target.code ? `gave ${x} the code ${target.code}` : `took the code off ${x}`;
+    case 'set_parent': {
+      const parent = [target.code, target.title]
+        .map((v) => String(v ?? ''))
+        .join(' ')
+        .trim();
+      return after.parent_key
+        ? `made ${x} part of ${parent || 'another feature'}`
+        : `took ${x} out of ${parent || 'the feature it was part of'}`;
     }
-    case "set_goal_measure": return `changed how the goal of ${x} is measured`;
-    case "set_status": return `marked ${x} ${after.cut ? "cut" : after.shipped ? "done" : "planned"}`;
-    case "set_decider": return `changed the decider of ${x}`;
+    case 'set_goal_measure':
+      return `changed how the goal of ${x} is measured`;
+    case 'set_status':
+      return `marked ${x} ${after.cut ? 'cut' : after.shipped ? 'done' : 'planned'}`;
+    case 'set_decider':
+      return `changed the decider of ${x}`;
     // ask-oracle-actions: a dependency added or removed in the feature talk names it (change_words.py).
-    case "set_depends": {
+    case 'set_depends': {
       const dep = target.dependency ? String(target.dependency) : null;
-      const gone = ((after.depends_on as unknown[] | undefined) ?? []).length < ((before.depends_on as unknown[] | undefined) ?? []).length;
-      return !dep ? `changed what ${x} depends on` : gone ? `${x} no longer depends on ${dep}` : `${x} now depends on ${dep}`;
+      const gone =
+        ((after.depends_on as unknown[] | undefined) ?? []).length <
+        ((before.depends_on as unknown[] | undefined) ?? []).length;
+      return !dep
+        ? `changed what ${x} depends on`
+        : gone
+          ? `${x} no longer depends on ${dep}`
+          : `${x} now depends on ${dep}`;
     }
     // prd-questions: a PRD question (a decision) answered, or its decider named.
-    case "decide_question": return `decided ${x}`;
+    case 'decide_question':
+      return `decided ${x}`;
     // Goal milestones (goal_milestones): a roadmap's own milestone changed, or removed.
-    case "edit_goal_milestone": {
+    case 'edit_goal_milestone': {
       const name = quoted(target.name) ?? item;
-      if ("milestone" in before && after.milestone === null) return name ? `removed the milestone ${name}` : "removed a milestone";
+      if ('milestone' in before && after.milestone === null)
+        return name ? `removed the milestone ${name}` : 'removed a milestone';
       // milestone-rename: a new name (a roadmap's own: in milestone; a PRD's: as is), as change_words says it.
       const was = (before.milestone ?? before) as Record<string, unknown> | null;
       const to = (after.milestone ?? after) as Record<string, unknown> | null;
       const fresh = quoted(to?.name);
-      if (fresh && was?.name && was.name !== to?.name) return `renamed the milestone ${quoted(was.name)} to ${fresh}`;
-      return name ? `changed the milestone ${name}` : "changed a milestone";
+      if (fresh && was?.name && was.name !== to?.name)
+        return `renamed the milestone ${quoted(was.name)} to ${fresh}`;
+      return name ? `changed the milestone ${name}` : 'changed a milestone';
     }
-    case "name_decider": return `named who decides ${x}`;
+    case 'name_decider':
+      return `named who decides ${x}`;
     // edit-decisions (decision_sheet, change_words.py): the sheet's changes.
-    case "edit_decision":
-    case "edit_question": {
+    case 'edit_decision':
+    case 'edit_question': {
       const name = quoted(target.name);
-      return name ? `changed ${name}` : `changed a ${op === "edit_decision" ? "decision" : "question"} on ${x}`;
+      return name
+        ? `changed ${name}`
+        : `changed a ${op === 'edit_decision' ? 'decision' : 'question'} on ${x}`;
     }
-    case "add_question": {
-      const asked = quoted(after.title) ?? "a question";
+    case 'add_question': {
+      const asked = quoted(after.title) ?? 'a question';
       return target.name ? `asked ${asked} in ${target.name}` : `asked ${asked}${on}`;
     }
-    case "withdraw_decision": return `withdrew ${quoted(target.name) ?? x}`;
+    case 'withdraw_decision':
+      return `withdrew ${quoted(target.name) ?? x}`;
     // trash-features-goals: a feature moved to Trash (its name reads "(deleted)" once it is gone).
-    case "delete_item": return `moved ${x} to Trash`;
+    case 'delete_item':
+      return `moved ${x} to Trash`;
     // edit-goals-prds: a goal archived or moved to Trash (goal_asks).
-    case "archive_goal": return `archived the goal ${quoted(target.title) ?? "a goal"}`;
+    case 'archive_goal':
+      return `archived the goal ${quoted(target.title) ?? 'a goal'}`;
     // prio-twin-propose (change_words: merge_twin): a same-name twin's feature merged into its row's.
     // Each by its code and name ("merged ledger-copy Ledger into pay-1 Ledger").
-    case "merge_twin": {
-      const named = (code: unknown, title: unknown) => [code, title].filter(Boolean).join(" ");
-      return `merged ${named(target.code, target.title) || item || "a feature"} into ${named(target.into_code, target.into_title) || "its same name"}`;
+    case 'merge_twin': {
+      const named = (code: unknown, title: unknown) => [code, title].filter(Boolean).join(' ');
+      return `merged ${named(target.code, target.title) || item || 'a feature'} into ${named(target.into_code, target.into_title) || 'its same name'}`;
     }
-    case "delete_goal": return `moved the goal ${quoted(target.title) ?? "a goal"} to Trash`;
-    case "unarchive_goal": return `restored the goal ${quoted(target.title) ?? "a goal"}`;
+    case 'delete_goal':
+      return `moved the goal ${quoted(target.title) ?? 'a goal'} to Trash`;
+    case 'unarchive_goal':
+      return `restored the goal ${quoted(target.title) ?? 'a goal'}`;
     // goal-map-link-asks (goal_map_asks, change_words.py): a feature put on a goal milestone, or moved there.
-    case "link_goal_map": {
-      const to = quoted(target.name) ?? "a milestone";
-      return target.from_milestone ? `moved ${x} from ${quoted(target.from_name) ?? "its milestone"} to ${to}` : `put ${x} on ${to}`;
+    case 'link_goal_map': {
+      const to = quoted(target.name) ?? 'a milestone';
+      return target.from_milestone
+        ? `moved ${x} from ${quoted(target.from_name) ?? 'its milestone'} to ${to}`
+        : `put ${x} on ${to}`;
     }
     // roadmap-decide: a cut item's fix, the dependency dropped (change_words.py).
-    case "remove_dependency": {
+    case 'remove_dependency': {
       const dep = quoted((target.titles as unknown[] | undefined)?.[1]);
       return dep ? `removed ${x}'s dependency on ${dep}` : `removed a dependency of ${x}`;
     }
@@ -175,13 +252,23 @@ export function changeSentence(
   const target = c.target ?? {};
   const before = c.before ?? {};
   const after = c.after ?? {};
-  if (c.status === "undone") return `${who} undid: ${changePhrase(c.op, target, after, before, item)}`;
+  if (c.status === 'undone')
+    return `${who} undid: ${changePhrase(c.op, target, after, before, item)}`;
   const what = changePhrase(c.op, target, before, after, item);
   let words = `${who} ${what}`;
   // What was asked, not done: "proposed: move F-26 Alert rules engine to Trash" (change_words.describe).
-  const asked = c.op === "delete_item" || c.op === "delete_goal" ? `move${what.slice("moved".length)}` : c.op === "archive_goal" ? `archive${what.slice("archived".length)}` : c.op === "unarchive_goal" ? `restore${what.slice("restored".length)}` : c.op === "link_goal_map" && what.startsWith("moved") ? `move${what.slice("moved".length)}` : what;
-  if (c.status === "proposed") words = `${who} proposed: ${asked}`;
-  else if (c.status === "declined") words = `${who} proposed: ${asked} · declined`;
-  if (undone) words += " · undone";
+  const asked =
+    c.op === 'delete_item' || c.op === 'delete_goal'
+      ? `move${what.slice('moved'.length)}`
+      : c.op === 'archive_goal'
+        ? `archive${what.slice('archived'.length)}`
+        : c.op === 'unarchive_goal'
+          ? `restore${what.slice('restored'.length)}`
+          : c.op === 'link_goal_map' && what.startsWith('moved')
+            ? `move${what.slice('moved'.length)}`
+            : what;
+  if (c.status === 'proposed') words = `${who} proposed: ${asked}`;
+  else if (c.status === 'declined') words = `${who} proposed: ${asked} · declined`;
+  if (undone) words += ' · undone';
   return words;
 }

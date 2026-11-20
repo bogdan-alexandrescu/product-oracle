@@ -1,58 +1,60 @@
-"use client";
+'use client';
 
-import { useRouter } from "@/lib/nav";
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useRouter } from '@/lib/nav';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 
-import { AuthCard } from "@/app/login/_components/AuthCard";
-import { Field, TEXTAREA } from "@/app/settings/_components/fields";
-import { Button, InfoTip, Notice } from "@/components/ds";
-import { api, MOCK_MODE, type Schemas } from "@/lib/api/client";
-import { formatDay } from "@/lib/format";
-import { errorMessage } from "@/lib/use-query";
+import { AuthCard } from '@/app/login/_components/AuthCard';
+import { Field, TEXTAREA } from '@/app/settings/_components/fields';
+import { Button, InfoTip, Notice } from '@/components/ds';
+import { api, MOCK_MODE, type Schemas } from '@/lib/api/client';
+import { formatDay } from '@/lib/format';
+import { errorMessage } from '@/lib/use-query';
 
-type Access = Schemas["AccessStateOut"];
-type State = Access["state"];
+type Access = Schemas['AccessStateOut'];
+type State = Access['state'];
 
 /** How often a pending request looks again (3.10: the page updates by itself). */
 const POLL_MS = 30_000;
 const NOTE_MAX = 500;
 
 const TITLE: Partial<Record<State, string>> = {
-  pending: "Waiting for an owner",
+  pending: 'Waiting for an owner',
   approved: "You're in",
-  declined: "An owner declined your request",
-  invite_expired: "Your invite expired",
-  invite_only: "This Oracle is invite only",
-  outside_domains: "Use your work account",
-  removed: "You were removed",
+  declined: 'An owner declined your request',
+  invite_expired: 'Your invite expired',
+  invite_only: 'This Oracle is invite only',
+  outside_domains: 'Use your work account',
+  removed: 'You were removed',
 };
 
 /** qa-onboarding-34: when the invite ran out, in words: past, today, or (not yet) when it will. */
 function expiry(at: string | null | undefined): string {
-  if (!at) return "It expired.";
-  if (formatDay(at) === formatDay(new Date().toISOString())) return "It expired today.";
-  return Date.parse(at) < Date.now() ? `It expired on ${formatDay(at)}.` : `It expires on ${formatDay(at)}.`;
+  if (!at) return 'It expired.';
+  if (formatDay(at) === formatDay(new Date().toISOString())) return 'It expired today.';
+  return Date.parse(at) < Date.now()
+    ? `It expired on ${formatDay(at)}.`
+    : `It expires on ${formatDay(at)}.`;
 }
 
 function body(a: Access): string {
-  const email = a.email ?? "your address";
+  const email = a.email ?? 'your address';
   switch (a.state) {
-    case "pending":
-      return `You asked to join ${a.company ?? "this company"}'s Product Oracle as ${email}. An owner will approve or decline your request. This page updates by itself.`;
-    case "approved":
-      return "Opening Oracle…";
-    case "declined":
+    case 'pending':
+      return `You asked to join ${a.company ?? 'this company'}'s Product Oracle as ${email}. An owner will approve or decline your request. This page updates by itself.`;
+    case 'approved':
+      return 'Opening Oracle…';
+    case 'declined':
       return `If you think this is a mistake, ask an owner to invite ${email}.`;
-    case "invite_expired":
+    case 'invite_expired':
       return `${expiry(a.invite_expired_at)} Ask the person who invited you to resend it.`;
-    case "invite_only":
+    case 'invite_only':
       return `Ask an owner to invite ${email}.`;
-    case "outside_domains":
+    case 'outside_domains':
       return `${email} isn't from this company's email domains, so it can't join this Oracle.`;
-    case "removed":
-      return "An owner removed you from this Oracle. Ask an owner to restore you.";
+    case 'removed':
+      return 'An owner removed you from this Oracle. Ask an owner to restore you.';
     default:
-      return "";
+      return '';
   }
 }
 
@@ -65,7 +67,7 @@ export default function AccessPage() {
   const router = useRouter();
   const [access, setAccess] = useState<Access | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState('');
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   // pass-f F-47: the access check that failed (the server's words), apart from a note's error.
@@ -75,16 +77,17 @@ export default function AccessPage() {
 
   const look = useCallback(
     () =>
-      api.GET("/v1/auth/access").then(
+      api.GET('/v1/auth/access').then(
         ({ data, response }) => {
           if (!live.current) return;
-          if (!data) return setCheckError(response.statusText || "No answer");
+          if (!data) return setCheckError(response.statusText || 'No answer');
           setCheckError(null);
-          if (data.state === "member" || data.state === "no_google_sign_in") return router.replace("/login");
+          if (data.state === 'member' || data.state === 'no_google_sign_in')
+            return router.replace('/login');
           setAccess(data);
           // Approved: on into Oracle with a full load (the session is new).
           // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-          if (data.state === "approved") window.location.assign("/");
+          if (data.state === 'approved') window.location.assign('/');
         },
         (e) => live.current && setCheckError(errorMessage(e)),
       ),
@@ -113,7 +116,9 @@ export default function AccessPage() {
     setSending(true);
     setError(null);
     try {
-      const { data, response } = await api.POST("/v1/auth/access/note", { body: { note: note.trim() } });
+      const { data, response } = await api.POST('/v1/auth/access/note', {
+        body: { note: note.trim() },
+      });
       if (!response.ok || !data) throw new Error(response.statusText || "Couldn't send the note");
       setAccess(data);
       setSent(true);
@@ -125,12 +130,12 @@ export default function AccessPage() {
   }
 
   async function signOut() {
-    await api.POST("/v1/auth/logout").catch(() => undefined);
+    await api.POST('/v1/auth/logout').catch(() => undefined);
     // Google sign-in in front of Oracle: ask it to clear its own cookie, which leads to
     // Google's account chooser. The mock has no Google in front: back to sign-in.
-    if (MOCK_MODE) return router.push("/login");
+    if (MOCK_MODE) return router.push('/login');
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-    window.location.assign("/?gcp-iap-mode=CLEAR_LOGIN_COOKIE");
+    window.location.assign('/?gcp-iap-mode=CLEAR_LOGIN_COOKIE');
   }
 
   const state = access?.state;
@@ -141,13 +146,20 @@ export default function AccessPage() {
   );
   const failed = !access && !!checkError;
   return (
-    <AuthCard title={failed ? "Can't check your access" : (state && TITLE[state]) || "Access"} testId="access-page">
-      <div data-testid="access-state" data-state={state} className="flex flex-col gap-4 text-[15px] leading-[22px]">
+    <AuthCard
+      title={failed ? "Can't check your access" : (state && TITLE[state]) || 'Access'}
+      testId="access-page"
+    >
+      <div
+        data-testid="access-state"
+        data-state={state}
+        className="flex flex-col gap-4 text-[15px] leading-[22px]"
+      >
         {error && <Notice tone="error">{error}</Notice>}
         {failed && (
           <div data-testid="access-check-failed" className="flex flex-wrap items-center gap-2">
             <Button variant="solid" disabled={checking} onClick={() => void retry()}>
-              {checking ? "Checking…" : "Retry"}
+              {checking ? 'Checking…' : 'Retry'}
             </Button>
             {out}
             <InfoTip label="the error" align="start">
@@ -155,9 +167,11 @@ export default function AccessPage() {
             </InfoTip>
           </div>
         )}
-        {!access && !error && !checkError && <span className="block h-3 w-2/3 animate-pulse rounded bg-surface2" />}
+        {!access && !error && !checkError && (
+          <span className="block h-3 w-2/3 animate-pulse rounded bg-surface2" />
+        )}
         {access && <p data-testid="access-body">{body(access)}</p>}
-        {state === "pending" && (
+        {state === 'pending' && (
           <>
             <form onSubmit={send} aria-label="Note for the owner" className="flex flex-col gap-2">
               <Field label="Add a note for the owner (optional)">
@@ -175,7 +189,7 @@ export default function AccessPage() {
               <div>
                 {/* qa4-settings-46: nothing typed, nothing to send. */}
                 <Button type="submit" variant="solid" disabled={sending || sent || !note.trim()}>
-                  {sending ? "Sending…" : sent ? "Sent" : "Send note"}
+                  {sending ? 'Sending…' : sent ? 'Sent' : 'Send note'}
                 </Button>
               </div>
             </form>
@@ -184,7 +198,7 @@ export default function AccessPage() {
             </p>
           </>
         )}
-        {state && state !== "pending" && state !== "approved" && <div>{out}</div>}
+        {state && state !== 'pending' && state !== 'approved' && <div>{out}</div>}
       </div>
     </AuthCard>
   );

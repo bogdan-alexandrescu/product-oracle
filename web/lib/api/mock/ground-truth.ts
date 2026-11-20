@@ -22,91 +22,107 @@
  * its proposed goal link, on the roadmap item Usage sync) and Alert rules (confirmed before codes
  * kept their own: keyed F-30, its Code F-17), flagged code_differs. Invented data only.
  */
-import type { Schemas } from "@/lib/api/client";
-import { confirmGoalLinks, type BaselineState } from "./baseline";
-import { reply } from "./typed";
-import { stableUuid } from "./ids";
-import { ANY_CODE as CODE_RE, codeFree, formerKeys, nextFeatureCode, setCode, wantedCode, wholeCode } from "./feature-codes";
-import { closed, roadmapId, type SimpleDb } from "./simple-roadmap";
+import type { Schemas } from '@/lib/api/client';
+import { confirmGoalLinks, type BaselineState } from './baseline';
+import { reply } from './typed';
+import { stableUuid } from './ids';
+import {
+  ANY_CODE as CODE_RE,
+  codeFree,
+  formerKeys,
+  nextFeatureCode,
+  setCode,
+  wantedCode,
+  wholeCode,
+} from './feature-codes';
+import { closed, roadmapId, type SimpleDb } from './simple-roadmap';
 
-export const GROUND_TRUTH_FLAGS_SCENARIO = "ground-truth-flags";
-export const GROUND_TRUTH_CONFIRM_SCENARIO = "ground-truth-confirm";
+export const GROUND_TRUTH_FLAGS_SCENARIO = 'ground-truth-flags';
+export const GROUND_TRUTH_CONFIRM_SCENARIO = 'ground-truth-confirm';
 /** ground-truth-confirm plus Community alerts, a run's proposal two roadmap items share (Chat alerts, PRD section f-140, and Forum alerts). */
-export const GROUND_TRUTH_SHARED_SCENARIO = "ground-truth-shared";
+export const GROUND_TRUTH_SHARED_SCENARIO = 'ground-truth-shared';
 /** ground-truth-shared with the shared proposal named after one of its items: Chat alerts. */
-export const GROUND_TRUTH_SHARED_NAMED_SCENARIO = "ground-truth-shared-named";
+export const GROUND_TRUTH_SHARED_NAMED_SCENARIO = 'ground-truth-shared-named';
 
-type Kind = Schemas["GroundTruthFlag"]["kind"];
-type Action = Schemas["GroundTruthFix"]["action"];
-type Flag = Schemas["GroundTruthFlag"];
-type Entity = BaselineState["entities"][number];
+type Kind = Schemas['GroundTruthFlag']['kind'];
+type Action = Schemas['GroundTruthFix']['action'];
+type Flag = Schemas['GroundTruthFlag'];
+type Entity = BaselineState['entities'][number];
 
 /** In the API's order (CHECK_KINDS). */
-export const CHECK_KINDS: Kind[] = ["unlinked_item", "slice_parent_missing", "prd_feature_missing", "no_code", "code_differs", "no_goal", "runs_today_on_roadmap"];
+export const CHECK_KINDS: Kind[] = [
+  'unlinked_item',
+  'slice_parent_missing',
+  'prd_feature_missing',
+  'no_code',
+  'code_differs',
+  'no_goal',
+  'runs_today_on_roadmap',
+];
 
 const WORDS: Record<Kind, string> = {
-  unlinked_item: "This roadmap item is not a feature in the Ground Truth.",
+  unlinked_item: 'This roadmap item is not a feature in the Ground Truth.',
   slice_parent_missing: "This slice's feature is not in the Ground Truth.",
   prd_feature_missing: "This PRD's feature is not in the Ground Truth.",
-  no_code: "This feature has no feature code yet.",
+  no_code: 'This feature has no feature code yet.',
   code_differs: "This feature's code is not the one its item or PRD gives it.",
-  no_goal: "This feature serves no goal.",
-  runs_today_on_roadmap: "This feature runs today but is still on the roadmap.",
+  no_goal: 'This feature serves no goal.',
+  runs_today_on_roadmap: 'This feature runs today but is still on the roadmap.',
 };
 
 /** Each fix's button, as the API's FIX_WORDS. */
 const FIX_WORDS: Record<Action, string> = {
-  add_to_ground_truth: "Add to Ground Truth",
-  link_to_feature: "Link to a feature",
-  confirm_feature: "Confirm it",
-  give_code: "Give it a code",
-  use_code: "Use its code",
-  pick_goal: "Pick a goal",
-  take_off_roadmap: "Take it off the roadmap",
+  add_to_ground_truth: 'Add to Ground Truth',
+  link_to_feature: 'Link to a feature',
+  confirm_feature: 'Confirm it',
+  give_code: 'Give it a code',
+  use_code: 'Use its code',
+  pick_goal: 'Pick a goal',
+  take_off_roadmap: 'Take it off the roadmap',
 };
 
-const ROADMAP_SLUG = "alerts-roadmap";
-const ROADMAP = { id: roadmapId(ROADMAP_SLUG), title: "Alerts roadmap" };
-const PRD = { id: stableUuid("ground-truth/prd/scale"), title: "Scale" };
+const ROADMAP_SLUG = 'alerts-roadmap';
+const ROADMAP = { id: roadmapId(ROADMAP_SLUG), title: 'Alerts roadmap' };
+const PRD = { id: stableUuid('ground-truth/prd/scale'), title: 'Scale' };
 const featureId = (key: string) => stableUuid(`ground-truth/feature/${key}`);
 /** A feature's code is its key when the key is one (F-12), as oracle.simple.priorities reads it. */
 const F_CODE = /^[A-Z]{1,3}-\d+[a-j]?$/;
 
 /** The scenario's features: key, name, status, whether it serves a goal. */
-const FEATURES: [string, string, Entity["status"], boolean][] = [
-  ["F-02", "Audit log", "confirmed", false],
-  ["smart-search", "Smart search", "confirmed", true],
-  ["F-03", "Night alerts", "confirmed", true],
-  ["F-11", "Sheets export", "confirmed", true],
-  ["F-12", "Digest emails", "confirmed", true],
-  ["F-14", "Weekly digest", "proposed", true],
+const FEATURES: [string, string, Entity['status'], boolean][] = [
+  ['F-02', 'Audit log', 'confirmed', false],
+  ['smart-search', 'Smart search', 'confirmed', true],
+  ['F-03', 'Night alerts', 'confirmed', true],
+  ['F-11', 'Sheets export', 'confirmed', true],
+  ['F-12', 'Digest emails', 'confirmed', true],
+  ['F-14', 'Weekly digest', 'proposed', true],
 ];
 /** Running today (Current state's proof), as feature_states would say. */
-const RUNNING = new Set([featureId("F-03")]);
+const RUNNING = new Set([featureId('F-03')]);
 /** The scenario's roadmap items: key, title, the feature it is, a draft (Export to sheets is published), the PRD
  * section it came from. */
 const ITEMS: [string, string, string | null, boolean, string?][] = [
-  ["gt-export-to-sheets", "Export to sheets", null, false],
-  ["gt-weekly-digest", "Weekly digest", featureId("F-14"), true],
-  ["gt-night-alerts", "Night alerts", featureId("F-03"), false],
+  ['gt-export-to-sheets', 'Export to sheets', null, false],
+  ['gt-weekly-digest', 'Weekly digest', featureId('F-14'), true],
+  ['gt-night-alerts', 'Night alerts', featureId('F-03'), false],
   // Digest emails came from a PRD's F-20 section: the next code counts it (F-21).
-  ["gt-digest-emails", "Digest emails", featureId("F-12"), false, "f-20"],
+  ['gt-digest-emails', 'Digest emails', featureId('F-12'), false, 'f-20'],
   // Two slice items (PRD sections f-15a, f-15b) whose feature, F-15, is in no PRD flag nor the Ground Truth.
-  ["gt-usage-report", "Usage report", null, true, "f-15a"],
-  ["gt-usage-chart", "Usage chart", null, true, "f-15b"],
+  ['gt-usage-report', 'Usage report', null, true, 'f-15a'],
+  ['gt-usage-chart', 'Usage chart', null, true, 'f-15b'],
   // An item of the PRD's F-09, over two milestones: it reads F-09a, and is an unlinked item (F-09 is the PRD's flag).
-  ["gt-guest-invites", "Guest invites", null, true, "f-09"],
+  ['gt-guest-invites', 'Guest invites', null, true, 'f-09'],
 ];
 /** The PRD Scale's approved plan: its feature not in the Ground Truth, over two milestones; it serves the
  * scenario's goal. */
-const PRD_FEATURES = [{ code: "F-09", name: "Guest seats", milestones: ["Beta", "Launch"] }];
+const PRD_FEATURES = [{ code: 'F-09', name: 'Guest seats', milestones: ['Beta', 'Launch'] }];
 /** The codes the base mock's confirmed features take here when they have none, so each of the scenario's kinds has its one flag. */
-const BASE_CODES = ["F-04", "F-05", "F-06", "F-07", "F-08"];
+const BASE_CODES = ['F-04', 'F-05', 'F-06', 'F-07', 'F-08'];
 
 /** The ground-truth-confirm scenario's roadmap item, on the proposed Usage sync. */
-const CONFIRM_ITEM = "gt-usage-sync";
+const CONFIRM_ITEM = 'gt-usage-sync';
 /** The ground-truth-confirm scenario's roadmap item on Alert sounds, from the PRD section of Sheets export's code. */
-const SOUNDS_ITEM = "gt-alert-sounds";
+const SOUNDS_ITEM = 'gt-alert-sounds';
 
 /** The ground-truth-confirm scenario on top of ground-truth-flags: Usage sync, a run's proposal with its own
  * Code and its proposed link to the goal, on a roadmap item; Alert rules, keyed F-30 as it was confirmed
@@ -114,88 +130,300 @@ const SOUNDS_ITEM = "gt-alert-sounds";
  * F-33 while its Code is F-18, which only the slice F-18a reads. */
 export function seedGroundTruthConfirm(baseline: BaselineState, simple: SimpleDb): void {
   seedGroundTruth(baseline, simple);
-  const template = baseline.entities.find((e) => e.type === "feature")!;
+  const template = baseline.entities.find((e) => e.type === 'feature')!;
   const goal = prdGoal(baseline)!;
-  const edge = baseline.edges.find((e) => e.type === "supports")!;
+  const edge = baseline.edges.find((e) => e.type === 'supports')!;
   const fresh = { body: null, parent_id: null, locked: false, locked_by: null, locked_at: null };
-  const sync = featureId("usage-sync");
-  baseline.entities.push({ ...template, ...fresh, id: sync, key: "usage-sync", title: "Usage sync", attrs: { code: "F-16" }, status: "proposed", origin: "agent" });
-  baseline.edges.push({ ...edge, ...fresh, id: stableUuid("ground-truth/serves/usage-sync"), src_id: sync, dst_id: goal.id, status: "proposed", origin: "agent" });
-  const rules = featureId("alert-rules");
-  baseline.entities.push({ ...template, ...fresh, id: rules, key: "F-30", title: "Alert rules", attrs: { code: "F-17" }, status: "confirmed" });
-  baseline.edges.push({ ...edge, ...fresh, id: stableUuid("ground-truth/serves/alert-rules"), src_id: rules, dst_id: goal.id, attrs: { contribution: 1 }, status: "proposed", origin: "agent" });
+  const sync = featureId('usage-sync');
+  baseline.entities.push({
+    ...template,
+    ...fresh,
+    id: sync,
+    key: 'usage-sync',
+    title: 'Usage sync',
+    attrs: { code: 'F-16' },
+    status: 'proposed',
+    origin: 'agent',
+  });
+  baseline.edges.push({
+    ...edge,
+    ...fresh,
+    id: stableUuid('ground-truth/serves/usage-sync'),
+    src_id: sync,
+    dst_id: goal.id,
+    status: 'proposed',
+    origin: 'agent',
+  });
+  const rules = featureId('alert-rules');
+  baseline.entities.push({
+    ...template,
+    ...fresh,
+    id: rules,
+    key: 'F-30',
+    title: 'Alert rules',
+    attrs: { code: 'F-17' },
+    status: 'confirmed',
+  });
+  baseline.edges.push({
+    ...edge,
+    ...fresh,
+    id: stableUuid('ground-truth/serves/alert-rules'),
+    src_id: rules,
+    dst_id: goal.id,
+    attrs: { contribution: 1 },
+    status: 'proposed',
+    origin: 'agent',
+  });
   // Alert sounds: confirmed as F-31 while its roadmap item's code, F-11, is Sheets export's.
-  const sounds = featureId("alert-sounds");
-  baseline.entities.push({ ...template, ...fresh, id: sounds, key: "F-31", title: "Alert sounds", attrs: {}, status: "confirmed" });
-  baseline.edges.push({ ...edge, ...fresh, id: stableUuid("ground-truth/serves/alert-sounds"), src_id: sounds, dst_id: goal.id, attrs: { contribution: 1 }, status: "confirmed" });
+  const sounds = featureId('alert-sounds');
+  baseline.entities.push({
+    ...template,
+    ...fresh,
+    id: sounds,
+    key: 'F-31',
+    title: 'Alert sounds',
+    attrs: {},
+    status: 'confirmed',
+  });
+  baseline.edges.push({
+    ...edge,
+    ...fresh,
+    id: stableUuid('ground-truth/serves/alert-sounds'),
+    src_id: sounds,
+    dst_id: goal.id,
+    attrs: { contribution: 1 },
+    status: 'confirmed',
+  });
   // Alert volume: confirmed as F-32 while its Code, F-11, is Sheets export's.
-  const volume = featureId("alert-volume");
-  baseline.entities.push({ ...template, ...fresh, id: volume, key: "F-32", title: "Alert volume", attrs: { code: "F-11" }, status: "confirmed" });
-  baseline.edges.push({ ...edge, ...fresh, id: stableUuid("ground-truth/serves/alert-volume"), src_id: volume, dst_id: goal.id, attrs: { contribution: 1 }, status: "confirmed" });
+  const volume = featureId('alert-volume');
+  baseline.entities.push({
+    ...template,
+    ...fresh,
+    id: volume,
+    key: 'F-32',
+    title: 'Alert volume',
+    attrs: { code: 'F-11' },
+    status: 'confirmed',
+  });
+  baseline.edges.push({
+    ...edge,
+    ...fresh,
+    id: stableUuid('ground-truth/serves/alert-volume'),
+    src_id: volume,
+    dst_id: goal.id,
+    attrs: { contribution: 1 },
+    status: 'confirmed',
+  });
   // Alert digest: confirmed as F-33 while its Code is F-18, which only the slice F-18a Alert digest by text reads.
-  const digest = featureId("alert-digest");
-  baseline.entities.push({ ...template, ...fresh, id: digest, key: "F-33", title: "Alert digest", attrs: { code: "F-18" }, status: "confirmed" });
-  baseline.edges.push({ ...edge, ...fresh, id: stableUuid("ground-truth/serves/alert-digest"), src_id: digest, dst_id: goal.id, attrs: { contribution: 1 }, status: "confirmed" });
-  const byText = featureId("alert-digest-text");
-  baseline.entities.push({ ...template, ...fresh, id: byText, key: "F-18a", title: "Alert digest by text", attrs: {}, status: "confirmed" });
-  baseline.edges.push({ ...edge, ...fresh, id: stableUuid("ground-truth/serves/alert-digest-text"), src_id: byText, dst_id: goal.id, attrs: { contribution: 1 }, status: "confirmed" });
+  const digest = featureId('alert-digest');
+  baseline.entities.push({
+    ...template,
+    ...fresh,
+    id: digest,
+    key: 'F-33',
+    title: 'Alert digest',
+    attrs: { code: 'F-18' },
+    status: 'confirmed',
+  });
+  baseline.edges.push({
+    ...edge,
+    ...fresh,
+    id: stableUuid('ground-truth/serves/alert-digest'),
+    src_id: digest,
+    dst_id: goal.id,
+    attrs: { contribution: 1 },
+    status: 'confirmed',
+  });
+  const byText = featureId('alert-digest-text');
+  baseline.entities.push({
+    ...template,
+    ...fresh,
+    id: byText,
+    key: 'F-18a',
+    title: 'Alert digest by text',
+    attrs: {},
+    status: 'confirmed',
+  });
+  baseline.edges.push({
+    ...edge,
+    ...fresh,
+    id: stableUuid('ground-truth/serves/alert-digest-text'),
+    src_id: byText,
+    dst_id: goal.id,
+    attrs: { contribution: 1 },
+    status: 'confirmed',
+  });
   (baseline.revisions ??= []).push({
-    id: stableUuid("ground-truth/revision/alert-rules"),
+    id: stableUuid('ground-truth/revision/alert-rules'),
     entity_id: rules,
     edge_id: null,
-    before: { type: "feature", key: "alert-rules", title: "Alert rules", body: null, attrs: { code: "F-17" }, status: "proposed" },
-    after: { type: "feature", key: "F-30", title: "Alert rules", body: null, attrs: { code: "F-17" }, status: "confirmed" },
-    actor: "user:approver",
+    before: {
+      type: 'feature',
+      key: 'alert-rules',
+      title: 'Alert rules',
+      body: null,
+      attrs: { code: 'F-17' },
+      status: 'proposed',
+    },
+    after: {
+      type: 'feature',
+      key: 'F-30',
+      title: 'Alert rules',
+      body: null,
+      attrs: { code: 'F-17' },
+      status: 'confirmed',
+    },
+    actor: 'user:approver',
     reason: null,
-    created_at: "2026-11-12T10:00:00Z",
+    created_at: '2026-11-12T10:00:00Z',
   });
   baseline.revisions.push({
-    id: stableUuid("ground-truth/revision/alert-sounds"),
+    id: stableUuid('ground-truth/revision/alert-sounds'),
     entity_id: sounds,
     edge_id: null,
-    before: { type: "feature", key: "alert-sounds", title: "Alert sounds", body: null, attrs: {}, status: "proposed" },
-    after: { type: "feature", key: "F-31", title: "Alert sounds", body: null, attrs: {}, status: "confirmed" },
-    actor: "user:approver",
+    before: {
+      type: 'feature',
+      key: 'alert-sounds',
+      title: 'Alert sounds',
+      body: null,
+      attrs: {},
+      status: 'proposed',
+    },
+    after: {
+      type: 'feature',
+      key: 'F-31',
+      title: 'Alert sounds',
+      body: null,
+      attrs: {},
+      status: 'confirmed',
+    },
+    actor: 'user:approver',
     reason: null,
-    created_at: "2026-11-12T10:05:00Z",
+    created_at: '2026-11-12T10:05:00Z',
   });
   baseline.revisions.push({
-    id: stableUuid("ground-truth/revision/alert-volume"),
+    id: stableUuid('ground-truth/revision/alert-volume'),
     entity_id: volume,
     edge_id: null,
-    before: { type: "feature", key: "alert-volume", title: "Alert volume", body: null, attrs: { code: "F-11" }, status: "proposed" },
-    after: { type: "feature", key: "F-32", title: "Alert volume", body: null, attrs: { code: "F-11" }, status: "confirmed" },
-    actor: "user:approver",
+    before: {
+      type: 'feature',
+      key: 'alert-volume',
+      title: 'Alert volume',
+      body: null,
+      attrs: { code: 'F-11' },
+      status: 'proposed',
+    },
+    after: {
+      type: 'feature',
+      key: 'F-32',
+      title: 'Alert volume',
+      body: null,
+      attrs: { code: 'F-11' },
+      status: 'confirmed',
+    },
+    actor: 'user:approver',
     reason: null,
-    created_at: "2026-11-12T10:10:00Z",
+    created_at: '2026-11-12T10:10:00Z',
   });
   baseline.revisions.push({
-    id: stableUuid("ground-truth/revision/alert-digest"),
+    id: stableUuid('ground-truth/revision/alert-digest'),
     entity_id: digest,
     edge_id: null,
-    before: { type: "feature", key: "alert-digest", title: "Alert digest", body: null, attrs: { code: "F-18" }, status: "proposed" },
-    after: { type: "feature", key: "F-33", title: "Alert digest", body: null, attrs: { code: "F-18" }, status: "confirmed" },
-    actor: "user:approver",
+    before: {
+      type: 'feature',
+      key: 'alert-digest',
+      title: 'Alert digest',
+      body: null,
+      attrs: { code: 'F-18' },
+      status: 'proposed',
+    },
+    after: {
+      type: 'feature',
+      key: 'F-33',
+      title: 'Alert digest',
+      body: null,
+      attrs: { code: 'F-18' },
+      status: 'confirmed',
+    },
+    actor: 'user:approver',
     reason: null,
-    created_at: "2026-11-12T10:15:00Z",
+    created_at: '2026-11-12T10:15:00Z',
   });
-  simple.items.push({ key: SOUNDS_ITEM, title: "Alert sounds", horizon: "next", roadmap: ROADMAP_SLUG, track: "alerts", confidence: "medium", start: 30, end: 70, source: "typed", draft: true, feature_id: sounds, section: "f-11" });
+  simple.items.push({
+    key: SOUNDS_ITEM,
+    title: 'Alert sounds',
+    horizon: 'next',
+    roadmap: ROADMAP_SLUG,
+    track: 'alerts',
+    confidence: 'medium',
+    start: 30,
+    end: 70,
+    source: 'typed',
+    draft: true,
+    feature_id: sounds,
+    section: 'f-11',
+  });
   simple.ids[SOUNDS_ITEM] = stableUuid(`simple-item/${SOUNDS_ITEM}`);
-  simple.items.push({ key: CONFIRM_ITEM, title: "Usage sync", horizon: "next", roadmap: ROADMAP_SLUG, track: "alerts", confidence: "medium", start: 30, end: 70, source: "typed", draft: true, feature_id: sync });
+  simple.items.push({
+    key: CONFIRM_ITEM,
+    title: 'Usage sync',
+    horizon: 'next',
+    roadmap: ROADMAP_SLUG,
+    track: 'alerts',
+    confidence: 'medium',
+    start: 30,
+    end: 70,
+    source: 'typed',
+    draft: true,
+    feature_id: sync,
+  });
   simple.ids[CONFIRM_ITEM] = stableUuid(`simple-item/${CONFIRM_ITEM}`);
 }
 
 /** The ground-truth-shared scenario's roadmap items, both on the proposed Community alerts. */
-const SHARED_ITEMS = ["gt-chat-alerts", "gt-forum-alerts"];
+const SHARED_ITEMS = ['gt-chat-alerts', 'gt-forum-alerts'];
 
 /** The ground-truth-shared scenario on top of ground-truth-confirm: Community alerts, a run's proposal shared by Chat alerts and Forum alerts. */
-export function seedGroundTruthShared(baseline: BaselineState, simple: SimpleDb, title = "Community alerts"): void {
+export function seedGroundTruthShared(
+  baseline: BaselineState,
+  simple: SimpleDb,
+  title = 'Community alerts',
+): void {
   seedGroundTruthConfirm(baseline, simple);
-  const template = baseline.entities.find((e) => e.type === "feature")!;
-  const id = featureId("community-alerts");
-  baseline.entities.push({ ...template, id, key: "community-alerts", title, body: null, attrs: {}, parent_id: null, locked: false, locked_by: null, locked_at: null, status: "proposed", origin: "agent" });
-  for (const [key, title, section] of [[SHARED_ITEMS[0], "Chat alerts", "f-140"], [SHARED_ITEMS[1], "Forum alerts", undefined]] as const) {
-    simple.items.push({ key, title, horizon: "next", roadmap: ROADMAP_SLUG, track: "alerts", confidence: "medium", start: 30, end: 70, source: "typed", draft: true, feature_id: id, ...(section ? { section } : {}) });
+  const template = baseline.entities.find((e) => e.type === 'feature')!;
+  const id = featureId('community-alerts');
+  baseline.entities.push({
+    ...template,
+    id,
+    key: 'community-alerts',
+    title,
+    body: null,
+    attrs: {},
+    parent_id: null,
+    locked: false,
+    locked_by: null,
+    locked_at: null,
+    status: 'proposed',
+    origin: 'agent',
+  });
+  for (const [key, title, section] of [
+    [SHARED_ITEMS[0], 'Chat alerts', 'f-140'],
+    [SHARED_ITEMS[1], 'Forum alerts', undefined],
+  ] as const) {
+    simple.items.push({
+      key,
+      title,
+      horizon: 'next',
+      roadmap: ROADMAP_SLUG,
+      track: 'alerts',
+      confidence: 'medium',
+      start: 30,
+      end: 70,
+      source: 'typed',
+      draft: true,
+      feature_id: id,
+      ...(section ? { section } : {}),
+    });
     simple.ids[key] = stableUuid(`simple-item/${key}`);
   }
 }
@@ -204,14 +432,18 @@ export function seedGroundTruthShared(baseline: BaselineState, simple: SimpleDb,
  * A feature's marks of roadmap items (fixes.py DECLINED, UNCONFIRMED): items whose match to it a person
  * declined (Its own feature), and items still waiting for their own Confirm it on a proposal they shared.
  */
-export const DECLINED = "_declined_items";
-export const UNCONFIRMED = "_unconfirmed_items";
-type MockItem = SimpleDb["items"][number];
-const markOf = (s: Pick<MockItem, "roadmap" | "key">) => `${s.roadmap}/${s.key}`;
-export const marked = (e: Entity, kind: string, s: MockItem) => ((e.attrs?.[kind] as string[] | undefined) ?? []).includes(markOf(s));
+export const DECLINED = '_declined_items';
+export const UNCONFIRMED = '_unconfirmed_items';
+type MockItem = SimpleDb['items'][number];
+const markOf = (s: Pick<MockItem, 'roadmap' | 'key'>) => `${s.roadmap}/${s.key}`;
+export const marked = (e: Entity, kind: string, s: MockItem) =>
+  ((e.attrs?.[kind] as string[] | undefined) ?? []).includes(markOf(s));
 export function mark(e: Entity, kind: string, s: MockItem, on: boolean): void {
   const { [kind]: had, ...rest } = (e.attrs ?? {}) as Record<string, unknown>;
-  const marks = [...((had as string[] | undefined) ?? []).filter((m) => m !== markOf(s)), ...(on ? [markOf(s)] : [])];
+  const marks = [
+    ...((had as string[] | undefined) ?? []).filter((m) => m !== markOf(s)),
+    ...(on ? [markOf(s)] : []),
+  ];
   e.attrs = marks.length ? { ...rest, [kind]: marks } : rest;
 }
 
@@ -222,59 +454,133 @@ export const itemById = (simple: SimpleDb | undefined, id: string) => {
 };
 
 /** fixes.confirmed_for: Confirm it from one item's flag; when the feature joined now, each other item on it waits for its own. */
-export function confirmedFor(simple: SimpleDb | undefined, e: Entity, itemId: string, joined: boolean): void {
+export function confirmedFor(
+  simple: SimpleDb | undefined,
+  e: Entity,
+  itemId: string,
+  joined: boolean,
+): void {
   const it = itemById(simple, itemId);
-  if (!it || e.type !== "feature") return;
+  if (!it || e.type !== 'feature') return;
   mark(e, UNCONFIRMED, it, false);
   mark(e, DECLINED, it, false);
   if (!joined) return;
-  for (const x of simple!.items) if (x !== it && !closed(x) && !x.trashed && (x.linked_feature ?? x.feature_id) === e.id) mark(e, UNCONFIRMED, x, true);
+  for (const x of simple!.items)
+    if (x !== it && !closed(x) && !x.trashed && (x.linked_feature ?? x.feature_id) === e.id)
+      mark(e, UNCONFIRMED, x, true);
 }
 
 /** check.tied_codes: the codes of the scenario's roadmap items and the PRD features (Link to a feature) linked to a feature (a slice's letter dropped). */
-export function tiedCodes(simple: SimpleDb | undefined, feature: string, baseline?: BaselineState): string[] {
-  const items = (simple?.items ?? []).filter((x) => (x.linked_feature ?? x.feature_id) === feature && !closed(x) && !x.trashed).flatMap((x) => wholeCode(x.section) ?? []);
-  const prd = Object.values(baseline?.prdLinks ?? {}).flatMap((links) => Object.entries(links).flatMap(([code, to]) => (to === feature ? (wholeCode(code) ?? []) : [])));
+export function tiedCodes(
+  simple: SimpleDb | undefined,
+  feature: string,
+  baseline?: BaselineState,
+): string[] {
+  const items = (simple?.items ?? [])
+    .filter((x) => (x.linked_feature ?? x.feature_id) === feature && !closed(x) && !x.trashed)
+    .flatMap((x) => wholeCode(x.section) ?? []);
+  const prd = Object.values(baseline?.prdLinks ?? {}).flatMap((links) =>
+    Object.entries(links).flatMap(([code, to]) => (to === feature ? (wholeCode(code) ?? []) : [])),
+  );
   return [...items, ...prd];
 }
 
 /** fixes._codes: {feature id: the code it reads through its first published roadmap item's PRD section}, for a feature whose key is no code. */
-export function codesRead(simple: SimpleDb | undefined, baseline?: BaselineState): Map<string, string> {
+export function codesRead(
+  simple: SimpleDb | undefined,
+  baseline?: BaselineState,
+): Map<string, string> {
   const out = new Map<string, string>();
   for (const x of simple?.items ?? []) {
     const f = x.linked_feature ?? x.feature_id;
-    const m = /^([a-z]{1,3})-(\d+)([a-j])?$/i.exec((x.section ?? "").trim());
-    const keyed = baseline?.entities.find((e) => e.id === f)?.key ?? "";
+    const m = /^([a-z]{1,3})-(\d+)([a-j])?$/i.exec((x.section ?? '').trim());
+    const keyed = baseline?.entities.find((e) => e.id === f)?.key ?? '';
     if (x.draft || x.trashed || !f || !m || out.has(f) || F_CODE.test(keyed)) continue;
-    out.set(f, `${m[1].toUpperCase()}-${m[2].padStart(2, "0")}${(m[3] ?? "").toLowerCase()}`);
+    out.set(f, `${m[1].toUpperCase()}-${m[2].padStart(2, '0')}${(m[3] ?? '').toLowerCase()}`);
   }
   return out;
 }
 
 /** Adds the scenario's features (to the baseline) and items (to the Alerts roadmap). */
 export function seedGroundTruth(baseline: BaselineState, simple: SimpleDb): void {
-  const template = baseline.entities.find((e) => e.type === "feature")!;
+  const template = baseline.entities.find((e) => e.type === 'feature')!;
   const goal = prdGoal(baseline)!;
-  const edge = baseline.edges.find((e) => e.type === "supports")!;
+  const edge = baseline.edges.find((e) => e.type === 'supports')!;
   for (const [key, title, status, serves] of FEATURES) {
     const id = featureId(key);
     if (baseline.entities.some((e) => e.id === id)) continue;
-    baseline.entities.push({ ...template, id, key, title, body: null, attrs: {}, status, parent_id: null, locked: false, locked_by: null, locked_at: null });
-    if (serves) baseline.edges.push({ ...edge, id: stableUuid(`ground-truth/serves/${key}`), src_id: id, dst_id: goal.id, status: "confirmed", locked: false, locked_by: null, locked_at: null });
+    baseline.entities.push({
+      ...template,
+      id,
+      key,
+      title,
+      body: null,
+      attrs: {},
+      status,
+      parent_id: null,
+      locked: false,
+      locked_by: null,
+      locked_at: null,
+    });
+    if (serves)
+      baseline.edges.push({
+        ...edge,
+        id: stableUuid(`ground-truth/serves/${key}`),
+        src_id: id,
+        dst_id: goal.id,
+        status: 'confirmed',
+        locked: false,
+        locked_by: null,
+        locked_at: null,
+      });
   }
   // The base mock's confirmed features: each with a code and serving a confirmed goal (the check reads every one).
   const ours = new Set(FEATURES.map(([key]) => featureId(key)));
-  const others = baseline.entities.filter((e) => e.type === "feature" && e.status === "confirmed" && !ours.has(e.id));
-  others.filter((e) => !F_CODE.test(e.key)).forEach((e, n) => {
-    if (n < BASE_CODES.length) e.key = BASE_CODES[n];
-  });
+  const others = baseline.entities.filter(
+    (e) => e.type === 'feature' && e.status === 'confirmed' && !ours.has(e.id),
+  );
+  others
+    .filter((e) => !F_CODE.test(e.key))
+    .forEach((e, n) => {
+      if (n < BASE_CODES.length) e.key = BASE_CODES[n];
+    });
   others.forEach((e) => {
-    if (!baseline.edges.some((x) => x.type === "supports" && x.src_id === e.id && x.dst_id === goal.id && x.status === "confirmed"))
-      baseline.edges.push({ ...edge, id: stableUuid(`ground-truth/serves/base/${e.id}`), src_id: e.id, dst_id: goal.id, status: "confirmed", locked: false, locked_by: null, locked_at: null });
+    if (
+      !baseline.edges.some(
+        (x) =>
+          x.type === 'supports' &&
+          x.src_id === e.id &&
+          x.dst_id === goal.id &&
+          x.status === 'confirmed',
+      )
+    )
+      baseline.edges.push({
+        ...edge,
+        id: stableUuid(`ground-truth/serves/base/${e.id}`),
+        src_id: e.id,
+        dst_id: goal.id,
+        status: 'confirmed',
+        locked: false,
+        locked_by: null,
+        locked_at: null,
+      });
   });
   for (const [key, title, feature, draft, section] of ITEMS) {
     if (simple.items.some((x) => x.key === key)) continue;
-    simple.items.push({ key, title, horizon: "next", roadmap: ROADMAP_SLUG, track: "alerts", confidence: "medium", start: 30, end: 70, source: "typed", draft, feature_id: feature, ...(section ? { section } : {}) });
+    simple.items.push({
+      key,
+      title,
+      horizon: 'next',
+      roadmap: ROADMAP_SLUG,
+      track: 'alerts',
+      confidence: 'medium',
+      start: 30,
+      end: 70,
+      source: 'typed',
+      draft,
+      feature_id: feature,
+      ...(section ? { section } : {}),
+    });
     simple.ids[key] = stableUuid(`simple-item/${key}`);
   }
 }
@@ -294,33 +600,40 @@ const flag = (kind: Kind, fixes: [Action, string][], rest: Partial<Flag>): Flag 
 
 /** The goal the PRD gives its features (the plan's one goal), as check.py's goal_of. */
 const prdGoal = (baseline: BaselineState) =>
-  baseline.entities.find((e) => e.type === "goal" && e.status === "confirmed") ?? baseline.entities.find((e) => e.type === "goal" && e.status !== "rejected");
+  baseline.entities.find((e) => e.type === 'goal' && e.status === 'confirmed') ??
+  baseline.entities.find((e) => e.type === 'goal' && e.status !== 'rejected');
 
 /** The check over the mock's state, as check.py's run. `seeded`: the scenario's PRD Scale is there (its plan's features are read). */
 function flagsOf(baseline: BaselineState, simple: SimpleDb | undefined, seeded: boolean): Flag[] {
-  const byId = new Map(baseline.entities.filter((e) => e.type === "feature").map((e) => [e.id, e]));
-  const truth = [...byId.values()].filter((e) => e.status === "confirmed");
+  const byId = new Map(baseline.entities.filter((e) => e.type === 'feature').map((e) => [e.id, e]));
+  const truth = [...byId.values()].filter((e) => e.status === 'confirmed');
   const g = prdGoal(baseline);
   const goal = g ? { id: g.id, code: null, name: g.title } : null;
   const ref = (e: Entity) => ({ id: e.id, code: F_CODE.test(e.key) ? e.key : null, name: e.title });
   const both = { roadmap: ROADMAP, prd: PRD };
   const out: Flag[] = [];
   const ids: Record<string, string> = simple?.ids ?? {};
-  const items = [...ITEMS.map(([key]) => key), CONFIRM_ITEM, SOUNDS_ITEM, ...SHARED_ITEMS].map((key) => simple?.items.find((x) => x.key === key)).filter((s): s is NonNullable<typeof s> => !!s && !closed(s) && !s.trashed);
+  const items = [...ITEMS.map(([key]) => key), CONFIRM_ITEM, SOUNDS_ITEM, ...SHARED_ITEMS]
+    .map((key) => simple?.items.find((x) => x.key === key))
+    .filter((s): s is NonNullable<typeof s> => !!s && !closed(s) && !s.trashed);
   // The Ground Truth by code (F-12, a slice F-12a), as check.py's truth_of.
   const truthOf = new Map(truth.filter((e) => F_CODE.test(e.key)).map((e) => [e.key, e]));
   // Link to a feature: a PRD feature linked to a Ground Truth feature is that feature.
   const links = baseline.prdLinks?.[PRD.id] ?? {};
   const linkedTo = (code: string | null) => {
-    const e = code ? byId.get(links[code] ?? "") : undefined;
-    return e?.status === "confirmed" ? e : undefined;
+    const e = code ? byId.get(links[code] ?? '') : undefined;
+    return e?.status === 'confirmed' ? e : undefined;
   };
-  const missing = seeded ? PRD_FEATURES.filter((f) => !truthOf.has(f.code) && !linkedTo(f.code)) : [];
+  const missing = seeded
+    ? PRD_FEATURES.filter((f) => !truthOf.has(f.code) && !linkedTo(f.code))
+    : [];
   // Each item's code (F-15a for a slice section f-15a) and its slice's feature's (F-15). An item of a PRD
   // feature over several milestones takes the next letter no slice item of it has (F-09a), as check.py's slice_of.
   const sectionOf = (s: (typeof items)[number]) => {
-    const m = /^([a-z]{1,3})-(\d+)([a-j])?$/i.exec((s.section ?? "").trim());
-    return m ? { base: `${m[1].toUpperCase()}-${m[2].padStart(2, "0")}`, letter: m[3]?.toLowerCase() } : null;
+    const m = /^([a-z]{1,3})-(\d+)([a-j])?$/i.exec((s.section ?? '').trim());
+    return m
+      ? { base: `${m[1].toUpperCase()}-${m[2].padStart(2, '0')}`, letter: m[3]?.toLowerCase() }
+      : null;
   };
   const taken = new Map<string, Set<string>>();
   for (const s of items) {
@@ -333,50 +646,92 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb | undefined, seeded: 
     if (sec?.letter) slices.set(s.key, [`${sec.base}${sec.letter}`, sec.base]);
     else if (sec && (PRD_FEATURES.find((f) => f.code === sec.base)?.milestones.length ?? 0) > 1) {
       const used = taken.get(sec.base) ?? new Set<string>();
-      const letter = [..."abcdefghij"].find((x) => !used.has(x)) ?? "j";
+      const letter = [...'abcdefghij'].find((x) => !used.has(x)) ?? 'j';
       taken.set(sec.base, used.add(letter));
       slices.set(s.key, [`${sec.base}${letter}`, sec.base]);
     }
   }
-  const codeOf = (s: (typeof items)[number]): [string | null, string | null] => slices.get(s.key) ?? [sectionOf(s)?.base ?? null, null];
+  const codeOf = (s: (typeof items)[number]): [string | null, string | null] =>
+    slices.get(s.key) ?? [sectionOf(s)?.base ?? null, null];
   const byCode = (s: (typeof items)[number]) => {
-    for (const c of codeOf(s)) if (c && (truthOf.get(c) ?? linkedTo(c))) return truthOf.get(c) ?? linkedTo(c);
+    for (const c of codeOf(s))
+      if (c && (truthOf.get(c) ?? linkedTo(c))) return truthOf.get(c) ?? linkedTo(c);
     return undefined;
   };
   for (const s of items) {
-    const was = byId.get(s.linked_feature ?? s.feature_id ?? "");
+    const was = byId.get(s.linked_feature ?? s.feature_id ?? '');
     // Its feature as the roadmap's working draft has it (a set_feature change: Add or Link); a match the
     // item declined is none, and an item on a shared proposal confirmed from another item's flag waits.
     const linked = was && marked(was, DECLINED, s) ? undefined : was;
-    const waits = linked?.status === "confirmed" && marked(linked, UNCONFIRMED, s);
-    if ((linked?.status === "confirmed" && !waits) || (!linked && byCode(s))) continue;
+    const waits = linked?.status === 'confirmed' && marked(linked, UNCONFIRMED, s);
+    if ((linked?.status === 'confirmed' && !waits) || (!linked && byCode(s))) continue;
     const id = ids[s.key];
     const [code, parent] = codeOf(s);
     const item = { id, code, name: s.title };
     if (!linked && parent && !missing.some((f) => f.code === parent)) {
-      out.push(flag("slice_parent_missing", [["add_to_ground_truth", parent], ["link_to_feature", id]], { item, where: both }));
+      out.push(
+        flag(
+          'slice_parent_missing',
+          [
+            ['add_to_ground_truth', parent],
+            ['link_to_feature', id],
+          ],
+          { item, where: both },
+        ),
+      );
       continue;
     }
     out.push(
-      flag("unlinked_item", [linked && (linked.status === "proposed" || waits) ? ["confirm_feature", linked.id] : ["add_to_ground_truth", id], ["link_to_feature", id]], {
-        item,
-        feature: linked ? ref(linked) : null,
-        where: both,
-      }),
+      flag(
+        'unlinked_item',
+        [
+          linked && (linked.status === 'proposed' || waits)
+            ? ['confirm_feature', linked.id]
+            : ['add_to_ground_truth', id],
+          ['link_to_feature', id],
+        ],
+        {
+          item,
+          feature: linked ? ref(linked) : null,
+          where: both,
+        },
+      ),
     );
   }
   // By code only: the same name as a confirmed feature is a hint, never a match.
   for (const f of missing) {
     const like = truth.find((e) => e.title.trim().toLowerCase() === f.name.toLowerCase());
-    const hint = like ? `${["Same name as", F_CODE.test(like.key) ? like.key : null, like.title].filter(Boolean).join(" ")}.` : null;
-    out.push(flag("prd_feature_missing", [["add_to_ground_truth", f.code], ["link_to_feature", f.code]], { feature: { id: null, code: f.code, name: f.name }, goal, where: both, hint, like: like ? ref(like) : null }));
+    const hint = like
+      ? `${['Same name as', F_CODE.test(like.key) ? like.key : null, like.title].filter(Boolean).join(' ')}.`
+      : null;
+    out.push(
+      flag(
+        'prd_feature_missing',
+        [
+          ['add_to_ground_truth', f.code],
+          ['link_to_feature', f.code],
+        ],
+        {
+          feature: { id: null, code: f.code, name: f.name },
+          goal,
+          where: both,
+          hint,
+          like: like ? ref(like) : null,
+        },
+      ),
+    );
   }
   // Every confirmed feature, as the API: a goal is served by a confirmed link to a confirmed goal.
-  for (const e of truth) if (!F_CODE.test(e.key)) out.push(flag("no_code", [["give_code", e.id]], { feature: ref(e) }));
+  for (const e of truth)
+    if (!F_CODE.test(e.key)) out.push(flag('no_code', [['give_code', e.id]], { feature: ref(e) }));
   // Keyed by the next number as it was confirmed, while its own code is another (check.py's code_differs).
   const joined = new Set(
     (baseline.revisions ?? [])
-      .filter((r) => (r.before as { status?: string; key?: string } | null)?.status === "proposed" && (r.after as { status?: string } | null)?.status === "confirmed")
+      .filter(
+        (r) =>
+          (r.before as { status?: string; key?: string } | null)?.status === 'proposed' &&
+          (r.after as { status?: string } | null)?.status === 'confirmed',
+      )
       .filter((r) => (r.before as { key?: string }).key !== (r.after as { key?: string }).key)
       .map((r) => `${r.entity_id}:${(r.after as { key?: string }).key}`),
   );
@@ -395,61 +750,125 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb | undefined, seeded: 
     // Its item's code is another feature's (a duplicate): link the item to that feature.
     const mine = !wholeCode((e.attrs as Record<string, unknown> | null)?.code);
     const dup = ![undefined, e.id].includes(held.get(want));
-    const on = mine && dup ? items.find((s) => (s.linked_feature ?? s.feature_id) === e.id && wholeCode(s.section) === want) : undefined;
-    if (on) out.push(flag("code_differs", [["link_to_feature", ids[on.key]]], { item: { id: ids[on.key], code: codeOf(on)[0], name: on.title }, feature: ref(e), where: both }));
+    const on =
+      mine && dup
+        ? items.find(
+            (s) => (s.linked_feature ?? s.feature_id) === e.id && wholeCode(s.section) === want,
+          )
+        : undefined;
+    if (on)
+      out.push(
+        flag('code_differs', [['link_to_feature', ids[on.key]]], {
+          item: { id: ids[on.key], code: codeOf(on)[0], name: on.title },
+          feature: ref(e),
+          where: both,
+        }),
+      );
     // Held with no item to link: Use its code could only be refused, so it is not flagged.
-    else if (!dup) out.push(flag("code_differs", [["use_code", e.id]], { feature: ref(e) }));
+    else if (!dup) out.push(flag('code_differs', [['use_code', e.id]], { feature: ref(e) }));
   }
-  const goals = new Set(baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => e.id));
-  const serving = new Set(baseline.edges.filter((e) => e.type === "supports" && e.status === "confirmed" && goals.has(e.dst_id)).map((e) => e.src_id));
-  for (const e of truth) if (!serving.has(e.id)) out.push(flag("no_goal", [["pick_goal", e.id]], { feature: ref(e) }));
+  const goals = new Set(
+    baseline.entities.filter((e) => e.type === 'goal' && e.status === 'confirmed').map((e) => e.id),
+  );
+  const serving = new Set(
+    baseline.edges
+      .filter((e) => e.type === 'supports' && e.status === 'confirmed' && goals.has(e.dst_id))
+      .map((e) => e.src_id),
+  );
+  for (const e of truth)
+    if (!serving.has(e.id)) out.push(flag('no_goal', [['pick_goal', e.id]], { feature: ref(e) }));
   for (const s of items) {
     // Its own feature, or the one it matches by code (F-03, F-03a).
-    const f = byId.get(s.linked_feature ?? s.feature_id ?? "") ?? byCode(s);
-    if (f && RUNNING.has(f.id)) out.push(flag("runs_today_on_roadmap", [["take_off_roadmap", ids[s.key]]], { item: { id: ids[s.key], code: codeOf(s)[0], name: s.title }, feature: ref(f), where: both }));
+    const f = byId.get(s.linked_feature ?? s.feature_id ?? '') ?? byCode(s);
+    if (f && RUNNING.has(f.id))
+      out.push(
+        flag('runs_today_on_roadmap', [['take_off_roadmap', ids[s.key]]], {
+          item: { id: ids[s.key], code: codeOf(s)[0], name: s.title },
+          feature: ref(f),
+          where: both,
+        }),
+      );
   }
   return out;
 }
 
 /** GroundTruthOut for the scenario: its flags in CHECK_KINDS' order, their counts per kind (zero included) and the total. */
-export function groundTruthCheck(scenario: string | null, baseline: BaselineState, simple: SimpleDb | undefined): Schemas["GroundTruthOut"] {
+export function groundTruthCheck(
+  scenario: string | null,
+  baseline: BaselineState,
+  simple: SimpleDb | undefined,
+): Schemas['GroundTruthOut'] {
   // Every scenario: the check reads the mock's own state (the scenario's PRD only where it is seeded).
-  const found = flagsOf(baseline, simple, (scenario === GROUND_TRUTH_FLAGS_SCENARIO || scenario === GROUND_TRUTH_CONFIRM_SCENARIO || scenario === GROUND_TRUTH_SHARED_SCENARIO || scenario === GROUND_TRUTH_SHARED_NAMED_SCENARIO) && !!simple);
+  const found = flagsOf(
+    baseline,
+    simple,
+    (scenario === GROUND_TRUTH_FLAGS_SCENARIO ||
+      scenario === GROUND_TRUTH_CONFIRM_SCENARIO ||
+      scenario === GROUND_TRUTH_SHARED_SCENARIO ||
+      scenario === GROUND_TRUTH_SHARED_NAMED_SCENARIO) &&
+      !!simple,
+  );
   const flags = CHECK_KINDS.flatMap((k) => found.filter((f) => f.kind === k));
-  const counts = Object.fromEntries(CHECK_KINDS.map((k) => [k, flags.filter((f) => f.kind === k).length]));
+  const counts = Object.fromEntries(
+    CHECK_KINDS.map((k) => [k, flags.filter((f) => f.kind === k).length]),
+  );
   return { flags, counts, total: flags.length };
 }
 
-type Role = Schemas["Me"]["role"];
-const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
+type Role = Schemas['Me']['role'];
+const RANK: Role[] = ['viewer', 'commenter', 'approver', 'owner'];
 const atLeast = (role: Role, min: Role) => RANK.indexOf(role) >= RANK.indexOf(min);
-const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+const json = (status: number, body: unknown) =>
+  new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 const fail = (status: number, detail: string) => json(status, { detail });
 /** Any feature code (F-15, F-15a). */
 const ANY_CODE = CODE_RE;
 
 /** The codes next_code reads besides the features' own: every PRD's feature codes and every roadmap item's PRD section. */
 export function codesSeen(simple: SimpleDb | undefined): string[] {
-  return [...PRD_FEATURES.map((f) => f.code), ...(simple?.items ?? []).map((x) => x.section ?? "")];
+  return [...PRD_FEATURES.map((f) => f.code), ...(simple?.items ?? []).map((x) => x.section ?? '')];
 }
 
 /** The next code for a feature, as oracle.baseline.fixes.next_code (./feature-codes.ts), or why not (409). */
-function nextCode(baseline: BaselineState, simple: SimpleDb | undefined, e: Entity): string | Response {
+function nextCode(
+  baseline: BaselineState,
+  simple: SimpleDb | undefined,
+  e: Entity,
+): string | Response {
   const next = nextFeatureCode(baseline, e, codesSeen(simple));
-  return "code" in next ? next.code : fail(409, next.refused);
+  return 'code' in next ? next.code : fail(409, next.refused);
 }
 
-function propose(baseline: BaselineState, userId: string, feature: Entity, fix: Record<string, string>) {
-  const same = baseline.proposals.find((x) => x.status === "open" && x.entity_id === feature.id && JSON.stringify((x.payload as { fix?: unknown }).fix) === JSON.stringify(fix));
+function propose(
+  baseline: BaselineState,
+  userId: string,
+  feature: Entity,
+  fix: Record<string, string>,
+) {
+  const same = baseline.proposals.find(
+    (x) =>
+      x.status === 'open' &&
+      x.entity_id === feature.id &&
+      JSON.stringify((x.payload as { fix?: unknown }).fix) === JSON.stringify(fix),
+  );
   if (same) return same;
   const p = {
-    id: stableUuid(`ground-truth/proposal/${feature.id}/${JSON.stringify(fix)}/${baseline.proposals.length}`),
+    id: stableUuid(
+      `ground-truth/proposal/${feature.id}/${JSON.stringify(fix)}/${baseline.proposals.length}`,
+    ),
     entity_id: feature.id,
     edge_id: null,
-    payload: { op: "update", kind: "entity", fields: {}, fix, reason: `Ground Truth fix: ${fix.action}`, origin: "agent" },
+    payload: {
+      op: 'update',
+      kind: 'entity',
+      fields: {},
+      fix,
+      reason: `Ground Truth fix: ${fix.action}`,
+      origin: 'agent',
+    },
     run_id: null,
     actor: `user:${userId}`,
-    status: "open" as const,
+    status: 'open' as const,
     decided_by: null,
     decided_at: null,
     created_at: new Date().toISOString(),
@@ -459,9 +878,14 @@ function propose(baseline: BaselineState, userId: string, feature: Entity, fix: 
 }
 
 /** fixes.give_code: the next code, as the person's own edit (it locks the feature), with its revision. */
-function giveCode(baseline: BaselineState, simple: SimpleDb | undefined, e: Entity, userId: string): string | Response {
+function giveCode(
+  baseline: BaselineState,
+  simple: SimpleDb | undefined,
+  e: Entity,
+  userId: string,
+): string | Response {
   const code = nextCode(baseline, simple, e);
-  if (typeof code !== "string") return code;
+  if (typeof code !== 'string') return code;
   const before = snapshot(e);
   setCode(baseline, e, code);
   revise(baseline, e, before, userId);
@@ -469,13 +893,25 @@ function giveCode(baseline: BaselineState, simple: SimpleDb | undefined, e: Enti
 }
 
 function snapshot(e: Entity): Record<string, unknown> {
-  const out: Record<string, unknown> = { type: e.type, key: e.key, title: e.title, body: e.body ?? null, attrs: { ...e.attrs }, status: e.status };
+  const out: Record<string, unknown> = {
+    type: e.type,
+    key: e.key,
+    title: e.title,
+    body: e.body ?? null,
+    attrs: { ...e.attrs },
+    status: e.status,
+  };
   if (e.parent_id) out.parent_id = e.parent_id;
   return out;
 }
 
 /** A revision for a key change, as service._revision records it (a key it had stays its alias). */
-function revise(baseline: BaselineState, e: Entity, before: Record<string, unknown>, userId: string) {
+function revise(
+  baseline: BaselineState,
+  e: Entity,
+  before: Record<string, unknown>,
+  userId: string,
+) {
   const at = new Date().toISOString();
   Object.assign(e, { locked: true, locked_by: userId, locked_at: at, updated_at: at });
   (baseline.revisions ??= []).push({
@@ -490,12 +926,17 @@ function revise(baseline: BaselineState, e: Entity, before: Record<string, unkno
   });
 }
 
-function link(baseline: BaselineState, prd: string, code: string, featureId: string): Entity | Response {
-  if (prd !== PRD.id) return fail(404, "No such PRD");
-  if (!PRD_FEATURES.some((f) => f.code === code)) return fail(404, "This PRD has no such feature");
-  const feature = baseline.entities.find((x) => x.id === featureId && x.type === "feature");
-  if (!feature) return fail(404, "No such feature");
-  if (feature.status !== "confirmed") return fail(409, "Link it to a feature in the Ground Truth.");
+function link(
+  baseline: BaselineState,
+  prd: string,
+  code: string,
+  featureId: string,
+): Entity | Response {
+  if (prd !== PRD.id) return fail(404, 'No such PRD');
+  if (!PRD_FEATURES.some((f) => f.code === code)) return fail(404, 'This PRD has no such feature');
+  const feature = baseline.entities.find((x) => x.id === featureId && x.type === 'feature');
+  if (!feature) return fail(404, 'No such feature');
+  if (feature.status !== 'confirmed') return fail(409, 'Link it to a feature in the Ground Truth.');
   const links = ((baseline.prdLinks ??= {})[prd] ??= {});
   if (links[code]) return fail(409, "This PRD's feature is already linked; undo that first.");
   links[code] = feature.id;
@@ -508,92 +949,148 @@ function link(baseline: BaselineState, prd: string, code: string, featureId: str
  * /v1/baseline/prd-links (Link to a feature for a PRD's feature or slice, Undo), and accepting a
  * commenter's fix proposal. Approvers and owners act at once; a commenter's fix is a proposal. Null for any other route.
  */
-export async function routeGroundTruthFixes(baseline: BaselineState, simple: SimpleDb | undefined, me: { id: string; role: Role }, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
+export async function routeGroundTruthFixes(
+  baseline: BaselineState,
+  simple: SimpleDb | undefined,
+  me: { id: string; role: Role },
+  req: Request,
+  p: string[],
+  q: URLSearchParams,
+): Promise<Response | null> {
   const m = req.method;
-  const ref = (e: Entity) => ({ id: e.id, code: ANY_CODE.test(e.key) ? e.key : null, name: e.title });
-  const fixOut = (e: Entity, rest: { status: "done" | "proposed"; code?: string | null; proposal_id?: string | null }): Schemas["GroundTruthFixOut"] => ({
+  const ref = (e: Entity) => ({
+    id: e.id,
+    code: ANY_CODE.test(e.key) ? e.key : null,
+    name: e.title,
+  });
+  const fixOut = (
+    e: Entity,
+    rest: { status: 'done' | 'proposed'; code?: string | null; proposal_id?: string | null },
+  ): Schemas['GroundTruthFixOut'] => ({
     feature: ref(e),
     code: null,
     proposal_id: null,
     ...rest,
   });
-  if (p[1] !== "baseline") return null;
-  if (p[2] === "entities" && p[3] && p[4] === "code" && !p[5] && (m === "POST" || m === "DELETE")) {
-    if (!atLeast(me.role, m === "POST" ? "commenter" : "approver")) return fail(403, "Your role cannot do this");
-    const e = baseline.entities.find((x) => x.id === p[3] && x.type === "feature");
-    if (!e) return fail(404, "No such feature");
-    if (m === "DELETE") {
+  if (p[1] !== 'baseline') return null;
+  if (p[2] === 'entities' && p[3] && p[4] === 'code' && !p[5] && (m === 'POST' || m === 'DELETE')) {
+    if (!atLeast(me.role, m === 'POST' ? 'commenter' : 'approver'))
+      return fail(403, 'Your role cannot do this');
+    const e = baseline.entities.find((x) => x.id === p[3] && x.type === 'feature');
+    if (!e) return fail(404, 'No such feature');
+    if (m === 'DELETE') {
       const old = baseline.codeFrom?.[e.id];
-      if (!old || !ANY_CODE.test(e.key)) return fail(409, "This feature's code was not given here.");
-      if (baseline.entities.some((x) => x.type === "feature" && x.key === old)) return fail(409, "Its old key is taken by another feature.");
+      if (!old || !ANY_CODE.test(e.key))
+        return fail(409, "This feature's code was not given here.");
+      if (baseline.entities.some((x) => x.type === 'feature' && x.key === old))
+        return fail(409, 'Its old key is taken by another feature.');
       const before = snapshot(e);
       e.key = old;
       delete baseline.codeFrom![e.id];
       revise(baseline, e, before, me.id);
-      return reply("/v1/baseline/entities/{entity_id}/code", "delete", fixOut(e, { status: "done" }));
+      return reply(
+        '/v1/baseline/entities/{entity_id}/code',
+        'delete',
+        fixOut(e, { status: 'done' }),
+      );
     }
     const code = nextCode(baseline, simple, e);
-    if (typeof code !== "string") return code;
-    if (!atLeast(me.role, "approver"))
-      return reply("/v1/baseline/entities/{entity_id}/code", "post", fixOut(e, { status: "proposed", proposal_id: propose(baseline, me.id, e, { action: "give_code" }).id }));
+    if (typeof code !== 'string') return code;
+    if (!atLeast(me.role, 'approver'))
+      return reply(
+        '/v1/baseline/entities/{entity_id}/code',
+        'post',
+        fixOut(e, {
+          status: 'proposed',
+          proposal_id: propose(baseline, me.id, e, { action: 'give_code' }).id,
+        }),
+      );
     giveCode(baseline, simple, e, me.id);
-    return reply("/v1/baseline/entities/{entity_id}/code", "post", fixOut(e, { status: "done", code }));
+    return reply(
+      '/v1/baseline/entities/{entity_id}/code',
+      'post',
+      fixOut(e, { status: 'done', code }),
+    );
   }
-  if (p[2] === "entities" && p[3] && p[4] === "own-code" && !p[5] && m === "POST") {
+  if (p[2] === 'entities' && p[3] && p[4] === 'own-code' && !p[5] && m === 'POST') {
     // fixes.use_own_code: its own code as its key; the number it had is given back, never given again.
-    if (!atLeast(me.role, "approver")) return fail(403, "Your role cannot do this");
-    const e = baseline.entities.find((x) => x.id === p[3] && x.type === "feature");
-    if (!e) return fail(404, "No such feature");
-    if (e.status !== "confirmed") return fail(409, "This feature is not in the Ground Truth yet.");
+    if (!atLeast(me.role, 'approver')) return fail(403, 'Your role cannot do this');
+    const e = baseline.entities.find((x) => x.id === p[3] && x.type === 'feature');
+    if (!e) return fail(404, 'No such feature');
+    if (e.status !== 'confirmed') return fail(409, 'This feature is not in the Ground Truth yet.');
     // A slice reads its feature's code with its letter (F-35a), never a code of its own.
-    if (e.parent_id && baseline.entities.some((x) => x.id === e.parent_id && x.type === "feature")) return fail(409, "This feature already has its own code.");
+    if (e.parent_id && baseline.entities.some((x) => x.id === e.parent_id && x.type === 'feature'))
+      return fail(409, 'This feature already has its own code.');
     const want = wantedCode(e, tiedCodes(simple, e.id, baseline));
-    if (!want || want === wholeCode(e.key)) return fail(409, "This feature already has its own code.");
-    if (!codeFree(baseline, e, want, codesRead(simple, baseline))) return fail(409, `Another feature already has the code ${want}.`);
+    if (!want || want === wholeCode(e.key))
+      return fail(409, 'This feature already has its own code.');
+    if (!codeFree(baseline, e, want, codesRead(simple, baseline)))
+      return fail(409, `Another feature already has the code ${want}.`);
     const before = snapshot(e);
     e.key = want;
     (baseline.codesGiven ??= []).push(want);
     revise(baseline, e, before, me.id);
     confirmGoalLinks(baseline, e, me.id);
-    return reply("/v1/baseline/entities/{entity_id}/own-code", "post", fixOut(e, { status: "done", code: want }));
+    return reply(
+      '/v1/baseline/entities/{entity_id}/own-code',
+      'post',
+      fixOut(e, { status: 'done', code: want }),
+    );
   }
-  if (p[2] === "prd-links" && !p[3] && (m === "POST" || m === "DELETE")) {
-    if (!atLeast(me.role, m === "POST" ? "commenter" : "approver")) return fail(403, "Your role cannot do this");
-    if (m === "DELETE") {
-      const prd = q.get("prd_document_id") ?? "";
-      const code = (q.get("code") ?? "").trim();
-      if (prd !== PRD.id) return fail(404, "No such PRD");
+  if (p[2] === 'prd-links' && !p[3] && (m === 'POST' || m === 'DELETE')) {
+    if (!atLeast(me.role, m === 'POST' ? 'commenter' : 'approver'))
+      return fail(403, 'Your role cannot do this');
+    if (m === 'DELETE') {
+      const prd = q.get('prd_document_id') ?? '';
+      const code = (q.get('code') ?? '').trim();
+      if (prd !== PRD.id) return fail(404, 'No such PRD');
       const links = baseline.prdLinks?.[prd];
       if (!links?.[code]) return fail(409, "This PRD's feature is not linked.");
       delete links[code];
-      return reply("/v1/baseline/prd-links", "delete", { ok: true });
+      return reply('/v1/baseline/prd-links', 'delete', { ok: true });
     }
-    const body = JSON.parse((await req.text()) || "{}") as Schemas["PrdLinkCreate"];
+    const body = JSON.parse((await req.text()) || '{}') as Schemas['PrdLinkCreate'];
     const code = body.code.trim();
-    if (!atLeast(me.role, "approver")) {
+    if (!atLeast(me.role, 'approver')) {
       // Checked as the API checks it, then proposed.
-      const trial: BaselineState = { ...baseline, prdLinks: JSON.parse(JSON.stringify(baseline.prdLinks ?? {})) };
+      const trial: BaselineState = {
+        ...baseline,
+        prdLinks: JSON.parse(JSON.stringify(baseline.prdLinks ?? {})),
+      };
       const checked = link(trial, body.prd_document_id, code, body.feature_id);
       if (checked instanceof Response) return checked;
       const name = PRD_FEATURES.find((f) => f.code === code)!.name;
       return reply(
-        "/v1/baseline/prd-links",
-        "post",
-        fixOut(checked, { status: "proposed", proposal_id: propose(baseline, me.id, checked, { action: "link_prd_feature", prd_document_id: body.prd_document_id, code, name }).id }),
+        '/v1/baseline/prd-links',
+        'post',
+        fixOut(checked, {
+          status: 'proposed',
+          proposal_id: propose(baseline, me.id, checked, {
+            action: 'link_prd_feature',
+            prd_document_id: body.prd_document_id,
+            code,
+            name,
+          }).id,
+        }),
       );
     }
     const linked = link(baseline, body.prd_document_id, code, body.feature_id);
-    return linked instanceof Response ? linked : reply("/v1/baseline/prd-links", "post", fixOut(linked, { status: "done" }));
+    return linked instanceof Response
+      ? linked
+      : reply('/v1/baseline/prd-links', 'post', fixOut(linked, { status: 'done' }));
   }
-  if (p[2] === "proposals" && p[3] && p[4] === "accept" && m === "POST") {
+  if (p[2] === 'proposals' && p[3] && p[4] === 'accept' && m === 'POST') {
     const prop = baseline.proposals.find((x) => x.id === p[3]);
     const fix = (prop?.payload as { fix?: Record<string, string> } | undefined)?.fix;
     if (!prop || !fix) return null;
-    if (!atLeast(me.role, "approver")) return fail(403, "Your role cannot do this");
-    if (prop.status !== "open") return fail(409, `Proposal is already ${prop.status}`);
+    if (!atLeast(me.role, 'approver')) return fail(403, 'Your role cannot do this');
+    if (prop.status !== 'open') return fail(409, `Proposal is already ${prop.status}`);
     const e = baseline.entities.find((x) => x.id === prop.entity_id);
-    if (!e) return fail(404, "No such feature");
-    const done = fix.action === "give_code" ? giveCode(baseline, simple, e, me.id) : link(baseline, fix.prd_document_id, fix.code, e.id);
+    if (!e) return fail(404, 'No such feature');
+    const done =
+      fix.action === 'give_code'
+        ? giveCode(baseline, simple, e, me.id)
+        : link(baseline, fix.prd_document_id, fix.code, e.id);
     if (done instanceof Response) return done;
     return null; // the baseline's route accepts it (no field to change) and serves its ProposalOut.
   }

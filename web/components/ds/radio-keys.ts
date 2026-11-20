@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from "react";
+import type { KeyboardEvent } from 'react';
 
 /**
  * qa-shell-7: a radio group's keys. One Tab stop (the checked radio, `tabIndex`), and the
@@ -16,7 +16,12 @@ export function onRadioKeys<V extends string>(
   choose: (v: V) => void,
   { follow = true }: { follow?: boolean } = {},
 ): void {
-  const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+  const step =
+    e.key === 'ArrowRight' || e.key === 'ArrowDown'
+      ? 1
+      : e.key === 'ArrowLeft' || e.key === 'ArrowUp'
+        ? -1
+        : 0;
   if (!step) return;
   e.preventDefault();
   const radios = [...e.currentTarget.querySelectorAll<HTMLElement>('[role="radio"]')];

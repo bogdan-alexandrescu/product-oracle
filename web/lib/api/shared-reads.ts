@@ -25,17 +25,17 @@
  *   that fails or differs still says so.
  */
 
-export const STALE_OK = "x-po-stale-ok";
+export const STALE_OK = 'x-po-stale-ok';
 
 const FRESH_MS = 2000;
 const RAIL_MS = 10_000;
 const STALE_MS = 5 * 60_000;
 const MAX_ENTRIES = 200;
 const MAX_MARKS = 1000;
-const CHANGED = "po:read-changed";
-const FAILED = "po:read-failed";
+const CHANGED = 'po:read-changed';
+const FAILED = 'po:read-failed';
 // The request headers that change an answer, besides the URL (any x- header too, but the stale-ok mark).
-const KEY_HEADERS = ["accept", "accept-language", "authorization"];
+const KEY_HEADERS = ['accept', 'accept-language', 'authorization'];
 
 type Entry = {
   /** When the shared answer landed; null while the first read is on its way. */
@@ -73,7 +73,9 @@ export function forgetReadsOf(path: string) {
 
 // A change said to the whole page (use-query's dataChanged, a chat card's sendCardChanged)
 // drops them too, before the reads it starts.
-if (typeof window !== "undefined") for (const e of ["po:data-changed", "simple:card-changed"]) window.addEventListener(e, forgetReads);
+if (typeof window !== 'undefined')
+  for (const e of ['po:data-changed', 'simple:card-changed'])
+    window.addEventListener(e, forgetReads);
 
 /** Calls `fn` with the URL's path and query whenever a read's answer differs from the one shared before it. */
 export function onReadChanged(fn: (url: string) => void): () => void {
@@ -93,10 +95,10 @@ export function onReadFailed(fn: (url: string) => void): () => void {
 export function readKey(req: Request): string {
   const url = new URL(req.url);
   const headers = [...req.headers]
-    .filter(([name]) => name !== STALE_OK && (KEY_HEADERS.includes(name) || name.startsWith("x-")))
+    .filter(([name]) => name !== STALE_OK && (KEY_HEADERS.includes(name) || name.startsWith('x-')))
     .sort(([a], [b]) => (a < b ? -1 : 1))
     .map(([name, value]) => `\n${name}: ${value}`);
-  return `${url.pathname}${url.search}${headers.join("")}`;
+  return `${url.pathname}${url.search}${headers.join('')}`;
 }
 
 /** Drops a landed answer, leaving its mark (the oldest marks go first past MAX_MARKS). */
@@ -113,7 +115,8 @@ function dropAnswer(key: string, e: Entry) {
 
 /** Drops the answers older than STALE_MS (no read takes them), keeping any read again on its way. */
 function dropOld(now: number) {
-  for (const [key, e] of entries) if (e.at !== null && now - e.at >= STALE_MS && !e.next) dropAnswer(key, e);
+  for (const [key, e] of entries)
+    if (e.at !== null && now - e.at >= STALE_MS && !e.next) dropAnswer(key, e);
 }
 
 /** A short hash of a body (cyrb53), so a mark keeps no answer. */
@@ -131,25 +134,28 @@ function hash(body: string): string {
 }
 
 function isWrite(req: Request): boolean {
-  return req.method !== "GET" || new URL(req.url).searchParams.has("mark_seen");
+  return req.method !== 'GET' || new URL(req.url).searchParams.has('mark_seen');
 }
 
 /** The caller's copy of a shared answer, given up when the caller's own signal aborts. */
 function copy(res: Promise<Response>, signal: AbortSignal | null): Promise<Response> {
   const mine = res.then((r) => r.clone());
   if (!signal) return mine;
-  if (signal.aborted) return Promise.reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+  if (signal.aborted)
+    return Promise.reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));
   return new Promise((resolve, reject) => {
-    const abort = () => reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
-    signal.addEventListener("abort", abort, { once: true });
-    mine.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+    const abort = () => reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));
+    signal.addEventListener('abort', abort, { once: true });
+    mine.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
   });
 }
 
-export function sharedReads(base: (req: Request) => Promise<Response>): (req: Request) => Promise<Response> {
-  if (typeof window === "undefined") return base;
+export function sharedReads(
+  base: (req: Request) => Promise<Response>,
+): (req: Request) => Promise<Response> {
+  if (typeof window === 'undefined') return base;
   return (req: Request) => {
-    const staleOk = req.headers.get(STALE_OK) === "1";
+    const staleOk = req.headers.get(STALE_OK) === '1';
     if (staleOk) req.headers.delete(STALE_OK);
     if (isWrite(req)) {
       forgetReads();
@@ -159,10 +165,12 @@ export function sharedReads(base: (req: Request) => Promise<Response>): (req: Re
     const key = readKey(req);
     const now = Date.now();
     dropOld(now);
-    if (req.cache === "no-store" || req.cache === "reload") return copy(fetchShared(base, req, key), req.signal);
+    if (req.cache === 'no-store' || req.cache === 'reload')
+      return copy(fetchShared(base, req, key), req.signal);
     const hit = entries.get(key);
     const age = hit?.at == null ? null : now - hit.at;
-    if (hit?.res && (hit.at === null || (age !== null && age < (staleOk ? RAIL_MS : FRESH_MS)))) return copy(hit.res, req.signal);
+    if (hit?.res && (hit.at === null || (age !== null && age < (staleOk ? RAIL_MS : FRESH_MS))))
+      return copy(hit.res, req.signal);
     // Read again: shared by every caller while it is on its way.
     const next = hit?.next ?? fetchShared(base, req, key);
     // The rail's counts show the last answer at once while it is read again behind them.
@@ -193,14 +201,30 @@ function orNewer(res: Promise<Response>, entry: Entry): Promise<Response> {
   return shared;
 }
 
-function fetchShared(base: (req: Request) => Promise<Response>, req: Request, key: string): Promise<Response> {
+function fetchShared(
+  base: (req: Request) => Promise<Response>,
+  req: Request,
+  key: string,
+): Promise<Response> {
   const gen = generation;
   // One caller aborting (the rail leaving a page) never aborts the read the others share.
-  const res = base(new Request(req.url, { method: "GET", headers: req.headers, credentials: req.credentials, cache: req.cache }));
+  const res = base(
+    new Request(req.url, {
+      method: 'GET',
+      headers: req.headers,
+      credentials: req.credentials,
+      cache: req.cache,
+    }),
+  );
   // A dropped answer's mark: this read still tells a failed or changed answer.
   const mark = marks.get(key);
   marks.delete(key);
-  const entry: Entry = entries.get(key) ?? { at: mark?.at ?? null, res: null, body: mark?.body ?? null, next: null };
+  const entry: Entry = entries.get(key) ?? {
+    at: mark?.at ?? null,
+    res: null,
+    body: mark?.body ?? null,
+    next: null,
+  };
   // What its callers wait on: a failed first try gives way to a newer read of it.
   const answer = orNewer(res, entry);
   answers.set(res, answer);
@@ -208,7 +232,7 @@ function fetchShared(base: (req: Request) => Promise<Response>, req: Request, ke
   entry.next = res;
   entries.set(key, entry);
   // The URL as listeners know it (onReadChanged, onReadFailed): the key without its headers.
-  const url = key.split("\n")[0]!;
+  const url = key.split('\n')[0]!;
   // Only the last read of it begun gives its answer: one begun before it never replaces it.
   const superseded = () => entry.next !== res;
   const drop = () => {
@@ -237,15 +261,16 @@ function fetchShared(base: (req: Request) => Promise<Response>, req: Request, ke
     }
     if (changed) window.dispatchEvent(new CustomEvent(CHANGED, { detail: url }));
   };
-  res.then(
-    (r) => {
-      if (!r.ok) return failed();
-      // A file (a PDF, an image, a download) is never kept: only text and JSON answers are.
-      const type = r.headers.get("content-type") ?? "";
-      if ((type && !/json|^text\//i.test(type)) || /attachment/i.test(r.headers.get("content-disposition") ?? "")) return drop();
-      r.clone().text().then(done, failed);
-    },
-    failed,
-  );
+  res.then((r) => {
+    if (!r.ok) return failed();
+    // A file (a PDF, an image, a download) is never kept: only text and JSON answers are.
+    const type = r.headers.get('content-type') ?? '';
+    if (
+      (type && !/json|^text\//i.test(type)) ||
+      /attachment/i.test(r.headers.get('content-disposition') ?? '')
+    )
+      return drop();
+    r.clone().text().then(done, failed);
+  }, failed);
   return answer;
 }

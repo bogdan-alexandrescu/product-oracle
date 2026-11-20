@@ -1,16 +1,16 @@
-"use client";
+'use client';
 
-import { RoleBadge } from "@/components/RoleBadge";
-import { Link, useRouter } from "@/lib/nav";
-import { useMemo, useState } from "react";
+import { RoleBadge } from '@/components/RoleBadge';
+import { Link, useRouter } from '@/lib/nav';
+import { useMemo, useState } from 'react';
 
-import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
-import { BuildRoadmapButton, SourceLink } from "@/components/BuildRoadmap";
-import { DocToolbar } from "@/components/DocToolbar";
-import { DOC_MISSING, DocumentNotFound } from "@/components/DocumentNotFound";
-import { RoadmapSharing } from "@/components/share/RoadmapSharing";
-import { PricingDecide } from "@/components/PricingDecide";
-import { DraftWithOracleButton, isTemplateOnly } from "@/components/DraftWithOracle";
+import { DocStatusChip } from '@/app/documents/_components/DocStatusChip';
+import { BuildRoadmapButton, SourceLink } from '@/components/BuildRoadmap';
+import { DocToolbar } from '@/components/DocToolbar';
+import { DOC_MISSING, DocumentNotFound } from '@/components/DocumentNotFound';
+import { RoadmapSharing } from '@/components/share/RoadmapSharing';
+import { PricingDecide } from '@/components/PricingDecide';
+import { DraftWithOracleButton, isTemplateOnly } from '@/components/DraftWithOracle';
 import {
   Button,
   Chip,
@@ -27,29 +27,36 @@ import {
   Panel,
   Split,
   type Column,
-} from "@/components/ds";
-import { ORACLE_WORK } from "@/components/JobsPanel";
-import { ReplacedByButton } from "@/components/ReplacedBy";
-import { RequestSpecDialog, SPEC_STATE, specHref, useSpecs, type SpecSummary } from "@/components/RequestSpec";
-import { Campaigns, ReviewSettingsButton, SectionAssignments } from "@/components/ReviewSetup";
-import { FRESHNESS, sizeText } from "@/components/tech-brief";
-import { ErrorNote, Loading } from "@/components/ui";
-import { api, ApiError, unwrap, type Schemas, type VersionSummary } from "@/lib/api/client";
-import { formatDateTime, plural } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { useScreenSubject } from "@/lib/screen-subject";
-import { NAMES_FAILED, useTemplateNames } from "@/lib/template-names";
-import { useQuery, type Query } from "@/lib/use-query";
-import { versionHref } from "@/lib/version-href";
-import { RebuildSign } from "@/components/RebuildSign";
+} from '@/components/ds';
+import { ORACLE_WORK } from '@/components/JobsPanel';
+import { ReplacedByButton } from '@/components/ReplacedBy';
+import {
+  RequestSpecDialog,
+  SPEC_STATE,
+  specHref,
+  useSpecs,
+  type SpecSummary,
+} from '@/components/RequestSpec';
+import { Campaigns, ReviewSettingsButton, SectionAssignments } from '@/components/ReviewSetup';
+import { FRESHNESS, sizeText } from '@/components/tech-brief';
+import { ErrorNote, Loading } from '@/components/ui';
+import { api, ApiError, unwrap, type Schemas, type VersionSummary } from '@/lib/api/client';
+import { formatDateTime, plural } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { useScreenSubject } from '@/lib/screen-subject';
+import { NAMES_FAILED, useTemplateNames } from '@/lib/template-names';
+import { useQuery, type Query } from '@/lib/use-query';
+import { versionHref } from '@/lib/version-href';
+import { RebuildSign } from '@/components/RebuildSign';
 
 /** A template or theme beside the title, by its name: a small hairline pill. */
-const META = "inline-flex min-h-[26px] max-w-full items-center rounded-full border border-line-strong px-2.5 text-[13px] text-text2";
+const META =
+  'inline-flex min-h-[26px] max-w-full items-center rounded-full border border-line-strong px-2.5 text-[13px] text-text2';
 
 /** The one empty marker on this page (qa-docs-42). */
-const NONE = "–";
+const NONE = '–';
 
-type SectionState = Schemas["SectionStateOut"];
+type SectionState = Schemas['SectionStateOut'];
 
 /**
  * The sections a person assigns (qa-docs-45): the opening section that carries the document's
@@ -58,18 +65,23 @@ type SectionState = Schemas["SectionStateOut"];
  * that only repeats its parent's heading ("Sources" under "Sources and data points").
  */
 export function assignableSections(states: SectionState[], title: string): SectionState[] {
-  const norm = (h: string) => h.replace(/^[\d.]+\s+/, "").trim().toLowerCase();
+  const norm = (h: string) =>
+    h
+      .replace(/^[\d.]+\s+/, '')
+      .trim()
+      .toLowerCase();
   const t = norm(title);
   return states.flatMap((s, i) => {
-    if (i === 0 && title && s.heading.trim() === title.trim()) return [{ ...s, heading: "Introduction" }];
+    if (i === 0 && title && s.heading.trim() === title.trim())
+      return [{ ...s, heading: 'Introduction' }];
     const h = norm(s.heading);
     if (h === t || `${h} prd` === t || h === `${t} prd`) return [];
-    const prev = i > 0 ? norm(states[i - 1]!.heading) : "";
+    const prev = i > 0 ? norm(states[i - 1]!.heading) : '';
     return prev && prev !== h && prev.startsWith(`${h} `) ? [] : [s];
   });
 }
 
-type Warning = VersionSummary["warnings"][number];
+type Warning = VersionSummary['warnings'][number];
 
 /**
  * A version's warning as a person reads it (qa4fix-docs): "Sections approved in v1 changed
@@ -77,11 +89,13 @@ type Warning = VersionSummary["warnings"][number];
  */
 export function warningText(w: Warning, headings: Map<string, string>): string {
   const keys = w.section_keys ?? [];
-  if (w.code !== "locked_section_changed" || keys.length === 0) return w.message;
+  if (w.code !== 'locked_section_changed' || keys.length === 0) return w.message;
   const named = keys.flatMap((k) => headings.get(k) ?? []);
   const other = keys.length - named.length;
-  const parts = other ? [...named, plural(other, named.length ? "other section" : "section")] : named;
-  return `${w.message} ${parts.join(", ")}`;
+  const parts = other
+    ? [...named, plural(other, named.length ? 'other section' : 'section')]
+    : named;
+  return `${w.message} ${parts.join(', ')}`;
 }
 
 function versionColumns(
@@ -92,18 +106,21 @@ function versionColumns(
 ): Column<VersionSummary>[] {
   return [
     {
-      key: "number",
-      header: "Version",
-      width: "120px",
+      key: 'number',
+      header: 'Version',
+      width: '120px',
       cell: (v) => (
-        <Link href={versionHref(doc, kind, v.number)} className="font-medium text-text hover:underline">
+        <Link
+          href={versionHref(doc, kind, v.number)}
+          className="font-medium text-text hover:underline"
+        >
           Version {v.number}
         </Link>
       ),
     },
     {
-      key: "state",
-      header: "State",
+      key: 'state',
+      header: 'State',
       cell: (v) => (
         <span className="inline-flex items-center gap-1.5">
           {/* qa4-docs-share-17: the same on every kind: Approved when approved, Latest on the latest, both when both. */}
@@ -120,7 +137,7 @@ function versionColumns(
               align="start"
               side="bottom"
               testId="overview-warnings-chip"
-              trigger={<Chip kind="warn">{plural(v.warnings.length, "warning")}</Chip>}
+              trigger={<Chip kind="warn">{plural(v.warnings.length, 'warning')}</Chip>}
             >
               <span className="flex flex-col gap-1.5">
                 {v.warnings.map((w, i) => (
@@ -133,24 +150,27 @@ function versionColumns(
       ),
     },
     {
-      key: "created",
-      header: "Imported",
-      width: "176px",
+      key: 'created',
+      header: 'Imported',
+      width: '176px',
       hideOnPhone: true,
-      className: "tnum text-text2",
+      className: 'tnum text-text2',
       cell: (v) => formatDateTime(v.created_at),
     },
     {
-      key: "diff",
-      header: "Changes",
-      width: "128px",
-      align: "right",
-      phone: "action",
+      key: 'diff',
+      header: 'Changes',
+      width: '128px',
+      align: 'right',
+      phone: 'action',
       cell: (v) =>
         v.number > 1 ? (
           // qa-docs-25: the link colour (accent), which reads as a link in dark mode too, where
           // accent-ink is a near-white tint.
-          <Link href={`/documents/${doc}/diff?from=${v.number - 1}&to=${v.number}`} className="text-accent hover:underline">
+          <Link
+            href={`/documents/${doc}/diff?from=${v.number - 1}&to=${v.number}`}
+            className="text-accent hover:underline"
+          >
             Diff from v{v.number - 1}
           </Link>
         ) : (
@@ -179,11 +199,11 @@ function VersionInspector({
   // template_only note; an import never does. The API already names a token "An integration".
   const byName = v.imported_by_name;
   const made =
-    byName === "Oracle"
-      ? { date: "Created", by: "Drafted by" }
-      : (v.notes ?? []).some((n) => n.code === "template_only")
-        ? { date: "Created", by: "Started by" }
-        : { date: "Imported", by: "Imported by" };
+    byName === 'Oracle'
+      ? { date: 'Created', by: 'Drafted by' }
+      : (v.notes ?? []).some((n) => n.code === 'template_only')
+        ? { date: 'Created', by: 'Started by' }
+        : { date: 'Imported', by: 'Imported by' };
   return (
     <Inspector
       testId="version-inspector"
@@ -193,13 +213,17 @@ function VersionInspector({
       chips={
         <>
           {v.approved_at && <Chip hero>Approved</Chip>}
-          {v.number === latest && <Chip kind="now" hero>Latest</Chip>}
+          {v.number === latest && (
+            <Chip kind="now" hero>
+              Latest
+            </Chip>
+          )}
         </>
       }
       action={
         // qa-docs-46: the header's Open latest opens the latest; an earlier version opens here.
         // qa-docs-68: a roadmap's header has no Open latest (its page shows the latest), so here.
-        (v.number !== latest || kind === "roadmap") && (
+        (v.number !== latest || kind === 'roadmap') && (
           <LinkButton variant="hero" href={versionHref(doc, kind, v.number)}>
             {`Open v${v.number}`}
           </LinkButton>
@@ -208,25 +232,31 @@ function VersionInspector({
     >
       <InspectorSection label="Details">
         {/* qa4-docs-share-15: written as Imported is, with its time. */}
-        <InspectorRow value={<span data-testid="version-approved">{v.approved_at ? formatDateTime(v.approved_at) : "Not approved"}</span>}>
+        <InspectorRow
+          value={
+            <span data-testid="version-approved">
+              {v.approved_at ? formatDateTime(v.approved_at) : 'Not approved'}
+            </span>
+          }
+        >
           Approved
         </InspectorRow>
-        <InspectorRow value={v.warnings.length ? plural(v.warnings.length, "warning") : "None"}>Warnings</InspectorRow>
+        <InspectorRow value={v.warnings.length ? plural(v.warnings.length, 'warning') : 'None'}>
+          Warnings
+        </InspectorRow>
         <InspectorRow value={formatDateTime(v.created_at)}>{made.date}</InspectorRow>
         {byName && (
-          <InspectorRow
-            value={
-              <span data-testid="version-importer">
-                {byName}
-              </span>
-            }
-          >
+          <InspectorRow value={<span data-testid="version-importer">{byName}</span>}>
             {made.by}
           </InspectorRow>
         )}
         {v.imported_again && (
           // A run's refused draft a person imported again: who and when (Company time zone).
-          <InspectorRow value={<span data-testid="version-imported-again">{v.imported_again}</span>}>Retried</InspectorRow>
+          <InspectorRow
+            value={<span data-testid="version-imported-again">{v.imported_again}</span>}
+          >
+            Retried
+          </InspectorRow>
         )}
       </InspectorSection>
       {v.source && (
@@ -246,9 +276,12 @@ function VersionInspector({
         </InspectorSection>
       )}
       {/* #370: Oracle's work is where its jobs are run (POST /v1/documents/{doc}/llm-jobs). */}
-      {can("create_llm_job") && (
+      {can('create_llm_job') && (
         <InspectorSection>
-          <Link href={`/documents/${doc}/v/${v.number}?tab=history#${ORACLE_WORK}`} className="text-sm font-medium text-accent-ink hover:underline">
+          <Link
+            href={`/documents/${doc}/v/${v.number}?tab=history#${ORACLE_WORK}`}
+            className="text-sm font-medium text-accent-ink hover:underline"
+          >
             Oracle&apos;s work on v{v.number}
           </Link>
         </InspectorSection>
@@ -263,23 +296,34 @@ type LatestOf = (slug: string | null | undefined) => number | null;
 function useSpecLatest(specs: SpecSummary[]): LatestOf {
   const needDocs = specs.some((s) => s.document_slug);
   const specDocs = useQuery(`documents|spec|${needDocs}`, () =>
-    needDocs ? unwrap(api.GET("/v1/documents", { params: { query: { kind: "spec" } } })) : Promise.resolve(null),
+    needDocs
+      ? unwrap(api.GET('/v1/documents', { params: { query: { kind: 'spec' } } }))
+      : Promise.resolve(null),
   );
-  return (slug: string | null | undefined) => specDocs.data?.find((x) => x.slug === slug)?.latest_version ?? null;
+  return (slug: string | null | undefined) =>
+    specDocs.data?.find((x) => x.slug === slug)?.latest_version ?? null;
 }
 
 /** A requested spec's row: its title, depth, state, freshness and Open spec. */
 function SpecRow({ s, latestOf }: { s: SpecSummary; latestOf: LatestOf }) {
   const state = SPEC_STATE[s.state];
-  const fresh = s.freshness && s.freshness !== "fresh" && s.state !== "stale" ? FRESHNESS[s.freshness as keyof typeof FRESHNESS] : null;
+  const fresh =
+    s.freshness && s.freshness !== 'fresh' && s.state !== 'stale'
+      ? FRESHNESS[s.freshness as keyof typeof FRESHNESS]
+      : null;
   // qa-docs-66: a spec opens on its document's latest version (an edit after the run adds one
   // the spec's own record does not count).
   const latest = latestOf(s.document_slug);
   return (
-    <li data-testid="engineering-spec" className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
+    <li
+      data-testid="engineering-spec"
+      className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5"
+    >
       <span className="min-w-0 font-semibold break-words">{s.request.title}</span>
       {/* qa4-docs-share-44: a brief-depth spec is a technical brief, as its own page title says. */}
-      <span className="text-sm text-text2">{s.depth === "full" ? "Full engineering spec" : "Technical brief"}</span>
+      <span className="text-sm text-text2">
+        {s.depth === 'full' ? 'Full engineering spec' : 'Technical brief'}
+      </span>
       <span className="flex-1" />
       <Chip kind={state.kind} dot>
         {state.label}
@@ -290,7 +334,7 @@ function SpecRow({ s, latestOf }: { s: SpecSummary; latestOf: LatestOf }) {
         aria-label={`Open ${s.request.title}`}
         className="text-sm font-medium text-accent-ink hover:underline"
       >
-        {s.depth === "full" ? "Open spec" : "Open technical brief"}
+        {s.depth === 'full' ? 'Open spec' : 'Open technical brief'}
       </Link>
     </li>
   );
@@ -301,8 +345,18 @@ function SpecRow({ s, latestOf }: { s: SpecSummary; latestOf: LatestOf }) {
  * requested at the Tech brief depth (qa-docs-29: a technical brief is listed with the tech
  * briefs, not under Engineering specs). Hidden until there is one; a failed load shows its error.
  */
-function TechBriefs({ doc, specs, latestOf }: { doc: string; specs: SpecSummary[]; latestOf: LatestOf }) {
-  const q = useQuery(`tech-briefs|${doc}`, () => unwrap(api.GET("/v1/tech-briefs", { params: { query: { prd: doc } } })));
+function TechBriefs({
+  doc,
+  specs,
+  latestOf,
+}: {
+  doc: string;
+  specs: SpecSummary[];
+  latestOf: LatestOf;
+}) {
+  const q = useQuery(`tech-briefs|${doc}`, () =>
+    unwrap(api.GET('/v1/tech-briefs', { params: { query: { prd: doc } } })),
+  );
   const briefs = q.data ?? [];
   if (q.error) {
     return (
@@ -326,7 +380,10 @@ function TechBriefs({ doc, specs, latestOf }: { doc: string; specs: SpecSummary[
       <ul className="divide-y divide-line">
         {briefs.map((b) => (
           <li key={b.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
-            <Link href={`/briefs/${b.id}`} className="min-w-0 font-semibold break-words text-accent-ink hover:underline">
+            <Link
+              href={`/briefs/${b.id}`}
+              className="min-w-0 font-semibold break-words text-accent-ink hover:underline"
+            >
               {b.feature.title}
             </Link>
             <span className="text-sm text-text2">{sizeText(b.size)}</span>
@@ -350,15 +407,29 @@ function TechBriefs({ doc, specs, latestOf }: { doc: string; specs: SpecSummary[
  * PRD's approved roadmap items and opens the Request spec dialog. A spec requested at the
  * Tech brief depth is listed under Tech briefs (qa-docs-29).
  */
-function EngineeringSpecs({ doc, approved, q, latestOf }: { doc: string; approved: boolean; q: Query<SpecSummary[]>; latestOf: LatestOf }) {
+function EngineeringSpecs({
+  doc,
+  approved,
+  q,
+  latestOf,
+}: {
+  doc: string;
+  approved: boolean;
+  q: Query<SpecSummary[]>;
+  latestOf: LatestOf;
+}) {
   const { can } = useMe();
   const [open, setOpen] = useState(false);
-  const may = approved && can("create_spec_request");
+  const may = approved && can('create_spec_request');
   const plan = useQuery(`plan|approved|specs|${doc}|${open}`, () =>
-    open ? unwrap(api.GET("/v1/plan", { params: { query: { scope: "approved" } } })) : Promise.resolve(null),
+    open
+      ? unwrap(api.GET('/v1/plan', { params: { query: { scope: 'approved' } } }))
+      : Promise.resolve(null),
   );
-  const items = (plan.data?.items ?? []).filter((i) => i.prd?.slug === doc && i.origin === "approved");
-  const specs = (q.data ?? []).filter((s) => s.depth === "full");
+  const items = (plan.data?.items ?? []).filter(
+    (i) => i.prd?.slug === doc && i.origin === 'approved',
+  );
+  const specs = (q.data ?? []).filter((s) => s.depth === 'full');
   const briefs = (q.data ?? []).length - specs.length;
   return (
     <Panel
@@ -379,14 +450,14 @@ function EngineeringSpecs({ doc, approved, q, latestOf }: { doc: string; approve
         // qa-docs-17: what unlocks a spec, and who asks for one.
         <p data-testid="engineering-specs-empty" className="px-4 py-3 text-text2">
           {briefs > 0
-            ? `No full engineering spec yet. ${briefs === 1 ? "The tech brief requested is" : "The tech briefs requested are"} under Tech briefs.`
+            ? `No full engineering spec yet. ${briefs === 1 ? 'The tech brief requested is' : 'The tech briefs requested are'} under Tech briefs.`
             : !approved
-              ? can("publish_version")
-                ? "No engineering spec yet. Approve a version to request a spec."
-                : "No engineering spec yet. A spec can be requested once a version is approved."
+              ? can('publish_version')
+                ? 'No engineering spec yet. Approve a version to request a spec.'
+                : 'No engineering spec yet. A spec can be requested once a version is approved.'
               : may
-                ? "No engineering spec yet. Request one for an approved roadmap item."
-                : "No engineering spec yet. An approver or owner can request one."}
+                ? 'No engineering spec yet. Request one for an approved roadmap item.'
+                : 'No engineering spec yet. An approver or owner can request one.'}
         </p>
       ) : (
         <ul className="divide-y divide-line">
@@ -395,7 +466,9 @@ function EngineeringSpecs({ doc, approved, q, latestOf }: { doc: string; approve
           ))}
         </ul>
       )}
-      {open && plan.data && <RequestSpecDialog prd={doc} items={items} onClose={() => setOpen(false)} />}
+      {open && plan.data && (
+        <RequestSpecDialog prd={doc} items={items} onClose={() => setOpen(false)} />
+      )}
       {open && plan.error && <ErrorNote>{plan.error}</ErrorNote>}
     </Panel>
   );
@@ -406,7 +479,7 @@ export function DocumentOverview({ doc }: { doc: string }) {
   const { can } = useMe();
   // qa-shell-1: a document the API does not have says so in words, never the API's own text.
   const q = useQuery(`doc|${doc}`, () =>
-    unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } } })).catch((e: unknown) => {
+    unwrap(api.GET('/v1/documents/{doc}', { params: { path: { doc } } })).catch((e: unknown) => {
       throw e instanceof ApiError && e.status === 404 ? new ApiError(404, DOC_MISSING) : e;
     }),
   );
@@ -419,20 +492,32 @@ export function DocumentOverview({ doc }: { doc: string }) {
   const statesQ = useQuery(`section-states|${doc}|${latest}`, () =>
     latest == null
       ? Promise.resolve(null)
-      : unwrap(api.GET("/v1/documents/{doc}/versions/{n}/section-states", { params: { path: { doc, n: latest } } })),
+      : unwrap(
+          api.GET('/v1/documents/{doc}/versions/{n}/section-states', {
+            params: { path: { doc, n: latest } },
+          }),
+        ),
   );
-  const states = assignableSections(statesQ.data?.sections ?? [], d?.title ?? "");
+  const states = assignableSections(statesQ.data?.sections ?? [], d?.title ?? '');
   // A warning names the sections it is about by heading.
-  const headings = useMemo(() => new Map((statesQ.data?.sections ?? []).map((s) => [s.section_key, s.heading])), [statesQ.data]);
+  const headings = useMemo(
+    () => new Map((statesQ.data?.sections ?? []).map((s) => [s.section_key, s.heading])),
+    [statesQ.data],
+  );
   const names = useTemplateNames();
   // F5 lane 3: the PRD's requested specs, split by depth between Tech briefs and Engineering specs (qa-docs-29).
-  const specsQ = useSpecs(d?.kind === "prd" ? doc : null);
+  const specsQ = useSpecs(d?.kind === 'prd' ? doc : null);
   const specLatest = useSpecLatest(specsQ.data ?? []);
   const templateOnly = isTemplateOnly(d?.kind, d?.versions ?? []);
   // one-roadmap-many-prds: a replaced PRD is read-only: nothing here writes it a new version.
   const replaced = (d?.replaced_by?.length ?? 0) > 0;
   // G7 3.3: the panel is about this document (its latest version).
-  useScreenSubject(d && versions[0] ? { kind: "document", subject: { document_id: d.id, version: versions[0].number } } : null, d?.title);
+  useScreenSubject(
+    d && versions[0]
+      ? { kind: 'document', subject: { document_id: d.id, version: versions[0].number } }
+      : null,
+    d?.title,
+  );
   // A missing document: the one not-found page, no crumb waiting on a title that never comes.
   if (q.error === DOC_MISSING) return <DocumentNotFound />;
   return (
@@ -448,20 +533,34 @@ export function DocumentOverview({ doc }: { doc: string }) {
             <PageHeader
               title={d.title}
               // qa-docs-6: the version the panel shows (the latest until another is picked).
-              suffix={selected ? `v${selected.number}` : d.latest_version != null ? `v${d.latest_version}` : undefined}
+              suffix={
+                selected
+                  ? `v${selected.number}`
+                  : d.latest_version != null
+                    ? `v${d.latest_version}`
+                    : undefined
+              }
               status={
                 <>
                   <DocStatusChip status={d.status} />
                   <RebuildSign slug={d.slug} own />
                   <RoleBadge />
                   {d.template && (
-                    <span className={META} data-testid="doc-template" title={d.template_version ? `Template, its version ${d.template_version}` : "Template"}>
+                    <span
+                      className={META}
+                      data-testid="doc-template"
+                      title={
+                        d.template_version
+                          ? `Template, its version ${d.template_version}`
+                          : 'Template'
+                      }
+                    >
                       Template: {names.template(d.template)}
                       {/* qa-docs-68: a roadmap's header is busier (sharing below it): its theme shares the template's pill. */}
-                      {d.kind === "roadmap" && d.theme && ` · Theme: ${names.theme(d.theme)}`}
+                      {d.kind === 'roadmap' && d.theme && ` · Theme: ${names.theme(d.theme)}`}
                     </span>
                   )}
-                  {d.theme && !(d.kind === "roadmap" && d.template) && (
+                  {d.theme && !(d.kind === 'roadmap' && d.template) && (
                     <span className={META} data-testid="doc-theme" title="Theme">
                       Theme: {names.theme(d.theme)}
                     </span>
@@ -475,16 +574,25 @@ export function DocumentOverview({ doc }: { doc: string }) {
               }
               action={
                 <>
-                  {d.kind === "prd" && <LinkButton href={`/documents/${d.slug}/composition`}>Composition</LinkButton>}
-                  {d.kind === "prd" && !replaced && <BuildRoadmapButton prd={d} />}
+                  {d.kind === 'prd' && (
+                    <LinkButton href={`/documents/${d.slug}/composition`}>Composition</LinkButton>
+                  )}
+                  {d.kind === 'prd' && !replaced && <BuildRoadmapButton prd={d} />}
                   {/* one-roadmap-many-prds: approvers and owners pick the PRDs that replace it, or clear it. */}
-                  {d.kind === "prd" && can("set_replaced_by") && <ReplacedByButton prd={d} onSaved={q.reload} />}
-                  {d.kind === "pricing" && <PricingDecide slug={d.slug} />}
-                  {statesQ.data && <ReviewSettingsButton doc={doc} sections={states} onSaved={statesQ.reload} />}
+                  {d.kind === 'prd' && can('set_replaced_by') && (
+                    <ReplacedByButton prd={d} onSaved={q.reload} />
+                  )}
+                  {d.kind === 'pricing' && <PricingDecide slug={d.slug} />}
+                  {statesQ.data && (
+                    <ReviewSettingsButton doc={doc} sections={states} onSaved={statesQ.reload} />
+                  )}
                   {templateOnly && !replaced && <DraftWithOracleButton slug={d.slug} />}
                   {/* qa-docs-68: a roadmap's page already shows its latest version (the audience view). */}
-                  {d.latest_version != null && d.kind !== "roadmap" && (
-                    <LinkButton variant={templateOnly ? "secondary" : "primary"} href={versionHref(doc, d.kind, d.latest_version)}>
+                  {d.latest_version != null && d.kind !== 'roadmap' && (
+                    <LinkButton
+                      variant={templateOnly ? 'secondary' : 'primary'}
+                      href={versionHref(doc, d.kind, d.latest_version)}
+                    >
                       Open latest (v{d.latest_version})
                     </LinkButton>
                   )}
@@ -495,8 +603,11 @@ export function DocumentOverview({ doc }: { doc: string }) {
                 in one short line. replaced-prd-history: its roadmap shows a short Read-only tick (the
                 reason in its tooltip) beside the same names. */}
             {replaced && (
-              <p data-testid="replaced-by" className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-text2">
-                {d.kind !== "prd" && (
+              <p
+                data-testid="replaced-by"
+                className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-text2"
+              >
+                {d.kind !== 'prd' && (
                   <>
                     <InfoTip
                       label="read-only"
@@ -509,31 +620,34 @@ export function DocumentOverview({ doc }: { doc: string }) {
                         </Chip>
                       }
                     >
-                      {d.read_only ?? "Read-only"}.
-                    </InfoTip>{" "}
+                      {d.read_only ?? 'Read-only'}.
+                    </InfoTip>{' '}
                   </>
                 )}
                 <span>
-                  Replaced by{" "}
+                  Replaced by{' '}
                   {d.replaced_by!.map((r, i, all) => (
                     <span key={r.id}>
-                      {i > 0 && (i === all.length - 1 ? " and " : ", ")}
-                      <Link href={`/documents/${r.slug}`} className="font-medium text-text underline">
+                      {i > 0 && (i === all.length - 1 ? ' and ' : ', ')}
+                      <Link
+                        href={`/documents/${r.slug}`}
+                        className="font-medium text-text underline"
+                      >
                         {r.title}
                       </Link>
                     </span>
                   ))}
-                  {d.kind === "prd" && ". Read-only: its items no longer feed the roadmap."}
+                  {d.kind === 'prd' && '. Read-only: its items no longer feed the roadmap.'}
                 </span>
               </p>
             )}
             {/* replaced-prd-history: the PRDs this one replaced stay reachable here, read-only history. */}
             {(d.replaces?.length ?? 0) > 0 && (
               <p data-testid="replaces" className="mb-3 text-sm text-text2">
-                Replaces{" "}
+                Replaces{' '}
                 {d.replaces!.map((r, i, all) => (
                   <span key={r.id}>
-                    {i > 0 && (i === all.length - 1 ? " and " : ", ")}
+                    {i > 0 && (i === all.length - 1 ? ' and ' : ', ')}
                     <Link href={`/documents/${r.slug}`} className="font-medium text-text underline">
                       {r.title}
                     </Link>
@@ -542,12 +656,28 @@ export function DocumentOverview({ doc }: { doc: string }) {
               </p>
             )}
             {names.failed && (d.template || d.theme) && (
-              <p data-testid="template-names-failed" role="status" className="mb-3 text-[13px] text-text2">
+              <p
+                data-testid="template-names-failed"
+                role="status"
+                className="mb-3 text-[13px] text-text2"
+              >
                 {NAMES_FAILED}
               </p>
             )}
-            {d.kind === "roadmap" && <RoadmapSharing d={d} />}
-            <Split inspector={selected ? <VersionInspector doc={doc} kind={d.kind} v={selected} latest={d.latest_version} headings={headings} /> : undefined}>
+            {d.kind === 'roadmap' && <RoadmapSharing d={d} />}
+            <Split
+              inspector={
+                selected ? (
+                  <VersionInspector
+                    doc={doc}
+                    kind={d.kind}
+                    v={selected}
+                    latest={d.latest_version}
+                    headings={headings}
+                  />
+                ) : undefined
+              }
+            >
               <Panel title="Versions" count={versions.length}>
                 <DataTable
                   label="Versions"
@@ -561,10 +691,25 @@ export function DocumentOverview({ doc }: { doc: string }) {
                   empty="No versions yet"
                 />
               </Panel>
-              {d.kind === "prd" && <TechBriefs doc={doc} specs={(specsQ.data ?? []).filter((s) => s.depth !== "full")} latestOf={specLatest} />}
-              {d.kind === "prd" && <EngineeringSpecs doc={doc} approved={d.versions.some((v) => v.approved_at)} q={specsQ} latestOf={specLatest} />}
+              {d.kind === 'prd' && (
+                <TechBriefs
+                  doc={doc}
+                  specs={(specsQ.data ?? []).filter((s) => s.depth !== 'full')}
+                  latestOf={specLatest}
+                />
+              )}
+              {d.kind === 'prd' && (
+                <EngineeringSpecs
+                  doc={doc}
+                  approved={d.versions.some((v) => v.approved_at)}
+                  q={specsQ}
+                  latestOf={specLatest}
+                />
+              )}
               {statesQ.error && <ErrorNote>{statesQ.error}</ErrorNote>}
-              {statesQ.data && <SectionAssignments doc={doc} states={states} onSaved={statesQ.reload} />}
+              {statesQ.data && (
+                <SectionAssignments doc={doc} states={states} onSaved={statesQ.reload} />
+              )}
               {latest != null && <Campaigns doc={doc} />}
             </Split>
           </>

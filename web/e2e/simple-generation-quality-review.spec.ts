@@ -1,6 +1,6 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /**
  * The generation-quality review's two screens a person sees (oracle.simple.quality), on the
@@ -20,50 +20,69 @@ import { expect, test, type Page } from "./test";
  */
 
 async function scenario(page: Page, name: string) {
-  await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, name] as const);
+  await page
+    .context()
+    .addInitScript(([key, value]) => localStorage.setItem(key, value), [
+      MOCK_SCENARIO_KEY,
+      name,
+    ] as const);
 }
 
-const HELD = "Weekly team health email";
+const HELD = 'Weekly team health email';
 
 async function openGrowRetention(page: Page, email?: string) {
-  await scenario(page, "simple-suggest-needs-look");
+  await scenario(page, 'simple-suggest-needs-look');
   await login(page, email);
-  await page.goto("/simple");
-  await page.getByRole("button", { name: /^Suggestions for Grow retention(, \d+ waiting)?$/ }).click();
-  const drawer = page.getByTestId("goal-panel");
+  await page.goto('/simple');
+  await page
+    .getByRole('button', { name: /^Suggestions for Grow retention(, \d+ waiting)?$/ })
+    .click();
+  const drawer = page.getByTestId('goal-panel');
   await expect(drawer).toBeVisible();
   return drawer;
 }
 
 for (const phone of [false, true]) {
-  test.describe(phone ? "phone" : "desktop", () => {
+  test.describe(phone ? 'phone' : 'desktop', () => {
     test.use({ viewport: phone ? { width: 390, height: 844 } : { width: 1440, height: 900 } });
 
-    for (const email of [undefined, "commenter@example.com"]) {
-      test(`a block not in the PRD reads "Not in the PRD yet" (${email ?? "owner"})`, async ({ page }) => {
-        await scenario(page, "one-pager-not-in-prd");
+    for (const email of [undefined, 'commenter@example.com']) {
+      test(`a block not in the PRD reads "Not in the PRD yet" (${email ?? 'owner'})`, async ({
+        page,
+      }) => {
+        await scenario(page, 'one-pager-not-in-prd');
         await login(page, email);
-        await page.goto("/simple/prds/guided-setup");
-        const notDoing = page.getByRole("region", { name: "Not doing" });
-        await expect(notDoing.getByTestId("one-pager-empty-block")).toHaveText("Not in the PRD yet");
-        await expect(notDoing.getByText("Not written yet")).toHaveCount(0);
+        await page.goto('/simple/prds/guided-setup');
+        const notDoing = page.getByRole('region', { name: 'Not doing' });
+        await expect(notDoing.getByTestId('one-pager-empty-block')).toHaveText(
+          'Not in the PRD yet',
+        );
+        await expect(notDoing.getByText('Not written yet')).toHaveCount(0);
       });
     }
 
-    test("the owner reads a held suggestion with a quiet note", async ({ page }) => {
+    test('the owner reads a held suggestion with a quiet note', async ({ page }) => {
       const drawer = await openGrowRetention(page);
-      await drawer.getByRole("tab", { name: "✦ Oracle · 2" }).click();
-      const note = drawer.getByTestId("goal-suggestion").filter({ hasText: HELD }).getByRole("note", { name: "Needs a look" });
+      await drawer.getByRole('tab', { name: '✦ Oracle · 2' }).click();
+      const note = drawer
+        .getByTestId('goal-suggestion')
+        .filter({ hasText: HELD })
+        .getByRole('note', { name: 'Needs a look' });
       await expect(note).toBeVisible();
-      await expect(note).toContainText("“Weekly team health email” does not name its goal");
-      await expect(drawer.getByTestId("goal-suggestion").filter({ hasText: "Alert templates for new teams" }).getByRole("note")).toHaveCount(0);
+      await expect(note).toContainText('“Weekly team health email” does not name its goal');
+      await expect(
+        drawer
+          .getByTestId('goal-suggestion')
+          .filter({ hasText: 'Alert templates for new teams' })
+          .getByRole('note'),
+      ).toHaveCount(0);
     });
 
-    test("a commenter does not see a held suggestion", async ({ page }) => {
-      const drawer = await openGrowRetention(page, "commenter@example.com");
-      await expect(drawer.getByRole("tab", { name: "✦ Oracle · 1" })).toBeVisible();
+    test('a commenter does not see a held suggestion', async ({ page }) => {
+      const drawer = await openGrowRetention(page, 'commenter@example.com');
+      await expect(drawer.getByRole('tab', { name: '✦ Oracle · 1' })).toBeVisible();
       await expect(drawer.getByText(HELD)).toHaveCount(0);
-      await expect(drawer.getByRole("note", { name: "Needs a look" })).toHaveCount(0);
+      await expect(drawer.getByRole('note', { name: 'Needs a look' })).toHaveCount(0);
     });
   });
 }

@@ -1,6 +1,6 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /*
  * Reported at 390 px: on a phone the roadmap chart (Chart in _timeline.tsx, on the Simple
@@ -16,74 +16,62 @@ test.use({
   isMobile: true,
 });
 
-async function simple(page: Page, format: "waterfall" | "gantt") {
+async function simple(page: Page, format: 'waterfall' | 'gantt') {
   await login(page);
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
   await page.getByTestId(`format-${format}`).click();
-  const chart = page.locator(
-    `[data-testid="simple-chart"][data-format="${format}"]`,
-  );
-  await expect(chart.getByTestId("axis-tick").first()).toBeVisible();
+  const chart = page.locator(`[data-testid="simple-chart"][data-format="${format}"]`);
+  await expect(chart.getByTestId('axis-tick').first()).toBeVisible();
   return chart;
 }
 
 async function plan(page: Page) {
   await page.addInitScript(([key, v]) => localStorage.setItem(key, v), [
     MOCK_SCENARIO_KEY,
-    "plan-timeline",
+    'plan-timeline',
   ] as const);
   await login(page);
-  await page.goto("/plan");
+  await page.goto('/plan');
   await page
-    .getByRole("group", { name: "Roadmap view" })
-    .getByRole("button", { name: "Timeline", exact: true })
+    .getByRole('group', { name: 'Roadmap view' })
+    .getByRole('button', { name: 'Timeline', exact: true })
     .click();
-  const chart = page.getByTestId("plan-timeline").getByTestId("simple-chart");
-  await expect(chart.getByTestId("axis-tick").first()).toBeVisible();
+  const chart = page.getByTestId('plan-timeline').getByTestId('simple-chart');
+  await expect(chart.getByTestId('axis-tick').first()).toBeVisible();
   return chart;
 }
 
 /** The Today pill's box: on screen, inside the part of the chart in view. */
 async function todayOnScreen(page: Page, chart: Locator) {
-  const pill = chart.getByTestId("today-pill");
-  await chart.getByTestId("chart-axis").scrollIntoViewIfNeeded();
+  const pill = chart.getByTestId('today-pill');
+  await chart.getByTestId('chart-axis').scrollIntoViewIfNeeded();
   await expect(pill).toBeVisible();
-  await expect(pill).toHaveText("Today");
+  await expect(pill).toHaveText('Today');
   const [p, v] = await Promise.all([
     pill.boundingBox(),
-    chart.getByTestId("chart-scroll").boundingBox(),
+    chart.getByTestId('chart-scroll').boundingBox(),
   ]);
   const screen = page.viewportSize()!;
   expect(p!.width).toBeGreaterThan(30);
   expect(p!.x).toBeGreaterThanOrEqual(Math.max(0, v!.x));
-  expect(p!.x + p!.width).toBeLessThanOrEqual(
-    Math.min(screen.width, v!.x + v!.width),
-  );
+  expect(p!.x + p!.width).toBeLessThanOrEqual(Math.min(screen.width, v!.x + v!.width));
   expect(p!.y).toBeGreaterThanOrEqual(0);
   expect(p!.y + p!.height).toBeLessThanOrEqual(screen.height);
 }
 
 /** Each quarter label: its words, and whether its box is cut by the chart's edge or the edge of the part in view. */
 function labels(chart: Locator) {
-  return chart.getByTestId("chart-scroll").evaluate((box) => {
+  return chart.getByTestId('chart-scroll').evaluate((box) => {
     const b = box.getBoundingClientRect();
-    const view = [
-      b.left + box.clientLeft,
-      b.left + box.clientLeft + box.clientWidth,
-    ];
-    const s = box.querySelector("svg")!.getBoundingClientRect();
+    const view = [b.left + box.clientLeft, b.left + box.clientLeft + box.clientWidth];
+    const s = box.querySelector('svg')!.getBoundingClientRect();
     return [...box.querySelectorAll('[data-testid="axis-tick"]')].map((t) => {
       const r = t.getBoundingClientRect();
-      const across = (edge: number) =>
-        r.left < edge - 0.5 && r.right > edge + 0.5;
+      const across = (edge: number) => r.left < edge - 0.5 && r.right > edge + 0.5;
       return {
-        text: t.textContent ?? "",
-        cut:
-          r.left < s.left - 0.5 ||
-          r.right > s.right + 0.5 ||
-          across(view[0]) ||
-          across(view[1]),
+        text: t.textContent ?? '',
+        cut: r.left < s.left - 0.5 || r.right > s.right + 0.5 || across(view[0]) || across(view[1]),
         shown: r.right > view[0] + 0.5 && r.left < view[1] - 0.5,
       };
     });
@@ -91,18 +79,13 @@ function labels(chart: Locator) {
 }
 
 async function quartersWhole(chart: Locator) {
-  const scroll = chart.getByTestId("chart-scroll");
+  const scroll = chart.getByTestId('chart-scroll');
   for (const end of [false, true]) {
-    await scroll.evaluate(
-      (el, e) => (el.scrollLeft = e ? el.scrollWidth : 0),
-      end,
-    );
+    await scroll.evaluate((el, e) => (el.scrollLeft = e ? el.scrollWidth : 0), end);
     await expect
-      .poll(
-        async () =>
-          (await labels(chart)).filter((l) => l.cut).map((l) => l.text),
-        { message: `cut labels${end ? " at the end" : ""}` },
-      )
+      .poll(async () => (await labels(chart)).filter((l) => l.cut).map((l) => l.text), {
+        message: `cut labels${end ? ' at the end' : ''}`,
+      })
       .toEqual([]);
     const all = await labels(chart);
     expect(all.length).toBeGreaterThan(1);
@@ -112,22 +95,20 @@ async function quartersWhole(chart: Locator) {
   }
 }
 
-test("Simple roadmap, Waterfall: Today is on screen and every quarter label is whole", async ({
+test('Simple roadmap, Waterfall: Today is on screen and every quarter label is whole', async ({
   page,
 }) => {
-  const chart = await simple(page, "waterfall");
+  const chart = await simple(page, 'waterfall');
   await todayOnScreen(page, chart);
   await quartersWhole(chart);
 });
 
-test("Simple roadmap, Gantt: Today is on screen", async ({ page }) => {
-  const chart = await simple(page, "gantt");
+test('Simple roadmap, Gantt: Today is on screen', async ({ page }) => {
+  const chart = await simple(page, 'gantt');
   await todayOnScreen(page, chart);
 });
 
-test("Plan, Timeline: Today is on screen and every quarter label is whole", async ({
-  page,
-}) => {
+test('Plan, Timeline: Today is on screen and every quarter label is whole', async ({ page }) => {
   const chart = await plan(page);
   await todayOnScreen(page, chart);
   await quartersWhole(chart);

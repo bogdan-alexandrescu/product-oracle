@@ -1,162 +1,178 @@
-import { MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from "../lib/api/mock/server";
+import { MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from '../lib/api/mock/server';
 
-import { expect, test } from "./test";
+import { expect, test } from './test';
 
-import { login, searchSources } from "./helpers";
+import { login, searchSources } from './helpers';
 
-test("settings › sources: my sources, status and last error, sync, allowlist, pause", async ({ page }) => {
+test('settings › sources: my sources, status and last error, sync, allowlist, pause', async ({
+  page,
+}) => {
   await login(page);
-  await page.goto("/settings/sources");
-  await expect(page.getByRole("heading", { level: 1, name: "Sources" })).toBeVisible();
+  await page.goto('/settings/sources');
+  await expect(page.getByRole('heading', { level: 1, name: 'Sources' })).toBeVisible();
 
-  const chat = page.getByRole("listitem", { name: "Product chat" });
-  await expect(chat).toContainText("Slack");
-  await expect(chat).toContainText("Active");
-  await expect(chat).toContainText("#product, #customer-feedback");
+  const chat = page.getByRole('listitem', { name: 'Product chat' });
+  await expect(chat).toContainText('Slack');
+  await expect(chat).toContainText('Active');
+  await expect(chat).toContainText('#product, #customer-feedback');
 
-  const repo = page.getByRole("listitem", { name: "Example repo" });
-  await expect(repo).toContainText("Error");
-  await expect(repo.getByTestId("last-error")).toHaveText("The connection was rejected: token expired");
+  const repo = page.getByRole('listitem', { name: 'Example repo' });
+  await expect(repo).toContainText('Error');
+  await expect(repo.getByTestId('last-error')).toHaveText(
+    'The connection was rejected: token expired',
+  );
 
-  await chat.getByRole("button", { name: "Sync now" }).click();
-  await expect(chat.getByRole("status")).toContainText("Synced: 2 items, 1 changed");
+  await chat.getByRole('button', { name: 'Sync now' }).click();
+  await expect(chat.getByRole('status')).toContainText('Synced: 2 items, 1 changed');
 
   // Edit channels and Delete sit in the row's More menu.
-  await chat.getByRole("button", { name: "More actions for Product chat" }).click();
-  await chat.getByRole("menuitem", { name: "Edit channels" }).click();
+  await chat.getByRole('button', { name: 'More actions for Product chat' }).click();
+  await chat.getByRole('menuitem', { name: 'Edit channels' }).click();
   // The channel list names the picks (#product): wait for it before switching to pasting ids.
-  await expect(chat.getByRole("checkbox", { name: "#product", exact: true })).toBeChecked();
-  await chat.getByRole("button", { name: "Paste links" }).click();
-  await chat.getByLabel("Channel links (one per line)").fill("C0123PRODUCT\nC0789ROADMAP");
-  await chat.getByRole("button", { name: "Save channels" }).click();
-  await expect(chat.getByRole("status")).toHaveText("Channels saved.");
+  await expect(chat.getByRole('checkbox', { name: '#product', exact: true })).toBeChecked();
+  await chat.getByRole('button', { name: 'Paste links' }).click();
+  await chat.getByLabel('Channel links (one per line)').fill('C0123PRODUCT\nC0789ROADMAP');
+  await chat.getByRole('button', { name: 'Save channels' }).click();
+  await expect(chat.getByRole('status')).toHaveText('Channels saved.');
   // A pasted id no list named reads as unknown (Settings' words, qa-settings-23), never by its id.
-  await expect(chat.getByTestId("source-picks")).toHaveText("#product, unknown channel");
+  await expect(chat.getByTestId('source-picks')).toHaveText('#product, unknown channel');
 
-  await chat.getByRole("button", { name: "Pause" }).click();
-  await expect(chat).toContainText("Paused");
-  await expect(chat.getByRole("button", { name: "Sync now" })).toBeDisabled();
-  await chat.getByRole("button", { name: "Resume" }).click();
-  await expect(chat.getByRole("button", { name: "Sync now" })).toBeEnabled();
+  await chat.getByRole('button', { name: 'Pause' }).click();
+  await expect(chat).toContainText('Paused');
+  await expect(chat.getByRole('button', { name: 'Sync now' })).toBeDisabled();
+  await chat.getByRole('button', { name: 'Resume' }).click();
+  await expect(chat.getByRole('button', { name: 'Sync now' })).toBeEnabled();
 
   // Resuming a source in error clears its error.
-  await repo.getByRole("button", { name: "Pause" }).click();
-  await repo.getByRole("button", { name: "Resume" }).click();
-  await expect(repo.getByTestId("last-error")).toHaveCount(0);
+  await repo.getByRole('button', { name: 'Pause' }).click();
+  await repo.getByRole('button', { name: 'Resume' }).click();
+  await expect(repo.getByTestId('last-error')).toHaveCount(0);
 });
 
-test("settings › sources: add from my connections, upload files, delete", async ({ page }) => {
+test('settings › sources: add from my connections, upload files, delete', async ({ page }) => {
   await login(page);
-  await page.goto("/settings/sources");
-  const form = page.getByRole("form", { name: "Add a source" });
+  await page.goto('/settings/sources');
+  const form = page.getByRole('form', { name: 'Add a source' });
 
-  await form.getByLabel("Kind").selectOption("github");
-  await expect(form.getByLabel("Connection")).toHaveValue(/.+/);
-  await form.getByLabel("Name").fill("Docs repo");
-  await form.getByRole("button", { name: "Paste links" }).click();
-  await form.getByLabel("Repositories (one per line)").fill("example-org/docs");
-  await form.getByRole("button", { name: "Add source" }).click();
-  const docs = page.getByRole("listitem", { name: "Docs repo" });
-  await expect(docs).toContainText("example-org/docs");
-  await expect(docs).toContainText("never synced");
+  await form.getByLabel('Kind').selectOption('github');
+  await expect(form.getByLabel('Connection')).toHaveValue(/.+/);
+  await form.getByLabel('Name').fill('Docs repo');
+  await form.getByRole('button', { name: 'Paste links' }).click();
+  await form.getByLabel('Repositories (one per line)').fill('example-org/docs');
+  await form.getByRole('button', { name: 'Add source' }).click();
+  const docs = page.getByRole('listitem', { name: 'Docs repo' });
+  await expect(docs).toContainText('example-org/docs');
+  await expect(docs).toContainText('never synced');
 
-  await form.getByLabel("Kind").selectOption("upload");
-  await form.getByLabel("Name").fill("Research notes");
-  await form.getByRole("button", { name: "Add source" }).click();
-  const notes = page.getByRole("listitem", { name: "Research notes" });
-  await expect(notes).toContainText("No items yet — upload files to add some");
+  await form.getByLabel('Kind').selectOption('upload');
+  await form.getByLabel('Name').fill('Research notes');
+  await form.getByRole('button', { name: 'Add source' }).click();
+  const notes = page.getByRole('listitem', { name: 'Research notes' });
+  await expect(notes).toContainText('No items yet — upload files to add some');
 
-  await notes.getByLabel("Upload files to Research notes").setInputFiles([
-    { name: "interview.md", mimeType: "text/markdown", buffer: Buffer.from("# Interview\nThe export button is hard to find.") },
-    { name: "brief.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4 mock") },
+  await notes.getByLabel('Upload files to Research notes').setInputFiles([
+    {
+      name: 'interview.md',
+      mimeType: 'text/markdown',
+      buffer: Buffer.from('# Interview\nThe export button is hard to find.'),
+    },
+    { name: 'brief.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 mock') },
   ]);
-  await expect(notes.getByRole("status")).toHaveText("Uploaded 2 files.");
-  await expect(notes).toContainText("2 items");
+  await expect(notes.getByRole('status')).toHaveText('Uploaded 2 files.');
+  await expect(notes).toContainText('2 items');
 
-  await notes.getByLabel("Upload files to Research notes").setInputFiles([
-    { name: "deck.pptx", mimeType: "application/octet-stream", buffer: Buffer.from("x") },
-  ]);
-  await expect(notes.getByRole("alert")).toContainText("only .md, .txt and .pdf files can be uploaded");
+  await notes
+    .getByLabel('Upload files to Research notes')
+    .setInputFiles([
+      { name: 'deck.pptx', mimeType: 'application/octet-stream', buffer: Buffer.from('x') },
+    ]);
+  await expect(notes.getByRole('alert')).toContainText(
+    'only .md, .txt and .pdf files can be uploaded',
+  );
 
   // Delete asks in the page (never a browser dialog); Back keeps the source.
   const native: string[] = [];
-  page.on("dialog", (d) => {
+  page.on('dialog', (d) => {
     native.push(d.message());
     void d.dismiss();
   });
-  const ask = page.getByRole("alertdialog", { name: "Delete" });
-  await docs.getByRole("button", { name: "More actions for Docs repo" }).click();
-  await docs.getByRole("menuitem", { name: "Delete" }).click();
-  await expect(ask).toContainText("Delete “Docs repo” and everything it pulled in?");
-  await ask.getByRole("button", { name: "Back" }).click();
+  const ask = page.getByRole('alertdialog', { name: 'Delete' });
+  await docs.getByRole('button', { name: 'More actions for Docs repo' }).click();
+  await docs.getByRole('menuitem', { name: 'Delete' }).click();
+  await expect(ask).toContainText('Delete “Docs repo” and everything it pulled in?');
+  await ask.getByRole('button', { name: 'Back' }).click();
   await expect(ask).toHaveCount(0);
-  await expect(page.getByRole("listitem", { name: "Docs repo" })).toHaveCount(1);
-  await docs.getByRole("button", { name: "More actions for Docs repo" }).click();
-  await docs.getByRole("menuitem", { name: "Delete" }).click();
-  await ask.getByRole("button", { name: "Delete" }).click();
-  await expect(page.getByRole("listitem", { name: "Docs repo" })).toHaveCount(0);
+  await expect(page.getByRole('listitem', { name: 'Docs repo' })).toHaveCount(1);
+  await docs.getByRole('button', { name: 'More actions for Docs repo' }).click();
+  await docs.getByRole('menuitem', { name: 'Delete' }).click();
+  await ask.getByRole('button', { name: 'Delete' }).click();
+  await expect(page.getByRole('listitem', { name: 'Docs repo' })).toHaveCount(0);
   expect(native).toEqual([]);
 });
 
-test("/sources: search ranks by confidence and explains the badge", async ({ page }) => {
+test('/sources: search ranks by confidence and explains the badge', async ({ page }) => {
   await login(page);
-  await page.goto("/sources");
-  await expect(page.getByRole("heading", { level: 1, name: "Sources" })).toBeVisible();
-  await searchSources(page, "onboarding checklist");
-  const hits = page.getByTestId("search-hit");
+  await page.goto('/sources');
+  await expect(page.getByRole('heading', { level: 1, name: 'Sources' })).toBeVisible();
+  await searchSources(page, 'onboarding checklist');
+  const hits = page.getByTestId('search-hit');
   await expect(hits).toHaveCount(2);
   // The README (fresh, from code) outranks the older chat thread.
-  await expect(hits.nth(0)).toContainText("README");
-  await expect(hits.nth(0)).toContainText("GitHub");
-  await expect(hits.nth(1)).toContainText("Customer question");
-  await expect(hits.nth(0).locator("mark").first()).toHaveText("onboarding");
+  await expect(hits.nth(0)).toContainText('README');
+  await expect(hits.nth(0)).toContainText('GitHub');
+  await expect(hits.nth(1)).toContainText('Customer question');
+  await expect(hits.nth(0).locator('mark').first()).toHaveText('onboarding');
 
-  const badge = hits.nth(0).getByTestId("confidence");
-  await expect(badge).toContainText("High confidence");
-  await badge.locator("summary").click();
-  const factors = badge.getByRole("table", { name: "Confidence factors" });
+  const badge = hits.nth(0).getByTestId('confidence');
+  await expect(badge).toContainText('High confidence');
+  await badge.locator('summary').click();
+  const factors = badge.getByRole('table', { name: 'Confidence factors' });
   await expect(factors).toBeVisible();
-  await expect(factors.getByRole("row").filter({ hasText: "Kind of source" })).toContainText("High");
-  await expect(factors).not.toContainText("0.85");
-  await expect(factors).toContainText("Freshness");
-  await expect(hits.nth(1).getByTestId("confidence")).toContainText("Medium confidence");
+  await expect(factors.getByRole('row').filter({ hasText: 'Kind of source' })).toContainText(
+    'High',
+  );
+  await expect(factors).not.toContainText('0.85');
+  await expect(factors).toContainText('Freshness');
+  await expect(hits.nth(1).getByTestId('confidence')).toContainText('Medium confidence');
 
-  await page.getByRole("combobox", { name: /^Source/ }).selectOption({ label: "Product chat" });
-  await page.getByRole("button", { name: "Search" }).click();
+  await page.getByRole('combobox', { name: /^Source/ }).selectOption({ label: 'Product chat' });
+  await page.getByRole('button', { name: 'Search' }).click();
   await expect(hits).toHaveCount(1);
-  await expect(hits.nth(0)).toContainText("Customer question");
+  await expect(hits.nth(0)).toContainText('Customer question');
 
-  await page.getByLabel("Search", { exact: true }).fill("nothing matches this");
-  await page.getByRole("button", { name: "Search" }).click();
-  await expect(page.getByText("Nothing in your sources matches")).toBeVisible();
+  await page.getByLabel('Search', { exact: true }).fill('nothing matches this');
+  await page.getByRole('button', { name: 'Search' }).click();
+  await expect(page.getByText('Nothing in your sources matches')).toBeVisible();
 });
 
-test("/sources: the search box keeps its focus while coverage loads", async ({ page }) => {
+test('/sources: the search box keeps its focus while coverage loads', async ({ page }) => {
   // Coverage is slow to come: a person types while it loads.
   await page.addInitScript(
     ([k, v, mk, ms]) => {
       localStorage.setItem(k, v);
       localStorage.setItem(mk, ms);
     },
-    [MOCK_SLOW_KEY, "/v1/sources/coverage", MOCK_SLOW_MS_KEY, "3000"] as const,
+    [MOCK_SLOW_KEY, '/v1/sources/coverage', MOCK_SLOW_MS_KEY, '3000'] as const,
   );
   await login(page);
-  await page.goto("/sources");
+  await page.goto('/sources');
   // The source picker is filled: the page is live, coverage not in yet.
-  await expect(page.getByRole("combobox", { name: /^Source/ }).getByRole("option", { name: "Product chat" })).toBeAttached();
-  await expect(page.getByRole("row", { name: /Product chat/ })).toHaveCount(0);
+  await expect(
+    page.getByRole('combobox', { name: /^Source/ }).getByRole('option', { name: 'Product chat' }),
+  ).toBeAttached();
+  await expect(page.getByRole('row', { name: /Product chat/ })).toHaveCount(0);
 
-  const box = page.getByLabel("Search", { exact: true });
+  const box = page.getByLabel('Search', { exact: true });
   await box.click();
-  await page.keyboard.type("onboarding");
-  await expect(box).toHaveValue("onboarding");
+  await page.keyboard.type('onboarding');
+  await expect(box).toHaveValue('onboarding');
 
   // Coverage comes in, with its side panel, while the person is typing: the box keeps its
   // focus, so the rest of the words land in it too.
-  await expect(page.getByRole("row", { name: /Product chat/ })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('row', { name: /Product chat/ })).toBeVisible({ timeout: 10_000 });
   await expect(box).toBeFocused();
-  await page.keyboard.type(" checklist");
-  await expect(box).toHaveValue("onboarding checklist");
-  await page.keyboard.press("Enter");
-  await expect(page.getByTestId("search-hit")).toHaveCount(2);
+  await page.keyboard.type(' checklist');
+  await expect(box).toHaveValue('onboarding checklist');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('search-hit')).toHaveCount(2);
 });

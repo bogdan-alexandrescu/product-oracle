@@ -1,22 +1,22 @@
-"use client";
+'use client';
 
-import { useEffect, useId, useRef, useState, type ComponentProps, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 
-import { ResolutionPanel, type GoTo } from "@/components/FeedbackPanel";
-import { JobsPanel, keyWords, ORACLE_WORK } from "@/components/JobsPanel";
-import { ReportsPanel } from "@/components/ReportsPanel";
-import { LowConfidence } from "@/components/CitationChip";
-import { Icon, Inspector, InspectorRow, Label } from "@/components/ds";
-import { FeedbackList } from "@/components/review/FeedbackList";
-import { TabBar } from "@/components/review/parts";
-import { ErrorNote, Loading, SpecStateBadge } from "@/components/ui";
-import type { CitationOut, VersionOut } from "@/lib/api/client";
-import { citationHref, citationRefText, citationSourceLabel, formatDateTime } from "@/lib/format";
+import { ResolutionPanel, type GoTo } from '@/components/FeedbackPanel';
+import { JobsPanel, keyWords, ORACLE_WORK } from '@/components/JobsPanel';
+import { ReportsPanel } from '@/components/ReportsPanel';
+import { LowConfidence } from '@/components/CitationChip';
+import { Icon, Inspector, InspectorRow, Label } from '@/components/ds';
+import { FeedbackList } from '@/components/review/FeedbackList';
+import { TabBar } from '@/components/review/parts';
+import { ErrorNote, Loading, SpecStateBadge } from '@/components/ui';
+import type { CitationOut, VersionOut } from '@/lib/api/client';
+import { citationHref, citationRefText, citationSourceLabel, formatDateTime } from '@/lib/format';
 
-export type PanelTab = "feedback" | "sources" | "history";
+export type PanelTab = 'feedback' | 'sources' | 'history';
 
-type FeedbackProps = Omit<ComponentProps<typeof FeedbackList>, "entries"> & {
-  entries: ComponentProps<typeof FeedbackList>["entries"] | null;
+type FeedbackProps = Omit<ComponentProps<typeof FeedbackList>, 'entries'> & {
+  entries: ComponentProps<typeof FeedbackList>['entries'] | null;
   error: string | null;
 };
 
@@ -47,7 +47,14 @@ export function ReviewPanel({
   version: VersionOut | undefined;
   doc: string;
   n: number;
-  stats: { reviewed: number; total: number; reviewedLabel?: string; locked: number; lockedLabel?: string; openFeedback: number | null };
+  stats: {
+    reviewed: number;
+    total: number;
+    reviewedLabel?: string;
+    locked: number;
+    lockedLabel?: string;
+    openFeedback: number | null;
+  };
   tab: PanelTab;
   setTab: (t: PanelTab) => void;
   feedback: FeedbackProps;
@@ -55,7 +62,7 @@ export function ReviewPanel({
   openFeedback: number | null;
   refreshKey: number;
   shortcuts?: ReactNode;
-  variant: "side" | "sheet";
+  variant: 'side' | 'sheet';
   /** Section links in History open here. */
   goTo?: GoTo;
   /** The questions asked about the open section (C2), above its feedback. */
@@ -66,43 +73,60 @@ export function ReviewPanel({
   const uid = useId();
   const idFor = (t: PanelTab) => `${uid}-${t}`;
   const tabs: { id: PanelTab; label: string; count?: number | null }[] = [
-    { id: "feedback", label: "Feedback", count: openFeedback },
-    { id: "sources", label: "Sources", count: version ? version.citations.length : null },
-    { id: "history", label: "History" },
+    { id: 'feedback', label: 'Feedback', count: openFeedback },
+    { id: 'sources', label: 'Sources', count: version ? version.citations.length : null },
+    { id: 'history', label: 'History' },
   ];
   const { entries, error, ...list } = feedback;
   return (
     <Inspector
       label="Review panel"
-      testId={variant === "side" ? "review-panel" : "review-panel-sheet"}
+      testId={variant === 'side' ? 'review-panel' : 'review-panel-sheet'}
       eyebrow={`Review · v${n}`}
       action={shortcuts}
       className={
-        variant === "side"
-          ? "min-[1101px]:flex min-[1101px]:min-h-0 min-[1101px]:flex-col"
-          : "rounded-none border-0 shadow-none max-[600px]:rounded-none"
+        variant === 'side'
+          ? 'min-[1101px]:flex min-[1101px]:min-h-0 min-[1101px]:flex-col'
+          : 'rounded-none border-0 shadow-none max-[600px]:rounded-none'
       }
       head={
         version && (
           <dl className="mt-2.5 flex flex-wrap gap-x-7 gap-y-2">
             {(
               [
-                [stats.reviewedLabel ?? "Reviewed", `${stats.reviewed}/${stats.total}`, "stat-reviewed"],
-                [stats.lockedLabel ?? "Locked", stats.locked, "stat-locked"],
-                ["Open feedback", stats.openFeedback ?? "–", "stat-open-feedback"],
+                [
+                  stats.reviewedLabel ?? 'Reviewed',
+                  `${stats.reviewed}/${stats.total}`,
+                  'stat-reviewed',
+                ],
+                [stats.lockedLabel ?? 'Locked', stats.locked, 'stat-locked'],
+                ['Open feedback', stats.openFeedback ?? '–', 'stat-open-feedback'],
               ] as const
             ).map(([label, value, testId]) => (
               <div key={label} data-testid={testId} className="flex flex-col-reverse">
-                <dt className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-hero-text2">{label}</dt>
-                <dd className="tnum font-display text-[34px] leading-10 font-bold tracking-[-0.03em]">{value}</dd>
+                <dt className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-hero-text2">
+                  {label}
+                </dt>
+                <dd className="tnum font-display text-[34px] leading-10 font-bold tracking-[-0.03em]">
+                  {value}
+                </dd>
               </div>
             ))}
           </dl>
         )
       }
     >
-      <div className={`flex-none px-5 pt-1 max-[600px]:px-4 ${variant === "sheet" ? "sticky top-0 z-[1] bg-surface" : ""}`}>
-        <TabBar label="Review panel" size="sm" tabs={tabs} value={tab} onChange={setTab} idFor={idFor} />
+      <div
+        className={`flex-none px-5 pt-1 max-[600px]:px-4 ${variant === 'sheet' ? 'sticky top-0 z-[1] bg-surface' : ''}`}
+      >
+        <TabBar
+          label="Review panel"
+          size="sm"
+          tabs={tabs}
+          value={tab}
+          onChange={setTab}
+          idFor={idFor}
+        />
       </div>
       <div
         role="tabpanel"
@@ -110,27 +134,40 @@ export function ReviewPanel({
         aria-labelledby={idFor(tab)}
         data-testid="review-tabpanel"
         className={`relative min-w-0 px-5 py-3.5 max-[600px]:px-4 ${
-          variant === "side" ? "min-[1101px]:min-h-0 min-[1101px]:flex-1 min-[1101px]:overflow-y-auto min-[1101px]:overscroll-contain" : ""
+          variant === 'side'
+            ? 'min-[1101px]:min-h-0 min-[1101px]:flex-1 min-[1101px]:overflow-y-auto min-[1101px]:overscroll-contain'
+            : ''
         }`}
       >
-        {tab === "feedback" && !discussion && questions}
-        {tab === "feedback" &&
+        {tab === 'feedback' && !discussion && questions}
+        {tab === 'feedback' &&
           (discussion ??
-            (error ? <ErrorNote>{error}</ErrorNote> : !entries ? <Loading /> : <FeedbackList entries={entries} {...list} />))}
-        {tab === "sources" && version && <SourcesTab version={version} />}
-        {tab === "history" && <HistoryTab doc={doc} n={n} refreshKey={refreshKey} goTo={goTo} version={version} />}
+            (error ? (
+              <ErrorNote>{error}</ErrorNote>
+            ) : !entries ? (
+              <Loading />
+            ) : (
+              <FeedbackList entries={entries} {...list} />
+            )))}
+        {tab === 'sources' && version && <SourcesTab version={version} />}
+        {tab === 'history' && (
+          <HistoryTab doc={doc} n={n} refreshKey={refreshKey} goTo={goTo} version={version} />
+        )}
       </div>
     </Inspector>
   );
 }
 
 /** E1 (owner, 2026-10-20): sources an edit added to a spec are listed apart from Oracle's. */
-const ADDED_SOURCE_LABEL = "Proposed · added in an edit";
+const ADDED_SOURCE_LABEL = 'Proposed · added in an edit';
 
 function sourceRow(c: CitationOut, number: number) {
   const href = citationHref(c);
   return (
-    <li key={c.id} className="flex min-h-8 min-w-0 items-center gap-2.5 text-sm max-[639px]:min-h-11">
+    <li
+      key={c.id}
+      className="flex min-h-8 min-w-0 items-center gap-2.5 text-sm max-[639px]:min-h-11"
+    >
       <span className="tnum w-5 flex-none text-right font-semibold text-text2">{number}</span>
       {/* The writer's confidence beside the source in words, or its note when unscored (text);
           qa4-docs-19: label and title wrap to two lines rather than being cut. */}
@@ -155,7 +192,11 @@ function sourceRow(c: CitationOut, number: number) {
         </a>
       ) : (
         // A Ground Truth item named in free text (source oracle): its ref on hover, no link.
-        <span title={citationRefText(c.ref)} data-testid="source-title" className="line-clamp-2 min-w-0 font-medium break-words text-text">
+        <span
+          title={citationRefText(c.ref)}
+          data-testid="source-title"
+          className="line-clamp-2 min-w-0 font-medium break-words text-text"
+        >
           {c.title ?? citationRefText(c.ref)}
         </span>
       )}
@@ -171,7 +212,11 @@ function SourcesTab({ version }: { version: VersionOut }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col text-sm" data-testid="version-info">
-        <InspectorRow value={<span className="text-sm font-medium">{formatDateTime(version.created_at)}</span>}>Imported</InspectorRow>
+        <InspectorRow
+          value={<span className="text-sm font-medium">{formatDateTime(version.created_at)}</span>}
+        >
+          Imported
+        </InspectorRow>
         {version.snapshot && (
           <InspectorRow
             value={
@@ -194,7 +239,10 @@ function SourcesTab({ version }: { version: VersionOut }) {
       ) : (
         <>
           {oracle.length > 0 && (
-            <section className="flex flex-col gap-1" aria-labelledby={added.length ? `${id}-oracle` : undefined}>
+            <section
+              className="flex flex-col gap-1"
+              aria-labelledby={added.length ? `${id}-oracle` : undefined}
+            >
               {added.length > 0 && (
                 <Label id={`${id}-oracle`} className="py-1">
                   Sources
@@ -213,7 +261,13 @@ function SourcesTab({ version }: { version: VersionOut }) {
             >
               <div className="flex flex-wrap items-center gap-2">
                 <Label id={`${id}-added`}>Added sources</Label>
-                <SpecStateBadge state={{ label: added[0].state_label ?? ADDED_SOURCE_LABEL, decided: false, added: true }} />
+                <SpecStateBadge
+                  state={{
+                    label: added[0].state_label ?? ADDED_SOURCE_LABEL,
+                    decided: false,
+                    added: true,
+                  }}
+                />
               </div>
               <ol className="flex flex-col" aria-label="Added sources">
                 {added.map((c, i) => sourceRow(c, oracle.length + i + 1))}
@@ -226,18 +280,41 @@ function SourcesTab({ version }: { version: VersionOut }) {
   );
 }
 
-function HistoryTab({ doc, n, refreshKey, goTo, version }: { doc: string; n: number; refreshKey: number; goTo?: GoTo; version?: VersionOut }) {
+function HistoryTab({
+  doc,
+  n,
+  refreshKey,
+  goTo,
+  version,
+}: {
+  doc: string;
+  n: number;
+  refreshKey: number;
+  goTo?: GoTo;
+  version?: VersionOut;
+}) {
   // F-35: jobs and reports name a section as the outline does ("1. Problem"), never by its key.
-  const sectionName = (key: string) => version?.sections.find((s) => s.section_key === key)?.heading ?? keyWords(key);
+  const sectionName = (key: string) =>
+    version?.sections.find((s) => s.section_key === key)?.heading ?? keyWords(key);
   // ?tab=reports (where applying a next draft lands, C1e): Reports opens on What changed.
-  const [landed] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === "reports");
+  const [landed] = useState(
+    () =>
+      typeof window !== 'undefined' &&
+      new URLSearchParams(window.location.search).get('tab') === 'reports',
+  );
   return (
     <div className="flex flex-col" data-testid="history">
       <Fold title="Resolutions" testId="history-resolutions">
         <ResolutionPanel doc={doc} n={n} refreshKey={refreshKey} goTo={goTo} />
       </Fold>
       <Fold title="Reports" testId="history-reports">
-        <ReportsPanel doc={doc} n={n} refreshKey={refreshKey} initialTab={landed ? "changes" : "resolution"} sectionName={sectionName} />
+        <ReportsPanel
+          doc={doc}
+          n={n}
+          refreshKey={refreshKey}
+          initialTab={landed ? 'changes' : 'resolution'}
+          sectionName={sectionName}
+        />
       </Fold>
       <Fold title="Oracle's work" testId="history-jobs" anchor={ORACLE_WORK}>
         <JobsPanel doc={doc} version={n} refreshKey={refreshKey} sectionName={sectionName} />
@@ -247,7 +324,17 @@ function HistoryTab({ doc, n, refreshKey, goTo, version }: { doc: string; n: num
 }
 
 /** A headed part of History that folds; `anchor` is the #hash that scrolls to it on arrival. */
-function Fold({ title, testId, anchor, children }: { title: string; testId: string; anchor?: string; children: ReactNode }) {
+function Fold({
+  title,
+  testId,
+  anchor,
+  children,
+}: {
+  title: string;
+  testId: string;
+  anchor?: string;
+  children: ReactNode;
+}) {
   const [open, setOpen] = useState(true);
   const id = useId();
   const ref = useRef<HTMLElement>(null);
@@ -257,14 +344,14 @@ function Fold({ title, testId, anchor, children }: { title: string; testId: stri
     if (!el) return;
     // The side panel and the phone's Review sheet both hold History: scroll the one in view.
     const go = () => {
-      if (el.checkVisibility()) el.scrollIntoView({ block: "start" });
+      if (el.checkVisibility()) el.scrollIntoView({ block: 'start' });
     };
     const raf = requestAnimationFrame(go);
     // The folds above load after arrival and push this one down: keep it in place while History
     // settles, until the reader scrolls or acts (or a few seconds pass).
     const settle = new ResizeObserver(go);
     settle.observe(el.parentElement ?? el);
-    const events = ["wheel", "touchstart", "keydown", "pointerdown"] as const;
+    const events = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
     const stop = () => {
       settle.disconnect();
       for (const e of events) window.removeEventListener(e, stop);
@@ -293,7 +380,7 @@ function Fold({ title, testId, anchor, children }: { title: string; testId: stri
           onClick={() => setOpen((o) => !o)}
           className="flex min-h-9 w-full items-center gap-1.5 text-left font-display text-[15px] font-bold tracking-heading text-text max-[639px]:min-h-11"
         >
-          <Icon name={open ? "chevron-down" : "chevron-right"} size={16} className="text-text2" />
+          <Icon name={open ? 'chevron-down' : 'chevron-right'} size={16} className="text-text2" />
           {title}
         </button>
       </h3>

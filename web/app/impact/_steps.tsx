@@ -1,25 +1,25 @@
-"use client";
+'use client';
 
-import { Link, useRouter } from "@/lib/nav";
-import { useId, useState, type ReactNode } from "react";
+import { Link, useRouter } from '@/lib/nav';
+import { useId, useState, type ReactNode } from 'react';
 
-import { Button, InfoTip, Notice } from "@/components/ds";
-import { INPUT } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { useMe } from "@/lib/me";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import { Button, InfoTip, Notice } from '@/components/ds';
+import { INPUT } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { useMe } from '@/lib/me';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-import { FRESH, usd, type Output, type Proposal } from "./_lib";
-import { useNamesOf } from "./_names";
+import { FRESH, usd, type Output, type Proposal } from './_lib';
+import { useNamesOf } from './_names';
 
 /** "prd_to_roadmap" → "PRD to roadmap": a run's flow in words. */
 const flowWords = (flow: string) => {
-  const w = flow.replaceAll("_", " ").replace(/\bprd\b/gi, "PRD");
+  const w = flow.replaceAll('_', ' ').replace(/\bprd\b/gi, 'PRD');
   return w.charAt(0).toUpperCase() + w.slice(1);
 };
 
-type Proposed = Schemas["RegenerationOut"];
-type Estimate = Schemas["RegenerateEstimateOut"];
+type Proposed = Schemas['RegenerationOut'];
+type Estimate = Schemas['RegenerateEstimateOut'];
 
 /** What a row's stages 2 and 3 returned, kept by the screen per output so a reload keeps them. */
 export type RowResult = { proposed?: Proposed; estimate?: Estimate };
@@ -46,17 +46,19 @@ export function PlanSteps({
   onChanged: () => void;
 }) {
   const { can, me } = useMe();
-  const isDoc = output.kind === "document_version";
+  const isDoc = output.kind === 'document_version';
   // A document's decider regenerates it whatever their role (oracle.trash.regenerate): read its policy.
   const slug = isDoc ? output.document_slug : null;
-  const policyQ = useQuery(`impact-policy|${slug ?? ""}`, () =>
-    slug ? unwrap(api.GET("/v1/documents/{doc}/review-policy", { params: { path: { doc: slug } } })) : Promise.resolve(null),
+  const policyQ = useQuery(`impact-policy|${slug ?? ''}`, () =>
+    slug
+      ? unwrap(api.GET('/v1/documents/{doc}/review-policy', { params: { path: { doc: slug } } }))
+      : Promise.resolve(null),
   );
   const decider = Boolean(me?.user_id && policyQ.data?.decider_id === me.user_id);
-  const mayAct = can("act_on_staleness");
-  const mayPropose = !isDoc && Boolean(output.request_id) && can("regenerate_spec", true);
-  const mayEstimate = isDoc && Boolean(slug) && can("estimate_regeneration", decider);
-  const mayStart = isDoc && Boolean(slug) && can("start_regeneration", decider);
+  const mayAct = can('act_on_staleness');
+  const mayPropose = !isDoc && Boolean(output.request_id) && can('regenerate_spec', true);
+  const mayEstimate = isDoc && Boolean(slug) && can('estimate_regeneration', decider);
+  const mayStart = isDoc && Boolean(slug) && can('start_regeneration', decider);
 
   if (!proposal) return null;
   if (!mayAct && !mayPropose && !mayEstimate) {
@@ -66,13 +68,14 @@ export function PlanSteps({
     <ol className="flex flex-col gap-3" aria-label="Steps">
       <Step title="1 · Settle staleness">
         {mayAct ? (
-          <Settle output={output} review={proposal.action === "review"} onChanged={onChanged} />
+          <Settle output={output} review={proposal.action === 'review'} onChanged={onChanged} />
         ) : (
           // #1590: who may settle stays one visible line; why this reader may still regenerate sits behind the (i).
           <p className="flex items-center gap-1.5 text-sm text-text2">
             Settling its staleness needs an approver.
             <InfoTip label="settling staleness" align="start" testId="settle-tip">
-              You decide on this {isDoc ? output.category.replace("_", " ") : "output"}, so you can regenerate it.
+              You decide on this {isDoc ? output.category.replace('_', ' ') : 'output'}, so you can
+              regenerate it.
             </InfoTip>
           </p>
         )}
@@ -80,7 +83,12 @@ export function PlanSteps({
       {isDoc ? (
         <>
           <Step title="2 · Estimate">
-            <EstimateStep slug={slug!} may={mayEstimate} estimate={result.estimate} onEstimate={(estimate) => onResult({ ...result, estimate })} />
+            <EstimateStep
+              slug={slug!}
+              may={mayEstimate}
+              estimate={result.estimate}
+              onEstimate={(estimate) => onResult({ ...result, estimate })}
+            />
           </Step>
           <Step title="3 · Start">
             <StartStep slug={slug!} may={mayStart} estimate={result.estimate} />
@@ -89,11 +97,19 @@ export function PlanSteps({
       ) : (
         <>
           <Step title="2 · Propose draft run">
-            <ProposeStep requestId={output.request_id!} may={mayPropose} proposed={result.proposed} onProposed={(proposed) => onResult({ ...result, proposed })} />
+            <ProposeStep
+              requestId={output.request_id!}
+              may={mayPropose}
+              proposed={result.proposed}
+              onProposed={(proposed) => onResult({ ...result, proposed })}
+            />
           </Step>
           <Step title="3 · Estimate and start">
             {result.proposed ? (
-              <Link href={`/runs/${result.proposed.run_id}`} className="text-sm font-medium text-accent-ink hover:underline">
+              <Link
+                href={`/runs/${result.proposed.run_id}`}
+                className="text-sm font-medium text-accent-ink hover:underline"
+              >
                 Estimate and start it on the run page
               </Link>
             ) : (
@@ -114,7 +130,9 @@ export function PlanSteps({
 function Step({ title, children }: { title: string; children: ReactNode }) {
   return (
     <li className="flex flex-col gap-1.5 border-l-2 border-line pl-3">
-      <span className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">{title}</span>
+      <span className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
+        {title}
+      </span>
       {children}
     </li>
   );
@@ -138,44 +156,56 @@ function useAction() {
 }
 
 /** A "review" row (a source's permission changed) only marks the output reviewed, as mockup C. */
-function Settle({ output, review, onChanged }: { output: Output; review: boolean; onChanged: () => void }) {
+function Settle({
+  output,
+  review,
+  onChanged,
+}: {
+  output: Output;
+  review: boolean;
+  onChanged: () => void;
+}) {
   const id = useId();
   const { busy, error, run } = useAction();
   const [reconciling, setReconciling] = useState(false);
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState('');
   const f = output.freshness;
-  const act = (action: Schemas["StalenessAction"]["action"], why: string | null = null) =>
+  const act = (action: Schemas['StalenessAction']['action'], why: string | null = null) =>
     run(async () => {
       await unwrap(
-        api.POST("/v1/trace/staleness/actions", {
+        api.POST('/v1/trace/staleness/actions', {
           body: {
             action,
             artifact_version_id: output.artifact_version_id ?? null,
-            document_version_id: output.artifact_version_id ? null : (output.document_version_id ?? null),
+            document_version_id: output.artifact_version_id
+              ? null
+              : (output.document_version_id ?? null),
             dependency_ids: [],
             reason: why,
           },
         }),
       );
       setReconciling(false);
-      setReason("");
+      setReason('');
       onChanged();
     });
 
-  if (f === "fresh" || f === "reconciled") return <p className="text-sm text-text2">Settled: {FRESH[f].label}.</p>;
-  if (review && f !== "potentially_stale") return <p className="text-sm text-text2">Marked reviewed: {FRESH[f].label}.</p>;
+  if (f === 'fresh' || f === 'reconciled')
+    return <p className="text-sm text-text2">Settled: {FRESH[f].label}.</p>;
+  if (review && f !== 'potentially_stale')
+    return <p className="text-sm text-text2">Marked reviewed: {FRESH[f].label}.</p>;
   return (
     <div className="flex flex-col gap-2">
       {!reconciling && (
         <div className="flex flex-wrap gap-2">
-          {f === "potentially_stale" && (
-            <Button disabled={busy} onClick={() => void act("review")}>
+          {f === 'potentially_stale' && (
+            <Button disabled={busy} onClick={() => void act('review')}>
               Mark reviewed
             </Button>
           )}
           {!review && (
             <>
-              <Button disabled={busy} onClick={() => void act("accept_regeneration")}>
+              <Button disabled={busy} onClick={() => void act('accept_regeneration')}>
                 Accept regeneration
               </Button>
               {/* qa-plan-45: a bordered button like its neighbours, not grey text that reads as disabled. */}
@@ -191,13 +221,20 @@ function Settle({ output, review, onChanged }: { output: Output; review: boolean
           className="flex flex-col gap-2"
           onSubmit={(e) => {
             e.preventDefault();
-            void act("reconcile", reason.trim() || null);
+            void act('reconcile', reason.trim() || null);
           }}
         >
           <label htmlFor={`${id}-why`} className="text-sm font-medium">
             Why the current version still holds
           </label>
-          <textarea id={`${id}-why`} rows={2} maxLength={2000} className={INPUT} value={reason} onChange={(e) => setReason(e.target.value)} />
+          <textarea
+            id={`${id}-why`}
+            rows={2}
+            maxLength={2000}
+            className={INPUT}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
           <div className="flex flex-wrap gap-2">
             <Button type="submit" variant="solid" disabled={busy}>
               Reconcile
@@ -213,15 +250,28 @@ function Settle({ output, review, onChanged }: { output: Output; review: boolean
   );
 }
 
-function ProposeStep({ requestId, may, proposed, onProposed }: { requestId: string; may: boolean; proposed?: Proposed; onProposed: (p: Proposed) => void }) {
+function ProposeStep({
+  requestId,
+  may,
+  proposed,
+  onProposed,
+}: {
+  requestId: string;
+  may: boolean;
+  proposed?: Proposed;
+  onProposed: (p: Proposed) => void;
+}) {
   const { busy, error, run } = useAction();
   const names = useNamesOf();
   if (proposed) {
     return (
       <p data-testid="plan-proposed" className="text-sm">
         Draft run proposed from PRD v{proposed.prd_version}
-        {proposed.section_keys.length > 0 && ` · ${proposed.section_keys.map((k) => names.section(k)).join(", ")}`}.
-        {proposed.dropped_section_keys.length > 0 && ` Dropped ${proposed.dropped_section_keys.map((k) => names.section(k)).join(", ")} (no longer in the PRD).`}
+        {proposed.section_keys.length > 0 &&
+          ` · ${proposed.section_keys.map((k) => names.section(k)).join(', ')}`}
+        .
+        {proposed.dropped_section_keys.length > 0 &&
+          ` Dropped ${proposed.dropped_section_keys.map((k) => names.section(k)).join(', ')} (no longer in the PRD).`}
       </p>
     );
   }
@@ -236,9 +286,9 @@ function ProposeStep({ requestId, may, proposed, onProposed }: { requestId: stri
             void run(async () => {
               onProposed(
                 await unwrap(
-                  api.POST("/v1/spec-requests/{request_id}/regenerate", {
+                  api.POST('/v1/spec-requests/{request_id}/regenerate', {
                     params: { path: { request_id: requestId } },
-                    body: { knobs: { depth: "standard", roles: {}, checkpoints: {} } },
+                    body: { knobs: { depth: 'standard', roles: {}, checkpoints: {} } },
                   }),
                 ),
               );
@@ -260,7 +310,17 @@ function ProposeStep({ requestId, may, proposed, onProposed }: { requestId: stri
   );
 }
 
-function EstimateStep({ slug, may, estimate, onEstimate }: { slug: string; may: boolean; estimate?: Estimate; onEstimate: (e: Estimate) => void }) {
+function EstimateStep({
+  slug,
+  may,
+  estimate,
+  onEstimate,
+}: {
+  slug: string;
+  may: boolean;
+  estimate?: Estimate;
+  onEstimate: (e: Estimate) => void;
+}) {
   const { busy, error, run } = useAction();
   if (estimate) {
     return (
@@ -274,12 +334,18 @@ function EstimateStep({ slug, may, estimate, onEstimate }: { slug: string; may: 
           <span className="tnum">{usd(estimate.approval_threshold_usd)}</span>
         </div>
         {estimate.needs_owner_approval && (
-          <p className="font-medium text-warn">Over the {usd(estimate.approval_threshold_usd)} threshold: waits for an owner&apos;s approval.</p>
+          <p className="font-medium text-warn">
+            Over the {usd(estimate.approval_threshold_usd)} threshold: waits for an owner&apos;s
+            approval.
+          </p>
         )}
       </div>
     );
   }
-  if (!may) return <p className="text-sm text-text2">An approver or the document&apos;s decider estimates it.</p>;
+  if (!may)
+    return (
+      <p className="text-sm text-text2">An approver or the document&apos;s decider estimates it.</p>
+    );
   return (
     <div className="flex flex-col gap-2">
       <div>
@@ -288,7 +354,14 @@ function EstimateStep({ slug, may, estimate, onEstimate }: { slug: string; may: 
           disabled={busy}
           onClick={() =>
             void run(async () => {
-              onEstimate(await unwrap(api.POST("/v1/documents/{doc}/regenerate/estimate", { params: { path: { doc: slug } }, body: { note: null } })));
+              onEstimate(
+                await unwrap(
+                  api.POST('/v1/documents/{doc}/regenerate/estimate', {
+                    params: { path: { doc: slug } },
+                    body: { note: null },
+                  }),
+                ),
+              );
             })
           }
         >
@@ -304,17 +377,27 @@ function StartStep({ slug, may, estimate }: { slug: string; may: boolean; estima
   const router = useRouter();
   const { busy, error, run } = useAction();
   if (!estimate) return <p className="text-sm text-text2">Once it is estimated.</p>;
-  if (!may) return <p className="text-sm text-text2">An approver or the document&apos;s decider starts it.</p>;
+  if (!may)
+    return (
+      <p className="text-sm text-text2">An approver or the document&apos;s decider starts it.</p>
+    );
   return (
     <div className="flex flex-col gap-2">
-      {estimate.needs_owner_approval && <p className="text-sm text-text2">Waits for an owner&apos;s approval after you start it.</p>}
+      {estimate.needs_owner_approval && (
+        <p className="text-sm text-text2">Waits for an owner&apos;s approval after you start it.</p>
+      )}
       <div>
         <Button
           variant="solid"
           disabled={busy}
           onClick={() =>
             void run(async () => {
-              const out = await unwrap(api.POST("/v1/documents/{doc}/regenerate", { params: { path: { doc: slug } }, body: { run_id: estimate.run_id, note: null } }));
+              const out = await unwrap(
+                api.POST('/v1/documents/{doc}/regenerate', {
+                  params: { path: { doc: slug } },
+                  body: { run_id: estimate.run_id, note: null },
+                }),
+              );
               router.push(`/runs/${out.id}`);
             })
           }
@@ -326,4 +409,3 @@ function StartStep({ slug, may, estimate }: { slug: string; may: boolean; estima
     </div>
   );
 }
-

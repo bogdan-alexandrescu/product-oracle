@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useRouter, useSearchParams } from "@/lib/nav";
-import { type FormEvent, Suspense, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useRouter, useSearchParams } from '@/lib/nav';
+import { type FormEvent, Suspense, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import {
   Button,
@@ -19,12 +19,12 @@ import {
   Sheet,
   Split,
   toast,
-} from "@/components/ds";
-import { INPUT, LoadError, Loading } from "@/components/ui";
-import { api, type Schemas, unwrap } from "@/lib/api/client";
-import { formatDateTime, plural } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
+} from '@/components/ds';
+import { INPUT, LoadError, Loading } from '@/components/ui';
+import { api, type Schemas, unwrap } from '@/lib/api/client';
+import { formatDateTime, plural } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { errorMessage, useAuthRedirect, useQuery } from '@/lib/use-query';
 
 import {
   CompanyInspector,
@@ -33,7 +33,7 @@ import {
   CompanyTable,
   CountsOnlyTip,
   type CompanyRow,
-} from "./_components/company-coverage";
+} from './_components/company-coverage';
 import {
   ConfidenceBadge,
   confidenceFactors,
@@ -45,20 +45,34 @@ import {
   KIND_LABEL,
   matchLevel,
   pct,
-} from "./_components/confidence";
-import { CoverageCountsTip, CoverageInspector, CoverageTable, CoverageTabs, NoSources, type CoverageTab } from "./_components/coverage";
+} from './_components/confidence';
+import {
+  CoverageCountsTip,
+  CoverageInspector,
+  CoverageTable,
+  CoverageTabs,
+  NoSources,
+  type CoverageTab,
+} from './_components/coverage';
 
-type Results = Schemas["SearchResults"];
-type Hit = Schemas["SearchHit"];
+type Results = Schemas['SearchResults'];
+type Hit = Schemas['SearchHit'];
 /** How a sync that did not finish went, said as Settings > Sources says it on the source's row. */
-type SyncNotice = { sourceId: string; tone: "pass" | "warn"; text: string };
-
+type SyncNotice = { sourceId: string; tone: 'pass' | 'warn'; text: string };
 
 /** ts_headline marks matches with <mark>; render them as React nodes, never as HTML. */
-function Snippet({ text, className = "", full = false }: { text: string; className?: string; full?: boolean }) {
+function Snippet({
+  text,
+  className = '',
+  full = false,
+}: {
+  text: string;
+  className?: string;
+  full?: boolean;
+}) {
   const parts = text.split(/<mark>(.*?)<\/mark>/g);
   return (
-    <p className={`text-sm text-text2 ${className}`} title={full ? parts.join("") : undefined}>
+    <p className={`text-sm text-text2 ${className}`} title={full ? parts.join('') : undefined}>
       {parts.map((part, i) =>
         i % 2 ? (
           <mark key={i} className="rounded bg-warn-bg px-0.5 font-semibold text-text">
@@ -109,15 +123,16 @@ function HitInspector({
       }
       stats={[
         // qa-work-33: plain words, not raw scores; the Ranking section says how they relate.
-        { label: "Confidence", value: confidenceLevel(item.confidence).label },
-        { label: "Match", value: matchLevel(hit.relevance, best) },
-        { label: "Rank", value: rank, of },
+        { label: 'Confidence', value: confidenceLevel(item.confidence).label },
+        { label: 'Match', value: matchLevel(hit.relevance, best) },
+        { label: 'Rank', value: rank, of },
       ]}
     >
       <InspectorSection label="Ranking" testId="hit-ranking">
         <p className="text-sm text-text2">
-          Ranked {rank} of {of}: results are ordered by how well their words match your search, then raised or lowered by
-          how much Oracle trusts the item ({confidenceLevel(item.confidence).label.toLowerCase()} confidence,{" "}
+          Ranked {rank} of {of}: results are ordered by how well their words match your search, then
+          raised or lowered by how much Oracle trusts the item (
+          {confidenceLevel(item.confidence).label.toLowerCase()} confidence,{' '}
           {pct(item.confidence.value)}).
         </p>
       </InspectorSection>
@@ -129,8 +144,8 @@ function HitInspector({
           <>
             Factors
             <InfoTip label="Confidence" align="start">
-              Confidence blends these factors; the share beside each is how much it counts. It sets how much this
-              item counts in search ranking and outputs.
+              Confidence blends these factors; the share beside each is how much it counts. It sets
+              how much this item counts in search ranking and outputs.
             </InfoTip>
           </>
         }
@@ -140,7 +155,8 @@ function HitInspector({
             key={f.key}
             value={
               <>
-                {factorLevel(f.value)} <span className="ml-1 font-normal text-text2">counts {pct(f.share)}</span>
+                {factorLevel(f.value)}{' '}
+                <span className="ml-1 font-normal text-text2">counts {pct(f.share)}</span>
               </>
             }
           >
@@ -151,18 +167,20 @@ function HitInspector({
       <InspectorSection label="Item">
         <InspectorRow value={itemKind(item.kind)}>Kind</InspectorRow>
         {item.author && <InspectorRow value={item.author}>Author</InspectorRow>}
-        {item.fetched_at && <InspectorRow value={formatDateTime(item.fetched_at)}>Fetched</InspectorRow>}
+        {item.fetched_at && (
+          <InspectorRow value={formatDateTime(item.fetched_at)}>Fetched</InspectorRow>
+        )}
       </InspectorSection>
     </Inspector>
   );
 }
 
-const PHONE = "(max-width: 600px)";
+const PHONE = '(max-width: 600px)';
 
 function subscribePhone(onChange: () => void) {
   const mq = window.matchMedia(PHONE);
-  mq.addEventListener("change", onChange);
-  return () => mq.removeEventListener("change", onChange);
+  mq.addEventListener('change', onChange);
+  return () => mq.removeEventListener('change', onChange);
 }
 
 /** True at phone width; false on the server. */
@@ -193,34 +211,38 @@ function SourcesSearchPage() {
   const { can, capsReady, capsError } = useMe();
   // #370: the Company coverage tab, for whoever may read the company's coverage (its
   // handler checks the role: an owner).
-  const owner = can("get_company_source_coverage", false);
+  const owner = can('get_company_source_coverage', false);
   // qa-work-2: syncing and editing a source follow the capabilities; a viewer reads only.
-  const canSync = can("sync_source");
+  const canSync = can('sync_source');
   const isPhone = useIsPhone();
-  const tab: CoverageTab = owner && params.get("tab") === "company" ? "company" : "mine";
-  const wanted = params.get("source");
+  const tab: CoverageTab = owner && params.get('tab') === 'company' ? 'company' : 'mine';
+  const wanted = params.get('source');
 
-  const sources = useQuery("sources", () => unwrap(api.GET("/v1/sources")));
+  const sources = useQuery('sources', () => unwrap(api.GET('/v1/sources')));
   // The connection each source reads (a Fireflies one shows its endpoint).
-  const kinds = useQuery("source-kinds", () => unwrap(api.GET("/v1/sources/kinds")));
-  const coverage = useQuery("coverage", () => unwrap(api.GET("/v1/sources/coverage")));
+  const kinds = useQuery('source-kinds', () => unwrap(api.GET('/v1/sources/kinds')));
+  const coverage = useQuery('coverage', () => unwrap(api.GET('/v1/sources/coverage')));
   const rows = coverage.data?.sources;
   const current = rows?.find((r) => r.source_id === wanted) ?? rows?.[0];
   const currentId = current?.source_id ?? null;
-  const detail = useQuery(`coverage:${currentId ?? ""}`, () =>
+  const detail = useQuery(`coverage:${currentId ?? ''}`, () =>
     currentId
-      ? unwrap(api.GET("/v1/sources/{source_id}/coverage", { params: { path: { source_id: currentId } } }))
+      ? unwrap(
+          api.GET('/v1/sources/{source_id}/coverage', {
+            params: { path: { source_id: currentId } },
+          }),
+        )
       : Promise.resolve(undefined),
   );
-  const companyOn = owner && tab === "company";
-  const company = useQuery(companyOn ? "coverage-company" : "coverage-company-off", () =>
-    companyOn ? unwrap(api.GET("/v1/sources/coverage/company")) : Promise.resolve(undefined),
+  const companyOn = owner && tab === 'company';
+  const company = useQuery(companyOn ? 'coverage-company' : 'coverage-company-off', () =>
+    companyOn ? unwrap(api.GET('/v1/sources/coverage/company')) : Promise.resolve(undefined),
   );
   const [companyPick, setCompanyPick] = useState<string | null>(null);
 
-  const [q, setQ] = useState("");
-  const [kind, setKind] = useState("");
-  const [source, setSource] = useState("");
+  const [q, setQ] = useState('');
+  const [kind, setKind] = useState('');
+  const [source, setSource] = useState('');
   const [results, setResults] = useState<Results | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -231,7 +253,10 @@ function SourcesSearchPage() {
   const onAuth = useAuthRedirect();
   const names = new Map((sources.data ?? []).map((s) => [s.id, s.name]));
   const currentConnection = (sources.data ?? []).find((s) => s.id === currentId)?.connection_id;
-  const endpoint = currentConnection ? kinds.data?.flatMap((k) => k.connections).find((c) => c.id === currentConnection)?.endpoint_url : null;
+  const endpoint = currentConnection
+    ? kinds.data?.flatMap((k) => k.connections).find((c) => c.id === currentConnection)
+        ?.endpoint_url
+    : null;
 
   // F-62: at phone width the inspector sits below the whole list; picking a source scrolls
   // it into view instead of leaving it off screen. Never on the page's first load: the first
@@ -242,7 +267,8 @@ function SourcesSearchPage() {
     const before = shownSource.current;
     shownSource.current = currentId;
     if (!before || !currentId) return;
-    if (isPhone && !results && tab === "mine") inspectorRef.current?.scrollIntoView({ block: "nearest" });
+    if (isPhone && !results && tab === 'mine')
+      inspectorRef.current?.scrollIntoView({ block: 'nearest' });
     // Only the picked source moves the panel; a resize or tab change must not.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentId]);
@@ -256,7 +282,7 @@ function SourcesSearchPage() {
       const query: { q: string; kinds?: string[]; source?: string } = { q: q.trim() };
       if (kind) query.kinds = [kind];
       if (source) query.source = source;
-      setResults(await unwrap(api.GET("/v1/search", { params: { query } })));
+      setResults(await unwrap(api.GET('/v1/search', { params: { query } })));
       setPicked(null);
     } catch (err) {
       if (!onAuth(err)) setError(errorMessage(err));
@@ -265,11 +291,12 @@ function SourcesSearchPage() {
     }
   }
 
-  const go = (query: string) => router.replace(query ? `/sources?${query}` : "/sources", { scroll: false });
+  const go = (query: string) =>
+    router.replace(query ? `/sources?${query}` : '/sources', { scroll: false });
   const selectSource = (id: string) => go(`source=${id}`);
   const selectTab = (t: CoverageTab) => {
     setCompanyPick(null);
-    go(t === "company" ? "tab=company" : currentId ? `source=${currentId}` : "");
+    go(t === 'company' ? 'tab=company' : currentId ? `source=${currentId}` : '');
   };
 
   async function syncNow() {
@@ -278,20 +305,26 @@ function SourcesSearchPage() {
     setError(null);
     setSyncNotice(null);
     try {
-      const name = current?.name ?? "The source";
+      const name = current?.name ?? 'The source';
       toast({ message: `Sync started: ${name}` });
-      const result = await unwrap(api.POST("/v1/sources/{source_id}/sync", { params: { path: { source_id: currentId } } }));
+      const result = await unwrap(
+        api.POST('/v1/sources/{source_id}/sync', { params: { path: { source_id: currentId } } }),
+      );
       await Promise.all([coverage.reload(), detail.reload()]);
       // qa-work-2: say how the sync went; a sync that did not finish says why.
       // fix-work review: a rate-limited or superseded sync reads as on Settings > Sources.
-      if (result.outcome === "completed") toast({ message: `${name} synced` });
-      else if (result.outcome === "rate_limited")
-        setSyncNotice({ sourceId: currentId, tone: "pass", text: "Rate limited: the next sync resumes where this one stopped." });
-      else if (result.outcome === "superseded")
+      if (result.outcome === 'completed') toast({ message: `${name} synced` });
+      else if (result.outcome === 'rate_limited')
         setSyncNotice({
           sourceId: currentId,
-          tone: "warn",
-          text: "Not synced: this source was edited while it synced. Sync again to use the new selection.",
+          tone: 'pass',
+          text: 'Rate limited: the next sync resumes where this one stopped.',
+        });
+      else if (result.outcome === 'superseded')
+        setSyncNotice({
+          sourceId: currentId,
+          tone: 'warn',
+          text: 'Not synced: this source was edited while it synced. Sync again to use the new selection.',
         });
       else setError(result.error ?? result.source.last_error ?? `${name} did not finish syncing.`);
     } catch (err) {
@@ -307,11 +340,15 @@ function SourcesSearchPage() {
     setLoadingMore(true);
     try {
       const more = await unwrap(
-        api.GET("/v1/sources/{source_id}/coverage", {
+        api.GET('/v1/sources/{source_id}/coverage', {
           params: { path: { source_id: currentId }, query: { offset: have.used_in.length } },
         }),
       );
-      detail.setData((d) => (d ? { ...d, used_in: [...d.used_in, ...more.used_in], used_in_total: more.used_in_total } : d));
+      detail.setData((d) =>
+        d
+          ? { ...d, used_in: [...d.used_in, ...more.used_in], used_in_total: more.used_in_total }
+          : d,
+      );
     } catch (err) {
       if (!onAuth(err)) setError(errorMessage(err));
     } finally {
@@ -321,13 +358,19 @@ function SourcesSearchPage() {
 
   const hits = results?.hits ?? [];
   // The first hit is selected until another is picked, as on every master/detail screen.
-  const selIndex = Math.max(0, hits.findIndex((h) => h.item.id === picked));
+  const selIndex = Math.max(
+    0,
+    hits.findIndex((h) => h.item.id === picked),
+  );
   const selected = hits[selIndex];
   const field = `${INPUT} h-10`;
 
   // Company: the first source row is selected on a wide screen; on a phone a row opens a sheet.
-  const cRows = companyRows(company.data).filter((r): r is CompanyRow & { kind: NonNullable<CompanyRow["kind"]> } => r.kind !== null);
-  const cPicked = cRows.find((r) => companyRowKey(r) === companyPick) ?? (isPhone ? undefined : cRows[0]);
+  const cRows = companyRows(company.data).filter(
+    (r): r is CompanyRow & { kind: NonNullable<CompanyRow['kind']> } => r.kind !== null,
+  );
+  const cPicked =
+    cRows.find((r) => companyRowKey(r) === companyPick) ?? (isPhone ? undefined : cRows[0]);
 
   let inspector = null;
   if (results) {
@@ -338,10 +381,10 @@ function SourcesSearchPage() {
         rank={selIndex + 1}
         of={hits.length}
         best={Math.max(0, ...hits.map((h) => h.relevance))}
-        sourceName={names.get(selected.item.source_id) ?? "source"}
+        sourceName={names.get(selected.item.source_id) ?? 'source'}
       />
     );
-  } else if (tab === "mine" && current) {
+  } else if (tab === 'mine' && current) {
     inspector = (
       <div ref={inspectorRef}>
         <CoverageInspector
@@ -359,7 +402,7 @@ function SourcesSearchPage() {
         />
       </div>
     );
-  } else if (tab === "company" && cPicked && !isPhone) {
+  } else if (tab === 'company' && cPicked && !isPhone) {
     inspector = <CompanyInspector row={cPicked} />;
   }
 
@@ -370,15 +413,15 @@ function SourcesSearchPage() {
         info={
           // qa-work-32: the tip is about the page; the ranking tip sits by Search.
           <InfoTip label="Sources" align="start" side="bottom">
-            What your sources pulled in: each source&apos;s items, how fresh they are, what was not read and where they are
-            used. Search finds words across them.
+            What your sources pulled in: each source&apos;s items, how fresh they are, what was not
+            read and where they are used. Search finds words across them.
           </InfoTip>
         }
         status={
           <>
             {results && (
               <Chip kind="acc" data-testid="hit-count">
-                {plural(hits.length, "hit")}
+                {plural(hits.length, 'hit')}
               </Chip>
             )}
           </>
@@ -403,7 +446,11 @@ function SourcesSearchPage() {
           </label>
           <label className="flex min-w-0 flex-[1_1_9rem] flex-col gap-1 text-[13px] font-semibold text-text2">
             Kind
-            <select value={kind} onChange={(e) => setKind(e.target.value)} className={`${field} font-normal`}>
+            <select
+              value={kind}
+              onChange={(e) => setKind(e.target.value)}
+              className={`${field} font-normal`}
+            >
               <option value="">Any kind</option>
               {ITEM_KINDS.map((k) => (
                 <option key={k} value={k}>
@@ -414,7 +461,11 @@ function SourcesSearchPage() {
           </label>
           <label className="flex min-w-0 flex-[1_1_9rem] flex-col gap-1 text-[13px] font-semibold text-text2">
             Source
-            <select value={source} onChange={(e) => setSource(e.target.value)} className={`${field} font-normal`}>
+            <select
+              value={source}
+              onChange={(e) => setSource(e.target.value)}
+              className={`${field} font-normal`}
+            >
               <option value="">All my sources</option>
               {(sources.data ?? []).map((s) => (
                 <option key={s.id} value={s.id}>
@@ -428,8 +479,8 @@ function SourcesSearchPage() {
           </Button>
           <span className="flex h-10 items-center">
             <InfoTip label="Ranking" side="bottom">
-              Results are ordered by how well their words match, then raised or lowered by how much Oracle trusts each
-              item (its confidence).
+              Results are ordered by how well their words match, then raised or lowered by how much
+              Oracle trusts each item (its confidence).
             </InfoTip>
           </span>
         </form>
@@ -447,7 +498,9 @@ function SourcesSearchPage() {
               </Button>
             }
           >
-            {!busy && hits.length === 0 && <Empty>Nothing in your sources matches “{results.query}”.</Empty>}
+            {!busy && hits.length === 0 && (
+              <Empty>Nothing in your sources matches “{results.query}”.</Empty>
+            )}
             {hits.length > 0 && (
               <ol aria-label="Search results">
                 {hits.map((hit) => {
@@ -459,7 +512,9 @@ function SourcesSearchPage() {
                       data-testid="search-hit"
                       onClick={() => setPicked(hit.item.id)}
                       className={`cursor-pointer border-t border-line px-4 py-2.5 first:border-t-0 max-[600px]:px-3 ${
-                        on ? "bg-accent-soft shadow-[inset_4px_0_0_var(--accent)]" : "hover:bg-surface2"
+                        on
+                          ? 'bg-accent-soft shadow-[inset_4px_0_0_var(--accent)]'
+                          : 'hover:bg-surface2'
                       }`}
                     >
                       <div className="flex min-w-0 items-center gap-3">
@@ -473,9 +528,12 @@ function SourcesSearchPage() {
                           {title}
                         </button>
                         {(() => {
-                          const where = `${KIND_LABEL[hit.item.source_kind]} · ${names.get(hit.item.source_id) ?? "source"} · ${itemKind(hit.item.kind)}`;
+                          const where = `${KIND_LABEL[hit.item.source_kind]} · ${names.get(hit.item.source_id) ?? 'source'} · ${itemKind(hit.item.kind)}`;
                           return (
-                            <span className="max-w-[40%] flex-none truncate text-sm text-text2 max-[600px]:hidden" title={where}>
+                            <span
+                              className="max-w-[40%] flex-none truncate text-sm text-text2 max-[600px]:hidden"
+                              title={where}
+                            >
                               {where}
                             </span>
                           );
@@ -500,14 +558,18 @@ function SourcesSearchPage() {
             tools={
               <>
                 {owner && <CoverageTabs value={tab} onChange={selectTab} />}
-                {tab === "company" ? <CountsOnlyTip /> : <CoverageCountsTip />}
+                {tab === 'company' ? <CountsOnlyTip /> : <CoverageCountsTip />}
               </>
             }
           >
             {/* F-1: a list that did not load says so, with Try again, and no table under it. */}
-            {tab === "company" ? (
+            {tab === 'company' ? (
               company.error ? (
-                <LoadError what="the company's coverage" error={company.error} onRetry={() => void company.reload()} />
+                <LoadError
+                  what="the company's coverage"
+                  error={company.error}
+                  onRetry={() => void company.reload()}
+                />
               ) : (
                 <CompanyTable
                   data={company.data ?? undefined}
@@ -517,17 +579,31 @@ function SourcesSearchPage() {
                 />
               )
             ) : coverage.error ? (
-              <LoadError what="your sources" error={coverage.error} onRetry={() => void coverage.reload()} />
+              <LoadError
+                what="your sources"
+                error={coverage.error}
+                onRetry={() => void coverage.reload()}
+              />
             ) : rows && rows.length === 0 ? (
               <NoSources />
             ) : (
-              <CoverageTable rows={rows} loading={coverage.loading} selected={currentId} onSelect={selectSource} />
+              <CoverageTable
+                rows={rows}
+                loading={coverage.loading}
+                selected={currentId}
+                onSelect={selectSource}
+              />
             )}
           </Panel>
         )}
       </Split>
-      {tab === "company" && isPhone && cPicked && !results && (
-        <Sheet open title="Company · coverage" onClose={() => setCompanyPick(null)} testId="company-sheet">
+      {tab === 'company' && isPhone && cPicked && !results && (
+        <Sheet
+          open
+          title="Company · coverage"
+          onClose={() => setCompanyPick(null)}
+          testId="company-sheet"
+        >
           <CompanyInspector row={cPicked} />
         </Sheet>
       )}

@@ -1,13 +1,13 @@
-"use client";
+'use client';
 
-import { usePathname } from "@/lib/nav";
-import { Suspense, type ReactNode } from "react";
+import { usePathname } from '@/lib/nav';
+import { Suspense, type ReactNode } from 'react';
 
-import { HomeSkeleton } from "@/app/simple/_home/skeleton";
-import { LinkedDiscussion } from "@/components/discuss/LinkedDiscussion";
-import { SimplePageSkeleton, useSimpleShown } from "@/components/simple/SimpleShell";
-import { useMe } from "@/lib/me";
-import { SIMPLE_HOME } from "@/lib/experience";
+import { HomeSkeleton } from '@/app/simple/_home/skeleton';
+import { LinkedDiscussion } from '@/components/discuss/LinkedDiscussion';
+import { SimplePageSkeleton, useSimpleShown } from '@/components/simple/SimpleShell';
+import { useMe } from '@/lib/me';
+import { SIMPLE_HOME } from '@/lib/experience';
 
 /**
  * Simple's pages draw only once Simple is known to be on (#725 review: no flash while off).

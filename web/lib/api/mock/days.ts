@@ -1,4 +1,4 @@
-import { calendarDay } from "@/lib/dates";
+import { calendarDay } from '@/lib/dates';
 
 /**
  * A calendar day in prose ("2026-10-02"), as the API's export reads it (api/oracle/export/render.py
@@ -13,7 +13,10 @@ const PROSE_DAY = /(?<![\w./-])(\d{4})-(\d{2})-(\d{2})(?![\w/-]|:\d)/g;
 export function daysInWords(text: string): string {
   return text.replace(PROSE_DAY, (all, y: string, m: string, d: string) => {
     const day = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)));
-    const real = day.getUTCFullYear() === Number(y) && day.getUTCMonth() === Number(m) - 1 && day.getUTCDate() === Number(d);
-    return real ? calendarDay(all, { month: "short", day: "numeric", year: "numeric" }) : all;
+    const real =
+      day.getUTCFullYear() === Number(y) &&
+      day.getUTCMonth() === Number(m) - 1 &&
+      day.getUTCDate() === Number(d);
+    return real ? calendarDay(all, { month: 'short', day: 'numeric', year: 'numeric' }) : all;
   });
 }

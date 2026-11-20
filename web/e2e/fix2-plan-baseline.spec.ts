@@ -1,7 +1,7 @@
-import { expect, test, type Locator, type Page } from "./test";
+import { expect, test, type Locator, type Page } from './test';
 
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login, pickZone } from "./helpers";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login, pickZone } from './helpers';
 
 /*
  * QA pass 2 on /baseline and the impact page (qa-plan-2, 8, 9, 23-28, 52; qa-onboarding-25-27,
@@ -17,94 +17,106 @@ const scenario = (page: Page, name: string) =>
 
 async function openBaseline(page: Page, email?: string) {
   await login(page, email);
-  await page.goto("/ground-truth");
-  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
-  await expect(page.getByTestId("goal-g.activation")).toBeVisible();
+  await page.goto('/ground-truth');
+  await expect(page.getByRole('heading', { level: 1, name: 'Ground Truth' })).toBeVisible();
+  await expect(page.getByTestId('goal-g.activation')).toBeVisible();
 }
 
-const goalsTable = (page: Page) => page.getByRole("grid", { name: "Goals" });
-const sheet = (page: Page) => page.getByRole("dialog", { name: "Build the Ground Truth" });
+const goalsTable = (page: Page) => page.getByRole('grid', { name: 'Goals' });
+const sheet = (page: Page) => page.getByRole('dialog', { name: 'Build the Ground Truth' });
 
 /** An empty company's first source, one file in it, from Settings > Sources (Start waits for items: qa-onboarding-2). */
 async function addFileSource(page: Page) {
-  await page.goto("/settings/sources");
-  const form = page.getByRole("form", { name: "Add a source" });
-  await form.getByLabel("Kind").selectOption("upload");
-  await form.getByLabel("Name").fill("Research notes");
-  await form.getByRole("button", { name: "Add source" }).click();
-  const notes = page.getByRole("listitem", { name: "Research notes" });
-  await notes.getByLabel("Upload files to Research notes").setInputFiles([
-    { name: "interview.md", mimeType: "text/markdown", buffer: Buffer.from("# Interview\nThe export button is hard to find.") },
+  await page.goto('/settings/sources');
+  const form = page.getByRole('form', { name: 'Add a source' });
+  await form.getByLabel('Kind').selectOption('upload');
+  await form.getByLabel('Name').fill('Research notes');
+  await form.getByRole('button', { name: 'Add source' }).click();
+  const notes = page.getByRole('listitem', { name: 'Research notes' });
+  await notes.getByLabel('Upload files to Research notes').setInputFiles([
+    {
+      name: 'interview.md',
+      mimeType: 'text/markdown',
+      buffer: Buffer.from('# Interview\nThe export button is hard to find.'),
+    },
   ]);
-  await expect(notes.getByTestId("source-items")).toHaveText("1 item");
+  await expect(notes.getByTestId('source-items')).toHaveText('1 item');
 }
 
 /** True when the element cuts its own content off (sideways or downwards). */
 const clipped = (el: Locator) =>
   el.evaluate((e) => {
     const cs = getComputedStyle(e);
-    const x = cs.overflowX !== "visible" && e.scrollWidth > e.clientWidth + 1;
-    const y = cs.overflowY !== "visible" && e.scrollHeight > e.clientHeight + 1;
+    const x = cs.overflowX !== 'visible' && e.scrollWidth > e.clientWidth + 1;
+    const y = cs.overflowY !== 'visible' && e.scrollHeight > e.clientHeight + 1;
     return x || y;
   });
 
-test.describe("desktop", () => {
+test.describe('desktop', () => {
   test.use({ viewport: DESKTOP });
 
   // protects=qa-plan-2: Progress says what it is measured from, so it squares with Plan's 38%
   // against 45%; fails_when=it reads "50% of target"; no_claim=the roll-up maths (pytest).
   test("progress says it is measured from the goal's start", async ({ page }) => {
     await openBaseline(page);
-    const progress = page.getByTestId("goal-g.activation").locator('[data-attr="progress"]');
+    const progress = page.getByTestId('goal-g.activation').locator('[data-attr="progress"]');
     // qa4-plan-42: in Plan's words, the distance to go from today's value.
-    await expect(progress).toHaveText("7 pts to go (38% now)");
-    await expect(progress).toHaveAttribute("title", "38% now, target ≥ 45%: 7 pts to go");
+    await expect(progress).toHaveText('7 pts to go (38% now)');
+    await expect(progress).toHaveAttribute('title', '38% now, target ≥ 45%: 7 pts to go');
   });
 
   // protects=qa-plan-8: a goal with no evidence shows no confidence score, in the table and its
   // drawer; fails_when=a 78 ring beside Evidence 0; no_claim=the API's scoring (pytest).
-  test("a goal with no evidence shows no confidence score", async ({ page }) => {
+  test('a goal with no evidence shows no confidence score', async ({ page }) => {
     await openBaseline(page);
-    const row = goalsTable(page).getByTestId("goal-g.activation");
-    await expect(row.getByRole("img", { name: "Not scored: no evidence yet" })).toBeVisible();
-    await expect(row.getByRole("img", { name: /Confidence 78/ })).toHaveCount(0);
-    await row.getByRole("button", { name: "Activation", exact: true }).click();
-    const d = page.getByRole("dialog", { name: "Activation" });
-    await expect(d.getByRole("img", { name: "Not scored: no evidence yet" })).toBeVisible();
+    const row = goalsTable(page).getByTestId('goal-g.activation');
+    await expect(row.getByRole('img', { name: 'Not scored: no evidence yet' })).toBeVisible();
+    await expect(row.getByRole('img', { name: /Confidence 78/ })).toHaveCount(0);
+    await row.getByRole('button', { name: 'Activation', exact: true }).click();
+    const d = page.getByRole('dialog', { name: 'Activation' });
+    await expect(d.getByRole('img', { name: 'Not scored: no evidence yet' })).toBeVisible();
   });
 
   // protects=qa-plan-9: a goal with metric and target that only lacks an owner says "No owner";
   // fails_when=it is called Not measurable; no_claim=the API's goal check.
   test("an owner-only gap reads 'No owner', not 'Not measurable'", async ({ page }) => {
     await openBaseline(page);
-    const paid = goalsTable(page).getByTestId("goal-g.paid-conversion");
-    await expect(paid.getByTestId("not-measurable")).toHaveText("No owner");
-    await expect(paid).not.toContainText("Not measurable");
-    await expect(paid.getByRole("button", { name: "Name an owner" })).toBeVisible();
+    const paid = goalsTable(page).getByTestId('goal-g.paid-conversion');
+    await expect(paid.getByTestId('not-measurable')).toHaveText('No owner');
+    await expect(paid).not.toContainText('Not measurable');
+    await expect(paid.getByRole('button', { name: 'Name an owner' })).toBeVisible();
     // A goal missing more stays Not measurable.
-    await expect(goalsTable(page).getByTestId("goal-g.early-churn").getByTestId("not-measurable")).toHaveText("Not measurable");
+    await expect(
+      goalsTable(page).getByTestId('goal-g.early-churn').getByTestId('not-measurable'),
+    ).toHaveText('Not measurable');
   });
 
   // protects=qa-plan-23: the horizon is whole; fails_when="Medium · Jun …"; no_claim=other widths.
   test("the horizon reads whole: 'Medium · Jun 30'", async ({ page }) => {
     await openBaseline(page);
-    const h = goalsTable(page).getByTestId("goal-g.paid-conversion").locator('[data-attr="horizon"]');
-    await expect(h).toHaveText("Medium · Jun 30");
+    const h = goalsTable(page)
+      .getByTestId('goal-g.paid-conversion')
+      .locator('[data-attr="horizon"]');
+    await expect(h).toHaveText('Medium · Jun 30');
     expect(await clipped(h)).toBe(false);
-    expect(await clipped(h.locator("xpath=.."))).toBe(false);
+    expect(await clipped(h.locator('xpath=..'))).toBe(false);
   });
 
   // protects=qa-plan-24 and qa-plan-28: targets in one form ("< 8%", not "below 8%") in the
   // Goals table and the Feature × goal targets row; the ledger header is one compact line;
   // fails_when=words beside symbols, or a three-line header; no_claim=Plan's cards.
-  test("targets in one form; the Feature × goal header is compact with a targets row", async ({ page }) => {
+  test('targets in one form; the Feature × goal header is compact with a targets row', async ({
+    page,
+  }) => {
     await openBaseline(page);
-    await expect(goalsTable(page).getByTestId("goal-g.early-churn").locator('[data-attr="target"]')).toHaveText("< 8%");
-    const ledger = page.getByRole("table", { name: "Feature × goal" });
+    await expect(
+      goalsTable(page).getByTestId('goal-g.early-churn').locator('[data-attr="target"]'),
+    ).toHaveText('< 8%');
+    const ledger = page.getByRole('table', { name: 'Feature × goal' });
     // The ledger follows the one goal order (position, then creation, then title), not the goals' weights.
-    await expect(ledger.getByTestId("ledger-target")).toHaveText(["< 8%", "≥ 12%", "≥ 45%"]);
-    await expect(ledger).not.toContainText("below 8%");
-    const head = ledger.getByRole("columnheader", { name: "Feature", exact: true });
+    await expect(ledger.getByTestId('ledger-target')).toHaveText(['< 8%', '≥ 12%', '≥ 45%']);
+    await expect(ledger).not.toContainText('below 8%');
+    const head = ledger.getByRole('columnheader', { name: 'Feature', exact: true });
     expect((await head.boundingBox())!.height).toBeLessThanOrEqual(40);
   });
 
@@ -112,68 +124,81 @@ test.describe("desktop", () => {
   // what happens next; fails_when="Estimate $7.00" alone; no_claim=costs over the line.
   test("the build sheet's estimate names the approval line", async ({ page }) => {
     await login(page);
-    await page.goto("/ground-truth?build=1");
-    await expect(sheet(page).getByTestId("build-estimate")).toHaveText("$7.00 estimated · below the $50 approval line · starts at once");
+    await page.goto('/ground-truth?build=1');
+    await expect(sheet(page).getByTestId('build-estimate')).toHaveText(
+      '$7.00 estimated · below the $50 approval line · starts at once',
+    );
   });
 
   // protects=qa-onboarding-25 and qa-onboarding-26: a first build on an empty company shows one
   // line about it, no blocker count, and no goals header band over nothing; fails_when=two
   // banners say the same, Blockers 1, or a Goals table with a short header; no_claim=a company
   // with goals (the header there spans its columns).
-  test("empty company: one build banner, no blockers, no half-drawn Goals table", async ({ page }) => {
-    await scenario(page, "empty");
+  test('empty company: one build banner, no blockers, no half-drawn Goals table', async ({
+    page,
+  }) => {
+    await scenario(page, 'empty');
     await login(page);
     await addFileSource(page);
-    await page.goto("/ground-truth?build=1");
-    await sheet(page).getByRole("button", { name: "Start" }).click();
+    await page.goto('/ground-truth?build=1');
+    await sheet(page).getByRole('button', { name: 'Start' }).click();
     await expect(sheet(page)).toHaveCount(0);
-    await expect(page.getByTestId("baseline-build-banner")).toContainText("Ground Truth being built");
-    await expect(page.getByTestId("baseline-build-banner")).toContainText("You'll get an Inbox item when it's ready to review.");
+    await expect(page.getByTestId('baseline-build-banner')).toContainText(
+      'Ground Truth being built',
+    );
+    await expect(page.getByTestId('baseline-build-banner')).toContainText(
+      "You'll get an Inbox item when it's ready to review.",
+    );
     await expect(page.getByText(/^Building the Ground Truth\./)).toHaveCount(0);
-    await expect(page.getByTestId("tab-count-blockers")).toHaveText("0");
-    const goals = page.getByRole("region", { name: "Goals", exact: true });
-    await expect(goals).toContainText("No goals yet");
-    await expect(goals.getByRole("columnheader")).toHaveCount(0);
+    await expect(page.getByTestId('tab-count-blockers')).toHaveText('0');
+    const goals = page.getByRole('region', { name: 'Goals', exact: true });
+    await expect(goals).toContainText('No goals yet');
+    await expect(goals.getByRole('columnheader')).toHaveCount(0);
   });
 
   // protects=qa-onboarding-38: with the Company in Berlin a build's start time names the zone as
   // Settings does (CET/CEST), not "GMT+1"; fails_when=an offset name; no_claim=zones outside Europe.
   test("Berlin: the build banner's time says CET, not GMT+1", async ({ page }) => {
     await login(page);
-    await page.goto("/settings/company");
-    await pickZone(page, "Europe/Berlin");
-    await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
-    await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
-    await page.goto("/ground-truth?build=1");
-    await sheet(page).getByRole("button", { name: "Start" }).click();
-    const banner = page.getByTestId("baseline-build-banner");
+    await page.goto('/settings/company');
+    await pickZone(page, 'Europe/Berlin');
+    await page.getByTestId('timezone-panel').getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByTestId('timezone-panel').getByRole('status')).toHaveText('Saved');
+    await page.goto('/ground-truth?build=1');
+    await sheet(page).getByRole('button', { name: 'Start' }).click();
+    const banner = page.getByTestId('baseline-build-banner');
     await expect(banner).toContainText(/started .* (AM|PM) CES?T/);
     await expect(banner).not.toContainText(/GMT[+-]/);
   });
 
   // protects=qa-plan-52 (with qa-docs-25): a what-if says it is a preview in words, under the
   // title; fails_when=a bare "Preview" badge; no_claim=recorded changes.
-  test("impact what-if: the page says it is a preview in words, with no bare badge", async ({ page }) => {
-    await scenario(page, "impact");
+  test('impact what-if: the page says it is a preview in words, with no bare badge', async ({
+    page,
+  }) => {
+    await scenario(page, 'impact');
     await openBaseline(page);
-    await page.getByTestId("feature-F-01").getByRole("button", { name: "Setup checklist" }).click();
-    await page.getByRole("dialog", { name: "Setup checklist" }).getByRole("link", { name: "What if it changed?" }).click();
+    await page.getByTestId('feature-F-01').getByRole('button', { name: 'Setup checklist' }).click();
+    await page
+      .getByRole('dialog', { name: 'Setup checklist' })
+      .getByRole('link', { name: 'What if it changed?' })
+      .click();
     await expect(page).toHaveURL(/\/impact\/entities\/[^/]+$/);
     await expect(page.getByText(/Preview only; nothing is marked stale\./)).toBeVisible();
-    await expect(page.getByTestId("impact-mode")).toHaveCount(0);
-    const header = page.locator("header[data-page-header]").filter({ visible: true });
-    await expect(header.getByText("Preview", { exact: true })).toHaveCount(0);
+    await expect(page.getByTestId('impact-mode')).toHaveCount(0);
+    const header = page.locator('header[data-page-header]').filter({ visible: true });
+    await expect(header.getByText('Preview', { exact: true })).toHaveCount(0);
   });
 });
 
-test.describe("phone", () => {
+test.describe('phone', () => {
   test.use({ viewport: PHONE });
 
   // protects=qa-plan-25: every Ground Truth tab is whole on screen (they wrap); fails_when=a tab is
   // cut or behind a scroll arrow; no_claim=Plan's tabs.
-  test("the tabs wrap: every tab is whole on screen", async ({ page }) => {
+  test('the tabs wrap: every tab is whole on screen', async ({ page }) => {
     await openBaseline(page);
-    const tabs = page.getByRole("tablist", { name: "Ground Truth views" }).getByRole("tab");
+    const tabs = page.getByRole('tablist', { name: 'Ground Truth views' }).getByRole('tab');
     await expect(tabs).toHaveCount(6);
     for (const tab of await tabs.all()) {
       const box = (await tab.boundingBox())!;
@@ -181,26 +206,29 @@ test.describe("phone", () => {
       expect(box.x + box.width).toBeLessThanOrEqual(PHONE.width);
       expect(await clipped(tab)).toBe(false);
     }
-    await expect(page.getByRole("button", { name: /^Scroll/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Scroll/ })).toHaveCount(0);
   });
 
   // protects=qa-plan-26: a goal row reads title and badges, then target and progress, then its
   // actions in one row, Rename among them; fails_when=the badge sits under the gap chip, the buttons float
   // beside the title or Rename wraps to a line of its own; no_claim=other tables.
-  test("a goal row: title and badges, then target and progress, then actions", async ({ page }) => {
+  test('a goal row: title and badges, then target and progress, then actions', async ({ page }) => {
     await openBaseline(page);
-    const churn = page.getByTestId("goal-g.early-churn");
-    const title = churn.getByRole("button", { name: "Cut early churn", exact: true });
-    const badge = churn.getByText("Proposed", { exact: true }).filter({ visible: true });
-    const gap = churn.getByTestId("phone-gap");
+    const churn = page.getByTestId('goal-g.early-churn');
+    const title = churn.getByRole('button', { name: 'Cut early churn', exact: true });
+    const badge = churn.getByText('Proposed', { exact: true }).filter({ visible: true });
+    const gap = churn.getByTestId('phone-gap');
     const target = churn.locator('[data-attr="target"]');
-    const make = churn.getByTestId("make-measurable");
-    const confirm = churn.getByRole("button", { name: "Confirm" });
-    const add = churn.getByRole("button", { name: "Add subgoal" });
-    const rename = churn.getByRole("button", { name: "Rename", exact: true });
-    for (const l of [title, badge, gap, target, make, confirm, add, rename]) await expect(l).toBeVisible();
+    const make = churn.getByTestId('make-measurable');
+    const confirm = churn.getByRole('button', { name: 'Confirm' });
+    const add = churn.getByRole('button', { name: 'Add subgoal' });
+    const rename = churn.getByRole('button', { name: 'Rename', exact: true });
+    for (const l of [title, badge, gap, target, make, confirm, add, rename])
+      await expect(l).toBeVisible();
     const box = async (l: Locator) => (await l.boundingBox())!;
-    const [t, b, g, tg, m, c, a, r] = await Promise.all([title, badge, gap, target, make, confirm, add, rename].map(box));
+    const [t, b, g, tg, m, c, a, r] = await Promise.all(
+      [title, badge, gap, target, make, confirm, add, rename].map(box),
+    );
     // Badges beside or right under the title, above the target line.
     expect(b.y + b.height).toBeLessThanOrEqual(tg.y);
     expect(g.y + g.height).toBeLessThanOrEqual(tg.y);
@@ -212,19 +240,23 @@ test.describe("phone", () => {
     // Rename in that same row, whole on screen, and it works: it opens the goal's Edit form.
     expect(Math.abs(c.y - r.y)).toBeLessThan(4);
     for (const x of [m, c, a, r]) expect(x.x + x.width).toBeLessThanOrEqual(PHONE.width);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
     await rename.click();
-    await expect(page.getByTestId("entity-drawer").getByRole("form", { name: "Edit" })).toBeVisible();
+    await expect(
+      page.getByTestId('entity-drawer').getByRole('form', { name: 'Edit' }),
+    ).toBeVisible();
   });
 
   // protects=qa-plan-27: the Weak evidence label and its (i) are whole; fails_when=the label's
   // box clips them; no_claim=other KPI strips.
-  test("the Weak evidence label is not clipped", async ({ page }) => {
+  test('the Weak evidence label is not clipped', async ({ page }) => {
     await openBaseline(page);
-    const label = page.getByTestId("kpi-weak").locator("dt");
-    await expect(label).toContainText("Weak evidence");
+    const label = page.getByTestId('kpi-weak').locator('dt');
+    await expect(label).toContainText('Weak evidence');
     expect(await clipped(label)).toBe(false);
-    const tip = label.getByRole("button");
+    const tip = label.getByRole('button');
     const [l, i] = [(await label.boundingBox())!, (await tip.boundingBox())!];
     expect(i.y + i.height).toBeLessThanOrEqual(l.y + l.height + 1);
   });

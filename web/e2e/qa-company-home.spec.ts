@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { login, pickZone } from "./helpers";
+import { login, pickZone } from './helpers';
 
 /*
  * QA findings on Home (Detailed): goal chips' keyboard behaviour, the confidence ring, the
@@ -10,33 +10,35 @@ import { login, pickZone } from "./helpers";
 
 async function openHome(page: Page) {
   await login(page);
-  await page.goto("/home");
-  await expect(page.getByRole("heading", { level: 1, name: "Home" })).toBeAttached();
-  await expect(page.getByTestId("home-goal-G1")).toBeVisible();
+  await page.goto('/home');
+  await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeAttached();
+  await expect(page.getByTestId('home-goal-G1')).toBeVisible();
 }
 
-const flight = (page: Page, slug: string, kind: "prd" | "run" = "run") =>
+const flight = (page: Page, slug: string, kind: 'prd' | 'run' = 'run') =>
   page.locator(`[data-testid="flight-row"][data-kind="${kind}"][data-document="${slug}"]`);
 
 // qa-company-4, qa-shell-31, qa-company-10: a goal's name is one Tab stop, a link that opens
 // the goal; no card that only repeats the name and target over the figure.
-test("goal names: one Tab stop each, Enter opens the goal, no card covers the figure", async ({ page }) => {
+test('goal names: one Tab stop each, Enter opens the goal, no card covers the figure', async ({
+  page,
+}) => {
   await openHome(page);
-  const link = page.getByTestId("home-goal-G1").getByTestId("goal-open");
-  await expect(link).toHaveAttribute("href", /^\/ground-truth\?entity=/);
-  await expect(page.getByTestId("home-goal-G1").getByTestId("code-chip")).toHaveCount(0);
+  const link = page.getByTestId('home-goal-G1').getByTestId('goal-open');
+  await expect(link).toHaveAttribute('href', /^\/ground-truth\?entity=/);
+  await expect(page.getByTestId('home-goal-G1').getByTestId('code-chip')).toHaveCount(0);
   await link.focus();
   await expect(link).toBeFocused();
 
   // Ten Tabs from the link: never a card, never the same element twice.
   const stops: string[] = [];
   for (let i = 0; i < 10; i++) {
-    await page.keyboard.press("Tab");
-    await expect(page.getByTestId("code-card")).toHaveCount(0);
+    await page.keyboard.press('Tab');
+    await expect(page.getByTestId('code-card')).toHaveCount(0);
     stops.push(
       await page.evaluate(() => {
         const el = document.activeElement as HTMLElement | null;
-        if (!el) return "none";
+        if (!el) return 'none';
         el.dataset.qaStop ??= String(Math.random());
         return el.dataset.qaStop;
       }),
@@ -47,117 +49,143 @@ test("goal names: one Tab stop each, Enter opens the goal, no card covers the fi
   // Hovering the name draws no card over the figure; Enter opens the goal on the Ground Truth.
   await link.hover();
   await page.waitForTimeout(400);
-  await expect(page.getByTestId("code-card")).toHaveCount(0);
+  await expect(page.getByTestId('code-card')).toHaveCount(0);
   await link.focus();
-  await page.keyboard.press("Enter");
+  await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/ground-truth\?entity=/);
 });
 
 // prod-2, qa-company-44: the ring says it is confidence, and shows only once there is a value.
-test("goals: the confidence ring is named and hidden without a current value; the change is in words", async ({ page }) => {
+test('goals: the confidence ring is named and hidden without a current value; the change is in words', async ({
+  page,
+}) => {
   await openHome(page);
-  const g1 = page.getByTestId("home-goal-G3");
-  await expect(g1.getByTestId("goal-confidence")).toBeVisible();
-  await expect(g1.getByTestId("goal-confidence")).toContainText("confidence");
+  const g1 = page.getByTestId('home-goal-G3');
+  await expect(g1.getByTestId('goal-confidence')).toBeVisible();
+  await expect(g1.getByTestId('goal-confidence')).toContainText('confidence');
   // qa-plan-4: no evidence yet, so no score, as on the Ground Truth page.
-  await expect(g1.getByTestId("goal-confidence")).toHaveText("No confidence yet: add evidence");
-  await expect(g1.getByTestId("goal-change")).toHaveText("+7 pts in 6 months");
+  await expect(g1.getByTestId('goal-confidence')).toHaveText('No confidence yet: add evidence');
+  await expect(g1.getByTestId('goal-change')).toHaveText('+7 pts in 6 months');
 
   // Cut early churn has no current value: no ring, no number beside the "–".
-  const g3 = page.getByTestId("home-goal-G1");
-  await expect(g3.getByTestId("goal-to-go")).toHaveText("No current value yet");
-  await expect(g3.getByTestId("goal-confidence")).toHaveCount(0);
-  await expect(g3.getByRole("img", { name: /^Confidence/ })).toHaveCount(0);
+  const g3 = page.getByTestId('home-goal-G1');
+  await expect(g3.getByTestId('goal-to-go')).toHaveText('No current value yet');
+  await expect(g3.getByTestId('goal-confidence')).toHaveCount(0);
+  await expect(g3.getByRole('img', { name: /^Confidence/ })).toHaveCount(0);
 
   // Plan's Goals band is the same panel.
-  await page.goto("/plan");
-  const plan = page.getByTestId("plan-goals").filter({ visible: true });
-  await expect(plan.getByTestId("home-goal-G3").getByTestId("goal-confidence")).toContainText("confidence");
-  await expect(plan.getByTestId("home-goal-G1").getByTestId("goal-confidence")).toHaveCount(0);
+  await page.goto('/plan');
+  const plan = page.getByTestId('plan-goals').filter({ visible: true });
+  await expect(plan.getByTestId('home-goal-G3').getByTestId('goal-confidence')).toContainText(
+    'confidence',
+  );
+  await expect(plan.getByTestId('home-goal-G1').getByTestId('goal-confidence')).toHaveCount(0);
 });
 
 // prod-1: while the goals load, the band holds skeleton cards rather than an empty box.
-test("goals: skeleton cards while the goals load, then the goals", async ({ page }) => {
+test('goals: skeleton cards while the goals load, then the goals', async ({ page }) => {
   await page.addInitScript(() => {
-    localStorage.setItem("po-mock-slow", "/v1/baseline/entities");
-    localStorage.setItem("po-mock-slow-ms", "3000");
+    localStorage.setItem('po-mock-slow', '/v1/baseline/entities');
+    localStorage.setItem('po-mock-slow-ms', '3000');
   });
   await login(page);
-  const goals = page.getByTestId("home-goals");
-  await expect(goals.getByTestId("goals-loading")).toBeVisible();
-  await expect(goals.getByTestId("goals-loading").locator("li")).toHaveCount(4);
-  await expect(page.getByTestId("home-goal-G3")).toBeVisible({ timeout: 15_000 });
-  await expect(goals.getByTestId("goals-loading")).toHaveCount(0);
+  const goals = page.getByTestId('home-goals');
+  await expect(goals.getByTestId('goals-loading')).toBeVisible();
+  await expect(goals.getByTestId('goals-loading').locator('li')).toHaveCount(4);
+  await expect(page.getByTestId('home-goal-G3')).toBeVisible({ timeout: 15_000 });
+  await expect(goals.getByTestId('goals-loading')).toHaveCount(0);
 });
 
 // qa-company-5: the row's journey step and the card's sections each say what they count.
 test("in flight: the PRD's step and its sections approved are labelled apart", async ({ page }) => {
   await openHome(page);
-  const table = page.getByTestId("home-in-flight-table");
-  await expect(table.getByRole("columnheader", { name: "Progress" })).toBeAttached();
-  const checkout = flight(page, "annual-billing", "prd");
-  await expect(checkout).toHaveAttribute("aria-selected", "true");
-  await expect(checkout.getByTestId("row-journey")).toContainText("Step 8 of 9");
-  const inspector = page.getByTestId("home-inspector");
-  await expect(inspector.getByTestId("inspector-journey")).toContainText("step 8 of 9");
-  await expect(inspector.getByTestId("stat-sections")).toContainText("Approved");
-  await expect(inspector.getByTestId("stat-sections")).not.toContainText("Sections done");
+  const table = page.getByTestId('home-in-flight-table');
+  await expect(table.getByRole('columnheader', { name: 'Progress' })).toBeAttached();
+  const checkout = flight(page, 'annual-billing', 'prd');
+  await expect(checkout).toHaveAttribute('aria-selected', 'true');
+  await expect(checkout.getByTestId('row-journey')).toContainText('Step 8 of 9');
+  const inspector = page.getByTestId('home-inspector');
+  await expect(inspector.getByTestId('inspector-journey')).toContainText('step 8 of 9');
+  await expect(inspector.getByTestId('stat-sections')).toContainText('Approved');
+  await expect(inspector.getByTestId('stat-sections')).not.toContainText('Sections done');
 });
 
 // qa-company-45: each blocker line names the blocker, not the check's heading.
 test("in flight: the selected PRD's blockers are named", async ({ page }) => {
   await openHome(page);
-  const blockers = page.getByTestId("home-inspector").getByTestId("inspector-blockers");
-  await expect(blockers).toContainText("The address lookup service allows 100 requests a minute per company");
-  await expect(blockers.getByTestId("inspector-blocker").filter({ hasText: /^Critical blockers$/ })).toHaveCount(0);
+  const blockers = page.getByTestId('home-inspector').getByTestId('inspector-blockers');
+  await expect(blockers).toContainText(
+    'The address lookup service allows 100 requests a minute per company',
+  );
+  await expect(
+    blockers.getByTestId('inspector-blocker').filter({ hasText: /^Critical blockers$/ }),
+  ).toHaveCount(0);
 });
 
 // qa-company-43, qa-shell-32: a paused run does not read as finished; runs are named, not slugged.
-test("in flight: a run paused over budget says Paused; runs are named by title, no slug or short id", async ({ page }) => {
+test('in flight: a run paused over budget says Paused; runs are named by title, no slug or short id', async ({
+  page,
+}) => {
   await openHome(page);
-  const paused = flight(page, "team-invites");
-  await expect(paused).toContainText("Paused: over budget");
-  await expect(paused.getByTestId("row-paused")).toHaveText(/^Paused/);
-  await expect(paused.getByRole("meter")).toHaveCount(0);
+  const paused = flight(page, 'team-invites');
+  await expect(paused).toContainText('Paused: over budget');
+  await expect(paused.getByTestId('row-paused')).toHaveText(/^Paused/);
+  await expect(paused.getByRole('meter')).toHaveCount(0);
 
-  const table = page.getByTestId("home-in-flight-table");
+  const table = page.getByTestId('home-in-flight-table');
   // #979: a run is named by its document's own title and its flow, no kind word added.
-  await expect(flight(page, "usage-alerts-v2")).toContainText("Usage alerts v2 · Ground Truth to PRD");
-  await expect(table).not.toContainText("usage-alerts-v2");
-  await expect(table).not.toContainText("team-onboarding");
-  await flight(page, "team-onboarding").click();
-  const inspector = page.getByTestId("home-inspector");
-  await expect(inspector).toContainText("Run · selected");
+  await expect(flight(page, 'usage-alerts-v2')).toContainText(
+    'Usage alerts v2 · Ground Truth to PRD',
+  );
+  await expect(table).not.toContainText('usage-alerts-v2');
+  await expect(table).not.toContainText('team-onboarding');
+  await flight(page, 'team-onboarding').click();
+  const inspector = page.getByTestId('home-inspector');
+  await expect(inspector).toContainText('Run · selected');
   await expect(inspector).not.toContainText(/Run [0-9a-f]{4}\b/);
-  await expect(inspector.getByRole("heading", { name: /^Team onboarding · Ground Truth to PRD/ })).toBeVisible();
+  await expect(
+    inspector.getByRole('heading', { name: /^Team onboarding · Ground Truth to PRD/ }),
+  ).toBeVisible();
 });
 
 // qa-company-24: Set up says the default zone is used until one is set, then the zone in words.
-test("set up: time zone says the default is used, then names the zone that was set", async ({ page }) => {
+test('set up: time zone says the default is used, then names the zone that was set', async ({
+  page,
+}) => {
   await login(page);
-  const step = page.getByTestId("setup-row-timezone");
-  await expect(step.getByTestId("setup-status")).toHaveText("Not set · Pacific is used");
-  await step.getByRole("link", { name: "Open" }).click();
+  const step = page.getByTestId('setup-row-timezone');
+  await expect(step.getByTestId('setup-status')).toHaveText('Not set · Pacific is used');
+  await step.getByRole('link', { name: 'Open' }).click();
   await expect(page).toHaveURL(/\/settings\/company/);
-  await pickZone(page, "Asia/Tokyo");
-  await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
-  await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved · Back to Home");
-  await page.goto("/home");
-  const status = page.getByTestId("setup-row-timezone").getByTestId("setup-status");
-  await expect(status).toContainText("(Tokyo)");
-  await expect(status).not.toContainText("Asia/");
+  await pickZone(page, 'Asia/Tokyo');
+  await page.getByTestId('timezone-panel').getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByTestId('timezone-panel').getByRole('status')).toHaveText(
+    'Saved · Back to Home',
+  );
+  await page.goto('/home');
+  const status = page.getByTestId('setup-row-timezone').getByTestId('setup-status');
+  await expect(status).toContainText('(Tokyo)');
+  await expect(status).not.toContainText('Asia/');
 });
 
-test.describe("on a phone", () => {
+test.describe('on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test("goals and in flight read the same on a phone, with no sideways scroll", async ({ page }) => {
+  test('goals and in flight read the same on a phone, with no sideways scroll', async ({
+    page,
+  }) => {
     await openHome(page);
-    await expect(page.getByTestId("home-goal-G3").getByTestId("goal-confidence")).toBeVisible();
-    await expect(page.getByTestId("home-goal-G1").getByTestId("goal-confidence")).toHaveCount(0);
-    await expect(page.getByTestId("home-goal-G3").getByTestId("goal-change")).toHaveText("+7 pts in 6 months");
-    await expect(flight(page, "team-invites").getByTestId("row-paused")).toBeVisible();
-    await expect(flight(page, "annual-billing", "prd").getByTestId("row-journey")).toContainText("Step 8 of 9");
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+    await expect(page.getByTestId('home-goal-G3').getByTestId('goal-confidence')).toBeVisible();
+    await expect(page.getByTestId('home-goal-G1').getByTestId('goal-confidence')).toHaveCount(0);
+    await expect(page.getByTestId('home-goal-G3').getByTestId('goal-change')).toHaveText(
+      '+7 pts in 6 months',
+    );
+    await expect(flight(page, 'team-invites').getByTestId('row-paused')).toBeVisible();
+    await expect(flight(page, 'annual-billing', 'prd').getByTestId('row-journey')).toContainText(
+      'Step 8 of 9',
+    );
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      390,
+    );
   });
 });

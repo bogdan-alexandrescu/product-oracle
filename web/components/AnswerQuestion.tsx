@@ -1,15 +1,15 @@
-"use client";
+'use client';
 
-import { useState } from "react";
+import { useState } from 'react';
 
-import { Button, InfoTip } from "@/components/ds";
-import { PersonPicker, peopleByIds, type Person } from "@/components/PersonPicker";
-import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
-import { ApiError, SOMETHING_WENT_WRONG, api, unwrap, type Schemas } from "@/lib/api/client";
-import { errorMessage } from "@/lib/use-query";
+import { Button, InfoTip } from '@/components/ds';
+import { PersonPicker, peopleByIds, type Person } from '@/components/PersonPicker';
+import { FIELD_LABEL, InlineError, TEXTAREA } from '@/components/review/parts';
+import { ApiError, SOMETHING_WENT_WRONG, api, unwrap, type Schemas } from '@/lib/api/client';
+import { errorMessage } from '@/lib/use-query';
 
-export type InboxQuestion = Schemas["InboxQuestion"];
-type Kind = Schemas["AnswerIn"]["kind"];
+export type InboxQuestion = Schemas['InboxQuestion'];
+type Kind = Schemas['AnswerIn']['kind'];
 
 /** The longest answer the API takes. */
 const MAX_ANSWER = 4000;
@@ -17,26 +17,28 @@ const MAX_ANSWER = 4000;
 /** Who asks, as the Inbox names them: "Oracle asks", "<name> asks" or, for a company API
  * token, "<token name> asks" ("An API token asks" once it is gone). */
 export function askerName(q: InboxQuestion): string {
-  return q.asked_by.kind === "oracle" ? "Oracle" : q.asked_by.name;
+  return q.asked_by.kind === 'oracle' ? 'Oracle' : q.asked_by.name;
 }
 
 /** What a settled question shows in place of its actions. */
 export function settledLabel(kind: Kind, delegate?: Person | null): string {
-  if (kind === "answer") return "Answered ✓";
-  if (kind === "dont_know") return "I don't know ✓";
-  if (kind === "defer") return "Deferred ✓";
-  if (kind === "research") return "Research proposed ✓";
-  return `Asked ${delegate?.name ?? "someone"} ✓`;
+  if (kind === 'answer') return 'Answered ✓';
+  if (kind === 'dont_know') return "I don't know ✓";
+  if (kind === 'defer') return 'Deferred ✓';
+  if (kind === 'research') return 'Research proposed ✓';
+  return `Asked ${delegate?.name ?? 'someone'} ✓`;
 }
 
 /** 403: the question was asked of someone else (moved since this loaded), by name. */
 async function askedOfMessage(questionId: string): Promise<string> {
   try {
-    const q = await unwrap(api.GET("/v1/questions/{item_id}", { params: { path: { item_id: questionId } } }));
-    const name = (await peopleByIds([q.asked_to])).get(q.asked_to ?? "")?.name;
-    return name ? `This was asked of ${name}` : "This was asked of someone else";
+    const q = await unwrap(
+      api.GET('/v1/questions/{item_id}', { params: { path: { item_id: questionId } } }),
+    );
+    const name = (await peopleByIds([q.asked_to])).get(q.asked_to ?? '')?.name;
+    return name ? `This was asked of ${name}` : 'This was asked of someone else';
   } catch {
-    return "This was asked of someone else";
+    return 'This was asked of someone else';
   }
 }
 
@@ -61,7 +63,7 @@ export function AnswerQuestion({
   /** False where the question is already on screen right above the form (an Inbox row opened in place). */
   showPrompt?: boolean;
 }) {
-  const [body, setBody] = useState("");
+  const [body, setBody] = useState('');
   const [busy, setBusy] = useState<Kind | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
@@ -69,21 +71,26 @@ export function AnswerQuestion({
   const prompt = q.question.prompt;
 
   async function send(kind: Kind, delegate?: Person) {
-    if (kind === "answer" && !body.trim()) {
-      setError("Write your answer first");
+    if (kind === 'answer' && !body.trim()) {
+      setError('Write your answer first');
       return;
     }
     setBusy(kind);
     setError(null);
     try {
-      if (kind === "answer" && sendAnswer) {
+      if (kind === 'answer' && sendAnswer) {
         if (await sendAnswer(body.trim())) onSettled(kind, settledLabel(kind));
         return;
       }
       await unwrap(
-        api.POST("/v1/questions/{question_id}/answers", {
+        api.POST('/v1/questions/{question_id}/answers', {
           params: { path: { question_id: q.question.id } },
-          body: { kind, body: kind === "answer" ? body.trim() : null, delegated_to: delegate?.user_id ?? null, evidence_ids: [] },
+          body: {
+            kind,
+            body: kind === 'answer' ? body.trim() : null,
+            delegated_to: delegate?.user_id ?? null,
+            evidence_ids: [],
+          },
         }),
       );
       onSettled(kind, settledLabel(kind, delegate));
@@ -92,8 +99,9 @@ export function AnswerQuestion({
         e instanceof ApiError && e.status === 403
           ? await askedOfMessage(q.question.id)
           : // brief-answers: a send cut off on the way says why; the text stays in the form.
-            kind === "answer" && (!(e instanceof ApiError) || (e.status >= 500 && e.message === SOMETHING_WENT_WRONG))
-            ? "Your answer did not reach Oracle in time. Your text is still here: send it again."
+            kind === 'answer' &&
+              (!(e instanceof ApiError) || (e.status >= 500 && e.message === SOMETHING_WENT_WRONG))
+            ? 'Your answer did not reach Oracle in time. Your text is still here: send it again.'
             : errorMessage(e),
       );
     } finally {
@@ -104,7 +112,10 @@ export function AnswerQuestion({
   return (
     <div className="flex min-w-0 flex-col gap-2.5 whitespace-normal" data-testid="answer-question">
       {showPrompt && (
-        <p className="text-[15px] leading-[22px] font-semibold break-words text-text" data-testid="answer-prompt">
+        <p
+          className="text-[15px] leading-[22px] font-semibold break-words text-text"
+          data-testid="answer-prompt"
+        >
           {prompt}
         </p>
       )}
@@ -126,8 +137,8 @@ export function AnswerQuestion({
           data-autofocus
           onChange={(e) => setBody(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void send("answer");
-            if (e.key === "Escape") onCancel?.();
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void send('answer');
+            if (e.key === 'Escape') onCancel?.();
           }}
           className={TEXTAREA}
         />
@@ -139,28 +150,32 @@ export function AnswerQuestion({
           variant="solid"
           icon="check"
           disabled={busy !== null || !body.trim()}
-          title={body.trim() ? undefined : "Write your answer first"}
-          onClick={() => send("answer")}
+          title={body.trim() ? undefined : 'Write your answer first'}
+          onClick={() => send('answer')}
         >
-          {busy === "answer" ? "Sending…" : "Send answer"}
+          {busy === 'answer' ? 'Sending…' : 'Send answer'}
         </Button>
-        {paths.has("dont_know") && (
-          <Button disabled={busy !== null} onClick={() => send("dont_know")}>
+        {paths.has('dont_know') && (
+          <Button disabled={busy !== null} onClick={() => send('dont_know')}>
             I don&apos;t know
           </Button>
         )}
-        {paths.has("defer") && (
-          <Button disabled={busy !== null} onClick={() => send("defer")}>
+        {paths.has('defer') && (
+          <Button disabled={busy !== null} onClick={() => send('defer')}>
             Defer
           </Button>
         )}
-        {paths.has("delegate") && (
-          <Button disabled={busy !== null} aria-expanded={picking} onClick={() => setPicking((v) => !v)}>
+        {paths.has('delegate') && (
+          <Button
+            disabled={busy !== null}
+            aria-expanded={picking}
+            onClick={() => setPicking((v) => !v)}
+          >
             Ask someone ▾
           </Button>
         )}
-        {paths.has("research") && (
-          <Button disabled={busy !== null} onClick={() => send("research")}>
+        {paths.has('research') && (
+          <Button disabled={busy !== null} onClick={() => send('research')}>
             Research this
           </Button>
         )}
@@ -171,8 +186,16 @@ export function AnswerQuestion({
         )}
       </div>
       {picking && (
-        <div className="rounded-button border border-line bg-surface p-2" role="group" aria-label="Ask someone">
-          <PersonPicker autoFocus exclude={q.question.asked_to ? [q.question.asked_to] : []} onPick={(p) => send("delegate", p)} />
+        <div
+          className="rounded-button border border-line bg-surface p-2"
+          role="group"
+          aria-label="Ask someone"
+        >
+          <PersonPicker
+            autoFocus
+            exclude={q.question.asked_to ? [q.question.asked_to] : []}
+            onPick={(p) => send('delegate', p)}
+          />
         </div>
       )}
     </div>

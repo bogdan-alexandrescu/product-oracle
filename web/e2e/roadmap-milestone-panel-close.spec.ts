@@ -1,6 +1,6 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /*
  * roadmap-milestone-panel-close: the milestone's panel on the Roadmap ("Edit M5", opened from its
@@ -18,40 +18,46 @@ import { expect, test, type Page } from "./test";
 test.use({ viewport: { width: 1440, height: 900 } });
 
 async function open(page: Page) {
-  await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "simple-milestones"] as const);
+  await page
+    .context()
+    .addInitScript(([key, value]) => localStorage.setItem(key, value), [
+      MOCK_SCENARIO_KEY,
+      'simple-milestones',
+    ] as const);
   await login(page);
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
 }
 
-const label = (page: Page, code: string) => page.getByTestId("ms-label").filter({ hasText: new RegExp(`^${code} `) });
-const card = (page: Page) => page.getByTestId("ms-card");
+const label = (page: Page, code: string) =>
+  page.getByTestId('ms-label').filter({ hasText: new RegExp(`^${code} `) });
+const card = (page: Page) => page.getByTestId('ms-card');
 
 async function openPanel(page: Page) {
-  await expect(label(page, "M5")).toBeVisible();
-  await label(page, "M5").click();
-  await expect(card(page).getByRole("heading", { name: "Edit M5" })).toBeVisible();
+  await expect(label(page, 'M5')).toBeVisible();
+  await label(page, 'M5').click();
+  await expect(card(page).getByRole('heading', { name: 'Edit M5' })).toBeVisible();
 }
 
 test("Escape closes the milestone's panel on the Roadmap", async ({ page }) => {
   await open(page);
   await openPanel(page);
-  await page.keyboard.press("Escape");
+  await page.keyboard.press('Escape');
   await expect(card(page)).toHaveCount(0);
   // It opens again after Escape, and Escape closes it again.
   await openPanel(page);
-  await card(page).getByLabel("Name", { exact: true }).focus();
-  await page.keyboard.press("Escape");
+  await card(page).getByLabel('Name', { exact: true }).focus();
+  await page.keyboard.press('Escape');
   await expect(card(page)).toHaveCount(0);
 });
 
 test("switching the Roadmap's view closes the milestone's panel", async ({ page }) => {
   await open(page);
-  for (const view of ["format-gantt", "format-board", "format-waterfall"]) {
+  for (const view of ['format-gantt', 'format-board', 'format-waterfall']) {
     await openPanel(page);
     await page.getByTestId(view).click();
     await expect(card(page)).toHaveCount(0);
-    await page.getByTestId("format-timeline").click();
+    await page.getByTestId('format-timeline').click();
     await expect(card(page)).toHaveCount(0);
   }
 });

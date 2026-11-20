@@ -1,7 +1,7 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
 
 /*
  * QA pass 4 on the run review page, /runs/<id>/review/<checkpoint> (qa-work-1, 6, 9, 11 to 17),
@@ -14,87 +14,120 @@ const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
 
 async function seeded(page: Page) {
-  await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "feature-set"] as const);
+  await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [
+    MOCK_SCENARIO_KEY,
+    'feature-set',
+  ] as const);
   await login(page);
 }
 
 /** Runs › Bulk import PRD › Review feature set, as a person goes there. */
 async function openReview(page: Page) {
-  await page.goto("/runs");
-  await page.locator('[data-testid="run-row"][data-document="bulk-import"]').filter({ visible: true }).getByRole("link").first().click();
+  await page.goto('/runs');
+  await page
+    .locator('[data-testid="run-row"][data-document="bulk-import"]')
+    .filter({ visible: true })
+    .getByRole('link')
+    .first()
+    .click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
-  await page.getByTestId("segment-feature_set").getByRole("link", { name: "Review feature set" }).click();
+  await page
+    .getByTestId('segment-feature_set')
+    .getByRole('link', { name: 'Review feature set' })
+    .click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+\/review\/[0-9a-f-]+/);
-  await expect(page.getByTestId("scope-row").first()).toBeVisible();
+  await expect(page.getByTestId('scope-row').first()).toBeVisible();
 }
 
-const row = (page: Page, title: string) => page.getByTestId("scope-row").filter({ has: page.getByTestId("feature-title").filter({ hasText: new RegExp(`^${title}$`) }) });
-const inspector = (page: Page) => page.getByTestId("scope-inspector").filter({ visible: true });
-const bar = (page: Page) => page.getByTestId("decision-bar");
+const row = (page: Page, title: string) =>
+  page.getByTestId('scope-row').filter({
+    has: page.getByTestId('feature-title').filter({ hasText: new RegExp(`^${title}$`) }),
+  });
+const inspector = (page: Page) => page.getByTestId('scope-inspector').filter({ visible: true });
+const bar = (page: Page) => page.getByTestId('decision-bar');
 
-test.describe("desktop", () => {
+test.describe('desktop', () => {
   test.use({ viewport: DESKTOP });
 
-  test("qa-work-1: Send back confirms what goes to the agents and the run counts the entries sent", async ({ page }) => {
+  test('qa-work-1: Send back confirms what goes to the agents and the run counts the entries sent', async ({
+    page,
+  }) => {
     await seeded(page);
     await openReview(page);
-    await row(page, "Bulk import").getByRole("button", { name: "Include", exact: true }).click();
-    await expect(row(page, "Bulk import").getByTestId("row-done")).toContainText("Included");
-    await row(page, "Bulk address edit").getByRole("button", { name: "Include dependency" }).click();
-    await expect(bar(page).getByTestId("staged-chip")).toHaveCount(2);
+    await row(page, 'Bulk import').getByRole('button', { name: 'Include', exact: true }).click();
+    await expect(row(page, 'Bulk import').getByTestId('row-done')).toContainText('Included');
+    await row(page, 'Bulk address edit')
+      .getByRole('button', { name: 'Include dependency' })
+      .click();
+    await expect(bar(page).getByTestId('staged-chip')).toHaveCount(2);
 
-    await bar(page).getByRole("button", { name: "Send back to agents" }).click();
-    const sheet = page.getByTestId("sheet-send-back");
+    await bar(page).getByRole('button', { name: 'Send back to agents' }).click();
+    const sheet = page.getByTestId('sheet-send-back');
     await expect(sheet).toBeVisible();
-    await expect(sheet).toContainText("The agents get 1 change: Shared address book export: included.");
-    await expect(sheet).toContainText("Not sent: Bulk import: included");
-    await expect(sheet.getByTestId("send-back-note")).toContainText("No note to the agents");
+    await expect(sheet).toContainText(
+      'The agents get 1 change: Shared address book export: included.',
+    );
+    await expect(sheet).toContainText('Not sent: Bulk import: included');
+    await expect(sheet.getByTestId('send-back-note')).toContainText('No note to the agents');
     // Cancel sends nothing.
-    await sheet.getByRole("button", { name: "Cancel" }).click();
+    await sheet.getByRole('button', { name: 'Cancel' }).click();
     await expect(sheet).toBeHidden();
     await expect(page).toHaveURL(/\/review\//);
 
-    await bar(page).getByRole("button", { name: "Send back to agents" }).click();
-    await sheet.getByRole("button", { name: "Send back", exact: true }).click();
+    await bar(page).getByRole('button', { name: 'Send back to agents' }).click();
+    await sheet.getByRole('button', { name: 'Send back', exact: true }).click();
     await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
-    await expect(page.getByTestId("sent-review").first()).toContainText("Sent back · 1 entry");
+    await expect(page.getByTestId('sent-review').first()).toContainText('Sent back · 1 entry');
   });
 
-  test("qa-work-6: a review of a missing run shows Run not found, never the id", async ({ page }) => {
+  test('qa-work-6: a review of a missing run shows Run not found, never the id', async ({
+    page,
+  }) => {
     await seeded(page);
-    const id = "7a11c0de-dead-4000-8000-00000000beef";
+    const id = '7a11c0de-dead-4000-8000-00000000beef';
     await page.goto(`/runs/${id}/review/00000000-0000-4000-8000-000000000000`);
-    const panel = page.getByTestId("run-not-found");
+    const panel = page.getByTestId('run-not-found');
     await expect(panel).toBeVisible();
-    await expect(page.getByRole("heading", { level: 1, name: "Run not found" })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Run not found' })).toBeVisible();
     await expect(panel).toContainText("This run doesn't exist or was deleted.");
-    await expect(page.locator("main")).not.toContainText(id);
-    await page.getByRole("link", { name: "Back to Runs" }).click();
+    await expect(page.locator('main')).not.toContainText(id);
+    await page.getByRole('link', { name: 'Back to Runs' }).click();
     await expect(page).toHaveURL(/\/runs$/);
   });
 
-  test("qa-work-9: the inspector offers the feature's decision once, in one vocabulary", async ({ page }) => {
+  test("qa-work-9: the inspector offers the feature's decision once, in one vocabulary", async ({
+    page,
+  }) => {
     await seeded(page);
     await openReview(page);
-    await row(page, "Bulk import").getByTestId("feature-title").click();
-    const card = inspector(page).getByTestId("reason-new_feature");
+    await row(page, 'Bulk import').getByTestId('feature-title').click();
+    const card = inspector(page).getByTestId('reason-new_feature');
     await expect(card).toBeVisible();
-    for (const name of ["Include", "Keep", "Leave out"]) await expect(card.getByRole("button", { name, exact: true })).toHaveCount(0);
-    const decision = inspector(page).getByRole("group", { name: "Decision" });
-    for (const name of ["Include", "Leave out", "Defer to a later PRD"]) await expect(decision.getByRole("button", { name, exact: true })).toBeVisible();
-    await expect(inspector(page).getByRole("button", { name: "Keep", exact: true })).toHaveCount(0);
-    await decision.getByRole("button", { name: "Include", exact: true }).click();
-    await expect(row(page, "Bulk import").getByTestId("row-done")).toContainText("Included");
-    await expect(bar(page).getByTestId("staged-chip").filter({ hasText: "Bulk import: included" })).toBeVisible();
-    await expect(decision.getByRole("button", { name: "Include", exact: true })).toHaveAttribute("aria-pressed", "true");
+    for (const name of ['Include', 'Keep', 'Leave out'])
+      await expect(card.getByRole('button', { name, exact: true })).toHaveCount(0);
+    const decision = inspector(page).getByRole('group', { name: 'Decision' });
+    for (const name of ['Include', 'Leave out', 'Defer to a later PRD'])
+      await expect(decision.getByRole('button', { name, exact: true })).toBeVisible();
+    await expect(inspector(page).getByRole('button', { name: 'Keep', exact: true })).toHaveCount(0);
+    await decision.getByRole('button', { name: 'Include', exact: true }).click();
+    await expect(row(page, 'Bulk import').getByTestId('row-done')).toContainText('Included');
+    await expect(
+      bar(page).getByTestId('staged-chip').filter({ hasText: 'Bulk import: included' }),
+    ).toBeVisible();
+    await expect(decision.getByRole('button', { name: 'Include', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
   });
 
-  test("qa-work-11, walk-eng-check 5: a long goal name shows whole, wrapping in its cell, the full name on hover too", async ({ page }) => {
+  test('qa-work-11, walk-eng-check 5: a long goal name shows whole, wrapping in its cell, the full name on hover too', async ({
+    page,
+  }) => {
     await seeded(page);
     await openReview(page);
-    const chip = row(page, "Bulk import").getByTestId("goal-chip");
-    await expect(chip).toHaveAttribute("title", "A goal not in the Ground Truth");
-    await expect(chip).toHaveText("A goal not in the Ground Truth");
+    const chip = row(page, 'Bulk import').getByTestId('goal-chip');
+    await expect(chip).toHaveAttribute('title', 'A goal not in the Ground Truth');
+    await expect(chip).toHaveText('A goal not in the Ground Truth');
     const fits = await chip.evaluate((el) => {
       const cell = el.parentElement!.getBoundingClientRect();
       const box = el.getBoundingClientRect();
@@ -103,111 +136,157 @@ test.describe("desktop", () => {
     expect(fits).toEqual({ whole: true, inside: true });
   });
 
-  test("qa-work-12: the dependency fix is a short one-line button; the reason chip names the dependency", async ({ page }) => {
+  test('qa-work-12: the dependency fix is a short one-line button; the reason chip names the dependency', async ({
+    page,
+  }) => {
     await seeded(page);
     await openReview(page);
-    const bulk = row(page, "Bulk address edit");
-    await expect(bulk.getByTestId("row-reasons")).toContainText("Depends on Shared address book export, left out");
-    const fix = bulk.getByTestId("your-call").getByRole("button", { name: "Include dependency" });
-    await expect(fix).toHaveAttribute("title", "Include Shared address book export");
-    const buttons = bulk.getByTestId("your-call").getByRole("button");
+    const bulk = row(page, 'Bulk address edit');
+    await expect(bulk.getByTestId('row-reasons')).toContainText(
+      'Depends on Shared address book export, left out',
+    );
+    const fix = bulk.getByTestId('your-call').getByRole('button', { name: 'Include dependency' });
+    await expect(fix).toHaveAttribute('title', 'Include Shared address book export');
+    const buttons = bulk.getByTestId('your-call').getByRole('button');
     for (const b of await buttons.all()) {
-      const one = await b.evaluate((el) => ({ fits: el.scrollWidth <= el.clientWidth + 1, nowrap: getComputedStyle(el).whiteSpace === "nowrap", h: el.getBoundingClientRect().height }));
+      const one = await b.evaluate((el) => ({
+        fits: el.scrollWidth <= el.clientWidth + 1,
+        nowrap: getComputedStyle(el).whiteSpace === 'nowrap',
+        h: el.getBoundingClientRect().height,
+      }));
       expect(one.fits).toBe(true);
       expect(one.nowrap).toBe(true);
       expect(one.h).toBeLessThanOrEqual(40);
     }
   });
 
-  test("qa-work-13: a handled row stays under its heading, its ✓ on the row", async ({ page }) => {
+  test('qa-work-13: a handled row stays under its heading, its ✓ on the row', async ({ page }) => {
     await seeded(page);
     await openReview(page);
-    const group = page.getByRole("rowgroup", { name: "A goal not in the Ground Truth" });
-    await expect(group.getByTestId("feature-title").filter({ hasText: /^Bulk import$/ })).toBeVisible();
-    await row(page, "Bulk import").getByRole("button", { name: "Include", exact: true }).click();
-    await expect(group.getByTestId("row-done")).toContainText("Included");
-    await expect(page.getByRole("rowgroup", { name: /^Nothing/ })).toHaveCount(0);
+    const group = page.getByRole('rowgroup', { name: 'A goal not in the Ground Truth' });
+    await expect(
+      group.getByTestId('feature-title').filter({ hasText: /^Bulk import$/ }),
+    ).toBeVisible();
+    await row(page, 'Bulk import').getByRole('button', { name: 'Include', exact: true }).click();
+    await expect(group.getByTestId('row-done')).toContainText('Included');
+    await expect(page.getByRole('rowgroup', { name: /^Nothing/ })).toHaveCount(0);
 
-    await page.getByRole("group", { name: "Group by" }).getByRole("button", { name: "Reason" }).click();
-    const byReason = page.getByRole("rowgroup", { name: "New, not in the Ground Truth" });
-    await expect(byReason.getByTestId("feature-title").filter({ hasText: /^Bulk import$/ })).toBeVisible();
-    await expect(byReason.getByTestId("row-done")).toContainText("Included");
-    await expect(page.getByRole("rowgroup", { name: /^Nothing/ })).toHaveCount(0);
+    await page
+      .getByRole('group', { name: 'Group by' })
+      .getByRole('button', { name: 'Reason' })
+      .click();
+    const byReason = page.getByRole('rowgroup', { name: 'New, not in the Ground Truth' });
+    await expect(
+      byReason.getByTestId('feature-title').filter({ hasText: /^Bulk import$/ }),
+    ).toBeVisible();
+    await expect(byReason.getByTestId('row-done')).toContainText('Included');
+    await expect(page.getByRole('rowgroup', { name: /^Nothing/ })).toHaveCount(0);
   });
 
-  test("qa-work-14: including a dependency says why it needs you; Approve counts the staged list", async ({ page }) => {
+  test('qa-work-14: including a dependency says why it needs you; Approve counts the staged list', async ({
+    page,
+  }) => {
     await seeded(page);
     await openReview(page);
-    await row(page, "Bulk import").getByRole("button", { name: "Include", exact: true }).click();
-    await row(page, "Bulk address edit").getByRole("button", { name: "Include dependency" }).click();
-    await expect(bar(page).getByTestId("tally-brought-back")).toContainText("Shared address book export is included now and needs you: no confirmed goal");
-    await expect(bar(page).getByTestId("staged-chip")).toHaveCount(2);
-    await expect(bar(page).getByRole("button", { name: "Approve with 2 edits" })).toBeVisible();
+    await row(page, 'Bulk import').getByRole('button', { name: 'Include', exact: true }).click();
+    await row(page, 'Bulk address edit')
+      .getByRole('button', { name: 'Include dependency' })
+      .click();
+    await expect(bar(page).getByTestId('tally-brought-back')).toContainText(
+      'Shared address book export is included now and needs you: no confirmed goal',
+    );
+    await expect(bar(page).getByTestId('staged-chip')).toHaveCount(2);
+    await expect(bar(page).getByRole('button', { name: 'Approve with 2 edits' })).toBeVisible();
   });
 
-  test("qa-work-15: a row with no goal shows one chip for it", async ({ page }) => {
+  test('qa-work-15: a row with no goal shows one chip for it', async ({ page }) => {
     await seeded(page);
     await openReview(page);
-    const bulk = row(page, "Bulk address edit");
-    await expect(bulk.getByTestId("row-reasons")).toContainText("No confirmed goal");
-    await expect(bulk).not.toContainText("No goal");
+    const bulk = row(page, 'Bulk address edit');
+    await expect(bulk.getByTestId('row-reasons')).toContainText('No confirmed goal');
+    await expect(bulk).not.toContainText('No goal');
   });
 
-  test("qa-work-16: headers and the proposal read as words", async ({ page }) => {
+  test('qa-work-16: headers and the proposal read as words', async ({ page }) => {
     await seeded(page);
     await openReview(page);
-    await expect(page.getByRole("columnheader").filter({ hasText: /^Confidence$/ })).toBeVisible();
-    await expect(page.getByRole("columnheader").filter({ hasText: /^Requirements$/ })).toBeVisible();
-    await row(page, "Bulk import").getByTestId("feature-title").click();
-    await expect(inspector(page)).toContainText("Oracle proposes: Include");
-    await expect(page.locator("main")).not.toContainText("Proposed: include");
+    await expect(page.getByRole('columnheader').filter({ hasText: /^Confidence$/ })).toBeVisible();
+    await expect(
+      page.getByRole('columnheader').filter({ hasText: /^Requirements$/ }),
+    ).toBeVisible();
+    await row(page, 'Bulk import').getByTestId('feature-title').click();
+    await expect(inspector(page)).toContainText('Oracle proposes: Include');
+    await expect(page.locator('main')).not.toContainText('Proposed: include');
   });
 
-  test("qa-work-17: the review's way back is the run page's arrow link, to the run", async ({ page }) => {
+  test("qa-work-17: the review's way back is the run page's arrow link, to the run", async ({
+    page,
+  }) => {
     await seeded(page);
     await openReview(page);
-    const runUrl = page.url().replace(/\/review\/.*$/, "");
-    const back = page.getByTestId("review-back");
-    await expect(back).toHaveText("Bulk import · Ground Truth to PRD");
-    await expect(back.locator("svg")).toHaveCount(1);
-    await expect(page.locator("main")).not.toContainText("Runs /");
+    const runUrl = page.url().replace(/\/review\/.*$/, '');
+    const back = page.getByTestId('review-back');
+    await expect(back).toHaveText('Bulk import · Ground Truth to PRD');
+    await expect(back.locator('svg')).toHaveCount(1);
+    await expect(page.locator('main')).not.toContainText('Runs /');
     await back.click();
     await expect(page).toHaveURL(runUrl);
   });
 });
 
-test.describe("phone", () => {
+test.describe('phone', () => {
   test.use({ viewport: PHONE });
 
-  test("qa-work-6: Run not found on a phone", async ({ page }) => {
+  test('qa-work-6: Run not found on a phone', async ({ page }) => {
     await seeded(page);
-    await page.goto("/runs/7a11c0de-dead-4000-8000-00000000beef/review/00000000-0000-4000-8000-000000000000");
-    await expect(page.getByTestId("run-not-found")).toBeVisible();
-    await expect(page.locator("main")).not.toContainText("7a11c0de");
+    await page.goto(
+      '/runs/7a11c0de-dead-4000-8000-00000000beef/review/00000000-0000-4000-8000-000000000000',
+    );
+    await expect(page.getByTestId('run-not-found')).toBeVisible();
+    await expect(page.locator('main')).not.toContainText('7a11c0de');
   });
 
-  test("qa-work-12/17: the dependency fix fits the card on one line and the back link wraps inside the page", async ({ page }) => {
+  test('qa-work-12/17: the dependency fix fits the card on one line and the back link wraps inside the page', async ({
+    page,
+  }) => {
     await seeded(page);
     await openReview(page);
-    const fix = row(page, "Bulk address edit").getByRole("button", { name: "Include dependency" });
+    const fix = row(page, 'Bulk address edit').getByRole('button', { name: 'Include dependency' });
     await expect(fix).toBeVisible();
-    expect(await fix.evaluate((el) => el.scrollWidth <= el.clientWidth + 1 && el.getBoundingClientRect().right <= window.innerWidth)).toBe(true);
-    const back = page.getByTestId("review-back");
+    expect(
+      await fix.evaluate(
+        (el) =>
+          el.scrollWidth <= el.clientWidth + 1 &&
+          el.getBoundingClientRect().right <= window.innerWidth,
+      ),
+    ).toBe(true);
+    const back = page.getByTestId('review-back');
     await expect(back).toBeVisible();
-    expect(await back.evaluate((el) => el.getBoundingClientRect().right <= window.innerWidth)).toBe(true);
+    expect(await back.evaluate((el) => el.getBoundingClientRect().right <= window.innerWidth)).toBe(
+      true,
+    );
   });
 
-  test("qa-work-1: on a phone, Send back from the decide sheet confirms first", async ({ page }) => {
+  test('qa-work-1: on a phone, Send back from the decide sheet confirms first', async ({
+    page,
+  }) => {
     await seeded(page);
     await openReview(page);
-    await row(page, "Bulk address edit").getByRole("button", { name: "Include dependency" }).click();
-    await expect(bar(page).getByRole("button")).toContainText("1 change");
-    await bar(page).getByRole("button").click();
-    await page.getByTestId("sheet-decide").getByRole("button", { name: "Send back to agents" }).click();
-    const sheet = page.getByTestId("sheet-send-back");
-    await expect(sheet).toContainText("The agents get 1 change: Shared address book export: included.");
-    await sheet.getByRole("button", { name: "Send back", exact: true }).click();
+    await row(page, 'Bulk address edit')
+      .getByRole('button', { name: 'Include dependency' })
+      .click();
+    await expect(bar(page).getByRole('button')).toContainText('1 change');
+    await bar(page).getByRole('button').click();
+    await page
+      .getByTestId('sheet-decide')
+      .getByRole('button', { name: 'Send back to agents' })
+      .click();
+    const sheet = page.getByTestId('sheet-send-back');
+    await expect(sheet).toContainText(
+      'The agents get 1 change: Shared address book export: included.',
+    );
+    await sheet.getByRole('button', { name: 'Send back', exact: true }).click();
     await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
-    await expect(page.getByTestId("sent-review").first()).toContainText("Sent back · 1 entry");
+    await expect(page.getByTestId('sent-review').first()).toContainText('Sent back · 1 entry');
   });
 });

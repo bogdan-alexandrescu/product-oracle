@@ -1,7 +1,7 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { THEME_KEY } from "../lib/theme";
-import { ADMIN, login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { THEME_KEY } from '../lib/theme';
+import { ADMIN, login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /*
  * Goal buckets you can change (the owner's picks of mk-goalbuckets: GB1 a "Pencil, form in
@@ -32,8 +32,8 @@ import { expect, test, type Page } from "./test";
  */
 
 const SIZES = [
-  { name: "desktop", viewport: { width: 1440, height: 900 } },
-  { name: "phone", viewport: { width: 390, height: 844 } },
+  { name: 'desktop', viewport: { width: 1440, height: 900 } },
+  { name: 'phone', viewport: { width: 390, height: 844 } },
 ] as const;
 
 async function open(page: Page, viewport: { width: number; height: number }, who = ADMIN.email) {
@@ -41,196 +41,264 @@ async function open(page: Page, viewport: { width: number; height: number }, who
   await page.context().addInitScript(
     ([key, value, themeKey]) => {
       localStorage.setItem(key, value);
-      localStorage.setItem(themeKey, "light");
+      localStorage.setItem(themeKey, 'light');
     },
-    [MOCK_SCENARIO_KEY, "simple-plan", THEME_KEY] as const,
+    [MOCK_SCENARIO_KEY, 'simple-plan', THEME_KEY] as const,
   );
   await login(page, who);
-  await page.goto("/simple/priorities?tab=buckets");
-  await expect(page.getByTestId("buckets-head")).toBeVisible();
-  await expect(page.locator('[data-testid="plan-goal"][data-goal="Reliability"]').getByTestId("goal-measure")).toBeVisible();
+  await page.goto('/simple/priorities?tab=buckets');
+  await expect(page.getByTestId('buckets-head')).toBeVisible();
+  await expect(
+    page.locator('[data-testid="plan-goal"][data-goal="Reliability"]').getByTestId('goal-measure'),
+  ).toBeVisible();
 }
 
-const bucket = (page: Page, goal: string) => page.locator(`[data-testid="plan-goal"][data-goal="${goal}"]`);
-const note = (page: Page) => page.getByTestId("bucket-note");
+const bucket = (page: Page, goal: string) =>
+  page.locator(`[data-testid="plan-goal"][data-goal="${goal}"]`);
+const note = (page: Page) => page.getByTestId('bucket-note');
 
 for (const size of SIZES) {
   test.describe(size.name, () => {
-    test("add a goal: Save stays off until measure, target and date are set; Undo removes it", async ({ page }) => {
+    test('add a goal: Save stays off until measure, target and date are set; Undo removes it', async ({
+      page,
+    }) => {
       await open(page, size.viewport);
-      await page.getByTestId("add-goal").getByRole("button", { name: "+ Add goal" }).click();
-      const form = page.getByTestId("add-goal").getByTestId("goal-form");
-      await expect(form.getByRole("heading", { name: "New goal" })).toBeVisible();
-      await expect(form).toContainText("Goal 5 in the order; change it in the Ground Truth");
-      const save = form.getByRole("button", { name: "Save goal" });
+      await page.getByTestId('add-goal').getByRole('button', { name: '+ Add goal' }).click();
+      const form = page.getByTestId('add-goal').getByTestId('goal-form');
+      await expect(form.getByRole('heading', { name: 'New goal' })).toBeVisible();
+      await expect(form).toContainText('Goal 5 in the order; change it in the Ground Truth');
+      const save = form.getByRole('button', { name: 'Save goal' });
       await expect(save).toBeDisabled();
-      await form.getByLabel("Goal").fill("Quieter support inbox");
-      await form.getByLabel("Measure: the number that shows it").fill("Support chats a week");
-      await form.getByLabel("Target").fill("Under 40");
+      await form.getByLabel('Goal').fill('Quieter support inbox');
+      await form.getByLabel('Measure: the number that shows it').fill('Support chats a week');
+      await form.getByLabel('Target').fill('Under 40');
       await expect(save).toBeDisabled();
       // PR8 (QA Nov 12): a field says what it lacks once the person leaves it.
-      await form.getByLabel("By").focus();
-      await form.getByLabel("By").blur();
-      await expect(form).toContainText("Pick a date.");
-      await form.getByLabel("By").fill("Mar 31, 2027");
+      await form.getByLabel('By').focus();
+      await form.getByLabel('By').blur();
+      await expect(form).toContainText('Pick a date.');
+      await form.getByLabel('By').fill('Mar 31, 2027');
       await expect(save).toBeEnabled();
       await save.click();
-      const made = bucket(page, "Quieter support inbox");
-      await expect(made.getByTestId("goal-measure")).toHaveText("Support chats a week: Under 40 by Mar 31, 2027");
-      await expect(made.getByTestId("goal-order")).toHaveText("5");
-      await expect(note(page)).toContainText("Added Quieter support inbox as goal 5.");
-      await note(page).getByRole("button", { name: "Undo" }).click();
+      const made = bucket(page, 'Quieter support inbox');
+      await expect(made.getByTestId('goal-measure')).toHaveText(
+        'Support chats a week: Under 40 by Mar 31, 2027',
+      );
+      await expect(made.getByTestId('goal-order')).toHaveText('5');
+      await expect(note(page)).toContainText('Added Quieter support inbox as goal 5.');
+      await note(page).getByRole('button', { name: 'Undo' }).click();
       await expect(made).toHaveCount(0);
     });
 
-    test("the intro and the chips read as the frames do", async ({ page }) => {
+    test('the intro and the chips read as the frames do', async ({ page }) => {
       await open(page, size.viewport);
       // mk-goalbuckets: the intro, then the plan's quarter.
-      await expect(page.getByTestId("prio-subtitle")).toHaveText("Q4 2026");
+      await expect(page.getByTestId('prio-subtitle')).toHaveText('Q4 2026');
       // Demo 9: the intro is behind the (i).
-      await expect(page.locator("#prio-about-text")).toHaveText("Where the engineer-weeks go, goal by goal.");
+      await expect(page.locator('#prio-about-text')).toHaveText(
+        'Where the engineer-weeks go, goal by goal.',
+      );
       // gb1-a-result, gb3: a feature that serves several goals shows "+1 goal" beside its name.
-      await expect(bucket(page, "Reliability").locator('[data-code="F-06"]').getByTestId("also-goals")).toHaveText("+1 goal");
-      await expect(bucket(page, "Growth").locator('[data-code="F-05"]').getByTestId("also-goals")).toHaveText("+1 goal");
+      await expect(
+        bucket(page, 'Reliability').locator('[data-code="F-06"]').getByTestId('also-goals'),
+      ).toHaveText('+1 goal');
+      await expect(
+        bucket(page, 'Growth').locator('[data-code="F-05"]').getByTestId('also-goals'),
+      ).toHaveText('+1 goal');
     });
 
-    test("edit a goal in place, then Undo", async ({ page }) => {
+    test('edit a goal in place, then Undo', async ({ page }) => {
       await open(page, size.viewport);
-      const card = bucket(page, "Reliability");
-      await expect(card.getByTestId("goal-measure")).toHaveText("Setups that finish without an error: 99.9% by Feb 12, 2027");
-      await card.getByRole("button", { name: "Edit Reliability" }).click();
-      const form = card.getByTestId("goal-form");
-      await expect(form.getByRole("heading", { name: "Edit goal" })).toBeVisible();
-      await expect(form.getByLabel("By")).toHaveValue("Feb 12, 2027");
-      await form.getByLabel("Target").fill("99.95%");
-      await form.getByLabel("By").fill("");
-      await expect(form.getByRole("button", { name: "Save goal" })).toBeDisabled();
-      await expect(form).toContainText("A goal needs a measure, a target and a date.");
-      await form.getByLabel("By").fill("Mar 31, 2027");
-      await form.getByRole("button", { name: "Save goal" }).click();
-      await expect(card.getByTestId("goal-measure")).toHaveText("Setups that finish without an error: 99.95% by Mar 31, 2027");
-      await expect(note(page)).toContainText("Saved Reliability: 99.95% by Mar 31, 2027.");
-      await note(page).getByRole("button", { name: "Undo" }).click();
-      await expect(card.getByTestId("goal-measure")).toHaveText("Setups that finish without an error: 99.9% by Feb 12, 2027");
+      const card = bucket(page, 'Reliability');
+      await expect(card.getByTestId('goal-measure')).toHaveText(
+        'Setups that finish without an error: 99.9% by Feb 12, 2027',
+      );
+      await card.getByRole('button', { name: 'Edit Reliability' }).click();
+      const form = card.getByTestId('goal-form');
+      await expect(form.getByRole('heading', { name: 'Edit goal' })).toBeVisible();
+      await expect(form.getByLabel('By')).toHaveValue('Feb 12, 2027');
+      await form.getByLabel('Target').fill('99.95%');
+      await form.getByLabel('By').fill('');
+      await expect(form.getByRole('button', { name: 'Save goal' })).toBeDisabled();
+      await expect(form).toContainText('A goal needs a measure, a target and a date.');
+      await form.getByLabel('By').fill('Mar 31, 2027');
+      await form.getByRole('button', { name: 'Save goal' }).click();
+      await expect(card.getByTestId('goal-measure')).toHaveText(
+        'Setups that finish without an error: 99.95% by Mar 31, 2027',
+      );
+      await expect(note(page)).toContainText('Saved Reliability: 99.95% by Mar 31, 2027.');
+      await note(page).getByRole('button', { name: 'Undo' }).click();
+      await expect(card.getByTestId('goal-measure')).toHaveText(
+        'Setups that finish without an error: 99.9% by Feb 12, 2027',
+      );
     });
 
-    test("archive a goal, picking where its features go, then Undo", async ({ page }) => {
+    test('archive a goal, picking where its features go, then Undo', async ({ page }) => {
       await open(page, size.viewport);
-      await expect(bucket(page, "Revenue").getByTestId("plan-feature")).toHaveCount(5);
-      await expect(bucket(page, "Revenue").locator('[data-code="F-14"]').getByTestId("also-goals")).toHaveText("+1 goal");
-      await bucket(page, "Revenue").getByRole("button", { name: "More for Revenue" }).click();
-      await page.getByRole("menuitem", { name: "Archive goal" }).click();
-      const dialog = page.getByRole("dialog", { name: "Archive Revenue" });
-      await expect(dialog).toContainText("It holds 5 features with work in M1 Prove it, M2 Scale volume and M3 Open to all.");
-      await expect(dialog).toContainText("1 serves another goal too and goes there: Plan limits → Growth");
-      await expect(dialog.getByRole("button", { name: "Archive goal" })).toBeDisabled();
-      await dialog.getByLabel("Goal", { exact: true }).selectOption({ label: "1 · Reliability" });
-      await expect(dialog).toContainText("Reliability will hold 9 features. Undo puts every link back.");
-      await dialog.getByRole("button", { name: "Archive goal" }).click();
+      await expect(bucket(page, 'Revenue').getByTestId('plan-feature')).toHaveCount(5);
+      await expect(
+        bucket(page, 'Revenue').locator('[data-code="F-14"]').getByTestId('also-goals'),
+      ).toHaveText('+1 goal');
+      await bucket(page, 'Revenue').getByRole('button', { name: 'More for Revenue' }).click();
+      await page.getByRole('menuitem', { name: 'Archive goal' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Archive Revenue' });
+      await expect(dialog).toContainText(
+        'It holds 5 features with work in M1 Prove it, M2 Scale volume and M3 Open to all.',
+      );
+      await expect(dialog).toContainText(
+        '1 serves another goal too and goes there: Plan limits → Growth',
+      );
+      await expect(dialog.getByRole('button', { name: 'Archive goal' })).toBeDisabled();
+      await dialog.getByLabel('Goal', { exact: true }).selectOption({ label: '1 · Reliability' });
+      await expect(dialog).toContainText(
+        'Reliability will hold 9 features. Undo puts every link back.',
+      );
+      await dialog.getByRole('button', { name: 'Archive goal' }).click();
       await expect(dialog).toHaveCount(0);
-      await expect(bucket(page, "Revenue")).toHaveCount(0);
-      await expect(note(page)).toContainText("Archived Revenue. 4 features moved to Reliability, 1 to the other goal it serves.");
+      await expect(bucket(page, 'Revenue')).toHaveCount(0);
+      await expect(note(page)).toContainText(
+        'Archived Revenue. 4 features moved to Reliability, 1 to the other goal it serves.',
+      );
       // gb2-a-result: the page is not left scrolled with the note over the bucket titles.
       const noteBox = (await note(page).boundingBox())!;
       for (const title of await page.locator('[data-testid="plan-goal"] h3').all()) {
         const t = await title.boundingBox();
-        if (t) expect(t.y >= noteBox.y + noteBox.height || t.y + t.height <= noteBox.y, `a goal title under the note at y=${t.y}`).toBe(true);
+        if (t)
+          expect(
+            t.y >= noteBox.y + noteBox.height || t.y + t.height <= noteBox.y,
+            `a goal title under the note at y=${t.y}`,
+          ).toBe(true);
       }
-      if (size.name === "desktop") await expect(bucket(page, "Reliability").locator("h3")).toBeInViewport();
-      await expect(bucket(page, "Reliability").locator('[data-code="F-11"]')).toBeVisible();
-      await expect(bucket(page, "Growth").locator('[data-code="F-14"]')).toBeVisible();
-      await note(page).getByRole("button", { name: "Undo" }).click();
-      await expect(bucket(page, "Revenue").getByTestId("plan-feature")).toHaveCount(5);
-      await expect(bucket(page, "Reliability").locator('[data-code="F-11"]')).toHaveCount(0);
+      if (size.name === 'desktop')
+        await expect(bucket(page, 'Reliability').locator('h3')).toBeInViewport();
+      await expect(bucket(page, 'Reliability').locator('[data-code="F-11"]')).toBeVisible();
+      await expect(bucket(page, 'Growth').locator('[data-code="F-14"]')).toBeVisible();
+      await note(page).getByRole('button', { name: 'Undo' }).click();
+      await expect(bucket(page, 'Revenue').getByTestId('plan-feature')).toHaveCount(5);
+      await expect(bucket(page, 'Reliability').locator('[data-code="F-11"]')).toHaveCount(0);
     });
 
-    test("drag a feature to another goal by pointer, then Undo", async ({ page }) => {
+    test('drag a feature to another goal by pointer, then Undo', async ({ page }) => {
       await open(page, size.viewport);
-      const row = bucket(page, "Reliability").locator('[data-code="F-03"]');
-      const grip = row.getByTestId("feature-grip");
+      const row = bucket(page, 'Reliability').locator('[data-code="F-03"]');
+      const grip = row.getByTestId('feature-grip');
       await grip.scrollIntoViewIfNeeded();
       const from = (await grip.boundingBox())!;
       await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
       await page.mouse.down();
-      const target = bucket(page, "Growth").getByRole("heading", { name: "Growth" });
-      if (size.name === "phone") {
+      const target = bucket(page, 'Growth').getByRole('heading', { name: 'Growth' });
+      if (size.name === 'phone') {
         // Growth is below the screen: holding at the bottom edge scrolls the page under the finger.
         await page.mouse.move(from.x + 4, size.viewport.height - 30, { steps: 6 });
-        await expect(page.getByTestId("drag-edge")).toContainText("Scrolling down");
-        await expect.poll(async () => (await target.boundingBox())!.y, { intervals: [30] }).toBeLessThan(size.viewport.height - 160);
+        await expect(page.getByTestId('drag-edge')).toContainText('Scrolling down');
+        await expect
+          .poll(async () => (await target.boundingBox())!.y, { intervals: [30] })
+          .toBeLessThan(size.viewport.height - 160);
         await page.mouse.move(from.x + 4, size.viewport.height / 2, { steps: 2 });
-        await expect(page.getByTestId("drag-edge")).toHaveCount(0);
+        await expect(page.getByTestId('drag-edge')).toHaveCount(0);
       }
       const to = (await target.boundingBox())!;
       await page.mouse.move(to.x + 10, to.y + to.height / 2, { steps: 8 });
-      await expect(bucket(page, "Growth")).toHaveAttribute("data-drop", "");
-      await expect(bucket(page, "Growth").getByTestId("drop-note")).toHaveText("Drop here: Growth becomes the goal it moves most");
-      await expect(page.getByTestId("drag-ghost")).toContainText("Setup failure alerts");
+      await expect(bucket(page, 'Growth')).toHaveAttribute('data-drop', '');
+      await expect(bucket(page, 'Growth').getByTestId('drop-note')).toHaveText(
+        'Drop here: Growth becomes the goal it moves most',
+      );
+      await expect(page.getByTestId('drag-ghost')).toContainText('Setup failure alerts');
       await page.mouse.up();
-      await expect(bucket(page, "Growth").locator('[data-code="F-03"]')).toBeVisible();
-      await expect(bucket(page, "Reliability").locator('[data-code="F-03"]')).toHaveCount(0);
-      await expect(note(page)).toContainText("Moved Setup failure alerts to Growth.");
-      await note(page).getByRole("button", { name: "Undo" }).click();
-      await expect(bucket(page, "Reliability").locator('[data-code="F-03"]')).toBeVisible();
+      await expect(bucket(page, 'Growth').locator('[data-code="F-03"]')).toBeVisible();
+      await expect(bucket(page, 'Reliability').locator('[data-code="F-03"]')).toHaveCount(0);
+      await expect(note(page)).toContainText('Moved Setup failure alerts to Growth.');
+      await note(page).getByRole('button', { name: 'Undo' }).click();
+      await expect(bucket(page, 'Reliability').locator('[data-code="F-03"]')).toBeVisible();
     });
 
-    test("move a feature by keyboard, announced; Escape cancels; Undo", async ({ page }) => {
+    test('move a feature by keyboard, announced; Escape cancels; Undo', async ({ page }) => {
       await open(page, size.viewport);
-      const grip = bucket(page, "Reliability").locator('[data-code="F-03"]').getByTestId("feature-grip");
-      await expect(grip).toHaveAccessibleName("Move Setup failure alerts to another goal");
+      const grip = bucket(page, 'Reliability')
+        .locator('[data-code="F-03"]')
+        .getByTestId('feature-grip');
+      await expect(grip).toHaveAccessibleName('Move Setup failure alerts to another goal');
       await grip.focus();
-      await page.keyboard.press("Enter");
-      await expect(page.getByTestId("bucket-live")).toContainText("Picked up Setup failure alerts.");
-      await page.keyboard.press("ArrowDown");
-      await expect(page.getByTestId("bucket-live")).toHaveText("Over goal 2, Growth. Enter drops it there.");
-      await page.keyboard.press("Escape");
-      await expect(page.getByTestId("bucket-live")).toContainText("Move cancelled.");
-      await expect(bucket(page, "Reliability").locator('[data-code="F-03"]')).toBeVisible();
+      await page.keyboard.press('Enter');
+      await expect(page.getByTestId('bucket-live')).toContainText(
+        'Picked up Setup failure alerts.',
+      );
+      await page.keyboard.press('ArrowDown');
+      await expect(page.getByTestId('bucket-live')).toHaveText(
+        'Over goal 2, Growth. Enter drops it there.',
+      );
+      await page.keyboard.press('Escape');
+      await expect(page.getByTestId('bucket-live')).toContainText('Move cancelled.');
+      await expect(bucket(page, 'Reliability').locator('[data-code="F-03"]')).toBeVisible();
       await grip.focus();
-      await page.keyboard.press(" ");
-      await page.keyboard.press("ArrowDown");
-      await page.keyboard.press("ArrowDown");
-      await expect(bucket(page, "Activation")).toHaveAttribute("data-drop", "");
-      await page.keyboard.press("Enter");
-      await expect(bucket(page, "Activation").locator('[data-code="F-03"]')).toBeVisible();
-      await expect(page.getByTestId("bucket-live")).toHaveText("Moved Setup failure alerts to Activation.");
-      await note(page).getByRole("button", { name: "Undo" }).click();
-      await expect(bucket(page, "Reliability").locator('[data-code="F-03"]')).toBeVisible();
+      await page.keyboard.press(' ');
+      await page.keyboard.press('ArrowDown');
+      await page.keyboard.press('ArrowDown');
+      await expect(bucket(page, 'Activation')).toHaveAttribute('data-drop', '');
+      await page.keyboard.press('Enter');
+      await expect(bucket(page, 'Activation').locator('[data-code="F-03"]')).toBeVisible();
+      await expect(page.getByTestId('bucket-live')).toHaveText(
+        'Moved Setup failure alerts to Activation.',
+      );
+      await note(page).getByRole('button', { name: 'Undo' }).click();
+      await expect(bucket(page, 'Reliability').locator('[data-code="F-03"]')).toBeVisible();
     });
 
     test("a feature's name opens its item panel, as the roadmap's does", async ({ page }) => {
       await open(page, size.viewport);
-      await expect(page.getByTestId("item-panel")).toHaveCount(0);
-      await bucket(page, "Revenue").locator('[data-code="F-14"]').getByRole("button", { name: "Plan limits", exact: true }).click();
-      const panel = page.getByTestId("item-panel");
+      await expect(page.getByTestId('item-panel')).toHaveCount(0);
+      await bucket(page, 'Revenue')
+        .locator('[data-code="F-14"]')
+        .getByRole('button', { name: 'Plan limits', exact: true })
+        .click();
+      const panel = page.getByTestId('item-panel');
       await expect(panel).toHaveCount(1);
-      const card = panel.getByTestId("floating-card");
+      const card = panel.getByTestId('floating-card');
       await expect(card).toBeVisible();
-      await expect(card).toContainText("Plan limits");
-      await card.getByRole("button", { name: /Close/ }).first().click();
-      await expect(page.getByTestId("item-panel")).toHaveCount(0);
+      await expect(card).toContainText('Plan limits');
+      await card.getByRole('button', { name: /Close/ }).first().click();
+      await expect(page.getByTestId('item-panel')).toHaveCount(0);
     });
 
-    test("a feature whose contribution to its goal is assumed is marked, as the Ground Truth marks it", async ({ page }) => {
+    test('a feature whose contribution to its goal is assumed is marked, as the Ground Truth marks it', async ({
+      page,
+    }) => {
       await open(page, size.viewport);
-      const assumed = bucket(page, "Activation").locator('[data-code="F-02"]').getByTestId("contribution-assumed");
+      const assumed = bucket(page, 'Activation')
+        .locator('[data-code="F-02"]')
+        .getByTestId('contribution-assumed');
       await expect(assumed).toBeVisible();
-      await expect(assumed).toHaveText("Contribution assumed");
-      await expect(bucket(page, "Activation").locator('[data-code="F-01"]').getByTestId("contribution-assumed")).toHaveCount(0);
+      await expect(assumed).toHaveText('Contribution assumed');
+      await expect(
+        bucket(page, 'Activation')
+          .locator('[data-code="F-01"]')
+          .getByTestId('contribution-assumed'),
+      ).toHaveCount(0);
     });
 
-    test("a viewer reads the goals with no controls; chips and bars name the milestone", async ({ page }) => {
-      await open(page, size.viewport, "viewer@example.com");
-      await expect(bucket(page, "Reliability").getByTestId("goal-measure")).toHaveText("Setups that finish without an error: 99.9% by Feb 12, 2027");
-      await expect(page.getByRole("button", { name: /^Edit / })).toHaveCount(0);
-      await expect(page.getByRole("button", { name: /^More for / })).toHaveCount(0);
-      await expect(page.getByTestId("add-goal")).toHaveCount(0);
-      await expect(page.getByTestId("feature-grip")).toHaveCount(0);
+    test('a viewer reads the goals with no controls; chips and bars name the milestone', async ({
+      page,
+    }) => {
+      await open(page, size.viewport, 'viewer@example.com');
+      await expect(bucket(page, 'Reliability').getByTestId('goal-measure')).toHaveText(
+        'Setups that finish without an error: 99.9% by Feb 12, 2027',
+      );
+      await expect(page.getByRole('button', { name: /^Edit / })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: /^More for / })).toHaveCount(0);
+      await expect(page.getByTestId('add-goal')).toHaveCount(0);
+      await expect(page.getByTestId('feature-grip')).toHaveCount(0);
       // A viewer opens a feature's item panel too, to read it.
-      await bucket(page, "Revenue").locator('[data-code="F-14"]').getByRole("button", { name: "Plan limits", exact: true }).click();
-      await expect(page.getByTestId("item-panel").getByTestId("floating-card")).toContainText("Plan limits");
-      for (const t of await page.getByTestId("plan-chip").allInnerTexts()) expect(t.replace(/\s+/g, " ")).toMatch(/^M\d (Prove it|Scale volume|Open to all)$/);
-      for (const t of await page.getByTestId("goal-bar-label").allInnerTexts()) expect(t).toMatch(/^M\d (Prove it|Scale volume|Open to all) · [\d.]+ weeks?$/);
+      await bucket(page, 'Revenue')
+        .locator('[data-code="F-14"]')
+        .getByRole('button', { name: 'Plan limits', exact: true })
+        .click();
+      await expect(page.getByTestId('item-panel').getByTestId('floating-card')).toContainText(
+        'Plan limits',
+      );
+      for (const t of await page.getByTestId('plan-chip').allInnerTexts())
+        expect(t.replace(/\s+/g, ' ')).toMatch(/^M\d (Prove it|Scale volume|Open to all)$/);
+      for (const t of await page.getByTestId('goal-bar-label').allInnerTexts())
+        expect(t).toMatch(/^M\d (Prove it|Scale volume|Open to all) · [\d.]+ weeks?$/);
     });
   });
 }
@@ -247,13 +315,14 @@ const titlesUnder = async (page: Page) => {
   const under: string[] = [];
   for (const title of await page.locator('[data-testid="plan-goal"] h3').all()) {
     const t = await title.boundingBox();
-    if (t && t.y < n.y + n.height && t.y + t.height > n.y) under.push((await title.textContent()) ?? "");
+    if (t && t.y < n.y + n.height && t.y + t.height > n.y)
+      under.push((await title.textContent()) ?? '');
   }
   return under;
 };
 const scrollY = (page: Page) => page.evaluate(() => Math.round(window.scrollY));
 /** Wheels the page (as a person) until `target`'s top is at about `y` on screen. */
-async function wheelTo(page: Page, target: ReturnType<Page["locator"]>, y: number) {
+async function wheelTo(page: Page, target: ReturnType<Page['locator']>, y: number) {
   await page.mouse.move(200, 300);
   for (let i = 0; i < 4; i++) {
     const d = (await target.boundingBox())!.y - y;
@@ -264,55 +333,62 @@ async function wheelTo(page: Page, target: ReturnType<Page["locator"]>, y: numbe
   }
 }
 
-test.describe("phone note", () => {
+test.describe('phone note', () => {
   const PHONE = SIZES[1].viewport;
-  for (const spacing of ["normal", "0.4px", "-0.3px"]) {
+  for (const spacing of ['normal', '0.4px', '-0.3px']) {
     test.describe(`letter-spacing ${spacing}`, () => {
       async function openSpaced(page: Page) {
         await open(page, PHONE);
-        if (spacing !== "normal") await page.addStyleTag({ content: `*, *::before, *::after { letter-spacing: ${spacing} !important; }` });
+        if (spacing !== 'normal')
+          await page.addStyleTag({
+            content: `*, *::before, *::after { letter-spacing: ${spacing} !important; }`,
+          });
       }
 
-      test("editing a goal low on the page leaves it where it is, the note fixed above the bottom bar", async ({ page }) => {
+      test('editing a goal low on the page leaves it where it is, the note fixed above the bottom bar', async ({
+        page,
+      }) => {
         await openSpaced(page);
-        const card = bucket(page, "Revenue");
+        const card = bucket(page, 'Revenue');
         await wheelTo(page, card, 120);
-        await card.getByRole("button", { name: "Edit Revenue" }).click();
-        const form = card.getByTestId("goal-form");
-        await form.getByLabel("Target").fill("Over 300");
-        const save = form.getByRole("button", { name: "Save goal" });
+        await card.getByRole('button', { name: 'Edit Revenue' }).click();
+        const form = card.getByTestId('goal-form');
+        await form.getByLabel('Target').fill('Over 300');
+        const save = form.getByRole('button', { name: 'Save goal' });
         await save.scrollIntoViewIfNeeded();
         const [y, top] = [await scrollY(page), (await card.boundingBox())!.y];
         await save.click();
-        await expect(note(page)).toContainText("Saved Revenue: over 300 by");
+        await expect(note(page)).toContainText('Saved Revenue: over 300 by');
         // GB1 a: the note is fixed over the page, just above the bottom bar.
-        expect(await note(page).evaluate((e) => getComputedStyle(e).position)).toBe("fixed");
+        expect(await note(page).evaluate((e) => getComputedStyle(e).position)).toBe('fixed');
         const n = (await note(page).boundingBox())!;
         expect(n.y + n.height).toBeGreaterThan(PHONE.height - 200);
         // The page stays put: the edited goal's title where its form was, on screen.
         await page.waitForTimeout(300);
         expect(await scrollY(page)).toBe(y);
-        const title = card.locator("h3");
+        const title = card.locator('h3');
         await expect(title).toBeInViewport();
         expect(Math.abs((await card.boundingBox())!.y - top)).toBeLessThanOrEqual(1);
         expect(await titlesUnder(page)).toEqual([]);
       });
 
-      test("a move whose goal title would sit under the note scrolls it clear by a little", async ({ page }) => {
+      test('a move whose goal title would sit under the note scrolls it clear by a little', async ({
+        page,
+      }) => {
         await openSpaced(page);
         // Pick up one of Revenue's features, then bring Activation's title down to where the note shows.
-        const grip = bucket(page, "Revenue").getByTestId("feature-grip").first();
+        const grip = bucket(page, 'Revenue').getByTestId('feature-grip').first();
         await grip.focus();
-        await page.keyboard.press("Enter");
-        await expect(page.getByTestId("bucket-live")).toContainText("Picked up");
-        const title = bucket(page, "Activation").locator("h3");
+        await page.keyboard.press('Enter');
+        await expect(page.getByTestId('bucket-live')).toContainText('Picked up');
+        const title = bucket(page, 'Activation').locator('h3');
         await wheelTo(page, title, PHONE.height - 110);
-        await page.keyboard.press("ArrowUp");
-        await expect(bucket(page, "Activation")).toHaveAttribute("data-drop", "");
+        await page.keyboard.press('ArrowUp');
+        await expect(bucket(page, 'Activation')).toHaveAttribute('data-drop', '');
         await wheelTo(page, title, PHONE.height - 110);
         const y = await scrollY(page);
-        await page.keyboard.press("Enter");
-        await expect(note(page)).toContainText("to Activation");
+        await page.keyboard.press('Enter');
+        await expect(note(page)).toContainText('to Activation');
         await expect.poll(() => titlesUnder(page)).toEqual([]);
         // A nudge, not a jump: the title is still on screen above the note.
         await expect(title).toBeInViewport();
@@ -321,23 +397,25 @@ test.describe("phone note", () => {
         expect(moved).toBeLessThan(200);
       });
 
-      test("after a change, the page stays where the person scrolls it, whatever re-renders", async ({ page }) => {
+      test('after a change, the page stays where the person scrolls it, whatever re-renders', async ({
+        page,
+      }) => {
         await openSpaced(page);
-        const card = bucket(page, "Growth");
+        const card = bucket(page, 'Growth');
         await wheelTo(page, card, 120);
-        await card.getByRole("button", { name: "Edit Growth" }).click();
-        await card.getByTestId("goal-form").getByRole("button", { name: "Save goal" }).click();
-        await expect(note(page)).toContainText("Saved Growth");
+        await card.getByRole('button', { name: 'Edit Growth' }).click();
+        await card.getByTestId('goal-form').getByRole('button', { name: 'Save goal' }).click();
+        await expect(note(page)).toContainText('Saved Growth');
         // The person scrolls on, a title under the note, then picks a feature up and puts it back.
-        await wheelTo(page, bucket(page, "Revenue").locator("h3"), PHONE.height - 110);
+        await wheelTo(page, bucket(page, 'Revenue').locator('h3'), PHONE.height - 110);
         const y = await scrollY(page);
-        const grip = bucket(page, "Activation").getByTestId("feature-grip").first();
+        const grip = bucket(page, 'Activation').getByTestId('feature-grip').first();
         await expect(grip).toBeInViewport();
         await grip.focus();
-        await page.keyboard.press("Enter");
-        await expect(page.getByTestId("bucket-live")).toContainText("Picked up");
-        await page.keyboard.press("Escape");
-        await expect(page.getByTestId("bucket-live")).toContainText("Move cancelled.");
+        await page.keyboard.press('Enter');
+        await expect(page.getByTestId('bucket-live')).toContainText('Picked up');
+        await page.keyboard.press('Escape');
+        await expect(page.getByTestId('bucket-live')).toContainText('Move cancelled.');
         await page.waitForTimeout(300);
         expect(await scrollY(page)).toBe(y);
       });

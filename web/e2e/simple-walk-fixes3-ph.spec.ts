@@ -1,7 +1,7 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { THEME_KEY } from "../lib/theme";
-import { login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { THEME_KEY } from '../lib/theme';
+import { login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /*
  * The owner's production walk of Simple mode (P4, P11), driven through the UI on a desktop
@@ -21,7 +21,7 @@ import { expect, test, type Page } from "./test";
  * needing attention; no_claim = the per-item marking on a new PRD version (the API's tests).
  */
 
-async function setUp(page: Page, scenario: string, scheme: "light" | "dark") {
+async function setUp(page: Page, scenario: string, scheme: 'light' | 'dark') {
   await page.context().addInitScript(
     ([key, value, themeKey, theme]) => {
       localStorage.setItem(key, value);
@@ -33,38 +33,53 @@ async function setUp(page: Page, scenario: string, scheme: "light" | "dark") {
 }
 
 for (const phone of [false, true]) {
-  for (const scheme of ["light", "dark"] as const) {
-    const where = `${phone ? "phone" : "desktop"}, ${scheme}`;
+  for (const scheme of ['light', 'dark'] as const) {
+    const where = `${phone ? 'phone' : 'desktop'}, ${scheme}`;
     test.describe(where, () => {
-      test.use({ viewport: phone ? { width: 390, height: 844 } : { width: 1366, height: 820 }, colorScheme: scheme });
+      test.use({
+        viewport: phone ? { width: 390, height: 844 } : { width: 1366, height: 820 },
+        colorScheme: scheme,
+      });
 
-      test(`an approved PRD names its owner and its milestones' span (${where})`, async ({ page }) => {
-        await setUp(page, "simple-walk", scheme);
-        await login(page, "viewer@example.com");
-        await page.goto("/simple/prds/guided-setup");
-        const meta = page.getByTestId("one-pager-meta");
-        await expect(meta).toContainText("Owner Priya Raman");
-        await expect(meta).not.toContainText("Owner Avery Stone");
-        await expect(meta).not.toContainText("No owner yet");
-        await expect(meta).toContainText("Oct 5, 2026 → Jan 15, 2027");
-        await expect(meta).not.toContainText("Mar 12, 2027");
+      test(`an approved PRD names its owner and its milestones' span (${where})`, async ({
+        page,
+      }) => {
+        await setUp(page, 'simple-walk', scheme);
+        await login(page, 'viewer@example.com');
+        await page.goto('/simple/prds/guided-setup');
+        const meta = page.getByTestId('one-pager-meta');
+        await expect(meta).toContainText('Owner Priya Raman');
+        await expect(meta).not.toContainText('Owner Avery Stone');
+        await expect(meta).not.toContainText('No owner yet');
+        await expect(meta).toContainText('Oct 5, 2026 → Jan 15, 2027');
+        await expect(meta).not.toContainText('Mar 12, 2027');
         const width = await page.evaluate(() => document.documentElement.scrollWidth);
         expect(width).toBeLessThanOrEqual(phone ? 390 : 1366);
       });
 
-      test(`a plan approved a week ago counts only items stale by their own rule (${where})`, async ({ page }) => {
-        await setUp(page, "plan-stale", scheme);
+      test(`a plan approved a week ago counts only items stale by their own rule (${where})`, async ({
+        page,
+      }) => {
+        await setUp(page, 'plan-stale', scheme);
         await login(page);
         // The rail on a desktop, the tab bar on a phone: both are the "Oracle" navigation.
-        await page.getByRole("navigation", { name: "Oracle" }).getByRole("link", { name: "Plan", exact: true }).click();
+        await page
+          .getByRole('navigation', { name: 'Oracle' })
+          .getByRole('link', { name: 'Plan', exact: true })
+          .click();
         await expect(page).toHaveURL(/\/plan$/);
-        const track = page.getByTestId("plan-track").filter({ visible: true }).filter({ hasText: "Usage alerts" });
+        const track = page
+          .getByTestId('plan-track')
+          .filter({ visible: true })
+          .filter({ hasText: 'Usage alerts' });
         await expect(track).toBeVisible();
-        await expect(track.getByTestId("track-health")).toHaveText("At risk");
+        await expect(track.getByTestId('track-health')).toHaveText('At risk');
         const headline = track.getByText(/^At risk: /);
-        await expect(headline).toHaveText(/^At risk: (1 of \d+ items needs|the item needs) attention \(may be out of date\)\./);
-        await expect(headline).not.toContainText("stale");
-        const text = (await headline.textContent()) ?? "";
+        await expect(headline).toHaveText(
+          /^At risk: (1 of \d+ items needs|the item needs) attention \(may be out of date\)\./,
+        );
+        await expect(headline).not.toContainText('stale');
+        const text = (await headline.textContent()) ?? '';
         const all = /(\d+) of (\d+) items/.exec(text);
         if (all) expect(all[1]).not.toBe(all[2]);
       });

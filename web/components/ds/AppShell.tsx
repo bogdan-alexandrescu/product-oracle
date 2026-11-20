@@ -1,35 +1,57 @@
-"use client";
+'use client';
 
-import { Link, usePathname, useRouter, useSearchParams } from "@/lib/nav";
-import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { Link, usePathname, useRouter, useSearchParams } from '@/lib/nav';
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
+import { createPortal } from 'react-dom';
 
-import { HopPanel } from "@/components/hop/HopPanel";
-import { personLine, SIMPLE_DESTINATIONS, SimpleNavs } from "@/components/simple/SimpleShell";
-import { closeTransientPanel, setPanelOpen, takeAskFocus, useAskDraft, usePanelOpen } from "@/components/hop/open-state";
-import { api, MOCK_MODE } from "@/lib/api/client";
-import { homeOf, modeOf } from "@/lib/experience";
-import { resetMockData } from "@/lib/api/mock/server";
-import { leave } from "@/lib/leave-guard";
-import { useMe } from "@/lib/me";
-import { useSettingsTabs } from "@/lib/settings-tabs";
-import { onReadChanged, onReadFailed } from "@/lib/api/shared-reads";
-import { onWaitingChanged, railInbox, railQuestions, readAgainLater, retryWait, waitingCount } from "@/lib/waiting";
-import { ScreenSubjectProvider } from "@/lib/screen-subject";
-import { useTheme, type ThemeChoice } from "@/lib/theme";
+import { HopPanel } from '@/components/hop/HopPanel';
+import { personLine, SIMPLE_DESTINATIONS, SimpleNavs } from '@/components/simple/SimpleShell';
+import {
+  closeTransientPanel,
+  setPanelOpen,
+  takeAskFocus,
+  useAskDraft,
+  usePanelOpen,
+} from '@/components/hop/open-state';
+import { api, MOCK_MODE } from '@/lib/api/client';
+import { homeOf, modeOf } from '@/lib/experience';
+import { resetMockData } from '@/lib/api/mock/server';
+import { leave } from '@/lib/leave-guard';
+import { useMe } from '@/lib/me';
+import { useSettingsTabs } from '@/lib/settings-tabs';
+import { onReadChanged, onReadFailed } from '@/lib/api/shared-reads';
+import {
+  onWaitingChanged,
+  railInbox,
+  railQuestions,
+  readAgainLater,
+  retryWait,
+  waitingCount,
+} from '@/lib/waiting';
+import { ScreenSubjectProvider } from '@/lib/screen-subject';
+import { useTheme, type ThemeChoice } from '@/lib/theme';
 
-import { Mark } from "./Brand";
-import { ConfirmHost, confirmInPage } from "./ConfirmDialog";
-import { ToastHost } from "./Toast";
-import { initialsOf } from "./Figures";
-import { Button } from "./Button";
-import { Icon, type IconName } from "./Icon";
-import { Notice } from "./Layout";
-import { ModeRoot, ModeSwitch, SEGMENTED } from "./ModeSwitch";
-import { usePageInfo } from "./page-info";
-import { onRadioKeys, radioTabIndex } from "./radio-keys";
-import { RAIL_SELECTED, TAB_BAR } from "./rail";
-import { Sheet } from "./Sheet";
+import { Mark } from './Brand';
+import { ConfirmHost, confirmInPage } from './ConfirmDialog';
+import { ToastHost } from './Toast';
+import { initialsOf } from './Figures';
+import { Button } from './Button';
+import { Icon, type IconName } from './Icon';
+import { Notice } from './Layout';
+import { ModeRoot, ModeSwitch, SEGMENTED } from './ModeSwitch';
+import { usePageInfo } from './page-info';
+import { onRadioKeys, radioTabIndex } from './radio-keys';
+import { RAIL_SELECTED, TAB_BAR } from './rail';
+import { Sheet } from './Sheet';
 
 type Dest = { label: string; href: string; icon: IconName; testId: string; match?: string };
 
@@ -39,20 +61,26 @@ type Dest = { label: string; href: string; icon: IconName; testId: string; match
  * 2026-10-21, "Rail order").
  */
 export const DESTINATIONS: Dest[] = [
-  { label: "Home", href: "/home", icon: "home", testId: "nav-home" },
-  { label: "Requests", href: "/requests", icon: "requests", testId: "nav-requests" },
-  { label: "Ground Truth", href: "/ground-truth", icon: "baseline", testId: "nav-baseline" },
-  { label: "PRDs", href: "/documents", icon: "prds", testId: "nav-prds" },
-  { label: "Priorities", href: "/priorities", icon: "priorities", testId: "nav-priorities" },
-  { label: "Plan", href: "/plan", icon: "roadmap", testId: "nav-plan" },
-  { label: "Runs", href: "/runs", icon: "runs", testId: "nav-runs" },
-  { label: "Inbox", href: "/inbox", icon: "inbox", testId: "nav-inbox" },
-  { label: "Company", href: "/company", icon: "company", testId: "nav-company" },
+  { label: 'Home', href: '/home', icon: 'home', testId: 'nav-home' },
+  { label: 'Requests', href: '/requests', icon: 'requests', testId: 'nav-requests' },
+  { label: 'Ground Truth', href: '/ground-truth', icon: 'baseline', testId: 'nav-baseline' },
+  { label: 'PRDs', href: '/documents', icon: 'prds', testId: 'nav-prds' },
+  { label: 'Priorities', href: '/priorities', icon: 'priorities', testId: 'nav-priorities' },
+  { label: 'Plan', href: '/plan', icon: 'roadmap', testId: 'nav-plan' },
+  { label: 'Runs', href: '/runs', icon: 'runs', testId: 'nav-runs' },
+  { label: 'Inbox', href: '/inbox', icon: 'inbox', testId: 'nav-inbox' },
+  { label: 'Company', href: '/company', icon: 'company', testId: 'nav-company' },
 ];
-const SETTINGS: Dest = { label: "Settings", href: "/settings", icon: "settings", testId: "nav-settings", match: "/settings" };
+const SETTINGS: Dest = {
+  label: 'Settings',
+  href: '/settings',
+  icon: 'settings',
+  testId: 'nav-settings',
+  match: '/settings',
+};
 
 /** Phone tab bar: Home, PRDs, Plan, Inbox, More. */
-const TABS = ["Home", "PRDs", "Plan", "Inbox"];
+const TABS = ['Home', 'PRDs', 'Plan', 'Inbox'];
 
 /*
  * The destination a document belongs to (UI test finding E2): every kind's pages are
@@ -83,13 +111,13 @@ export function useDocumentDestination(slug: string | undefined, href: string | 
 
 /** The destination the open document page belongs to, once it has said so; a new roadmap's is Plan (qa-shell-14). */
 function useDocumentHome(pathname: string): string | undefined {
-  const kind = useSearchParams().get("kind");
+  const kind = useSearchParams().get('kind');
   useSyncExternalStore(
     subscribeDocumentHomes,
     () => documentHomesVersion,
     () => 0,
   );
-  if (pathname === "/documents/new") return kind === "roadmap" ? "/plan" : undefined;
+  if (pathname === '/documents/new') return kind === 'roadmap' ? '/plan' : undefined;
   const slug = /^\/documents\/([^/]+)/.exec(pathname)?.[1];
   return slug ? documentHomes.get(decodeURIComponent(slug)) : undefined;
 }
@@ -138,17 +166,18 @@ function isActive(pathname: string, d: Dest, home?: string): boolean {
   if (home) return d.href === home || home.startsWith(`${d.href}/`);
   const base = d.match ?? d.href;
   // /sources (evidence search) lives under Settings › Sources.
-  if (d.testId === SETTINGS.testId && pathname.startsWith("/sources")) return true;
+  if (d.testId === SETTINGS.testId && pathname.startsWith('/sources')) return true;
   // A brief before drafting (C5) is on its way to a PRD.
-  if (d.href === "/documents" && pathname.startsWith("/intakes/")) return true;
+  if (d.href === '/documents' && pathname.startsWith('/intakes/')) return true;
   // A spec's flows and wireframes (v2 screen 4) belong with its tech brief, a document.
-  if (d.href === "/documents" && pathname.startsWith("/specs/")) return true;
+  if (d.href === '/documents' && pathname.startsWith('/specs/')) return true;
   // qa-docs-65: a feature's tech brief belongs with its PRD.
-  if (d.href === "/documents" && pathname.startsWith("/briefs/")) return true;
+  if (d.href === '/documents' && pathname.startsWith('/briefs/')) return true;
   // qa-plan-19: the Roadmap's tabs (changelog, launches) are tabs of Plan.
-  if (d.href === "/plan" && (pathname === "/roadmap" || pathname.startsWith("/roadmap/"))) return true;
+  if (d.href === '/plan' && (pathname === '/roadmap' || pathname.startsWith('/roadmap/')))
+    return true;
   // qa-plan-59: a baseline item's what-if belongs with Baseline.
-  if (d.href === "/ground-truth" && pathname.startsWith("/impact/entities/")) return true;
+  if (d.href === '/ground-truth' && pathname.startsWith('/impact/entities/')) return true;
   // A recorded change's impact (/impact/changes/<id>) highlights by what it says it's about
   // (useChangeHome, above the "if (home)" branch); unknown, it highlights nothing rather than
   // guessing PRDs.
@@ -181,36 +210,57 @@ function useInboxCount(enabled: boolean): number | null {
     }
     const mine = parts.map((p) => (seq.current[p] = (seq.current[p] ?? 0) + 1));
     inflight.current += 1;
-    void Promise.allSettled(parts.map((p) => INBOX_READS[p](undefined, staleOk))).then((results) => {
-      inflight.current -= 1;
-      const next: { [P in InboxPart]?: InboxReads[P] | null } = {};
-      results.forEach((r, i) => {
-        const p = parts[i]!;
-        if (seq.current[p] !== mine[i]) return;
-        fails.current[p] = r.status === "fulfilled" ? 0 : (fails.current[p] ?? 0) + 1;
-        Object.assign(next, { [p]: r.status === "fulfilled" ? r.value : null });
-      });
-      setGot((g) => ({ ...g, ...next }));
-      setSettled((n) => n + 1);
-    });
+    void Promise.allSettled(parts.map((p) => INBOX_READS[p](undefined, staleOk))).then(
+      (results) => {
+        inflight.current -= 1;
+        const next: { [P in InboxPart]?: InboxReads[P] | null } = {};
+        results.forEach((r, i) => {
+          const p = parts[i]!;
+          if (seq.current[p] !== mine[i]) return;
+          fails.current[p] = r.status === 'fulfilled' ? 0 : (fails.current[p] ?? 0) + 1;
+          Object.assign(next, { [p]: r.status === 'fulfilled' ? r.value : null });
+        });
+        setGot((g) => ({ ...g, ...next }));
+        setSettled((n) => n + 1);
+      },
+    );
   }, []);
   useEffect(() => {
-    if (enabled) read(["inbox", "questions"], true);
+    if (enabled) read(['inbox', 'questions'], true);
   }, [enabled, pathname, changes, read]);
   // simple-call-budget: read stale-ok, so a read since that answered something new reads that list again (shared, no call).
-  useEffect(() => onReadChanged((url) => enabled && INBOX_PART_BY_URL.has(url) && read([INBOX_PART_BY_URL.get(url)!], false)), [enabled, read]);
+  useEffect(
+    () =>
+      onReadChanged(
+        (url) =>
+          enabled && INBOX_PART_BY_URL.has(url) && read([INBOX_PART_BY_URL.get(url)!], false),
+      ),
+    [enabled, read],
+  );
   // A read again of either list that failed: read it now, not stale-ok; a failed list shows no number.
-  useEffect(() => onReadFailed((url) => enabled && INBOX_PART_BY_URL.has(url) && read([INBOX_PART_BY_URL.get(url)!], false, false)), [enabled, read]);
+  useEffect(
+    () =>
+      onReadFailed(
+        (url) =>
+          enabled &&
+          INBOX_PART_BY_URL.has(url) &&
+          read([INBOX_PART_BY_URL.get(url)!], false, false),
+      ),
+    [enabled, read],
+  );
   // counts-failed-part: a failed list is read again with Simple's rail's back-off (15 s, 30 s, ... up
   // to 5 min, never while the tab is hidden), so the badge comes back without a page change.
-  const failed = INBOX_PARTS.filter((p) => got[p] === null).join(",");
+  const failed = INBOX_PARTS.filter((p) => got[p] === null).join(',');
   useEffect(() => {
     if (!enabled || !failed || inflight.current > 0) return;
-    const parts = failed.split(",") as InboxPart[];
-    const cancel = readAgainLater(retryWait(Math.max(...parts.map((p) => fails.current[p] ?? 1)) - 1), () => {
-      pending.current = null;
-      read(parts, false);
-    });
+    const parts = failed.split(',') as InboxPart[];
+    const cancel = readAgainLater(
+      retryWait(Math.max(...parts.map((p) => fails.current[p] ?? 1)) - 1),
+      () => {
+        pending.current = null;
+        read(parts, false);
+      },
+    );
     pending.current = cancel;
     return () => {
       cancel();
@@ -226,12 +276,13 @@ type InboxPart = keyof typeof INBOX_READS;
 type InboxReads = { [P in InboxPart]: Awaited<ReturnType<(typeof INBOX_READS)[P]>> };
 const INBOX_PARTS = Object.keys(INBOX_READS) as InboxPart[];
 const INBOX_PART_BY_URL = new Map<string, InboxPart>([
-  ["/v1/inbox", "inbox"],
-  ["/v1/inbox/questions", "questions"],
+  ['/v1/inbox', 'inbox'],
+  ['/v1/inbox/questions', 'questions'],
 ]);
 
 /** The link's name with its badge: "Inbox, 11 waiting" (qa-shell-14: a span's aria-label is not read). */
-export const badgedName = (label: string, n: number | null | undefined) => (n ? `${label}, ${n} waiting` : undefined);
+export const badgedName = (label: string, n: number | null | undefined) =>
+  n ? `${label}, ${n} waiting` : undefined;
 
 /**
  * qa-shell-14, qa-onboarding-32: the count sits beside the icon's top-right corner, starting
@@ -242,7 +293,7 @@ export const badgedName = (label: string, n: number | null | undefined) => (n ? 
 function Badge({ n, testId }: { n: number | null; testId?: string }) {
   if (!n) return null;
   // Past 99 it says 99+ (the link's name keeps the count), so it fits the 88 px rail and the tab.
-  const text = n > 99 ? "99+" : String(n);
+  const text = n > 99 ? '99+' : String(n);
   return (
     <span
       data-testid={testId}
@@ -250,7 +301,11 @@ function Badge({ n, testId }: { n: number | null; testId?: string }) {
       // qa4-settings-32: a round pill tall enough for its digits; two or more digits drop to 11 px
       // so "11" fits without an oval squeezed against the icon.
       className={`tnum absolute top-0 left-[calc(50%+14px)] h-[18px] min-w-[18px] rounded-full bg-rail-badge text-center font-mono leading-[18px] font-semibold whitespace-nowrap text-on-rail-badge ring-2 ring-rail ${
-        text.length > 2 ? "px-1 text-[11px] tracking-tighter" : text.length > 1 ? "px-1 text-[11px]" : "px-0.5 text-[12px]"
+        text.length > 2
+          ? 'px-1 text-[11px] tracking-tighter'
+          : text.length > 1
+            ? 'px-1 text-[11px]'
+            : 'px-0.5 text-[12px]'
       }`}
     >
       {text}
@@ -259,9 +314,9 @@ function Badge({ n, testId }: { n: number | null; testId?: string }) {
 }
 
 const THEMES: { value: ThemeChoice; label: string; icon: IconName }[] = [
-  { value: "system", label: "System", icon: "monitor" },
-  { value: "light", label: "Light", icon: "sun" },
-  { value: "dark", label: "Dark", icon: "moon" },
+  { value: 'system', label: 'System', icon: 'monitor' },
+  { value: 'light', label: 'Light', icon: 'sun' },
+  { value: 'dark', label: 'Dark', icon: 'moon' },
 ];
 
 /**
@@ -269,7 +324,13 @@ const THEMES: { value: ThemeChoice; label: string; icon: IconName }[] = [
  * focus moves to the checked theme; Escape closes it and returns focus to the avatar
  * (qa-shell-12, qa-shell-18). The avatar is marked current on /account (qa-shell-15).
  */
-function UserMenu({ placement, emailBeside = false }: { placement: "rail" | "header"; emailBeside?: boolean }) {
+function UserMenu({
+  placement,
+  emailBeside = false,
+}: {
+  placement: 'rail' | 'header';
+  emailBeside?: boolean;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const { me, clear } = useMe();
@@ -278,10 +339,10 @@ function UserMenu({ placement, emailBeside = false }: { placement: "rail" | "hea
   const [at, setAt] = useState({ bottom: 12, left: 100 });
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
-  const email = me?.email ?? me?.token_name ?? "";
+  const email = me?.email ?? me?.token_name ?? '';
   // qa-simple-roadmap-46: the panel truncates this line; the full address (and the name,
   // when there is one) still reads on hover/focus.
-  const name = me && me.kind === "user" ? (me.name ?? null) : null;
+  const name = me && me.kind === 'user' ? (me.name ?? null) : null;
   // qa-simple-prd-p3-31: Simple's rail writes the email beside the avatar when there is no
   // name; the avatar's hidden line then leaves it out, so the block says it once.
   const emailShown = emailBeside && !!email && personLine(me) === email;
@@ -295,28 +356,33 @@ function UserMenu({ placement, emailBeside = false }: { placement: "rail" | "hea
     const place = () => {
       const r = button.current?.getBoundingClientRect();
       // Beside the rail, Detailed's or Simple's: past the rail's right edge.
-      const nav = button.current?.closest("nav")?.getBoundingClientRect();
-      if (r) setAt({ bottom: Math.max(8, window.innerHeight - r.bottom), left: (nav?.right ?? r.right) + 12 });
+      const nav = button.current?.closest('nav')?.getBoundingClientRect();
+      if (r)
+        setAt({
+          bottom: Math.max(8, window.innerHeight - r.bottom),
+          left: (nav?.right ?? r.right) + 12,
+        });
     };
     place();
-    window.addEventListener("resize", place);
+    window.addEventListener('resize', place);
     // Capture: the rail's own scroll does not bubble.
-    document.addEventListener("scroll", place, true);
+    document.addEventListener('scroll', place, true);
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+      if (e.key !== 'Escape') return;
       // Only this menu closes (not the Ask panel).
       e.preventDefault();
       setOpen(false);
       button.current?.focus();
     };
-    const onDown = (e: PointerEvent) => root.current && !root.current.contains(e.target as Node) && setOpen(false);
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("pointerdown", onDown);
+    const onDown = (e: PointerEvent) =>
+      root.current && !root.current.contains(e.target as Node) && setOpen(false);
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onDown);
     return () => {
-      window.removeEventListener("resize", place);
-      document.removeEventListener("scroll", place, true);
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("pointerdown", onDown);
+      window.removeEventListener('resize', place);
+      document.removeEventListener('scroll', place, true);
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onDown);
     };
   }, [open]);
 
@@ -328,24 +394,24 @@ function UserMenu({ placement, emailBeside = false }: { placement: "rail" | "hea
   }
 
   async function signOut() {
-    await api.POST("/v1/auth/logout").catch(() => undefined);
+    await api.POST('/v1/auth/logout').catch(() => undefined);
     // Still signed in after dropping the session cookie: Google IAP signs this browser
     // in. Ask IAP to clear its own cookie, which leads to Google's sign-in.
-    const still = await api.GET("/v1/me").catch(() => undefined);
+    const still = await api.GET('/v1/me').catch(() => undefined);
     if (still?.response.ok) {
       // A full page load on purpose: IAP answers this URL, it never reaches Next.
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-      window.location.assign("/?gcp-iap-mode=CLEAR_LOGIN_COOKIE");
+      window.location.assign('/?gcp-iap-mode=CLEAR_LOGIN_COOKIE');
       return;
     }
     clear();
-    router.push("/login");
+    router.push('/login');
   }
 
   // walk-brief review: blank while /v1/me loads, never a "?" for a member not read yet.
-  const initials = me ? initialsOf(email) : "";
-  const rail = placement === "rail";
-  const current = pathname === "/account" || pathname.startsWith("/account/");
+  const initials = me ? initialsOf(email) : '';
+  const rail = placement === 'rail';
+  const current = pathname === '/account' || pathname.startsWith('/account/');
 
   const panel = (
     <div
@@ -354,20 +420,27 @@ function UserMenu({ placement, emailBeside = false }: { placement: "rail" | "hea
       style={rail ? at : undefined}
       className={
         rail
-          ? "fixed z-50 max-h-[calc(100dvh-16px)] w-72 overflow-y-auto rounded-panel border border-line bg-surface p-3 text-text shadow-tip [--focus-ring:var(--accent)]"
-          : "absolute top-[calc(100%+8px)] right-0 z-50 w-72 max-w-[calc(100vw-20px)] rounded-panel border border-line bg-surface p-3 text-left text-text shadow-tip [--focus-ring:var(--accent)]"
+          ? 'fixed z-50 max-h-[calc(100dvh-16px)] w-72 overflow-y-auto rounded-panel border border-line bg-surface p-3 text-text shadow-tip [--focus-ring:var(--accent)]'
+          : 'absolute top-[calc(100%+8px)] right-0 z-50 w-72 max-w-[calc(100vw-20px)] rounded-panel border border-line bg-surface p-3 text-left text-text shadow-tip [--focus-ring:var(--accent)]'
       }
     >
       {/* qa-simple-roadmap-46: the name and the whole email, each on its own line and wrapped, never cut off. */}
       <p className="mb-3 px-1 text-sm font-medium" data-testid="account-who">
         {name && <span className="block break-words">{name}</span>}
-        <span className={`block break-all ${name ? "font-normal text-text2" : ""}`}>{email}</span>
+        <span className={`block break-all ${name ? 'font-normal text-text2' : ''}`}>{email}</span>
       </p>
       <div
         role="radiogroup"
         aria-label="Theme"
         data-testid="theme-switch"
-        onKeyDown={(e) => onRadioKeys(e, THEMES.map((t) => t.value), theme, setTheme)}
+        onKeyDown={(e) =>
+          onRadioKeys(
+            e,
+            THEMES.map((t) => t.value),
+            theme,
+            setTheme,
+          )
+        }
         className={`mb-3 grid grid-cols-3 ${SEGMENTED.track}`}
       >
         {THEMES.map((t) => (
@@ -387,12 +460,12 @@ function UserMenu({ placement, emailBeside = false }: { placement: "rail" | "hea
           </button>
         ))}
       </div>
-      {me?.kind === "user" && (
+      {me?.kind === 'user' && (
         // A person's own account; a service token has none.
         <Link
           href="/account"
           data-testid="nav-my-account"
-          aria-current={current ? "page" : undefined}
+          aria-current={current ? 'page' : undefined}
           onClick={() => setOpen(false)}
           className="mb-1 flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm font-medium text-text hover:bg-surface2 aria-[current=page]:bg-accent-soft aria-[current=page]:text-accent-ink"
         >
@@ -407,19 +480,22 @@ function UserMenu({ placement, emailBeside = false }: { placement: "rail" | "hea
           onClick={async () => {
             // qa-shell-13: it drops every change made in this browser, so it asks first.
             const yes = await confirmInPage({
-              action: "Reset sample data",
-              message: "Restore the sample data and sign out? Every change made in this browser is lost.",
+              action: 'Reset sample data',
+              message:
+                'Restore the sample data and sign out? Every change made in this browser is lost.',
               destructive: true,
             });
             if (!yes) return;
             resetMockData();
             // Full reload on purpose: every view re-reads the freshly seeded state.
             // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-            window.location.assign("/login");
+            window.location.assign('/login');
           }}
           className="mb-1 flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm font-medium text-text hover:bg-surface2"
         >
-          <span className="rounded border border-dashed border-line-strong px-1.5 text-[13px] text-text2">Mock data</span>
+          <span className="rounded border border-dashed border-line-strong px-1.5 text-[13px] text-text2">
+            Mock data
+          </span>
           Reset
         </button>
       )}
@@ -435,19 +511,19 @@ function UserMenu({ placement, emailBeside = false }: { placement: "rail" | "hea
   );
 
   return (
-    <div ref={root} className={rail ? "relative mt-2 flex-none" : "relative flex-none"}>
+    <div ref={root} className={rail ? 'relative mt-2 flex-none' : 'relative flex-none'}>
       <button
         ref={button}
         type="button"
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-label={`Account ${email}`}
-        aria-current={current ? "page" : undefined}
+        aria-current={current ? 'page' : undefined}
         title={email}
-        data-testid={rail ? "user-menu" : "phone-user-menu"}
+        data-testid={rail ? 'user-menu' : 'phone-user-menu'}
         onClick={() => setOpen((o) => !o)}
         className={`grid place-items-center rounded-full bg-rail-avatar font-semibold text-on-rail-avatar ring-2 ring-rail-avatar-ring aria-[current=page]:ring-[3px] aria-[current=page]:ring-rail-active-text ${
-          rail ? "size-[38px] text-sm" : "size-8 text-[13px]"
+          rail ? 'size-[38px] text-sm' : 'size-8 text-[13px]'
         }`}
       >
         {initials}
@@ -462,13 +538,23 @@ function UserMenu({ placement, emailBeside = false }: { placement: "rail" | "hea
   );
 }
 
-function RailLink({ d, pathname, home, badge }: { d: Dest; pathname: string; home?: string; badge?: number | null }) {
+function RailLink({
+  d,
+  pathname,
+  home,
+  badge,
+}: {
+  d: Dest;
+  pathname: string;
+  home?: string;
+  badge?: number | null;
+}) {
   const active = isActive(pathname, d, home);
   return (
     <Link
       href={d.href}
       data-testid={d.testId}
-      aria-current={active ? "page" : undefined}
+      aria-current={active ? 'page' : undefined}
       aria-label={badgedName(d.label, badge)}
       className={`relative flex w-[70px] flex-none flex-col items-center gap-0.5 rounded-[10px] pt-[7px] pb-1.5 text-[13px] leading-4 font-medium text-rail-text hover:bg-rail-hover hover:text-rail-active-text ${RAIL_SELECTED}`}
     >
@@ -485,7 +571,13 @@ function RailLink({ d, pathname, home, badge }: { d: Dest; pathname: string; hom
  * `/i/<token>`), which a customer opens without an account and never signs in on.
  */
 function bare(pathname: string): boolean {
-  return pathname.startsWith("/login") || pathname.startsWith("/access") || pathname.startsWith("/oauth") || pathname.startsWith("/i/") || pathname.startsWith("/s/");
+  return (
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/access') ||
+    pathname.startsWith('/oauth') ||
+    pathname.startsWith('/i/') ||
+    pathname.startsWith('/s/')
+  );
 }
 
 /*
@@ -527,7 +619,7 @@ function Navs() {
   // qa-docs-59: Present mode covers the screen; no rail or account button under (or over) its controls.
   const shown = (loading || !!me) && !bare(pathname) && !/\/present\/?$/.test(pathname);
   // Simple's pages count in Simple's rail (its own back-off), so the badge reads only where it shows.
-  const inbox = useInboxCount(shown && modeOf(pathname) !== "simple");
+  const inbox = useInboxCount(shown && modeOf(pathname) !== 'simple');
   const documentHome = useDocumentHome(pathname);
   const changeHome = useChangeHome(pathname);
   const home = documentHome ?? changeHome;
@@ -548,12 +640,25 @@ function Navs() {
   if (!shown) return null;
   // #723: Simple's pages have Simple's own rail, nothing of Detailed's.
   // qa-shell-27: on a phone the header's avatar is the one account control, never the More sheet.
-  if (modeOf(pathname) === "simple") return <SimpleNavs account={(placement) => (placement === "rail" ? <UserMenu placement="rail" emailBeside /> : null)} />;
+  if (modeOf(pathname) === 'simple')
+    return (
+      <SimpleNavs
+        account={(placement) =>
+          placement === 'rail' ? <UserMenu placement="rail" emailBeside /> : null
+        }
+      />
+    );
 
   const tabDests = TABS.map((t) => DESTINATIONS.find((d) => d.label === t)!);
-  const moreDests = [...DESTINATIONS.filter((d) => !TABS.includes(d.label)), ...(settings ? [settings] : [])];
+  const moreDests = [
+    ...DESTINATIONS.filter((d) => !TABS.includes(d.label)),
+    ...(settings ? [settings] : []),
+  ];
   // qa-settings-39: the bar has no tab for My account; like Settings, it lights More.
-  const moreActive = moreDests.some((d) => isActive(pathname, d, home)) || pathname === "/account" || pathname.startsWith("/account/");
+  const moreActive =
+    moreDests.some((d) => isActive(pathname, d, home)) ||
+    pathname === '/account' ||
+    pathname.startsWith('/account/');
 
   // z-[39]: drawn after the page now, one under the page's own z-40 sheets and panels, which
   // still lie over it as they did when it came first.
@@ -571,15 +676,17 @@ function Navs() {
               key={d.href}
               href={d.href}
               data-testid={`tab-${d.testId.slice(4)}`}
-              aria-current={active ? "page" : undefined}
-              aria-label={d.label === "Inbox" ? badgedName(d.label, inbox) : undefined}
+              aria-current={active ? 'page' : undefined}
+              aria-label={d.label === 'Inbox' ? badgedName(d.label, inbox) : undefined}
               className={`relative flex flex-col items-center justify-center gap-[3px] rounded-[10px] text-[13px] leading-4 ${
-                active ? `bg-rail-active font-semibold text-rail-active-text ${TAB_BAR}` : "font-medium text-rail-text"
+                active
+                  ? `bg-rail-active font-semibold text-rail-active-text ${TAB_BAR}`
+                  : 'font-medium text-rail-text'
               }`}
             >
               <Icon name={d.icon} stroke={1.7} />
               <span>{d.label}</span>
-              {d.label === "Inbox" && <Badge n={inbox} testId="tab-inbox-badge" />}
+              {d.label === 'Inbox' && <Badge n={inbox} testId="tab-inbox-badge" />}
             </Link>
           );
         })}
@@ -588,11 +695,13 @@ function Navs() {
           aria-expanded={more}
           aria-controls="more-sheet"
           // qa4-shell-22: on a More page (Priorities, Runs, Settings…) the tab says so to screen readers too.
-          aria-current={moreActive && !more ? "page" : undefined}
+          aria-current={moreActive && !more ? 'page' : undefined}
           data-testid="tab-more"
           onClick={() => setMore((m) => !m)}
           className={`relative flex flex-col items-center justify-center gap-[3px] rounded-[10px] text-[13px] leading-4 ${
-            more || moreActive ? `bg-rail-active font-semibold text-rail-active-text ${TAB_BAR}` : "font-medium text-rail-text"
+            more || moreActive
+              ? `bg-rail-active font-semibold text-rail-active-text ${TAB_BAR}`
+              : 'font-medium text-rail-text'
           }`}
         >
           <Icon name="more" stroke={1.7} />
@@ -600,7 +709,14 @@ function Navs() {
         </button>
       </nav>
       {/* qa-shell-10: a sheet above the tab bar, with a backdrop; Escape, a tap outside or a swipe down closes it. */}
-      <Sheet open={more} title="More" onClose={() => setMore(false)} testId="more-sheet" id="more-sheet" above>
+      <Sheet
+        open={more}
+        title="More"
+        onClose={() => setMore(false)}
+        testId="more-sheet"
+        id="more-sheet"
+        above
+      >
         <div className="p-3">
           <ModeSwitch placement="sheet" documentHome={home} />
           <ul className="grid grid-cols-3 gap-1">
@@ -608,7 +724,7 @@ function Navs() {
               <li key={d.href}>
                 <Link
                   href={d.href}
-                  aria-current={isActive(pathname, d, home) ? "page" : undefined}
+                  aria-current={isActive(pathname, d, home) ? 'page' : undefined}
                   className="flex flex-col items-center gap-1 rounded-xl py-2.5 text-sm font-medium text-text hover:bg-surface2 aria-[current=page]:bg-accent-soft aria-[current=page]:text-accent-ink"
                 >
                   <Icon name={d.icon} />
@@ -629,13 +745,24 @@ function Navs() {
         data-testid="app-nav"
         className="sticky top-0 z-40 col-start-1 row-start-1 flex h-dvh w-[88px] flex-col items-center gap-0.5 overflow-x-hidden overflow-y-auto overscroll-contain bg-rail py-3.5 [scrollbar-width:none] [--focus-ring:var(--rail-bar)] max-[600px]:hidden"
       >
-        <Link href="/home" aria-label="Product Oracle" data-testid="nav-brand" className="mb-3 flex-none rounded-xl">
+        <Link
+          href="/home"
+          aria-label="Product Oracle"
+          data-testid="nav-brand"
+          className="mb-3 flex-none rounded-xl"
+        >
           <Mark size={44} tone="sky" className="block" />
         </Link>
         <ModeSwitch placement="rail" documentHome={home} />
         {/* qa-shell-2: a short window scrolls the rail, so Settings and the account menu stay reachable. */}
         {DESTINATIONS.map((d) => (
-          <RailLink key={d.href} d={d} pathname={pathname} home={home} badge={d.label === "Inbox" ? inbox : undefined} />
+          <RailLink
+            key={d.href}
+            d={d}
+            pathname={pathname}
+            home={home}
+            badge={d.label === 'Inbox' ? inbox : undefined}
+          />
         ))}
         <span className="flex-1" />
         <span aria-hidden className="mb-1.5 h-px w-10 flex-none bg-rail-sep" />
@@ -649,22 +776,26 @@ function Navs() {
 
 /** Titles of the screens outside the rail's destinations, for when the page draws no H1 yet. */
 const OTHER_TITLES: [string, string][] = [
-  ["/login", "Sign in"],
-  ["/access", "Access"],
-  ["/oauth", "Connect an MCP client"],
-  ["/sources", "Sources"],
-  ["/design", "Design system"],
-  ["/account", "My account"],
+  ['/login', 'Sign in'],
+  ['/access', 'Access'],
+  ['/oauth', 'Connect an MCP client'],
+  ['/sources', 'Sources'],
+  ['/design', 'Design system'],
+  ['/account', 'My account'],
 ];
 
 function fallbackTitle(pathname: string): string {
-  if (pathname.endsWith("/present")) return "Present";
+  if (pathname.endsWith('/present')) return 'Present';
   const other = OTHER_TITLES.find(([p]) => pathname === p || pathname.startsWith(`${p}/`));
   if (other) return other[1];
-  if (modeOf(pathname) === "simple") {
-    return [...SIMPLE_DESTINATIONS].reverse().find((d) => pathname === d.href || pathname.startsWith(`${d.href}/`))?.label ?? "Home";
+  if (modeOf(pathname) === 'simple') {
+    return (
+      [...SIMPLE_DESTINATIONS]
+        .reverse()
+        .find((d) => pathname === d.href || pathname.startsWith(`${d.href}/`))?.label ?? 'Home'
+    );
   }
-  return [...DESTINATIONS, SETTINGS].find((d) => isActive(pathname, d))?.label ?? "Product Oracle";
+  return [...DESTINATIONS, SETTINGS].find((d) => isActive(pathname, d))?.label ?? 'Product Oracle';
 }
 
 /**
@@ -674,8 +805,8 @@ function fallbackTitle(pathname: string): string {
  * The browser tab always names the page itself ("Dates · Product Oracle").
  */
 function sectionOf(pathname: string): string | null {
-  if (/^\/(plan|roadmap)(\/[^/]+)?\/?$/.test(pathname)) return "Plan";
-  if (/^\/company(\/[^/]+)?\/?$/.test(pathname)) return "Company";
+  if (/^\/(plan|roadmap)(\/[^/]+)?\/?$/.test(pathname)) return 'Plan';
+  if (/^\/company(\/[^/]+)?\/?$/.test(pathname)) return 'Company';
   // qa-settings-40: Settings' pages name themselves ("Connections"); the phone's page picker
   // under it (settings/_nav.tsx) already says they are Settings.
   return null;
@@ -683,11 +814,15 @@ function sectionOf(pathname: string): string | null {
 
 /** An H1's words, without its suffix ("v3") when `plain`. */
 function h1Text(h1: Element | undefined, plain: boolean): string {
-  if (!h1) return "";
-  return Array.from(h1.childNodes, (n) => (plain && n instanceof Element && n.hasAttribute("data-title-suffix") ? "" : (n.textContent?.trim() ?? "")))
+  if (!h1) return '';
+  return Array.from(h1.childNodes, (n) =>
+    plain && n instanceof Element && n.hasAttribute('data-title-suffix')
+      ? ''
+      : (n.textContent?.trim() ?? ''),
+  )
     .filter(Boolean)
-    .join(" ")
-    .replace(/\s+/g, " ");
+    .join(' ')
+    .replace(/\s+/g, ' ');
 }
 
 /**
@@ -695,11 +830,13 @@ function h1Text(h1: Element | undefined, plain: boolean): string {
  * documents"), without a count beside it (Requests' "Themes 3").
  */
 function tabName(a: Element): string {
-  const full = a.getAttribute("aria-label")?.trim();
+  const full = a.getAttribute('aria-label')?.trim();
   if (full) return full;
-  return Array.from(a.childNodes, (n) => (n instanceof Element && /^\s*\d+\s*$/.test(n.textContent ?? "") ? "" : (n.textContent ?? "")))
-    .join(" ")
-    .replace(/\s+/g, " ")
+  return Array.from(a.childNodes, (n) =>
+    n instanceof Element && /^\s*\d+\s*$/.test(n.textContent ?? '') ? '' : (n.textContent ?? ''),
+  )
+    .join(' ')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
@@ -712,8 +849,8 @@ function tabName(a: Element): string {
  */
 function withTab(h1: Element | undefined, words: string, pathname: string): string {
   if (!h1 || !words) return words;
-  const tab = h1.closest("[data-page-header]")?.querySelector('nav a[aria-current="page"]');
-  const label = tab ? tabName(tab) : "";
+  const tab = h1.closest('[data-page-header]')?.querySelector('nav a[aria-current="page"]');
+  const label = tab ? tabName(tab) : '';
   if (!label || label === words) return words;
   const section = [...DESTINATIONS, SETTINGS].find((d) => isActive(pathname, d))?.label;
   return words === section ? `${label} · ${words}` : `${words} · ${label}`;
@@ -726,8 +863,9 @@ function withTab(h1: Element | undefined, words: string, pathname: string): stri
  */
 function inSection(words: string, pathname: string): string {
   if (!words) return words;
-  if (/^\/settings(\/|$)/.test(pathname) && words !== "Settings" && !words.endsWith(" · Settings")) return `${words} · Settings`;
-  if (modeOf(pathname) === "simple" && !words.endsWith(" · Simple")) return `${words} · Simple`;
+  if (/^\/settings(\/|$)/.test(pathname) && words !== 'Settings' && !words.endsWith(' · Settings'))
+    return `${words} · Settings`;
+  if (modeOf(pathname) === 'simple' && !words.endsWith(' · Simple')) return `${words} · Simple`;
   return words;
 }
 
@@ -741,48 +879,67 @@ const noSubscribe = () => () => undefined;
 function usePageTitle(pathname: string): { title: string; plain: string; drawn?: boolean } {
   const [read, setRead] = useState<{ title: string; plain: string; drawn?: boolean } | null>(null);
   useEffect(() => {
-    const main = document.querySelector("main");
+    const main = document.querySelector('main');
     if (!main) return;
     const update = () => {
       // Next keeps recently visited routes mounted but hidden: the shown page's H1.
-      const h1s = Array.from(main.querySelectorAll("h1"));
+      const h1s = Array.from(main.querySelectorAll('h1'));
       const h1 = h1s.find((h) => h.checkVisibility()) ?? h1s[0];
       // B-23: a page can keep its H1's suffix off the phone header (PageHeader phoneSuffix).
-      const title = h1Text(h1, !!h1?.hasAttribute("data-phone-plain"));
+      const title = h1Text(h1, !!h1?.hasAttribute('data-phone-plain'));
       // qa-shell-3: a section's tab (Plan, Company, Settings) is headed by the section's name;
       // the browser tab names the open tab too ("Dates · Plan"), so no two pages share one.
       const plain = inSection(withTab(h1, h1Text(h1, true), pathname), pathname);
       // qa-docs-78: a page that draws its H1 on a phone too (PageHeader phoneTitle).
-      const drawn = !!h1?.hasAttribute("data-phone-title");
-      setRead((r) => (r?.title === title && r.plain === plain && r.drawn === drawn ? r : title ? { title, plain: plain || title, drawn } : null));
+      const drawn = !!h1?.hasAttribute('data-phone-title');
+      setRead((r) =>
+        r?.title === title && r.plain === plain && r.drawn === drawn
+          ? r
+          : title
+            ? { title, plain: plain || title, drawn }
+            : null,
+      );
     };
     update();
     // dod-perf: only a change that can touch the H1 reads it again (checkVisibility lays the
     // page out): not a chart's drag writing its pills' styles and live text every frame.
-    const hasH1 = (n: Node) => n instanceof Element && (n.matches("h1") || !!n.querySelector("h1"));
+    const hasH1 = (n: Node) => n instanceof Element && (n.matches('h1') || !!n.querySelector('h1'));
     const touches = (r: MutationRecord): boolean => {
       const el = r.target instanceof Element ? r.target : r.target.parentElement;
-      if (!el || el.closest("h1, [data-page-header]")) return true;
-      if (r.type === "attributes") return hasH1(el);
-      if (r.type === "childList") return [...r.addedNodes, ...r.removedNodes].some(hasH1);
+      if (!el || el.closest('h1, [data-page-header]')) return true;
+      if (r.type === 'attributes') return hasH1(el);
+      if (r.type === 'childList') return [...r.addedNodes, ...r.removedNodes].some(hasH1);
       return false;
     };
     const watch = new MutationObserver((records) => {
       if (records.some(touches)) update();
     });
-    watch.observe(main, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["hidden", "style", "aria-current"] });
+    watch.observe(main, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ['hidden', 'style', 'aria-current'],
+    });
     return () => watch.disconnect();
   }, [pathname]);
   // qa-shell-24: a not-found page renders on the server under another path than the
   // browser's, so the path's fallback title waits for hydration (no #418 mismatch).
-  const hydrated = useSyncExternalStore(noSubscribe, () => true, () => false);
+  const hydrated = useSyncExternalStore(
+    noSubscribe,
+    () => true,
+    () => false,
+  );
   if (read) return read;
-  const fallback = hydrated ? fallbackTitle(pathname) : "";
-  return { title: fallback, plain: fallback === "Product Oracle" ? fallback : inSection(fallback, pathname) };
+  const fallback = hydrated ? fallbackTitle(pathname) : '';
+  return {
+    title: fallback,
+    plain: fallback === 'Product Oracle' ? fallback : inSection(fallback, pathname),
+  };
 }
 
 /** Public pages that set their own title (a customer's interview link, a shared roadmap). */
-const ownTitle = (pathname: string) => pathname.startsWith("/i/") || pathname.startsWith("/s/");
+const ownTitle = (pathname: string) => pathname.startsWith('/i/') || pathname.startsWith('/s/');
 
 /**
  * qa-shell-2: the browser tab names the page, "<title> · Product Oracle", from the same H1
@@ -791,12 +948,13 @@ const ownTitle = (pathname: string) => pathname.startsWith("/i/") || pathname.st
 function DocumentTitle() {
   const pathname = usePathname();
   const { plain } = usePageTitle(pathname);
-  const text = !plain || plain === "Product Oracle" ? "Product Oracle" : `${plain} · Product Oracle`;
+  const text =
+    !plain || plain === 'Product Oracle' ? 'Product Oracle' : `${plain} · Product Oracle`;
   useEffect(() => {
     if (ownTitle(pathname) || !plain) return;
     document.title = text;
     // Next may write the layout's title back after a navigation: keep ours.
-    const head = document.querySelector("head");
+    const head = document.querySelector('head');
     if (!head) return;
     const keep = new MutationObserver(() => {
       if (document.title !== text) document.title = text;
@@ -820,44 +978,62 @@ function PhoneHeader() {
   const { me } = useMe();
   const { title, drawn } = usePageTitle(pathname);
   // The section from the path waits for hydration too (qa-shell-24, see usePageTitle).
-  const hydrated = useSyncExternalStore(noSubscribe, () => true, () => false);
+  const hydrated = useSyncExternalStore(
+    noSubscribe,
+    () => true,
+    () => false,
+  );
   // qa-docs-78: a page whose own H1 shows on a phone (a long document title, wrapped) is not
   // named a second time, cut, right above it: the bar names where it is, as the rail does.
   const documentHome = useDocumentHome(pathname);
   const changeHome = useChangeHome(pathname);
   const home = documentHome ?? changeHome;
-  const where = drawn ? ([...DESTINATIONS, SETTINGS].find((d) => isActive(pathname, d, home))?.label ?? null) : null;
+  const where = drawn
+    ? ([...DESTINATIONS, SETTINGS].find((d) => isActive(pathname, d, home))?.label ?? null)
+    : null;
   const info = usePageInfo();
   const [askButton, askSheet] = usePhoneAsk();
   if (bare(pathname)) return null;
   return (
     <>
-    <header
-      data-testid="phone-header"
-      className="sticky top-0 z-30 hidden h-[var(--phone-top-bar)] items-center gap-2.5 bg-rail-top pt-[env(safe-area-inset-top)] pr-2.5 pl-3 [--focus-ring:var(--rail-bar)] max-[600px]:flex"
-    >
-      {/* qa-simple-home-32: a 44 px hit area around the 22 px mark; the negative margin keeps the mark where it was. */}
-      <Link href={homeOf(modeOf(pathname))} aria-label="Product Oracle" data-testid="phone-brand" className="-m-[11px] flex size-11 flex-none items-center justify-center rounded-md">
-        {/* ask-fresh: Simple's light header draws the mark in the accent ink, as its rail does; Detailed's navy keeps the sky mark. */}
-        {pathname.startsWith("/simple") ? <Mark size={22} tone="current" className="block text-accent-ink" /> : <Mark size={22} tone="sky" className="block" />}
-      </Link>
-      <span className="flex min-w-0 flex-1 items-center gap-2">
-        <p data-testid="phone-title" className="min-w-0 truncate font-display text-[17px] leading-6 font-semibold text-rail-active-text">
-          {(hydrated && sectionOf(pathname)) || where || title}
-        </p>
-        {info && (
-          <span
-            data-testid="phone-info"
-            className="flex flex-none items-center [&_[data-testid=info-tip][aria-expanded=false]>span]:border-rail-text [&_[data-testid=info-tip][aria-expanded=false]>span]:text-rail-active-text"
+      <header
+        data-testid="phone-header"
+        className="sticky top-0 z-30 hidden h-[var(--phone-top-bar)] items-center gap-2.5 bg-rail-top pt-[env(safe-area-inset-top)] pr-2.5 pl-3 [--focus-ring:var(--rail-bar)] max-[600px]:flex"
+      >
+        {/* qa-simple-home-32: a 44 px hit area around the 22 px mark; the negative margin keeps the mark where it was. */}
+        <Link
+          href={homeOf(modeOf(pathname))}
+          aria-label="Product Oracle"
+          data-testid="phone-brand"
+          className="-m-[11px] flex size-11 flex-none items-center justify-center rounded-md"
+        >
+          {/* ask-fresh: Simple's light header draws the mark in the accent ink, as its rail does; Detailed's navy keeps the sky mark. */}
+          {pathname.startsWith('/simple') ? (
+            <Mark size={22} tone="current" className="block text-accent-ink" />
+          ) : (
+            <Mark size={22} tone="sky" className="block" />
+          )}
+        </Link>
+        <span className="flex min-w-0 flex-1 items-center gap-2">
+          <p
+            data-testid="phone-title"
+            className="min-w-0 truncate font-display text-[17px] leading-6 font-semibold text-rail-active-text"
           >
-            {info}
-          </span>
-        )}
-      </span>
-      {me && !panelHidden(pathname) && askButton}
-      {me && <UserMenu placement="header" />}
-    </header>
-    {askSheet}
+            {(hydrated && sectionOf(pathname)) || where || title}
+          </p>
+          {info && (
+            <span
+              data-testid="phone-info"
+              className="flex flex-none items-center [&_[data-testid=info-tip][aria-expanded=false]>span]:border-rail-text [&_[data-testid=info-tip][aria-expanded=false]>span]:text-rail-active-text"
+            >
+              {info}
+            </span>
+          )}
+        </span>
+        {me && !panelHidden(pathname) && askButton}
+        {me && <UserMenu placement="header" />}
+      </header>
+      {askSheet}
     </>
   );
 }
@@ -876,7 +1052,7 @@ export function usePhoneAsk(meeting = false): [button: ReactNode, sheet: ReactNo
   useEffect(() => {
     // The words arrive from outside React (the drawer's link); a phone opens its sheet for them.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (!meeting && typedIn && window.matchMedia("(max-width: 600px)").matches) setAsk(true);
+    if (!meeting && typedIn && window.matchMedia('(max-width: 600px)').matches) setAsk(true);
   }, [typedIn, meeting]);
   const [askPath, setAskPath] = useState(pathname);
   if (askPath !== pathname) {
@@ -886,24 +1062,38 @@ export function usePhoneAsk(meeting = false): [button: ReactNode, sheet: ReactNo
   // Simple's Ask sheet (the owner's pick C): the whole screen over the header and the tab bar,
   // with the panel's own head (Ask Oracle, New chat, close). Both modes' sheets sit outside the
   // sticky header, whose stacking would put them under the tab bar (qa4-shell-1).
-  const simple = pathname.startsWith("/simple");
+  const simple = pathname.startsWith('/simple');
   const sheet = simple ? (
-    <Sheet open={ask} title="Ask Oracle" onClose={() => setAsk(false)} testId="phone-ask-sheet" scroll={false} bare>
+    <Sheet
+      open={ask}
+      title="Ask Oracle"
+      onClose={() => setAsk(false)}
+      testId="phone-ask-sheet"
+      scroll={false}
+      bare
+    >
       <HopPanel onClose={() => setAsk(false)} mark={false} />
     </Sheet>
   ) : (
-    <Sheet open={ask} title="Ask Oracle" onClose={() => setAsk(false)} testId="phone-ask-sheet" scroll={false} full>
+    <Sheet
+      open={ask}
+      title="Ask Oracle"
+      onClose={() => setAsk(false)}
+      testId="phone-ask-sheet"
+      scroll={false}
+      full
+    >
       <HopPanel showHeader={false} />
     </Sheet>
   );
   const button = (
     <button
       type="button"
-      data-testid={meeting ? "meeting-phone-ask" : "phone-ask"}
+      data-testid={meeting ? 'meeting-phone-ask' : 'phone-ask'}
       aria-label="Ask Oracle"
       aria-expanded={ask}
       onClick={() => setAsk(true)}
-      className={`${meeting ? "hidden max-[600px]:flex" : "flex"} h-9 flex-none items-center gap-1 rounded-lg px-2 text-[15px] font-semibold text-rail-active-text hover:bg-rail-hover`}
+      className={`${meeting ? 'hidden max-[600px]:flex' : 'flex'} h-9 flex-none items-center gap-1 rounded-lg px-2 text-[15px] font-semibold text-rail-active-text hover:bg-rail-hover`}
     >
       <Icon name="ask" size={20} />
       Ask
@@ -933,7 +1123,7 @@ function HopDock() {
   const { me } = useMe();
   const open = usePanelOpen();
   const shown = !!me && !panelHidden(pathname);
-  const simple = modeOf(pathname) === "simple";
+  const simple = modeOf(pathname) === 'simple';
   const strip = useRef<HTMLButtonElement>(null);
   const drawer = useRef<HTMLDivElement>(null);
   const wasOpen = useRef(open);
@@ -947,15 +1137,15 @@ function HopDock() {
   useEffect(() => {
     if (!shown) return;
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === "j") {
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'j') {
         e.preventDefault();
         setPanelOpen(!open);
-      } else if (e.key === "Escape" && open && !e.defaultPrevented) {
+      } else if (e.key === 'Escape' && open && !e.defaultPrevented) {
         setPanelOpen(false);
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, [shown, open]);
   useEffect(() => {
     const closed = wasOpen.current && !open;
@@ -967,7 +1157,9 @@ function HopDock() {
     if (!open || !takeAskFocus()) return;
     // The panel draws its question box once it has loaded.
     const focusBox = () => {
-      const box = drawer.current?.querySelector<HTMLTextAreaElement>('textarea[aria-label="Ask Oracle"]') ?? drawer.current?.querySelector<HTMLTextAreaElement>("textarea");
+      const box =
+        drawer.current?.querySelector<HTMLTextAreaElement>('textarea[aria-label="Ask Oracle"]') ??
+        drawer.current?.querySelector<HTMLTextAreaElement>('textarea');
       if (!box) return false;
       box.focus();
       return true;
@@ -996,13 +1188,17 @@ function HopDock() {
   // qa-onboarding-29: a page's own modal (fixed z-40 inside <main>) ties with the dock's z-40 and
   // loses on DOM order, leaving the Ask column bright beside the dimmed page. While one is open the
   // dock steps down to z-30 so the overlay covers the whole window.
-  const modalOver = "[body:has(#main_[aria-modal=true])_&]:z-30";
-  const width = simple ? "w-0 min-[1240px]:w-[400px] min-[1240px]:border-l" : open ? "w-[45px] border-l min-[1600px]:w-[400px]" : "w-[45px] border-l";
+  const modalOver = '[body:has(#main_[aria-modal=true])_&]:z-30';
+  const width = simple
+    ? 'w-0 min-[1240px]:w-[400px] min-[1240px]:border-l'
+    : open
+      ? 'w-[45px] border-l min-[1600px]:w-[400px]'
+      : 'w-[45px] border-l';
   return (
     <aside
       aria-label="Ask Oracle"
       data-testid="hop-dock"
-      data-open={open ? "true" : "false"}
+      data-open={open ? 'true' : 'false'}
       className={`sticky top-0 z-40 col-start-3 row-start-1 h-dvh border-line bg-surface max-[600px]:hidden ${modalOver} ${width}`}
     >
       {!simple && (
@@ -1014,7 +1210,7 @@ function HopDock() {
           aria-label="Ask Oracle"
           title="Ask Oracle (⌘J)"
           onClick={() => setPanelOpen(true)}
-          className={`flex h-full w-11 flex-col items-center gap-3 pt-4 text-text hover:bg-surface2 ${open ? "invisible min-[1600px]:hidden" : ""}`}
+          className={`flex h-full w-11 flex-col items-center gap-3 pt-4 text-text hover:bg-surface2 ${open ? 'invisible min-[1600px]:hidden' : ''}`}
         >
           <Mark size={24} tone="current" className="block flex-none text-accent" />
           <span className="text-[15px] font-semibold [writing-mode:vertical-rl]">Ask</span>
@@ -1025,8 +1221,8 @@ function HopDock() {
         <div
           aria-hidden
           data-testid="hop-backdrop"
-          data-backdrop={simple ? "below-1240" : "below-1600"}
-          className={`fixed inset-0 z-40 bg-hero/30 [:root[data-theme=dark]_&]:bg-[rgb(0_0_0/0.55)] dark:[:root:not([data-theme=light])_&]:bg-[rgb(0_0_0/0.55)] ${simple ? "min-[1240px]:hidden" : "min-[1600px]:hidden"}`}
+          data-backdrop={simple ? 'below-1240' : 'below-1600'}
+          className={`fixed inset-0 z-40 bg-hero/30 [:root[data-theme=dark]_&]:bg-[rgb(0_0_0/0.55)] dark:[:root:not([data-theme=light])_&]:bg-[rgb(0_0_0/0.55)] ${simple ? 'min-[1240px]:hidden' : 'min-[1600px]:hidden'}`}
           onClick={() => setPanelOpen(false)}
         />
       )}
@@ -1036,8 +1232,8 @@ function HopDock() {
           data-testid="hop-drawer"
           className={
             simple
-              ? "fixed inset-y-0 right-0 z-40 w-[400px] max-w-[100vw] border-l border-line bg-surface shadow-tip min-[1240px]:static min-[1240px]:h-full min-[1240px]:w-full min-[1240px]:max-w-none min-[1240px]:border-l-0 min-[1240px]:shadow-none"
-              : "fixed inset-y-0 right-0 z-40 w-[400px] max-w-[100vw] border-l border-line shadow-tip min-[1600px]:static min-[1600px]:h-full min-[1600px]:w-full min-[1600px]:max-w-none min-[1600px]:border-l-0 min-[1600px]:shadow-none"
+              ? 'fixed inset-y-0 right-0 z-40 w-[400px] max-w-[100vw] border-l border-line bg-surface shadow-tip min-[1240px]:static min-[1240px]:h-full min-[1240px]:w-full min-[1240px]:max-w-none min-[1240px]:border-l-0 min-[1240px]:shadow-none'
+              : 'fixed inset-y-0 right-0 z-40 w-[400px] max-w-[100vw] border-l border-line shadow-tip min-[1600px]:static min-[1600px]:h-full min-[1600px]:w-full min-[1600px]:max-w-none min-[1600px]:border-l-0 min-[1600px]:shadow-none'
           }
         >
           <HopPanel onClose={() => setPanelOpen(false)} />
@@ -1062,15 +1258,7 @@ export function CapsError() {
   if (!capsError) return null;
   return (
     <div className="px-4 pt-3 sm:px-6">
-      <Notice
-        tone="error"
-        testId="caps-error"
-        action={
-          <Button onClick={retryCaps}>
-            Retry
-          </Button>
-        }
-      >
+      <Notice tone="error" testId="caps-error" action={<Button onClick={retryCaps}>Retry</Button>}>
         {capsError}
       </Notice>
     </div>

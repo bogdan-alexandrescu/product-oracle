@@ -1,6 +1,6 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /**
  * fix2-simple-roadmap, the page pass (/simple/roadmap): red tests for QA2's findings 13, 4,
@@ -11,34 +11,41 @@ import { expect, test, type Locator, type Page } from "./test";
  * alert-mobile on the alerts roadmap), on desktop (1440x900) and a phone (390x844).
  */
 
-const URL = "/simple/roadmap";
+const URL = '/simple/roadmap';
 const DESKTOP = { viewport: { width: 1440, height: 900 } };
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 
-const bar = (page: Page, key: string): Locator => page.locator(`g[data-testid="bar"][data-item="${key}"]`);
+const bar = (page: Page, key: string): Locator =>
+  page.locator(`g[data-testid="bar"][data-item="${key}"]`);
 // mk-qa4-roadmap QR3 A: a broken link reads in the panel above the chart, not in a callout over its bar.
-const conflict = (page: Page, key: string): Locator => page.getByTestId("conflicts").locator(`[data-testid="conflict"][data-item="${key}"]`);
+const conflict = (page: Page, key: string): Locator =>
+  page.getByTestId('conflicts').locator(`[data-testid="conflict"][data-item="${key}"]`);
 const depArrow = (page: Page, from: string, to: string): Locator =>
   page.locator(`[data-testid="dep-arrow"][data-from="${from}"][data-to="${to}"]`);
 
 async function open(page: Page, email?: string) {
   await login(page, email);
   await page.goto(URL);
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
 }
 
 /** The Gantt, which draws the dependency arrows and floats the item card. */
 async function gantt(page: Page) {
-  await page.getByTestId("format-gantt").click();
-  await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
+  await page.getByTestId('format-gantt').click();
+  await expect(page.getByTestId('simple-chart')).toHaveAttribute('data-format', 'gantt');
 }
 
 /** A box's edges, rounded so a sub-pixel layout difference does not fail the check. */
 function edges(box: { x: number; y: number; width: number; height: number }) {
-  return { left: Math.round(box.x), right: Math.round(box.x + box.width), top: Math.round(box.y), bottom: Math.round(box.y + box.height) };
+  return {
+    left: Math.round(box.x),
+    right: Math.round(box.x + box.width),
+    top: Math.round(box.y),
+    bottom: Math.round(box.y + box.height),
+  };
 }
 
-test.describe("desktop", () => {
+test.describe('desktop', () => {
   test.use(DESKTOP);
 
   /**
@@ -46,9 +53,9 @@ test.describe("desktop", () => {
    * never starts a review (meetings.may_start: an owner or the PRD's decider), so the button
    * reads as disabled, with the reason shown, before they ever open the sheet.
    */
-  test("Start review is enabled for an owner", async ({ page }) => {
+  test('Start review is enabled for an owner', async ({ page }) => {
     await open(page);
-    await expect(page.getByRole("button", { name: "Start review" })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Start review' })).toBeEnabled();
   });
 
   /**
@@ -59,30 +66,36 @@ test.describe("desktop", () => {
    * the reason, instead of opening a sheet that turns him away.
    */
   test("Start review is enabled for a PRD's decider below owner", async ({ page, context }) => {
-    await context.addInitScript((key) => localStorage.setItem(key, "simple-deciders"), MOCK_SCENARIO_KEY);
-    await open(page, "dana.decider@example.com");
-    const btn = page.getByRole("button", { name: "Start review" });
+    await context.addInitScript(
+      (key) => localStorage.setItem(key, 'simple-deciders'),
+      MOCK_SCENARIO_KEY,
+    );
+    await open(page, 'dana.decider@example.com');
+    const btn = page.getByRole('button', { name: 'Start review' });
     await expect(btn).toBeEnabled();
     await btn.click();
-    await expect(page.getByRole("dialog")).toBeVisible();
-    await expect(page.getByTestId("start-not-allowed")).toHaveCount(0);
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await expect(page.getByTestId('start-not-allowed')).toHaveCount(0);
   });
 
   // fix4 qa-simple-roadmap-22: someone who may not start a review no longer sees the button (was: disabled with a reason).
-  test("Start review is off for a track owner who decides no PRD", async ({ page, context }) => {
-    await context.addInitScript((key) => localStorage.setItem(key, "simple-deciders"), MOCK_SCENARIO_KEY);
-    await open(page, "avery.lane@example.com");
-    await expect(page.getByTestId("key-dates-open")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Start review" })).toHaveCount(0);
-    await expect(page.getByTestId("start-review-reason")).toHaveCount(0);
+  test('Start review is off for a track owner who decides no PRD', async ({ page, context }) => {
+    await context.addInitScript(
+      (key) => localStorage.setItem(key, 'simple-deciders'),
+      MOCK_SCENARIO_KEY,
+    );
+    await open(page, 'avery.lane@example.com');
+    await expect(page.getByTestId('key-dates-open')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Start review' })).toHaveCount(0);
+    await expect(page.getByTestId('start-review-reason')).toHaveCount(0);
   });
 
-  for (const email of ["commenter@example.com", "viewer@example.com"]) {
-    test(`Start review is hidden for ${email.split("@")[0]}`, async ({ page }) => {
+  for (const email of ['commenter@example.com', 'viewer@example.com']) {
+    test(`Start review is hidden for ${email.split('@')[0]}`, async ({ page }) => {
       await open(page, email);
-      await expect(page.getByTestId("key-dates-open")).toBeVisible();
-      await expect(page.getByRole("button", { name: "Start review" })).toHaveCount(0);
-      await expect(page.getByTestId("start-review-reason")).toHaveCount(0);
+      await expect(page.getByTestId('key-dates-open')).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Start review' })).toHaveCount(0);
+      await expect(page.getByTestId('start-review-reason')).toHaveCount(0);
     });
   }
 
@@ -92,11 +105,11 @@ test.describe("desktop", () => {
    */
   test("a broken link reads inside the Timeline's broken-links panel", async ({ page }) => {
     await open(page);
-    await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "timeline");
-    const c = conflict(page, "alert-digest").filter({ hasText: "starts" });
+    await expect(page.getByTestId('simple-chart')).toHaveAttribute('data-format', 'timeline');
+    const c = conflict(page, 'alert-digest').filter({ hasText: 'starts' });
     await expect(c).toBeVisible();
-    await expect(c).toContainText("Weekly alert digest");
-    const chart = edges((await page.getByTestId("simple-chart").boundingBox())!);
+    await expect(c).toContainText('Weekly alert digest');
+    const chart = edges((await page.getByTestId('simple-chart').boundingBox())!);
     const box = edges((await c.boundingBox())!);
     expect(box.left).toBeGreaterThanOrEqual(chart.left - 1);
     expect(box.right).toBeLessThanOrEqual(chart.right + 1);
@@ -107,34 +120,52 @@ test.describe("desktop", () => {
    * dependent of the shared dependency (alert-mobile, whose dates are estimated, not only
    * alert-digest, the one clicked), and the fix is transitive.
    */
-  test("Move the dependents fixes every sibling dependent, not only the one clicked", async ({ page }) => {
+  test('Move the dependents fixes every sibling dependent, not only the one clicked', async ({
+    page,
+  }) => {
     await open(page);
     await gantt(page);
-    await expect(depArrow(page, "alert-rules", "alert-digest")).toHaveAttribute("data-state", "red");
+    await expect(depArrow(page, 'alert-rules', 'alert-digest')).toHaveAttribute(
+      'data-state',
+      'red',
+    );
     // walkb-roadmap: Mobile alert push has only an end, after Alert rules engine ends: no made-up start, no broken link.
-    await expect(depArrow(page, "alert-rules", "alert-mobile")).toHaveAttribute("data-state", "ok");
-    await page.getByTestId("needs-decision").click();
-    const tray = page.getByTestId("decision-tray");
-    await expect(tray.getByTestId("tray-broken").filter({ hasText: "Mobile alert push" })).toHaveCount(0);
-    await tray.getByTestId("tray-broken").filter({ hasText: "Weekly alert digest" }).getByRole("button", { name: "Move the dependents" }).first().click();
-    await expect(page.getByText(/Moved what depends on 'Alert rules engine' in your working draft/)).toBeVisible();
+    await expect(depArrow(page, 'alert-rules', 'alert-mobile')).toHaveAttribute('data-state', 'ok');
+    await page.getByTestId('needs-decision').click();
+    const tray = page.getByTestId('decision-tray');
+    await expect(
+      tray.getByTestId('tray-broken').filter({ hasText: 'Mobile alert push' }),
+    ).toHaveCount(0);
+    await tray
+      .getByTestId('tray-broken')
+      .filter({ hasText: 'Weekly alert digest' })
+      .getByRole('button', { name: 'Move the dependents' })
+      .first()
+      .click();
+    await expect(
+      page.getByText(/Moved what depends on 'Alert rules engine' in your working draft/),
+    ).toBeVisible();
 
-    await expect(depArrow(page, "alert-rules", "alert-digest")).toHaveAttribute("data-state", "ok");
-    await expect(depArrow(page, "alert-rules", "alert-mobile")).toHaveAttribute("data-state", "ok");
-    await page.getByTestId("needs-decision").click();
-    await expect(tray.getByTestId("tray-broken").filter({ hasText: "Mobile alert push" })).toHaveCount(0);
+    await expect(depArrow(page, 'alert-rules', 'alert-digest')).toHaveAttribute('data-state', 'ok');
+    await expect(depArrow(page, 'alert-rules', 'alert-mobile')).toHaveAttribute('data-state', 'ok');
+    await page.getByTestId('needs-decision').click();
+    await expect(
+      tray.getByTestId('tray-broken').filter({ hasText: 'Mobile alert push' }),
+    ).toHaveCount(0);
     // What is left on the digest (if anything) is no longer its order after Alert rules engine.
-    await expect(tray.getByTestId("tray-broken").filter({ hasText: /‘Alert rules engine’/ })).toHaveCount(0);
+    await expect(
+      tray.getByTestId('tray-broken').filter({ hasText: /‘Alert rules engine’/ }),
+    ).toHaveCount(0);
   });
 
   /**
    * #22, #36: the Gantt legend says what it draws in plain words, not "PM-owned" or
    * "validation gate"; #41: the Oracle-suggestion wording is plain too.
    */
-  test("the Gantt legend reads in plain words", async ({ page }) => {
+  test('the Gantt legend reads in plain words', async ({ page }) => {
     await open(page);
-    await page.getByTestId("format-gantt").click();
-    const legend = page.getByTestId("legend");
+    await page.getByTestId('format-gantt').click();
+    const legend = page.getByTestId('legend');
     await expect(legend).toBeVisible();
     const text = (await legend.textContent())!;
     expect(text).not.toMatch(/PM-owned/);
@@ -147,14 +178,14 @@ test.describe("desktop", () => {
    * Discover key when nothing is in discovery), and the wording after them carries no stray
    * leading separator and no jargon ("validation gate").
    */
-  test("the Waterfall legend has no stray separator and no unused phase key", async ({ page }) => {
+  test('the Waterfall legend has no stray separator and no unused phase key', async ({ page }) => {
     await open(page);
-    await page.getByTestId("format-waterfall").click();
-    const legend = page.getByTestId("legend");
+    await page.getByTestId('format-waterfall').click();
+    const legend = page.getByTestId('legend');
     await expect(legend).toBeVisible();
     const text = (await legend.textContent())!;
     expect(text).not.toMatch(/validation gate/);
-    expect(text.trim().startsWith("·")).toBe(false);
+    expect(text.trim().startsWith('·')).toBe(false);
   });
 
   /**
@@ -164,21 +195,21 @@ test.describe("desktop", () => {
    */
   test("Needs a decision names what it counts, not the side menu's badges", async ({ page }) => {
     await open(page);
-    const btn = page.getByTestId("needs-decision");
-    await expect(btn).toContainText("Needs a decision");
-    const title = await btn.getAttribute("title");
+    const btn = page.getByTestId('needs-decision');
+    await expect(btn).toContainText('Needs a decision');
+    const title = await btn.getAttribute('title');
     // roadmap-decide review: no roadmap chosen, it counts every roadmap's draft and says so.
     expect(title).toMatch(/your roadmaps' working drafts/i);
     // fix2 review: the same is said on screen (not only a hover title), with the button's count.
     const n = (await btn.textContent())!.match(/(\d+)/)![1];
     await btn.click();
-    const scope = page.getByTestId("tray-scope");
+    const scope = page.getByTestId('tray-scope');
     await expect(scope).toBeVisible();
     // qa-nov17: the count in sight, where it counts behind the (i).
     await expect(scope).toContainText(`${n} to decide`);
     await expect(scope).toContainText("In your roadmaps' working drafts");
     // roadmap-decide: one broken-link count everywhere, so the tray names what it counts, with no apology for a differing side menu.
-    await expect(scope).toContainText("broken links, dates to confirm, proposals");
+    await expect(scope).toContainText('broken links, dates to confirm, proposals');
   });
 
   /**
@@ -187,10 +218,12 @@ test.describe("desktop", () => {
    */
   test("the decision tray's tile labels share one height", async ({ page }) => {
     await open(page);
-    await page.getByTestId("needs-decision").click();
-    const tiles = page.getByTestId("decision-tray").getByTestId("tray-counters").locator("li");
+    await page.getByTestId('needs-decision').click();
+    const tiles = page.getByTestId('decision-tray').getByTestId('tray-counters').locator('li');
     await expect(tiles).toHaveCount(5);
-    const heights = await tiles.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height));
+    const heights = await tiles.evaluateAll((els) =>
+      els.map((el) => el.getBoundingClientRect().height),
+    );
     for (const h of heights) expect(Math.abs(h - heights[0])).toBeLessThanOrEqual(2);
   });
 
@@ -199,15 +232,17 @@ test.describe("desktop", () => {
    * sits in the side panel beside the chart, as on the Timeline, and dims nothing; its own
    * Close button closes it.
    */
-  test("the Gantt's item card sits in the side panel with no backdrop and closes with Close", async ({ page }) => {
+  test("the Gantt's item card sits in the side panel with no backdrop and closes with Close", async ({
+    page,
+  }) => {
     await open(page);
     await gantt(page);
-    await bar(page, "alert-rules").click();
-    const card = page.getByTestId("floating-card");
+    await bar(page, 'alert-rules').click();
+    const card = page.getByTestId('floating-card');
     await expect(card).toBeVisible();
-    await expect(page.getByTestId("item-panel")).toContainText("Alert rules engine");
-    await expect(page.getByTestId("floating-card-backdrop")).toHaveCount(0);
-    await card.getByRole("button", { name: "Close" }).click();
+    await expect(page.getByTestId('item-panel')).toContainText('Alert rules engine');
+    await expect(page.getByTestId('floating-card-backdrop')).toHaveCount(0);
+    await card.getByRole('button', { name: 'Close' }).click();
     await expect(card).not.toBeVisible();
   });
 
@@ -215,14 +250,14 @@ test.describe("desktop", () => {
    * #34: the "Added … as a draft" toast is one host for the whole app; on desktop it now
    * sits in the bottom-right corner rather than centred over the middle of the chart.
    */
-  test("the draft toast sits in a corner, not mid-chart", async ({ page }) => {
+  test('the draft toast sits in a corner, not mid-chart', async ({ page }) => {
     await open(page);
-    const chart = (await page.getByTestId("simple-chart").boundingBox())!;
-    await page.getByLabel("Add an item").fill("A new idea from the test");
-    const roadmap = page.getByTestId("quick-add-roadmap");
-    if (await roadmap.count()) await roadmap.selectOption({ label: "Alerts roadmap" });
-    await page.getByLabel("Add an item").press("Enter");
-    const toast = page.getByRole("status").filter({ hasText: "as a draft" });
+    const chart = (await page.getByTestId('simple-chart').boundingBox())!;
+    await page.getByLabel('Add an item').fill('A new idea from the test');
+    const roadmap = page.getByTestId('quick-add-roadmap');
+    if (await roadmap.count()) await roadmap.selectOption({ label: 'Alerts roadmap' });
+    await page.getByLabel('Add an item').press('Enter');
+    const toast = page.getByRole('status').filter({ hasText: 'as a draft' });
     await expect(toast).toBeVisible();
     const box = (await toast.boundingBox())!;
     // Mid-chart would centre the toast under the chart's own midpoint; the corner keeps it
@@ -232,7 +267,7 @@ test.describe("desktop", () => {
   });
 });
 
-test.describe("phone", () => {
+test.describe('phone', () => {
   test.use(PHONE);
 
   /**
@@ -240,13 +275,13 @@ test.describe("phone", () => {
    * rules engine ends; walkb-roadmap: end-only Mobile alert push no longer breaks) reads in
    * the panel above the chart, not cut off at either edge of the screen.
    */
-  test("a broken link is not cut off on a phone Waterfall", async ({ page }) => {
+  test('a broken link is not cut off on a phone Waterfall', async ({ page }) => {
     await open(page);
-    await page.getByTestId("format-waterfall").click();
-    await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "waterfall");
-    const c = conflict(page, "alert-digest").filter({ hasText: "starts" });
+    await page.getByTestId('format-waterfall').click();
+    await expect(page.getByTestId('simple-chart')).toHaveAttribute('data-format', 'waterfall');
+    const c = conflict(page, 'alert-digest').filter({ hasText: 'starts' });
     await expect(c).toBeVisible();
-    await expect(c).toContainText("Weekly alert digest");
+    await expect(c).toContainText('Weekly alert digest');
     const box = edges((await c.boundingBox())!);
     expect(box.left).toBeGreaterThanOrEqual(-1);
     expect(box.right).toBeLessThanOrEqual(PHONE.viewport.width + 1);
@@ -256,10 +291,10 @@ test.describe("phone", () => {
    * #20: a phone's Gantt names the milestone the current weeks hide, by its code and its
    * name ("M2 Scale volume"), not the code alone.
    */
-  test("the swipe hint names the milestone, not only its code", async ({ page }) => {
+  test('the swipe hint names the milestone, not only its code', async ({ page }) => {
     await open(page);
-    await page.getByTestId("format-gantt").click();
-    const hint = page.getByTestId("swipe-hint");
+    await page.getByTestId('format-gantt').click();
+    const hint = page.getByTestId('swipe-hint');
     if (await hint.count()) {
       const text = (await hint.textContent())!;
       expect(text).toMatch(/^Swipe sideways for M\d+ \S/);
@@ -270,10 +305,10 @@ test.describe("phone", () => {
    * #36: a phone's Roadmap/Goal/Track filters and Group by read above the chart, not after
    * the legend, the actions and the goal cards at the page's foot.
    */
-  test("the filters sit above the chart on a phone", async ({ page }) => {
+  test('the filters sit above the chart on a phone', async ({ page }) => {
     await open(page);
-    const filtersBox = (await page.getByTestId("filters").boundingBox())!;
-    const chartBox = (await page.getByTestId("simple-chart").boundingBox())!;
+    const filtersBox = (await page.getByTestId('filters').boundingBox())!;
+    const chartBox = (await page.getByTestId('simple-chart').boundingBox())!;
     expect(filtersBox.y).toBeLessThan(chartBox.y);
   });
 });

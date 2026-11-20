@@ -1,10 +1,10 @@
-import { notFound } from "@/lib/nav";
-import { Suspense } from "react";
+import { notFound } from '@/lib/nav';
+import { Suspense } from 'react';
 
-import { SIMPLE_MODE } from "@/lib/simple-mode";
+import { SIMPLE_MODE } from '@/lib/simple-mode';
 
-import { SimpleDecisions } from "./_decisions";
-import { PageSkeleton } from "@/components/ds";
+import { SimpleDecisions } from './_decisions';
+import { PageSkeleton } from '@/components/ds';
 
 /** Simple S8 (#723): Decisions, direction B "By meeting". */
 export default function SimpleDecisionsPage() {
