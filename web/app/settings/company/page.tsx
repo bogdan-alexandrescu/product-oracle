@@ -288,7 +288,8 @@ function zoneOffset(zone: string): { minutes: number; text: string } {
   try {
     // The zone's offset, not a date: nothing here is shown in another zone.
     // eslint-disable-next-line no-restricted-syntax
-    raw = new Intl.DateTimeFormat("en-US", { timeZone: zone, timeZoneName: "shortOffset" }).formatToParts(new Date()).find((p) => p.type === "timeZoneName")?.value ?? "";
+    const format = new Intl.DateTimeFormat("en-US", { timeZone: zone, timeZoneName: "shortOffset" });
+    raw = format.formatToParts(new Date()).find((p) => p.type === "timeZoneName")?.value ?? "";
   } catch {
     return { minutes: 0, text: "UTC" };
   }

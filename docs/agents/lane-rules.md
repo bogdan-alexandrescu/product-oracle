@@ -33,7 +33,8 @@ The repo-wide rules (router, feature loop, token economy, gates) are in the root
 - A migration, if one is needed, chains after the branch's own head, so
   `cd api && uv run alembic heads` shows one head (CLD renumbers when trains merge).
 - Web checks, from `web/`: `npx next typegen && npx tsc --noEmit -p .`, then `npm run lint`,
-  then `npm run test:unit` (Vitest: logic and render tests beside their module).
+  then `npm run format:check` (Prettier; `npm run format` writes it), then `npm run test:unit`
+  (Vitest: logic and render tests beside their module).
 - Every user-facing change gets a mock-backed Playwright spec in `web/e2e` that drives the UI
   as a person would and fails without the change. Import `test` from `e2e/test.ts` (it pins
   the mock clock). The mock (`web/lib/api/mock`) must match the API.

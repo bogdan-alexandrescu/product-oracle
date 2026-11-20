@@ -32,7 +32,7 @@ const isMock = (file: string) => MOCK_SOURCES.some((m) => file.startsWith(path.j
 function pageReads(): Set<string> {
   const reads = new Set<string>();
   for (const file of ["app", "components", "lib"].flatMap(sources).filter((f) => !isMock(f))) {
-    for (const m of fs.readFileSync(file, "utf8").matchAll(/\.GET\(\s*"([^"]+)"/g)) reads.add(m[1]);
+    for (const m of fs.readFileSync(file, "utf8").matchAll(/\.GET\(\s*(["'])([^"']+)\1/g)) reads.add(m[2]);
   }
   return reads;
 }
@@ -41,7 +41,7 @@ function mockedReads(): Set<string> {
   const mocked = new Set<string>();
   for (const file of MOCK_SOURCES.flatMap(sources)) {
     const text = fs.readFileSync(file, "utf8");
-    for (const m of text.matchAll(/\b(?:\w*[rR]eply|bodyOf)\(\s*"(\/[^"]*)",\s*([^,()]*?)"get"/g)) mocked.add(m[1]);
+    for (const m of text.matchAll(/\b(?:\w*[rR]eply|bodyOf)\(\s*(["'])(\/[^"']*)\1,\s*([^,()]*?)(["'])get\4/g)) mocked.add(m[2]);
   }
   return mocked;
 }

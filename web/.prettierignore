@@ -1,0 +1,21 @@
+# Generated (make openapi): never edited by hand.
+lib/api/openapi.json
+lib/api/schema.d.ts
+
+# Written by scripts: their own output is the format.
+package-lock.json
+e2e/prose-ceilings.json
+
+# Test inputs read byte for byte.
+e2e/real/fixtures/
+
+# Build and test output.
+.next/
+.next-*/
+out/
+build/
+coverage/
+test-results/
+playwright-report/
+blob-report/
+next-env.d.ts

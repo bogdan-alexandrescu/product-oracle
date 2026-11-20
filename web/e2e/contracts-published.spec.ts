@@ -34,7 +34,7 @@ const PUBLISHED: Record<string, () => unknown> = {
   "mock-fit-date-plan": () => json("fit-date-plan.json"),
   // The mock's per-document switches (llm-jobs.ts KINDS) the Playwright tests drive.
   "mock-llm-job-settings": () => ({
-    kinds: listed(read("lib", "api", "mock", "llm-jobs.ts"), /const KINDS[^=]*=\s*\[([^\]]*)\]/, /"([a-z_]+)"/g),
+    kinds: listed(read("lib", "api", "mock", "llm-jobs.ts"), /const KINDS[^=]*=\s*\[([^\]]*)\]/, /["']([a-z_]+)["']/g),
   }),
   // The mock's codeLeftOut run on every case the API publishes: the API checks it gives the same.
   "mock-code-left-out": () => ({
