@@ -7,7 +7,7 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { DeleteMenu } from "@/components/ArtifactMenu";
 import { Button, Chip, Inspector, InspectorSection, LinkButton } from "@/components/ds";
 import { free, startPrdHref } from "@/components/RequestsBehind";
-import { ErrorNote, INPUT } from "@/components/ui";
+import { ErrorNote, INPUT, LoadError } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { named, namedText } from "@/lib/codes";
 import { formatDate, formatDay, plural } from "@/lib/format";
@@ -450,7 +450,12 @@ function Links({
     <form className="flex flex-col gap-2" onSubmit={save}>
       <fieldset className="flex flex-col gap-1">
         <legend className="text-sm font-semibold text-text2">Goals</legend>
-        {(goals.data ?? []).length === 0 && <p className="text-sm text-text2">{goals.loading ? "Loading goals…" : "No confirmed goals yet"}</p>}
+        {/* #1586: goals that could not be read say so, never "No confirmed goals yet". */}
+        {goals.error ? (
+          <LoadError what="the goals" error={goals.error} onRetry={() => void goals.reload()} />
+        ) : (
+          (goals.data ?? []).length === 0 && <p className="text-sm text-text2">{goals.loading ? "Loading goals…" : "No confirmed goals yet"}</p>
+        )}
         {(goals.data ?? []).map((g) => (
           <label key={g.id} className="flex items-center gap-2 text-[15px]">
             <input

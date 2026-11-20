@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState, type FormEvent } from "react";
 
 import { Button, InfoTip, InspectorSection, Notice, SegmentedControl } from "@/components/ds";
-import { INPUT, Loading } from "@/components/ui";
+import { INPUT, LoadError, Loading } from "@/components/ui";
 import { api, unwrap, type EntityDetail, type EntityOut, type Schemas } from "@/lib/api/client";
 import { calendarDay } from "@/lib/dates";
 import { goalFigure } from "@/lib/format";
@@ -574,7 +574,10 @@ export function Measurements({ goal, canWrite, onChanged }: { goal: EntityDetail
             }}
           />
         )}
-        {q.loading && !q.data ? (
+        {/* #1586: values that could not be read say so, never "No values recorded yet". */}
+        {q.error ? (
+          <LoadError what="the values" error={q.error} onRetry={() => void q.reload()} />
+        ) : q.loading && !q.data ? (
           <Loading />
         ) : rows.length === 0 ? (
           <p className="text-text2">
