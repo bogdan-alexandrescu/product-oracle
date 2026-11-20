@@ -33,6 +33,7 @@ NOW = datetime(2026, 10, 18, 12, 0, tzinfo=UTC)
 
 
 def test_the_authorize_url_is_claude_codes_in_its_order():
+    """The sign-in URL matches Claude Code's own request, param order included."""
     state, verifier = new_state(), new_verifier()
     assert len(state) >= 43  # 32 random bytes
     url = build_authorize_url(state=state, code_challenge=challenge_for(verifier))
@@ -56,12 +57,14 @@ def test_the_authorize_url_is_claude_codes_in_its_order():
 
 
 def test_the_pasted_code_may_carry_its_state():
+    """A pasted code may carry its state after a hash, or have none at all."""
     assert split_pasted_code("  abc#def ") == ("abc", "def")
     assert split_pasted_code("abc") == ("abc", None)
     assert split_pasted_code("abc#") == ("abc", None)
 
 
 def test_claude_codes_saved_login_is_read_verbatim_and_must_be_a_pair():
+    """A saved login is read in either camelCase or snake_case, needing both tokens."""
     ms = int((NOW + timedelta(hours=5)).timestamp() * 1000)
     wrapped = json.dumps(
         {"claudeAiOauth": {"accessToken": "a", "refreshToken": "r", "expiresAt": ms}}
@@ -82,6 +85,7 @@ def test_claude_codes_saved_login_is_read_verbatim_and_must_be_a_pair():
 
 
 async def test_redeeming_a_code_is_json_with_the_state_and_claude_codes_headers():
+    """Redeeming a code posts JSON with Claude Code's own headers; reuse is refused."""
     seen: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -115,6 +119,7 @@ async def test_redeeming_a_code_is_json_with_the_state_and_claude_codes_headers(
 
 
 async def test_a_refresh_is_form_encoded_and_invalid_grant_is_terminal():
+    """A refresh is form-encoded, and an invalid grant means sign-in again."""
     seen: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -144,6 +149,7 @@ async def test_a_refresh_is_form_encoded_and_invalid_grant_is_terminal():
 
 
 def test_a_redeemed_code_without_a_refresh_token_saves_nothing():
+    """Redeeming a code that comes back without a refresh token saves nothing."""
     with pytest.raises(CredentialError, match="Nothing was saved"):
         credential_from_token_response({"access_token": "a"})
     cred = credential_from_token_response(
@@ -153,6 +159,7 @@ def test_a_redeemed_code_without_a_refresh_token_saves_nothing():
 
 
 def test_the_redeemed_codes_answer_says_which_claude_account_it_is():
+    """The account and org from a token response are read, odd shapes kept safe."""
     # #405: the token endpoint reports the account and organization beside the tokens.
     assert identity_from_token_response(
         {
@@ -184,6 +191,7 @@ REAL_SHAPE = {
 
 
 def test_usage_is_converted_from_percent_and_clamped_and_unknown_windows_kept():
+    """A usage reading converts percent to a fraction, clamped at full."""
     windows = usage.parse(REAL_SHAPE)
     assert set(windows) == {"five_hour", "seven_day", "nimbus_quill"}
     assert windows["five_hour"].utilization == pytest.approx(0.34)
@@ -192,6 +200,7 @@ def test_usage_is_converted_from_percent_and_clamped_and_unknown_windows_kept():
 
 
 async def test_the_usage_call_presents_the_cli_and_a_429_is_a_rate_limit():
+    """The usage call presents itself as the CLI, and a 429 reports as rate limited."""
     seen: list[httpx.Request] = []
 
     def ok(request: httpx.Request) -> httpx.Response:
@@ -250,6 +259,7 @@ class Poll:
 
 
 async def test_the_never_read_account_and_then_the_oldest_are_polled_first():
+    """A usage poll checks an unread account first, then the oldest reading."""
     p = Poll({})
     accounts = [
         _acct("fresh", NOW),
@@ -262,6 +272,7 @@ async def test_the_never_read_account_and_then_the_oldest_are_polled_first():
 
 
 async def test_the_budget_is_a_hard_cap_and_a_rate_limit_ends_the_round():
+    """A usage poll stops at its budget, and a rate limit ends the round early."""
     p = Poll({"b": usage.RateLimited(299)})
     accounts = [_acct(x, NOW - timedelta(hours=10 - i)) for i, x in enumerate("abcde")]
     out = await p.round(accounts, max_polls=5)
@@ -272,6 +283,7 @@ async def test_the_budget_is_a_hard_cap_and_a_rate_limit_ends_the_round():
 
 
 async def test_a_failed_poll_records_nothing_and_an_unreadable_token_is_skipped():
+    """A failed poll reports unavailable, and an unreadable token is skipped."""
     p = Poll({"a": usage.UsageUnavailable("HTTP 500"), "b": "unreadable"})
     out = await p.round([_acct("a", None), _acct("b", NOW), _acct("c", NOW)], max_polls=3)
     assert [o.reason for o in out] == ["unavailable", "token_unreadable", "ok"]

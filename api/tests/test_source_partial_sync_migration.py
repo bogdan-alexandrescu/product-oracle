@@ -68,6 +68,7 @@ def _columns() -> list[str]:
 
 
 def test_the_chain_after_updates():
+    """The source partial sync migration still chains after later migrations."""
     script = ScriptDirectory.from_config(_cfg())
     # 0023_intake_brief_fields (C4) chains on it, then 0024_segment_skipped; one head.
     assert script.get_revision("0023_intake_brief_fields").down_revision == REVISION
@@ -75,6 +76,7 @@ def test_the_chain_after_updates():
 
 
 def test_upgrade_adds_partly_synced_at_and_downgrade_drops_it(scratch_db):
+    """The source partial sync migration's column upgrades and downgrades cleanly."""
     cfg = _cfg()
     upgrade(cfg, PREVIOUS)
     tenant, user = uuid.uuid4(), uuid.uuid4()

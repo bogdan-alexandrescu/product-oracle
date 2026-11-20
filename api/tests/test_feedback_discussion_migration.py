@@ -91,11 +91,13 @@ def _thread(t: uuid.UUID, d: uuid.UUID, title: str) -> uuid.UUID:
 
 
 def test_chains_on_bet_flow_line_key():
+    """This migration chains onto the bet flow's line-key branch head, keeping one lineage."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_items_keep_everything_up_and_down(scratch_db):
+    """A feedback item can link to one thread, and deleting the thread keeps the item."""
     cfg = _cfg()
     upgrade(cfg, PREVIOUS)
     t, d = uuid.uuid4(), uuid.uuid4()

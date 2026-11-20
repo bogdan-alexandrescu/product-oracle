@@ -112,6 +112,7 @@ async def test_accept_with_skip_fields_applies_the_rest_and_records_them(client,
 
 
 async def test_accept_without_skip_applies_anyway(client, ctx):
+    """A later overlapping proposal still applies and overwrites the earlier one."""
     feat = await _feature(client, ctx)
     first = await _propose(client, ctx, feat, {"milestone": "M2"})
     second = await _propose(client, ctx, feat, {"milestone": "Later"})
@@ -124,6 +125,7 @@ async def test_accept_without_skip_applies_anyway(client, ctx):
 
 
 async def test_skipping_a_field_the_proposal_does_not_change_is_refused(client, ctx):
+    """Skipping a field the proposal never touched is refused, not silently ignored."""
     feat = await _feature(client, ctx)
     proposal = await _propose(client, ctx, feat, {"milestone": "Later"})
     resp = await _accept(client, ctx, proposal, skip_fields=["title"])

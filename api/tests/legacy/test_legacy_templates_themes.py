@@ -79,6 +79,7 @@ async def _themes(tenant_id) -> dict[str, tuple]:
 async def test_template_upgrade_skips_edited_archived_and_company_templates(
     client, tenant_id, monkeypatch
 ):
+    """A packaged template upgrade skips an edited, archived or company template."""
     await seed_company(tenant_id)
     h = {"Authorization": f"Bearer {await role_token(tenant_id, 'approver')}"}
     # Edited built-in: a user's body becomes its latest version.
@@ -135,6 +136,7 @@ async def test_template_upgrade_skips_edited_archived_and_company_templates(
 
 
 async def test_theme_upgrade_never_rewrites_existing_themes(client, tenant_id, monkeypatch):
+    """A packaged theme upgrade never rewrites an edited, archived or company theme."""
     await seed_company(tenant_id)
     h = {"Authorization": f"Bearer {await role_token(tenant_id, 'approver')}"}
     themes = (await client.get("/v1/themes", headers=h)).json()
@@ -166,6 +168,7 @@ async def test_theme_upgrade_never_rewrites_existing_themes(client, tenant_id, m
 
 
 async def test_documents_keep_resolving_their_template_after_edit_and_archive(client, tenant_id):
+    """A document keeps rendering from its own template version after it is archived."""
     await seed_company(tenant_id)
     owner = {"Authorization": f"Bearer {await role_token(tenant_id, 'owner')}"}
     resp = await import_md(client, owner, fixture("legacy_prd_v1.md"))

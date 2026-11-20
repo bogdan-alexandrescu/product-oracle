@@ -60,6 +60,7 @@ async def goal_title(ctx, goal_id: str) -> str:
 
 
 async def test_the_roadmap_decider_renames_a_goal_target_and_the_goal_keeps_its_title(client):
+    """Renaming a goal milestone's target leaves the goal's own title untouched."""
     ctx = await make_ctx()
     ids = await seed(ctx, due="2026-12-15")
     await make(client, ctx, ids, name="Carts ready", date="2026-11-27")
@@ -82,6 +83,7 @@ async def test_the_roadmap_decider_renames_a_goal_target_and_the_goal_keeps_its_
 
 
 async def test_a_non_decider_proposes_a_goal_target_rename_and_the_owner_accepts_it(client):
+    """A proposed milestone rename waits on the owner's decision to take effect."""
     ctx = await make_ctx()
     ids = await seed(ctx, due="2026-12-15")
     [g] = targets(await read(client, ctx, "approver"))
@@ -110,6 +112,7 @@ async def test_a_non_decider_proposes_a_goal_target_rename_and_the_owner_accepts
 
 
 async def test_a_proposal_on_a_roadmap_milestone_shows_pending(client):
+    """A pending rename on a roadmap milestone shows until the owner accepts it."""
     ctx = await make_ctx()
     ids = await seed(ctx)
     m = await make(client, ctx, ids, name="Carts ready", date="2026-11-27")
@@ -127,6 +130,7 @@ async def test_a_proposal_on_a_roadmap_milestone_shows_pending(client):
 
 
 async def test_a_prd_milestone_takes_a_name_proposal_and_its_owner_renames_directly(client):
+    """A PRD milestone takes a rename as a proposal, but its owner can rename directly."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         owner = User(email="prdowner@example.com", name="Priya Owner", password_hash="x",
@@ -152,6 +156,7 @@ async def test_a_prd_milestone_takes_a_name_proposal_and_its_owner_renames_direc
 
 
 def test_a_rename_proposal_reads_as_a_rename():
+    """A milestone rename reads as a rename, not as a vague change."""
     target = {"milestone_id": "x", "name": "Activation"}
     own = change_words.phrase("edit_goal_milestone", target, {"milestone": {"name": "Activation"}},
                               {"milestone": {"name": "Ten teams live"}}, None)  # fmt: skip

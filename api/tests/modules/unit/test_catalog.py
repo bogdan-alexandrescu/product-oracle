@@ -56,6 +56,7 @@ PACK_B_SPECIALISED = [
 
 
 def test_every_packaged_contract_validates_and_is_unique():
+    """Every packaged contract validates and its sections never collide."""
     contracts = builtin_contracts()
     industry = [k for p in builtin_packs().values() if p.core for k in p.own]
     assert len(contracts) == len(PACK_A) + len(PACK_B_SPECIALISED) + len(industry)
@@ -64,12 +65,14 @@ def test_every_packaged_contract_validates_and_is_unique():
 
 
 def test_pack_a_is_exactly_the_section_4_4_core():
+    """The startup pack is exactly the documented core module set."""
     pack = builtin_packs()["startup.standard"]
     assert list(pack.modules) == PACK_A
     assert pack.title == "General Tech Startup"
 
 
 def test_pack_b_is_the_shared_core_plus_conditional_specialised_modules():
+    """The AI platform pack's specialised modules are conditional, not required."""
     pack = builtin_packs()["ai-agent.platform"]
     assert list(pack.modules) == PACK_A + PACK_B_SPECIALISED
     assert pack.title == "Multi-tenant AI Agent Platform"
@@ -82,6 +85,7 @@ def test_pack_b_is_the_shared_core_plus_conditional_specialised_modules():
 
 
 def test_constraints_solutions_is_a_module_definition():
+    """Constraints and solutions is required and depends on goals and outcomes."""
     c = builtin_contracts()["constraints.solutions"]
     assert c.title == "Constraints, blockers and solution strategy"
     assert c.policy == "required"
@@ -90,6 +94,7 @@ def test_constraints_solutions_is_a_module_definition():
 
 
 def test_dependencies_resolve_inside_each_pack():
+    """Every module's dependencies stay inside its own pack."""
     contracts = builtin_contracts()
     for pack in builtin_packs().values():
         for key in pack.modules:
@@ -97,6 +102,7 @@ def test_dependencies_resolve_inside_each_pack():
 
 
 def test_category_selects_a_pack():
+    """An unknown or missing category falls back to the startup pack."""
     assert default_pack_for("ai_agent_platform") == "ai-agent.platform"
     assert default_pack_for("b2b_saas") == "saas.b2b"  # O1h
     assert default_pack_for("unknown_category") == "startup.standard"
@@ -137,6 +143,7 @@ def _texts(obj) -> list[str]:
 
 
 def test_packs_are_templates_only_no_prewritten_content():
+    """Packaged modules hold no prewritten content or prefilled values."""
     for key, contract in builtin_contracts().items():
         data = contract.model_dump(mode="json")
         for text in _texts(data):
@@ -166,6 +173,7 @@ def test_module_text_keeps_to_oracle_words():
 
 
 def test_specialised_platform_modules_point_people_at_configuration_artifacts():
+    """Specialised platform modules point people at a configuration artifact."""
     contracts = builtin_contracts()
     for key in ("agents.archetypes", "platform.brand-governance", "platform.config-precedence"):
         c = contracts[key]
@@ -174,6 +182,7 @@ def test_specialised_platform_modules_point_people_at_configuration_artifacts():
 
 
 def test_every_module_keeps_evidence_out_of_the_body():
+    """Every module keeps its evidence in the appendix, never the body."""
     for key, c in builtin_contracts().items():
         assert c.evidence_policy == "record_provenance_in_appendix", key
     assert builtin_contracts()["sources.data-points"].effective_section_ids()[0] == "sources"
@@ -183,12 +192,14 @@ def test_every_module_keeps_evidence_out_of_the_body():
 
 
 def test_each_builtin_prd_template_has_a_manifest_and_no_roadmap_does():
+    """Every built-in PRD template has a manifest; no roadmap template does."""
     prd = {t.key for t in BUILTIN_TEMPLATES if t.kind == "prd"}
     assert set(builtin_manifests()) == prd
     assert len(prd) == 7
 
 
 def test_manifest_sections_exist_in_their_template_and_map_once():
+    """A manifest's mapped sections exist once in its template, not all mapped."""
     for key, manifest in builtin_manifests().items():
         body = builtin_body(BUILTIN_TEMPLATES_BY_KEY[key])
         sections = set(check_template(body).section_keys)
@@ -202,6 +213,7 @@ def test_manifest_sections_exist_in_their_template_and_map_once():
 
 
 def test_manifests_only_map_where_unambiguous():
+    """A manifest maps a section to a module only when it is unambiguous."""
     m = builtin_manifests()
     # Container and mixed sections are never mapped.
     assert all("problem-alignment" not in ss for ss in m["oracle-default"].modules.values())

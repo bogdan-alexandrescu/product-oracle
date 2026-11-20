@@ -84,6 +84,7 @@ def pages_url(conn: Connection) -> str:
 
 
 async def test_lists_shared_pages_and_databases_paged(client, alice, notion_conn, notion_http):
+    """Listing shared Notion pages pages results and never leaks the access token."""
     resp = await client.get(pages_url(notion_conn), headers=alice.headers)
     assert resp.status_code == 200, resp.text
     out = resp.json()
@@ -123,6 +124,7 @@ async def test_lists_shared_pages_and_databases_paged(client, alice, notion_conn
 async def test_only_the_connection_owner_may_browse(
     client, tenant_id, alice, bob, notion_conn, notion_http
 ):
+    """Only a Notion connection's owner may browse its pages."""
     other = await client.get(pages_url(notion_conn), headers=bob.headers)
     assert other.status_code == 404
     missing = await client.get(
@@ -139,6 +141,7 @@ async def test_only_the_connection_owner_may_browse(
 
 
 async def test_rate_limit_is_a_clear_retry_message(client, alice, notion_conn):
+    """A Notion rate limit reads as a clear retry message, not a raw error."""
     use_provider_http(
         lambda r: httpx.Response(
             429, json=fixture("error_rate_limited.json"), headers={"Retry-After": "20"}
@@ -156,6 +159,7 @@ async def test_rate_limit_is_a_clear_retry_message(client, alice, notion_conn):
 
 
 async def test_rejected_token_marks_the_connection_expired(client, tenant_id, alice, notion_conn):
+    """A rejected Notion token marks the connection expired so it is not retried blind."""
     use_provider_http(lambda r: httpx.Response(401, json=fixture("error_unauthorized.json")))
     try:
         resp = await client.get(pages_url(notion_conn), headers=alice.headers)
@@ -173,6 +177,7 @@ async def test_rejected_token_marks_the_connection_expired(client, tenant_id, al
 
 
 async def test_notion_down_is_a_502(client, alice, notion_conn):
+    """Notion being down surfaces as a clear server error, not a crash."""
     use_provider_http(lambda r: httpx.Response(503, json={"message": "down"}))
     try:
         resp = await client.get(pages_url(notion_conn), headers=alice.headers)
@@ -194,6 +199,7 @@ def notion_connector(monkeypatch):
 
 
 async def test_notion_source_from_the_ui_syncs(client, alice, notion_conn, notion_connector):
+    """A Notion source made the way the picker builds it syncs correctly."""
     # "roots" is what the picker saves.
     created = await client.post(
         "/v1/sources",
@@ -217,6 +223,7 @@ async def test_notion_source_from_the_ui_syncs(client, alice, notion_conn, notio
 async def test_narrowing_a_notion_source_deletes_pages_outside_it(
     client, alice, notion_conn, notion_connector
 ):
+    """Narrowing a Notion source's roots deletes pages that now fall outside it."""
     # Owner decision S5: narrowing a source deletes what now falls outside it on the next
     # sync. Roots CHILD (with GRAND under it) and DB (rows ROW1, ROW2); then untick DB.
     created = await client.post(
@@ -253,6 +260,7 @@ async def test_narrowing_a_notion_source_deletes_pages_outside_it(
 async def test_unticking_a_root_deletes_its_pages_on_save_without_reading_notion(
     client, alice, notion_conn, notion_connector
 ):
+    """Unticking a root deletes its pages on save without re-reading Notion first."""
     created = await client.post(
         "/v1/sources",
         headers=alice.headers,
@@ -284,6 +292,7 @@ async def test_unticking_a_root_deletes_its_pages_on_save_without_reading_notion
 async def test_the_old_pages_key_is_refused_naming_roots(
     client, alice, notion_conn, notion_connector
 ):
+    """The old pages key in a Notion source's config is refused in favor of roots."""
     resp = await client.post(
         "/v1/sources",
         headers=alice.headers,
@@ -304,6 +313,7 @@ async def test_the_old_pages_key_is_refused_naming_roots(
 async def test_browsing_reads_the_credential_with_the_row_locked(
     client, alice, notion_conn, notion_http, monkeypatch
 ):
+    """Browsing Notion pages locks the connection's credential row while reading it."""
     locked: list[bool] = []
     get_own = connections_service.get_own
 
@@ -320,6 +330,7 @@ async def test_browsing_reads_the_credential_with_the_row_locked(
 async def test_a_missing_capability_does_not_expire_the_connection(
     client, tenant_id, alice, notion_conn
 ):
+    """A missing Notion capability does not wrongly mark the connection expired."""
     use_provider_http(
         lambda r: httpx.Response(
             403,
@@ -338,6 +349,7 @@ async def test_a_missing_capability_does_not_expire_the_connection(
 
 
 async def test_malformed_results_are_skipped_not_a_500(client, alice, notion_conn):
+    """A malformed Notion search result is skipped, never a server error."""
     good = fixture("search_roadmap.json")["results"][0]
     body = {
         "object": "list",
@@ -367,6 +379,7 @@ async def test_malformed_results_are_skipped_not_a_500(client, alice, notion_con
 async def test_browsing_is_throttled_per_person_and_connection(
     client, tenant_id, alice, bob, notion_conn, notion_http, monkeypatch
 ):
+    """Browsing Notion pages is rate-limited per person and per connection."""
     monkeypatch.setattr(notion_pages, "BROWSE_LIMIT", 3)
     for _ in range(3):
         ok = await client.get(pages_url(notion_conn), headers=alice.headers)
@@ -391,6 +404,7 @@ async def test_browsing_is_throttled_per_person_and_connection(
 
 
 def test_run_tokens_may_not_list_notion_pages():
+    """Listing Notion pages is not allowed under any run-token scope."""
     path = "/v1/connections/{connection_id}/notion/pages"
     assert scopes.required_scope("GET", path) is None
     every_scope = frozenset({*scopes.READ_AREAS, "write:proposals", "write:drafts"})
@@ -400,6 +414,7 @@ def test_run_tokens_may_not_list_notion_pages():
 async def test_service_api_tokens_may_not_list_notion_pages(
     client, tenant_id, notion_conn, notion_http
 ):
+    """A service API token may not list Notion pages."""
     async with tenant_session(tenant_id) as s:
         _token, raw = await create_api_token(s, "service")
         await s.commit()
@@ -422,6 +437,7 @@ def local_runtime():
 async def test_a_run_token_is_refused_list_notion_pages_over_mcp(
     tenant_id, alice, notion_conn, notion_http, local_runtime
 ):
+    """A run token is refused the list-Notion-pages tool over MCP too."""
     from tests.test_mcp import mcp_client, run_token, text_of
 
     token = await run_token(tenant_id, ["read:sources", "read:baseline"], alice.id)
@@ -434,6 +450,7 @@ async def test_a_run_token_is_refused_list_notion_pages_over_mcp(
 
 
 async def test_the_mcp_tool_says_it_lists_every_shared_page(tenant_id, alice):
+    """The MCP tool's description says it lists every shared page, even unsourced ones."""
     from oracle.main import app
     from oracle.mcp.tools import app_operations
 

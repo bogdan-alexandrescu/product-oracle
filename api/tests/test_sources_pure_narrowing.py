@@ -100,6 +100,7 @@ async def ff_conn(tenant_id, alice):
 async def test_fireflies_narrowing_with_an_expired_connection_saves_and_sweeps(
     client, tenant_id, alice, fake, ff_connector, ff_conn
 ):
+    """Narrowing a source saves and updates live status with an expired connection."""
     sid = await _create(client, alice, "fireflies", ff_conn, WIDE_FF)
     assert (await _live(tenant_id, sid))["P1"] is True
     await _break_connection(tenant_id, ff_conn.id)
@@ -116,6 +117,7 @@ async def test_fireflies_narrowing_with_an_expired_connection_saves_and_sweeps(
 async def test_fireflies_narrowing_during_a_provider_outage_saves_and_sweeps(
     client, tenant_id, alice, fake, ff_connector, ff_conn
 ):
+    """A narrowing save succeeds in a provider outage since it calls no provider."""
     sid = await _create(client, alice, "fireflies", ff_conn, WIDE_FF)
     fake.error = httpx.Response(503, text="Service Unavailable")
     fake.requests.clear()
@@ -130,6 +132,7 @@ async def test_fireflies_narrowing_during_a_provider_outage_saves_and_sweeps(
 async def test_fireflies_widening_still_needs_a_working_connection(
     client, tenant_id, alice, fake, ff_connector, ff_conn
 ):
+    """Widening a narrowed source is refused once its connection has expired."""
     sid = await _create(client, alice, "fireflies", ff_conn, NARROW_FF)
     await _break_connection(tenant_id, ff_conn.id)
     resp = await patch_source(client, sid, {"config": WIDE_FF}, headers=alice.headers)
@@ -178,6 +181,7 @@ async def notion_conn(tenant_id, alice):
 async def test_notion_narrowing_with_an_expired_connection_saves_and_sweeps(
     client, tenant_id, alice, notion_fake, notion_conn
 ):
+    """Notion narrowing saves and sweeps live status even with an expired connection."""
     sid = await _create(client, alice, "notion", notion_conn, {"roots": [CHILD, DB]})
     await _break_connection(tenant_id, notion_conn.id)
     notion_fake.requests.clear()
@@ -192,6 +196,7 @@ async def test_notion_narrowing_with_an_expired_connection_saves_and_sweeps(
 async def test_notion_narrowing_during_a_provider_outage_saves_and_sweeps(
     client, tenant_id, alice, notion_fake, notion_conn, monkeypatch
 ):
+    """Notion narrowing saves and sweeps live status during a provider outage."""
     sid = await _create(client, alice, "notion", notion_conn, {"roots": [CHILD, DB]})
     down = httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(503)))
     monkeypatch.setitem(base._registry, "notion", NotionConnector(client=down))
@@ -205,6 +210,7 @@ async def test_notion_narrowing_during_a_provider_outage_saves_and_sweeps(
 async def test_notion_adding_a_root_still_needs_a_working_connection(
     client, tenant_id, alice, notion_fake, notion_conn
 ):
+    """Adding a Notion root is refused when the connection is broken."""
     sid = await _create(client, alice, "notion", notion_conn, {"roots": [CHILD]})
     await _break_connection(tenant_id, notion_conn.id)
     resp = await patch_source(
@@ -217,6 +223,7 @@ async def test_notion_adding_a_root_still_needs_a_working_connection(
 async def test_notion_a_stale_rename_with_the_old_wide_config_is_validated(
     client, tenant_id, alice, notion_fake, notion_conn
 ):
+    """Widening calls Notion to validate live, refused once stale and offline."""
     sid = await _create(client, alice, "notion", notion_conn, {"roots": [CHILD, DB]})
     saved = await patch_source(client, sid, {"config": {"roots": [CHILD]}}, headers=alice.headers)
     assert saved.status_code == 200, saved.text
@@ -276,6 +283,7 @@ async def test_a_save_that_loaded_the_row_before_a_narrowing_is_validated_as_a_w
 async def test_a_save_that_loaded_the_row_before_a_reconnect_is_validated_as_a_reconnect(
     tenant_id, alice, notion_fake, notion_conn
 ):
+    """An edit loaded before a reconnect is checked as a reconnect, not a stale no-op."""
     other = await add_connection(
         tenant_id, alice.id, "notion", bundle={"access_token": "ntn_example"}, account_id="2"
     )
@@ -317,6 +325,7 @@ async def _get(client, alice, sid) -> dict:
 async def test_a_stale_save_with_an_old_base_version_is_refused_and_changes_nothing(
     client, tenant_id, alice, fake, ff_connector, ff_conn
 ):
+    """A stale save is refused and changes nothing when its base version is old."""
     sid = await _create(client, alice, "fireflies", ff_conn, WIDE_FF)
     opened = (await _get(client, alice, sid))["config_version"]
     assert opened == 1
@@ -345,6 +354,7 @@ async def test_a_stale_save_with_an_old_base_version_is_refused_and_changes_noth
 async def test_a_save_with_the_matching_base_version_is_applied(
     client, tenant_id, alice, fake, ff_connector, ff_conn
 ):
+    """A save with the matching base version is applied and bumps the version."""
     sid = await _create(client, alice, "fireflies", ff_conn, WIDE_FF)
     version = (await _get(client, alice, sid))["config_version"]
     renamed = await patch_source(
@@ -381,6 +391,7 @@ async def test_a_config_change_without_a_base_version_is_refused(
 async def test_a_rename_and_a_pause_need_no_base_version(
     client, tenant_id, alice, fake, ff_connector, ff_conn
 ):
+    """Renaming or pausing a source needs no base version to succeed."""
     sid = await _create(client, alice, "fireflies", ff_conn, WIDE_FF)
     version = (await _get(client, alice, sid))["config_version"]
     renamed = await client.patch(
@@ -397,6 +408,7 @@ async def test_a_rename_and_a_pause_need_no_base_version(
 async def test_a_rename_with_a_stale_base_version_is_still_checked(
     client, tenant_id, alice, fake, ff_connector, ff_conn
 ):
+    """A rename with a stale base version is still rejected with a conflict."""
     sid = await _create(client, alice, "fireflies", ff_conn, WIDE_FF)
     stale = await client.patch(
         f"/v1/sources/{sid}", headers=alice.headers, json={"name": "Renamed", "base_version": 99}
@@ -466,6 +478,7 @@ async def test_a_save_that_lands_during_validation_is_refused(
 async def test_a_save_that_changes_nothing_does_not_bump_the_version(
     client, tenant_id, alice, fake, ff_connector, ff_conn
 ):
+    """Saving unchanged values does not bump the source's config version."""
     sid = await _create(client, alice, "fireflies", ff_conn, WIDE_FF)
     before = await _get(client, alice, sid)
     same = await client.patch(
@@ -486,6 +499,7 @@ async def test_a_save_that_changes_nothing_does_not_bump_the_version(
 async def test_a_sync_and_a_pause_do_not_bump_the_config_version(
     client, tenant_id, alice, fake, ff_connector, ff_conn
 ):
+    """Syncing or pausing a source leaves its config version unchanged."""
     sid = await _create(client, alice, "fireflies", ff_conn, WIDE_FF)  # creates and syncs
     version = (await _get(client, alice, sid))["config_version"]
     again = await client.post(f"/v1/sources/{sid}/sync", headers=alice.headers)

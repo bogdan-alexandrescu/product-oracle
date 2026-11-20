@@ -142,6 +142,7 @@ CHANGE_CEILING = 90
 
 @pytest.mark.timing
 async def test_reads_answer_within_budget(client):
+    """Every slow Simple read answers within its own time budget."""
     ctx, _ = await _company()
     headers = ctx.as_("owner")
     best = {}
@@ -160,6 +161,7 @@ async def test_reads_answer_within_budget(client):
 
 @pytest.mark.timing
 async def test_a_change_answers_within_budget(client):
+    """Posting a change answers within its own time budget."""
     ctx, co = await _company()
     headers = ctx.as_("owner")
     times = []
@@ -173,6 +175,7 @@ async def test_a_change_answers_within_budget(client):
 
 
 async def test_reads_make_few_statements(client):
+    """Every slow Simple read makes no more than its allotted statements."""
     ctx, _ = await _company()
     headers = ctx.as_("owner")
     counts = {}
@@ -188,6 +191,7 @@ async def test_reads_make_few_statements(client):
 
 
 async def test_a_change_makes_few_statements(client):
+    """Posting a change makes no more than its allotted statements."""
     ctx, co = await _company()
     headers = ctx.as_("owner")
     r = await client.post("/v1/simple/changes", json=_title_edit(co, 0), headers=headers)
@@ -205,6 +209,7 @@ SMALL = {"prds": 4, "per": 6, "cut_per": 2, "entities": 200, "changes": 40, "pro
 
 
 async def test_a_change_answers_as_the_history_tells_it(client):
+    """Reading an item's history gives the same answer to everyone who asks it."""
     ctx = await make_ctx()
     co = await seed_company(ctx, **SMALL)
     url = "/v1/simple/changes"
@@ -240,6 +245,7 @@ async def test_a_change_answers_as_the_history_tells_it(client):
 
 
 def test_quick_title_match_scores_as_the_full_one():
+    """A quick title match scores pairs the same way the full match does."""
     titles = [title(n) for n in range(0, 900, 7)]
     titles += [f"{t} v2" for t in titles[:40]] + ["", "Export", "export!", "Bulk-export 2"]
     titles += ["Café export", "İstanbul setup", "Ünïcode  search", "ﬁle uploads"]
@@ -255,6 +261,7 @@ def test_quick_title_match_scores_as_the_full_one():
 
 
 async def test_prd_whos_read_as_prd_who():
+    """Batch-reading many PRDs' decider and reviewers matches reading one at a time."""
     ctx = await make_ctx()
     co = await seed_company(ctx, **SMALL)
     async with tenant_session(ctx.tenant_id) as s:
@@ -280,6 +287,7 @@ async def test_prd_whos_read_as_prd_who():
 
 
 async def test_agendas_read_as_one_meeting_s():
+    """Batch-reading many meetings' agendas matches reading one meeting at a time."""
     ctx = await make_ctx()
     co = await seed_company(ctx, **SMALL)
     async with tenant_session(ctx.tenant_id) as s:

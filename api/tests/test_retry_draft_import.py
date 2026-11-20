@@ -142,6 +142,7 @@ async def _retried(tenant_id) -> list[AuditEvent]:
 
 
 async def test_a_rejected_draft_is_imported_by_retry(client, owner, runtime, monkeypatch):
+    """A retried import succeeds and attaches the document, review still undecided."""
     tenant_id, auth = owner
     run = await _rejected(client, auth, runtime, monkeypatch)
     seg = run["segments"][4]
@@ -189,6 +190,7 @@ async def test_a_rejected_draft_is_imported_by_retry(client, owner, runtime, mon
 
 
 async def test_a_draft_still_rejected_keeps_the_new_error(client, owner, runtime, monkeypatch):
+    """A retry that fails again replaces the old refusal with the new one, not both."""
     tenant_id, auth = owner
     run = await _rejected(client, auth, runtime, monkeypatch, prd=BAD_PRD)
     before = run["segments"][4]["draft_import"]["error"]
@@ -216,6 +218,7 @@ async def test_a_draft_still_rejected_keeps_the_new_error(client, owner, runtime
 
 
 async def test_nothing_to_retry_is_refused(client, owner, runtime, monkeypatch):
+    """Retry is refused with no failed import, no such segment, or no such run."""
     _, auth = owner
     # A draft that imported: no error to retry.
     ok = await started(client, auth, checkpoints=OFF)
@@ -234,6 +237,7 @@ async def test_nothing_to_retry_is_refused(client, owner, runtime, monkeypatch):
 
 
 async def test_a_segment_that_left_no_draft_is_refused(client, owner, runtime, monkeypatch):
+    """A segment that produced no draft file cannot be retried."""
     _, auth = owner
     run = await _rejected(client, auth, runtime, monkeypatch, prd=None)
     seg = run["segments"][4]
@@ -244,6 +248,7 @@ async def test_a_segment_that_left_no_draft_is_refused(client, owner, runtime, m
 
 
 async def test_refused_once_changes_are_requested(client, owner, runtime, monkeypatch):
+    """Requesting changes after a rejected import disables retry for that segment."""
     tenant_id, auth = owner
     # Changes requested: the segment runs again; its old review is decided.
     run = await _rejected(client, auth, runtime, monkeypatch)
@@ -258,6 +263,7 @@ async def test_refused_once_changes_are_requested(client, owner, runtime, monkey
 async def test_approve_is_refused_while_the_draft_is_not_imported(
     client, owner, runtime, monkeypatch
 ):
+    """Approval waits for the draft import everywhere; requesting changes still works."""
     tenant_id, auth = owner
     run = await _rejected(client, auth, runtime, monkeypatch)
     assert pending(run)["cannot_approve"] == NOT_IMPORTED
@@ -279,6 +285,7 @@ async def test_approve_is_refused_while_the_draft_is_not_imported(
 
 
 async def test_after_the_run_finished_an_owner_retries(client, owner, runtime, monkeypatch):
+    """Only the run's owner, not an approver, may retry import once the run finished."""
     tenant_id, auth = owner
     run = await _rejected(client, auth, runtime, monkeypatch)
     await _approved_while_refused(tenant_id, run["id"])
@@ -375,6 +382,7 @@ async def test_a_burst_of_retries_imports_a_few_at_a_time(client, owner, runtime
 
 
 async def test_refused_on_a_cancelled_or_failed_run(client, owner, runtime, monkeypatch):
+    """Retry is refused once a run is cancelled or failed."""
     tenant_id, auth = owner
     cancelled = await _rejected(client, auth, runtime, monkeypatch)
     resp = await client.post(f"/v1/runs/{cancelled['id']}/cancel", headers=auth)
@@ -400,6 +408,7 @@ async def test_refused_on_a_cancelled_or_failed_run(client, owner, runtime, monk
 
 
 async def test_the_checkpoint_approver_role_retries(client, owner, runtime, monkeypatch):
+    """Retry takes the review's approver role, not a viewer or commenter."""
     tenant_id, auth = owner
     run = await _rejected(client, auth, runtime, monkeypatch)
     for role in ("viewer", "commenter"):
@@ -525,6 +534,7 @@ async def _inbox(client, headers) -> dict:
 async def test_a_run_that_finished_with_no_document_gets_an_inbox_row(
     client, owner, runtime, monkeypatch
 ):
+    """A run that finished with no document shows in the owner's Inbox with retry."""
     tenant_id, auth = owner
     run = await _rejected(client, auth, runtime, monkeypatch)
     # Still waiting at its review: the review's checkpoint is the Inbox's item, not this.
@@ -550,6 +560,7 @@ async def test_a_run_that_finished_with_no_document_gets_an_inbox_row(
 async def test_draft_rejected_clears_once_the_run_succeeded_past_the_refusal(
     client, owner, runtime, monkeypatch
 ):
+    """The draft_rejected flag clears once the run succeeds past the refusal."""
     tenant_id, auth = owner
     run = await _rejected(client, auth, runtime, monkeypatch)
     assert (await get(client, auth, run["id"]))["draft_rejected"]
@@ -603,6 +614,7 @@ async def test_a_retried_import_reads_imported_again_by_the_retrier(
 async def test_another_segments_import_keeps_the_retry_refused_in_plain_words(
     client, owner, runtime, monkeypatch
 ):
+    """Once another segment imported the document, retry is refused in plain words."""
     tenant_id, auth = owner
     run = await _rejected(client, auth, runtime, monkeypatch)
     await _approved_while_refused(tenant_id, run["id"])
@@ -653,6 +665,7 @@ def _rows(inbox: dict, run) -> list[dict]:
 async def test_the_no_document_row_clears_when_a_later_run_imports_the_document(
     client, owner, runtime, monkeypatch
 ):
+    """The Inbox's no-document row clears once a later run imports the same document."""
     tenant_id, auth = owner
     base = (await _inbox(client, auth))["total"]
     run = await _finished_without_document(client, auth, tenant_id, runtime, monkeypatch)
@@ -677,6 +690,7 @@ async def test_the_no_document_row_clears_when_a_later_run_imports_the_document(
 async def test_the_no_document_row_clears_on_a_successful_retry(
     client, owner, runtime, monkeypatch
 ):
+    """A successful retry clears the run's no-document row from the Inbox."""
     tenant_id, auth = owner
     base = (await _inbox(client, auth))["total"]
     run = await _finished_without_document(client, auth, tenant_id, runtime, monkeypatch)
@@ -693,6 +707,7 @@ async def test_the_no_document_row_clears_on_a_successful_retry(
 async def test_a_run_that_finished_before_the_row_shipped_gets_none(
     client, owner, runtime, monkeypatch
 ):
+    """Runs from before the no-document feature still offer retry on their own page."""
     from oracle.runs.service import NO_DOCUMENT_SINCE
 
     tenant_id, auth = owner

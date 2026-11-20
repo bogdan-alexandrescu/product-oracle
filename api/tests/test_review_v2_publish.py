@@ -58,6 +58,7 @@ def codes(body: dict) -> list[str]:
 
 
 async def test_an_unapproved_version_cannot_be_published(client):
+    """A version cannot publish until it is approved."""
     ctx = await setup(client)
     body = await check(client, ctx)
     assert body["can_publish"] is False and codes(body) == ["version_not_approved"]
@@ -69,6 +70,7 @@ async def test_an_unapproved_version_cannot_be_published(client):
 
 
 async def test_missing_required_sections_block(client):
+    """Publishing is blocked by a missing required section or its unapproved revision."""
     templated = replace(
         DRAFT,
         "title: Team calendar PRD\n",
@@ -87,6 +89,7 @@ async def test_missing_required_sections_block(client):
 
 
 async def test_stale_mandatory_approvals_block_and_current_ones_pass(client):
+    """Publishing is blocked by a stale mandatory approval and passes once renewed."""
     ctx = await setup(client)
     resp = await client.put(
         f"/v1/documents/{DOC}/review-policy",
@@ -165,6 +168,7 @@ async def _linked_item(ctx) -> tuple:
 
 
 async def test_invalidated_source_permissions_block(client):
+    """A revoked or deleted cited source blocks publish until permission is restored."""
     ctx = await setup(client)
     await approved(client, ctx)
     source_id, item_id = await _linked_item(ctx)
@@ -300,6 +304,7 @@ async def test_publish_pins_everything_and_never_changes(client):
 
 
 async def test_publish_refuses_a_content_hash_it_was_not_checked_with(client):
+    """Publish refuses a content hash that was not checked against the current version."""
     ctx = await setup(client)
     await approved(client, ctx)
     resp = await client.post(ctx.v(1, "/publish"), json={"content_hash": "x"}, headers=ctx.auth)
@@ -307,6 +312,7 @@ async def test_publish_refuses_a_content_hash_it_was_not_checked_with(client):
 
 
 async def test_brief_layers_are_pinned_when_the_version_has_them(client):
+    """A brief-layered version publishes with its brief export, refusing a bad format."""
     briefed = replace(
         DRAFT, "title: Team calendar PRD\n", "title: Team calendar PRD\nbrief: [title, problem]\n"
     )
@@ -330,6 +336,7 @@ async def test_brief_layers_are_pinned_when_the_version_has_them(client):
 
 
 async def test_warnings_never_block(client):
+    """Warnings never block publish, unlike an open critical change request."""
     ctx = await setup(client)
     await client.post(
         ctx.v(1, "/comments"),

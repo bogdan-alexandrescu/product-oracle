@@ -54,6 +54,7 @@ def scratch_db():
 
 
 def test_one_head_and_one_base():
+    """The whole migration graph has exactly one head and one base."""
     script = ScriptDirectory.from_config(_cfg())
     assert len(script.get_heads()) == 1
     assert len(script.get_bases()) == 1
@@ -68,6 +69,7 @@ def test_every_revision_is_reached_from_the_head():
 
 
 def test_up_down_up(scratch_db):
+    """Every migration applies cleanly up to head, down to base, and up again."""
     cfg = _cfg()
     command.upgrade(cfg, "head")
     assert len(_tables()) > 100

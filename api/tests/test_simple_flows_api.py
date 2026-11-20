@@ -58,6 +58,7 @@ def clock(monkeypatch):
 
 
 async def test_steps_carry_who_and_yes_no(client):
+    """Drawn flow steps carry their actor and yes/no answers, not just plain text."""
     assert prompting.CURRENT["simple_visual"] == "simple_visual.v2"
     assert '"actor"' in prompting.load("simple_visual.v2")
     ctx = await world(client)
@@ -75,6 +76,7 @@ async def test_steps_carry_who_and_yes_no(client):
 
 
 async def test_drawing_state_names_stage_and_start(client):
+    """A pending drawing names its stage and start time, clearing them once done."""
     ctx = await world(client)
     _, item = await roadmap_world(ctx)
     r = await client.post(f"{URL}/feature/{item.id}/request", json={"brief": ""},
@@ -104,6 +106,7 @@ async def test_drawing_state_names_stage_and_start(client):
     [("owner", 202), ("decider", 202), ("approver", 403), ("commenter", 403), ("viewer", 403)],
 )
 async def test_roles_read_the_flow_fields(client, role, ask):
+    """Only some roles can request a new drawing; anyone can read one already made."""
     ctx = await world(client)
     page = await get(client, ctx, role)
     bet = line(page, "bets-2")

@@ -66,6 +66,7 @@ def scratch_db():
 
 
 def test_0020_chains_on_mains_head_and_is_the_single_head():
+    """Migration 0020 chains onto main's head, keeping a single alembic head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == BEFORE
 
@@ -81,6 +82,7 @@ def _report(tenant: uuid.UUID, kind: str, week: date = date(2026, 10, 19)) -> No
 
 
 def test_upgrade_adds_the_tables_and_downgrade_drops_them(scratch_db):
+    """The migration adds its tables with their constraints; downgrade removes them."""
     cfg = _cfg()
     upgrade(cfg, BEFORE)
     assert not TABLES & _tables()

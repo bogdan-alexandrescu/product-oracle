@@ -95,6 +95,7 @@ WHO = {
     ],
 )  # fmt: skip
 def test_date_rights_table(named, expected):
+    """A schedule date's rights to propose or verify match role and a named lead."""
     # protects=§1 Who does what, the one rights function; fails_when=an approver verifies
     # while a lead is named, a lead or owner only proposes, a commenter or viewer gets any
     # right, or approvers lose today's rights with no lead named; no_claim=the routes.
@@ -199,6 +200,7 @@ async def _actions(tenant_id, basis_id: str) -> list[str]:
 
 
 async def test_a_proposed_basis_supports_nothing_until_the_lead_verifies(client, owner, runtime):  # noqa: F811
+    """With a lead named, a proposed basis supports no date until the lead verifies."""
     # protects=AC1 and AC2; fails_when=an approver's basis supports a date while a lead is
     # named, or the lead's verify leaves the item's date refused or the document's mark
     # unverified; no_claim=the UI.
@@ -245,6 +247,7 @@ async def test_a_proposed_basis_supports_nothing_until_the_lead_verifies(client,
 
 
 async def test_reject_and_a_second_decision_is_409(client, owner):  # noqa: F811
+    """Rejecting a basis stores its reason; a decided basis can't decide again."""
     # protects=AC3; fails_when=reject does not store its reason, or a decided basis can be
     # verified or rejected again; no_claim=dates (a rejected basis is not verified, which
     # verified_bases already filters).
@@ -280,6 +283,7 @@ async def test_reject_and_a_second_decision_is_409(client, owner):  # noqa: F811
 
 
 async def test_with_a_lead_named_approvers_neither_verify_nor_withdraw(client, owner):  # noqa: F811
+    """With a lead named, only the lead or owner verifies or withdraws a basis."""
     # protects=AC4; fails_when=an approver verifies or withdraws while a lead is named, or
     # an owner is refused; no_claim=commenters (date_rights_table).
     tenant_id, auth = owner
@@ -305,6 +309,7 @@ async def test_with_a_lead_named_approvers_neither_verify_nor_withdraw(client, o
 
 
 async def test_with_no_lead_named_approvers_keep_todays_rights(client, owner):  # noqa: F811
+    """With no lead named, an approver keeps today's right to verify or withdraw."""
     # protects=AC5, O4 while no lead is named; fails_when=an approver's basis waits as
     # proposed or its withdrawal is refused; no_claim=leads.
     tenant_id, auth = owner
@@ -319,6 +324,7 @@ async def test_with_no_lead_named_approvers_keep_todays_rights(client, owner):  
 
 
 async def test_withdraw_stores_the_reason(client, owner):  # noqa: F811
+    """Withdrawing a basis stores its reason, readable through the API too."""
     # protects=AC6 (API half; the backfill is test_basis_verification_migration);
     # fails_when=the reason only reaches the audit log; no_claim=the UI.
     tenant_id, auth = owner
@@ -335,6 +341,7 @@ async def test_withdraw_stores_the_reason(client, owner):  # noqa: F811
 
 
 async def test_impact_matches_what_withdraw_changes(client, owner, runtime):  # noqa: F811
+    """A basis's impact preview names exactly what withdrawing it would change."""
     # protects=AC7; fails_when=the preview names a milestone, item or document mark the
     # withdrawal does not change (or misses one), or the preview writes anything;
     # no_claim=the sentence the UI builds from it.
@@ -384,6 +391,7 @@ async def test_impact_matches_what_withdraw_changes(client, owner, runtime):  # 
 
 
 async def test_the_lead_s_inbox_lists_proposed_bases(client, owner):  # noqa: F811
+    """The lead's inbox lists proposed bases waiting on them, not an approver's."""
     # protects=AC8; fails_when=a proposed basis is missing, listed twice or not counted in
     # the lead's total, or shows in an approver's Inbox; no_claim=the Inbox UI.
     tenant_id, auth = owner
@@ -413,6 +421,7 @@ async def test_the_lead_s_inbox_lists_proposed_bases(client, owner):  # noqa: F8
 
 
 async def test_another_company_gets_404_and_run_tokens_are_refused(client, owner, runtime):  # noqa: F811
+    """Another company gets 404 on a basis, and run tokens can't reach its tools."""
     # protects=AC9; fails_when=another company reads or acts on a basis, or a run token
     # reaches a basis tool; no_claim=the tenancy layer itself.
     tenant_id, auth = owner

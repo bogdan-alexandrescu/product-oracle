@@ -72,11 +72,13 @@ def scratch_db():
 
 
 def test_chains_on_the_single_head():
+    """The web tools migration chains onto the branch's single prior head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_upgrade_and_downgrade(scratch_db):
+    """Upgrading adds the web_searches table and read:web check; downgrade drops it."""
     upgrade(_cfg(), PREVIOUS)
     assert "web_searches" not in _tables()
     assert "web_results" in _tables() and "'read:web'" in _check()

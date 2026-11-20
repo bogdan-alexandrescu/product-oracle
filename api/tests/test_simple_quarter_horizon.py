@@ -27,6 +27,7 @@ HORIZONS = {"short_quarters": 1, "medium_quarters": 2, "long_from_months": 12,
 
 
 def test_quarter_windows_on_the_company_day():
+    """Quarter windows for Now, Next and Later follow the company's current day."""
     nov = dates.windows(HORIZONS, date(2026, 11, 10))
     assert nov["now"] == (date(2026, 10, 1), date(2026, 12, 31))
     assert nov["next"] == (date(2027, 1, 1), date(2027, 3, 31))
@@ -45,6 +46,7 @@ def _typed(start: date, end: date) -> Resolved:
 
 
 def test_horizon_of_reads_dates():
+    """An item's horizon, now, next or later, is decided by its own start and end."""
     w = dates.windows(HORIZONS, date(2026, 11, 10))
     assert dates.horizon_of(_typed(date(2026, 8, 15), date(2026, 11, 20)), w) == "now"
     assert dates.horizon_of(_typed(date(2026, 12, 31), date(2027, 1, 20)), w) == "now"
@@ -61,6 +63,7 @@ def test_horizon_of_reads_dates():
 
 
 def test_shift_to_moves_whole_quarters():
+    """Shifting an item to another quarter keeps its length within that quarter."""
     w = dates.windows(HORIZONS, date(2026, 11, 10))
     # Now -> Next across the year end, length kept (46 days).
     assert dates.shift_to(date(2026, 10, 1), date(2026, 11, 15), "next", w) == (

@@ -135,12 +135,14 @@ def _with(**changes):
 
 
 def test_the_build_prompt_example_validates():
+    """The module contract example from the build prompt spec actually validates."""
     c = validate_contract(EXAMPLE)
     assert c.id == "constraints.solutions" and c.condition == ALWAYS
     assert c.effective_section_ids() == ["constraints-solutions"]
 
 
 def test_every_field_of_the_true_schema_validates_and_round_trips():
+    """A full module contract round-trips through JSON and covers every spec field."""
     c = validate_contract(FULL)
     stored = contract_json(c)
     again = validate_contract(stored)
@@ -165,10 +167,12 @@ def test_every_field_of_the_true_schema_validates_and_round_trips():
 
 
 def test_json_text_validates_too():
+    """The contract validator accepts a JSON string, not only a parsed dict."""
     assert validate_contract(ModuleContract.model_validate(EXAMPLE).model_dump_json()).id
 
 
 def test_hash_changes_with_the_contract():
+    """A module contract's hash changes whenever its content changes."""
     a = validate_contract(EXAMPLE)
     b = validate_contract({**EXAMPLE, "display_order": 61})
     assert contract_hash(a) != contract_hash(b)
@@ -198,6 +202,7 @@ def test_hash_changes_with_the_contract():
     ],
 )
 def test_invalid_contracts_are_refused(changes, message):
+    """A module contract is refused for any of many structural or naming errors."""
     with pytest.raises(ValidationError, match=message):
         validate_contract(_with(**changes))
 
@@ -215,11 +220,13 @@ def test_invalid_contracts_are_refused(changes, message):
     ],
 )
 def test_invalid_fields_are_refused(field, message):
+    """A field definition is refused when its type's required options are missing."""
     with pytest.raises(ValidationError, match=message):
         validate_contract(_with(fields=[*FULL["fields"], field]))
 
 
 def test_duplicate_fields_and_dangling_references_are_refused():
+    """A contract is refused for a duplicate field key or a dangling field reference."""
     dup = [*FULL["fields"], FULL["fields"][0]]
     with pytest.raises(ValidationError, match="field keys must be unique"):
         validate_contract(_with(fields=dup))
@@ -250,6 +257,7 @@ def test_duplicate_fields_and_dangling_references_are_refused():
     ],
 )
 def test_invalid_validators_are_refused(validator, message):
+    """A field validator is refused when its kind and value don't actually match."""
     with pytest.raises(ValidationError, match=message):
         validate_contract(_with(validators=[validator]))
 
@@ -273,6 +281,7 @@ def test_invalid_validators_are_refused(validator, message):
     ],
 )
 def test_valid_conditions(tree):
+    """Every well-formed condition operator in the spec actually parses."""
     assert parse_condition(tree).op == tree["op"]
 
 
@@ -296,11 +305,13 @@ def test_valid_conditions(tree):
     ],
 )
 def test_invalid_conditions(tree, message):
+    """A condition tree can never run code, access internals or use a bad path."""
     with pytest.raises(ValidationError, match=message):
         parse_condition(tree)
 
 
 def test_conditions_are_bounded():
+    """A condition tree is refused once it nests or grows past a fixed bound."""
     deep = {"op": "true"}
     for _ in range(MAX_CONDITION_DEPTH):
         deep = {"op": "not", "arg": deep}
@@ -315,6 +326,7 @@ def test_conditions_are_bounded():
 
 
 def test_semver_key_orders_releases():
+    """Semantic version strings sort numerically, and a bad one is refused."""
     assert sorted(["1.10.0", "1.2.0", "0.9.9"], key=semver_key) == ["0.9.9", "1.2.0", "1.10.0"]
     with pytest.raises(ValueError, match="not a semantic version"):
         semver_key("v1")

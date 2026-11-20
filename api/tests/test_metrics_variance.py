@@ -18,6 +18,7 @@ def _zigzag(start: float = 100.0, changes: int = 12, step: float = 10.0) -> list
 # up metric, with the band prev +- 2 x typical; fails_when=the median of the absolute
 # history is not used, or the band is not 2 x typical; no_claim=storage of the row.
 def test_rule_one_flags_a_jump_better_with_the_band():
+    """A jump past the typical swing is flagged better for a metric meant to rise."""
     values = _zigzag() + [_zigzag()[-1] + 40]
     got = variance.check(values, "up", None)
     assert got.variance == "better"
@@ -31,6 +32,7 @@ def test_rule_one_flags_a_jump_better_with_the_band():
 # protects=criterion 1 (direction): the same series on a down metric is Worse;
 # fails_when=the direction is ignored; no_claim=the words on screen.
 def test_rule_one_is_worse_for_a_down_metric():
+    """The same jump is flagged worse for a metric meant to fall."""
     values = _zigzag() + [_zigzag()[-1] + 40]
     assert variance.check(values, "down", None).variance == "worse"
 
@@ -39,6 +41,7 @@ def test_rule_one_is_worse_for_a_down_metric():
 # variance at the 10% default and a 9% move is not; fails_when=rule 1 is used on a short
 # history, or the threshold is off by one; no_claim=an owner's threshold.
 def test_rule_two_with_a_short_history():
+    """With too little history for rule one, a smaller jump flags past rule two's bar."""
     base = [100, 101, 100, 101, 100]
     assert variance.check([*base, 112], "up", None).variance == "better"
     assert variance.check([*base, 109], "up", None).variance is None
@@ -47,6 +50,7 @@ def test_rule_two_with_a_short_history():
 # protects=rule 2 at zero: with v[w-1] = 0 any change counts, and none is no variance;
 # fails_when=a division by zero raises or a flat zero is flagged; no_claim=negative values.
 def test_rule_two_from_zero():
+    """A metric rising from zero flags only once it clears rule two's fixed bar."""
     assert variance.check([0, 0, 3], "up", None).variance == "better"
     assert variance.check([0, 0, 0], "up", None).variance is None
 
@@ -55,6 +59,7 @@ def test_rule_two_from_zero():
 # rule 1 says none; fails_when=the owner's threshold applies only to short histories;
 # no_claim=the threshold's 1-500 bounds (API test).
 def test_an_owners_threshold_always_applies():
+    """An owner's chosen threshold flags a change even when the band would not."""
     values = _zigzag() + [_zigzag()[-1] + 6]
     assert values[-2] == 100
     assert variance.check(values, "up", None).variance is None
@@ -64,6 +69,7 @@ def test_an_owners_threshold_always_applies():
 # protects=criterion 1 (missing week): a week with no value is no variance and reads "No
 # value this week"; fails_when=a missing week raises or is flagged; no_claim=the review.
 def test_a_missing_week_is_no_variance():
+    """A week with no value is never flagged as a variance, only as missing."""
     got = variance.check([*_zigzag(), None], "up", None)
     assert got.variance is None
     assert got.no_value is True
@@ -75,6 +81,7 @@ def test_a_missing_week_is_no_variance():
 # carry those instants; fails_when=a fixed offset or UTC midnight is used;
 # no_claim=PostHog's parsing of the timestamps.
 def test_week_bounds_across_dst_and_the_placeholders():
+    """A week's query bounds and placeholders hold across a daylight-saving change."""
     start, end = pull.week_bounds(date(2026, 10, 26), "America/Los_Angeles")
     assert start == datetime(2026, 10, 26, 7, tzinfo=UTC)
     assert end == datetime(2026, 11, 2, 8, tzinfo=UTC)
@@ -90,6 +97,7 @@ def test_week_bounds_across_dst_and_the_placeholders():
 # in the new week, so the last complete one is the week before; fails_when=UTC dates pick
 # the week; no_claim=other zones.
 def test_last_complete_week():
+    """The last complete week is picked right near a Sunday midnight in its zone."""
     at = datetime(2026, 10, 19, 12, tzinfo=UTC)
     assert pull.last_complete_week(at, "America/Los_Angeles") == date(2026, 10, 12)
     sunday_night = datetime(2026, 10, 19, 6, tzinfo=UTC)  # Sun 23:00 in Los Angeles
@@ -99,6 +107,7 @@ def test_last_complete_week():
 # protects=the provider's message never carries the key and is capped at 300 characters;
 # fails_when=the key is echoed or a long message passes whole; no_claim=logging.
 def test_error_text_redaction():
+    """PostHog error text is cut short with the account's own key redacted."""
     key = "phx_secret_value_123"
     got = posthog.redact(f"Invalid key {key}. " + "x" * 400, key)
     assert key not in got
@@ -111,6 +120,7 @@ def test_error_text_redaction():
 # flags +6; fails_when=the fixed 10% still applies under an owner's higher threshold
 # (it could only loosen the rule), or a lower one is ignored; no_claim=rule 1's history.
 def test_rule_two_uses_the_owners_threshold_above_and_below_ten():
+    """Rule two uses the owner's threshold instead of its ten percent bar, if set."""
     base = [100, 101, 100, 101, 100]
     assert variance.check([*base, 112], "up", 20).variance is None
     assert variance.check([*base, 125], "up", 20).variance == "better"
@@ -123,6 +133,7 @@ def test_rule_two_uses_the_owners_threshold_above_and_below_ten():
 # +12 on 100 unflagged, 5% flags +6; fails_when=a flat history falls back to the fixed
 # 10%; no_claim=rule 1 with a moving history.
 def test_a_flat_history_uses_the_owners_threshold():
+    """A flat history still flags using the owner's threshold, or the fixed bar."""
     flat = [100.0] * 13
     assert variance.check([*flat, 112], "up", 20).variance is None
     assert variance.check([*flat, 112], "up", None).variance == "better"
@@ -132,5 +143,6 @@ def test_a_flat_history_uses_the_owners_threshold():
 # protects=a PostHog answer of SQL NULL is no value, not 0; fails_when=NULL reads as 0;
 # no_claim=the real PostHog API's shape.
 def test_a_null_answer_is_no_value():
+    """A null query result reads as no value, and a zero reads as the value zero."""
     assert posthog._number({"results": [[None]]}) is None
     assert posthog._number({"results": [[0]]}) == 0

@@ -107,6 +107,7 @@ async def _decide_all(client, headers, run, size="m"):
 
 
 def test_the_flow_has_the_check_after_the_feature_set_and_it_skips_when_off():
+    """The engineering check sits after the feature set and costs one architect."""
     # protects=AC1/AC2 segment order, skip_when_off and the estimate; fails_when=the
     # check sits elsewhere, runs with its stop off or costs other than one architect;
     # no_claim=the dates stop (lane B: test_eng_dates_stop.py).
@@ -130,6 +131,7 @@ def test_the_flow_has_the_check_after_the_feature_set_and_it_skips_when_off():
 
 
 async def test_a_new_run_has_the_check_on_and_its_estimate_includes_it(client, owner, runtime):
+    """A new run has the engineering check on by default, counted in its estimate."""
     # protects=AC1 knobs and estimate, GET /v1/flows decider; fails_when=the check is off
     # by default, missing from the estimate or the flow says it is decided by role;
     # no_claim=eng_dates (lane B: $36.50 with both, test_eng_dates_stop.py).
@@ -150,6 +152,7 @@ async def test_a_new_run_has_the_check_on_and_its_estimate_includes_it(client, o
 
 
 async def test_with_the_check_off_no_step_runs_and_nothing_is_spent(client, owner, runtime):
+    """Turning the engineering check off skips its step and spends nothing on it."""
     # protects=AC2 skip in segment mode; fails_when=the estimate counts it, a step is
     # submitted for it or the run stalls between the feature set and priority;
     # no_claim=workflow mode (covered by the plan's segment filter, not driven here).
@@ -174,6 +177,7 @@ async def test_with_the_check_off_no_step_runs_and_nothing_is_spent(client, owne
 
 
 async def test_the_run_waits_at_the_check_with_its_briefs(client, owner, runtime):
+    """The run waits at the check and lists tech briefs as its artifact."""
     # protects=AC3; fails_when=the check is not submitted after the feature set or its
     # checkpoint does not list tech_briefs.yaml; no_claim=the architect's content.
     _, auth = owner
@@ -189,6 +193,7 @@ async def test_the_run_waits_at_the_check_with_its_briefs(client, owner, runtime
 
 
 async def test_approve_is_blocked_until_each_verdict_and_blocking_answer(client, owner, runtime):
+    """Approve is blocked until every feature has a verdict with no open question."""
     # protects=AC6 the gate and c6 suggestions; fails_when=Approve passes with a feature
     # undecided or a blocking question open, or a commenter's verdict counts; no_claim=the
     # screen (Playwright).
@@ -229,6 +234,7 @@ async def test_approve_is_blocked_until_each_verdict_and_blocking_answer(client,
     ],
 )  # fmt: skip
 async def test_the_vocabulary_refuses_what_it_does_not_allow(client, owner, runtime, body, words):
+    """An invalid verdict, size, answer or feature is refused, never stored."""
     # protects=AC §7 422s; fails_when=an invalid verdict, size, answer or feature is
     # stored; no_claim=question actions (D8's own tests).
     _, auth = owner
@@ -239,6 +245,7 @@ async def test_the_vocabulary_refuses_what_it_does_not_allow(client, owner, runt
 
 
 async def test_approve_sets_the_size_and_tells_priority_about_the_verdict(client, owner, runtime):
+    """Approving the check locks the size and tells priority why it is not feasible."""
     # protects=AC7; fails_when=the changed size is not the feature's locked attrs.effort
     # by the lead, or the priority prompt lacks the not-feasible feature and its reason;
     # no_claim=the priority score maths (C8).
@@ -264,6 +271,7 @@ async def test_approve_sets_the_size_and_tells_priority_about_the_verdict(client
 
 
 async def test_with_a_lead_named_only_the_lead_decides(client, owner, runtime):
+    """Once a lead is named, only the lead, not another approver, decides."""
     # protects=AC4 at the check; fails_when=an approver decides while a lead is named, or
     # no-lead decisions are not audited engineering_lead_named false; no_claim=the
     # console path (A3's tests).
@@ -296,6 +304,7 @@ async def test_with_a_lead_named_only_the_lead_decides(client, owner, runtime):
 
 
 async def test_with_no_lead_an_approver_decides_audited(client, owner, runtime):
+    """With no lead named, an approver decides the check, and this is audited."""
     # protects=AC4 fallback; fails_when=an approver is refused with no lead named or the
     # audit lacks engineering_lead_named false; no_claim=A3's flag routes.
     tenant_id, auth = owner
@@ -314,6 +323,7 @@ async def test_with_no_lead_an_approver_decides_audited(client, owner, runtime):
 
 
 async def test_send_back_reruns_the_architect_and_opens_a_new_check(client, owner, runtime):
+    """Sending the check back reruns the architect and opens a fresh engineering check."""
     # protects=AC8 at the check; fails_when=the segment is not re-run with the note or no
     # new eng_review checkpoint opens; no_claim=D4's file format (its own tests).
     _, auth = owner
@@ -332,6 +342,7 @@ async def test_send_back_reruns_the_architect_and_opens_a_new_check(client, owne
 
 
 async def test_a_run_started_before_the_check_keeps_its_segments(client, owner, runtime):
+    """A run started before the check existed resolves it as off by default."""
     # protects=AC28; fails_when=stored knobs without eng_review resolve it on; no_claim=
     # a migration (lane A has none).
     from oracle.runs import service
@@ -348,6 +359,7 @@ async def test_a_run_started_before_the_check_keeps_its_segments(client, owner, 
 
 
 async def test_the_fake_runtimes_briefs_pass_the_check_and_the_run_goes_on(client, owner):
+    """The fake runtime's default briefs pass the check so the run moves on."""
     # protects=fix 1 of #423 (every Baseline to PRD run on the fake runtime); fails_when=the
     # fake's default tech_briefs.yaml is a file-level problem (a YAML mapping where a text
     # assumption belongs: bad_entry), so Approve is 409 and the run sticks at the check;

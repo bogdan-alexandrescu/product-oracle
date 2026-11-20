@@ -41,6 +41,7 @@ async def ctx():
 # fails_when=the key is stored in clear, echoed, or no test query is made; no_claim=the
 # real PostHog endpoint.
 async def test_connect_stores_the_key_encrypted(client, ctx, fake_posthog):
+    """Connecting PostHog stores the API key encrypted, never echoed in a reply."""
     resp = await connect(client, ctx)
     assert resp.status_code == 200, resp.text
     out = resp.json()
@@ -69,6 +70,7 @@ async def test_connect_stores_the_key_encrypted(client, ctx, fake_posthog):
 # removed; an approver is 403 on every analytics route; fails_when=the key leaks in the
 # error, a refused key is stored, or an approver connects; no_claim=audit rows.
 async def test_refused_key_and_roles(client, ctx, fake_posthog):
+    """An invalid PostHog key is refused unstored, and only an owner manages it."""
     fake_posthog.refuse_key = "Invalid personal API key"
     resp = await connect(client, ctx)
     assert resp.status_code == 422
@@ -86,6 +88,8 @@ async def test_refused_key_and_roles(client, ctx, fake_posthog):
 # an http host is 422; fails_when=a private address is queried; no_claim=DNS rebinding
 # between the check and the connect (guarded_transport checks each connect).
 async def test_an_own_host_must_be_public_https(client, ctx, fake_posthog, monkeypatch):
+    """A self-hosted PostHog host must resolve to a public address, over https."""
+
     async def private(host, port):
         return ["10.0.0.5"]
 
@@ -113,6 +117,7 @@ async def test_an_own_host_must_be_public_https(client, ctx, fake_posthog, monke
 # another count, a value keeps the old version, or the change is not listed;
 # no_claim=chart rendering.
 async def test_backfill_and_definition_versions(client, ctx, clock, fake_posthog):
+    """Connecting PostHog backfills twelve weeks; a query edit bumps its version."""
     assert (await connect(client, ctx)).status_code == 200
     weeks = weeks_back(12)
     fake_posthog.values = {w: 300 + 10 * i for i, w in enumerate(weeks)}
@@ -157,6 +162,7 @@ async def test_backfill_and_definition_versions(client, ctx, clock, fake_posthog
 # Test shows the last 4 weeks' values and stores nothing; fails_when=a failed pull
 # replaces the value or Test writes rows; no_claim=the ticker's retries.
 async def test_pull_failure_and_test_query(client, ctx, clock, fake_posthog):
+    """A failed PostHog pull never leaks the key, and a test query stores nothing."""
     assert (await connect(client, ctx)).status_code == 200
     metric = (await create(client, ctx, source="posthog", query=QUERY)).json()
     fake_posthog.status = 500
@@ -188,6 +194,7 @@ async def test_pull_failure_and_test_query(client, ctx, clock, fake_posthog):
 # disconnected"); a PostHog metric cannot be created without a connection;
 # fails_when=the key survives or metrics keep pulling; no_claim=the confirmation's count.
 async def test_disconnect_pauses_posthog_metrics(client, ctx, clock, fake_posthog):
+    """Disconnecting PostHog pauses its metrics but leaves manual ones active."""
     resp = await create(client, ctx, source="posthog", query=QUERY)
     assert resp.status_code == 409
     assert (await connect(client, ctx)).status_code == 200
@@ -212,6 +219,7 @@ async def test_disconnect_pauses_posthog_metrics(client, ctx, clock, fake_postho
 # api_key value; fails_when=the validation error echoes the request body (and the key);
 # no_claim=logs (the key is never logged by Oracle's code, not checked here).
 async def test_a_malformed_analytics_put_never_echoes_the_key(client, ctx, fake_posthog):
+    """A malformed analytics request never echoes the api key back in its reply."""
     bodies = [
         {"provider": "posthog", "host": "eu", "project_id": "not valid!", "api_key": KEY},
         {"host": "eu", "project_id": "12345", "api_key": KEY},
@@ -235,6 +243,7 @@ async def test_a_malformed_analytics_put_never_echoes_the_key(client, ctx, fake_
 # later pull, not only the last week; fails_when=the weeks after the failure stay empty
 # for good; no_claim=the real PostHog API's shape.
 async def test_a_failed_backfill_is_filled_by_a_later_pull(client, ctx, clock, fake_posthog):
+    """A week that failed during backfill is filled in by a later scheduled pull."""
     from datetime import timedelta
 
     from tests.metrics_helpers import NOW
@@ -262,6 +271,7 @@ async def test_a_failed_backfill_is_filled_by_a_later_pull(client, ctx, clock, f
 # value this week"), not 0; Test shows the week with no value; fails_when=NULL is stored
 # as 0; no_claim=the real PostHog API's shape.
 async def test_a_null_answer_stores_no_value(client, ctx, clock, fake_posthog):
+    """A null answer from PostHog for a week stores no value for that week."""
     assert (await connect(client, ctx)).status_code == 200
     weeks = weeks_back(12)
     fake_posthog.values = {weeks[3]: None, LAST_WEEK: None}

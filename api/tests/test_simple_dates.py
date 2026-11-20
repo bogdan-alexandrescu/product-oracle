@@ -48,6 +48,7 @@ NEW = datetime(2026, 10, 1, tzinfo=UTC)
 
 
 def test_precedence_own_over_engineering_over_tracker_over_window():
+    """Dates resolve by precedence: typed or accepted, then engineering, then tracker."""
     tracker = Candidate(None, date(2026, 12, 1), "tracker", NEW)
     engineering = Candidate(None, date(2026, 11, 20), "engineering", OLD)
     typed = Candidate(date(2026, 10, 5), date(2026, 11, 1), "typed", OLD)
@@ -75,6 +76,7 @@ def test_precedence_own_over_engineering_over_tracker_over_window():
 
 
 def test_ties_within_a_source_take_the_latest_update():
+    """When two candidates share a source, the most recently updated one wins."""
     older = Candidate(None, date(2026, 11, 1), "tracker", OLD)
     newer = Candidate(None, date(2026, 12, 15), "tracker", NEW)
     assert dates.resolve([newer, older], WINDOW).end.date == date(2026, 12, 15)
@@ -85,6 +87,7 @@ def test_ties_within_a_source_take_the_latest_update():
 
 
 def test_an_end_only_item_starts_its_effort_before_its_end():
+    """An end-only item's start sits its effort's length of days before that end."""
     end = Candidate(None, date(2026, 11, 30), "tracker", NEW)
     week = dates.resolve([end], WINDOW, effort_weeks=1)
     assert week.start == Dated(date(2026, 11, 24), "estimated", True)
@@ -94,12 +97,14 @@ def test_an_end_only_item_starts_its_effort_before_its_end():
 
 
 def test_an_end_only_item_without_effort_starts_28_days_before_its_end():
+    """Without an effort estimate, an end-only item starts 28 days before its end."""
     end = Candidate(None, date(2026, 11, 30), "tracker", NEW)
     assert dates.resolve([end], WINDOW).start == Dated(date(2026, 11, 3), "estimated", True)
     assert dates.resolve([end], WINDOW, effort_weeks=None).start.date == date(2026, 11, 3)
 
 
 def test_an_estimated_span_is_the_effort_s_days_as_a_suggestion_s():
+    """An estimated span covers exactly the effort's days, or 28 with none given."""
     # A 1-week item spans 7 days and a 3-week item 21, end included, as suggest() spans
     # its days (start + days - 1); without an effort, 28 days as suggest()'s fallback.
     end = Candidate(None, date(2026, 11, 30), "tracker", NEW)
@@ -112,6 +117,7 @@ def test_an_estimated_span_is_the_effort_s_days_as_a_suggestion_s():
 
 
 def test_an_estimated_start_may_lie_before_the_window_never_after_the_end():
+    """An estimated start may lie before the window, but never after its own end."""
     early = Candidate(None, date(2026, 10, 10), "engineering", NEW)
     r = dates.resolve([early], WINDOW, effort_weeks=2)
     assert r.start == Dated(date(2026, 9, 27), "estimated", True)
@@ -124,6 +130,7 @@ def test_an_estimated_start_may_lie_before_the_window_never_after_the_end():
 
 
 def test_a_typed_start_is_never_changed_and_an_estimated_end_keeps_its_rule():
+    """A typed start date is never changed, even when it falls outside the window."""
     typed = Candidate(date(2026, 10, 2), date(2026, 11, 30), "typed", NEW)
     r = dates.resolve([typed], WINDOW, effort_weeks=1)
     assert r.start == Dated(date(2026, 10, 2), "typed", False)
@@ -139,6 +146,7 @@ def test_a_typed_start_is_never_changed_and_an_estimated_end_keeps_its_rule():
 
 
 def test_horizon_windows_at_a_quarter_boundary():
+    """Now, Next and Later horizons track calendar quarters, shifting at the boundary."""
     # board-quarters: Now this calendar quarter, Next the next one, Later from the one after.
     dec31 = dates.windows(HORIZONS, date(2026, 12, 31))
     assert dec31["now"] == (date(2026, 10, 1), date(2026, 12, 31))
@@ -150,6 +158,7 @@ def test_horizon_windows_at_a_quarter_boundary():
 
 
 def test_waterfall_split_when_no_named_phases():
+    """With no named phases, a span splits into four waterfall phases by proportion."""
     start = Dated(date(2026, 1, 1), "typed", False)
     end = Dated(date(2026, 4, 10), "typed", False)  # 100 days
     out = dates.phases(start, end, None, [])
@@ -164,6 +173,7 @@ def test_waterfall_split_when_no_named_phases():
 
 
 def test_waterfall_from_named_dated_gates():
+    """Named, dated gates fix their own phase boundaries; the rest stay estimated."""
     start = Dated(date(2026, 1, 1), "typed", False)
     end = Dated(date(2026, 4, 10), "typed", False)
     gates = [{"name": "Beta", "criterion": "3 pilots", "date": "2026-03-20"}, {"name": "Pilot"}]
@@ -177,6 +187,7 @@ def test_waterfall_from_named_dated_gates():
 
 
 def test_suggestion_dependencies_push_the_start():
+    """A suggested start is pushed past the latest dependency's own end date."""
     s = dates.suggest(WINDOW, [("Ledger", date(2026, 10, 20)), ("Import", date(2026, 11, 1))],
                       [30], "high", "now")  # fmt: skip
     assert s.start == date(2026, 11, 2)
@@ -185,6 +196,7 @@ def test_suggestion_dependencies_push_the_start():
 
 
 def test_suggestion_without_dependencies_starts_with_the_window():
+    """With no dependencies, a suggestion starts at the window in plain words."""
     s = dates.suggest(WINDOW, [], [10, 20, 60], "medium", "now")
     assert (s.start, s.end) == (date(2026, 10, 1), date(2026, 10, 20))
     # fix2-simple-roadmap-gantt finding 30: plain words, not "median".
@@ -192,6 +204,7 @@ def test_suggestion_without_dependencies_starts_with_the_window():
 
 
 def test_suggestion_falls_back_to_28_days():
+    """With nothing to go on, a suggestion falls back to a 28-day span."""
     s = dates.suggest(WINDOW, [], [], None, "now")
     assert (s.start, s.end) == (date(2026, 10, 1), date(2026, 10, 28))
     assert "28 days" in s.basis
@@ -199,17 +212,20 @@ def test_suggestion_falls_back_to_28_days():
 
 
 def test_suggestion_end_is_clipped_to_the_window():
+    """A suggestion's end is clipped to the window when a dependency pushes past it."""
     s = dates.suggest(WINDOW, [("Ledger", date(2026, 12, 10))], [], None, "now")
     assert (s.start, s.end) == (date(2026, 12, 11), date(2026, 12, 31))
     assert "window" in s.basis
 
 
 def test_suggestion_past_the_window_is_not_clipped():
+    """A suggestion is not clipped once a dependency pushes it past the window."""
     s = dates.suggest(WINDOW, [("Ledger", date(2027, 1, 10))], [], None, "now")
     assert (s.start, s.end) == (date(2027, 1, 11), date(2027, 2, 7))
 
 
 def test_median_is_of_whole_days():
+    """The median of a list of day counts is itself always a whole day count."""
     assert dates.median_days([10, 11]) == 11
     assert dates.median_days([10, 20, 60]) == 20
     assert dates.median_days([]) == dates.FALLBACK_DAYS
@@ -221,6 +237,7 @@ HZ = {"short_quarters": 1, "medium_quarters": 2, "long_from_months": 12, "long_t
 
 
 def test_undated_estimate_is_the_suggestion_then_the_quarter_then_the_window():
+    """An undated item's estimate falls back: suggestion, then quarter, then window."""
     w = dates.windows(HZ, date(2026, 11, 10))
     sug = (date(2027, 1, 4), date(2027, 2, 14))
     q4 = date(2026, 10, 1)
@@ -250,5 +267,6 @@ def _typed_r(start: date, end: date) -> dates.Resolved:
 
 
 def test_quarter_window_and_its_word():
+    """A quarter's date window and its Q# year label describe the same quarter."""
     assert dates.quarter_window(date(2026, 10, 1)) == (date(2026, 10, 1), date(2026, 12, 31))
     assert dates.quarter_word(date(2027, 4, 1)) == "Q2 2027"

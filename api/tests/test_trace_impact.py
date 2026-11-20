@@ -63,6 +63,7 @@ async def _scenario(client):
 
 
 async def test_impact_of_a_recorded_change_lists_outputs_reasons_and_a_plan(client):
+    """A recorded change lists every affected output, why, and a safe plan."""
     ctx, chain, v1, arts, deps = await _scenario(client)
     assert (await import_md(client, ctx.as_("approver"), PRD_V2)).status_code == 201
     change_id = (await dependency(ctx.tenant_id, deps["engineering_spec"])).caused_by_change_id
@@ -94,6 +95,7 @@ async def test_impact_of_a_recorded_change_lists_outputs_reasons_and_a_plan(clie
 
 
 async def test_impact_of_a_requirement_change_reaches_acceptance_tests(client):
+    """A changed requirement's impact reaches its acceptance tests, not a tech brief."""
     ctx, chain, v1, arts, deps = await _scenario(client)
     resp = await client.patch(
         f"/v1/baseline/entities/{chain['requirement']}",
@@ -116,6 +118,7 @@ async def test_impact_of_a_requirement_change_reaches_acceptance_tests(client):
 
 
 async def test_previewing_an_entity_impact_changes_nothing(client):
+    """Previewing an entity's impact shows effects without marking anything stale."""
     ctx, chain, v1, arts, deps = await _scenario(client)
     resp = await client.get(
         f"/v1/baseline/entities/{chain['requirement']}/impact", headers=ctx.as_("viewer")
@@ -134,6 +137,7 @@ async def test_previewing_an_entity_impact_changes_nothing(client):
 
 
 async def test_impact_from_a_document_version(client):
+    """A document version's impact report lists only its own affected outputs."""
     ctx, chain, v1, arts, deps = await _scenario(client)
     assert (await import_md(client, ctx.as_("approver"), PRD_V2)).status_code == 201
     v2 = await version_row(ctx.tenant_id, 2)
@@ -153,6 +157,7 @@ async def test_impact_from_a_document_version(client):
 
 
 async def test_impact_routes_are_company_scoped_and_need_auth(client):
+    """Impact routes need a sign in and never show another company's change or entity."""
     a = await make_ctx("Company A")
     ctx, chain, v1, arts, deps = await _scenario(client)
     await import_md(client, ctx.as_("approver"), PRD_V2)

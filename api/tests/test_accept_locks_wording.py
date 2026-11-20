@@ -12,6 +12,7 @@ LOCKED = "against Oracle's changes until a person unlocks it"
 
 
 def test_the_accept_tool_says_the_item_is_locked():
+    """The accept tool's description says accepting locks the item plainly."""
     ops = {(o.method, o.path): o for o in app_operations(app)}
     accept = ops[("POST", "/v1/baseline/proposals/{proposal_id}/accept")]
     assert LOCKED in accept.tool_description()
@@ -19,11 +20,13 @@ def test_the_accept_tool_says_the_item_is_locked():
 
 
 def test_the_propose_change_tool_says_accepting_locks_the_item():
+    """The propose change tool also says accepting locks the item."""
     (propose,) = [c for c in CURATED if c.name == "propose_change"]
     assert LOCKED in propose.description
 
 
 def test_the_from_run_reason_says_accepting_keeps_the_item_locked():
+    """A run's accept reason text says accepting keeps the item locked."""
     assert LOCKED in from_run.ACCEPT_KEEPS_LOCKED
 
 

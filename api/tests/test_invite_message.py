@@ -180,6 +180,7 @@ def test_the_expiry_is_in_the_company_time_zone_with_its_abbreviation(moment, wo
 
 
 def test_another_company_zone_names_its_own_abbreviation():
+    """A reply in another timezone gets that zone's own abbreviation."""
     message = _email(expires_at=datetime(2026, 11, 6, 17, 0, tzinfo=UTC), zone="Asia/Tokyo")
     assert "Expires Sat Nov 7, 2:00 AM JST" in message.text
 
@@ -257,6 +258,7 @@ def test_reply_to_is_the_inviter_and_from_stays_the_mailbox():
 
 
 def test_no_inviter_address_sets_no_reply_to():
+    """With no inviter address, the email sets no reply-to header."""
     parsed = _parsed(_email(reply_to=None, inviter="An owner"))
     assert parsed["Reply-To"] is None
 
@@ -307,6 +309,7 @@ async def test_the_invite_stores_returns_and_sends_the_message(client, owner, ia
 
 
 async def test_no_message_is_null_and_leaves_the_block_out(client, owner, iap, mail):  # noqa: F811
+    """An invite with no message omits the message block from the email."""
     _, headers = owner
     for body in ({}, {"message": None}, {"message": "   "}):
         address = f"p{uuid.uuid4().hex[:6]}@example.com"

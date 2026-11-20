@@ -56,6 +56,7 @@ async def discussion_count(ctx) -> int:
 # opens, the refusal is another status or wording, or the flags disappear; no_claim=the
 # web hiding the buttons (autonomy-goals.spec.ts).
 async def test_observe_opens_no_interview_and_keeps_the_flags(client, fake):
+    """Observe autonomy refuses to open or continue a goal interview, asking nothing."""
     fake.text = reply_with(VERSIONS)
     ctx = await company()
     goal = await vague_goal(client, ctx)
@@ -79,6 +80,7 @@ async def test_observe_opens_no_interview_and_keeps_the_flags(client, fake):
 # of its versions (keep_versions reads the level when the reply completes); fails_when=any
 # goal_measure version is stored; no_claim=the reply's prose (it still streams).
 async def test_observe_mid_interview_stores_no_versions(client, fake):
+    """Switching to Observe mid-interview keeps reading open but stores no new version."""
     fake.text = reply_with(VERSIONS)
     ctx = await company()
     goal = await vague_goal(client, ctx)
@@ -98,6 +100,7 @@ async def test_observe_mid_interview_stores_no_versions(client, fake):
 # stored, or none; no_claim=the web's missing Use version 1 quick reply (the web reads
 # the level; autonomy-goals.spec.ts).
 async def test_draft_keeps_one_version(client, fake):
+    """Draft autonomy keeps only the newest proposed version from a goal interview."""
     fake.text = reply_with(VERSIONS)
     ctx = await company()
     goal = await vague_goal(client, ctx)
@@ -112,6 +115,7 @@ async def test_draft_keeps_one_version(client, fake):
 # fails_when=the level trims or refuses at Recommend; no_claim=the versions' content
 # (test_goal_interview.test_opening_turn_stores_versions).
 async def test_recommend_keeps_up_to_three_versions(client, fake):
+    """Recommend autonomy keeps up to three proposed versions from a goal interview."""
     fake.text = reply_with(VERSIONS)
     ctx = await company()
     goal = await vague_goal(client, ctx)
@@ -128,6 +132,7 @@ async def test_recommend_keeps_up_to_three_versions(client, fake):
 # Draft; no_claim=what a real model writes.
 @pytest.mark.parametrize(("level", "asked"), [("draft", "one"), ("recommend", "up to 3")])
 async def test_the_prompt_asks_for_as_many_versions_as_are_kept(client, fake, level, asked):
+    """The interview prompt asks for one version under Draft, up to 3 under Recommend."""
     fake.text = reply_with(VERSIONS)
     ctx = await company()
     goal = await vague_goal(client, ctx)

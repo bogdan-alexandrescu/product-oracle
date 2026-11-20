@@ -23,6 +23,7 @@ DRAFTS = "/v1/simple/drafts"
 
 
 async def test_a_never_approved_roadmap_publishes_its_draft_over_a_run_version_in_review(client):
+    """A newer run import waiting for review never blocks a draft's own approval."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["move_dates"])
     async with tenant_session(ctx.tenant_id) as s:

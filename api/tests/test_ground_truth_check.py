@@ -218,6 +218,7 @@ def _clean(out: dict, w: dict) -> None:
 
 
 async def test_unlinked_item(client):
+    """A roadmap item with no feature link, or a proposed one only, reads as unlinked."""
     w = await world()
     out = await _check(client, w["ctx"])
     items, feats = w["items"], w["features"]
@@ -236,6 +237,7 @@ async def test_unlinked_item(client):
 
 
 async def test_slice_parent_missing(client):
+    """A roadmap item sliced from a missing PRD feature is flagged once, by its code."""
     w = await world()
     out = await _check(client, w["ctx"])
     prd_id, prd_title = w["prd"]
@@ -256,6 +258,7 @@ async def test_slice_parent_missing(client):
 
 
 async def test_prd_feature_missing(client):
+    """A PRD feature not yet in the Ground Truth is flagged with its code and citation."""
     w = await world()
     out = await _check(client, w["ctx"])
     prd_id, prd_title = w["prd"]
@@ -271,6 +274,7 @@ async def test_prd_feature_missing(client):
 
 
 async def test_no_code(client):
+    """A confirmed feature with no code is flagged so it can be given one."""
     w = await world()
     out = await _check(client, w["ctx"])
     no_code = _of(out, "no_code")
@@ -282,6 +286,7 @@ async def test_no_code(client):
 
 
 async def test_no_goal(client):
+    """A confirmed feature serving no confirmed goal is flagged with a fix to pick one."""
     w = await world()
     out = await _check(client, w["ctx"])
     feats = w["features"]
@@ -293,6 +298,7 @@ async def test_no_goal(client):
 
 
 async def test_runs_today_on_roadmap(client):
+    """A roadmap item whose feature still runs today is flagged off the roadmap."""
     w = await world()
     out = await _check(client, w["ctx"])
     feats = w["features"]
@@ -306,6 +312,7 @@ async def test_runs_today_on_roadmap(client):
 
 
 async def test_counts_per_kind(client):
+    """The check's summary counts match the flags of each kind, and the total too."""
     w = await world()
     out = await _check(client, w["ctx"])
     assert out["counts"] == {"unlinked_item": 2, "slice_parent_missing": 1,
@@ -315,6 +322,7 @@ async def test_counts_per_kind(client):
 
 
 async def test_a_slice_item_of_a_missing_prd_feature(client):
+    """A PRD feature's several roadmap slices are flagged once; each has its letter."""
     w = await world()
     prd_id, pv_id, rv_id = w["seed"]
     async with tenant_session(w["ctx"].tenant_id) as s:
@@ -362,6 +370,7 @@ async def _add_usage_export(w: dict, status: str = "confirmed") -> dict:
 
 
 async def test_an_item_matched_by_code_is_in_the_ground_truth(client):
+    """A roadmap item matched to a feature by its own code is never flagged unlinked."""
     w = await world()
     ids = await _add_usage_export(w)
     out = await _check(client, w["ctx"])
@@ -373,6 +382,7 @@ async def test_an_item_matched_by_code_is_in_the_ground_truth(client):
 
 
 async def test_a_proposed_code_still_flags_its_items(client):
+    """A merely proposed feature's code does not excuse its items from being flagged."""
     w = await world()
     ids = await _add_usage_export(w, status="proposed")
     out = await _check(client, w["ctx"])
@@ -385,6 +395,7 @@ async def test_a_proposed_code_still_flags_its_items(client):
 
 
 async def test_a_slice_given_a_code_is_in_the_ground_truth(client):
+    """A slice feature given its own code reads as in the Ground Truth, not code-less."""
     w = await world()
     async with tenant_session(w["ctx"].tenant_id) as s:
         seed = Seed(s)
@@ -401,6 +412,7 @@ async def test_a_slice_given_a_code_is_in_the_ground_truth(client):
 
 
 async def test_prd_plan_codes_read_as_codes(client):
+    """A PRD feature's code reads the same as text or a number, never a plain number."""
     plan = {**PLAN, "features": [{"code": "f-01", "name": "Bulk import", "milestones": ["M1"]},
                                  {"code": 15, "name": "Usage export"}]}  # fmt: skip
     w = await world(plan)
@@ -412,6 +424,7 @@ async def test_prd_plan_codes_read_as_codes(client):
 
 
 async def test_an_item_of_a_running_feature_by_code_is_flagged(client):
+    """A roadmap item matched by code to a feature still running is flagged off."""
     w = await world()
     prd_id, pv_id, rv_id = w["seed"]
     async with tenant_session(w["ctx"].tenant_id) as s:
@@ -442,6 +455,7 @@ async def test_an_item_of_a_running_feature_by_code_is_flagged(client):
 
 
 async def test_plan_and_item_codes_read_one_way(client):
+    """Spellings of one feature code read as one code; an invalid number reads as none."""
     plan = {**PLAN, "features": [{"code": "f-1", "name": "Bulk import", "milestones": ["M1"]},
                                  {"code": 1, "name": "Bulk import"},
                                  {"code": " F-001 ", "name": "Bulk import"},
@@ -460,6 +474,7 @@ async def test_plan_and_item_codes_read_one_way(client):
 
 
 async def test_prd_features_match_by_code_only(client):
+    """A PRD feature sharing a name is still flagged missing unless its code matches."""
     plan = {**PLAN, "features": [*PLAN["features"],
                                  {"code": "F-20", "name": "Bulk import", "milestones": ["M2"]},
                                  {"name": "Dark mode", "milestones": ["M2"]}]}  # fmt: skip
@@ -485,6 +500,7 @@ async def test_prd_features_match_by_code_only(client):
 
 
 async def test_only_confirmed_goals_and_links_count(client):
+    """A feature has a goal only through a confirmed link to a confirmed goal."""
     w = await world()
     feats = w["features"]
     async with tenant_session(w["ctx"].tenant_id) as s:
@@ -508,6 +524,7 @@ async def test_only_confirmed_goals_and_links_count(client):
 
 
 async def test_trashed_entries_are_left_out(client):
+    """A trashed feature or goal is left out of every flag; its item reads as unlinked."""
     w = await world()
     feats = w["features"]
     async with tenant_session(w["ctx"].tenant_id) as s:
@@ -526,6 +543,7 @@ async def test_trashed_entries_are_left_out(client):
 
 
 async def test_only_confirmed_features_count(client):
+    """A roadmap item linked only to a proposed feature is flagged until confirmed."""
     w = await world()
     d, proposed = w["items"]["d"], w["features"]["proposed"]
     flag = next(f for f in _of(await _check(client, w["ctx"]), "unlinked_item")
@@ -553,6 +571,7 @@ FIX_WORDS = {
 
 
 async def test_each_fix_has_its_words(client):
+    """Every fix on every flag carries the plain words defined for its own action."""
     w = await world()
     out = await _check(client, w["ctx"])
     seen = set()
@@ -584,6 +603,7 @@ async def _serves(w: dict, feature_id: str) -> list[str]:
 
 
 async def test_an_add_links_a_published_item_through_its_draft(client):
+    """Adding a feature for a roadmap item links it, serves its goal, clears its flag."""
     w = await world()
     b = w["items"]["b"]
     flagged = lambda out: [f["item"]["id"] for f in _of(out, "unlinked_item")]  # noqa: E731
@@ -602,6 +622,7 @@ async def test_an_add_links_a_published_item_through_its_draft(client):
 
 
 async def test_link_to_a_feature_is_a_change_in_the_draft(client):
+    """Linking an item to a feature in a draft clears its flag; only feature_id counts."""
     w = await world()
     b, f2 = w["items"]["b"], w["features"]["F-02"]
     body = {"op": "set_feature", "target": {"item_id": b}, "before": {"feature_id": None},
@@ -621,6 +642,7 @@ async def test_link_to_a_feature_is_a_change_in_the_draft(client):
 
 
 async def test_a_commenters_add_is_one_proposal_with_its_link_and_goal(client):
+    """A commenter's repeated add is one proposal; accepting links the item and goal."""
     w = await world()
     b = w["items"]["b"]
     flagged = lambda out: [f["item"]["id"] for f in _of(out, "unlinked_item")]  # noqa: E731
@@ -645,6 +667,7 @@ async def test_a_commenters_add_is_one_proposal_with_its_link_and_goal(client):
 
 
 async def test_a_prd_flag_carries_its_goal(client):
+    """A PRD-feature-missing flag carries its goal; adding the feature clears it."""
     w = await world()
     out = await _check(client, w["ctx"])
     f9 = next(f for f in _of(out, "prd_feature_missing") if f["feature"]["code"] == "F-09")
@@ -663,6 +686,7 @@ async def test_a_prd_flag_carries_its_goal(client):
 
 
 async def test_words_carry_no_ids(client):
+    """Every flag's plain-words summary stays short, ends in a period, names no raw id."""
     w = await world()
     out = await _check(client, w["ctx"])
     # code_differs: tests/test_ground_truth_confirm_code.py.
@@ -675,6 +699,7 @@ async def test_words_carry_no_ids(client):
 
 
 async def test_anyone_who_reads_the_roadmap_reads_it(client):
+    """Anyone with roadmap access reads the same check; signed-out is refused."""
     w = await world()
     for who in ("viewer", "commenter", "approver", "owner"):
         assert (await _check(client, w["ctx"], who))["total"] == 8
@@ -683,6 +708,7 @@ async def test_anyone_who_reads_the_roadmap_reads_it(client):
 
 
 async def test_scoped_to_the_company(client):
+    """The Ground Truth check only sees its own company's items, never another's."""
     w = await world()
     other = await make_ctx("Other Example Co")
     out = await _check(client, other)
@@ -692,6 +718,7 @@ async def test_scoped_to_the_company(client):
 
 
 async def test_an_unlinked_item_still_saves(client):
+    """Adding and approving a still-unlinked roadmap item saves it, still flagged."""
     w = await AddWorld().build()
     c = (await w.add(client, "owner", "Guided setup"))["change"]
     assert c["status"] == "applied"
@@ -712,6 +739,7 @@ async def test_an_unlinked_item_still_saves(client):
 
 
 async def test_entity_create_keeps_codes_and_links_to_features(client):
+    """Only a feature's key can be a feature code, and only a feature serves a goal."""
     w = await world()
     h = w["ctx"].as_("owner")
     goal = {"type": "goal", "key": "F-30", "title": "Keep teams"}
@@ -737,6 +765,7 @@ async def test_entity_create_keeps_codes_and_links_to_features(client):
 
 
 async def test_a_proposal_carries_the_link_and_goal_of_a_feature_only(client):
+    """A proposal enforces the feature-only rule for links, deduped by the item's id."""
     w = await world()
     h = w["ctx"].as_("commenter")
     goal = {
@@ -767,6 +796,7 @@ async def test_a_proposal_carries_the_link_and_goal_of_a_feature_only(client):
 
 
 async def test_an_add_while_the_roadmaps_draft_waits_says_why(client):
+    """Adding a feature while the roadmap's draft awaits approval is refused."""
     w = await world()
     h = w["ctx"].as_("owner")
     # A change to another item opens the roadmap's draft; it is sent for approval.

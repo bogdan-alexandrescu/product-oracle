@@ -73,6 +73,7 @@ PRD = """# Team space
 
 
 def test_tables_give_kind_what_decisions_and_risks():
+    """A feature's kind and what, plus its milestone's decisions, parse from tables."""
     view = plan.compute(plan.parse(PRD, date(2026, 10, 28)))
     s = {x.code: x for x in view.slices}
     assert (s["F-01"].kind, s["F-01"].what) == (
@@ -88,6 +89,7 @@ def test_tables_give_kind_what_decisions_and_risks():
 
 
 def test_job_answer_gives_kind_what_decisions_and_risks():
+    """A job's answer drops blank decisions or risks and keeps the real ones."""
     answer = {
         "milestones": [
             {"code": "M1", "name": "Prove it", "start": "2026-11-02", "end": "2026-11-27",
@@ -109,6 +111,7 @@ def test_job_answer_gives_kind_what_decisions_and_risks():
 
 
 def test_prompt_asks_for_the_part():
+    """The current plan prompt asks for every detail field the plan page needs."""
     name, text = prompting.current("prd_plan")
     assert name != "prd_plan.v1"
     for word in (
@@ -125,6 +128,7 @@ def test_prompt_asks_for_the_part():
 
 
 async def test_plan_reads_flows_and_measured_goals(client):
+    """A feature's flow steps and each goal's measured progress show on the plan."""
     ctx = await make_ctx()
     ids = await seed(ctx, FIXTURE, items=("f-01", "f-03"))
     async with tenant_session(ctx.tenant_id) as s:

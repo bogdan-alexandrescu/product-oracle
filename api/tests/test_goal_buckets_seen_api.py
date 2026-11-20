@@ -31,6 +31,7 @@ async def _grow(client, w: World) -> dict:
 
 @pytest.mark.asyncio
 async def test_edit_with_matching_seen_saves(client):
+    """A goal edit saved with a seen value matching the latest state is applied."""
     w = await World().build()
     r = await client.patch(f"{URL}/goals/{w.goals['grow']}", headers=w.as_("owner"),
                            json={**EDIT, "seen": SEEN})  # fmt: skip
@@ -41,6 +42,7 @@ async def test_edit_with_matching_seen_saves(client):
 
 @pytest.mark.asyncio
 async def test_edit_after_another_edit_is_refused(client):
+    """A goal edit is refused with a conflict if someone else changed it since the form opened."""
     w = await World().build()
     # Someone else changes the measure after the form opened.
     other = {**SEEN, "measure": "Shops selling weekly"}

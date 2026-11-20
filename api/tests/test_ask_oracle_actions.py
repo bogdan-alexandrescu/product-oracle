@@ -110,6 +110,7 @@ OUTWARD = (
 
 
 def test_every_route_is_allowed_or_denied_by_name():
+    """Every route is allowed or denied by name, never both, never neither."""
     cat = ask_actions.catalogue(app)
     named = {**OUTWARD_OR_SECRET, **dict.fromkeys(NOT_OFFERED, "")}
     seen = 0
@@ -139,12 +140,14 @@ def test_every_route_is_allowed_or_denied_by_name():
 
 
 def test_trashing_an_outcome_is_classed_by_name():
+    """Deleting an outcome is denied for its own reason, not just as a new route."""
     cat = ask_actions.catalogue(app)
     assert "delete_outcome" in NOT_OFFERED
     assert cat.denied["delete_outcome"] != ask_actions.NEW_ROUTE_WHY
 
 
 def test_no_offered_action_takes_a_secret():
+    """No action Ask Oracle offers ever takes a secret field or parameter."""
     for a in ask_actions.catalogue(app).actions.values():
         fields = ask_actions.body_fields(a.op) if a.body else []
         assert not [f for f in fields if ask_actions.SECRET.search(f)], a.name
@@ -152,6 +155,7 @@ def test_no_offered_action_takes_a_secret():
 
 
 def test_a_new_route_starts_excluded():
+    """A newly added route starts denied until it is explicitly allowed."""
     toy = FastAPI()
 
     @toy.post("/v1/widgets", name="make_widget")
@@ -174,6 +178,7 @@ async def _entity(ctx, key: str) -> Entity | None:
 
 
 async def test_viewer_gets_no_card_for_an_approver_action(client):
+    """A viewer gets no action card for an approver-only action, only a note."""
     ctx = await make_people()
     await World(ctx).build()
     seen: list = []
@@ -217,6 +222,7 @@ async def test_viewer_gets_no_card_for_an_approver_action(client):
 
 
 async def test_a_read_runs_at_once_and_is_worded(client):
+    """A read action runs at once with no card, and its answer is worded."""
     ctx = await make_people()
     await World(ctx).build()
     seen: list = []
@@ -236,6 +242,7 @@ async def test_a_read_runs_at_once_and_is_worded(client):
 
 
 async def test_dependency_removal_card_end_to_end_with_undo(client):
+    """Removing then re-adding a dependency by chat applies and undoes correctly."""
     ctx = await make_people()
     w = await World(ctx).build()
     bulk, ledger = w.ids["Bulk import"], w.ids["Ledger v2"]
@@ -301,6 +308,7 @@ async def _apply(client, ctx, who: str, card: dict) -> dict:
 
 
 async def test_a_card_names_each_record_and_undo_is_promised_only_when_sure(client):
+    """A delete names its record and warns it cannot be undone."""
     ctx = await make_people()
     await World(ctx).build()
     m = await _called(client, ctx, "approver", _entity_call("night-nurse")["calls"][0])
@@ -358,6 +366,7 @@ async def test_a_card_names_each_record_and_undo_is_promised_only_when_sure(clie
 
 
 def test_undo_needs_one_id_matching_the_delete():
+    """Undo needs exactly one matching id and skips values it cannot invert."""
     cat = ask_actions.catalogue(app).actions
     back = ask_actions._deleter(cat["create_entity"])
     assert back is not None and back.name == "delete_entity"
@@ -377,6 +386,7 @@ def test_undo_needs_one_id_matching_the_delete():
 
 
 async def test_a_secret_is_never_kept_in_a_card(client):
+    """A create with a secret field gets no card, and the secret never shows."""
     ctx = await make_people()
     await World(ctx).build()
     body = {"type": "assumption", "key": "k1", "title": "Example",
@@ -388,6 +398,7 @@ async def test_a_secret_is_never_kept_in_a_card(client):
 
 
 async def test_a_meeting_offers_only_reads_every_attendee_reaches(client, meetings):  # noqa: F811
+    """A meeting offers only actions every attendee could reach themselves."""
     ctx = await make_people()
     await World(ctx).build()
     mid = _meeting(ctx, meetings)  # a viewer attends
@@ -405,6 +416,7 @@ async def test_a_meeting_offers_only_reads_every_attendee_reaches(client, meetin
 
 
 async def test_apply_all_leaves_api_action_cards_for_their_own_apply(client):
+    """Apply-all is refused when a message still holds its own action cards."""
     ctx = await make_people()
     await World(ctx).build()
     m = await _called(client, ctx, "approver", _entity_call("a-one")["calls"][0],
@@ -417,6 +429,7 @@ async def test_apply_all_leaves_api_action_cards_for_their_own_apply(client):
 
 
 async def test_undo_of_a_dependency_card_turns_back_only_its_dependency(client):
+    """Undoing a dependency card turns back only that one dependency."""
     ctx = await make_people()
     w = await World(ctx).build()
     bulk = w.ids["Bulk import"]
@@ -561,6 +574,7 @@ async def test_an_allowed_route_that_pings_names_each_person_on_its_card(client)
 
 
 def test_the_walk_sees_a_ping():
+    """A code walk actually reaches the functions that send a ping."""
     from oracle.decisions import service as decisions
     from oracle.intake import questions
 
@@ -576,6 +590,7 @@ async def _new_entity(client, ctx, key: str, title: str) -> str:
 
 
 async def test_a_card_names_every_record_its_body_points_to(client):
+    """A card names every record its body points to, or gets no card at all."""
     ctx = await make_people()
     await World(ctx).build()
     a = await _new_entity(client, ctx, "night-nurse", "Night shift nurse")
@@ -598,6 +613,7 @@ async def test_a_card_names_every_record_its_body_points_to(client):
 
 
 async def test_undo_is_not_promised_for_a_merged_value(client):
+    """Undo is never promised for an edit that merges into an existing value."""
     ctx = await make_people()
     await World(ctx).build()
     a = await _new_entity(client, ctx, "night-nurse", "Night shift nurse")
@@ -613,6 +629,7 @@ async def test_undo_is_not_promised_for_a_merged_value(client):
 
 
 async def test_a_meeting_never_reads_one_person_own_records(client, meetings):  # noqa: F811
+    """A meeting never reads one attendee's own private records for another."""
     from tests.test_simple_chat_api import MeetingRules
 
     ctx = await make_people()
@@ -637,6 +654,7 @@ async def test_a_meeting_never_reads_one_person_own_records(client, meetings):  
 
 
 async def test_a_secret_value_is_never_kept_in_a_card(client):
+    """A secret value pasted anywhere in a create body is kept out of the reply."""
     ctx = await make_people()
     await World(ctx).build()
     pasted = "ghp_" + "Example0Token1Not2Real3Value4Abc5"
@@ -648,6 +666,7 @@ async def test_a_secret_value_is_never_kept_in_a_card(client):
 
 
 async def test_a_proposal_answer_promises_no_undo(monkeypatch):
+    """A proposal, not yet applied, leaves its card's undo unset."""
     from types import SimpleNamespace
 
     cat = ask_actions.catalogue(app).actions
@@ -674,6 +693,7 @@ async def test_a_proposal_answer_promises_no_undo(monkeypatch):
 
 
 async def test_a_card_whose_commit_failed_cannot_apply_twice(client, monkeypatch):
+    """A card whose own record failed to save cannot be applied a second time."""
     ctx = await make_people()
     await World(ctx).build()
     m = await _called(client, ctx, "approver", _entity_call("once-only")["calls"][0])
@@ -704,6 +724,7 @@ async def test_a_card_whose_commit_failed_cannot_apply_twice(client, monkeypatch
 
 
 async def test_a_decision_request_names_the_approver_and_apply_pings_exactly_them(client, slack):  # noqa: F811
+    """A decision card names its approver and pings exactly that person."""
     from tests.test_slack_bridge import install
     from tests.test_slack_pings import pings_of
 
@@ -735,6 +756,7 @@ async def test_a_decision_request_names_the_approver_and_apply_pings_exactly_the
 
 
 async def test_a_question_names_whom_it_asks_and_a_reassigned_one_the_new_person(client, slack):  # noqa: F811
+    """A question card names who it asks, and reassigning it pings the new person."""
     from tests.test_slack_bridge import install
     from tests.test_slack_pings import pings_of
 
@@ -795,6 +817,7 @@ async def test_a_question_names_whom_it_asks_and_a_reassigned_one_the_new_person
 
 
 async def test_a_card_names_an_intake_a_prd_version_and_a_document(client):
+    """A card names the intake, document, or PRD version it belongs to."""
     from oracle.docs.models import Document, DocumentVersion
     from tests.fixtures import draft, import_draft
     from tests.intake_helpers import create_intake
@@ -835,6 +858,7 @@ async def test_a_card_names_an_intake_a_prd_version_and_a_document(client):
 
 
 async def test_a_pinging_card_says_truthfully_whether_slack_goes(client, slack):  # noqa: F811
+    """A pinging card says truthfully whether Slack will actually be used."""
     from tests.test_slack_bridge import install
     from tests.test_slack_pings import choose
 

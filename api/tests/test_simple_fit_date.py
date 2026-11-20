@@ -89,6 +89,7 @@ def plan(target: dt.date = dt.date(2027, 1, 29), focus_raise: float | None = 0.8
 
 
 def test_ranked_by_days_saved_for_least_harm():
+    """Fit-date changes rank by days saved, ties broken by the least harmful kind."""
     a = fd.answer(plan())
     assert [c.days for c in a.changes] == sorted((c.days for c in a.changes), reverse=True)
     for x, y in zip(a.changes, a.changes[1:], strict=False):
@@ -118,6 +119,7 @@ def test_ranked_by_days_saved_for_least_harm():
 
 
 def test_live_date_of_a_picked_set():
+    """A picked set's live date is the same no matter what order the picks come in."""
     p = plan()
     today = fd.schedule(p).milestones["M2"]
     # 4 engineers at 70%: 2.8 person-weeks a week; M1's 5 then M2's 29 gated, plus the hold.
@@ -134,6 +136,7 @@ def test_live_date_of_a_picked_set():
 
 
 def test_oracle_pick_reaches_the_target_with_the_least():
+    """Oracle's automatic pick reaches the target using the fewest changes that work."""
     p = plan()
     a = fd.answer(p)
     assert a.reachable
@@ -145,6 +148,7 @@ def test_oracle_pick_reaches_the_target_with_the_least():
 
 
 def test_locked_items():
+    """Guardrail items are never picked to save time; they show locked with why."""
     a = fd.answer(plan())
     assert all(c.id not in ("send", "cards") for c in a.changes)
     assert [(it.title, it.guard) for it, _ in a.locked] == [
@@ -157,6 +161,7 @@ def test_locked_items():
 
 
 def test_no_set_reaches_the_target():
+    """An unreachable target still gets the best picks and the closest date they reach."""
     p = plan(target=dt.date(2026, 12, 20))
     a = fd.answer(p)
     assert a.reachable is False
@@ -169,6 +174,7 @@ def test_no_set_reaches_the_target():
 
 
 def test_cutting_a_locked_item_would_reach_is_said():
+    """An unreachable answer still says whether dropping a locked item would reach."""
     p = plan(
         target=fd.date_of(plan(), [c.id for c in fd.answer(plan()).changes if c.pickable])
         - dt.timedelta(days=3)
@@ -179,6 +185,7 @@ def test_cutting_a_locked_item_would_reach_is_said():
 
 
 def test_draft_marks_resized_items_for_a_new_estimate():
+    """A re-plan flags resized items for a fresh estimate but leaves locked ones alone."""
     p = plan()
     d = fd.draft(p, ["summary", "snippets", "bulk", "tone"])
     assert [i.id for i in d.needs_estimate] == ["summary", "snippets"]

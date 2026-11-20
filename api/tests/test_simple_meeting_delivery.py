@@ -93,6 +93,7 @@ async def _tick(w, clock_, minutes: float = 0) -> None:
 
 
 async def test_partial_failure_retries_then_fails(client, monkeypatch, clock, caplog):  # noqa: F811
+    """A failed email retries three times on backoff then fails; sent ones stay sent."""
     w = await world()
     commenter = w.ctx.users["commenter"]
     # Alembic's fileConfig (the test database's migrations) disables loggers made before it.
@@ -132,6 +133,7 @@ async def test_partial_failure_retries_then_fails(client, monkeypatch, clock, ca
 
 
 async def test_slack_fails_three_times(client, monkeypatch, clock):  # noqa: F811
+    """Slack delivery stops retrying and fails after three tries."""
     w = await world()
     m, fake, slack = await _sent(client, w, monkeypatch, bad=set(), slack_fails=5)
     await _tick(w, clock)
@@ -146,6 +148,7 @@ async def test_slack_fails_three_times(client, monkeypatch, clock):  # noqa: F81
 
 
 async def test_retry_rights_and_requeue(client, monkeypatch, clock):  # noqa: F811
+    """Only an owner or who ended the meeting may retry delivery, just the failed part."""
     w = await world()
     commenter = w.ctx.users["commenter"]
     m, fake, slack = await _sent(client, w, monkeypatch, bad={commenter.email}, slack_fails=9)
@@ -205,6 +208,7 @@ async def _set_delivery(w, meeting_id: str, delivery: dict) -> None:
 
 
 async def test_legacy_queued_slack_is_never_posted_again(client, monkeypatch, clock):  # noqa: F811
+    """A Slack post stored before tries were tracked reads as sent, never posted again."""
     # Card (dod-delivery review):
     #   protects: a meeting sent before each Slack post carried its tries (stored
     #   slack_status "queued", no slack_tries: the old outbox already posted it) reads as
@@ -224,6 +228,7 @@ async def test_legacy_queued_slack_is_never_posted_again(client, monkeypatch, cl
 
 
 async def test_legacy_email_count_is_kept(client, monkeypatch, clock):  # noqa: F811
+    """A delivery saved before per-attendee status keeps its old count of emails sent."""
     # Card (dod-delivery review):
     #   protects: a delivery stored before each attendee carried a status keeps its stored
     #   count of emails sent.
@@ -238,6 +243,7 @@ async def test_legacy_email_count_is_kept(client, monkeypatch, clock):  # noqa: 
 
 
 async def test_meeting_is_not_locked_while_sending(client, monkeypatch, clock):  # noqa: F811
+    """Sending delivery never locks the meeting row, so edits go through meanwhile."""
     # Card (dod-delivery review):
     #   protects: the meeting row is not held FOR UPDATE through each email and the Slack
     #   call (a slow mailer or Slack must not block edits to the meeting); a claimed send
@@ -294,6 +300,7 @@ async def test_meeting_is_not_locked_while_sending(client, monkeypatch, clock): 
 
 
 def test_the_old_alias_is_gone():
+    """The delivery tick has one name only; its old alias is not kept around unused."""
     # Card (dod-delivery review): protects: the tick has one name (deliver_due);
     # fails_when: the unused send_queued_emails alias is back; no_claim: behaviour.
     assert not hasattr(meetings, "send_queued_emails")

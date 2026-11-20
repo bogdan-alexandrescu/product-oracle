@@ -11,6 +11,7 @@ OAUTH_TABLES = {"oauth_clients", "oauth_codes", "oauth_tokens"}
 
 
 def test_0004_up_down_up(scratch_db):  # noqa: F811
+    """The OAuth migration can go up, down and up again without losing other data."""
     cfg = _cfg()
     upgrade(cfg, "0003")
     assert not (OAUTH_TABLES & _tables())

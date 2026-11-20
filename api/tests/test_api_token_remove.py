@@ -34,6 +34,7 @@ async def listed(client, headers, **params) -> set[str]:
 
 
 async def test_an_expired_token_is_removed(client):
+    """Removing an expired token clears it from every list, including its owner's own."""
     ctx = await setup(client)
     pm = await person(ctx.tenant_id, "approver", "pm")
     token_id, _ = await member_token(ctx, pm.user_id, "laptop-cli")
@@ -58,6 +59,7 @@ async def test_an_expired_token_is_removed(client):
 
 
 async def test_an_active_or_revoked_token_is_refused(client):
+    """Only an expired token can be removed; an active or revoked one is refused."""
     ctx = await setup(client)
     pm = await person(ctx.tenant_id, "approver", "pm")
     active, _ = await member_token(ctx, pm.user_id, "still-on")
@@ -92,6 +94,7 @@ async def test_another_persons_token_is_refused(client):
 
 
 async def test_approvals_made_with_a_removed_token_keep_it(client):
+    """Removing a token keeps the approvals it already made."""
     ctx = await setup(client)
     pm = await person(ctx.tenant_id, "approver", "pm")
     token_id, agent = await member_token(ctx, pm.user_id, "pm-agent")
@@ -117,6 +120,7 @@ async def revoked_at(tenant_id: uuid.UUID, token_id: uuid.UUID) -> datetime | No
 
 
 async def test_a_password_change_leaves_a_removed_token_alone(client):
+    """A password change revokes active tokens but leaves an already removed one alone."""
     ctx = await setup(client)
     pm = await person(ctx.tenant_id, "approver", "pm")
     gone, active = await removed_and_active(ctx, pm.user_id)
@@ -142,6 +146,7 @@ async def test_a_password_change_leaves_a_removed_token_alone(client):
 
 
 async def test_removing_a_member_leaves_a_removed_token_alone(client):
+    """Disabling a member revokes its active token but leaves a removed one alone."""
     ctx = await setup(client)
     pm = await person(ctx.tenant_id, "approver", "pm")
     gone, active = await removed_and_active(ctx, pm.user_id)
@@ -160,6 +165,7 @@ async def test_removing_a_member_leaves_a_removed_token_alone(client):
 
 
 async def test_the_service_token_list_skips_a_removed_token(client):
+    """The service's token list leaves out a token that was removed."""
     from oracle.members import service
 
     ctx = await setup(client)

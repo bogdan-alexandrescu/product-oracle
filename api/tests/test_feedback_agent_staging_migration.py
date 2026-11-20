@@ -66,6 +66,7 @@ def _columns() -> list[str]:
 
 
 def test_the_chain_after_feedback_authors():
+    """Each migration added since this one chains to a single head, with no branch left dangling."""
     script = ScriptDirectory.from_config(_cfg())
     # 0022_invite_delivery (A5) chains on it, then 0022_baseline_flow (B1),
     # 0022_engineering_lead (A3), 0022_discussions (G1), 0022_priority_snapshot_runs (C8),
@@ -91,6 +92,7 @@ def test_the_chain_after_feedback_authors():
 
 
 def test_upgrade_adds_the_staging_columns_and_downgrade_drops_them(scratch_db):
+    """Upgrading adds the staging columns with no data loss; downgrading removes them."""
     cfg = _cfg()
     upgrade(cfg, "0020_prd_scopes")
     tenant, doc, item = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()

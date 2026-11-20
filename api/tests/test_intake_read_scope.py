@@ -71,6 +71,7 @@ def _as_run(ctx, who: str, raw: str) -> dict:
 # flow's one segment holds it, with that one tool; fails_when=another flow could mint it or
 # the read falls under read:baseline; no_claim=the MCP transport.
 def test_only_the_intake_read_holds_the_scope():
+    """Only the intake-analysis read segment holds its special scope, at its own price."""
     assert required_scope("GET", "/v1/intakes/{intake_id}/analysis-input") == SCOPE
     assert required_scope("GET", "/v1/intakes/{intake_id}/summary") == "read:sources"
     assert SCOPE in SCOPES
@@ -93,6 +94,7 @@ def test_only_the_intake_read_holds_the_scope():
 # own minted token holds read:intake-input only; fails_when=the body differs from the job's
 # payload or an excerpt is missing; no_claim=what the agent does with it.
 async def test_the_runs_token_reads_exactly_the_jobs_payload(client):
+    """A run token's analysis input matches the job's exact payload, and is audited."""
     ctx = await company()
     intake_id, run = await _intake_with_run(client, ctx)
     raw = await _token(ctx, run.id)
@@ -118,6 +120,7 @@ async def test_the_runs_token_reads_exactly_the_jobs_payload(client):
 # scope, and the run's token without the scope all get 404; fails_when=any of them reads
 # the payload; no_claim=SwarmCloud's token handling.
 async def test_any_other_run_token_is_404(client):
+    """A run token for another run, flow, or without the right scope reads nothing."""
     ctx = await company()
     intake_id, run = await _intake_with_run(client, ctx)
     other_id, other_run = await _intake_with_run(client, ctx)
@@ -141,6 +144,7 @@ async def test_any_other_run_token_is_404(client):
 # token get 403 "This is for Oracle's read of an intake"; another company's intake is 404;
 # fails_when=a person or an API token reads the author's excerpts; no_claim=MCP listing.
 async def test_people_and_api_tokens_get_403(client):
+    """People and plain API tokens are refused the run-only analysis-input route."""
     ctx = await company()
     intake_id, _run = await _intake_with_run(client, ctx)
     url = f"/v1/intakes/{intake_id}/analysis-input"
@@ -156,6 +160,7 @@ async def test_people_and_api_tokens_get_403(client):
 # protects=criterion 3c: once the run ends its tokens are revoked and the route answers
 # 401; fails_when=a revoked token still reads; no_claim=the 10-minute expiry timing.
 async def test_an_ended_runs_token_is_401(client):
+    """A run token stops working once its run's tokens are revoked."""
     ctx = await company()
     intake_id, run = await _intake_with_run(client, ctx)
     raw = await _token(ctx, run.id)

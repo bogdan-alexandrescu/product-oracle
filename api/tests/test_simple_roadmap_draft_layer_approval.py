@@ -49,6 +49,7 @@ def keyed(card: dict) -> dict[str, dict]:
 
 
 async def test_layer_changes_survive_approval(client):
+    """Draft layer edits survive once the PRD version holding them is approved."""
     ctx, _ = await world()
     [card] = await layer(client, ctx)
     items = keyed(card)
@@ -67,6 +68,7 @@ async def test_layer_changes_survive_approval(client):
 
 
 async def test_two_versions(client):
+    """Approving a PRD's second draft version publishes only that version's items."""
     ctx, ids = await world()
     await version(ctx, ids, 2, "2027-02-05", [
         {"key": "offline-sync", "title": "Offline sync v2",
@@ -79,6 +81,7 @@ async def test_two_versions(client):
 
 
 async def test_an_approved_later_version_hides_an_older_draft(client):
+    """Approving a later PRD version hides an older, still-unapproved draft of it."""
     ctx, ids = await world()
     async with tenant_session(ctx.tenant_id) as s:
         prd = await s.get(Document, ids["prd"])
@@ -90,6 +93,7 @@ async def test_an_approved_later_version_hides_an_older_draft(client):
 
 
 async def test_only_items_approval_places(client):
+    """The draft layer lists every item approval will place, using its real date."""
     ctx, _ = await world()  # its Ideas board has no date, no basis, no milestone
     [card] = await layer(client, ctx)
     items = keyed(card)

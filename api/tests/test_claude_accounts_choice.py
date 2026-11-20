@@ -46,29 +46,34 @@ def acct(label: str, *, state=AccountState.AVAILABLE, observed=NOW, assigned=0, 
 
 
 def test_the_binding_window_decides_not_the_average():
+    """The binding window decides headroom, not the average of all windows."""
     a = acct("a", five_hour=win(0.10), seven_day=win(0.95))
     assert a.headroom(NOW) == pytest.approx(0.05)
 
 
 def test_an_account_past_its_reset_is_full_again_without_being_probed():
+    """An account past its reset counts as full again, no new reading needed."""
     a = acct("a", five_hour=win(1.0, resets_in=-timedelta(minutes=1)))
     assert a.headroom(NOW) == 1.0
     assert choose([a], NOW) == a
 
 
 def test_the_account_with_the_most_headroom_wins():
+    """The account with the most headroom is chosen over a busier one."""
     busy = acct("busy", five_hour=win(0.7))
     idle = acct("idle", five_hour=win(0.2))
     assert choose([busy, idle], NOW) == idle
 
 
 def test_load_is_spread_rather_than_stacked_when_headroom_ties():
+    """On a headroom tie, the account with fewer jobs assigned wins."""
     one = acct("one", assigned=3, five_hour=win(0.2))
     two = acct("two", assigned=1, five_hour=win(0.2))
     assert choose([one, two], NOW) == two
 
 
 def test_choosing_is_deterministic_by_label_last():
+    """On a full tie, the earlier label wins, not the order given."""
     b = acct("bravo", five_hour=win(0.2))
     a = acct("alpha", five_hour=win(0.2))
     assert choose([b, a], NOW) == a
@@ -76,11 +81,13 @@ def test_choosing_is_deterministic_by_label_last():
 
 
 def test_a_nearly_spent_account_is_not_handed_to_a_new_job():
+    """An account almost at its usage floor is withheld from new jobs."""
     nearly = acct("nearly", five_hour=win(1 - DEFAULT_ASSIGN_FLOOR + 0.01))
     assert choose([nearly], NOW) is None
 
 
 def test_an_unobserved_account_is_assignable():
+    """An account never yet read is treated as fully available."""
     fresh = acct("fresh")
     assert fresh.headroom(NOW) == 1.0
     assert choose([fresh], NOW) == fresh
@@ -88,6 +95,7 @@ def test_an_unobserved_account_is_assignable():
 
 
 def test_a_stale_reading_is_discounted_but_not_treated_as_exhausted():
+    """A stale reading lowers headroom but never to zero, and still works alone."""
     old = acct("old", observed=NOW - timedelta(hours=1), five_hour=win(0.2))
     new = acct("new", five_hour=win(0.5))
     assert old.headroom(NOW) == pytest.approx(0.4)
@@ -99,10 +107,12 @@ def test_a_stale_reading_is_discounted_but_not_treated_as_exhausted():
     "state", [AccountState.PAUSED, AccountState.DRAINING, AccountState.REAUTH_REQUIRED]
 )
 def test_only_an_available_account_takes_new_jobs(state):
+    """A paused, draining or sign-in-needed account is never chosen for jobs."""
     assert choose([acct("x", state=state)], NOW) is None
 
 
 def test_excluded_and_unreadable_accounts_are_skipped():
+    """An excluded account is skipped, and an unreadable mark expires in 30 minutes."""
     a, b = acct("a"), acct("b")
     assert choose([a, b], NOW, exclude=["id-a"]) == b
     unreadable = Account(account_id="id-c", label="c", unreadable_at=NOW - timedelta(minutes=5))
@@ -116,16 +126,19 @@ def test_excluded_and_unreadable_accounts_are_skipped():
 
 
 def test_no_accounts_is_the_one_reason_that_means_fall_back():
+    """An empty pool reports no accounts registered, not a retry time."""
     assert eligibility([], NOW) == (Unavailable.NO_ACCOUNTS_REGISTERED, None)
 
 
 def test_a_paused_pool_waits_on_a_person():
+    """A pool where every account is paused or needs sign-in waits on a person."""
     pool = [acct("a", state=AccountState.PAUSED), acct("b", state=AccountState.REAUTH_REQUIRED)]
     assert choose(pool, NOW) is None
     assert eligibility(pool, NOW) == (Unavailable.POOL_PAUSED, None)
 
 
 def test_a_spent_pool_says_when_the_earliest_window_clears():
+    """A spent pool reports the soonest time any window clears, not just no."""
     soon = acct("soon", five_hour=win(0.99, resets_in=timedelta(minutes=40)))
     later = acct("later", seven_day=win(1.0, resets_in=timedelta(days=2)))
     assert choose([soon, later], NOW) is None
@@ -136,6 +149,7 @@ def test_a_spent_pool_says_when_the_earliest_window_clears():
 
 
 def test_an_account_blocked_only_by_staleness_is_a_reading_wait_not_a_spent_pool():
+    """An account blocked only by staleness waits for a fresh read, not a spent pool."""
     # Raw remaining between the floor and twice it: halved below the floor by age alone.
     old = acct("old", observed=NOW - timedelta(hours=1), five_hour=win(0.8))
     assert choose([old], NOW) is None
@@ -144,6 +158,7 @@ def test_an_account_blocked_only_by_staleness_is_a_reading_wait_not_a_spent_pool
 
 
 def test_every_account_ruled_out_by_this_call_is_a_wait_not_a_fallback():
+    """Excluding the only account reports no account available, not an empty pool."""
     assert eligibility([acct("a")], NOW, exclude=["id-a"]) == (
         Unavailable.NO_ACCOUNT_AVAILABLE,
         None,
@@ -151,6 +166,7 @@ def test_every_account_ruled_out_by_this_call_is_a_wait_not_a_fallback():
 
 
 def test_next_reset_reports_only_what_is_actually_blocking():
+    """An account with headroom to spare has no next reset time to report."""
     roomy = acct("roomy", five_hour=win(0.3), seven_day=win(0.5))
     assert roomy.next_reset(NOW) is None
     blocked = acct(
@@ -165,6 +181,7 @@ def test_next_reset_reports_only_what_is_actually_blocking():
 
 
 def test_a_reading_of_one_window_keeps_the_other():
+    """Recording a reading for one window keeps the other window untouched."""
     a = acct("a", five_hour=win(0.9))
     merged = a.with_reading({"seven_day": win(0.2)}, NOW + timedelta(minutes=1))
     assert set(merged.windows) == {"five_hour", "seven_day"}
@@ -173,6 +190,7 @@ def test_a_reading_of_one_window_keeps_the_other():
 
 
 def test_a_newer_reading_wins_and_an_older_one_is_discarded():
+    """An older usage reading is discarded; a newer one replaces it."""
     a = acct("a", five_hour=win(0.5))
     newer = a.with_reading({"five_hour": win(0.7)}, NOW + timedelta(minutes=5))
     assert newer.windows["five_hour"].utilization == 0.7
@@ -181,6 +199,7 @@ def test_a_newer_reading_wins_and_an_older_one_is_discarded():
 
 
 def test_windows_and_holds_round_trip_and_bad_entries_are_dropped():
+    """Windows and holds survive a JSON round trip, and bad entries are dropped."""
     windows = {"five_hour": WindowReading(0.25, NOW, observed_at=NOW)}
     assert windows_from_json(windows_to_json(windows)) == windows
     hold = Hold("h1", NOW, task_id="reporting", attempt_id="a1", assigned_at=NOW, move="drain")
@@ -191,6 +210,7 @@ def test_windows_and_holds_round_trip_and_bad_entries_are_dropped():
 
 
 def test_hold_log_entries_age_out_and_carry_both_sides_of_a_swap():
+    """A hold log entry carries both sides of a swap with its own retention expiry."""
     hold = Hold("h1", NOW + timedelta(hours=3), assigned_at=NOW, swapped_from="id-a",
                 swap_reason="exhausted")  # fmt: skip
     opened = hold_log_entry(hold, "id-b")
@@ -207,6 +227,7 @@ def test_hold_log_entries_age_out_and_carry_both_sides_of_a_swap():
 
 
 def test_every_account_is_swept_except_a_dead_one():
+    """Every account is swept for a refresh except one that needs sign-in."""
     pool = [
         acct("idle"),
         acct("paused", state=AccountState.PAUSED),
@@ -218,10 +239,12 @@ def test_every_account_is_swept_except_a_dead_one():
 
 @pytest.mark.parametrize("bad", ["", "UPPER", "-lead", "trail-", "has space", "a" * 41, "dot.x"])
 def test_a_label_outside_the_rule_is_refused(bad):
+    """A label breaking the naming rule, like blank or uppercase, is refused."""
     with pytest.raises(AccountError):
         validate_label(bad)
 
 
 def test_a_label_inside_the_rule_is_accepted():
+    """A label that follows the naming rule is accepted as given."""
     for good in ["a", "personal", "work-2", "a" * 40]:
         assert validate_label(good) == good

@@ -17,6 +17,7 @@ async def _add(client, ctx, role="approver", **body):
 
 
 async def test_add_risk_then_archive_it_with_a_reason(client, ctx):
+    """Archiving a confirmed item rejects it and keeps the reason in its history."""
     resp = await _add(client, ctx, type="risk", key="card-fees-1a2b3c", title="Card fees rise")
     assert resp.status_code == 201, resp.text
     risk = resp.json()["entity"]
@@ -41,6 +42,7 @@ async def test_add_risk_then_archive_it_with_a_reason(client, ctx):
 
 
 async def test_add_feature_with_its_product_and_goals(client, ctx):
+    """A feature can be linked to its product and a goal through added edges."""
     product = (await _add(client, ctx, type="product", key="shop", title="Shop")).json()["entity"]
     goal = (await _add(client, ctx, type="goal", key="activation", title="Activation")).json()
     assert goal["entity"]["status"] == "proposed"  # goals start proposed
@@ -62,6 +64,7 @@ async def test_add_feature_with_its_product_and_goals(client, ctx):
 
 
 async def test_add_validates_as_the_form_expects(client, ctx):
+    """Adding an item rejects a duplicate key, a bad key format, and an empty title."""
     resp = await _add(client, ctx, type="risk", key="dup", title="One")
     assert resp.status_code == 201
     assert (await _add(client, ctx, type="risk", key="dup", title="Two")).status_code == 409
@@ -70,6 +73,7 @@ async def test_add_validates_as_the_form_expects(client, ctx):
 
 
 async def test_viewers_and_commenters_cannot_add_confirm_or_reject(client, ctx):
+    """Viewers and commenters cannot add, confirm or reject an item."""
     item = (await _add(client, ctx, type="assumption", key="phones", title="Phones")).json()
     for role in ("viewer", "commenter"):
         resp = await _add(client, ctx, role, type="risk", key=f"r-{role}", title="R")

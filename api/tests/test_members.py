@@ -344,6 +344,7 @@ def test_every_route_requires_a_role():
     ("method", "path", "min_role", "kwargs"), MATRIX, ids=[f"{m} {p}" for m, p, _, _ in MATRIX]
 )
 async def test_role_matrix(client, world, role, method, path, min_role, kwargs):
+    """Every endpoint refuses a role below its minimum and allows the rest."""
     headers = {**kwargs.get("headers", {}), **await token_with_role(world.tenant_id, role)}
     resp = await client.request(
         method, path.format(**world.ids()), **{**kwargs, "headers": headers}
@@ -363,6 +364,7 @@ async def test_role_matrix(client, world, role, method, path, min_role, kwargs):
 
 
 async def test_denied_requests_change_nothing(client, world):
+    """A viewer's refused requests change no data and write no audit event."""
     viewer = await token_with_role(world.tenant_id, "viewer")
     before = await audit(world.tenant_id)
     for method, path, min_role, kwargs in MATRIX:
@@ -380,6 +382,7 @@ async def test_denied_requests_change_nothing(client, world):
 
 
 async def test_commenter_resolves_and_edits_only_their_own(client, world):
+    """A commenter can resolve or edit only their own comment, not another's."""
     commenter = await token_with_role(world.tenant_id, "commenter")
     url = V2.format(doc="checkout-redesign") + "/comments"
     mine = await client.post(
@@ -415,6 +418,7 @@ async def test_commenter_resolves_and_edits_only_their_own(client, world):
 
 
 async def test_list_members(client, world):
+    """Listing members never includes a password hash, and shows each status."""
     resp = await client.get("/v1/members", headers=world.owner)
     assert resp.status_code == 200
     assert [(m["email"], m["role"]) for m in resp.json()] == [
@@ -440,6 +444,7 @@ async def test_list_members(client, world):
 
 
 async def test_change_role_is_audited(client, world):
+    """Changing a role is audited once; setting the same role again logs nothing."""
     resp = await client.patch(
         f"/v1/members/{world.member_id}", json={"role": "owner"}, headers=world.owner
     )
@@ -454,6 +459,7 @@ async def test_change_role_is_audited(client, world):
 
 
 async def test_cannot_demote_the_last_owner(client, world):
+    """The last owner cannot be demoted, so a company is never left without one."""
     resp = await client.patch(
         f"/v1/members/{world.admin_id}", json={"role": "approver"}, headers=world.owner
     )
@@ -478,6 +484,7 @@ async def test_cannot_demote_the_last_owner(client, world):
 
 
 async def test_member_patch_validation(client, world):
+    """Patching a member rejects an unknown role and an id that does not exist."""
     resp = await client.patch(
         f"/v1/members/{world.member_id}", json={"role": "admin"}, headers=world.owner
     )
@@ -489,6 +496,7 @@ async def test_member_patch_validation(client, world):
 
 
 async def test_members_are_per_company(client, world):
+    """A member of one company is unreachable from another company's account."""
     from tests.conftest import make_tenant
 
     other = await make_tenant("Other Co")
@@ -504,6 +512,7 @@ async def test_members_are_per_company(client, world):
 
 
 async def test_create_invite(client, world):
+    """Creating an invite normalizes the email, records who sent it, and is audited."""
     resp = await client.post(
         "/v1/invites", json={"email": "  Pat@Example.COM ", "role": "approver"}, headers=world.owner
     )
@@ -527,6 +536,7 @@ async def test_create_invite(client, world):
     ],
 )
 async def test_create_invite_refusals(client, world, email, code):
+    """An invite is refused for a duplicate, an existing member, or a bad email."""
     resp = await client.post(
         "/v1/invites", json={"email": email, "role": "viewer"}, headers=world.owner
     )
@@ -534,6 +544,7 @@ async def test_create_invite_refusals(client, world, email, code):
 
 
 async def test_revoke_invite(client, world):
+    """Revoking an invite frees its email to be invited again, and is audited."""
     url = f"/v1/invites/{world.invite_id}"
     assert (await client.delete(url, headers=world.owner)).status_code == 204
     assert (await client.get("/v1/invites", headers=world.owner)).json() == []
@@ -557,6 +568,7 @@ async def test_revoke_invite(client, world):
 
 
 async def test_accepted_invite_cannot_be_revoked(client, world):
+    """An already-accepted invite cannot be revoked."""
     from datetime import UTC, datetime
 
     async with tenant_session(world.tenant_id) as s:

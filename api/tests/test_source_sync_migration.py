@@ -66,11 +66,13 @@ def scratch_db():
 
 
 def test_chains_on_the_single_head():
+    """The source sync migration chains onto the single existing head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_upgrade_and_downgrade(scratch_db):
+    """The source sync migration's backoff columns upgrade and downgrade right."""
     upgrade(_cfg(), REVISION)
     columns = _columns()
     assert columns["next_sync_at"] == "YES" and columns["sync_failures"] == "NO"

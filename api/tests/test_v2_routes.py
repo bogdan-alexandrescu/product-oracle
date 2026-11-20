@@ -19,6 +19,7 @@ FIXTURES_DIR_PRD = Path(__file__).parent / "fixtures" / "prd_v1.md"
 
 
 def test_every_new_table_has_a_list_and_a_get():
+    """Every v2 database table has both a list and a get API route."""
     from oracle.db import Base
     from oracle.v2 import models as m
 
@@ -36,6 +37,7 @@ def test_every_new_table_has_a_list_and_a_get():
 
 
 def test_every_route_is_an_mcp_tool():
+    """Every v2 read route is also exposed as a correctly named MCP tool."""
     ops = {(o.method, o.path): o for o in app_operations(app)}
     for res in RESOURCES:
         listing = ops[("GET", f"/v1{res.path}")]
@@ -47,11 +49,13 @@ def test_every_route_is_an_mcp_tool():
 
 @pytest.mark.parametrize("path", PATHS)
 async def test_routes_require_auth(client, path):
+    """No v2 list or get route can be read without authentication."""
     assert (await client.get(f"/v1{path}")).status_code == 401
     assert (await client.get(f"/v1{path}/{uuid.uuid4()}")).status_code == 401
 
 
 async def test_a_viewer_lists_and_gets_every_entity_of_their_company(client):
+    """A viewer can list and read every v2 entity belonging to their company."""
     ctx = await make_ctx()
     seeded = await seed_v2(ctx.tenant_id)
     viewer = ctx.as_("viewer")
@@ -89,6 +93,7 @@ async def test_another_companys_rows_are_invisible(client):
 
 
 async def test_list_filters_and_paging(client):
+    """Each v2 list route filters and pages correctly, and rejects bad params."""
     ctx = await make_ctx()
     seeded = await seed_v2(ctx.tenant_id)
     h = ctx.as_("viewer")
@@ -117,6 +122,7 @@ async def test_list_filters_and_paging(client):
 
 
 async def test_typed_json_columns_come_back_typed(client):
+    """A v2 row's JSON columns come back as their real typed shape, not raw text."""
     ctx = await make_ctx()
     seeded = await seed_v2(ctx.tenant_id)
     h = ctx.as_("viewer")

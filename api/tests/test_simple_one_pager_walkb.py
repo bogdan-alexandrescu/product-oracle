@@ -72,6 +72,7 @@ def outcome(text: str, name: str, frm: str, to: str) -> OnePagerLine:
 
 
 def test_measure_from_success_lines():
+    """An outcome line finds its measure and source by matching its own name."""
     found = {m.name: m for m in checks.measures([SUCCESS])}
     assert (
         found["Onboarding on time"].measure
@@ -100,6 +101,7 @@ def test_measure_from_success_lines():
 
 
 def test_who_has_it_one_plain_line():
+    """Who has it reads a single plain sentence as the whole audience line."""
     assert (
         checks.who_has_it([WHO]) == "Customer success managers who run onboarding for new accounts"
     )
@@ -128,6 +130,7 @@ def test_who_has_it_one_plain_line():
 
 
 def test_codes_keep_the_sentence():
+    """A feature's name is added after its bare code once, never duplicated."""
     secs = [
         sec(
             "requirements",
@@ -153,6 +156,7 @@ def test_codes_keep_the_sentence():
 
 
 def test_generated_words_read_month_first_and_whole():
+    """Generated text always renders dates month first and drops raw markdown links."""
     assert checks.month_first(
         "M1 ends 2027-03-31; see [Pacing plan](#f-01) (#feature-pacing-plan)"
     ) == ("M1 ends Mar 31, 2027; see Pacing plan")
@@ -170,6 +174,7 @@ def test_generated_words_read_month_first_and_whole():
 
 
 def test_needs_a_look_only_for_real_disagreement():
+    """A count that truly matches its list is never flagged as a disagreement."""
     m1 = sec(
         "milestone-m1",
         "M1 Pace",
@@ -188,6 +193,7 @@ def test_needs_a_look_only_for_real_disagreement():
 
 # The one-pager PDF's header printed its span as "2026-11-02 – 2027-02-26".
 def test_pdf_span_reads_month_first():
+    """A date span always reads month first, dropping a year shared by both ends."""
     from datetime import date
 
     assert (
@@ -197,6 +203,7 @@ def test_pdf_span_reads_month_first():
 
 
 def test_measure_is_the_lines_own_words_never_a_citation():
+    """An outcome's measure is never built from a citation's title or quote."""
     # Cited by a meeting's notes and by a feature: never the measure (vqa one-pager 2).
     success = sec(
         "success",

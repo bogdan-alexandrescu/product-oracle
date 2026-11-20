@@ -122,6 +122,7 @@ async def reads(ctx) -> list[dict]:
 # which grants nothing else; fails_when=a run token without live:sources may call a live
 # route, or an olt_ caller may call a non-live one; no_claim=the routes themselves.
 def test_live_area_needs_live_sources():
+    """Live Fireflies routes need the live:sources scope, which unlocks nothing else."""
     for path in ("/v1/live/sources", "/v1/live/fireflies/{connection_id}/meetings"):
         assert scopes.required_scope("GET", path) == "live:sources"
         assert not scopes.allowed(frozenset({"read:sources", "read:baseline"}), "GET", path)
@@ -136,6 +137,7 @@ def test_live_area_needs_live_sources():
 # fails_when=the raw token is stored, the TTL drifts, or any other tool is listed;
 # no_claim=-.
 async def test_token_is_hashed_and_lists_only_live_tools(client, sources, model):
+    """A live token is hashed, expires in 10 minutes, and can only run live tools."""
     ctx, conn = await setup(client)
     _d, reply_id = await asked(client, ctx)
     before = datetime.now(UTC)
@@ -162,6 +164,7 @@ async def test_token_is_hashed_and_lists_only_live_tools(client, sources, model)
 # the sentence, making no source call; fails_when=a read happens after the reply or
 # after a join; no_claim=how a join is refused (test_join_is_refused...).
 async def test_token_refused_after_the_reply_and_after_a_join(client, sources, model):
+    """A live token stops working once another person joins the chat or it ends."""
     ctx, conn = await setup(client)
     d, reply_id = await asked(client, ctx)
     raw = await mint(ctx, "commenter", reply_id)
@@ -208,6 +211,7 @@ async def test_token_refused_after_the_reply_and_after_a_join(client, sources, m
 # protects=section 3: a token is refused 10 minutes after it was minted, even with its
 # reply still streaming; fails_when=an expired token still reads; no_claim=-.
 async def test_token_refused_after_ten_minutes(client, sources, model):
+    """An expired live token is refused by both the MCP call and the REST route."""
     ctx, conn = await setup(client)
     _d, reply_id = await asked(client, ctx)
     raw = await mint(ctx, "commenter", reply_id)
@@ -234,6 +238,7 @@ async def test_token_refused_after_ten_minutes(client, sources, model):
 # answers 429 with the spec's sentence and reaches no source; fails_when=a cached or failed
 # call is free, a failed call gets a ref, or a 9th read happens; no_claim=-.
 async def test_eight_live_reads_per_reply(client, sources, model):
+    """A reply allows only 8 live reads; cached reads count, the 9th is refused."""
     ctx, conn = await setup(client)
     _d, reply_id = await asked(client, ctx)
     raw = await mint(ctx, "commenter", reply_id)
@@ -276,6 +281,7 @@ async def test_eight_live_reads_per_reply(client, sources, model):
 # ref (it carries no cite); fails_when=live_sources is free or answers after a join;
 # no_claim=live_sources without a token (tests/test_live_fireflies.py).
 async def test_live_sources_with_a_token_counts_and_is_rechecked(client, sources, model):
+    """Listing live sources also counts against the cap, and refusing it still works."""
     ctx, conn = await setup(client)
     d, reply_id = await asked(client, ctx)
     raw = await mint(ctx, "commenter", reply_id)
@@ -315,6 +321,7 @@ async def test_live_sources_with_a_token_counts_and_is_rechecked(client, sources
 # the order calls finish, or a failed call keeps a ref; no_claim=the gap a failed call
 # leaves while another is in flight (the later call keeps its number).
 async def test_refs_follow_call_order(client, sources, model):
+    """Cite ref numbers follow the order calls were made, not the order they settle."""
     ctx, conn = await setup(client)
     _d, reply_id = await asked(client, ctx)
     raw = await mint(ctx, "commenter", reply_id)
@@ -342,6 +349,7 @@ async def test_refs_follow_call_order(client, sources, model):
 # fails_when=a person is let into a chat holding what Oracle read from the asker's
 # sources, or an ordinary chat refuses them; no_claim=the web's wording (lane 3).
 async def test_join_is_refused_in_a_chat_holding_live_reads(client, sources, model):
+    """Joining a discussion is refused while a live token still holds reads in it."""
     ctx, conn = await setup(client)
     d, reply_id = await asked(client, ctx)
     raw = await mint(ctx, "commenter", reply_id)
@@ -436,6 +444,7 @@ async def _go_live(ctx, reply_id: uuid.UUID) -> str | None:
 # second person; fails_when=both a join and a later live read succeed, or going live does
 # not wait for the lock; no_claim=the lock timings of production Postgres.
 async def test_join_and_live_read_race(client, sources, model):
+    """A join and a live read on the same message can never both succeed."""
     ctx, conn = await setup(client)
     for _ in range(6):
         d, reply_id = await asked(client, ctx)

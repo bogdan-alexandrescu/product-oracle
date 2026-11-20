@@ -62,6 +62,7 @@ def _goal(out: dict, goal_id: str) -> dict | None:
 
 @pytest.mark.asyncio
 async def test_goal_owner_in_the_form(client):
+    """A goal's owner can be set, changed, cleared, or kept, and must be a real person."""
     w = await World().build()
     await _named(w)
     hana = str(w.ctx.users["approver"].id)
@@ -95,6 +96,7 @@ async def test_goal_owner_in_the_form(client):
 
 @pytest.mark.asyncio
 async def test_archived_goals_listed_and_restored(client):
+    """An archived goal is listed with its owner, and only an approver can restore it."""
     w = await World().build()
     await _named(w)
     grow, quiet = w.goals["grow"], w.goals["quiet"]
@@ -132,6 +134,7 @@ async def test_archived_goals_listed_and_restored(client):
 
 @pytest.mark.asyncio
 async def test_ask_to_archive_and_delete_goes_to_the_decider(client):
+    """A commenter's ask to archive a goal waits on the owner's accept to take effect."""
     w = await World().build()
     await _named(w)
     grow, quiet = w.goals["grow"], w.goals["quiet"]
@@ -189,6 +192,7 @@ async def test_ask_to_archive_and_delete_goes_to_the_decider(client):
 
 @pytest.mark.asyncio
 async def test_ask_to_restore_goes_to_the_decider(client):
+    """Restoring an archived goal needs an owner's accept, unless an approver acts."""
     w = await World().build()
     await _named(w)
     grow, quiet = w.goals["grow"], w.goals["quiet"]
@@ -227,6 +231,7 @@ async def test_ask_to_restore_goes_to_the_decider(client):
 
 @pytest.mark.asyncio
 async def test_delete_goal_undo_brings_links_back(client):
+    """Undoing a goal's delete brings its links to other goals back too."""
     w = await World().build()
     grow, quiet = w.goals["grow"], w.goals["quiet"]
     before = await w.links(client)
@@ -245,6 +250,7 @@ async def test_delete_goal_undo_brings_links_back(client):
 
 @pytest.mark.asyncio
 async def test_delete_goal_undo_gives_items_their_goal_back(client):
+    """Undoing a goal's delete restores the goal to every item that had it."""
     from oracle.roadmap.models import RoadmapItem
     from tests.test_trash_features_goals import _world
 
@@ -265,6 +271,7 @@ async def test_delete_goal_undo_gives_items_their_goal_back(client):
 
 @pytest.mark.asyncio
 async def test_delete_goal_undo_keeps_later_goal_changes(client):
+    """Undoing a goal's delete never overwrites a later goal change to an item."""
     from oracle.roadmap.models import RoadmapItem
     from tests.test_simple_roadmap_api import Seed
     from tests.test_trash_features_goals import _world

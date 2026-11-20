@@ -122,6 +122,7 @@ LEADS_AND_OWNERS = {"owner", "lead_commenter", "lead_approver"}
     ],
 )
 def test_may_decide_truth_table(kind, flow, named, allowed):
+    """Engineering stops go to leads and owners once named, else to role."""
     # protects=C2 Multiple reviewers' routing of both engineering stops; fails_when=a
     # non-lead approver decides either stop while a lead is named, nobody can when none
     # is, or #126's spec rule changes; no_claim=the flow creates the stops (F4).
@@ -140,6 +141,7 @@ def test_may_decide_truth_table(kind, flow, named, allowed):
     ],
 )
 def test_date_rights(named, verify, propose):
+    """Leads and owners verify dates; approvers propose once a lead is named."""
     # protects=F3's decided rule: leads and owners verify, approvers propose while a lead
     # is named and verify while none is; fails_when=a lead is refused, a plain commenter
     # gets a right, or an approver verifies with a lead named; no_claim=the routes
@@ -154,6 +156,7 @@ def test_date_rights(named, verify, propose):
 
 
 async def test_the_owner_names_a_commenter_engineering_lead(client, owner):
+    """An owner can name a commenter as lead; naming them again does nothing."""
     # protects=AC1, an owner names a lead, audited; fails_when=the flag is not stored,
     # listed or audited; no_claim=UI.
     tenant_id, auth = owner
@@ -172,6 +175,7 @@ async def test_the_owner_names_a_commenter_engineering_lead(client, owner):
 
 
 async def test_a_viewer_cannot_be_named(client, owner):
+    """A viewer can never be made an engineering lead."""
     # protects=AC2, never a viewer; fails_when=the flag sticks to a viewer; no_claim=UI.
     tenant_id, auth = owner
     viewer = await person(tenant_id, "viewer")
@@ -184,6 +188,7 @@ async def test_a_viewer_cannot_be_named(client, owner):
 
 
 async def test_demoting_a_lead_to_viewer_clears_the_flag(client, owner):
+    """Demoting a lead to viewer clears their lead flag in the same change."""
     # protects=AC3, a demotion to viewer clears the flag in the same change; fails_when=a
     # viewer keeps the flag or the clearing is not audited; no_claim=UI.
     tenant_id, auth = owner
@@ -200,6 +205,7 @@ async def test_demoting_a_lead_to_viewer_clears_the_flag(client, owner):
 
 
 async def test_a_patch_needs_a_field_and_an_owner(client, owner):
+    """Naming a lead needs a real field to change and only an owner may do it."""
     # protects=AC4; fails_when=an empty PATCH passes or a non-owner names a lead;
     # no_claim=UI.
     tenant_id, auth = owner
@@ -222,6 +228,7 @@ async def test_a_patch_needs_a_field_and_an_owner(client, owner):
 
 
 async def test_an_invite_carries_the_flag_to_the_first_sign_in(client, fetches):  # noqa: F811
+    """An invite can carry the lead flag through to the invitee's first sign-in."""
     # protects=AC5, the owner names a lead before they first sign in; fails_when=a viewer
     # invite carries it, or the flag is lost on sign-in; no_claim=UI.
     tenant_id, auth = await seed_auth()
@@ -252,6 +259,7 @@ async def test_an_invite_carries_the_flag_to_the_first_sign_in(client, fetches):
 
 
 async def test_the_database_refuses_a_flagged_viewer(owner):
+    """The database itself refuses to store a viewer row flagged as lead."""
     # protects=AC6, the constraint holds whatever path writes; fails_when=a viewer row can
     # carry the flag; no_claim=the API's message.
     tenant_id, _ = owner
@@ -269,6 +277,7 @@ async def test_the_database_refuses_a_flagged_viewer(owner):
 
 
 async def test_me_says_whether_the_caller_is_a_lead(client, owner):
+    """The me response says whether the caller acts for an engineering lead."""
     # protects=AC7, any client learns whether it acts for a lead; fails_when=a lead reads
     # false, or a token acting for no member reads true; no_claim=the web's note.
     tenant_id, auth = owner
@@ -290,6 +299,7 @@ async def test_me_says_whether_the_caller_is_a_lead(client, owner):
 
 
 async def test_with_a_lead_named_leads_and_owners_decide_the_engineering_stop(client, owner):
+    """Once a lead is named, decide, can_decide and the Inbox all agree."""
     # protects=AC8, decide, can_decide and the Inbox agree; fails_when=one site still
     # compares roles only; no_claim=the runtime's own console UI.
     tenant_id, auth = owner
@@ -322,6 +332,7 @@ async def test_with_a_lead_named_leads_and_owners_decide_the_engineering_stop(cl
 
 
 async def test_an_owner_decides_the_engineering_stop_with_a_lead_named(client, owner):
+    """An owner can still decide the engineering stop even once a lead is named."""
     # protects=AC8, owners decide every stop; fails_when=an owner is refused once a lead is
     # named; no_claim=eng_dates in a run (F4 lane B adds the kind; the truth table covers it).
     tenant_id, auth = owner
@@ -333,6 +344,7 @@ async def test_an_owner_decides_the_engineering_stop_with_a_lead_named(client, o
 
 
 async def test_with_no_lead_named_approvers_decide_it(client, owner):
+    """With no lead named, an approver decides the stop, never a commenter."""
     # protects=AC9, the stops never stall a company with no lead; fails_when=an approver
     # is refused, or a commenter is let through; no_claim=F4's stop placement.
     tenant_id, auth = owner
@@ -349,6 +361,7 @@ async def test_with_no_lead_named_approvers_decide_it(client, owner):
 
 
 async def test_a_lead_unflagged_after_loading_the_run_is_refused(client, owner):
+    """A lead whose flag is cleared after loading the run is refused deciding."""
     # protects=AC10, the flag is re-read when the decision lands; fails_when=a decision by
     # an unflagged lead is recorded; no_claim=concurrency inside one transaction.
     tenant_id, auth = owner
@@ -368,6 +381,7 @@ async def test_a_lead_unflagged_after_loading_the_run_is_refused(client, owner):
 
 
 async def test_a_console_answer_by_an_approver_not_lead_is_refused(client, owner):
+    """A console answer from a non-lead approver never counts as a decision."""
     # protects=AC11, the console path applies the same rule; fails_when=a non-lead
     # approver's console answer counts while a lead is named; no_claim=D3's console gate.
     tenant_id, auth = owner
@@ -389,6 +403,7 @@ async def test_a_console_answer_by_an_approver_not_lead_is_refused(client, owner
 
 
 async def test_a_lead_decides_no_other_kind(client, owner):
+    """The lead flag gives no right to decide any other kind of stop."""
     # protects=AC12, other kinds are unchanged; fails_when=the flag lets a commenter
     # decide any other stop; no_claim=every kind (the truth table covers them).
     tenant_id, auth = owner
@@ -402,6 +417,7 @@ async def test_a_lead_decides_no_other_kind(client, owner):
 
 
 async def test_a_lead_decision_not_delivered_yet_is_delivered_by_the_tick(client, owner):
+    """A lead's decision that failed to post is delivered on the next tick."""
     # protects=the delivery re-check reads the lead flag too; fails_when=a commenter lead's
     # owed decision is voided as below the checkpoint's role; no_claim=the post itself.
     tenant_id, auth = owner
@@ -418,6 +434,7 @@ async def test_a_lead_decision_not_delivered_yet_is_delivered_by_the_tick(client
 
 
 async def test_unflagging_a_lead_voids_their_undelivered_engineering_decisions(client, owner):
+    """Clearing a lead's flag voids their own undelivered engineering decision."""
     # protects=AC15, C2's voiding on a demotion applies to the flag; fails_when=an
     # unflagged lead's owed decision is still delivered; no_claim=other kinds (no lead
     # can decide them without the role, AC12).
@@ -439,6 +456,7 @@ async def test_unflagging_a_lead_voids_their_undelivered_engineering_decisions(c
 
 
 async def test_unflagging_an_owner_lead_voids_nothing(client, owner):
+    """Clearing an owner's lead flag voids nothing; owners still decide every stop."""
     # protects=an owner still decides every stop; fails_when=clearing an owner's flag
     # voids what they decided; no_claim=other members.
     tenant_id, auth = owner
@@ -459,6 +477,7 @@ async def test_unflagging_an_owner_lead_voids_nothing(client, owner):
 
 
 async def test_leads_record_and_withdraw_date_bases(client, owner):
+    """Leads verify dates directly; an approver's basis waits once a lead is named."""
     # protects=AC13 as F3 Date bases decided it: leads verify dates, an approver's basis
     # waits as proposed once a lead is named; fails_when=a lead is refused or an approver
     # verifies or withdraws with a lead named; no_claim=the date-basis UI.
@@ -504,6 +523,7 @@ async def test_leads_record_and_withdraw_date_bases(client, owner):
 
 
 async def test_the_setup_checklist_has_an_engineering_lead_step(client, owner):
+    """The setup checklist's engineering lead step counts only enabled leads."""
     # protects=3.6, the owner's eng_lead step between domains and horizons; fails_when=it
     # is done with no lead, or counts disabled leads; no_claim=the web draws it.
     tenant_id, auth = owner

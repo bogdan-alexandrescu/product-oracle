@@ -23,6 +23,7 @@ PLATFORM = {
 @pytest.mark.parametrize("template", sorted(builtin_manifests()))
 @pytest.mark.parametrize("pack", ["startup.standard", "ai-agent.platform"])
 def test_a_composed_template_is_still_a_valid_draft(template, pack):
+    """A composed template renders a valid draft, appendix last."""
     body = builtin_body(BUILTIN_TEMPLATES_BY_KEY[template])
     original = check_template(body)
     comp = compose(context(pack=pack, template=template, inputs=PLATFORM))

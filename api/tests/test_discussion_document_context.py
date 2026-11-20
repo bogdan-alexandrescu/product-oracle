@@ -45,6 +45,7 @@ async def ask(client, fake, subject_kind: str, subject: dict) -> tuple[str, list
 # section (the horizon on another line goes unseen) or a person's source enters;
 # no_claim=what the model writes.
 async def test_a_section_discussion_reads_the_version_section_first(client, fake):  # noqa: F811
+    """A section discussion reads that version's section content first."""
     prompt, events = await ask(client, fake, "section", section)
     assert PROBLEM in prompt and PAYMENT in prompt and LAST in prompt
     assert prompt.index(PROBLEM) < prompt.index("Owner: product. Status: draft for review.")
@@ -60,6 +61,7 @@ async def test_a_section_discussion_reads_the_version_section_first(client, fake
 # version even when it has no brief layer; fails_when=it reads nothing of the document;
 # no_claim=the budget's exact cut.
 async def test_a_document_discussion_reads_the_whole_version(client, fake):  # noqa: F811
+    """A document discussion reads the whole version, not one section."""
     prompt, _ = await ask(client, fake, "document", lambda doc: {"document_id": doc, "version": 1})
     assert PROBLEM in prompt and PAYMENT in prompt and LAST in prompt
     assert EXCERPT not in prompt
@@ -69,6 +71,7 @@ async def test_a_document_discussion_reads_the_whole_version(client, fake):  # n
 # conversation still fits; fails_when=a long document crowds out the conversation;
 # no_claim=the order of the sections (above).
 def test_the_document_has_its_own_budget():
+    """A document's context has its own character budget."""
     ctx = context.Context()
     sections = [(f"s{i}", f"Section {i}", "x" * 5000) for i in range(30)]
     context.add_sections(ctx, "doc", sections)
@@ -80,6 +83,7 @@ def test_the_document_has_its_own_budget():
 # only when the reply ends; fails_when=the stream sends citations only after the last
 # piece; no_claim=the chip (Playwright).
 async def test_the_stream_sends_a_citation_when_its_marker_completes(client, fake):  # noqa: F811
+    """The stream sends a citation as soon as its marker completes."""
     _, events = await ask(client, fake, "section", section)
     names = [name for name, _ in events]
     deltas = [i for i, name in enumerate(names) if name == "delta"]

@@ -129,6 +129,7 @@ async def change_recorded(ctx, change: dict, who: str, op: str, at: datetime) ->
 
 
 async def test_draft_ops_record_who_and_when(client, clock):
+    """Resuming and submitting a draft each record who did it and when."""
     w = await draft_world(reviewers=("approver",))
     ctx = w.ctx
     assert (await edit_title(client, w, "decider")).status_code == 201
@@ -212,6 +213,7 @@ async def test_draft_ops_record_who_and_when(client, clock):
 
 
 async def test_visual_ops_record_who_and_when(client, clock):
+    """Requesting and commenting on a drawing record who acted and when."""
     ctx = await visual_world(client)
     _, item = await roadmap_world(ctx)
     path = f"{VISUALS}/feature/{item.id}"
@@ -269,6 +271,7 @@ async def decided(ctx, sid: str, status: str, who: str, at: datetime) -> None:
 
 
 async def test_date_suggestion_ops_record_who_and_when(client, clock):
+    """Accepting or editing a date suggestion records who decided it and when."""
     ctx = await make_people()
     w = await ChangeWorld(ctx).build(decider=True, ops=["move_dates", "edit_title", "edit_text"])
     a, b, c = (w.suggestion[f"{op}-u"] for op in ("move_dates", "edit_title", "edit_text"))
@@ -313,6 +316,7 @@ async def test_date_suggestion_ops_record_who_and_when(client, clock):
 
 
 async def test_goal_suggestion_ops_record_who_and_when(client, clock):
+    """Asking for and filing goal suggestions both record who did it and when."""
     w = await AddWorld().build()
     ctx = w.ctx
     quiet = w.goals["quiet"]

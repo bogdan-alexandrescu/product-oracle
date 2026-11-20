@@ -15,6 +15,7 @@ def _page() -> public.PublicPage:
 
 
 def test_preview_footer_is_plain():
+    """The public preview footer reads as one plain sentence about its dates."""
     html = public.render_public(_page())
     assert "On a shared link, this shows when it was shared and when it ends." in html
     assert "Preview: a shared link" not in html
@@ -22,6 +23,7 @@ def test_preview_footer_is_plain():
 
 
 def test_shared_footer_keeps_its_dates():
+    """A shared link's footer shows its actual share date and expiry date."""
     html = public.render_public(_page(), shared_on="Oct 30, 2026", expires_on="Nov 13, 2026")
     assert "Shared Oct 30, 2026 · expires Nov 13, 2026" in html
 

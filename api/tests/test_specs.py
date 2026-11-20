@@ -102,6 +102,7 @@ async def av_rows(tenant_id) -> list[ArtifactVersion]:
 
 
 async def test_flow_in_the_catalog(client, runtime):
+    """The PRD-to-spec flow is catalogued with its checkpoint, outputs and roles."""
     world = await make_world(client)
     body = (await client.get("/v1/flows", headers=world.ctx.as_("viewer"))).json()
     flow = next(f for f in body["flows"] if f["key"] == "prd_to_spec")
@@ -116,6 +117,7 @@ async def test_flow_in_the_catalog(client, runtime):
 
 
 async def test_runs_route_does_not_start_a_spec_run(client, runtime):
+    """The generic runs route refuses a spec run; it must go through spec-requests."""
     world = await make_world(client)
     resp = await client.post(
         "/v1/runs", json={"flow": "prd_to_spec", "source": PRD}, headers=world.ctx.as_("owner")
@@ -125,6 +127,7 @@ async def test_runs_route_does_not_start_a_spec_run(client, runtime):
 
 
 async def test_request_checks_its_inputs(client, runtime):
+    """A spec request is checked for an approved PRD, valid ids and screen count."""
     world = await make_world(client, approve=False)
     detail = (await request_spec(client, world, status=422))["detail"]
     assert "no approved version" in detail
@@ -156,6 +159,7 @@ async def test_request_checks_its_inputs(client, runtime):
 
 
 async def test_a_spec_run_writes_spec_flows_and_wireframes_linked_to_requirements(client, runtime):
+    """A spec run writes a spec, flows and wireframes linked to their requirements."""
     world = await make_world(client)
     created = await generated(client, runtime, world)
     owner, viewer = world.ctx.as_("owner"), world.ctx.as_("viewer")
@@ -259,6 +263,7 @@ async def test_a_spec_run_writes_spec_flows_and_wireframes_linked_to_requirement
 
 
 async def test_the_prompt_carries_requirements_contract_and_prd(client, runtime):
+    """The spec prompt carries the requirements, PRD text and acceptance criteria."""
     world = await make_world(client)
     created = await generated(client, runtime, world)
     prompt = runtime.submitted[-1].steps[-1].prompt
@@ -275,6 +280,7 @@ async def test_the_prompt_carries_requirements_contract_and_prd(client, runtime)
 
 
 async def test_the_fake_runtime_default_files_import(client, runtime):
+    """A tech brief's default files import cleanly with its own design and sections."""
     world = await make_world(client)
     created = await request_spec(client, world, depth="brief", screens=2)
     await start(client, world.ctx.as_("approver"), created["run_id"])
@@ -291,6 +297,7 @@ async def test_the_fake_runtime_default_files_import(client, runtime):
 
 
 async def test_a_spec_that_breaks_the_contract_is_not_imported(client, runtime):
+    """A spec that violates its section contract is not imported, nothing is stored."""
     world = await make_world(client)
     script(runtime, world, spec=spec_md(skip=("approach", "assumptions")))
     created = await generated(client, runtime, world, checkpoint=False)
@@ -303,6 +310,7 @@ async def test_a_spec_that_breaks_the_contract_is_not_imported(client, runtime):
 
 
 async def test_unsafe_design_is_refused_and_nothing_half_checked_is_stored(client, runtime):
+    """An unsafe design is refused at import and no half-checked version is stored."""
     world = await make_world(client)
     bad = design_json(world.reqs, SECTIONS).replace(
         "<button>Continue</button>", '<button onclick=\\"steal()\\">Continue</button>'
@@ -318,6 +326,7 @@ async def test_unsafe_design_is_refused_and_nothing_half_checked_is_stored(clien
 
 
 async def test_design_links_must_be_the_requests(client, runtime):
+    """A design's links are checked against the request's requirements and sections."""
     world = await make_world(client)
     other = str(uuid.uuid4())
     script(runtime, world, design=design_json([other], ["no-such-section"]))
@@ -331,6 +340,7 @@ async def test_design_links_must_be_the_requests(client, runtime):
 
 
 async def test_a_prd_change_marks_what_links_the_section_potentially_stale(client, runtime):
+    """A PRD change marks only the spec and design whose linked section changed."""
     world = await make_world(client)
     created = await generated(client, runtime, world)
     owner, viewer = world.ctx.as_("owner"), world.ctx.as_("viewer")
@@ -370,6 +380,7 @@ async def test_a_prd_change_marks_what_links_the_section_potentially_stale(clien
 
 
 async def test_a_requirement_change_marks_the_spec_stale(client, runtime):
+    """A requirement change marks the spec, flow and wireframe linking it as stale."""
     world = await make_world(client)
     created = await generated(client, runtime, world)
     owner = world.ctx.as_("owner")
@@ -388,6 +399,7 @@ async def test_a_requirement_change_marks_the_spec_stale(client, runtime):
 
 
 async def test_regeneration_is_a_proposed_draft_run(client, runtime):
+    """Regenerating against a new PRD version creates a proposed draft, not a rewrite."""
     world = await make_world(client)
     created = await generated(client, runtime, world)
     owner, approver = world.ctx.as_("owner"), world.ctx.as_("approver")
@@ -447,6 +459,7 @@ async def test_regeneration_is_a_proposed_draft_run(client, runtime):
 
 
 async def test_engineering_approvers_approve_the_approach(client, runtime):
+    """A spec's named engineering approvers, not just any approver, approve it."""
     world = await make_world(client)
     lead = await add_approver(world.ctx)
     created = await generated(client, runtime, world, engineering_approver_ids=[str(lead.id)])
@@ -484,6 +497,7 @@ async def test_engineering_approvers_approve_the_approach(client, runtime):
 
 
 async def test_a_person_edits_a_spec_and_keeps_its_lineage(client, runtime):
+    """An edited spec keeps its dependency lineage and supersedes its prior version."""
     world = await make_world(client)
     created = await generated(client, runtime, world)
     owner = world.ctx.as_("owner")
@@ -531,6 +545,7 @@ async def test_a_person_edits_a_spec_and_keeps_its_lineage(client, runtime):
 
 
 async def test_design_annotations_are_reviewable(client, runtime):
+    """Design review comments and verdicts are scoped to roles, approvers deciding."""
     world = await make_world(client)
     created = await generated(client, runtime, world)
     spec = await get_spec(client, world.ctx.as_("viewer"), created["spec"]["request"]["id"])
@@ -616,6 +631,7 @@ async def test_design_review_threads_name_people(client, runtime):
 
 
 async def test_design_outputs_are_served_static_and_sandboxed(client, runtime):
+    """Design outputs are served static, sandboxed, and typed, blocking script content."""
     world = await make_world(client)
     created = await generated(client, runtime, world)
     spec = await get_spec(client, world.ctx.as_("viewer"), created["spec"]["request"]["id"])
@@ -641,6 +657,7 @@ async def test_design_outputs_are_served_static_and_sandboxed(client, runtime):
 
 
 async def test_the_cost_gates_hold_for_spec_runs(client, runtime):
+    """Spec runs are held by the same cost gates and approval thresholds as other runs."""
     world = await make_world(client)
     every = ["researcher", "analyst", "architect", "designer", "prioritizer", "writer", "critic"]
     created = await request_spec(
@@ -668,6 +685,7 @@ async def test_the_cost_gates_hold_for_spec_runs(client, runtime):
 
 
 async def test_design_can_be_left_out(client, runtime):
+    """A spec run can leave design out entirely and still succeed."""
     world = await make_world(client)
     script(runtime, world, design='{"version": 1, "flows": [], "wireframes": []}')
     created = await generated(client, runtime, world, design=False)
@@ -681,6 +699,7 @@ async def test_design_can_be_left_out(client, runtime):
 
 
 async def test_another_company_cannot_see_or_touch_specs(client, runtime):
+    """Another company cannot read, review or regenerate a spec outside its tenant."""
     world = await make_world(client)
     created = await generated(client, runtime, world)
     other = await make_world(client, name="Other Co")
@@ -712,6 +731,7 @@ async def test_another_company_cannot_see_or_touch_specs(client, runtime):
 
 
 async def test_every_specs_route_is_an_mcp_tool():
+    """Every spec route is also exposed as an MCP tool."""
     from oracle.main import app
     from oracle.mcp.tools import app_operations
 
@@ -732,6 +752,7 @@ async def test_every_specs_route_is_an_mcp_tool():
 
 
 async def test_an_older_version_cannot_be_approved_over_a_newer_one(client, runtime):
+    """An older document version cannot be approved over an already-approved newer one."""
     world = await make_world(client)
     created = await generated(client, runtime, world)
     owner = world.ctx.as_("owner")
@@ -756,6 +777,7 @@ async def test_an_older_version_cannot_be_approved_over_a_newer_one(client, runt
 
 
 async def test_an_importer_crash_still_opens_the_checkpoint(client, runtime):
+    """An importer crash still opens the run's checkpoint instead of losing the run."""
     world = await make_world(client)
 
     async def boom(db, run, files, principal):
@@ -772,6 +794,7 @@ async def test_an_importer_crash_still_opens_the_checkpoint(client, runtime):
 
 
 async def test_a_refused_spec_import_still_records_the_design_and_status(client, runtime):
+    """A spec import refused by a slug clash still records its design and status."""
     world = await make_world(client)
     created = await request_spec(client, world, document="taken-slug", depth="full")
     # Meanwhile a PRD takes the slug: the spec import is refused (kind mismatch).
@@ -849,6 +872,7 @@ EDITS_OF_PRD_PARTS = [
 
 @pytest.mark.parametrize(("old", "new"), EDITS_OF_PRD_PARTS)
 async def test_an_edit_that_changes_a_prd_part_is_refused(client, runtime, old, new):
+    """An edit that changes a PRD-decided part of a spec is refused."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     slug = created["spec"]["document_slug"]
@@ -861,6 +885,7 @@ async def test_an_edit_that_changes_a_prd_part_is_refused(client, runtime, old, 
 
 
 async def test_an_edit_that_drops_the_requirements_section_is_refused(client, runtime):
+    """An edit that drops the requirements section from a spec is refused."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     slug = created["spec"]["document_slug"]
@@ -878,6 +903,7 @@ async def test_an_edit_that_drops_the_requirements_section_is_refused(client, ru
 
 
 async def test_an_edit_to_engineering_parts_is_accepted(client, runtime):
+    """An edit to the engineering parts of a spec, leaving PRD parts alone, is kept."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     slug = created["spec"]["document_slug"]
@@ -900,6 +926,7 @@ async def test_an_edit_to_engineering_parts_is_accepted(client, runtime):
 
 
 async def test_a_run_cannot_push_to_another_runs_spec(client, runtime):
+    """A run may push edits only to its own document, never another run's or none."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     slug = created["spec"]["document_slug"]
@@ -965,6 +992,7 @@ async def _requirement(world, key: str, status: str, link: str | None = None) ->
 
 
 async def test_a_proposed_requirement_the_prd_never_adopted_is_refused(client, runtime):
+    """A spec request naming a requirement the PRD never adopted is refused."""
     world = await make_world(client)
     r9 = await _requirement(world, "R9", "proposed")
     body = await request_spec(
@@ -974,6 +1002,7 @@ async def test_a_proposed_requirement_the_prd_never_adopted_is_refused(client, r
 
 
 async def test_a_confirmed_but_unlinked_requirement_is_refused(client, runtime):
+    """A spec request naming a confirmed but unlinked requirement is refused."""
     world = await make_world(client)
     r7 = await _requirement(world, "R7", "confirmed")
     body = await request_spec(
@@ -987,6 +1016,7 @@ async def test_a_confirmed_but_unlinked_requirement_is_refused(client, runtime):
 
 
 async def test_a_requirement_linked_to_another_prd_version_is_refused(client, runtime):
+    """A requirement linked only on another PRD version cannot back a spec on this one."""
     world = await make_world(client)
     r8 = await _requirement(world, "R8", "confirmed")
     # Linked only on PRD v2, not on v1 that the spec is built from.
@@ -1012,6 +1042,7 @@ async def test_a_requirement_linked_to_another_prd_version_is_refused(client, ru
 
 
 async def test_linked_requirements_are_accepted(client, runtime):
+    """Requirements linked at the document or version level are accepted for a spec."""
     world = await make_world(client)
     on_version = await _requirement(world, "R5", "confirmed", link="version")
     on_document = await _requirement(world, "R6", "confirmed", link="document")
@@ -1025,6 +1056,7 @@ async def test_linked_requirements_are_accepted(client, runtime):
 
 
 async def test_with_no_engineering_approvers_the_requester_approves_their_own_spec(client, runtime):
+    """With no engineering approvers named, the requester may approve their own spec."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world, who="approver")
     slug = created["spec"]["document_slug"]
@@ -1060,6 +1092,7 @@ async def test_with_no_engineering_approvers_the_requester_approves_their_own_sp
 
 
 async def test_regenerate_changes_nothing_until_its_run_imports(client, runtime):
+    """A regeneration proposal changes nothing on the spec until its run imports."""
     world = await make_world(client)
     owner, approver = world.ctx.as_("owner"), world.ctx.as_("approver")
     created = await generated_review2(client, runtime, world)
@@ -1113,6 +1146,7 @@ async def test_regenerate_changes_nothing_until_its_run_imports(client, runtime)
 
 
 async def test_record_design_does_not_record_the_same_design_twice(client, runtime):
+    """Recording the same design twice does not create a second version."""
     from oracle.auth.deps import Principal  # noqa: F401
     from oracle.specs import lineage
     from oracle.specs.design import check_design
@@ -1195,6 +1229,7 @@ def _probe(stored: str) -> str:
 
 
 async def test_the_reviewers_probe_is_refused_naming_the_part(client, runtime):
+    """An edit probing to change what the reviewers see is refused, naming the part."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     resp = await _edit(client, world, created, _probe)
@@ -1223,6 +1258,7 @@ async def test_the_reviewers_probe_is_refused_naming_the_part(client, runtime):
     ids=["moved", "demoted", "not-in-brief", "brief-swapped"],
 )  # fmt: skip
 async def test_oracle_parts_keep_key_level_position_and_brief(client, runtime, edit):
+    """An Oracle part's level, position and brief listing cannot be altered by an edit."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     resp = await _edit(client, world, created, edit)
@@ -1243,6 +1279,7 @@ INSERTED = "## Shipping notes {#shipping-notes}\n\n- Free shipping on every orde
 
 
 async def test_an_inserted_section_shows_as_proposed(client, runtime):
+    """A section inserted outside Oracle's parts shows as proposed and undecided."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     resp = await _edit(
@@ -1265,6 +1302,7 @@ async def test_an_inserted_section_shows_as_proposed(client, runtime):
 
 
 async def test_an_added_rollout_notes_section_is_accepted_and_proposed(client, runtime):
+    """An added rollout-notes section is accepted but never counted as decided."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     resp = await _edit(
@@ -1292,6 +1330,7 @@ async def test_an_added_rollout_notes_section_is_accepted_and_proposed(client, r
 
 
 async def test_an_editor_written_proposed_label_is_not_a_split_point(client, runtime):
+    """A fake Proposed label written by an editor is not treated as a real split point."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     stored = await stored_markdown(world.ctx.tenant_id, created["spec"]["document_slug"])
@@ -1341,6 +1380,7 @@ async def test_an_editor_written_proposed_label_is_not_a_split_point(client, run
     ids=["one-label", "all-labels", "no-map-note", "intro-version", "intro-prd"],
 )  # fmt: skip
 async def test_labels_and_the_intro_line_cannot_be_edited(client, runtime, edit):
+    """Oracle's state labels and intro line cannot be changed by an edit."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     resp = await _edit(client, world, created, edit)
@@ -1349,6 +1389,7 @@ async def test_labels_and_the_intro_line_cannot_be_edited(client, runtime, edit)
 
 
 async def test_an_edit_is_checked_against_the_prd_versions_text_not_todays(client, runtime):
+    """An edit is checked against the PRD version's own text, not today's baseline."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     # The baseline changes after the spec was written from PRD v1.
@@ -1434,6 +1475,7 @@ async def _regenerate(client, world, request_id, status=201, **body):
 
 
 async def test_regenerate_to_a_version_that_did_not_carry_a_requirement_is_refused(client, runtime):
+    """Regenerating to a version that never carried a requirement is refused."""
     world = await make_world(client)
     request_id = await _spec_on_v1(client, runtime, world)
     v2 = await _approved_v2(client, world)
@@ -1444,6 +1486,7 @@ async def test_regenerate_to_a_version_that_did_not_carry_a_requirement_is_refus
 
 
 async def test_regenerate_with_a_requirement_rejected_since_is_refused(client, runtime):
+    """Regenerating is refused for a requirement rejected since the spec was made."""
     world = await make_world(client)
     request_id = await _spec_on_v1(client, runtime, world)
     v2 = await _approved_v2(client, world)
@@ -1458,6 +1501,7 @@ async def test_regenerate_with_a_requirement_rejected_since_is_refused(client, r
 
 
 async def test_a_mentions_link_does_not_adopt_a_requirement(client, runtime):
+    """A mentions-only link does not count as the PRD adopting a requirement."""
     world = await make_world(client)
     async with tenant_session(world.ctx.tenant_id) as s:
         r4 = Entity(type="requirement", key="R4", title="R4", status="confirmed", origin="user")
@@ -1474,6 +1518,7 @@ async def test_a_mentions_link_does_not_adopt_a_requirement(client, runtime):
 
 
 async def test_regenerate_refuses_a_requirement_v2_only_mentions(client, runtime):
+    """Regenerating is refused for a requirement only mentioned, not adopted, in v2."""
     world = await make_world(client)
     request_id = await _spec_on_v1(client, runtime, world)
     v2 = await _approved_v2(client, world)
@@ -1484,6 +1529,7 @@ async def test_regenerate_refuses_a_requirement_v2_only_mentions(client, runtime
 
 
 async def test_import_drops_and_reports_a_requirement_no_longer_adopted(client, runtime):
+    """Importing after a requirement's link is dropped records the drop explicitly."""
     world = await make_world(client)
     owner = world.ctx.as_("owner")
     request_id = await _spec_on_v1(client, runtime, world)
@@ -1520,6 +1566,7 @@ async def test_import_drops_and_reports_a_requirement_no_longer_adopted(client, 
 async def test_a_regeneration_whose_spec_import_fails_leaves_the_request_on_its_version(
     client, runtime
 ):
+    """A regeneration whose import fails leaves the spec request on its old version."""
     world = await make_world(client)
     owner = world.ctx.as_("owner")
     request_id = await _spec_on_v1(client, runtime, world)
@@ -1585,6 +1632,7 @@ SLOW_PAYLOADS = {
 @pytest.mark.timing
 @pytest.mark.parametrize("name", list(SLOW_PAYLOADS))
 def test_the_static_check_is_linear(name):
+    """The static markdown and SVG safety check runs in linear time on slow payloads."""
     from oracle.specs.sanitize import sanitize_svg, sanitize_wireframe, static_problems
 
     kind, content = SLOW_PAYLOADS[name]
@@ -1603,6 +1651,7 @@ def test_the_static_check_is_linear(name):
 
 @pytest.mark.timing
 def test_a_worst_case_design_bundle_is_checked_in_under_a_second():
+    """A worst-case bundle of flows and wireframes is checked in under a second."""
     from oracle.specs.design import check_design
 
     reqs, sections = [str(uuid.uuid4())], ["s-1"]
@@ -1616,6 +1665,7 @@ def test_a_worst_case_design_bundle_is_checked_in_under_a_second():
 
 
 def test_quoted_local_css_references_are_local():
+    """Quoted local CSS references inside an SVG are treated as local, not blocked."""
     from oracle.specs.sanitize import sanitize_svg, static_problems
 
     for ref in ("url(#arrow)", "url('#arrow')", 'url("#arrow")', "url( '#arrow' )"):
@@ -1635,6 +1685,7 @@ def test_quoted_local_css_references_are_local():
 async def test_the_design_check_runs_off_the_event_loop_with_a_time_cap(
     client, runtime, monkeypatch
 ):
+    """The design check runs off the event loop and is capped, so it cannot hang a run."""
     from oracle.specs import service
 
     release = threading.Event()
@@ -1667,6 +1718,7 @@ async def test_the_design_check_runs_off_the_event_loop_with_a_time_cap(
 
 
 async def test_a_run_token_may_not_push_to_its_slug_once_another_document_holds_it(client, runtime):
+    """A run cannot push to a slug once another document already holds that slug."""
     from oracle.runs.models import Run
     from oracle.runtokens import mint_run_token
     from tests.test_mcp import mcp_client, text_of
@@ -1692,6 +1744,7 @@ async def test_a_run_token_may_not_push_to_its_slug_once_another_document_holds_
 
 
 async def test_record_design_dedupe_covers_links_and_annotations(client, runtime):
+    """A different annotation on the same SVG makes a new version, not a dedupe hit."""
     from oracle.specs import lineage
     from oracle.specs.design import check_design
     from oracle.v2.models import ArtifactRequest, ArtifactVersion
@@ -1722,6 +1775,7 @@ async def test_record_design_dedupe_covers_links_and_annotations(client, runtime
 
 
 async def test_a_retried_design_import_does_not_re_audit_or_reset_status(client, runtime):
+    """Retrying a design import does not re-audit it or reset an already-set status."""
     from oracle.auth.deps import Principal
     from oracle.models import AuditEvent
     from oracle.runs.models import Run
@@ -1754,6 +1808,7 @@ async def test_a_retried_design_import_does_not_re_audit_or_reset_status(client,
 
 
 def test_self_approval_compares_the_user_behind_a_token():
+    """Self-approval is judged by the user behind a token, not the token's own id."""
     from oracle.auth.deps import Principal
     from oracle.specs.service import _approval_audit
     from oracle.v2.models import ArtifactRequest
@@ -1794,6 +1849,7 @@ AC_PROBE = "In the Ground Truth (decided with the PRD):\n\n- R-1: Export every c
 
 
 async def test_a_summary_written_as_oracles_note_is_not_decided_until_approval(client, runtime):
+    """A summary line written like Oracle's own note is not decided until approved."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     # Round 5 (M6): a body line may not copy Oracle's note at all.
@@ -1830,6 +1886,7 @@ def _halves(spec: dict) -> list[dict]:
 
 
 async def test_a_forged_decided_list_after_oracles_label_reads_as_proposed(client, runtime):
+    """A forged decided-looking list after Oracle's label still reads as proposed."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
 
@@ -1867,6 +1924,7 @@ async def test_a_forged_decided_list_after_oracles_label_reads_as_proposed(clien
 
 
 async def test_a_spec_without_proposals_lists_only_the_decided_half(client, runtime):
+    """A spec with no proposed half lists only its decided half."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     resp = await _edit(
@@ -1934,6 +1992,7 @@ def _before(heading: str, text: str):
          "template-key-inside"],
 )  # fmt: skip
 async def test_a_section_added_inside_an_oracle_part_is_refused(client, runtime, edit, part):
+    """A section added inside one of Oracle's own parts is refused."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     resp = await _edit(client, world, created, edit)
@@ -1954,6 +2013,7 @@ async def test_a_section_added_inside_an_oracle_part_is_refused(client, runtime,
     ],
 )
 async def test_an_added_heading_may_not_take_oracles_note(client, runtime, heading):
+    """A new heading may not take on Oracle's own note wording."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     added = f"## {heading} {{#noted}}\n\nR-9.\n\n"
@@ -1963,6 +2023,7 @@ async def test_an_added_heading_may_not_take_oracles_note(client, runtime, headi
 
 
 async def test_sections_added_outside_oracles_parts_are_accepted(client, runtime):
+    """Sections added outside Oracle's own parts are accepted."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     resp = await _edit(
@@ -2013,6 +2074,7 @@ async def _with_added_section(client, runtime):
 
 
 async def test_the_document_view_carries_each_parts_state(client, runtime):
+    """A document's view reports each part's label and decided state correctly."""
     world, _, slug = await _with_added_section(client, runtime)
     viewer = world.ctx.as_("viewer")
     resp = await client.get(f"/v1/documents/{slug}/versions/2", headers=viewer)
@@ -2046,6 +2108,7 @@ def _after(text: str, heading: str) -> str:
 
 
 async def test_exports_label_added_sections_and_oracles_parts(client, runtime):
+    """Exports label added sections and Oracle's own parts consistently."""
     world, _, slug = await _with_added_section(client, runtime)
     viewer = world.ctx.as_("viewer")
     base = f"/v1/documents/{slug}/versions/2/export"
@@ -2073,6 +2136,7 @@ async def test_exports_label_added_sections_and_oracles_parts(client, runtime):
 
 
 async def test_the_pptx_slide_of_an_added_section_carries_the_label(client, runtime):
+    """A PPTX slide for an added section carries its state label."""
     import io
 
     from pptx import Presentation
@@ -2093,6 +2157,7 @@ async def test_the_pptx_slide_of_an_added_section_carries_the_label(client, runt
 
 
 async def test_markdown_carries_the_labels_and_round_trips(client, runtime):
+    """Exported markdown carries the state labels and round-trips to the stored text."""
     world, created, slug = await _with_added_section(client, runtime)
     approver = world.ctx.as_("approver")
     md = (await client.get(f"/v1/documents/{slug}/versions/2/markdown", headers=approver)).text
@@ -2116,6 +2181,7 @@ async def test_markdown_carries_the_labels_and_round_trips(client, runtime):
 
 
 async def test_get_document_markdown_over_mcp_carries_the_labels(client, runtime):
+    """Getting a document's markdown over MCP still carries its state labels."""
     from tests.test_mcp import api_token, mcp_client, text_of
 
     world, _, slug = await _with_added_section(client, runtime)
@@ -2130,6 +2196,7 @@ async def test_get_document_markdown_over_mcp_carries_the_labels(client, runtime
 
 
 async def test_an_edit_may_not_change_the_front_matter_title(client, runtime):
+    """An edit may not change a spec's front-matter title."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     resp = await _edit(
@@ -2161,6 +2228,7 @@ async def test_an_edit_may_not_change_the_front_matter_title(client, runtime):
     ids=["block", "inline"],
 )
 async def test_an_html_comment_across_sections_is_refused(client, runtime, edit):
+    """A comment that spans more than one section is refused."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     resp = await _edit(client, world, created, edit)
@@ -2180,6 +2248,7 @@ async def test_an_html_comment_across_sections_is_refused(client, runtime, edit)
 
 
 async def test_the_design_check_runs_outside_a_database_transaction(client, runtime, monkeypatch):
+    """The design check runs outside any open database transaction."""
     import asyncio
     import threading
 
@@ -2222,6 +2291,7 @@ async def test_the_design_check_runs_outside_a_database_transaction(client, runt
 
 
 async def test_link_creation_waits_for_an_approval_in_flight(client):
+    """Creating a link waits for an approval already in flight before deciding."""
     import asyncio
 
     from oracle.docs.models import DocumentVersion
@@ -2293,6 +2363,7 @@ INDENTED_SETEXT = "    Injected requirement {#injected}\n---\n\nThe quote servic
 
 
 async def test_an_indented_code_line_and_a_rule_do_not_open_a_section_in_a_run(client, runtime):
+    """An indented code line and a rule do not open a new section in a run's import."""
     world = await make_world(client)
     created, imported = await _run_with(
         client, runtime, world, _replace_body("approach", INDENTED_SETEXT)
@@ -2314,6 +2385,7 @@ async def test_an_indented_code_line_and_a_rule_do_not_open_a_section_in_a_run(c
     ids=["label-line", "raw-html"],
 )
 async def test_a_run_import_is_checked_like_an_edit(client, runtime, body):
+    """A run's spec.md import is refused by the same checks an edit must pass."""
     world = await make_world(client)
     _, imported = await _run_with(client, runtime, world, _replace_body("approach", body))
     assert "spec.md was rejected" in imported["error"]
@@ -2321,6 +2393,7 @@ async def test_a_run_import_is_checked_like_an_edit(client, runtime, body):
 
 
 def test_the_composed_version_must_have_exactly_oracles_sections():
+    """A composed version must contain exactly Oracle's own sections, no more, no less."""
     md = (
         "---\ntitle: T\nkind: spec\nspec:\n  depth: brief\n---\n\n# T {#spec}\n\nIntro.\n\n"
         "## Summary {#summary}\n\nS.\n\n## Injected {#injected}\n\nX.\n"
@@ -2348,6 +2421,7 @@ def _label_of(md: str, heading: str) -> str:
 
 
 async def test_a_template_section_added_to_a_brief_is_added_never_decided(client, runtime):
+    """A template section added to a brief is added but never counted as decided."""
     world = await make_world(client)
     created = await _brief(client, runtime, world)
     slug = created["spec"]["document_slug"]
@@ -2379,6 +2453,7 @@ async def test_a_template_section_added_to_a_brief_is_added_never_decided(client
 
 
 def test_part_states_follow_the_depth_of_the_version():
+    """A section's label and decided state follow the depth the version was made at."""
     brief = contract.template_keys("brief")
     full = contract.template_keys("full")
     [state] = contract.part_states("architecture", "x", True, brief)
@@ -2402,6 +2477,7 @@ def test_part_states_follow_the_depth_of_the_version():
     ids=["renamed", "label", "note"],
 )
 async def test_template_section_titles_are_fixed(client, runtime, heading):
+    """A template section's title is fixed and cannot be renamed or relabeled."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     resp = await _edit(client, world, created, lambda md: md.replace(APPROACH, heading, 1))
@@ -2438,6 +2514,7 @@ TITLE_PROBES = [
 
 @pytest.mark.parametrize("heading", NOTE_PROBES + TITLE_PROBES)
 async def test_heading_normalisation_is_not_bypassable(client, runtime, heading):
+    """Normalizing headings cannot be bypassed by spacing or lookalike characters."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     added = f"## {heading} {{#noted}}\n\nR-9.\n\n"
@@ -2447,6 +2524,7 @@ async def test_heading_normalisation_is_not_bypassable(client, runtime, heading)
 
 
 def test_normalised_text():
+    """Normalizing text folds formatting, lookalikes and punctuation to a plain form."""
     assert contract.normalised("**De­cided** &middot; [x](#y)") == "decided · x"
     assert contract.normalised("Dеcided​") == "decided"
     assert contract._squashed("P.R.D.") == "prd"
@@ -2466,6 +2544,7 @@ def test_normalised_text():
     ids=["setext-2", "setext-1", "blockquote", "list"],
 )
 async def test_section_headings_must_be_top_level_atx(client, runtime, added):
+    """An added heading must be a top-level ATX heading, not setext, quote or list."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     resp = await _edit(client, world, created, _before(OPEN, added))
@@ -2490,6 +2569,7 @@ async def test_section_headings_must_be_top_level_atx(client, runtime, added):
     ],
 )
 async def test_raw_html_blocks_are_refused_in_spec_edits(client, runtime, block):
+    """Raw HTML blocks of many kinds are refused in spec edits."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     resp = await _edit(
@@ -2515,11 +2595,13 @@ async def test_raw_html_blocks_are_refused_in_spec_edits(client, runtime, block)
     ids=["unparsable", "setext", "nested"],
 )
 def test_label_markdown_fails_closed(markdown):
+    """Labeling markdown fails closed on text it cannot safely parse."""
     with pytest.raises(DraftError):
         contract.label_markdown(markdown, approved=False)
 
 
 def test_labels_go_at_the_parsers_body_line():
+    """Labels are inserted right at the body's first line, not elsewhere."""
     md = (
         "---\ntitle: T\nkind: spec\nspec:\n  depth: full\n---\n\n# T {#spec}\n\nIntro.\n\n"
         "## Rollout {#rollout}\nTen percent.\n\n## Summary {#summary}\n\nS.\n"
@@ -2550,6 +2632,7 @@ BODY_PROBES = [
 
 @pytest.mark.parametrize("line", BODY_PROBES)
 async def test_a_body_line_may_not_copy_a_label_or_oracles_note(client, runtime, line):
+    """A body line may not copy one of Oracle's own labels or notes."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     resp = await _edit(
@@ -2565,6 +2648,7 @@ async def test_a_body_line_may_not_copy_a_label_or_oracles_note(client, runtime,
 
 
 async def test_the_proposed_acceptance_half_may_not_copy_a_label(client, runtime):
+    """The proposed acceptance half may not copy one of Oracle's labels."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     resp = await _edit(
@@ -2600,6 +2684,7 @@ async def _with_rollout(client, runtime):
 
 
 async def test_exports_render_labels_as_elements_bodies_can_not_produce(client, runtime):
+    """Exports render state labels as elements a body cannot itself produce."""
     from pptx import Presentation
 
     world, _, slug = await _with_rollout(client, runtime)
@@ -2655,6 +2740,7 @@ def _add_citation(md: str) -> str:
 
 
 async def test_citations_added_in_an_edit_are_listed_apart_from_oracles_sources(client, runtime):
+    """Citations added in an edit are listed apart from Oracle's own sources."""
     from pptx import Presentation
 
     from tests.test_mcp import api_token, mcp_client, text_of
@@ -2716,6 +2802,7 @@ async def test_citations_added_in_an_edit_are_listed_apart_from_oracles_sources(
 
 
 def test_an_edit_may_not_change_or_remove_oracles_citations():
+    """An edit may not change or remove Oracle's own citations."""
     oracle = contract.oracle_citations("---\ntitle: T\n" + CITATION + "---\n\n# T {#spec}\n")
     same = "---\ntitle: T\n" + CITATION + "---\n\n# T {#spec}\n"
     changed = same.replace("Carrier adapter limits", "Something else")
@@ -2730,6 +2817,7 @@ def test_an_edit_may_not_change_or_remove_oracles_citations():
 
 
 async def test_the_feedback_package_serves_labelled_markdown(client, runtime):
+    """The feedback package serves markdown that still carries its state labels."""
     world, _, slug = await _with_rollout(client, runtime)
     resp = await client.get(
         f"/v1/documents/{slug}/versions/2/feedback-package", headers=world.ctx.as_("viewer")
@@ -2743,6 +2831,7 @@ async def test_the_feedback_package_serves_labelled_markdown(client, runtime):
 
 
 async def test_oracles_parts_may_not_sit_under_an_added_level_one_heading(client, runtime):
+    """Oracle's own parts may not be nested under an added top-level heading."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     resp = await _edit(client, world, created, _before(AC, "# Appendix {#appendix}\n\nMore.\n\n"))
@@ -2751,6 +2840,7 @@ async def test_oracles_parts_may_not_sit_under_an_added_level_one_heading(client
 
 
 async def test_the_comment_message_says_the_rule(client, runtime):
+    """A refused comment's error message names the actual rule it broke."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     resp = await _edit(
@@ -2767,6 +2857,7 @@ async def test_the_comment_message_says_the_rule(client, runtime):
 
 
 def test_baseline_text_is_escaped_in_the_decided_half():
+    """Requirement text and markup are escaped when rendered into the decided half."""
     inputs = contract.SpecInputs(
         slug="s",
         title="S",
@@ -2799,6 +2890,7 @@ def test_baseline_text_is_escaped_in_the_decided_half():
 
 
 async def test_the_version_diff_shows_added_sections_with_their_state(client, runtime):
+    """A version diff shows added sections along with their state label."""
     world, _, slug = await _with_rollout(client, runtime)
     resp = await client.get(
         f"/v1/documents/{slug}/diff?from=1&to=2", headers=world.ctx.as_("viewer")
@@ -2810,6 +2902,7 @@ async def test_the_version_diff_shows_added_sections_with_their_state(client, ru
 
 
 def test_strip_state_labels_leaves_code_blocks_alone():
+    """Stripping state labels leaves text inside code blocks untouched."""
     md = (
         "---\ntitle: T\n---\n\n# T {#spec}\n\n```\n**Decided · from the approved PRD**\n```\n\n"
         "    **Decided · from the approved PRD**\n"
@@ -2826,6 +2919,7 @@ def test_strip_state_labels_leaves_code_blocks_alone():
     ids=["template", "template_version"],
 )
 async def test_an_edit_may_not_change_the_front_matter_template(client, runtime, edit):
+    """An edit may not change a spec's front-matter template or its version."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     resp = await _edit(client, world, created, edit)
@@ -2876,6 +2970,7 @@ BODY_PROBES_review6 = [
 
 @pytest.mark.parametrize("text", BODY_PROBES_review6)
 async def test_a_body_may_not_render_as_a_label(client, runtime, text):
+    """A body line written to render as a label is refused."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     resp = await _edit(client, world, created, _after_anchor(text))
@@ -2894,6 +2989,7 @@ HEADING_PROBES = [
 
 @pytest.mark.parametrize("heading", HEADING_PROBES)
 async def test_added_headings_may_not_take_oracles_titles_or_notes(client, runtime, heading):
+    """An added heading may not take on Oracle's own titles or notes."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     added = f"## {heading} {{#noted}}\n\nR-9.\n\n"
@@ -2915,11 +3011,13 @@ async def test_added_headings_may_not_take_oracles_titles_or_notes(client, runti
     ],
 )
 def test_legitimate_text_in_any_script_is_not_refused(text):
+    """Legitimate text in any script or language is not mistaken for a label."""
     assert not any(contract._takes_plain(run, False) for run in contract._plain_runs(text))
     assert not contract._takes_label(text, anywhere=True)
 
 
 def test_the_skeleton_folds_look_alikes_and_drops_ignorables():
+    """Folding a heading to its skeleton form strips lookalikes and ignorable marks."""
     assert contract.skeleton("Dec͏ided") == "decided"
     assert contract.skeleton("ㅤᎠecided") == "decided"
     assert contract.skeleton("apprօved") == "approved"
@@ -2927,6 +3025,7 @@ def test_the_skeleton_folds_look_alikes_and_drops_ignorables():
 
 
 def test_body_runs_read_soft_breaks_as_spaces_and_every_cell():
+    """Reading body runs treats soft breaks as spaces and covers every table cell."""
     runs = contract._plain_runs("**a\nb**\n\n| x | y |\n| - | - |\n| c | d |\n\n```\ncode\n```")
     # Round 7: the end of emphasis reads as a separator ('**Decided** R-9').
     assert runs == ["a b · ", "x", "y", "c", "d", "code", ""]
@@ -2938,6 +3037,7 @@ PROBE_ID = "c1\nspec: {depth: brief}\n# Decided · from the approved PRD"
 
 
 def test_citation_ids_are_restricted_at_parse_time():
+    """A citation id is restricted to a safe character set at parse time."""
     md = (
         "---\ntitle: T\ncitations:\n- id: "
         + json.dumps(PROBE_ID)
@@ -2953,6 +3053,7 @@ def test_citation_ids_are_restricted_at_parse_time():
 
 
 async def test_an_edit_adding_a_citation_with_a_multiline_id_is_refused(client, runtime):
+    """An edit adding a citation with a multiline id is refused."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     probe = CITATION.replace("- id: ext-1", "- id: " + json.dumps(PROBE_ID))
@@ -2964,6 +3065,7 @@ async def test_an_edit_adding_a_citation_with_a_multiline_id_is_refused(client, 
 
 
 def test_the_added_sources_comment_quotes_the_ids():
+    """A comment added for new sources quotes each added citation id."""
     md = "---\ntitle: T\n" + CITATION + "---\n\n# T {#spec}\n\nX. [c:ext-1]\n"
     labelled = contract.label_markdown(md, approved=False)
     assert labelled.split("\n")[1] == f'{contract.ADDED_SOURCES_COMMENT} "ext-1"'
@@ -2980,6 +3082,7 @@ FLOW = (
 
 @pytest.mark.parametrize("style", ["flow", "indented", "quoted-key"])
 async def test_added_sources_are_labelled_whatever_the_front_matter_style(client, runtime, style):
+    """Added sources are labelled whatever style the front matter is written in."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     slug = created["spec"]["document_slug"]
@@ -3026,6 +3129,7 @@ async def _store(tenant_id, slug: str, number: int, markdown: str) -> None:
 
 
 async def test_a_version_that_can_not_carry_its_labels_is_a_422_on_every_read(client, runtime):
+    """A version whose labels cannot be carried is a 422 on every read of it."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     slug = created["spec"]["document_slug"]
@@ -3046,6 +3150,8 @@ async def test_a_version_that_can_not_carry_its_labels_is_a_422_on_every_read(cl
 
 
 def test_compose_refuses_what_it_could_not_serve(monkeypatch):
+    """Composing a spec reports a refusal it could not serve, with no markdown."""
+
     def refuse(*_a, **_k):
         raise DraftError([contract.ImportProblem(code="acceptance_split", message="no place")])
 
@@ -3079,6 +3185,7 @@ def _agent_md() -> str:
 
 
 def test_oracle_written_text_is_escaped_in_the_intro_and_the_link():
+    """Oracle-written text is escaped in the intro line and the PRD link."""
     composed = contract.compose(
         _agent_md(),
         inputs(
@@ -3098,6 +3205,7 @@ def test_oracle_written_text_is_escaped_in_the_intro_and_the_link():
 
 @pytest.mark.parametrize("text", ["---", "===", "- x", "+ y", "1. z", "2) w"])
 def test_escape_inline_never_opens_a_block(text):
+    """Escaping inline text never lets it open as a block element."""
     md = f"---\ntitle: T\n---\n\n# T {{#t}}\n\n- **R-1: T**\n  {contract.escape_inline(text)}\n"
     draft = parse_draft(md)
     assert [s.section_key for s in draft.sections] == ["t"]
@@ -3108,6 +3216,7 @@ def test_escape_inline_never_opens_a_block(text):
 
 @pytest.mark.parametrize("first", ["---", "===", "  ---"])
 def test_a_body_starting_with_a_rule_does_not_make_the_label_a_heading(first):
+    """A body starting with a rule does not turn the label above it into a heading."""
     md = (
         "---\ntitle: T\nkind: spec\nspec:\n  depth: full\n---\n\n# T {#spec}\n\nIntro.\n\n"
         f"## Rollout {{#rollout}}\n{first}\nTen percent.\n"
@@ -3122,6 +3231,7 @@ def test_a_body_starting_with_a_rule_does_not_make_the_label_a_heading(first):
 
 
 async def test_an_edit_may_not_drop_the_label_from_all_but_one_section(client, runtime):
+    """An edit may not drop the Proposed or Assumed label from all but one section."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     stored = await stored_markdown(world.ctx.tenant_id, created["spec"]["document_slug"])
@@ -3146,6 +3256,7 @@ async def test_an_edit_may_not_drop_the_label_from_all_but_one_section(client, r
     ],
 )
 async def test_front_matter_comments_may_not_look_like_labels(client, runtime, comment):
+    """A front-matter comment may not look like one of the state labels."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     resp = await _edit(
@@ -3159,6 +3270,7 @@ async def test_front_matter_comments_may_not_look_like_labels(client, runtime, c
 
 
 async def test_inline_html_comments_are_refused_in_bodies(client, runtime):
+    """Inline HTML comments inside a body are refused."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     resp = await _edit(
@@ -3169,12 +3281,14 @@ async def test_inline_html_comments_are_refused_in_bodies(client, runtime):
 
 
 def test_strip_leaves_a_multiline_scalar_alone():
+    """Stripping state labels leaves a multiline YAML scalar untouched."""
     comment = f"{contract.ADDED_SOURCES_COMMENT} x"
     md = f'---\ntitle: "T\n  {comment}"\nnote: |\n  a\n{comment}\n---\n\n# T {{#t}}\n\nX.\n'
     assert contract.strip_state_labels(md) == md
 
 
 async def test_a_template_section_added_to_a_brief_keeps_its_title(client, runtime):
+    """A template section added to a brief keeps its fixed title."""
     pass
 
     world = await make_world(client)
@@ -3214,6 +3328,7 @@ def _after_anchor_review7(text: str, citation: bool = False):
 
 @pytest.mark.timing
 def test_the_comment_checks_are_linear_on_a_mebibyte_of_unclosed_comments():
+    """Checking comments stays linear even on a megabyte of unclosed comment markers."""
     body = "<!--" * (1 << 18)  # 1 MiB
     started = time.monotonic()
     assert contract._comment_spans(body)
@@ -3231,6 +3346,7 @@ def test_the_comment_checks_are_linear_on_a_mebibyte_of_unclosed_comments():
 
 
 def test_no_spec_check_parses_with_html_on():
+    """The spec checker's markdown parser never enables raw HTML parsing."""
     assert not contract._BLOCK_MD.options["html"]
     assert not hasattr(contract, "_HTML_MD")
 
@@ -3274,6 +3390,7 @@ REFUSED_review7 = [
 
 @pytest.mark.parametrize(("text", "code", "cite"), REFUSED_review7)
 async def test_round_7_probes_are_refused(client, runtime, text, code, cite):
+    """A set of probe texts from round 7 are all refused with their own codes."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     resp = await _edit(client, world, created, _after_anchor_review7(text, cite))
@@ -3282,6 +3399,7 @@ async def test_round_7_probes_are_refused(client, runtime, text, code, cite):
 
 
 async def test_a_heading_with_a_citation_marker_still_reads_as_a_prd_part(client, runtime):
+    """A heading with a citation marker still reads as one of Oracle's own parts."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     resp = await _edit(
@@ -3308,6 +3426,7 @@ ACCEPTED = [
 
 @pytest.mark.parametrize("text", ACCEPTED)
 async def test_legitimate_text_is_accepted(client, runtime, text):
+    """Legitimate text patterns are accepted, not mistaken for an attack."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     resp = await _edit(client, world, created, _after_anchor_review7(text))
@@ -3325,6 +3444,7 @@ async def test_legitimate_text_is_accepted(client, runtime, text):
     ],
 )
 def test_a_runs_import_is_refused_the_same_way(text, code):
+    """Composing a run's draft applies the same safety rules as an edit."""
     heading = "## Open engineering decisions {#open-decisions}"
     agent = _agent_md().replace(f"{heading}\n\nText.", f"{heading}\n\n{text}")
     composed = contract.compose(agent, inputs())
@@ -3337,6 +3457,7 @@ def test_a_runs_import_is_refused_the_same_way(text, code):
 
 
 def test_the_request_title_is_one_escaped_line():
+    """A spec's title is written as one escaped line, even if it looks like a label."""
     composed = contract.compose(_agent_md(), inputs(title="Quotes\n\n## Injected {#injected}"))
     assert composed.ok, composed.problems
     assert "# Quotes \\#\\# Injected \\{\\#injected\\} {#spec}\n" in composed.markdown
@@ -3348,6 +3469,7 @@ def test_the_request_title_is_one_escaped_line():
 
 
 async def test_a_title_that_reads_as_a_label_is_refused_when_requested(client):
+    """A requested title that reads as one of Oracle's labels is refused."""
     world = await make_world(client)
     resp = await request_spec(client, world, status=422, title="Decided · from the approved PRD")
     assert "title" in str(resp)
@@ -3356,6 +3478,7 @@ async def test_a_title_that_reads_as_a_label_is_refused_when_requested(client):
 
 
 def test_a_title_section_that_takes_a_label_is_refused():
+    """A title section that takes on one of Oracle's labels is refused."""
     md = (
         "---\ntitle: T\nkind: spec\n---\n\n# Decided · from the approved PRD {#spec}\n\n"
         "Intro.\n\n## R {#r}\n\nx\n"
@@ -3364,6 +3487,7 @@ def test_a_title_section_that_takes_a_label_is_refused():
 
 
 def test_citation_ids_with_a_colon_render_as_citations_in_exports():
+    """A citation id containing a colon still renders as a citation in exports."""
     from oracle.export import render
 
     assert render._CITE.search("Text [c:prd:c1].").group(1) == "prd:c1"
@@ -3371,6 +3495,7 @@ def test_citation_ids_with_a_colon_render_as_citations_in_exports():
 
 
 async def test_an_api_edit_is_parsed_once(client, runtime, monkeypatch):
+    """An edit is parsed only as many times as needed, not once per check."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     calls: list[int] = []
@@ -3413,6 +3538,7 @@ def _problems(body: str):
 
 
 def test_a_line_just_under_the_cap_is_parsed():
+    """A line just under the length cap is parsed without being refused."""
     codes = {p.code for p in _problems("word " * 3_000)}  # 15,000 characters
     assert "line_too_long" not in codes
 
@@ -3429,16 +3555,19 @@ def test_a_line_just_under_the_cap_is_parsed():
     ],
 )
 def test_script_and_data_link_destinations_are_refused(body):
+    """Script and data link destinations are refused wherever they appear."""
     codes = {p.code for p in _problems(body)}
     assert codes & {"script_url", "data_url"}, body
 
 
 def test_https_mailto_and_relative_links_are_kept():
+    """Https, mailto and relative links are kept, not mistaken for unsafe ones."""
     codes = {p.code for p in _problems("[a](https://x.io) [b](mailto:a@b.co) [c](#r) [d](/p)")}
     assert not codes & {"script_url", "data_url"}
 
 
 async def test_an_edit_whose_markdown_parse_is_too_slow_is_refused(client, runtime, monkeypatch):
+    """An edit whose markdown parse runs too slow is refused instead of hanging."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     real = contract._BLOCK_MD.parse
@@ -3458,6 +3587,7 @@ async def test_an_edit_whose_markdown_parse_is_too_slow_is_refused(client, runti
 
 
 def test_exports_render_a_remote_image_as_a_link_and_a_stored_image_as_an_image():
+    """Exports render a remote image as a link but a stored image as an image."""
     from oracle.export import render
 
     for md in (render._markdown(), render._themed_markdown(False)):
@@ -3515,16 +3645,19 @@ async def _import_quickly(client, text: str, doc: str = "probe"):
 
 @pytest.mark.timing
 def test_a_900_kb_line_of_tags_is_refused_before_any_parse():
+    """A huge line of repeated tags is refused before any markdown is parsed."""
     assert _refused_quickly(FRONT + "<b>" * 300_000 + "\n") == {"line_too_long"}
 
 
 @pytest.mark.timing
 async def test_a_900_kb_line_of_tags_is_refused_at_import(client):
+    """A huge line of repeated tags is refused at import, not just at parse time."""
     resp = await _import_quickly(client, FRONT + "<b>" * 300_000 + "\n")
     assert resp.status_code == 422 and "line_too_long" in resp.text
 
 
 def test_a_line_over_the_cap_is_named_by_its_line():
+    """A line over the length cap is reported with the line number that is too long."""
     with pytest.raises(DraftError) as exc:
         parse_draft(FRONT + "ok\n\n" + "x" * 20_001 + "\n")
     [problem] = exc.value.problems
@@ -3534,6 +3667,7 @@ def test_a_line_over_the_cap_is_named_by_its_line():
 @pytest.mark.timing
 @pytest.mark.parametrize("separator", ["\n", "\n\n"])
 def test_a_megabyte_of_image_openers_in_short_lines_is_refused_quickly(separator):
+    """A megabyte of short lines of image openers is refused quickly, not slowly."""
     text = FRONT + IMAGE_OPENERS.replace("\n", separator) + "\n"
     assert len(text) > 900_000
     assert _refused_quickly(text)
@@ -3541,12 +3675,14 @@ def test_a_megabyte_of_image_openers_in_short_lines_is_refused_quickly(separator
 
 @pytest.mark.timing
 async def test_a_megabyte_of_image_openers_is_refused_quickly_at_import(client):
+    """A megabyte of image openers is refused quickly when imported through the API."""
     resp = await _import_quickly(client, FRONT + IMAGE_OPENERS + "\n")
     assert resp.status_code == 422, resp.text[:300]
 
 
 @pytest.mark.timing
 def test_a_megabyte_of_prose_in_long_lines_is_read_quickly():
+    """A megabyte of prose in long lines is parsed quickly, not linearly slow."""
     text = FRONT + "\n".join([LONG_PROSE_LINE] * 48) + "\n"
     assert len(text) > 950_000
     started = time.monotonic()
@@ -3557,12 +3693,14 @@ def test_a_megabyte_of_prose_in_long_lines_is_read_quickly():
 
 @pytest.mark.timing
 async def test_a_megabyte_of_prose_in_long_lines_imports_quickly(client):
+    """A megabyte of prose in long lines imports quickly through the API."""
     resp = await _import_quickly(client, FRONT + "\n".join([LONG_PROSE_LINE] * 48) + "\n")
     assert resp.status_code == 201, resp.text[:300]
 
 
 @pytest.mark.timing
 async def test_a_spec_edit_of_prose_in_long_lines_is_checked_quickly(client, runtime):
+    """An edit of long prose under the spec size cap is checked quickly."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     prose = "\n\n".join([LONG_PROSE_LINE] * 8)  # 160 KB: under the spec cap
@@ -3574,6 +3712,7 @@ async def test_a_spec_edit_of_prose_in_long_lines_is_checked_quickly(client, run
 
 @pytest.mark.timing
 async def test_a_spec_edit_over_the_spec_cap_is_refused(client, runtime):
+    """A spec edit over the size cap is refused quickly, not after a long parse."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     prose = "\n\n".join([LONG_PROSE_LINE] * 11)  # 220 KB
@@ -3584,6 +3723,7 @@ async def test_a_spec_edit_over_the_spec_cap_is_refused(client, runtime):
 
 
 async def test_a_queue_wait_does_not_count_against_the_parse_cap():
+    """A queued parse waiting for a worker does not count against its own time cap."""
     loop = asyncio.get_running_loop()
     # Every worker of the parse pool is busy for longer than the cap.
     busy = [loop.run_in_executor(safe_yaml._EXECUTOR, time.sleep, 0.6) for _ in range(4)]
@@ -3593,6 +3733,7 @@ async def test_a_queue_wait_does_not_count_against_the_parse_cap():
 
 @pytest.mark.timing
 async def test_slow_posts_do_not_make_a_small_honest_import_fail(client, monkeypatch):
+    """Slow concurrent imports do not make a small honest import fail or time out."""
     monkeypatch.setattr(safe_yaml, "PARSE_SECONDS", 0.3)
     ctx = await make_ctx()
     owner = ctx.as_("owner")
@@ -3671,6 +3812,7 @@ async def _until(condition, seconds: float = 60) -> None:
     ],
 )
 def test_script_and_data_destinations_are_refused_in_every_spelling(body):
+    """Script and data link destinations are refused in every obfuscated spelling."""
     codes = {p.code for p in _problems(body)}
     assert codes & {"script_url", "data_url"}, body
 
@@ -3684,6 +3826,7 @@ def test_script_and_data_destinations_are_refused_in_every_spelling(body):
     ],
 )
 def test_text_about_script_urls_and_safe_links_are_kept(body):
+    """Text that merely mentions script URLs or uses safe links is kept as written."""
     codes = {p.code for p in _problems(body)}
     assert not codes & {"script_url", "data_url"}, body
 
@@ -3714,11 +3857,13 @@ def _check_images_html(html: str) -> None:
 
 
 def test_the_export_renderers_show_images_by_the_rule():
+    """Export renderers show images by the same remote-versus-stored rule."""
     for md in (render._markdown(), render._themed_markdown(False)):
         _check_images_html(md.render(IMAGES_BODY, {"footnotes": render._Footnotes({})}))
 
 
 async def test_html_and_pdf_exports_show_images_by_the_rule(client):
+    """HTML and PDF exports show images by the same remote-versus-stored rule."""
     owner = (await make_ctx()).as_("owner")
     draft = "---\ntitle: Images\n---\n\n# Images {#images}\n\n" + IMAGES_BODY
     resp = await import_md(client, owner, draft, doc="images")
@@ -3738,6 +3883,7 @@ async def test_html_and_pdf_exports_show_images_by_the_rule(client):
 
 
 def test_slides_show_an_image_as_its_label():
+    """Slides show an image by its label instead of embedding the image itself."""
     blocks = pptx.parse_blocks(IMAGES_BODY)
     paras = [item for item in blocks.items if isinstance(item, pptx.Para)]
     text = " ".join(r.text for p in paras for r in p.runs)

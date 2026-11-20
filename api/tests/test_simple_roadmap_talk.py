@@ -141,12 +141,14 @@ async def added(w: World, title: str) -> RoadmapItem | None:
 
 
 def test_roadmap_actions_are_registered():
+    """Every roadmap-talk action stays registered with the chat engine, args included."""
     for op in ("move_to_milestone", "move_after", "add_item", "split_item"):
         assert op in chat.OPS
     assert {"start", "end", "shift", "when"} <= set(chat.OPS["move_dates"].args)
 
 
 async def test_item_talk_answers_with_its_source(client):
+    """An item's chat answer names its source, kept per item and person."""
     w = await world()
     seen: list = []
     m = await reads(client, w, "commenter", "what is this for?",
@@ -171,6 +173,7 @@ async def test_item_talk_answers_with_its_source(client):
 
 @pytest.mark.parametrize("who", ROLES)
 async def test_item_talk_move_restated_per_role(client, who):
+    """A move is restated in plain words, and applies or proposes by the asker's role."""
     w = await world()
     m = await say(client, w, who, "move it two weeks later", page(w))
     if who == "viewer":
@@ -198,6 +201,7 @@ async def test_item_talk_move_restated_per_role(client, who):
 
 @pytest.mark.parametrize("who", ROLES)
 async def test_new_actions_per_role(client, who):
+    """A batch of roadmap changes becomes one card each, applied or proposed by role."""
     w = await world()
     a, b = w.ids["move_dates-a"], w.ids["move_dates-b"]
     answer = actions(act("move_to_milestone", item=a, milestone="M2"),
@@ -240,6 +244,7 @@ async def test_new_actions_per_role(client, who):
 
 
 async def test_two_actions_one_corrected_one_rejected(client):
+    """A batched change can be corrected or rejected alone; rejecting writes nothing."""
     w = await world()
     a, b = w.ids["move_dates-a"], w.ids["move_dates-b"]
     answer = actions(act("move_after", item=b, after=a),
@@ -280,6 +285,7 @@ async def test_two_actions_one_corrected_one_rejected(client):
 
 
 async def test_correct_refuses_what_the_engine_would(client):
+    """A correction is refused whenever the change engine itself would refuse it."""
     w = await world()
     m = await say(client, w, "owner", "move it two weeks later", page(w))
     cid = m["cards"][0]["id"]
@@ -315,6 +321,7 @@ async def test_correct_refuses_what_the_engine_would(client):
 
 
 async def test_correct_restates_the_item_talk_line(client):
+    """After a correction, the chat restates the change with the corrected values."""
     w = await world()
     m = await say(client, w, "owner", "move it two weeks later", page(w))
     assert m["body"] == "I understood: move Adaptive pacing two weeks later, to Oct 15 – Nov 29."
@@ -327,6 +334,7 @@ async def test_correct_restates_the_item_talk_line(client):
 
 
 async def test_applied_add_item_names_its_item(client):
+    """An applied add-item card names the new item it created."""
     w = await world()
     one = actions(act("add_item", title="Dashboard", goal="Growth", milestone="M2"))
     m = await reads(client, w, "owner", "add a dashboard item", one, ROADMAP)
@@ -338,6 +346,7 @@ async def test_applied_add_item_names_its_item(client):
 
 @pytest.mark.parametrize("who", ["approver", "commenter"])
 async def test_add_item_card_says_what_the_engine_does(client, who):
+    """An add-item card says applied or proposed to match what actually happened."""
     w = await World(await make_people()).build(decider=False, track_owner="approver",
                                                ops=["move_dates"])  # fmt: skip
     one = actions(act("add_item", title="Dashboard"))
@@ -351,6 +360,7 @@ async def test_add_item_card_says_what_the_engine_does(client, who):
 
 
 async def test_item_talk_filters_off_topic_answers(client):
+    """Off-topic replies from the model are dropped; on-topic ones still answer."""
     w = await world()
     m = await reads(client, w, "commenter", "tell me a joke",
                     {"actions": [], "clarify": None, "answer": "The weather is fine today.",
@@ -363,6 +373,7 @@ async def test_item_talk_filters_off_topic_answers(client):
 
 
 async def test_correct_refusals_are_plain(client):
+    """A correction refusal reads in plain words, not starting with the raw field name."""
     w = await world()
     m = await say(client, w, "owner", "move it two weeks later", page(w))
     r = await apply(client, w, "owner", m["cards"][0]["id"], {"milestone": "M2"})
@@ -379,6 +390,7 @@ async def test_correct_refusals_are_plain(client):
 
 
 async def test_talk_move_by_a_span_moves_from_newer_dates(client):
+    """A move by a span re-applies from the item's latest dates, even if they moved."""
     w = await world()
     m = await say(client, w, "owner", "move it two weeks later", page(w))
     [card] = m["cards"]

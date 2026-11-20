@@ -174,6 +174,7 @@ def actions(*xs: dict) -> dict:
 
 
 async def test_free_form_line_is_restated_with_a_card(client):
+    """A free-form chat line is read with context and shown back as a change card."""
     ctx = await make_people()
     w = await World(ctx).build()
     await post(client, ctx, "owner", "who owns Ledger v2?")
@@ -206,6 +207,7 @@ async def test_free_form_line_is_restated_with_a_card(client):
 
 
 async def test_two_actions_two_cards_and_apply_all(client):
+    """Apply all applies each card in order and stops at the first one gone stale."""
     ctx = await make_people()
     w = await World(ctx).build()
     ledger, export = w.ids["Ledger v2"], w.ids["Alert export"]
@@ -242,6 +244,7 @@ async def test_two_actions_two_cards_and_apply_all(client):
 
 
 async def test_ambiguous_gives_choices_then_a_card(client):
+    """An ambiguous request asks which item first, then builds a card for the pick."""
     ctx = await make_people()
     w = await World(ctx).build()
     digest, export = w.ids["Alert digest"], w.ids["Alert export"]
@@ -286,6 +289,7 @@ async def test_ambiguous_gives_choices_then_a_card(client):
 
 
 async def test_bad_model_replies_are_refusals(client):
+    """A bad or malformed model reply is shown as a plain one-line refusal, no card."""
     ctx = await make_people()
     w = await World(ctx).build()
     ledger = w.ids["Ledger v2"]
@@ -309,6 +313,7 @@ async def test_bad_model_replies_are_refusals(client):
 
 @pytest.mark.parametrize("end", ["failed", "cancelled"])
 async def test_failed_read_offers_retry(client, end):
+    """A failed read offers a retry, which cannot be replayed once it has worked."""
     ctx = await make_people()
     w = await World(ctx).build()
     await post(client, ctx, "owner", "kick ledger down the road a month")
@@ -337,6 +342,7 @@ SPENT = "no_account_available"
     ],
 )
 async def test_a_spent_pool_says_until_when_with_no_retry(client, monkeypatch, resets, words):
+    """A spent account pool says exactly when it resets and gives no retry button."""
     monkeypatch.setitem(DEFAULTS, "company_timezone", "America/Los_Angeles")
     ctx = await make_people()
     await World(ctx).build()
@@ -360,6 +366,7 @@ async def test_a_spent_pool_says_until_when_with_no_retry(client, monkeypatch, r
     ],
 )
 async def test_a_cleared_window_or_another_failure_keeps_the_generic_line(client, cause):
+    """A cleared spent window or any other failure keeps the generic retry message."""
     ctx = await make_people()
     await World(ctx).build()
     await post(client, ctx, "owner", "kick ledger down the road a month")
@@ -374,6 +381,7 @@ MAY = {"owner": "apply", "decider": "apply", "approver": "propose", "commenter":
 
 
 async def test_reader_roles_in_a_meeting(client, meetings):  # noqa: F811
+    """In a meeting each role's card carries its own apply right; the newest wins."""
     ctx = await make_people()
     w = await World(ctx).build()
     mid = _meeting(ctx, meetings)
@@ -447,6 +455,7 @@ async def test_a_meeting_change_ending_in_a_question_mark_keeps_its_reply(client
 
 
 async def test_reader_roles_on_ask(client):
+    """A plain question is routed to Oracle's Ask only from the one-box chat."""
     ctx = await make_people()
     w = await World(ctx).build()
     answer = actions(act("edit_title", item=w.ids["Bulk import"], title="Bulk import v2"))
@@ -475,6 +484,7 @@ async def test_reader_roles_on_ask(client):
 
 
 async def test_the_worker_claims_a_chat_reader_job(client):
+    """A chat message queues a chat_reader job that the worker can claim and run."""
     from oracle.jobs import worker
 
     ctx = await make_people()
@@ -489,6 +499,7 @@ async def test_the_worker_claims_a_chat_reader_job(client):
 
 
 def test_every_parse_op_is_registered():
+    """Every parse op is a registered ChatOp with args, wired into jobs and routes."""
     ops = {"move_dates", "change_horizon", "set_milestone", "add_feature_ask",
            "add_launch_task", "add_item_task", "add_action_item", "edit_title", "cut"}  # fmt: skip
     assert ops <= set(chat.OPS)
@@ -501,6 +512,7 @@ def test_every_parse_op_is_registered():
 
 
 async def test_review_one_bad_action_keeps_the_valid_cards(client):
+    """One invalid action among several keeps the valid cards and names the rest."""
     # protects: one invalid action among several keeps the valid cards and says, on the same
     # line, which one it cannot do; fails_when: the whole reply turns into a refusal.
     ctx = await make_people()
@@ -515,6 +527,7 @@ async def test_review_one_bad_action_keeps_the_valid_cards(client):
 
 
 async def test_review_unknown_person_or_day_is_a_question(client):
+    """An unknown person or an unreadable day asks a question, never a refusal."""
     # protects: an action naming an unknown person or a day Oracle cannot read asks a
     # question (no card) instead of refusing; fails_when: it reads "I can't do that: Who …".
     ctx = await make_people()
@@ -534,6 +547,7 @@ async def test_review_unknown_person_or_day_is_a_question(client):
 
 
 async def test_review_an_answer_names_oracles_data(client):
+    """A free-text answer is kept only when it speaks of Oracle's own data."""
     # protects: the reader's free-text answer is kept only when it speaks of Oracle's data
     # (an item or a person it was given); fails_when: an answer about anything else is shown.
     ctx = await make_people()
@@ -549,6 +563,7 @@ async def test_review_an_answer_names_oracles_data(client):
 
 
 async def test_review_under_discussion_is_what_the_meeting_takes(client, meetings):  # noqa: F811
+    """Under discussion is the agenda's next item or the PRD, not the newest decision."""
     # protects: in a meeting the reader is told what the meeting has under discussion: the
     # item its agenda takes next ("take X next"), else the PRD under review; never the
     # newest open decision (S8 lists them newest first); fails_when: with D-7 and D-12 open
@@ -579,6 +594,7 @@ async def test_review_under_discussion_is_what_the_meeting_takes(client, meeting
 
 
 async def test_review_under_discussion_drops_a_cut_agenda_item(client, meetings):  # noqa: F811
+    """Once the agenda's next item is cut, under discussion falls back to the PRD."""
     # protects: the item the agenda takes next is under discussion only while it is still
     # in the plan; once it is cut the reader is told the PRD under review (the review's
     # minor); fails_when: under_discussion names the dropped item.
@@ -603,6 +619,7 @@ async def test_review_under_discussion_drops_a_cut_agenda_item(client, meetings)
 
 
 async def test_reader_prompt_is_a_new_version(client):
+    """The reader's prompt is a new version whenever its context shape changes."""
     # protects: the reader's context changed shape (agenda an object, open_decisions,
     # under_discussion), so its prompt is a new version, not v1 edited in place (the
     # review's minor); fails_when: the reader still runs chat_reader.v1.
@@ -618,6 +635,7 @@ async def test_reader_prompt_is_a_new_version(client):
 
 
 async def test_review_nothing_is_dropped_without_a_word(client):
+    """Every refusal is said, the unread part named, and changes past the fifth wait."""
     # protects (qa-simple-decide-24): every refusal is said, the part of the line the reader
     # could not read is named, and changes past the fifth are said to wait; fails_when: only
     # the first refusal is said, a skipped part or the sixth change vanishes silently.
@@ -644,6 +662,7 @@ async def test_review_nothing_is_dropped_without_a_word(client):
 
 
 async def test_review_choice_labels_are_oracles_words(client):
+    """A clarify choice's label is always Oracle's own words, never the model's text."""
     # protects: a clarify choice's label (posted as the person's line when picked) is Oracle's
     # own words: the item's title, or the card's restatement when the choices share an item;
     # fails_when: the model's label text is shown and posted.
@@ -675,6 +694,7 @@ async def test_review_choice_labels_are_oracles_words(client):
 
 
 async def test_a_long_change_request_is_taken_up_to_4000_characters(client):
+    """A change request is taken up to 4,000 characters; past that it is refused."""
     # protects (ask-length-limit): a long change request pasted into Ask Oracle (1,622
     # characters was refused) is taken up to 4,000 characters, and past it the refusal names
     # the limit; fails_when: the text limit is still 1,000.
@@ -691,6 +711,7 @@ async def test_a_long_change_request_is_taken_up_to_4000_characters(client):
 
 
 async def test_a_partly_read_request_lists_every_part_it_did_not_use(client):
+    """Every skipped part is named; capacity, dates and off-gate items say unsupported."""
     # protects (ask-length-limit): a change request Oracle only partly understands lists every
     # part it did not use (all the skipped parts, each change past the fifth by name), and
     # capacity, dates and an item off the gate but still in Now are said to be not yet
@@ -724,6 +745,7 @@ async def test_a_partly_read_request_lists_every_part_it_did_not_use(client):
 
 
 async def test_a_failed_agenda_read_tells_the_reader_why(client, meetings, monkeypatch, caplog):  # noqa: F811
+    """A failed agenda read is told apart from an empty one, and its cause is logged."""
     # protects (#1574): the meeting's agenda read becoming None with no trace; the reader is
     # told the agenda was read, could not be read (and why), or does not apply; fails_when:
     # a failed read looks the same as a meeting with nothing on it, or leaves no log line.

@@ -69,6 +69,7 @@ def scratch_db():
 
 
 def test_chains_on_the_single_head():
+    """The Slack pings migration chains onto the single existing head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
@@ -86,6 +87,7 @@ USER = uuid.UUID("00000000-0000-4000-8000-0000000000bb")
 
 
 def test_upgrade_and_downgrade(scratch_db):
+    """The Slack pings migration's new columns upgrade and downgrade cleanly."""
     upgrade(_cfg(), REVISION)
     assert _columns()["recipient_id"] == "YES"
     assert _columns()["link_id"] == "YES"

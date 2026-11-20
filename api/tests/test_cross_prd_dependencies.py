@@ -138,6 +138,7 @@ async def _summary(w: dict, dep: str = "account-health-ledger") -> dict:
 
 
 async def test_a_cross_prd_dependency_passes_the_engineering_check_named_with_its_prd():
+    """A brief depending on another PRD's roadmap feature passes, named with its PRD."""
     # protects=a brief depending on another PRD's feature on the company roadmap is read,
     # not refused, and names it with its PRD; fails_when=unknown_dependency refuses the file.
     w = await world()
@@ -149,6 +150,7 @@ async def test_a_cross_prd_dependency_passes_the_engineering_check_named_with_it
 
 
 async def test_a_dependency_on_a_key_no_roadmap_knows_is_still_refused():
+    """A real dependency link passes; a made-up key is refused even with no roadmap."""
     # protects=only real links pass; fails_when=any key passes the check.
     w = await world()
     summary = await _summary(w, "made-up-feature")
@@ -164,6 +166,7 @@ async def test_a_dependency_on_a_key_no_roadmap_knows_is_still_refused():
 # The waiver names the problem by its code, or by its own ref (gate.problem_ref).
 @pytest.mark.parametrize("answer", ["depends_on_excluded", "depends_on_excluded~3f9a1c2e"])
 async def test_a_dependency_waived_at_the_feature_set_stop_passes_the_engineering_check(answer):
+    """A dependency waived at the feature set stop passes the engineering check."""
     # protects=a dependency waived at this run's feature set stop is accepted; fails_when=
     # a waived dependency still refuses the briefs.
     w = await world(roadmap=False)
@@ -189,6 +192,7 @@ async def test_a_dependency_waived_at_the_feature_set_stop_passes_the_engineerin
 
 
 async def test_the_prd_draft_and_its_plan_keep_the_link():
+    """The PRD draft keeps a cross-PRD dependency link named with its PRD."""
     # protects=the PRD writer is told to keep the dependency named with its PRD, the items
     # check lets a Scale item depend on the Safety item and the company queue plans it after;
     # fails_when=the link is dropped on the way to the roadmap.
@@ -238,6 +242,7 @@ async def test_the_prd_draft_and_its_plan_keep_the_link():
 
 
 async def test_the_feature_set_stop_shows_another_prd_s_feature_as_information():
+    """Depending on another PRD's feature already held is information, not blocking."""
     # protects=a dependency on a feature another PRD on the company roadmap holds is not a
     # blocking problem and reads "needs X from <PRD>"; fails_when=it asks for a waiver.
     w = await world()
@@ -257,6 +262,7 @@ async def test_the_feature_set_stop_shows_another_prd_s_feature_as_information()
 
 
 def test_the_scope_review_row_reads_needs_x_from_its_prd_and_does_not_block():
+    """The scope review's row names what is needed and from which PRD, no waiver."""
     # protects=the feature set stop's row says what is needed and from which PRD, and asks
     # for no waiver; fails_when=it reads as a blocking problem or shows the raw key.
     from oracle.runs import scope_review
@@ -276,6 +282,7 @@ def test_the_scope_review_row_reads_needs_x_from_its_prd_and_does_not_block():
 
 
 async def test_the_scope_read_names_another_prd_s_dependency_with_its_prd():
+    """The feature panel shows another PRD's dependency named, not just its key."""
     # protects=the feature set's panel shows another PRD's feature by its name and PRD, not
     # its key marked Unknown; fails_when=the scope read carries only the dependency's key.
     from oracle.auth.deps import Principal
@@ -297,6 +304,7 @@ async def test_the_scope_read_names_another_prd_s_dependency_with_its_prd():
 
 
 async def test_a_run_already_waiting_at_the_engineering_check_is_read_again():
+    """A run waiting at the engineering check is re-checked under current rules."""
     # protects=a run stopped at the Engineering check before cross-PRD links were accepted
     # shows its briefs and may be approved once the stop is read, with no rerun;
     # fails_when=the stored check is read as it was stored ("could not be read").
@@ -344,6 +352,7 @@ async def test_a_run_already_waiting_at_the_engineering_check_is_read_again():
 
 
 async def test_a_read_only_token_reading_a_waiting_run_writes_nothing(client):
+    """Reading a waiting run with a read-only token re-checks it live, writing nothing."""
     # protects=GET /runs/{id} reads the Engineering check as the rules now are without
     # storing it, so a read-only credential's read changes nothing; fails_when=the read
     # commits the checked-again payload.
@@ -406,6 +415,7 @@ async def _items_check(w: dict, horizon: str = "now", dep: str = "account-health
 
 
 async def test_a_cycle_across_two_prds_is_reported_naming_both_features_and_prds():
+    """A dependency cycle across two PRDs is reported naming both features and PRDs."""
     # protects=a cycle through another PRD's feature is a problem named in plain words;
     # fails_when=the cross-PRD link skips the cycle check and the queue keeps any order.
     w = await _two_prds_on_the_roadmap()
@@ -420,6 +430,7 @@ async def test_a_cycle_across_two_prds_is_reported_naming_both_features_and_prds
 
 
 async def test_a_cross_prd_dependency_in_a_later_horizon_is_reported():
+    """An item waiting on another PRD's item in a later horizon is reported plainly."""
     # protects=an item in Now waiting on another PRD's item in Next is told plainly;
     # fails_when=the cross-PRD link skips the horizon check.
     w = await _two_prds_on_the_roadmap(safety_deps=())
@@ -432,6 +443,7 @@ async def test_a_cross_prd_dependency_in_a_later_horizon_is_reported():
 
 
 async def test_the_items_review_names_a_later_cross_prd_dependency_with_its_fixes():
+    """The items review names a later cross-PRD dependency and gives its own fixes."""
     # protects=the Roadmap items review's reason for an item waiting on another PRD's item
     # in a later horizon names it with its PRD and offers its own fixes, beside the item's
     # own dependency; fails_when=the two problems swap words and fixes, or one shows the
@@ -478,6 +490,7 @@ async def _ledger_by_feature_key(w: dict) -> None:
 
 
 async def test_a_dependency_on_a_feature_key_orders_the_queue_by_its_items():
+    """A dependency named by another PRD's feature key still orders the queue."""
     # protects=a dependency named by another PRD's feature key (accepted by the checks)
     # orders the company queue by that feature's items; fails_when=it is matched by item key
     # only and silently dropped.
@@ -489,6 +502,7 @@ async def test_a_dependency_on_a_feature_key_orders_the_queue_by_its_items():
 
 
 async def test_the_simple_panel_shows_a_dependency_named_by_a_feature_key():
+    """The feature panel's depends-on and needed-by also hold a feature-key link."""
     # protects=the feature panel's depends on / needed by hold the other PRD's item when the
     # dependency names its feature; fails_when=the link is matched by item key only.
     from oracle.simple import service as simple
@@ -503,6 +517,7 @@ async def test_the_simple_panel_shows_a_dependency_named_by_a_feature_key():
 
 
 async def test_a_confirmed_ground_truth_feature_in_no_prd_is_named_at_the_engineering_check():
+    """A confirmed Ground Truth feature in no PRD is named at the engineering check."""
     # protects=the feature set stop lets a brief depend on a confirmed feature, and the
     # Engineering check names it plainly while no PRD holds it (not first at the roadmap
     # items stop); area PRDs drafted side by side see each other's approved scopes
@@ -526,6 +541,7 @@ async def test_a_confirmed_ground_truth_feature_in_no_prd_is_named_at_the_engine
 
 
 async def test_a_new_prd_s_approved_scope_counts_before_its_import_and_any_roadmap():
+    """A sibling PRD's approved scope counts before any import or roadmap exists."""
     # protects=the area PRDs drafted side by side see each other's approved features while
     # each PRD is new (its scope names no document yet) and no company roadmap exists;
     # fails_when=only imported PRDs on an existing company roadmap count.
@@ -547,6 +563,7 @@ async def test_a_new_prd_s_approved_scope_counts_before_its_import_and_any_roadm
 
 
 async def test_only_each_prd_s_latest_approved_scope_counts():
+    """Only each PRD's latest approved scope counts; a dropped feature leaves it."""
     # protects=a feature a PRD dropped from its latest approved scope is no longer on the
     # company roadmap; fails_when=every approved scope ever is read.
     w = await world()
@@ -567,6 +584,7 @@ async def test_only_each_prd_s_latest_approved_scope_counts():
 
 
 async def test_the_prd_draft_prompt_names_the_other_feature_with_its_prd():
+    """The PRD draft's own prompt carries the cross-PRD link, named with its PRD."""
     # protects=the PRD writer's own prompt (the prd_draft step) carries the link named with
     # its PRD; fails_when=the line is built but never reaches the drafted PRD's prompt.
     from oracle.runs import flows
@@ -595,6 +613,7 @@ async def test_the_prd_draft_prompt_names_the_other_feature_with_its_prd():
 
 
 async def test_a_typed_start_before_another_prd_s_dependency_ends_is_warned_in_simple():
+    """Simple warns when an item starts before another PRD's needed feature ends."""
     # protects=in Simple, an item typed to start before the other PRD's feature it waits on
     # ends gets a plain warning line naming that feature with its PRD; fails_when=the
     # cross-PRD link is dropped, or the line leaves out which PRD holds it.
@@ -661,6 +680,7 @@ async def _shown(client, auth, w: dict) -> dict:
 
 
 async def test_the_review_gate_reads_the_problems_the_page_shows(client):
+    """The review gate counts the same problems the page shows, both checked fresh."""
     # protects=a check stored with problems a later rule answers is approvable once every
     # verdict is staged: the review's gate reads the briefs checked again, as the page's
     # check does; fails_when=the gate counts the stored problems (file_problems 1, Approve
@@ -679,6 +699,7 @@ async def test_the_review_gate_reads_the_problems_the_page_shows(client):
 
 
 async def test_a_check_with_real_problems_is_listed_on_the_page_and_never_approved(client):
+    """A real unresolved dependency problem blocks approval and shows on the page."""
     # protects=a dependency no PRD or roadmap knows still blocks: the page's check lists it,
     # the review's gate counts the same problem and Approve is refused; fails_when=the
     # gate and the page disagree, or the approve route approves with a real problem.

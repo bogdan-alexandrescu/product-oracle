@@ -49,6 +49,7 @@ async def _changes(tenant_id: uuid.UUID) -> list[m.ChangeEvent]:
 
 
 async def test_deleting_an_entity_keeps_its_dependants_stale_with_a_deleted_cause(client):
+    """Deleting an entity leaves dependants stale with a snapshot of the cause."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id)
     v1 = await prd_v1(client, ctx)
@@ -118,6 +119,7 @@ async def test_deleting_an_entity_keeps_its_dependants_stale_with_a_deleted_caus
 
 
 async def test_rejecting_an_entity_marks_its_criteria_features_sections_and_outputs(client):
+    """Rejecting an entity marks its criteria, features, sections and outputs stale."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id)
     v1 = await prd_v1(client, ctx)
@@ -163,6 +165,7 @@ async def test_rejecting_an_entity_marks_its_criteria_features_sections_and_outp
 
 
 async def test_the_write_path_walks_only_the_neighbourhood_of_the_change(client):
+    """A downstream graph walk loads only what is actually downstream of the change."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id)
     async with tenant_session(ctx.tenant_id) as s:
@@ -175,6 +178,7 @@ async def test_the_write_path_walks_only_the_neighbourhood_of_the_change(client)
 
 
 async def test_a_walk_that_hits_the_node_limit_is_flagged_and_recorded(client, monkeypatch):
+    """A graph walk that hits its node limit is flagged truncated wherever shown."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id)
     monkeypatch.setattr(graph_mod, "MAX_NODES", 2)
@@ -226,6 +230,7 @@ entities:
 
 
 async def test_a_bulk_import_records_one_closure_per_subject_kind(client):
+    """A bulk import records one staleness closure per subject kind and its cause."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id)
     v1 = await prd_v1(client, ctx)
@@ -257,6 +262,7 @@ async def test_a_bulk_import_records_one_closure_per_subject_kind(client):
 
 
 async def test_the_staleness_list_pages_and_explains_each_output(client):
+    """The staleness list pages correctly and explains each stale output's reason."""
     ctx = await make_ctx()
     v1 = await prd_v1(client, ctx)
     ids = []
@@ -316,6 +322,7 @@ async def _count_queries(coro) -> int:
 
 
 async def test_the_version_trace_query_count_does_not_grow_with_sections(client):
+    """A document version's trace query count stays fixed, however many sections."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id)
     v1 = await prd_v1(client, ctx)
@@ -347,6 +354,7 @@ async def test_the_version_trace_query_count_does_not_grow_with_sections(client)
 
 
 async def test_creating_removing_and_reparenting_an_edge_records_a_change(client):
+    """Creating, removing or re-parenting an edge records a change, marks stale."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id)
     v1 = await prd_v1(client, ctx)
@@ -390,6 +398,7 @@ async def test_creating_removing_and_reparenting_an_edge_records_a_change(client
 
 
 async def test_an_owner_edge_records_no_content_change(client):
+    """An ownership edge is not a content change, so it records nothing."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id)
     resp = await client.post(
@@ -403,6 +412,7 @@ async def test_an_owner_edge_records_no_content_change(client):
 
 
 async def test_an_entity_change_reaches_links_made_on_a_newer_version(client):
+    """An entity change reaches a dependency linked only on a later version."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id)
     v1 = await prd_v1(client, ctx)
@@ -427,6 +437,7 @@ async def test_an_entity_change_reaches_links_made_on_a_newer_version(client):
 
 
 async def test_dependencies_cannot_cross_companies(client):
+    """A dependency cannot target another company's artifact, version or entity."""
     a = await make_ctx("Company A")
     b = await make_ctx("Company B")
     chain_b = await seed_chain(b.tenant_id)
@@ -478,6 +489,7 @@ async def _export(client, ctx) -> str:
 
 
 async def test_the_appendix_leaves_out_rejected_items(client):
+    """The exported appendix leaves out a link to a rejected entity."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id)
     v1 = await prd_v1(client, ctx)
@@ -497,6 +509,7 @@ async def test_the_appendix_leaves_out_rejected_items(client):
 
 
 async def test_document_wide_links_are_exported_under_their_section(client):
+    """A document-wide link, even named by slug and key, exports under its section."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id)
     v1 = await prd_v1(client, ctx)
@@ -599,6 +612,7 @@ async def _assert_evidence_removal(ctx, evidence_id, link, wire, spec):
 
 
 async def test_removing_evidence_marks_the_sections_citing_it_and_their_outputs(client):
+    """Removing evidence marks the sections that cited it, and their outputs, stale."""
     ctx = await make_ctx()
     _, evidence_id, link, wire, spec = await _evidence_setup(client, ctx)
 
@@ -609,6 +623,7 @@ async def test_removing_evidence_marks_the_sections_citing_it_and_their_outputs(
 
 
 async def test_removing_evidence_over_mcp_marks_the_same(client):
+    """Removing evidence over MCP marks the same sections and outputs as the API."""
     ctx = await make_ctx()
     _, evidence_id, link, wire, spec = await _evidence_setup(client, ctx)
 
@@ -680,6 +695,7 @@ async def _assert_source_removal(ctx, source_id, evidence_id, by_evidence, by_it
 
 
 async def test_deleting_a_source_marks_what_its_items_back(client):
+    """Deleting a source marks stale whatever its items backed."""
     ctx = await make_ctx()
     setup = await _source_setup(client, ctx)
 
@@ -690,6 +706,7 @@ async def test_deleting_a_source_marks_what_its_items_back(client):
 
 
 async def test_deleting_a_source_over_mcp_marks_the_same(client):
+    """Deleting a source through the MCP tool marks the same items stale as the API."""
     ctx = await make_ctx()
     setup = await _source_setup(client, ctx)
     async with tenant_session(ctx.tenant_id) as s:
@@ -704,6 +721,7 @@ async def test_deleting_a_source_over_mcp_marks_the_same(client):
 
 
 async def test_a_link_to_a_source_item_alone_goes_with_its_source(client):
+    """A link naming only a source item is removed once its source is deleted."""
     ctx = await make_ctx()
     v1 = await prd_v1(client, ctx)
     item_id = await make_item(ctx, "owner")
@@ -739,6 +757,7 @@ async def _edges(tenant_id: uuid.UUID, pairs, type_: str = "depends_on") -> None
 
 
 async def test_load_around_caps_its_roots_and_says_so(client, monkeypatch):
+    """A graph load over too many roots caps them, still reaching a root's neighbour."""
     ctx = await make_ctx()
     roots = await _entities(ctx.tenant_id, 4)
     (child,) = await _entities(ctx.tenant_id, 1, prefix="child")
@@ -754,6 +773,7 @@ async def test_load_around_caps_its_roots_and_says_so(client, monkeypatch):
 
 
 async def test_a_cycle_that_ends_at_the_depth_bound_is_not_truncation(client, monkeypatch):
+    """A cycle that closes exactly at the depth bound is not reported as truncated."""
     ctx = await make_ctx()
     root, a, b = await _entities(ctx.tenant_id, 3)
     # a and b are downstream of root; root depends on b again: a cycle of three.
@@ -767,6 +787,7 @@ async def test_a_cycle_that_ends_at_the_depth_bound_is_not_truncation(client, mo
 
 
 async def test_a_chain_longer_than_the_depth_bound_is_truncated(client, monkeypatch):
+    """A chain longer than the depth bound stops there and is marked truncated."""
     ctx = await make_ctx()
     ids = await _entities(ctx.tenant_id, 5)
     await _edges(ctx.tenant_id, [(ids[i + 1], ids[i]) for i in range(4)])
@@ -780,6 +801,7 @@ async def test_a_chain_longer_than_the_depth_bound_is_truncated(client, monkeypa
 
 
 async def test_a_walk_never_follows_an_edge_into_another_company(client):
+    """A graph walk never crosses into another company, even over a shared edge."""
     a = await make_ctx("Company A")
     b = await make_ctx("Company B")
     (ours,) = await _entities(a.tenant_id, 1, prefix="ours")
@@ -801,6 +823,7 @@ async def test_a_walk_never_follows_an_edge_into_another_company(client):
 
 
 async def test_removing_a_part_reaches_what_is_downstream_of_its_whole(client):
+    """Removing a part reaches outputs downstream of its siblings via their whole."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id)
     v1 = await prd_v1(client, ctx)
@@ -820,6 +843,7 @@ async def test_removing_a_part_reaches_what_is_downstream_of_its_whole(client):
 
 
 async def test_a_proposed_edge_records_no_change_until_it_is_confirmed(client):
+    """A proposed edge records no change or staleness until it is confirmed."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id)
     v1 = await prd_v1(client, ctx)
@@ -857,6 +881,7 @@ async def test_a_proposed_edge_records_no_change_until_it_is_confirmed(client):
 
 
 async def test_a_reconciled_deleted_upstream_stays_settled(client):
+    """A dependency reconciled after its upstream is deleted stays settled for good."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id)
     v1 = await prd_v1(client, ctx)
@@ -989,6 +1014,7 @@ async def _assert_section_follows(client, ctx, v1, feature: uuid.UUID, section: 
 
 @pytest.mark.parametrize("via", ["rest", "mcp"])
 async def test_a_link_naming_an_entity_survives_its_sources_deletion(client, via):
+    """A link naming both an entity and a source keeps the entity when it's deleted."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id)
     v1 = await prd_v1(client, ctx)
@@ -1063,6 +1089,7 @@ async def test_an_item_only_link_is_deleted_with_its_source(client):
 
 @pytest.mark.parametrize("via", ["rest", "mcp"])
 async def test_a_link_naming_an_entity_survives_its_evidences_removal(client, via):
+    """A link naming both an entity and evidence keeps the entity when it's removed."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id)
     v1 = await prd_v1(client, ctx)

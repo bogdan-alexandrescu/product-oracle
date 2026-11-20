@@ -36,6 +36,7 @@ async def stamp_approved(ctx: Ctx, n: int = 1) -> None:
 
 
 async def test_approving_a_template_only_prd_is_409_nothing_written(client):
+    """Approving a PRD whose sections hold only template text is refused as unwritten."""
     ctx = await make_ctx()
     await start_prd(client, ctx)
     resp = await client.post(
@@ -53,6 +54,7 @@ async def test_approving_a_template_only_prd_is_409_nothing_written(client):
 
 
 async def test_a_prd_with_one_written_section_approves(client):
+    """A PRD with just one section actually written by a person approves normally."""
     ctx = await make_ctx()
     await start_prd(client, ctx)
     h = ctx.as_("approver")
@@ -68,6 +70,7 @@ async def test_a_prd_with_one_written_section_approves(client):
 
 
 async def test_publish_check_blocks_a_template_only_prd(client):
+    """The publish check blocks a template-only PRD, naming nothing written."""
     ctx = await make_ctx()
     await start_prd(client, ctx)
     await stamp_approved(ctx)
@@ -82,6 +85,7 @@ async def test_publish_check_blocks_a_template_only_prd(client):
 
 
 async def test_a_roadmap_is_not_built_from_a_template_only_prd(client):
+    """A roadmap run refuses to build from a PRD whose text is still the template."""
     ctx = await make_ctx()
     await start_prd(client, ctx)
     await stamp_approved(ctx)

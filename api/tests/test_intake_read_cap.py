@@ -53,6 +53,7 @@ async def _read(client, ctx, intake_id: str, who: str = "commenter"):
 # refusal is another status or other words, or ai_read does not count;
 # no_claim=the button (web/e2e/intake-read-cap.spec.ts).
 async def test_a_fourth_read_in_a_company_day_is_refused_in_words(client, monkeypatch):
+    """A fourth read in one company day is refused with a plain-words message."""
     _at(monkeypatch, AFTERNOON)
     ctx = await company()
     intake_id = await _new(client, ctx, ai_extraction=False)
@@ -80,6 +81,7 @@ async def test_a_fourth_read_in_a_company_day_is_refused_in_words(client, monkey
 # the next Company day starts the count again; fails_when=the server's (UTC) day is counted,
 # or yesterday's reads still count; no_claim=other time zones' wording.
 async def test_the_count_is_per_company_day_not_the_servers(client, monkeypatch):
+    """The daily read cap resets on the company's own day, not the server's clock."""
     _at(monkeypatch, AFTERNOON)
     ctx = await company()
     intake_id = await _new(client, ctx, ai_extraction=False)
@@ -101,6 +103,7 @@ async def test_the_count_is_per_company_day_not_the_servers(client, monkeypatch)
 # all three on-demand reads; fails_when=an automatic read uses one up;
 # no_claim=the automatic reads' own rules (test_intake_read).
 async def test_the_reads_on_create_and_repin_are_not_counted(client, monkeypatch):
+    """An intake's automatic read on create or repin never counts against the read cap."""
     _at(monkeypatch, AFTERNOON)
     ctx = await company()
     intake_id = await _new(client, ctx)
@@ -124,6 +127,7 @@ async def test_the_reads_on_create_and_repin_are_not_counted(client, monkeypatch
 # protects=per intake: another intake's reads are not counted; fails_when=the cap is the
 # author's across intakes; no_claim=a per-author cap (none was decided).
 async def test_another_intakes_reads_are_not_counted(client, monkeypatch):
+    """Each intake keeps its own read count; another intake's reads do not count."""
     _at(monkeypatch, AFTERNOON)
     ctx = await company()
     first = await _new(client, ctx, ai_extraction=False)
@@ -140,6 +144,7 @@ async def test_another_intakes_reads_are_not_counted(client, monkeypatch):
 # too; fails_when=an owner bypasses it; no_claim=owners starting reads of others' intakes
 # (only the author starts one, test_ai_read_route_roles_and_conflicts).
 async def test_owners_get_the_same_cap(client, monkeypatch):
+    """An owner hits the same daily read cap as any other member, with no exception."""
     from tests.baseline_helpers import make_item
     from tests.intake_helpers import PAIN, create_intake
 

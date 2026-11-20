@@ -26,6 +26,7 @@ from tests.test_runs import decide, get, pending, started, tick
 
 
 async def test_held_console_approval_confirms_after_a_waiver(client, owner, monkeypatch):  # noqa: F811
+    """A console approval held by a blocking reason needs a confirm once waived."""
     tenant_id, auth = owner
     await seed_baseline(tenant_id)
     swarm = FakeSwarmCloud(mcp=True, await_input=True, service_answer=True)

@@ -34,6 +34,7 @@ def clock(monkeypatch):
 
 @pytest.mark.parametrize("role", ["owner", "viewer"])
 async def test_a_feature_on_the_map_reads_its_goal(client, role):
+    """A feature with no goal of its own reads the one its earliest milestone serves."""
     ctx, ids = await world()
     items = by_key(await get(client, ctx, role))
     f1, f2, f3 = items["one-tap-link"], items["guided-week"], items["rep-leaderboard"]
@@ -47,6 +48,7 @@ async def test_a_feature_on_the_map_reads_its_goal(client, role):
 
 
 async def test_a_goal_set_on_the_item_wins(client):
+    """A goal set directly on an item overrides the one its milestone would suggest."""
     ctx, ids = await world()
     import uuid
 

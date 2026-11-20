@@ -90,6 +90,7 @@ async def read(client, headers) -> tuple[int, dict]:
 
 
 async def test_statements_do_not_grow_with_run_stops(client):
+    """Adding more run stops to review costs no extra queries reading the Inbox."""
     ctx = await make_ctx()
     await seed_company(ctx)
     await read(client, ctx.as_("owner"))
@@ -105,6 +106,7 @@ async def test_statements_do_not_grow_with_run_stops(client):
 
 
 async def test_batched_reads_answer_as_each_alone(client, monkeypatch):
+    """Batching several people's Inbox reads returns what reading each alone would."""
     ctx = await make_ctx()
     await seed_company(ctx)
     shared = {who: (await read(client, ctx.as_(who)))[1] for who in READERS}
@@ -174,6 +176,7 @@ def before(module: types.ModuleType) -> dict:
 
 
 def test_ci_is_on_only_when_true():
+    """The CI flag reads as on only for its recognized true spellings, not all."""
     for value in ("1", "true", "TRUE", "True", "yes", "Yes"):
         assert on_ci({"CI": value}), value
     for value in ("", "0", "false", "False", "no", "off"):
@@ -182,6 +185,8 @@ def test_ci_is_on_only_when_true():
 
 
 def test_hung_fetch_counts_as_failed(monkeypatch):
+    """A hung git lookup counts as a failed read: skipped locally, failed in CI."""
+
     def hang(cmd, **kw):
         raise subprocess.TimeoutExpired(cmd, kw["timeout"])
 
@@ -197,6 +202,7 @@ def test_hung_fetch_counts_as_failed(monkeypatch):
 
 
 async def test_answers_as_before_inbox_perf(client, monkeypatch):
+    """Reverting the Inbox performance fix gives the same answers, just more queries."""
     ctx = await make_ctx()
     await seed_company(ctx)
     now = {who: (await read(client, ctx.as_(who)))[1] for who in READERS}
@@ -213,6 +219,7 @@ async def test_answers_as_before_inbox_perf(client, monkeypatch):
 
 @pytest.mark.timing
 async def test_inbox_answers_in_time(client):
+    """Reading the Inbox on a realistic company stays under its time budget."""
     ctx = await make_ctx()
     await seed_company(ctx)
     headers = ctx.as_("owner")

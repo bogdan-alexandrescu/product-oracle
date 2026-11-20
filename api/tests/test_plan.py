@@ -226,6 +226,7 @@ async def seed_two_prds(ctx: Ctx) -> None:
 
 
 async def test_plan_lists_both_prds_and_every_item_once(client):
+    """The Plan screen lists every PRD and every one of its items exactly once."""
     ctx = await make_ctx()
     await seed_two_prds(ctx)
     body = await plan(client, ctx)
@@ -252,6 +253,7 @@ async def test_plan_lists_both_prds_and_every_item_once(client):
 
 
 async def test_scope_approved_drops_draft_items(client):
+    """Scoping the Plan screen to approved drops every draft item and its change info."""
     ctx = await make_ctx()
     await seed_two_prds(ctx)
     body = await plan(client, ctx, scope="approved")
@@ -267,6 +269,7 @@ async def test_scope_approved_drops_draft_items(client):
 
 
 async def test_goal_ids_come_from_the_features_supports_edges(client):
+    """A Plan item's goal ids come from its feature's supports edges only."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
@@ -345,6 +348,7 @@ async def _planned(seed: Seed):
     ],
 )
 async def test_item_state(client, situation, state):
+    """A Plan item's state matches its situation: done, slipped, at risk, planned."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         await situation(Seed(s))
@@ -409,6 +413,7 @@ async def draft_twin(client, ctx: Ctx, approved: dict[str, Any], draft: dict[str
 
 
 async def test_a_moved_draft_item_says_from_where(client):
+    """A draft item moved between horizons says which horizon it moved from and to."""
     ctx = await make_ctx()
     item = await draft_twin(client, ctx, {"horizon": "now"}, {"horizon": "next"})
     assert item["origin"] == "draft" and item["state"] == "proposed"
@@ -426,6 +431,7 @@ async def test_a_moved_draft_item_says_from_where(client):
     ],
 )
 async def test_change_counts_plan_changes_only(client, approved, draft, kind, fields, notes):
+    """Only fields the Plan screen cares about count as a changed item, not every edit."""
     ctx = await make_ctx()
     item = await draft_twin(client, ctx, approved, draft)
     assert item["change"]["kind"] == kind
@@ -540,6 +546,7 @@ async def _brief(seed: Seed):
     ],
 )  # fmt: skip
 async def test_prd_stage(client, situation, who, stage, label, step):
+    """A PRD's stage, label and journey step match its checkpoints and who is looking."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         await situation(Seed(s))
@@ -551,6 +558,7 @@ async def test_prd_stage(client, situation, who, stage, label, step):
 
 
 def test_engineering_stop_lines():
+    """An engineering checkpoint names the lead as who to wait for, when one exists."""
     lead, me = uuid.uuid4(), uuid.uuid4()
     line = service.checkpoint_line
     # A lead is named: the check waits for them, whoever looks.
@@ -668,6 +676,7 @@ async def _n_nothing(seed: Seed, owner_id):
     ],
 )
 async def test_next_decision(client, situation, named_owner, action, label, role, status):
+    """A Plan item's next action and who owns it match its current blocking situation."""
     ctx = await make_ctx()
     owner_id = ctx.users["owner"].id if named_owner else None
     async with tenant_session(ctx.tenant_id) as s:
@@ -691,6 +700,7 @@ async def test_next_decision(client, situation, named_owner, action, label, role
 
 
 async def test_basis_ids_are_the_bases_the_date_source_names(client):
+    """An item's basis ids are only the bases its own date source names."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
@@ -727,6 +737,7 @@ async def test_basis_ids_are_the_bases_the_date_source_names(client):
 
 
 async def test_another_companys_rows_never_appear(client):
+    """One company's Plan rows and ids never appear in another company's Plan response."""
     mine, theirs = await make_ctx("Example Co"), await make_ctx("Other Co")
     for ctx, slug in ((mine, "prd-mine"), (theirs, "prd-theirs")):
         async with tenant_session(ctx.tenant_id) as s:
@@ -744,6 +755,7 @@ async def test_another_companys_rows_never_appear(client):
 
 
 async def test_run_tokens_are_refused_and_viewers_read(client):
+    """A run token cannot read the Plan screen, but a viewer can, via MCP too."""
     ctx = await make_ctx()
     await seed_two_prds(ctx)
     assert (await client.get("/v1/plan", headers=ctx.as_("viewer"))).status_code == 200
@@ -767,6 +779,7 @@ async def test_run_tokens_are_refused_and_viewers_read(client):
 
 
 async def test_query_budget(client):
+    """The Plan screen stays within a fixed query budget even with many PRDs and items."""
     ctx = await make_ctx()
     tracks = 30
     async with tenant_session(ctx.tenant_id) as s:
@@ -800,6 +813,7 @@ async def test_query_budget(client):
 
 
 async def test_item_history_in_version_order(client):
+    """An item's history lists its roadmap versions in order, with each PRD version."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)

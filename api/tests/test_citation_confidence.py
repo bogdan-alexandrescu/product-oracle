@@ -46,6 +46,7 @@ def _with_items(**items: str) -> str:
 
 
 async def test_import_stores_and_reads_back_the_confidence_fields(client):
+    """Importing a draft stores and reads back each citation's confidence fields."""
     tenant_id, auth = await seed_auth()
     await seed_oracle_refs(tenant_id)
     item = await _item(tenant_id)
@@ -79,6 +80,7 @@ async def test_import_stores_and_reads_back_the_confidence_fields(client):
 
 
 async def test_round_trip_through_the_markdown_export(client):
+    """Exporting then re-importing a draft's markdown keeps its citations intact."""
     # The stored markdown carries the fields; re-importing it is the same version.
     tenant_id, auth = await seed_auth()
     await seed_oracle_refs(tenant_id)
@@ -92,6 +94,7 @@ async def test_round_trip_through_the_markdown_export(client):
 
 
 async def test_an_unknown_or_other_company_item_is_a_warning_not_a_refusal(client):
+    """Citing an unknown or another company's source item warns, but still imports."""
     tenant_id, auth = await seed_auth()
     await seed_oracle_refs(tenant_id)
     other = await _item(await make_tenant("Other Co"))

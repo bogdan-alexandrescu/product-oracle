@@ -66,6 +66,7 @@ async def _new(c, n=1):
 
 
 async def test_the_author_sees_what_changed_since_the_import(tenant_id, slack):
+    """A PRD draft's author sees how many source items changed since it was imported."""
     alice = await make_user(tenant_id, "alice@example.com")
     async with client_for(alice) as a:
         sid = await _source(a, tenant_id, alice)
@@ -85,6 +86,7 @@ async def test_the_author_sees_what_changed_since_the_import(tenant_id, slack):
 
 
 async def test_others_see_neither_the_items_nor_their_number(tenant_id, slack):
+    """Only a draft's author sees its new-items count; another's items do not count."""
     alice = await make_user(tenant_id, "alice@example.com")
     bob = await make_user(tenant_id, "bob@example.com")
     async with client_for(alice) as a, client_for(bob) as b:
@@ -100,6 +102,7 @@ async def test_others_see_neither_the_items_nor_their_number(tenant_id, slack):
 
 
 async def test_a_run_draft_counts_from_the_runs_pin(tenant_id, slack):
+    """A run's draft counts new items from when its sources were pinned, not before."""
     alice = await make_user(tenant_id, "alice@example.com")
     async with client_for(alice) as a:
         sid = await _source(a, tenant_id, alice)
@@ -137,6 +140,7 @@ async def test_a_run_draft_counts_from_the_runs_pin(tenant_id, slack):
 
 
 async def test_a_run_from_an_intake_counts_only_the_sources_it_read(tenant_id, slack):
+    """A run started from an intake counts new items only from the sources it read."""
     alice = await make_user(tenant_id, "alice@example.com")
     async with client_for(alice) as a:
         read = await _source(a, tenant_id, alice, "Read chat")
@@ -180,6 +184,7 @@ async def test_a_run_from_an_intake_counts_only_the_sources_it_read(tenant_id, s
 
 
 async def test_a_run_draft_belongs_to_the_person_it_acted_for(tenant_id, slack):
+    """A run's draft new-items count belongs to who it ran for, not just any viewer."""
     alice = await make_user(tenant_id, "alice@example.com")
     bob = await make_user(tenant_id, "bob@example.com")
     async with client_for(alice) as a, client_for(bob) as b:
@@ -211,6 +216,7 @@ async def test_a_run_draft_belongs_to_the_person_it_acted_for(tenant_id, slack):
 
 
 async def test_an_unknown_version_is_404(tenant_id, slack):
+    """Asking for new items on an unknown version or document returns not found."""
     alice = await make_user(tenant_id, "alice@example.com")
     async with client_for(alice) as a:
         await _import(a)

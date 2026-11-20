@@ -44,6 +44,7 @@ async def changes(ctx) -> list[SimpleChange]:
 
 
 async def test_question_ops_record_who_and_when_and_stay_in_their_company(client, monkeypatch):
+    """A question's decide and name-decider ops stay in their own company, logged."""
     monkeypatch.setattr(q_tests.company_time, "now", lambda: q_tests.NOW)
     ctx = await make_ctx()
     await q_tests.seed(ctx, with_decider=False)
@@ -76,6 +77,7 @@ async def test_question_ops_record_who_and_when_and_stay_in_their_company(client
 
 
 async def test_edit_line_records_who_and_when_and_stays_in_its_company(client, monkeypatch):
+    """Editing a document's line stays in its own company and is logged, who and when."""
     monkeypatch.setattr(op_tests.company_time, "now", lambda: op_tests.NOW)
     ctx = await op_tests.world(client)
     other = await make_people()

@@ -26,6 +26,7 @@ DRAFTS = "/v1/simple/drafts"
 
 
 async def test_a_draft_publishes_over_a_summary_date_with_no_schedule_basis(client):
+    """A draft still publishes when its summary text mentions a date with no basis."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["move_dates"])
     async with tenant_session(ctx.tenant_id) as s:

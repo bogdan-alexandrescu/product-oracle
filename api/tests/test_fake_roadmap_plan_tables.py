@@ -18,6 +18,7 @@ PROMPT = """Write roadmap.md.
 
 
 def test_a_faked_roadmap_draft_carries_the_briefs_plan_tables():
+    """The fake runtime's roadmap draft copies the brief's plan tables."""
     draft = fake._default_files("roadmap_draft", 1, ("roadmap.md",), PROMPT)["roadmap.md"]
     plan = draft.index("## Plan {#plan}")
     milestones = draft.index("## Milestones {#plan-milestones}")
@@ -27,5 +28,6 @@ def test_a_faked_roadmap_draft_carries_the_briefs_plan_tables():
 
 
 def test_without_plan_tables_in_the_brief_the_draft_is_unchanged():
+    """A brief with no plan table leaves the fake roadmap draft without one."""
     draft = fake._default_files("roadmap_draft", 1, ("roadmap.md",), "Write it.")["roadmap.md"]
     assert "## Plan {#plan}" not in draft

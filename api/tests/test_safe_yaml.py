@@ -88,6 +88,7 @@ def _timed(fn, *args, **kwargs):
 @pytest.mark.timing
 @pytest.mark.parametrize("name", sorted(REFUSED))
 def test_probe_is_refused_fast(name):
+    """Each known unsafe YAML probe is refused quickly with its own named problem."""
     text, problem = REFUSED[name]
     safe_yaml.load("warm: up")
     _, exc, took = _timed(safe_yaml.load, text)
@@ -99,6 +100,7 @@ def test_probe_is_refused_fast(name):
 
 @pytest.mark.timing
 def test_base60_is_a_string_and_fast():
+    """A large base-60-like value parses as a string quickly, up to its size cap."""
     data, exc, took = _timed(safe_yaml.load, BASE60_80K)
     assert exc is None
     assert isinstance(data["probe"], str) and data["probe"].startswith("1:1:1")
@@ -109,6 +111,7 @@ def test_base60_is_a_string_and_fast():
 
 
 def test_narrowed_types():
+    """Safe YAML narrows ambiguous scalars the same way plain YAML used to."""
     data = safe_yaml.load(
         "a: yes\nb: no\nc: on\nd: off\ne: true\nf: False\ng: 1:30\nh: 0x1F\ni: 012\n"
         "j: 1_000\nk: 4.2\nl: -3\nm: ~\nn: 2026-11-30\no: 2.5e+3\np: '1'\n'<<': {x: 1}\n"
@@ -150,6 +153,7 @@ def test_what_safe_dump_writes_reads_back_the_same():
 
 
 def test_directives_and_internal_errors_are_one_error():
+    """YAML directives, bad dates and internal parser errors are one safe error."""
     for text in ("%TAG !e! tag:e,2000:\n---\na: 1\n", "%YAML 1.1\n---\na: 1\n"):
         with pytest.raises(safe_yaml.SafeYamlError, match="directives"):
             safe_yaml.load(text)
@@ -201,6 +205,7 @@ async def test_a_slow_parse_does_not_block_the_event_loop():
 @pytest.mark.timing
 @pytest.mark.parametrize("name", sorted(REFUSED))
 def test_parse_draft_refuses_probe(name):
+    """Parsing a draft's front matter refuses each unsafe probe, quickly."""
     lines, problem = REFUSED[name]
     parse_draft(PRD)
     _, exc, took = _timed(parse_draft, with_front_matter(lines))
@@ -212,6 +217,7 @@ def test_parse_draft_refuses_probe(name):
 
 @pytest.mark.timing
 def test_parse_draft_base60_and_size():
+    """Parsing front matter accepts a large base-60 value but caps an oversized one."""
     parsed, exc, took = _timed(parse_draft, with_front_matter(BASE60_80K))
     assert exc is None and isinstance(parsed.front_matter["probe"], str) and took < FAST
     _, exc, took = _timed(parse_draft, with_front_matter(BASE60_1M))
@@ -220,6 +226,7 @@ def test_parse_draft_base60_and_size():
 
 
 def test_parse_draft_reports_the_line_of_a_refusal():
+    """A refused draft front matter reports the line of its problem, not just a note."""
     with pytest.raises(DraftError) as caught:
         parse_draft(with_front_matter("a: 1\nprobe: &x 1\n"))
     assert caught.value.problems[0].line == 3  # the '---' line is line 1
@@ -233,6 +240,7 @@ def test_parse_draft_reports_the_line_of_a_refusal():
     "name", ["deep_sequence", "billion_laughs", "long_decimal", "tag_binary", "nan"]
 )
 async def test_import_version_answers_422(client, name):
+    """Importing a version with unsafe front matter answers 422 quickly, not a hang."""
     _, auth = await seed_auth()
     await import_draft(client, auth, PRD, doc="warm-up")
     start = time.perf_counter()
@@ -245,6 +253,7 @@ async def test_import_version_answers_422(client, name):
 
 @pytest.mark.timing
 async def test_import_version_caps_the_body(client):
+    """Importing a document version refuses a body over its byte cap, streamed or not."""
     _, auth = await seed_auth()
     start = time.perf_counter()
     resp = await import_draft(client, auth, with_front_matter(BASE60_1M))
@@ -266,6 +275,7 @@ async def test_import_version_caps_the_body(client):
 
 
 async def test_import_version_reads_base60_as_a_string(client):
+    """Importing a version reads a base-60-like front matter value as a plain string."""
     _, auth = await seed_auth()
     resp = await import_draft(client, auth, with_front_matter(BASE60_80K))
     assert resp.status_code == 201, resp.text
@@ -273,6 +283,7 @@ async def test_import_version_reads_base60_as_a_string(client):
 
 
 async def test_push_draft_refuses_probes(tenant_id):
+    """The MCP push_draft tool refuses unsafe probes the same way the API does."""
     token = await api_token(tenant_id, "owner")
     async with mcp_client(token) as c:
         for name in ("deep_sequence", "billion_laughs", "overflow"):
@@ -306,6 +317,7 @@ BASELINE = "version: 1\nentities: []\nedges: []\n"
 @pytest.mark.timing
 @pytest.mark.parametrize("name", sorted(REFUSED))
 def test_baseline_parse_refuses_probe(name):
+    """Parsing baseline YAML refuses each unsafe probe quickly as invalid YAML."""
     _, exc, took = _timed(yaml_io._parse_and_validate, REFUSED[name][0] + BASELINE)
     assert isinstance(exc, yaml_io.YamlInvalid), exc
     assert [p.code for p in exc.problems] == ["invalid_yaml"]
@@ -315,6 +327,7 @@ def test_baseline_parse_refuses_probe(name):
 @pytest.mark.timing
 @pytest.mark.parametrize("name", ["deep_sequence", "billion_laughs", "nan", "duplicate_key"])
 async def test_baseline_yaml_import_answers_422(client, name):
+    """Importing baseline YAML with an unsafe probe answers 422 quickly."""
     _, auth = await seed_auth()
     headers = {**auth, "Content-Type": "application/yaml"}
     await client.post("/v1/baseline/yaml", content=BASELINE.encode(), headers=headers)
@@ -329,6 +342,7 @@ async def test_baseline_yaml_import_answers_422(client, name):
 
 
 async def test_baseline_yaml_import_caps_the_body(client):
+    """Importing baseline YAML refuses a body over its byte cap."""
     _, auth = await seed_auth()
     resp = await client.post(
         "/v1/baseline/yaml",
@@ -347,6 +361,7 @@ TEMPLATE = "---\nbrief: [t]\n---\n# T {#t}\n\n## Sources and data points {#sourc
 @pytest.mark.timing
 @pytest.mark.parametrize("name", ["deep_sequence", "billion_laughs", "tag_python", "nan"])
 def test_template_front_matter_and_layout_refuse_probes(name):
+    """Checking a template's front matter or embedded YAML layout refuses probes."""
     lines = REFUSED[name][0]
     check, exc, took = _timed(check_template, "---\n" + lines + TEMPLATE[4:])
     assert exc is None and took < FAST
@@ -358,6 +373,7 @@ def test_template_front_matter_and_layout_refuse_probes(name):
 
 
 async def test_template_validate_route_refuses_a_probe(client):
+    """The template validate route reports an unsafe probe as invalid front matter."""
     _, auth = await seed_auth()
     body = "---\n" + REFUSED["billion_laughs"][0] + TEMPLATE[4:]
     resp = await client.post("/v1/templates/validate", json={"body": body}, headers=auth)
@@ -371,6 +387,7 @@ async def test_template_validate_route_refuses_a_probe(client):
     [("deep_sequence", "too_deep"), ("billion_laughs", "yaml_alias"), ("nan", "non_finite_number")],
 )
 def test_roadmap_items_refuse_probes(name, code):
+    """Checking roadmap items YAML refuses each probe with its own named code."""
     # The refusal's code (SafeYamlError.code) names why, for the run's items check.
     check, exc, took = _timed(roadmap.check_items, REFUSED[name][0] + "items: []\n")
     assert exc is None and took < FAST
@@ -378,6 +395,7 @@ def test_roadmap_items_refuse_probes(name, code):
 
 
 def test_roadmap_items_bad_date_is_invalid_yaml_not_a_crash():
+    """A roadmap item with an impossible date fails as invalid YAML, not a crash."""
     check = roadmap.check_items("items:\n  - id: a\n    milestone: {date: 2026-02-30}\n")
     assert [p["code"] for p in check.problems] == ["invalid_yaml"]
 
@@ -395,6 +413,7 @@ def runtime():
 
 @pytest.mark.parametrize("name", ["deep_sequence", "billion_laughs", "base60_1m"])
 async def test_a_runs_unsafe_prd_md_fails_the_import_visibly(client, runtime, name):
+    """A run whose generated prd.md is unsafe YAML fails visibly, naming the code."""
     _, auth = await seed_auth()
     lines = BASE60_1M if name == "base60_1m" else REFUSED[name][0]
     prd = with_front_matter(lines, PRD.replace("checkout-redesign", "example-prd"))
@@ -411,6 +430,7 @@ async def test_a_runs_unsafe_prd_md_fails_the_import_visibly(client, runtime, na
 
 
 async def test_a_runs_unsafe_baseline_yaml_fails_the_import_visibly(client, runtime):
+    """A run whose generated baseline.yaml is unsafe fails visibly, named."""
     _, auth = await seed_auth()
     text = REFUSED["billion_laughs"][0] + BASELINE
     runtime.script["baseline"] = [Outcome(artifacts={"baseline.yaml": text})]
@@ -452,6 +472,7 @@ def _repo_yaml() -> list[tuple[str, str]]:
 
 
 def test_every_template_and_fixture_parses_as_before():
+    """Every built-in template and fixture still parses the same under safe YAML."""
     from oracle.templates.preview import SAMPLE_PRD, SAMPLE_ROADMAP
 
     texts = _repo_yaml()  # the built-in templates are files under oracle/templates/builtin

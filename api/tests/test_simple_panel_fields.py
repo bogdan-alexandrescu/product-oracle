@@ -102,6 +102,7 @@ class Panel:
 
 
 async def test_panel_fields_apply_and_read(client):
+    """Every panel field, once changed, reads back as its new value."""
     p = await Panel().build(await make_people())
     items = await p.read(client)
     a = items["a"]
@@ -144,6 +145,7 @@ async def test_panel_fields_apply_and_read(client):
 
 
 async def test_panel_fields_before_is_what_the_read_shows(client):
+    """A panel change is refused if its before value no longer matches reality."""
     p = await Panel().build(await make_people())
     # The items name no track of their own: the read shows their PRD's.
     assert (await p.read(client))["a"]["track"]["id"] == str(p.track.id)
@@ -158,6 +160,7 @@ async def test_panel_fields_before_is_what_the_read_shows(client):
 
 
 async def test_panel_fields_roles_and_undo(client):
+    """A commenter's panel edit is just proposed, and undo restores the old value."""
     p = await Panel().build(await make_people())
     r = await p.post(client, "set_goal", {"goal_id": str(p.g1.id)}, {"goal_id": str(p.g2.id)},
                      who="commenter")  # fmt: skip
@@ -182,6 +185,7 @@ async def test_panel_fields_roles_and_undo(client):
 
 
 async def test_panel_fields_bad_values(client):
+    """An invalid value for a panel field is rejected, not silently applied."""
     p = await Panel().build(await make_people())
     bad = [
         ("set_confidence", {"confidence": None}, {"confidence": "sure"}),
@@ -198,6 +202,7 @@ async def test_panel_fields_bad_values(client):
 
 
 async def test_panel_goal_measure_edit(client):
+    """Editing a goal's measure updates what the item's panel shows for it."""
     p = await Panel().build(await make_people())
     async with tenant_session(p.ctx.tenant_id) as s:
         g = await s.get(type(p.g1), p.g1.id)
@@ -222,6 +227,7 @@ async def test_panel_goal_measure_edit(client):
 
 
 async def test_panel_goal_measure_change(client):
+    """A goal measure change needs an owner to apply it; a viewer cannot propose one."""
     p = await Panel().build(await make_people())
     async with tenant_session(p.ctx.tenant_id) as s:
         g = await s.get(type(p.g1), p.g1.id)
@@ -293,6 +299,7 @@ async def test_panel_goal_measure_change(client):
 
 
 async def test_goal_measure_conflict_names_the_last_in_one_instant(client):
+    """A stale goal-measure change names whoever actually changed it last."""
     ctx = await make_people()
     async with tenant_session(ctx.tenant_id) as s:
         ctx.users["second"] = User(email="second.owner@example.com", name="Sam Second",
@@ -321,6 +328,7 @@ async def test_goal_measure_conflict_names_the_last_in_one_instant(client):
 
 
 async def test_panel_depends_keys_must_name_something(client):
+    """A dependency must name a real item or feature, or it is rejected."""
     p = await Panel().build(await make_people())
     r = await p.post(client, "set_depends", {"depends_on": []}, {"depends_on": ["F-404"]},
                      item=p.b)  # fmt: skip
@@ -335,6 +343,7 @@ async def test_panel_depends_keys_must_name_something(client):
 
 
 async def test_panel_status_planned_keeps_other_shipped(client):
+    """Restoring an item to planned keeps its own shipped mark from the tracker."""
     p = await Panel().build(await make_people())
     mark = {"note": "Runs in the partner app", "on": "2026-10-01"}
     async with tenant_session(p.ctx.tenant_id) as s:
@@ -363,6 +372,7 @@ async def _in_progress(p: "Panel") -> None:
 
 @pytest.mark.parametrize("plain", [True, False])
 async def test_cut_restore_cut_again_reads_the_tracker_each_time(client, plain):
+    """Cutting and restoring an item repeatedly always returns its real status."""
     p = await Panel().build(await make_people())
     await _in_progress(p)
     assert (await p.read(client))["a"]["status"] == "in_progress"
@@ -382,6 +392,7 @@ async def test_cut_restore_cut_again_reads_the_tracker_each_time(client, plain):
 
 
 async def test_a_stale_cut_names_another_person_s_latest_change(client):
+    """A stale status change names the other person who most recently changed it."""
     ctx = await make_people()
     async with tenant_session(ctx.tenant_id) as s:
         ctx.users["second"] = User(email="second.owner@example.com", name="Sam Second",

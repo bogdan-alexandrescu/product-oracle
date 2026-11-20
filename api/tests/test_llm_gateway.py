@@ -77,6 +77,7 @@ async def _call(tenant_id, fakes, job="reporting"):
 async def test_a_call_runs_on_the_account_with_most_headroom_and_records_its_reading(
     tenant_id, fakes
 ):
+    """A call runs on the account with the most headroom and records its reading."""
     await add_account(tenant_id, "busy", windows={"five_hour": window(0.8)})
     roomy = await add_account(tenant_id, "roomy", windows={"five_hour": window(0.1)})
     fakes.plan.answers["acc-roomy"] = _reading(0.33)
@@ -90,6 +91,7 @@ async def test_a_call_runs_on_the_account_with_most_headroom_and_records_its_rea
 
 
 async def test_an_exhausted_account_is_swapped_at_the_turn_boundary(tenant_id, fakes):
+    """An account that runs out mid-pool is swapped for a fresh one next turn."""
     spent = await add_account(tenant_id, "alpha")
     spare = await add_account(tenant_id, "bravo", windows={"five_hour": window(0.5)})
     fakes.plan.answers["acc-alpha"] = LlmRateLimited("out of quota", _reading(1.0))
@@ -105,6 +107,7 @@ async def test_an_exhausted_account_is_swapped_at_the_turn_boundary(tenant_id, f
 
 
 async def test_a_draining_account_moves_its_hold_before_the_next_turn(tenant_id, fakes):
+    """An account marked draining has its hold moved before the next call."""
     a = await add_account(tenant_id, "alpha")
     b = await add_account(tenant_id, "bravo", windows={"five_hour": window(0.5)})
     real_must_move = gateway.pool.must_move
@@ -129,6 +132,7 @@ async def test_a_draining_account_moves_its_hold_before_the_next_turn(tenant_id,
 
 
 async def test_no_other_account_says_why_and_gives_the_hold_back(tenant_id, fakes):
+    """With no other account free, the call fails with a reason and a reset time."""
     a = await add_account(tenant_id, "alpha")
     fakes.plan.answers["acc-alpha"] = LlmRateLimited("out of quota", _reading(1.0))
     with pytest.raises(NoClaudeAccount) as info:
@@ -139,6 +143,7 @@ async def test_no_other_account_says_why_and_gives_the_hold_back(tenant_id, fake
 
 
 async def test_a_paused_pool_is_a_wait_never_the_fallback(tenant_id, fakes):
+    """A paused pool makes the call wait and fail; it never falls back silently."""
     from oracle.claude_accounts import fallback
 
     await add_account(tenant_id, "alpha", state=AccountState.PAUSED)
@@ -152,6 +157,7 @@ async def test_a_paused_pool_is_a_wait_never_the_fallback(tenant_id, fakes):
 
 
 async def test_with_no_account_the_fallback_credential_is_used(tenant_id, fakes):
+    """With no account registered, a stored fallback credential runs the call."""
     from oracle.claude_accounts import fallback
 
     with pytest.raises(NoClaudeAccount, match="Settings > Claude accounts"):
@@ -171,6 +177,7 @@ async def test_with_no_account_the_fallback_credential_is_used(tenant_id, fakes)
 
 
 async def test_an_unreadable_credential_moves_the_call_and_marks_the_account(tenant_id, fakes):
+    """An account whose credential can't be read is skipped and marked unusable."""
     a = await add_account(tenant_id, "alpha")
     b = await add_account(tenant_id, "bravo", windows={"five_hour": window(0.5)})
     async with tenant_session(tenant_id) as s:
@@ -184,6 +191,7 @@ async def test_an_unreadable_credential_moves_the_call_and_marks_the_account(ten
 
 
 async def test_only_the_built_in_jobs_run_on_the_pool(tenant_id, fakes):
+    """Only the built-in job kinds are allowed to run on the account pool."""
     with pytest.raises(ValueError, match="review_comments"):
         await _call(tenant_id, fakes, job="agent_workflow")
 
@@ -201,6 +209,8 @@ def _request(**kw) -> LlmRequest:
 
 
 async def test_messages_api_transport_uses_x_api_key():
+    """The Messages API transport sends the right headers and reads the reply."""
+
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url == "https://api.anthropic.com/v1/messages"
         assert request.headers["x-api-key"] == API_KEY_PREFIX + "03-key"
@@ -291,6 +301,7 @@ def fake_claude(tmp_path, monkeypatch):
 async def test_claude_code_transport_runs_headless_with_the_token_and_reads_the_windows(
     fake_claude,
 ):
+    """The Claude Code transport runs headless with the token only in its env."""
     script, log = fake_claude
     transport = ClaudeCodeTransport(claude_bin=script, timeout=30)
     out = await transport.complete(PLAN_TOKEN_PREFIX + "01-good", _request())
@@ -322,6 +333,8 @@ async def test_claude_code_transport_runs_headless_with_the_token_and_reads_the_
 
 
 def test_a_rate_limit_event_is_a_reading_only_when_it_says_everything():
+    """A rate limit reading is kept only when the event carries every field."""
+
     def event(**info):
         return {"type": "rate_limit_event", "rate_limit_info": info}
 
@@ -344,6 +357,7 @@ def test_a_rate_limit_event_is_a_reading_only_when_it_says_everything():
 
 
 async def test_claude_code_transport_missing_binary_or_garbage():
+    """A missing claude binary or unreadable output raises a clear error."""
     with pytest.raises(LlmUnavailable, match="not installed"):
         await ClaudeCodeTransport(claude_bin="/nonexistent/claude").complete("t", _request())
     with pytest.raises(LlmUnavailable, match="boom"):
@@ -351,6 +365,7 @@ async def test_claude_code_transport_missing_binary_or_garbage():
 
 
 def test_render_prompt_for_multi_turn():
+    """A multi-turn conversation is rendered into one prompt in order."""
     assert render_prompt(MESSAGES) == "Summarise the goals."
     turns = [
         {"role": "user", "content": "A?"},
@@ -363,6 +378,7 @@ def test_render_prompt_for_multi_turn():
 
 
 def test_claude_code_transport_passes_the_reported_cost_on():
+    """The cost reported by Claude Code is passed on with the usage numbers."""
     stdout = json.dumps(
         {
             "type": "result",
@@ -396,6 +412,7 @@ async def _call_by(tenant_id, fakes, deadline, on_call=None):
 
 @pytest.mark.timing
 async def test_no_swap_starts_that_cannot_finish_before_the_deadline(tenant_id, fakes, monkeypatch):
+    """A swap never starts a call that cannot finish before the deadline."""
     monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 1.0)
     spent = await add_account(tenant_id, "alpha")
     spare = await add_account(tenant_id, "bravo", windows={"five_hour": window(0.5)})
@@ -427,6 +444,7 @@ async def test_no_swap_starts_that_cannot_finish_before_the_deadline(tenant_id, 
 
 
 async def test_no_call_starts_that_cannot_finish_before_the_deadline(tenant_id, fakes, monkeypatch):
+    """No call starts at all if the deadline leaves it no time to run."""
     monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 10.0)
     account = await add_account(tenant_id, "alpha")
     with pytest.raises(LlmOutOfTime):
@@ -439,6 +457,7 @@ async def test_no_call_starts_that_cannot_finish_before_the_deadline(tenant_id, 
 
 
 async def test_the_fallback_call_respects_the_deadline_too(tenant_id, fakes, monkeypatch):
+    """The fallback credential's call also respects the deadline."""
     monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 10.0)
     async with tenant_session(tenant_id) as s:
         from oracle.claude_accounts import fallback
@@ -484,6 +503,7 @@ async def _started_pid(pidfile) -> int:
 
 
 async def test_a_cancelled_call_leaves_no_claude_code_process(slow_claude):
+    """Cancelling a call leaves no Claude Code process still running."""
     script, pidfile = slow_claude
     transport = ClaudeCodeTransport(claude_bin=script, timeout=120)
     task = asyncio.create_task(transport.complete(PLAN_TOKEN_PREFIX + "01-good", _request()))
@@ -497,6 +517,7 @@ async def test_a_cancelled_call_leaves_no_claude_code_process(slow_claude):
 async def test_a_cancelled_call_gives_its_hold_back_only_once_the_process_is_gone(
     tenant_id, slow_claude, monkeypatch
 ):
+    """A cancelled call's hold is given back only after its process ends."""
     script, pidfile = slow_claude
     account = await add_account(tenant_id, "alpha")
     real_release = gateway.pool.release
@@ -521,6 +542,7 @@ async def test_a_cancelled_call_gives_its_hold_back_only_once_the_process_is_gon
 async def test_a_cancel_while_the_account_is_assigned_gives_the_hold_back(
     tenant_id, fakes, monkeypatch
 ):
+    """Cancelling while an account is held still gives that hold back."""
     account = await add_account(tenant_id, "alpha")
     real_assign = gateway.pool.assign
     taken = asyncio.Event()
@@ -564,6 +586,7 @@ def _running(pid: int) -> bool:
 
 @pytest.mark.skipif(not sys.platform.startswith("linux"), reason="PR_SET_PDEATHSIG is Linux's")
 async def test_claude_code_dies_with_the_api_process(slow_claude):
+    """Killing the API process also kills the Claude Code process it started."""
     script, pidfile = slow_claude
     api = await asyncio.create_subprocess_exec(sys.executable, "-c", API_PROCESS, script)
     pid = await _started_pid(pidfile)
@@ -585,6 +608,7 @@ async def test_claude_code_dies_with_the_api_process(slow_claude):
 
 
 def test_a_refusal_gives_the_clearing_time_in_words_in_the_zone():
+    """A pool-exhausted refusal gives the reset time in words, in the local zone."""
     from oracle.claude_accounts.accounts import Unavailable
     from oracle.claude_accounts.pool import NoAccount
 
@@ -598,6 +622,7 @@ def test_a_refusal_gives_the_clearing_time_in_words_in_the_zone():
 
 
 async def test_a_spent_pool_refuses_in_the_company_time_zone_never_iso(tenant_id, fakes):
+    """A spent pool refuses in the company's own time zone, never as an ISO stamp."""
     from oracle.tenant_settings import TenantSetting
 
     await add_account(tenant_id, "weekly", windows={"seven_day": window(0.97, timedelta(days=2))})
@@ -620,6 +645,7 @@ async def test_a_spent_pool_refuses_in_the_company_time_zone_never_iso(tenant_id
 
 
 async def test_a_spent_pool_with_a_fallback_runs_the_call_on_the_fallback(tenant_id, fakes):
+    """With a spent pool but a stored fallback, the call still runs, on the fallback."""
     from oracle.claude_accounts import fallback
 
     weekly = await add_account(
@@ -647,6 +673,7 @@ async def test_a_spent_pool_with_a_fallback_runs_the_call_on_the_fallback(tenant
 
 
 async def test_a_spent_pool_without_a_fallback_still_refuses_with_the_worded_time(tenant_id, fakes):
+    """A spent pool with no fallback still refuses with a worded reset time."""
     await add_account(tenant_id, "weekly", windows={"seven_day": window(0.97, timedelta(days=2))})
     with pytest.raises(NoClaudeAccount) as info:
         await _call(tenant_id, fakes)

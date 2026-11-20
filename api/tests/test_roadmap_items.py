@@ -37,6 +37,7 @@ HAND_MD = ROADMAP_MD.replace(PLAN_TABLES, "")
 
 
 async def test_run_items_are_traced_to_the_approved_prd(client, owner, runtime):  # noqa: F811
+    """A run's roadmap items trace to the exact approved PRD version and section."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await seed_baseline(tenant_id)
@@ -93,6 +94,7 @@ async def test_run_items_are_traced_to_the_approved_prd(client, owner, runtime):
 
 
 async def test_declared_and_section_linked_trace(client, owner, runtime):  # noqa: F811
+    """An item's own links and a PRD section's trace links both connect it to goals."""
     tenant_id, auth = owner
     await approved_prd(client, auth, approve=False)
     await seed_baseline(tenant_id)
@@ -139,6 +141,7 @@ async def test_a_manual_import_refuses_unverified_dates_and_pins_approved_versio
     owner,  # noqa: F811
     runtime,  # noqa: F811
 ):
+    """A manual items import blocks an unverified date; nothing replaces until backed."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)
@@ -211,6 +214,7 @@ async def test_a_run_never_stores_an_unverified_date(client, owner, runtime):  #
 
 
 async def test_the_feedback_loop_carries_items_forward(client, owner, runtime):  # noqa: F811
+    """A dropped item carries into the next roadmap version noted as carried, not lost."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)
@@ -241,6 +245,7 @@ async def test_the_feedback_loop_carries_items_forward(client, owner, runtime): 
 
 
 async def test_items_routes_are_company_scoped(client, owner, runtime):  # noqa: F811
+    """Roadmap items routes are scoped to the right company; a PRD is not a roadmap."""
     _, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)
@@ -334,6 +339,7 @@ async def test_odd_yaml_values_never_abort_an_import(client, owner, runtime):  #
 
 
 async def test_carried_items_keep_a_date_only_while_its_basis_holds(client, owner, runtime):  # noqa: F811
+    """A carried item's date is withheld, not kept, once its only basis is withdrawn."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)

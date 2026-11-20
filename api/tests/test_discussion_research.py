@@ -56,6 +56,7 @@ async def _tick(client, ctx, times: int = 3) -> None:
 # its output read by every member, never in the New run dialog; fails_when=it reads
 # sources, writes anything, or its cost is not the one shown; no_claim=the agent's answer.
 def test_the_research_flow():
+    """The research flow's roles, scopes, tools and output are as set."""
     flow = flows.FLOWS[research.FLOW]
     (sdef,) = flow.segments
     assert sdef.roles == ("researcher",) and flow.default_depth == "quick"
@@ -75,6 +76,7 @@ def test_the_research_flow():
 # fails_when=a commenter starts a run, or the cost is missing before it starts;
 # no_claim=the button (the web spec).
 async def test_who_may_research_and_the_cost_shown_first(client):
+    """Only owners and approvers may research, cost shown beforehand."""
     set_runtime(FakeRuntime())
     try:
         ctx, doc = await company(client)
@@ -99,6 +101,7 @@ async def test_who_may_research_and_the_cost_shown_first(client):
 # token holds the flow's read scopes only; fails_when=no run starts, two start, or the
 # token can read sources; no_claim=the runtime's behaviour.
 async def test_research_starts_one_run_and_says_so(client):
+    """Starting research starts one run and refuses a second while it runs."""
     set_runtime(FakeRuntime())
     try:
         ctx, doc = await company(client)
@@ -136,6 +139,7 @@ async def test_research_starts_one_run_and_says_so(client):
 # researched; fails_when=Oracle's or a system line, another thread's message, or a closed
 # discussion starts a run; no_claim=private discussions (readable() covers them).
 async def test_what_can_be_researched(client):
+    """Research only answers a question in its own open thread."""
     set_runtime(FakeRuntime())
     try:
         ctx, doc = await company(client)
@@ -176,6 +180,7 @@ async def test_what_can_be_researched(client):
 # fails_when=the answer is a person's, cites nothing, keeps a dangling marker, or the line
 # still says running; no_claim=the answer's quality (fake runtime).
 async def test_the_answer_comes_back_as_oracles_with_its_sources(client):
+    """A finished research answer is Oracle's and keeps its citations."""
     set_runtime(FakeRuntime({"research": [Outcome(artifacts={research.FILE: ANSWER})]}))
     try:
         ctx, doc = await company(client)
@@ -205,6 +210,7 @@ async def test_the_answer_comes_back_as_oracles_with_its_sources(client):
 # Research this may be asked again; fails_when=the line says running forever or a second
 # ask is refused; no_claim=why the run failed.
 async def test_a_run_without_an_answer_fails_plainly(client):
+    """A research run with no usable answer fails plainly."""
     set_runtime(FakeRuntime({"research": [Outcome(artifacts={research.FILE: "  "})]}))
     try:
         ctx, doc = await company(client)
@@ -229,6 +235,7 @@ async def test_a_run_without_an_answer_fails_plainly(client):
 # data, numbered for [c:n]; fails_when=the question or the data notice is missing;
 # no_claim=what the agent does with it.
 async def test_the_prompt_carries_the_question_as_data(client):
+    """The research prompt carries the question as data, not instruction."""
     set_runtime(FakeRuntime())
     try:
         ctx, doc = await company(client)
@@ -295,6 +302,7 @@ async def _research(client, ctx, d, asked, who="approver") -> dict:
 # REST or MCP; fails_when=the memo's title, slug or id reaches the commenter anywhere;
 # no_claim=paraphrase of the memo (nothing of it is read).
 async def test_research_reads_as_a_member_in_the_reviewers_scenario(client):
+    """Research reads only the asker's own sources, hiding a hidden memo."""
     every = " ".join(f"[c:{n}]" for n in range(1, 30))
     set_runtime(FakeRuntime({"research": [Outcome(artifacts={research.FILE: f"Yes {every}."})]}))
     try:
@@ -330,6 +338,7 @@ async def test_research_reads_as_a_member_in_the_reviewers_scenario(client):
 # (a line stored before the fix kept the approver's view) is dropped, its marker with it;
 # fails_when=the answer cites the memo; no_claim=entries of other kinds.
 async def test_the_importer_drops_a_citation_a_commenter_may_not_see(client):
+    """The importer drops a citation a commenter may not see."""
     text = "Pricing is settled [c:1] [c:77]."
     set_runtime(FakeRuntime({"research": [Outcome(artifacts={research.FILE: text})]}))
     try:
@@ -357,6 +366,7 @@ async def test_the_importer_drops_a_citation_a_commenter_may_not_see(client):
 # cites it loses that citation for them; fails_when=the commenter reads the memo's title
 # or link; no_claim=paraphrase.
 async def test_an_answer_stored_before_the_fix_is_withheld_from_a_commenter(client):
+    """An answer stored before the fix is still withheld from commenters."""
     set_runtime(FakeRuntime())
     try:
         ctx, _doc = await company(client)
@@ -392,6 +402,7 @@ async def test_an_answer_stored_before_the_fix_is_withheld_from_a_commenter(clie
 # in words; fails_when=the token gets 403, a search is not counted, or the refusal is a
 # bare code; no_claim=the real search provider (faked).
 async def test_the_research_token_searches_the_web_within_the_allowance(client):
+    """The research token can search the web within its monthly allowance."""
     from oracle.baseline.public_links import get_link_fetcher
     from oracle.main import app
     from oracle.web import robots
@@ -457,6 +468,7 @@ async def test_the_research_token_searches_the_web_within_the_allowance(client):
 # run never read is dropped; fails_when=the web page is not cited or links elsewhere;
 # no_claim=the page's content.
 async def test_a_cited_web_page_is_a_link(client):
+    """A cited web page is imported as its own link citation."""
     from oracle.web.models import WebResult
 
     text = "Others cap by seat [w-1], and the PRD agrees [c:1] [w-9]."
@@ -487,6 +499,7 @@ async def test_a_cited_web_page_is_a_link(client):
 # protects=MAJOR 1: an import that runs again (the tick died after the importer's commit)
 # posts the answer once; fails_when=the answer appears twice; no_claim=the run's step.
 async def test_a_duplicate_import_posts_once(client):
+    """Importing the same research answer twice still posts it once."""
     set_runtime(FakeRuntime({"research": [Outcome(artifacts={research.FILE: ANSWER})]}))
     try:
         ctx, doc = await company(client)
@@ -508,6 +521,7 @@ async def test_a_duplicate_import_posts_once(client):
 # failure in the thread, in words, and Research this may be asked again; fails_when=the
 # line reads running forever or a second ask gets 409; no_claim=which refusal.
 async def test_a_failed_start_shows_in_the_thread_and_may_be_retried(client, monkeypatch):
+    """A failed research start shows in the thread and can be retried."""
     from oracle.runs import service as runs_service
 
     class Refused(runs_service.RunError):

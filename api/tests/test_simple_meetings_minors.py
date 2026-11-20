@@ -56,6 +56,7 @@ async def _sweep(w) -> int:
 
 
 async def test_a_meeting_nobody_opened_is_ended_by_the_idle_sweep(client, clock):  # noqa: F811
+    """An idle sweep ends a meeting nobody opened once it outlasts its idle limit."""
     w = await world()
     # The start's reply failed: the row is there, and nobody opens the meeting.
     mid = (await start(client, w, length_min=60))["id"]
@@ -74,6 +75,7 @@ async def test_a_meeting_nobody_opened_is_ended_by_the_idle_sweep(client, clock)
 
 
 async def test_a_kept_question_shows_under_notes_at_once(client):
+    """A question asked in chat shows under the meeting's notes right away, once each."""
     w = await world()
     mid = (await start(client, w, attendee_ids=[uid(w, x) for x in ("approver", "commenter")]))[
         "id"
@@ -100,6 +102,7 @@ async def _tick(w) -> ticker_body.CompanyTick:
 
 
 async def test_the_ticker_ends_an_idle_meeting(client, clock):  # noqa: F811
+    """The periodic ticker ends a meeting once it has sat idle past its limit."""
     w = await world()
     mid = (await start(client, w, length_min=60))["id"]
     clock["now"] = NOW + changes.MEETING_IDLE + timedelta(minutes=1)
@@ -111,6 +114,7 @@ async def test_the_ticker_ends_an_idle_meeting(client, clock):  # noqa: F811
 
 
 async def test_a_failing_meeting_end_keeps_the_ticks_session_closes(client, clock, monkeypatch):  # noqa: F811
+    """A meeting end that errors still closes its session, and a later tick ends it."""
     w = await world()
     mid = (await start(client, w, length_min=60))["id"]
     clock["now"] = NOW + changes.MEETING_IDLE + timedelta(minutes=1)

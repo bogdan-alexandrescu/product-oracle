@@ -85,6 +85,7 @@ async def _pdf(ctx, slug: str = "guided-setup") -> str:
 
 
 async def test_owner_is_the_documents_owner(client):
+    """A document's owner is whoever approved its latest version, or none at all."""
     ctx = await world(client)
     # A later version pushed by a service token, approved: still the document's owner.
     v2 = PRD.replace("A sample project created on day one", "A guided tour on day one")
@@ -115,6 +116,7 @@ async def test_owner_is_the_documents_owner(client):
 
 
 async def test_span_from_dated_milestones(client):
+    """The plan's span comes from its dated milestones, read month first in the PDF."""
     ctx = await world(client)
     await seed_slice(ctx)  # M1 (Nov 20) and M3 (Jan 29) dated; two items with none
     view = await get(client, ctx, "viewer")
@@ -142,6 +144,7 @@ PLAN_TABLES = """
 
 
 async def test_span_follows_the_dated_plan(client):
+    """The plan's span matches its own dated plan tables, not just the milestones."""
     import hashlib
 
     from oracle.simple import plan
@@ -162,6 +165,7 @@ async def test_span_follows_the_dated_plan(client):
 
 
 async def test_no_dated_milestone_no_span(client):
+    """With no dated milestone, the plan shows its items but no date span at all."""
     ctx = await world(client)
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
@@ -188,6 +192,7 @@ async def _section_less(tenant_id, key: str) -> None:
 
 
 async def test_new_prd_version_leaves_items_with_no_section(client, owner, runtime):  # noqa: F811
+    """A new PRD version only marks stale the items whose own section actually changed."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)
@@ -223,6 +228,7 @@ async def _track(client, auth) -> dict:
 
 
 async def test_track_headline_counts_only_own_staleness(client, owner, runtime):  # noqa: F811
+    """A track's headline counts only items stale from their own section, not the PRD."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)
@@ -249,6 +255,7 @@ async def test_track_headline_counts_only_own_staleness(client, owner, runtime):
 
 
 def test_headline_plain_when_only_the_prd_moved():
+    """A track headline about a newer PRD version says so plainly, with no zero counts."""
     counts = {"items": 40, "now": 40, "next": 0, "later": 0, "at_risk": 0, "blocked": 0,
               "stale": 0, "slipping": 0, "done": 0}  # fmt: skip
     text = views._headline("at_risk", counts, None, 3)

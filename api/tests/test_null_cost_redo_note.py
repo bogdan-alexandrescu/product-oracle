@@ -49,6 +49,7 @@ async def _console_not_yet(client, auth, tenant_id, unknown: bool) -> dict:
 
 
 async def test_an_unknown_estimate_leaves_the_amount_out_of_the_redo_notes(client, owner):
+    """A redo note with an unknown cost estimate leaves the dollar amount out entirely."""
     tenant_id, auth = owner
     run = await _console_not_yet(client, auth, tenant_id, unknown=True)
     [console] = _redo_notes(run)
@@ -64,6 +65,7 @@ async def test_an_unknown_estimate_leaves_the_amount_out_of_the_redo_notes(clien
 
 
 async def test_a_known_estimate_still_reads_about_n(client, owner):
+    """A redo note with a known cost estimate still reads about that dollar amount."""
     tenant_id, auth = owner
     run = await _console_not_yet(client, auth, tenant_id, unknown=False)
     [console] = _redo_notes(run)

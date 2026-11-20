@@ -88,6 +88,7 @@ async def _through(path: str, client, tenant_id, slug: str) -> None:
 
 @pytest.mark.parametrize("path", ["cli", "mcp", "mcp-curated"])
 async def test_every_import_path_matches_the_rest_import(client, tenant_id, path):
+    """A draft imported via the CLI or MCP matches the same draft imported via REST."""
     viewer = {"Authorization": f"Bearer {await role_token(tenant_id, 'viewer')}"}
     # Seed the built-in templates first: an export before seeding names the template by
     # its key (oracle-default) rather than its name, whichever path imported the draft.
@@ -141,6 +142,7 @@ async def test_every_import_path_matches_the_rest_import(client, tenant_id, path
 async def test_cli_pull_writes_the_feedback_package_with_locked_sections(
     client, tenant_id, tmp_path
 ):
+    """The CLI pull command writes a draft's locked sections and open items to disk."""
     owner = await role_token(tenant_id, "owner")
     headers = {"Authorization": f"Bearer {owner}"}
     assert (await import_md(client, headers, V1)).status_code == 201

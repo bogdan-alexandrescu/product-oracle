@@ -42,6 +42,7 @@ def _plain(m: from_run.Members) -> dict:
 
 
 async def test_members_read_together_answer_as_each_alone():
+    """Reading several runs' members together gives each run the same answer as reading it alone."""
     ctx = await make_ctx()
     await cross_runs(ctx)
     async with tenant_session(ctx.tenant_id) as s:

@@ -127,6 +127,7 @@ async def actions(ctx: Ctx) -> list[str]:
 
 
 async def test_comment_anchor_round_trips(client, ctx):
+    """A comment's anchor and section round trip and open one feedback item."""
     created = await comment(client, ctx)
     assert created["anchor"] == ANCHOR
     assert created["section_key"] == "goal-trace"
@@ -155,6 +156,7 @@ async def test_comment_anchor_round_trips(client, ctx):
 
 
 async def test_comment_validation(client, ctx):
+    """Comment creation rejects an unknown section, empty anchor, or missing version."""
     bad_section = await client.post(
         ctx.v(1, "/comments"),
         json={"section_key": "nope", "anchor": ANCHOR, "body": "x"},
@@ -178,6 +180,7 @@ async def test_comment_validation(client, ctx):
 
 
 async def test_replies_and_resolve(client, ctx):
+    """Replies nest under their thread and never open their own feedback item."""
     top = await comment(client, ctx)
     reply = await client.post(
         f"/v1/comments/{top['id']}/replies", json={"body": "Added c1"}, headers=ctx.headers
@@ -244,6 +247,7 @@ async def test_replies_and_resolve(client, ctx):
 
 
 async def test_verdicts_create_and_supersede_feedback_items(client, ctx):
+    """A new verdict on a section supersedes its own earlier open feedback item."""
     approved = await verdict(client, ctx, "title", "approved")
     assert approved["feedback_item_id"] is None
     assert await feedback(client, ctx) == []
@@ -295,6 +299,7 @@ async def test_verdicts_create_and_supersede_feedback_items(client, ctx):
 
 
 async def test_verdict_validation(client, ctx):
+    """A verdict is rejected for an unknown value or an unknown section."""
     bad = await client.put(
         ctx.v(1, "/sections/goal-trace/review"), json={"verdict": "meh"}, headers=ctx.headers
     )
@@ -306,6 +311,7 @@ async def test_verdict_validation(client, ctx):
 
 
 async def test_later_version_verdict_supersedes_earlier_version_item(client, ctx):
+    """A verdict on a later version supersedes the item an earlier version opened."""
     old = await verdict(client, ctx, "goal-trace", "rejected", "No")
     await add_version(ctx.tenant_id, ctx.document_id, 2)
     await verdict(client, ctx, "goal-trace", "approved", n=2)
@@ -317,6 +323,7 @@ async def test_later_version_verdict_supersedes_earlier_version_item(client, ctx
 
 
 async def test_feedback_filters_by_status_and_version(client, ctx):
+    """Feedback can be filtered by its status and by the version it was raised on."""
     c1 = await comment(client, ctx, body="v1 comment")
     r1 = await verdict(client, ctx, "s-5-2", "changes_requested", "fix")
     await add_version(ctx.tenant_id, ctx.document_id, 2)
@@ -359,6 +366,7 @@ async def test_feedback_filters_by_status_and_version(client, ctx):
 
 
 async def test_patch_feedback(client, ctx):
+    """Patching feedback updates only the given fields and leaves the rest alone."""
     c = await comment(client, ctx)
     url = f"/v1/feedback/{c['feedback_item_id']}"
     declined = await client.patch(
@@ -386,6 +394,7 @@ async def test_patch_feedback(client, ctx):
 
 
 async def test_feedback_package(client, ctx):
+    """The feedback package lists only open items and names the locked sections."""
     c = await comment(client, ctx)
     r = await verdict(client, ctx, "s-5-2", "rejected", "Redo")
     await verdict(client, ctx, "title", "approved")
@@ -420,6 +429,7 @@ async def test_feedback_package(client, ctx):
 
 
 async def test_resolution_report_lists_earlier_items_with_outcome(client, ctx):
+    """The resolution report lists earlier items with how each was resolved."""
     c = await comment(client, ctx)
     r = await verdict(client, ctx, "s-5-2", "changes_requested", "Rank by installs")
     sup = await verdict(client, ctx, "goal-trace", "rejected")
@@ -470,6 +480,7 @@ async def test_resolution_report_lists_earlier_items_with_outcome(client, ctx):
 
 
 async def test_apply_resolutions_rejects_unknown_ids_without_changes(ctx):
+    """Resolving feedback by an unknown or foreign id is refused, with no changes."""
     async with tenant_session(ctx.tenant_id) as s:
         v1 = await s.scalar(select(DocumentVersion.id))
         comment_row = Comment(version_id=v1, section_key="goal-trace", body="x")
@@ -514,6 +525,7 @@ async def test_apply_resolutions_rejects_unknown_ids_without_changes(ctx):
 
 
 async def test_approve_sets_document_status(client, ctx):
+    """Approving a version sets its status, is idempotent, and refuses unknowns."""
     await add_version(ctx.tenant_id, ctx.document_id, 2)
     resp = await client.post(ctx.v(2, "/approve"), headers=ctx.headers)
     assert resp.status_code == 200
@@ -538,6 +550,7 @@ async def test_approve_sets_document_status(client, ctx):
 
 
 async def test_other_tenant_cannot_see_review_data(client, ctx):
+    """Another company's token cannot read or act on this company's review data."""
     c = await comment(client, ctx)
     async with tenant_session(await make_tenant("Other Co")) as s:
         _, raw = await create_api_token(s, "other")

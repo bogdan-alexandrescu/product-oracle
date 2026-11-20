@@ -89,6 +89,7 @@ async def read(client, headers) -> tuple[int, dict]:
 
 
 async def test_waiting_reads_in_a_fixed_budget(client, monkeypatch):
+    """The waiting list reads any number of run stops without building the whole Inbox."""
     from oracle.runs import service as runs
 
     async def whole_inbox(*a, **k):
@@ -108,6 +109,7 @@ async def test_waiting_reads_in_a_fixed_budget(client, monkeypatch):
 
 
 async def test_add_predictions_waits_as_on_the_inbox(client, owner, runtime):  # noqa: F811
+    """An outcome needing a prediction waits on the same list as the Inbox, until set."""
     tenant_id, auth = owner
     by_item = await outcome_world(client, auth, runtime, tenant_id)
     inbox = (await client.get("/v1/inbox", headers=auth)).json()
@@ -136,6 +138,7 @@ async def test_add_predictions_waits_as_on_the_inbox(client, owner, runtime):  #
 
 
 async def test_failed_ritual_offers_retry_as_on_the_inbox(client, ctx, at, monkeypatch):  # noqa: F811
+    """A failed ritual offers a retry on the waiting list, same as on the Inbox."""
     from oracle.rituals import service as rituals
 
     async def has_goal(db) -> bool:

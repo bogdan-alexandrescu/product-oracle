@@ -69,11 +69,13 @@ def scratch_db():
 
 
 def test_chains_on_the_single_head():
+    """The migration chains onto the branch's single existing head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_upgrade_and_downgrade(scratch_db):
+    """Upgrading adds the live_tokens table with its expected columns."""
     upgrade(_cfg(), PREVIOUS)
     tenant, user, d, m = uuid.uuid4(), uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
     assert "live_tokens" not in _tables()

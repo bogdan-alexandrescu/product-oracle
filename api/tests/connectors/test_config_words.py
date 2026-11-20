@@ -81,6 +81,7 @@ def refusal(check, config) -> ConnectorConfigError:
     ],
 )
 def test_a_refusal_that_names_the_fix_is_an_action(check, config, message, cause):
+    """A config refusal always tells the exact fix to make, apart from its cause."""
     e = refusal(check, config)
     assert str(e) == message
     assert e.is_action
@@ -103,6 +104,7 @@ def test_a_refusal_that_names_the_fix_is_an_action(check, config, message, cause
     ],
 )
 def test_a_cause_is_not_an_action(check, config, message):
+    """An end date before the start is refused in plain words, not as an action."""
     e = refusal(check, config)
     assert str(e) == message
     assert not e.is_action

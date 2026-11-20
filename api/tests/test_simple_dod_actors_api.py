@@ -49,6 +49,7 @@ async def recorded(ctx, action: str, who: str, since: datetime, entity_id=None) 
 
 
 async def test_unrecorded_writes_record_who_and_when(client):
+    """Every one of these writes records who did it and when, with no exception."""
     w = await mt.world()
     m = await mt.start(client, w, attendee_ids=[mt.uid(w, "approver")])
     since = datetime.now(UTC)
@@ -77,6 +78,7 @@ async def test_unrecorded_writes_record_who_and_when(client):
 
 
 async def test_chat_card_writes_refuse_viewers_and_other_companies(client):
+    """A chat card's apply, undo, discard or choose refuses a viewer or outsider."""
     ctx = await ct.make_people()
     w = await ct.World(ctx).build()
     other = await make_people()
@@ -119,6 +121,7 @@ async def test_chat_card_writes_refuse_viewers_and_other_companies(client):
 
 
 async def test_only_the_presenter_decider_or_an_owner_sends_the_minutes(client):
+    """Only the meeting's presenter, decider or an owner may send its minutes."""
     w = await mt.world()
     other = await make_people()
     m = await mt.start(client, w)

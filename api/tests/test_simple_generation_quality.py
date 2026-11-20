@@ -189,11 +189,13 @@ def _bets(b, text):
     ],
 )  # fmt: skip
 def test_one_pager_checks_name_each_failure(edit, check, say):
+    """Each one-pager quality problem is named with its own check and message."""
     out = _checks(edit)
     assert {"check": check, "say": say} in out, out
 
 
 def test_good_one_pager_answer_passes_its_checks():
+    """A good one-pager answer passes every check, even with a block marked missing."""
     assert quality.one_pager(good(), one_pager.FALLBACK, MAPPED) == []
     # A block with nothing in the PRD is marked, not filled.
     bare = {**MAPPED, "not_doing": []}
@@ -209,6 +211,7 @@ def _all_missing() -> dict:
 
 
 def test_a_block_the_prd_has_is_never_marked_missing():
+    """A block the PRD really has is never let through marked missing."""
     out = quality.one_pager(_all_missing(), one_pager.FALLBACK, MAPPED)
     for title in ("Problem and who has it", "What we will build", "Not doing"):
         say = f"“{title}” is marked “Not in the PRD yet” but the PRD has it"
@@ -228,6 +231,7 @@ def test_a_block_the_prd_has_is_never_marked_missing():
 
 
 def test_a_prd_quote_is_not_chatter_or_tbd():
+    """Quoting the PRD's own words passes; words it never said still get flagged."""
     mapped = {**MAPPED, "problem": [_sec("problem", "Problem",
               "Users say I can't find my shared TODO lists.")]}  # fmt: skip
     a = good()
@@ -257,6 +261,7 @@ async def _run(ctx, answers: list[dict]) -> tuple[dict, list[dict]]:
 
 
 async def test_good_one_pager_is_built_at_once(client):
+    """A correct one-pager answer builds right away, with nothing held for review."""
     ctx = await world(client)
     await get(client, ctx)
     out, asked = await _run(ctx, [good()])
@@ -269,6 +274,7 @@ async def test_good_one_pager_is_built_at_once(client):
 
 
 async def test_one_pager_fails_then_passes(client):
+    """A one-pager that fails once still builds once a retry gets it right."""
     ctx = await world(client)
     await get(client, ctx)
     out, asked = await _run(ctx, [bad(), good()])
@@ -283,6 +289,7 @@ async def test_one_pager_fails_then_passes(client):
 
 
 async def test_one_pager_fails_twice(client):
+    """Two failed answers hold the one-pager for the owner; others see a fallback."""
     ctx = await world(client)
     quick = await get(client, ctx)
     out, asked = await _run(ctx, [bad(), bad()])
@@ -309,6 +316,7 @@ async def test_one_pager_fails_twice(client):
 
 
 async def test_an_all_missing_answer_never_blanks_the_page(client):
+    """An answer marking everything missing never blanks what other readers see."""
     ctx = await world(client)
     await get(client, ctx)
     # Each reader against their own quick read (a bet's Draw the flow is per reader).
@@ -322,6 +330,7 @@ async def test_an_all_missing_answer_never_blanks_the_page(client):
 
 
 async def test_a_block_not_in_the_prd_reads_missing(client):
+    """A block truly absent from the PRD reads as missing for every reader."""
     ctx = await world(client)
     prd = PRD.split("## Not doing")[0] + "## Risks" + PRD.split("## Risks")[1]
     r = await client.post("/v1/documents/guided-setup/versions", content=prd.encode(),
@@ -359,6 +368,7 @@ async def _answer(a: dict) -> dict:
 
 
 async def test_a_held_run_keeps_the_last_good_built_at(client, monkeypatch):
+    """A held re-run keeps the last good build's timestamp instead of overwriting it."""
     ctx = await world(client)
     await get(client, ctx)
     await _run(ctx, [good()])
@@ -378,6 +388,7 @@ async def test_a_held_run_keeps_the_last_good_built_at(client, monkeypatch):
 
 
 async def test_an_owner_editing_a_held_line_is_told_why(client):
+    """Editing a line from a held draft is refused, with a reason and the prior text."""
     ctx = await world(client)
     await get(client, ctx)
     await _run(ctx, [bad(), bad()])
@@ -399,6 +410,7 @@ def _idea(title: str, **over) -> dict:
 
 
 async def test_suggestion_checks_name_each_failure(client):
+    """Each goal suggestion quality problem is named with its own plain message."""
     w = await World().build()
     async with tenant_session(w.ctx.tenant_id) as s:
         goal = await s.get(additions.Entity, uuid.UUID(w.goals["quiet"]))
@@ -454,6 +466,7 @@ BAD = {
 
 
 async def test_suggestions_fail_then_pass(client):
+    """A suggestion that fails once is still kept once a later pass fixes it."""
     w = await World().build()
     out, asked = await _suggest(w, [BAD, GOOD])
     assert len(asked) == 2 and out["suggested"] == 3
@@ -470,12 +483,14 @@ async def test_suggestions_fail_then_pass(client):
 
 
 async def test_good_suggestions_are_asked_once(client):
+    """Good suggestions need asking only once before all three are kept."""
     w = await World().build()
     out, asked = await _suggest(w, [GOOD])
     assert len(asked) == 1 and "failed_checks" not in asked[0] and out["suggested"] == 3
 
 
 async def test_suggestions_fail_twice(client):
+    """Suggestions that fail twice show the owner their checks, hidden from others."""
     w = await World().build()
     out, asked = await _suggest(w, [BAD, BAD])
     assert len(asked) == 2 and out["suggested"] == 3
@@ -493,6 +508,7 @@ async def test_suggestions_fail_twice(client):
 
 
 async def test_a_held_suggestion_does_not_refuse_a_commenter_s_title(client):
+    """A held suggestion blocks a matching title only for roles that can see it."""
     w = await World().build()
     await _suggest(w, [BAD, BAD])
     r = await client.post(f"/v1/simple/goals/{w.goals['quiet']}/suggestions",
@@ -510,6 +526,7 @@ async def test_a_held_suggestion_does_not_refuse_a_commenter_s_title(client):
 
 
 async def test_item_draft_fails_then_passes_or_twice(client):
+    """A drafted item's outcome text is retried on failure, left blank if never fixed."""
     w = await World().build()
     chatty = {"outcome": "As an AI, I think admins bring data in.", "goal_key": "grow"}
     fine = {"outcome": "Admins bring their data in one step.", "goal_key": "grow"}

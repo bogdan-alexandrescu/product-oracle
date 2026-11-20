@@ -221,6 +221,7 @@ def model_gap(summary: dict) -> dict | None:
 
 
 async def test_the_author_sees_every_finding_and_each_starts_private(client, fake):
+    """The intake's author sees every finding at once, and each one starts out private."""
     ctx, intake_id, items = await authored_intake(client, fake)
     mine = await read_summary(client, ctx, intake_id, "author")
     assert mine["is_author"] is True
@@ -250,6 +251,7 @@ async def test_the_author_sees_every_finding_and_each_starts_private(client, fak
 
 @pytest.mark.parametrize("who", READERS)
 async def test_private_findings_show_nothing_to_anyone_else(client, fake, who):
+    """A private finding is invisible to anyone but its intake's author, always."""
     ctx, intake_id, items = await authored_intake(client, fake)
     texts = await reader_texts(client, ctx, intake_id, who)
     for name, said in texts.items():
@@ -272,6 +274,7 @@ async def test_private_findings_show_nothing_to_anyone_else(client, fake, who):
 
 @pytest.mark.parametrize("who", READERS)
 async def test_counts_show_counts_and_categories_only(client, fake, who):
+    """At the counts sharing level, others see only a finding's count and category."""
     ctx, intake_id, _ = await authored_intake(client, fake)
     await share_all(client, ctx, intake_id, "counts")
     texts = await reader_texts(client, ctx, intake_id, who)
@@ -291,6 +294,7 @@ async def test_counts_show_counts_and_categories_only(client, fake, who):
 
 @pytest.mark.parametrize("who", READERS)
 async def test_summary_shows_oracles_summary_without_excerpts_or_numbers(client, fake, who):
+    """At the summary sharing level, others read Oracle's words, never a figure."""
     ctx, intake_id, items = await authored_intake(client, fake)
     await share_all(client, ctx, intake_id, "summary")
     texts = await reader_texts(client, ctx, intake_id, who)
@@ -315,6 +319,7 @@ async def test_summary_shows_oracles_summary_without_excerpts_or_numbers(client,
 
 @pytest.mark.parametrize("who", READERS)
 async def test_full_shows_everything_and_the_read_is_audited(client, fake, who):
+    """At the full sharing level, others see a finding's real detail, and it is logged."""
     ctx, intake_id, items = await authored_intake(client, fake)
     await share_all(client, ctx, intake_id, "full")
     theirs = await read_summary(client, ctx, intake_id, who)
@@ -338,6 +343,7 @@ async def test_full_shows_everything_and_the_read_is_audited(client, fake, who):
 
 
 async def test_the_author_lowers_a_level_again_and_every_change_is_audited(client, fake):
+    """The author can change a finding's sharing level, and each change is audited."""
     ctx, intake_id, _ = await authored_intake(client, fake)
     [conflict_finding] = [f for f in await findings(client, ctx, intake_id)
                           if f["kind"] == "conflict"]  # fmt: skip
@@ -372,6 +378,7 @@ async def test_the_author_lowers_a_level_again_and_every_change_is_audited(clien
 
 
 async def test_only_the_author_sets_sharing(client, fake):
+    """Only the intake's author, never a run token or anyone else, can set sharing."""
     ctx, intake_id, _ = await authored_intake(client, fake)
     [row] = [f for f in await findings(client, ctx, intake_id) if f["kind"] == "conflict"]
     url = f"/v1/intakes/{intake_id}/findings/{row['id']}"
@@ -400,6 +407,7 @@ async def test_only_the_author_sets_sharing(client, fake):
 
 
 async def test_another_company_cannot_read_or_share_findings(client, fake):
+    """Another company gets a 404 trying to read or change an intake's findings."""
     ctx, intake_id, _ = await authored_intake(client, fake)
     other = await company("Other Co")
     [row] = [f for f in await findings(client, ctx, intake_id) if f["kind"] == "conflict"]
@@ -413,6 +421,7 @@ async def test_another_company_cannot_read_or_share_findings(client, fake):
 
 
 async def test_a_private_gap_is_404_to_everyone_else_on_every_route(client, fake):
+    """A private gap's id is a 404 anywhere else it could be read, decided, answered."""
     ctx, intake_id, _ = await authored_intake(client, fake)
     mine = await read_summary(client, ctx, intake_id, "author")
     [gap] = [g for g in mine["gaps"] if g["statement"] == MODEL_GAP]
@@ -638,6 +647,7 @@ USERS_BRIEF = (
 
 @pytest.mark.parametrize("who", READERS)
 async def test_a_summary_with_private_evidence_reads_as_a_plain_one(client, who):
+    """An intake's summary reads identically whether or not it hides private evidence."""
     ctx, private_id, plain_id = await twin_intakes(client, brief=USERS_BRIEF)
     mine = await read_summary(client, ctx, private_id, "author")
     assert any(c["knowledge_state"] == "ai_inference" for c in mine["coverage"])
@@ -649,6 +659,7 @@ async def test_a_summary_with_private_evidence_reads_as_a_plain_one(client, who)
 
 
 async def test_next_actions_follow_the_ranking_not_row_ids(client):
+    """Next actions are ordered by a gap's importance ranking, never by its row id."""
     ctx, private_id, plain_id = await twin_intakes(client)
     for intake_id in (private_id, plain_id):
         out = await read_summary(client, ctx, intake_id, "viewer")
@@ -716,6 +727,7 @@ async def question_rows(client, ctx, intake_id: str, who: str) -> list[tuple]:
 
 @pytest.mark.parametrize("who", READERS)
 async def test_batch_sizes_and_numbers_never_reveal_a_private_question(client, fake, who):
+    """A private question never changes the size or number of anyone else's batch."""
     ctx, private_id, plain_id = await twin_model_intakes(client, fake)
     # The author's private question waits as a draft, ranked among the others.
     mine = await question_rows(client, ctx, private_id, "author")
@@ -752,6 +764,7 @@ async def batch_as(client, ctx, intake_id: str, who: str, number: int) -> dict:
 
 
 async def test_an_approvers_batches_stay_full_and_numbered_as_a_plain_intake(client, fake):
+    """An approver's batches stay the same size and numbering as a plain intake's."""
     ctx, private_id, plain_id = await twin_model_intakes(client, fake)
     a = await ask_all(client, ctx, private_id, "approver")
     b = await ask_all(client, ctx, plain_id, "approver")
@@ -801,6 +814,7 @@ async def _defer_visible(client, ctx, intake_id: str, author: str) -> None:
 
 @pytest.mark.parametrize("who", READERS)
 async def test_status_never_waits_on_a_hidden_gap(client, fake, who):
+    """An intake's status waits on a hidden gap only for the author who can see it."""
     ctx, private_id, plain_id = await twin_model_intakes(client, fake)
     await _defer_visible(client, ctx, private_id, "author")
     await _defer_visible(client, ctx, plain_id, "plain")
@@ -823,6 +837,7 @@ async def test_status_never_waits_on_a_hidden_gap(client, fake, who):
 
 
 async def test_an_intake_jobs_usage_is_the_authors_only(client, fake):
+    """Only the intake's author sees a job's token counts and cost; others see nulls."""
     ctx, private_id, _ = await twin_model_intakes(client, fake)
     async with tenant_session(ctx.tenant_id) as s:
         job = await s.scalar(select(LlmJob).where(LlmJob.intake_id == uuid.UUID(private_id)))
@@ -847,6 +862,7 @@ async def test_an_intake_jobs_usage_is_the_authors_only(client, fake):
 
 
 async def test_a_rejected_critical_answer_is_not_closed_by_the_baseline(client):
+    """A rejected critical answer stays open even after the baseline confirms the fact."""
     ctx = await company()
     doc = await _document(client, ctx)
     out = await create_intake(client, ctx, who="approver", document=doc, brief=BLOCKER_BRIEF)
@@ -884,6 +900,7 @@ async def test_a_rejected_critical_answer_is_not_closed_by_the_baseline(client):
 
 
 def test_the_elsewhere_reason_names_the_role_that_reviews():
+    """A gap's elsewhere reason names the exact role that reviews its own category."""
     for cat in cats.CATEGORIES:
         gap = KnowledgeGap(
             id=uuid.uuid4(), category=cat.key, importance="critical",
@@ -900,6 +917,7 @@ def test_the_elsewhere_reason_names_the_role_that_reviews():
 
 
 async def test_a_private_gap_from_a_write_route_fails_closed():
+    """A private gap reached through any write path still fails closed as a 404."""
     gap = KnowledgeGap(
         id=uuid.uuid4(), intake_id=uuid.uuid4(), category="release_rollout",
         statement=MODEL_GAP, importance="high", impact=["risks"], evidence_ids=[],
@@ -957,6 +975,7 @@ async def test_old_rows_show_importance_and_priority_from_public_facts(client):
 
 
 async def test_editing_a_categorys_statement_never_turns_rule_gaps_private(client, monkeypatch):
+    """Rewording a category's question text never turns its existing gaps private."""
     ctx, private_id, _ = await twin_intakes(client)
     before = await read_summary(client, ctx, private_id, "viewer")
     changed = tuple(
@@ -974,6 +993,7 @@ async def test_editing_a_categorys_statement_never_turns_rule_gaps_private(clien
 
 
 async def test_a_non_authors_list_reads_only_the_intakes_it_lists(client, monkeypatch):
+    """Listing gaps or questions never looks up sharing for an intake outside the list."""
     ctx, private_id, plain_id = await twin_intakes(client)
     seen: list[str] = []
     real = sharing.registry
@@ -991,6 +1011,7 @@ async def test_a_non_authors_list_reads_only_the_intakes_it_lists(client, monkey
 
 
 async def test_a_long_hidden_list_never_exceeds_the_bind_parameter_limit(client, monkeypatch):
+    """A huge list of hidden gap ids never breaks a query's bind-parameter limit."""
     ctx, private_id, _ = await twin_intakes(client)
     many = {uuid.uuid4() for _ in range(40_000)}
 
@@ -1089,6 +1110,7 @@ async def set_importance(client, ctx, gap: dict, importance: str, who: str = "ow
 
 
 async def test_an_importance_edit_moves_no_intake_row_whatever_private_findings_exist(client):
+    """Changing a gap's importance never moves its intake's row, private or not."""
     ctx, private_id, plain_id = await twin_intakes(client)
     async with tenant_session(ctx.tenant_id) as s:
         intake = await s.get(ProductIntake, uuid.UUID(private_id))
@@ -1111,6 +1133,7 @@ async def test_an_importance_edit_moves_no_intake_row_whatever_private_findings_
 
 
 async def test_a_person_set_importance_survives_private_evidence(client):
+    """A person-set critical importance survives new private evidence added later."""
     ctx, intake_id = await plain_author_intake(client)
     gap = gaps_by_category(await read_summary(client, ctx, intake_id, "viewer"))["pain_evidence"]
     assert gap["importance"] != "critical"
@@ -1137,6 +1160,7 @@ async def test_a_person_set_importance_survives_private_evidence(client):
 
 
 async def test_a_repin_adding_private_evidence_moves_no_shared_row(client):
+    """Repinning with new private evidence changes nothing any other viewer can see."""
     ctx, intake_id = await plain_author_intake(client, brief=BRIEF)
     before = await rows_of(ctx, intake_id)
     viewer_before = await read_summary(client, ctx, intake_id, "viewer")
@@ -1160,6 +1184,7 @@ async def test_a_repin_adding_private_evidence_moves_no_shared_row(client):
 
 
 async def test_a_draft_question_stores_its_rationale_from_public_facts(client):
+    """A draft question's stored rationale is built only from facts everyone can see."""
     ctx, private_id, plain_id = await twin_intakes(client)
     private = await rows_of(ctx, private_id)
     plain = await rows_of(ctx, plain_id)
@@ -1210,6 +1235,7 @@ async def _baseline_proposals(ctx) -> list[Proposal]:
 
 
 async def test_answering_a_private_finding_proposes_nothing_until_it_is_shared(client, fake):
+    """Answering a still-private finding proposes nothing to the baseline until shared."""
     ctx, intake_id, _ = await authored_with(client, fake, _privacy_gap)
     q = await _model_question(ctx, intake_id)
     resp = await client.post(
@@ -1273,6 +1299,7 @@ def _principal(ctx, who: str) -> Principal:
 
 
 async def test_a_private_critical_gap_warns_its_author_and_gates_once_shared(client, fake):
+    """A private critical gap warns only its author; publish blocks once shared."""
     ctx = await company()
     await add_account(ctx.tenant_id, "personal", windows={"five_hour": window(0.2)})
     await add_author(ctx, "approver")
@@ -1316,6 +1343,7 @@ async def test_a_private_critical_gap_warns_its_author_and_gates_once_shared(cli
 
 
 async def test_the_summary_level_shows_the_fixed_line_until_the_author_confirms(client, fake):
+    """At the summary level others see Oracle's draft line until the author confirms."""
     ctx, intake_id, _ = await authored_intake(client, fake)
     rows = await findings(client, ctx, intake_id)
     [gap] = [r for r in rows if r["kind"] == "gap" and r["origin"] == "model"]
@@ -1391,6 +1419,7 @@ async def _run_of(ctx, intake_id: str) -> dict[str, str]:
 
 @pytest.mark.parametrize("real_run", [False, True])
 async def test_a_run_never_reads_a_private_findings_items(client, fake, real_run):
+    """A run can never fetch, search or cite an item behind a still-private finding."""
     ctx, intake_id, items = await authored_intake(client, fake)
     h = await _run_of(ctx, intake_id) if real_run else _writes.as_run(ctx)
     pinned = (await read_summary(client, ctx, intake_id, "author"))["pinned"]["snapshot_id"]
@@ -1673,6 +1702,7 @@ async def run_reads(client, ctx, intake_id: str, items: dict) -> dict[str, int |
 
 
 async def test_a_finding_that_cites_nothing_withholds_everything_its_intake_read(client, fake):
+    """A model finding that cites no source still hides every item the read touched."""
     ctx, intake_id, items = await world(client, fake, hidden=False, model=_cites_nothing)
     rows = await findings(client, ctx, intake_id)
     model = [r for r in rows if r["origin"] == "model"]
@@ -1721,6 +1751,7 @@ async def test_an_intake_without_the_record_withholds_what_it_read(client, fake)
 
 
 async def test_a_run_cannot_attach_a_withheld_item_as_baseline_evidence(client, fake):
+    """A run cannot attach a withheld source item as evidence, though its author can."""
     ctx, intake_id, items = await world(client, fake, hidden=False, role="approver")
     risk = await entity(client, ctx, type="risk", key="address-risk", title="Address risk")
     h = _writes.as_run(ctx)
@@ -1748,6 +1779,7 @@ async def test_a_run_cannot_attach_a_withheld_item_as_baseline_evidence(client, 
 
 
 async def test_a_run_cannot_cite_a_withheld_item_in_an_answer(client, fake):
+    """A run cannot cite a withheld item when answering, though its author can."""
     ctx, intake_id, items = await world(client, fake, hidden=False)
     async with tenant_session(ctx.tenant_id) as s:
         q = await s.scalar(
@@ -1789,6 +1821,7 @@ async def _baseline_proposals_round5(ctx) -> list[Proposal]:
 
 
 async def test_counts_proposes_only_the_categorys_question(client, fake):
+    """Sharing a gap at counts proposes only its category question, not the answer."""
     ctx, intake_id, _ = await world(client, fake, hidden=False, model=_blocker_gap)
     async with tenant_session(ctx.tenant_id) as s:
         gap = await s.scalar(select(KnowledgeGap).where(KnowledgeGap.statement == MODEL_GAP))
@@ -1840,6 +1873,7 @@ async def test_counts_proposes_only_the_categorys_question(client, fake):
 
 
 async def test_answering_a_finding_at_counts_proposes_only_the_question(client, fake):
+    """Answering a finding already shared at counts still keeps the answer out of it."""
     ctx, intake_id, _ = await world(client, fake, hidden=False, model=_blocker_gap)
     doc = await _document(client, ctx)
     async with tenant_session(ctx.tenant_id) as s:
@@ -1864,6 +1898,7 @@ async def test_answering_a_finding_at_counts_proposes_only_the_question(client, 
 
 
 async def test_a_publish_gate_never_carries_the_viewers_private_gaps(client, fake):
+    """A publish gate never shows a viewer's private gap, though an advisory check may."""
     ctx = await company()
     await add_account(ctx.tenant_id, "personal", windows={"five_hour": window(0.2)})
     await add_author(ctx, "approver")
@@ -1906,6 +1941,7 @@ async def _open_finding_intake(client, fake) -> tuple:
 
 
 async def test_an_unrestricted_finding_takes_no_summary_or_level(client, fake):
+    """A finding that was never restricted refuses a summary or sharing-level edit."""
     ctx, intake_id, fid = await _open_finding_intake(client, fake)
     resp = await client.put(
         f"/v1/intakes/{intake_id}/findings/{fid}/summary", json={}, headers=ctx.as_("author")
@@ -1919,6 +1955,7 @@ async def test_an_unrestricted_finding_takes_no_summary_or_level(client, fake):
 
 
 async def test_run_withheld_reads_one_precomputed_set(client, fake, monkeypatch):
+    """A run's withheld-item set comes from one precomputed table, never a live scan."""
     ctx, intake_id, items = await world(client, fake, hidden=False)
 
     def boom(*a, **k):
@@ -1935,6 +1972,7 @@ async def test_run_withheld_reads_one_precomputed_set(client, fake, monkeypatch)
 
 
 async def test_a_runs_source_counts_match_what_it_may_list(client, fake):
+    """A run's reported source item counts always match what it can actually list."""
     ctx, intake_id, items = await world(client, fake, hidden=False)
     h = _writes.as_run(ctx)
     sources = (await client.get("/v1/sources", headers=h)).json()
@@ -1950,6 +1988,7 @@ async def test_a_runs_source_counts_match_what_it_may_list(client, fake):
 
 
 async def test_a_private_findings_summary_audit_names_only_its_id(client, fake):
+    """Setting a private finding's summary logs only its id, nothing else about it."""
     ctx, intake_id, _ = await world(client, fake, hidden=False)
     gap = await finding_of(client, ctx, intake_id, "gap", "model")
     resp = await client.put(
@@ -1967,6 +2006,7 @@ async def test_a_private_findings_summary_audit_names_only_its_id(client, fake):
 
 
 async def test_legacy_importance_rows_are_indexed_and_normalized(client, fake):
+    """Re-analyzing backfills a missing importance basis on every legacy rule gap."""
     ctx, intake_id, _ = await world(client, fake, hidden=False)
     async with tenant_session(ctx.tenant_id) as s:
         names = (
@@ -2002,6 +2042,7 @@ async def test_legacy_importance_rows_are_indexed_and_normalized(client, fake):
 
 
 async def test_a_stale_finding_at_summary_shows_its_line_not_its_row(client, fake):
+    """A stale finding at the summary level shows only its summary line, not its data."""
     ctx, intake_id, items = await world(client, fake, hidden=False)
     stale = await finding_of(client, ctx, intake_id, "stale")
     await share_round5(client, ctx, intake_id, stale["id"], "summary")
@@ -2014,6 +2055,7 @@ async def test_a_stale_finding_at_summary_shows_its_line_not_its_row(client, fak
 
 
 async def test_research_and_patches_of_a_finding_shared_as_counts_stay_hidden(client, fake):
+    """Research proposals and patches of a counts-shared finding stay hidden too."""
     ctx, intake_id, _ = await world(client, fake, hidden=False, model=_blocker_gap)
     async with tenant_session(ctx.tenant_id) as s:
         gap = await s.scalar(select(KnowledgeGap).where(KnowledgeGap.statement == MODEL_GAP))
@@ -2034,6 +2076,7 @@ async def test_research_and_patches_of_a_finding_shared_as_counts_stay_hidden(cl
 
 
 async def test_a_prd_patch_is_not_accepted_while_others_may_not_read_it(client, fake):
+    """A PRD patch cannot be accepted while others still cannot read its basis."""
     ctx, intake_id, _ = await world(client, fake, hidden=False, model=_blocker_gap, role="owner")
     doc = await _document(client, ctx)
     await link(client, ctx, intake_id, doc)
@@ -2070,6 +2113,7 @@ async def _critical_blocker_gap(client, ctx, intake_id: str) -> dict:
 
 
 async def test_b4_only_an_owner_accepts_a_blockers_risk_for_at_most_90_days(client):
+    """Only an owner may accept a blocker's risk, and never for more than 90 days."""
     ctx = await company()
     out = await create_intake(client, ctx, who="approver")
     intake_id = out["intake"]["id"]
@@ -2241,6 +2285,7 @@ async def _status(ctx, proposal_id) -> str:
 
 
 async def test_private_withdraws_the_open_proposal_and_sharing_again_recreates_it(client, fake):
+    """Making a gap private withdraws its open proposal; sharing again remakes it."""
     ctx, intake_id, _ = await world(client, fake, hidden=False, model=_blocker_gap)
     gap = await _answer_model_gap(client, ctx)
     await share_round5(client, ctx, intake_id, str(gap.id), "summary")
@@ -2339,6 +2384,7 @@ async def test_an_unregistered_model_gap_keeps_its_intakes_reads_withheld(client
 
 
 async def test_two_writers_recording_the_same_intakes_reads_never_conflict(client, fake):
+    """Two concurrent read records for the same intake never conflict or duplicate."""
     ctx, intake_id, _ = await world(client, fake, hidden=False)
     iid = uuid.UUID(intake_id)
     async with tenant_session(ctx.tenant_id) as s:
@@ -2358,6 +2404,7 @@ async def test_two_writers_recording_the_same_intakes_reads_never_conflict(clien
 
 
 async def test_lowering_to_private_audits_the_finding_id_only(client, fake):
+    """Lowering a finding to private logs only its id, never its kind or category."""
     ctx, intake_id, _ = await world(client, fake, hidden=False)
     conflict = await finding_of(client, ctx, intake_id, "conflict")
     await share_round5(client, ctx, intake_id, conflict["id"], "counts")
@@ -2486,6 +2533,7 @@ async def test_an_item_a_reanalysis_adds_stays_withheld_until_shared_again(clien
 
 
 async def test_an_item_edited_upstream_after_sharing_serves_the_frozen_text(client, fake):  # noqa: F811
+    """A source edited after sharing still serves the version frozen at share time."""
     ctx, intake_id, items = await world(client, fake, hidden=False)
     await share_all(client, ctx, intake_id, "full")
     await _sync(ctx, items["a"], EDITED_A)
@@ -2514,6 +2562,7 @@ async def test_an_item_edited_upstream_after_sharing_serves_the_frozen_text(clie
 
 
 async def test_a_deleted_shared_item_is_a_404_for_runs_and_never_found(client, fake):  # noqa: F811
+    """A shared item that gets deleted is a 404 for a run and vanishes from search."""
     ctx, intake_id, items = await world(client, fake, hidden=False)
     await share_all(client, ctx, intake_id, "full")
     for who in RUNS:
@@ -2526,6 +2575,7 @@ async def test_a_deleted_shared_item_is_a_404_for_runs_and_never_found(client, f
 
 
 async def test_as_of_never_reaches_another_version_of_a_shared_item(client, fake):  # noqa: F811
+    """Asking for an earlier time still returns a shared item's one frozen version."""
     ctx, intake_id, items = await world(client, fake, hidden=False)
     await share_all(client, ctx, intake_id, "full")
     frozen = (
@@ -2549,6 +2599,7 @@ async def test_as_of_never_reaches_another_version_of_a_shared_item(client, fake
 
 
 async def test_a_withdrawn_proposal_keeps_no_answer_text(client, fake):  # noqa: F811
+    """Withdrawing a proposal strips the answer text out of its stored payload."""
     ctx, intake_id, _ = await world(client, fake, hidden=False, model=_blocker_gap)
     gap = await _answer_model_gap(client, ctx)
     await share_round5(client, ctx, intake_id, str(gap.id), "summary")
@@ -2602,6 +2653,7 @@ async def _actions(ctx) -> list[str]:
 
 
 async def test_withdrawn_first_then_the_accept_is_refused(client, fake):  # noqa: F811
+    """If a proposal is withdrawn first, a race to accept it afterward is refused."""
     world_ = await world(client, fake, hidden=False, model=_blocker_gap)
     ctx, intake_id, _ = world_
     gap, proposal = await _open_proposal(client, world_)
@@ -2629,6 +2681,7 @@ async def test_withdrawn_first_then_the_accept_is_refused(client, fake):  # noqa
 
 
 async def test_accepted_first_then_the_withdraw_leaves_it_accepted(client, fake):  # noqa: F811
+    """If a proposal is accepted first, a later withdraw leaves it accepted, logged."""
     world_ = await world(client, fake, hidden=False, model=_blocker_gap)
     ctx, intake_id, _ = world_
     gap, proposal = await _open_proposal(client, world_)
@@ -2811,6 +2864,7 @@ async def _run_titles(client, ctx, who: str, intake_id: str, item_id) -> dict[st
 
 
 async def test_a_run_sees_the_title_as_shared_after_an_upstream_rename(client, fake):  # noqa: F811
+    """A run sees a source's renamed title once it is shared again after the rename."""
     ctx, intake_id, items = await world(client, fake, hidden=False)
     await share_all(client, ctx, intake_id, "full")
     await _rename(ctx, items["a"], content=EDITED_A)
@@ -2859,6 +2913,7 @@ async def test_a_snapshot_a_run_opens_serves_shared_items_frozen(client, fake): 
 
 
 async def test_attach_without_ref_stores_the_frozen_title(client, fake):  # noqa: F811
+    """Evidence from a renamed item keeps the title it had when first shared."""
     from tests.baseline_helpers import entity
 
     ctx, intake_id, items = await world(client, fake, hidden=False, role="approver")
@@ -2910,6 +2965,7 @@ async def test_a_findings_ids_list_only_what_others_may_read(client, fake):  # n
 
 
 async def test_another_users_released_item_reads_without_who_is_on_it(client, fake):  # noqa: F811
+    """A shared item hides its author and participants from everyone but the author."""
     ctx, intake_id, items = await world(client, fake, hidden=False)
     async with tenant_session(ctx.tenant_id) as s:
         item = await s.get(SourceItem, items["a"])
@@ -2935,6 +2991,7 @@ async def test_another_users_released_item_reads_without_who_is_on_it(client, fa
 
 
 async def test_a_release_naming_another_items_version_serves_nothing(client, fake):  # noqa: F811
+    """A release pointing at another item's version is served to no one."""
     from oracle.intake.models import IntakeSharedItem
 
     ctx, intake_id, items = await world(client, fake, hidden=False)
@@ -3089,6 +3146,7 @@ async def test_people_never_see_the_renamed_link_of_a_shared_item(client, fake):
 
 
 async def test_attach_stores_the_link_as_shared(client, fake):  # noqa: F811
+    """Evidence for a linked page keeps the link it had when first shared."""
     from tests.baseline_helpers import entity
 
     ctx, intake_id, items = await world(client, fake, hidden=False, role="approver")

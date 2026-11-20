@@ -36,6 +36,7 @@ async def state(ctx, sid: str) -> tuple[int, str]:
 
 
 async def test_a_viewer_cannot_accept_or_edit_a_date_suggestion(client):
+    """A viewer cannot accept or edit a suggestion; a commenter can only propose it."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["move_dates"])
     sid = w.suggestion["move_dates-u"]
@@ -57,6 +58,7 @@ async def test_a_viewer_cannot_accept_or_edit_a_date_suggestion(client):
 
 
 async def test_another_company_cannot_accept_or_edit_a_date_suggestion(client):
+    """Another company's date suggestion is invisible, so acting on it is refused."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["move_dates"])
     other = await make_people()

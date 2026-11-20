@@ -87,6 +87,7 @@ class World:
 
 
 async def test_priorities_and_goal_buckets_leave_out_a_trashed_feature(client):
+    """A feature trashed everywhere it ships drops from Priorities and Goal buckets."""
     w = await World().build()
     before = await w.priorities(client)
     before_ids = {r["feature_id"] for r in before["rows"]}
@@ -108,6 +109,7 @@ async def test_priorities_and_goal_buckets_leave_out_a_trashed_feature(client):
 
 
 async def test_a_feature_hidden_by_roadmap_visibility_still_shows(client):
+    """A feature hidden from the roadmap still lists in Priorities, unreorderable."""
     w = await World().build()
     out = await w.priorities(client, "commenter")
     rows = {r["feature_id"]: r for r in out["rows"]}

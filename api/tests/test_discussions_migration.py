@@ -106,6 +106,7 @@ def _insert_discussion(tenant: uuid.UUID, **over) -> uuid.UUID:
 # protects=the chain has one head, this one, right after main's; fails_when=a second head
 # or a fixed number that skips main's; no_claim=what the tables hold.
 def test_the_chain_ends_here_after_feedback_agent_staging():
+    """The discussions migration chains onto the branch's one head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
@@ -114,6 +115,7 @@ def test_the_chain_ends_here_after_feedback_agent_staging():
 # discussions; the four tables and their CHECKs exist; fails_when=a step fails, a table or
 # CHECK is missing, or the downgrade leaves a table behind; no_claim=the routes.
 def test_upgrade_downgrade_upgrade_with_discussions_in_it(scratch_db):
+    """The discussions migration's tables and checks survive an upgrade and downgrade."""
     cfg = _cfg()
     upgrade(cfg, REVISION)
     command.downgrade(cfg, PREVIOUS)

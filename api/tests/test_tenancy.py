@@ -15,12 +15,14 @@ from tests.conftest import make_tenant
 
 
 async def test_select_without_tenant_is_refused():
+    """A query with no tenant set is refused instead of running unscoped."""
     async with bare_session() as s:
         with pytest.raises(TenantRequiredError):
             await s.execute(select(Document))
 
 
 async def test_get_text_and_flush_without_tenant_are_refused():
+    """A get, a raw text query and a flush with no tenant set are all refused."""
     async with bare_session() as s:
         with pytest.raises(TenantRequiredError):
             await s.get(Document, uuid.uuid4())
@@ -32,12 +34,14 @@ async def test_get_text_and_flush_without_tenant_are_refused():
 
 
 async def test_tenant_session_requires_a_tenant():
+    """A tenant session cannot be opened without a tenant id."""
     with pytest.raises(TenantRequiredError):
         async with tenant_session(None):  # type: ignore[arg-type]
             pass
 
 
 async def test_set_tenant_unlocks_the_session(tenant_id):
+    """Setting a tenant on a bare session lets its queries run."""
     async with bare_session() as s:
         set_tenant(s, tenant_id)
         assert (await s.execute(select(Document))).all() == []
@@ -53,6 +57,7 @@ async def _add_doc(tenant: uuid.UUID, slug: str) -> uuid.UUID:
 
 
 async def test_queries_only_see_own_tenant():
+    """Reads, bulk updates and deletes on a tenant session touch only its own rows."""
     a, b = await make_tenant("A"), await make_tenant("B")
     doc_a = await _add_doc(a, "alpha")
     doc_b = await _add_doc(b, "beta")
@@ -76,6 +81,7 @@ async def test_queries_only_see_own_tenant():
 
 
 async def test_cannot_write_rows_of_another_tenant():
+    """A row tagged with another tenant's id cannot be flushed."""
     a, b = await make_tenant("A"), await make_tenant("B")
     async with tenant_session(a) as s:
         s.add(Document(slug="x", title="X", tenant_id=b))

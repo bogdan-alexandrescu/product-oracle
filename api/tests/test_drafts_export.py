@@ -46,6 +46,7 @@ requires_pdf = pytest.mark.skipif(
     ],
 )
 def test_prd_recommendations(answers, key):
+    """The PRD template recommendation matches the decision given, with a reason."""
     got, reason = recommend_prd(PrdAnswers(**answers))
     assert got == key
     assert reason and "\n" not in reason
@@ -66,11 +67,13 @@ def test_prd_recommendations(answers, key):
     ],
 )
 def test_roadmap_recommendations(answers, key, variant):
+    """The roadmap template recommendation picks the right template and variant."""
     got, reason, options, _ = recommend_roadmap(RoadmapAnswers(**answers), confirmed_goals=3)
     assert got == key and options["variant"] == variant and reason
 
 
 def test_roadmap_warnings():
+    """The roadmap recommendation warns of thin goals, no dates or a public mismatch."""
     _, _, _, warnings = recommend_roadmap(RoadmapAnswers(audience="board"), confirmed_goals=1)
     assert any("thin" in w for w in warnings)
     _, _, options, warnings = recommend_roadmap(
@@ -89,6 +92,7 @@ def test_roadmap_warnings():
 
 
 async def test_recommend_api_uses_baseline_goals_and_company_default(client, tenant_id):
+    """The recommend endpoint uses the company's confirmed goals and owner-set default."""
     await seed_company(tenant_id)
     viewer = await _token(tenant_id, "viewer")
     owner = await _token(tenant_id)
@@ -153,6 +157,7 @@ async def test_recommend_api_uses_baseline_goals_and_company_default(client, ten
 
 
 async def test_start_draft_creates_document_from_skeleton(client, tenant_id):
+    """Starting a draft builds its document from the chosen template, with a free slug."""
     h = await _token(tenant_id, "approver")
     viewer = await _token(tenant_id, "viewer")
     body = {"kind": "prd", "title": "Saved carts", "template": "pr-faq"}
@@ -212,6 +217,7 @@ async def test_start_draft_creates_document_from_skeleton(client, tenant_id):
 
 
 async def test_archived_template_keeps_its_documents_resolving(client, tenant_id):
+    """An archived template still renders its old documents, but starts no new draft."""
     h = await _token(tenant_id)
     out = (
         await client.post(
@@ -288,6 +294,7 @@ async def _import(client, h, doc="checkout", markdown=DRAFT) -> None:
 
 
 async def test_export_uses_template_theme_and_o1c_appendix(client, tenant_id):
+    """A document's export uses its theme and lists sources apart, not inline cites."""
     h = await _token(tenant_id)
     await seed_company(tenant_id)  # oracle-default v2 and the themes
     await _import(client, h)
@@ -315,6 +322,7 @@ async def test_export_uses_template_theme_and_o1c_appendix(client, tenant_id):
 async def test_document_theme_wins_and_unthemed_documents_get_the_builtin_default(
     client, tenant_id
 ):
+    """An export uses the document's own theme, or the kind's built-in default."""
     await seed_company(tenant_id)
     h = await _token(tenant_id)
     await _import(
@@ -358,6 +366,7 @@ async def test_document_theme_wins_and_unthemed_documents_get_the_builtin_defaul
 
 
 async def test_roadmap_board_layout(client, tenant_id):
+    """The roadmap board export flags an item that serves no confirmed goal, visibly."""
     h = await _token(tenant_id)
     out = (
         await client.post(
@@ -392,6 +401,7 @@ async def test_roadmap_board_layout(client, tenant_id):
 
 @requires_pdf
 async def test_themed_pdfs_render(client, tenant_id):
+    """Every template's PDF export renders as a real PDF with its sources listed."""
     h = await _token(tenant_id)
     for template in ("oracle-default", "pr-faq", "narrative-memo", "prd-rfc", "one-pager"):
         out = (
@@ -423,6 +433,7 @@ async def test_themed_pdfs_render(client, tenant_id):
 
 @requires_pdf
 async def test_one_page_theme_checks_the_fit(client, tenant_id):
+    """A one-page export that overflows reports it in a header, never inside the page."""
     h = await _token(tenant_id)
     out = (
         await client.post(
@@ -454,6 +465,7 @@ async def test_one_page_theme_checks_the_fit(client, tenant_id):
 
 @requires_pdf
 def test_pdf_loads_nothing_external(tmp_path):
+    """Exporting a PDF never fetches an external file or a network resource."""
     import http.server
     import threading
 
@@ -504,6 +516,7 @@ def test_pdf_loads_nothing_external(tmp_path):
     ],
 )
 def test_running_header_detection(css, running):
+    """A repeating PDF header is seen only from a real running rule, not a comment."""
     from oracle.export.render import running_header
 
     assert running_header(css) is running
@@ -520,6 +533,7 @@ def test_running_header_detection(css, running):
     ],
 )
 def test_running_header_detection_is_linear(hostile):
+    """Detecting a repeating PDF header stays fast even on adversarial, huge input."""
     import time
 
     from oracle.export.render import running_header
@@ -530,6 +544,7 @@ def test_running_header_detection_is_linear(hostile):
 
 
 def test_header_caps_keep_the_version_and_whole_words():
+    """A capped PDF header title ends at a whole word and still shows its version."""
     from oracle.docs.schemas import VersionSource
     from oracle.export.render import _cap, _header_source
 
@@ -566,6 +581,7 @@ def _text_positions(page) -> list[tuple[float, str]]:
 
 @requires_pdf
 async def test_board_header_fits_the_margin_and_the_footer_is_filled(client, tenant_id):
+    """A roadmap board's repeated header stays in its margin, footer filled in."""
     h = await _token(tenant_id)
     long_title = "Board " + "with a very long roadmap name " * 6
     out = (

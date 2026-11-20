@@ -78,6 +78,7 @@ async def _users() -> list[str]:
 
 
 async def test_valid_assertion_provisions_user(client, fetches):
+    """A valid Google IAP sign-in provisions a user once, reusing cached signing keys."""
     r = await seed()
     await _join_at_once(r.tenant_id)
     resp = await client.get("/v1/me", headers={HEADER: assertion("Dana@Example.com")})
@@ -102,6 +103,7 @@ async def test_valid_assertion_provisions_user(client, fetches):
 
 
 async def test_existing_user_matched_case_insensitively(client, fetches, monkeypatch):
+    """An IAP sign-in matches an existing user's email regardless of letter case."""
     monkeypatch.setattr(get_settings(), "iap_allowed_domains", [])  # no provisioning
     await seed(email="admin@other.test")
     resp = await client.get("/v1/me", headers={HEADER: assertion("ADMIN@Other.Test")})
@@ -111,6 +113,7 @@ async def test_existing_user_matched_case_insensitively(client, fetches, monkeyp
 
 
 async def test_iap_user_can_use_the_api(client, fetches):
+    """A user signed in through IAP can use the rest of the API like any session."""
     await seed()
     resp = await client.get("/v1/documents", headers={HEADER: assertion("admin@example.com")})
     assert resp.status_code == 200
@@ -138,6 +141,7 @@ async def test_iap_user_can_use_the_api(client, fetches):
     ],
 )
 async def test_invalid_assertion_is_401(client, fetches, bad):
+    """An IAP assertion with a wrong audience, issuer, signature or key is refused."""
     await seed()
     resp = await client.get("/v1/me", headers={HEADER: bad()})
     assert resp.status_code == 401
@@ -145,12 +149,14 @@ async def test_invalid_assertion_is_401(client, fetches, bad):
 
 
 async def test_expiry_within_leeway_is_accepted(client, fetches):
+    """An IAP assertion just past expiry is still accepted within the clock leeway."""
     await seed()
     resp = await client.get("/v1/me", headers={HEADER: assertion("admin@example.com", exp_in=-5)})
     assert resp.status_code == 200
 
 
 async def test_invalid_assertion_beats_a_valid_cookie(client, fetches):
+    """A bad IAP assertion is refused even with a valid session cookie present."""
     await seed(password="correct horse")
     await client.post(
         "/v1/auth/login", json={"email": "admin@example.com", "password": "correct horse"}
@@ -161,6 +167,7 @@ async def test_invalid_assertion_beats_a_valid_cookie(client, fetches):
 
 
 async def test_disallowed_domain_is_401_and_not_created(client, fetches):
+    """Signing in from a domain not on the allow list is refused, no user created."""
     await seed()
     resp = await client.get("/v1/me", headers={HEADER: assertion("eve@elsewhere.test")})
     assert resp.status_code == 401
@@ -168,6 +175,7 @@ async def test_disallowed_domain_is_401_and_not_created(client, fetches):
 
 
 async def test_auto_provision_off(client, fetches, monkeypatch):
+    """Turning off auto-provisioning blocks new IAP users; existing ones still sign in."""
     monkeypatch.setattr(get_settings(), "iap_auto_provision", False)
     await seed()
     resp = await client.get("/v1/me", headers={HEADER: assertion("dana@example.com")})
@@ -178,6 +186,7 @@ async def test_auto_provision_off(client, fetches, monkeypatch):
 
 
 async def test_no_tenant_yet_is_401(client, fetches):
+    """IAP sign-in is refused, and creates no user, before any company exists yet."""
     resp = await client.get("/v1/me", headers={HEADER: assertion()})
     assert resp.status_code == 401
     async with unscoped_session() as s:
@@ -185,6 +194,7 @@ async def test_no_tenant_yet_is_401(client, fetches):
 
 
 async def test_disabled_ignores_header(client, fetches, monkeypatch):
+    """With IAP off, its header is ignored entirely, even a spoofed unsigned one."""
     monkeypatch.setattr(get_settings(), "iap_audiences", [])
     await seed(password="correct horse")
     # Neither a valid nor a garbage assertion does anything; the old flow applies.
@@ -202,12 +212,14 @@ async def test_disabled_ignores_header(client, fetches, monkeypatch):
 
 
 async def test_unsigned_email_header_ignored_when_enabled(client, fetches):
+    """An unsigned header claiming an email is never trusted, even with IAP on."""
     await seed()
     spoof = {"x-goog-authenticated-user-email": "accounts.google.com:admin@example.com"}
     assert (await client.get("/v1/me", headers=spoof)).status_code == 401
 
 
 async def test_cookie_and_bearer_still_work_when_enabled(client, fetches):
+    """Turning on IAP does not break signing in with a bearer token or cookie."""
     r = await seed(password="correct horse", token_name="ci")
     bearer = await client.get("/v1/me", headers={"Authorization": f"Bearer {r.token}"})
     # The seeded token acts as the admin.
@@ -224,6 +236,7 @@ async def test_cookie_and_bearer_still_work_when_enabled(client, fetches):
 
 
 async def test_logout_is_harmless_under_iap(client, fetches):
+    """Logging out while signed in through IAP is harmless; sign-in still works after."""
     await seed()
     headers = {HEADER: assertion("admin@example.com")}
     assert (await client.post("/v1/auth/logout", headers=headers)).status_code == 204
@@ -231,6 +244,8 @@ async def test_logout_is_harmless_under_iap(client, fetches):
 
 
 async def test_key_endpoint_down_is_503(client, monkeypatch):
+    """Google's signing keys being unreachable reports a temporary failure, not 401."""
+
     async def down() -> dict:
         raise OSError("unreachable")
 
@@ -244,6 +259,7 @@ async def test_key_endpoint_down_is_503(client, monkeypatch):
 
 
 async def test_a_failed_or_empty_key_fetch_backs_off_only_briefly(client, monkeypatch):
+    """A failed key fetch is not retried every sign-in, only backs off briefly."""
     fetched: list[int] = []
 
     async def empty() -> dict:
@@ -299,6 +315,7 @@ async def _set_default_role(tenant_id, value) -> None:
 
 
 async def test_invited_email_gets_the_invite_role(client, fetches):
+    """An invited person's first sign-in gets the invited role, not the default."""
     r = await seed()
     invite_id = await _invite(r.tenant_id, "pat@example.com", "approver")
     await _set_default_role(r.tenant_id, "viewer")  # the invite wins over the default
@@ -330,6 +347,7 @@ async def test_invited_email_gets_the_invite_role(client, fetches):
     [("viewer", "viewer"), ("owner", "owner"), ("admin", "commenter"), (None, "commenter")],
 )
 async def test_uninvited_email_gets_the_company_default(client, fetches, setting, role):
+    """An uninvited person's first sign-in gets the company's default role."""
     r = await seed()
     await _join_at_once(r.tenant_id)
     if setting is not None:
@@ -340,6 +358,7 @@ async def test_uninvited_email_gets_the_company_default(client, fetches, setting
 
 
 async def test_revoked_and_accepted_invites_are_ignored(client, fetches):
+    """A revoked or already-used invite is ignored, so sign-in uses the default role."""
     r = await seed()
     await _join_at_once(r.tenant_id)
     await _invite(r.tenant_id, "kim@example.com", "owner", revoked_at=datetime.now(UTC))
@@ -349,6 +368,7 @@ async def test_revoked_and_accepted_invites_are_ignored(client, fetches):
 
 
 async def test_existing_user_keeps_role_despite_invite(client, fetches):
+    """Inviting an existing user to a new role never changes their current role."""
     r = await seed()  # admin@example.com is an owner
     invite_id = await _invite(r.tenant_id, "admin@example.com", "viewer")
     resp = await client.get("/v1/me", headers={HEADER: assertion("admin@example.com")})
@@ -358,6 +378,7 @@ async def test_existing_user_keeps_role_despite_invite(client, fetches):
 
 
 async def test_invite_does_not_admit_a_disallowed_domain(client, fetches):
+    """An invite cannot admit someone from a domain the company does not allow."""
     r = await seed()
     invite_id = await _invite(r.tenant_id, "guest@elsewhere.test", "approver")
     resp = await client.get("/v1/me", headers={HEADER: assertion("guest@elsewhere.test")})

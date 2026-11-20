@@ -26,6 +26,7 @@ def _codes(exc: DraftError) -> list[tuple[str, str | None, str | None]]:
 
 
 def test_v1_sections_and_citations():
+    """A v1 PRD draft parses into its sections, citations and plain body text."""
     parsed = parse_draft(draft("prd_v1.md"))
     assert parsed.document == "checkout-redesign"
     assert parsed.title == "Checkout redesign PRD"
@@ -58,6 +59,7 @@ def test_v1_sections_and_citations():
 
 
 def test_v2_resolutions():
+    """A v2 draft's feedback resolutions parse with their status and note."""
     parsed = parse_draft(draft("prd_v2.md"))
     assert [(r.feedback_id, r.status) for r in parsed.resolutions] == [
         (FEEDBACK_SHIPPING, "addressed"),
@@ -67,6 +69,7 @@ def test_v2_resolutions():
 
 
 def test_content_hash_ignores_line_endings_and_trailing_space():
+    """A draft's content hash ignores line endings and trailing whitespace differences."""
     a = parse_draft(draft("prd_v1.md"))
     b = parse_draft(draft("prd_v1.md").replace("\n", "\r\n") + "\n\n")
     assert a.content_hash == b.content_hash
@@ -74,6 +77,7 @@ def test_content_hash_ignores_line_endings_and_trailing_space():
 
 
 def test_section_hash_changes_with_heading_level_and_body():
+    """A section's hash changes when its heading level or body text changes, not else."""
     base = parse_draft(_draft("## A {#a}\n\nbody\n")).sections[0].content_hash
     assert parse_draft(_draft("## A {#a}\n\nbody\n\n")).sections[0].content_hash == base
     assert parse_draft(_draft("## B {#a}\n\nbody\n")).sections[0].content_hash != base
@@ -82,6 +86,7 @@ def test_section_hash_changes_with_heading_level_and_body():
 
 
 def test_every_problem_is_reported():
+    """Every parse problem in a draft is reported at once, not just the first found."""
     text = _draft(
         "# Title {#title}\n\n"
         "## No id here\n\nSee [c:c1] and [c:ghost].\n\n"
@@ -110,6 +115,7 @@ def test_every_problem_is_reported():
 
 
 def test_oracle_baseline_citations_parse():
+    """A citation of Oracle's own baseline items parses with its source and reference."""
     # A run's writer cites Oracle's own baseline (goals, decisions, constraints,
     # features): source 'oracle', its ref free text naming the baseline item.
     parsed = parse_draft(draft("prd_oracle_citations.md"))
@@ -128,6 +134,7 @@ def test_oracle_baseline_citations_parse():
 
 
 def test_text_under_heading_without_id_is_not_citation_checked():
+    """Text under a heading with no id is not citation-checked until the id is added."""
     # Text under a heading without an id is not a section, so its citations are not
     # checked; once the id is added they are. The missing id itself is reported.
     text = _draft("# T {#t}\n\n## Missing\n\n[c:x]\n")
@@ -137,12 +144,14 @@ def test_text_under_heading_without_id_is_not_citation_checked():
 
 
 def test_headings_in_code_fences_are_not_sections():
+    """A heading inside a code fence is not treated as a document section."""
     parsed = parse_draft(_draft("# T {#t}\n\n```\n# not a heading\n```\n"))
     assert [s.section_key for s in parsed.sections] == ["t"]
     assert parsed.sections[0].body_text == "# not a heading"
 
 
 def test_setext_heading_needs_id_too():
+    """A setext-style heading needs its own id too, same as a hash heading."""
     with pytest.raises(DraftError) as info:
         parse_draft(_draft("# T {#t}\n\nSub\n---\n\ntext\n"))
     assert _codes(info.value) == [("missing_section_id", None, None)]
@@ -179,17 +188,20 @@ def test_setext_heading_needs_id_too():
     ],
 )
 def test_front_matter_and_structure_problems(text, code):
+    """Missing front matter, bad citations and other structure problems are all caught."""
     with pytest.raises(DraftError) as info:
         parse_draft(text)
     assert code in [p.code for p in info.value.problems]
 
 
 def test_body_text_strips_markdown_and_citations():
+    """A section's plain body text strips markdown formatting and citation markers."""
     md = "Some **bold** and `code` [c:c1], then a [link](https://example.com).\n\n- one\n- two"
     assert body_text(md) == "Some bold and code, then a link.\none\ntwo"
 
 
 def test_body_text_keeps_table_rows():
+    """A table's rows stay intact in plain body text, with escaped pipes kept as text."""
     # A literal pipe inside a cell stays escaped, so " | " always separates cells.
     md = (
         "Targets [c:c1]:\n\n"
@@ -211,15 +223,18 @@ def test_body_text_keeps_table_rows():
 
 
 def test_body_text_of_header_only_table():
+    """A table with only a header row still renders as plain text, not empty."""
     assert body_text("| A | B |\n|---|---|") == "A | B"
 
 
 def test_title_falls_back_to_first_heading():
+    """A draft with no title in its front matter falls back to its first heading."""
     parsed = parse_draft("---\ndocument: d\n---\n# From heading {#t}\n")
     assert parsed.title == "From heading"
 
 
 def test_citation_confidence_fields_parse():
+    """A citation's confidence score, note and low-confidence flag all parse fine."""
     # What a writer computed per citation is kept: the source item it read (on some),
     # its confidence 0-1 (or null with a note saying why) and the low-confidence flag.
     parsed = parse_draft(draft("prd_citation_confidence.md"))
@@ -247,6 +262,7 @@ def test_citation_confidence_fields_parse():
 
 @pytest.mark.parametrize("value", ["1.5", "-0.1", "nan", "high"])
 def test_citation_confidence_out_of_range_is_invalid(value):
+    """A citation confidence outside 0 to 1, or not a number, is refused as invalid."""
     citations = f"citations:\n  - id: c1\n    source: web\n    ref: x\n    confidence: {value}\n"
     with pytest.raises(DraftError) as err:
         parse_draft(_draft("# T {#t}\n\nA.\n", citations))
@@ -256,12 +272,14 @@ def test_citation_confidence_out_of_range_is_invalid(value):
 
 @pytest.mark.parametrize("value", ["0", "1", "0.0", "1.0"])
 def test_citation_confidence_bounds_are_inclusive(value):
+    """A citation confidence of exactly 0 or 1 is accepted, not out of range."""
     citations = f"citations:\n  - id: c1\n    source: web\n    ref: x\n    confidence: {value}\n"
     parsed = parse_draft(_draft("# T {#t}\n\nA [c:c1].\n", citations))
     assert parsed.citations[0].confidence == float(value)
 
 
 def test_citation_item_that_is_not_a_uuid_still_parses():
+    """A citation's item need not be a real id at parse time; that check comes later."""
     # The item is checked against the company's sources on import (a warning there,
     # never a refusal); the parser keeps whatever was written.
     citations = "citations:\n  - id: c1\n    source: web\n    ref: x\n    item: not-a-uuid\n"
@@ -280,6 +298,7 @@ def test_citation_item_that_is_not_a_uuid_still_parses():
     ],
 )
 def test_a_non_oracle_ref_with_a_scheme_other_than_http_is_refused(ref, scheme):
+    """A citation ref using a scheme other than http or https is refused, not linked."""
     # The web opens a citation's ref as a link: no URL but http(s) gets in.
     text = _draft(
         "# T {#t}\n\nA claim [c:c1].\n",
@@ -295,6 +314,7 @@ def test_a_non_oracle_ref_with_a_scheme_other_than_http_is_refused(ref, scheme):
 
 
 def test_http_https_schemeless_and_oracle_refs_parse():
+    """A citation ref with no scheme, or an http, https or oracle one, still parses."""
     # A ref with no scheme (an upload's name, an item's id) is kept and shown as text.
     text = _draft(
         "# T {#t}\n\n[c:a] [c:b] [c:u] [c:n] [c:o]\n",
@@ -340,6 +360,7 @@ def test_http_https_schemeless_and_oracle_refs_parse():
 )
 @pytest.mark.parametrize("source", ["web", "upload"])
 def test_an_odd_ref_is_refused_at_import(ref, source):
+    """A citation ref that could resolve to another host or hide a script is refused."""
     # Only an absolute http(s) URL with a host, a urn or a plain name gets in (an oracle
     # ref names a baseline item, checked at import): nothing a browser could resolve to a
     # link elsewhere.
@@ -351,6 +372,7 @@ def test_an_odd_ref_is_refused_at_import(ref, source):
     "ref", ["\u00a0baseline goal g1", "baseline goal g1\u200b", "\ufeffbaseline goal g1 "]
 )
 def test_an_oracle_ref_with_odd_whitespace_is_refused(ref):
+    """An Oracle citation ref with hidden or stray whitespace is refused outright."""
     with pytest.raises(ValueError, match="ref"):
         CitationIn(id="c1", source="oracle", ref=ref)
 
@@ -360,6 +382,7 @@ def test_an_oracle_ref_with_odd_whitespace_is_refused(ref):
     ["\u00a0javascript:alert(1)", "\ufeffjavascript:x", "//evil.example/x", "https:///x"],
 )
 def test_an_odd_ref_in_a_draft_is_an_invalid_citation(ref):
+    """An odd-whitespace or spoofed-host ref in a real draft is still invalid."""
     escaped = ref.encode("unicode_escape").decode()
     text = _draft(
         "# T {#t}\n\nA claim [c:c1].\n",
@@ -383,10 +406,12 @@ def test_an_odd_ref_in_a_draft_is_an_invalid_citation(ref):
     ],
 )
 def test_a_plain_ref_still_parses(ref):
+    """An ordinary http, urn or filename-style citation ref still parses as valid."""
     assert CitationIn(id="c1", source="web", ref=ref).ref == ref
 
 
 def test_a_malformed_resolution_is_dropped_not_refused():
+    """A malformed feedback resolution is dropped with a reason, not refused."""
     # Nov 3: a resolution never refuses the draft; it is dropped with why.
     text = _draft("# T {#t}\n", "resolutions:\n  - feedback_id: nope\n    status: addressed\n")
     parsed = parse_draft(text)

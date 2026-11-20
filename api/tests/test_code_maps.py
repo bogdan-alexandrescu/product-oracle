@@ -72,6 +72,7 @@ def codes(problems) -> set[str]:
 
 
 def test_the_sample_map_checks_clean():
+    """A well-formed code map checks clean and lists every id by its kind."""
     # protects=AC4 a map in the format checks clean and lists its ids; fails_when=a valid
     # map is refused; no_claim=what the map says is true of the code.
     assert codemap.check(text(MAP)) == []
@@ -107,12 +108,14 @@ def _module(**over) -> dict:
     ],
 )  # fmt: skip
 def test_each_problem_code_is_reported(code, data):
+    """Each way a code map can be malformed is flagged with its own code."""
     # protects=AC4 duplicate ids, ids not prefixed by their kind, unresolved module refs,
     # absolute or parent paths are refused; fails_when=such a map is stored as ready.
     assert code in codes(codemap.check(text(data)))
 
 
 def test_unreadable_and_oversized_files_are_refused():
+    """A code map that is not JSON, too large or too deeply nested is refused."""
     # protects=AC4 the 2 MB cap and unreadable text; fails_when=a huge or broken file is
     # parsed or stored.
     assert codes(codemap.check("{not json")) == {"unreadable"}
@@ -125,6 +128,7 @@ def test_unreadable_and_oversized_files_are_refused():
 
 @pytest.mark.parametrize("number", ["NaN", "Infinity", "-Infinity", "1e999", "-1e999"])
 def test_numbers_that_are_not_finite_are_refused(number):
+    """A code map with NaN or Infinity is refused as not finite."""
     # protects=a map with NaN or Infinity (JSONB refuses them) is refused as it is read,
     # with a clear reason; fails_when=it checks clean and its store fails.
     raw = text(MAP).replace('"version": 1', f'"version": 1, "weight": {number}')
@@ -142,6 +146,7 @@ def test_numbers_that_are_not_finite_are_refused(number):
     ],
 )
 def test_nul_characters_are_refused(data):
+    """A code map with a NUL character anywhere is refused as unreadable."""
     # protects=a map with a NUL character (JSONB text refuses it), in a value or a key,
     # is refused as it is read, with a clear reason; fails_when=it checks clean and its
     # store fails.
@@ -153,6 +158,7 @@ def test_nul_characters_are_refused(data):
 
 
 def test_a_docs_only_map_is_marked_partial():
+    """A map built from docs alone is marked partial and says so in its summary."""
     # protects=the fallback until the checkout is available: a map built from synced
     # docs says so; fails_when=partial is lost or a non-boolean passes.
     data = changed(partial=True)
@@ -162,6 +168,7 @@ def test_a_docs_only_map_is_marked_partial():
 
 
 def test_the_summary_lists_what_the_map_holds():
+    """A code map's summary names its repo, commit and what it holds."""
     summary = codemap.summary(MAP)
     assert REPO in summary and "3f2c9a1" in summary
     assert "module:billing" in summary and "api:create-invoice" in summary
@@ -171,6 +178,7 @@ def test_the_summary_lists_what_the_map_holds():
 
 
 def test_the_code_map_flow_has_one_indexer_segment_without_a_checkpoint():
+    """The code_map flow is one unattended indexer segment with no checkpoint."""
     # protects=the code_map flow (one segment, role indexer, no checkpoint, writes
     # code_map.json) and the optional checkpoint; fails_when=the flow opens a stop or the
     # catalog cannot describe it.
@@ -186,6 +194,7 @@ def test_the_code_map_flow_has_one_indexer_segment_without_a_checkpoint():
 
 
 async def test_the_flow_catalog_shows_a_segment_without_a_checkpoint(client):
+    """The flow catalog reports the code_map segment as having no checkpoint."""
     tenant_id, auth = await seed_auth()
     catalog = (await client.get("/v1/flows", headers=auth)).json()
     flow = next(f for f in catalog["flows"] if f["key"] == "code_map")
@@ -258,6 +267,7 @@ async def built_map(client, tenant_id, owner) -> dict:
 
 
 async def test_the_sources_owner_maps_the_code(client, map_runtime):
+    """Mapping the code starts one run, and refuses a second while one runs."""
     # protects=AC5 Map the code drafts a code_map run, starts it after its estimate, and
     # a valid map is stored ready with its content and as_of; fails_when=no run starts,
     # the map is not stored or not audited; no_claim=the indexer reads the code (the
@@ -295,6 +305,7 @@ async def test_the_sources_owner_maps_the_code(client, map_runtime):
 
 
 async def test_an_invalid_map_is_stored_failed_with_its_problems(client, bad_map_runtime):
+    """An invalid code map from the indexer is stored failed with its problems."""
     # protects=AC5 an invalid map stores failed with the problems; fails_when=it is
     # stored ready or the run succeeds.
     tenant_id = await make_tenant()
@@ -310,6 +321,7 @@ async def test_an_invalid_map_is_stored_failed_with_its_problems(client, bad_map
 
 
 async def test_the_map_is_read_once_on_the_parse_pool(client, map_runtime, monkeypatch):
+    """The untrusted code map file is parsed once, off the main event loop."""
     # protects=the importer reads the untrusted code_map.json once, on the parse pool
     # (oracle.safe_yaml.run_parse_within); fails_when=it is parsed on the event loop or
     # twice.
@@ -350,6 +362,7 @@ async def test_the_map_is_read_once_on_the_parse_pool(client, map_runtime, monke
     ids=["nan", "infinity", "nul"],
 )
 async def test_a_map_jsonb_refuses_ends_failed_with_the_reason(client, raw, reason):
+    """A code map the database itself refuses still ends up failed, not stuck."""
     # protects=a map with NaN, Infinity or a NUL character ends failed with that reason
     # (and its run fails); fails_when=the store raises and the map stays building with a
     # generic error.
@@ -372,6 +385,7 @@ async def test_a_map_jsonb_refuses_ends_failed_with_the_reason(client, raw, reas
 
 
 async def test_only_the_sources_owner_maps_its_repos(client, map_runtime):
+    """Mapping the code is refused to anyone but the source's owner."""
     # protects=start_code_map is the source's owner's, for a repo of a GitHub source;
     # fails_when=another member maps someone's source or an unlisted repo is mapped.
     tenant_id = await make_tenant()
@@ -394,6 +408,7 @@ async def test_only_the_sources_owner_maps_its_repos(client, map_runtime):
 
 
 async def test_a_run_over_the_threshold_waits_for_an_owner(client, map_runtime, monkeypatch):
+    """A code map run priced above the threshold waits for an owner first."""
     # protects=P3 gating: a code_map run over $50 waits for an owner's approval; the map
     # stays building; fails_when=it starts without approval.
     monkeypatch.setattr(flows, "APPROVAL_THRESHOLD_USD", flows.ROLES["indexer"].base_usd / 4)
@@ -404,6 +419,7 @@ async def test_a_run_over_the_threshold_waits_for_an_owner(client, map_runtime, 
 
 
 async def test_a_run_that_fails_marks_its_map_failed(client):
+    """A code map run that fails at the runtime leaves its map marked failed."""
     # protects=a map never stays building after its run failed at the runtime;
     # fails_when=the row stays building and blocks Map the code forever.
     set_runtime(FakeRuntime({"index": [Outcome(state="failed", error="runtime down")]}))
@@ -424,6 +440,7 @@ async def test_a_run_that_fails_marks_its_map_failed(client):
 
 
 async def test_a_private_map_is_the_owners_until_shared_in_full(client, map_runtime):
+    """A private code map is invisible to anyone but its owner until shared."""
     # protects=AC6 and AC9 (S6): a private map is a 404 to another member, absent for a
     # run token and from capability_map(); after sharing: full, all three see it; lowering
     # it back stops new uses; audited; fails_when=a private map leaks to anyone but the
@@ -481,6 +498,7 @@ async def test_a_private_map_is_the_owners_until_shared_in_full(client, map_runt
 
 
 async def test_list_filters_by_repo_and_status(client, map_runtime):
+    """Listing code maps filters by status and repo, leaving out full content."""
     tenant_id = await make_tenant()
     owner = await make_person(tenant_id, "dev@example.com", "commenter")
     got = await built_map(client, tenant_id, owner)
@@ -494,6 +512,7 @@ async def test_list_filters_by_repo_and_status(client, map_runtime):
 
 
 async def test_another_companys_maps_are_404(client, map_runtime):
+    """Every code map route is scoped to its own company, a 404 for any other."""
     # protects=AC9 every route is company-scoped; fails_when=an id of another company
     # reads or shares.
     tenant_id = await make_tenant()
@@ -512,6 +531,7 @@ async def test_another_companys_maps_are_404(client, map_runtime):
 
 
 async def test_deleting_or_narrowing_the_source_deletes_its_maps(client, map_runtime):
+    """Narrowing a source's repo list, or deleting it, deletes its maps too."""
     # protects=S5's narrowing rule: a repo dropped from the source's allowlist, or the
     # source deleted, takes its maps with it; fails_when=a map outlives its source.
     tenant_id = await make_tenant()
@@ -585,6 +605,7 @@ async def age(tenant_id, map_id, hours: float) -> None:
 async def test_a_merge_marks_the_map_stale_and_the_tick_refreshes_it_once(
     client, map_runtime, monkeypatch
 ):
+    """A merged pull request marks the map stale; tick starts one refresh for it."""
     # protects=AC7 a sync seeing a merged pull request marks the map stale; the tick
     # starts exactly one refresh run; a merge during the refresh coalesces into one
     # follow-up, and a merge within the day of the last start starts none (the company's
@@ -636,6 +657,7 @@ async def test_a_merge_marks_the_map_stale_and_the_tick_refreshes_it_once(
 
 
 async def test_a_refresh_keeps_the_maps_sharing(client, map_runtime, monkeypatch):
+    """Refreshing a code map keeps the sharing level of the map it replaces."""
     # protects=a refreshed map is shared as the one it replaces; fails_when=a refresh
     # makes a shared map private (runs lose it) or a private one shared.
     tenant_id = await make_tenant()
@@ -682,6 +704,7 @@ async def choose(client, tenant_id, value) -> dict:
     [("hourly", 1), ("every_6_hours", 6), ("daily", 24), ("weekly", 168)],
 )
 async def test_each_refresh_choice_spaces_the_tick_refresh(client, map_runtime, choice, hours):
+    """The company's chosen refresh interval decides when tick refreshes a map."""
     # protects=the company's 'Refresh stale code maps' choice is the spacing the tick keeps
     # between a repo's last map run and its refresh: none just inside it, one just past it;
     # fails_when=the tick still refreshes hourly whatever the company chose, or never;
@@ -699,6 +722,7 @@ async def test_each_refresh_choice_spaces_the_tick_refresh(client, map_runtime, 
 
 
 async def test_only_on_demand_never_refreshes_and_map_the_code_still_does(client, map_runtime):
+    """Choosing on-demand means tick never refreshes a map by itself."""
     # protects=only on demand: the tick never refreshes a stale map, however old; Map the
     # code refreshes it at once; fails_when=the tick refreshes on demand, or Map the code is
     # refused on a stale map; no_claim=the run's cost approval (P3's tests).
@@ -716,6 +740,7 @@ async def test_only_on_demand_never_refreshes_and_map_the_code_still_does(client
 
 
 async def test_a_company_that_never_chose_refreshes_daily(client, map_runtime):
+    """A company that never picked a refresh interval gets daily by default."""
     # protects=the default is daily: GET settings names it, a stale map 2 hours after its run
     # waits, one a day after refreshes; fails_when=the old hourly spacing stays the default;
     # no_claim=the other choices (the parametrized test).
@@ -737,6 +762,7 @@ async def test_a_company_that_never_chose_refreshes_daily(client, map_runtime):
 
 
 async def test_the_refresh_setting_is_an_owners_and_audited(client):
+    """Changing the code map refresh setting is an owner's call, and is audited."""
     # protects=only owners change 'Refresh stale code maps', an unknown choice is 422, and a
     # change is an audit entry with its value; fails_when=an approver changes it, a typo is
     # stored, or the change leaves no trace; no_claim=the other settings' checks.
@@ -793,6 +819,7 @@ def briefs_runtime():
 async def test_a_run_records_the_code_maps_it_used_and_briefs_are_checked_against_them(
     client, eng_flow, briefs_runtime
 ):
+    """A run records the shared code maps it used, and briefs are checked on them."""
     # protects=F5-1's unchecked registration checks refs against the shared maps the run
     # recorded at its start: a brief citing the map's ids is registered; fails_when=the
     # run records no map, or a brief whose refs the map holds is refused as unknown_ref.
@@ -814,6 +841,7 @@ async def test_a_run_records_the_code_maps_it_used_and_briefs_are_checked_agains
 
 
 async def test_a_brief_citing_a_docs_only_map_is_marked_partial(client, eng_flow, briefs_runtime):
+    """A brief citing a docs-only map is marked partial from the run's own record."""
     # protects=briefs cite a docs-only map with its label: Oracle sets partial on the
     # brief's repo from the map the run recorded, never from the file; fails_when=a
     # brief resting on the docs reads as resting on the code.
@@ -835,6 +863,7 @@ async def test_a_brief_citing_a_docs_only_map_is_marked_partial(client, eng_flow
 
 
 async def test_a_private_map_is_not_recorded_for_a_run(client, eng_flow, briefs_runtime):
+    """A run never records a private code map, so a brief citing it is unknown."""
     # protects=S6: a run never uses a private map; fails_when=a private map's ids pass
     # an unchecked brief.
     from tests.test_tech_briefs import advance_to, brief_rows, start
@@ -854,6 +883,7 @@ async def test_a_private_map_is_not_recorded_for_a_run(client, eng_flow, briefs_
 
 
 async def test_the_code_map_prompt_names_the_repo_and_the_docs_only_fallback(client):
+    """The indexer's prompt names the repo, the file, and the docs-only fallback."""
     # protects=the indexer's task: the repo, the format, data-not-instructions, and the
     # docs-only fallback (partial: true) while the checkout is not available;
     # fails_when=the prompt omits the repo or the fallback.

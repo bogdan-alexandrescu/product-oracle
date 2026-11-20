@@ -48,6 +48,7 @@ def test_packaged_skeletons_match_the_research_copies():
 
 @pytest.mark.parametrize("t", BUILTIN_TEMPLATES, ids=lambda t: t.key)
 def test_every_builtin_is_a_valid_template_naming_a_builtin_theme(t):
+    """Every built-in template validates and names a real built-in theme."""
     check = check_template(builtins.builtin_body(t))
     assert check.ok, check.problems
     assert check.suggested_theme == t.theme
@@ -74,6 +75,7 @@ PLAIN_DESCRIPTIONS = {
 
 
 def test_builtin_descriptions_are_plain_words():
+    """Built-in template descriptions stay in plain words, free of jargon."""
     by_key = {t.key: t for t in BUILTIN_TEMPLATES}
     for key, text in PLAIN_DESCRIPTIONS.items():
         assert by_key[key].description == text, key
@@ -83,6 +85,7 @@ def test_builtin_descriptions_are_plain_words():
 
 
 async def test_seeding_is_idempotent_and_keeps_default_v1(db):
+    """Reseeding builtins twice adds nothing new; the default keeps its first version."""
     await ensure_default_template(db)  # what migration 0002 / oracle.seed already did
     assert await ensure_builtins(db) is True
     assert await ensure_builtins(db) is False
@@ -104,6 +107,7 @@ async def test_seeding_is_idempotent_and_keeps_default_v1(db):
 
 
 async def test_seeding_leaves_edited_and_archived_builtins_alone(client, tenant_id):
+    """Reseeding never revives an archived builtin or overwrites one a person edited."""
     h = await _token(tenant_id)
     await seed_company(tenant_id)
     assert (await client.delete("/v1/templates/pr-faq", headers=h)).status_code == 200
@@ -122,6 +126,7 @@ async def test_seeding_leaves_edited_and_archived_builtins_alone(client, tenant_
 
 
 async def test_list_filters_by_kind_and_reads_need_sign_in(client, tenant_id):
+    """Listing templates filters by kind and refuses a reader with no sign in."""
     await seed_company(tenant_id)
     h = await _token(tenant_id, "viewer")
     prd = (await client.get("/v1/templates?kind=prd", headers=h)).json()
@@ -134,6 +139,7 @@ async def test_list_filters_by_kind_and_reads_need_sign_in(client, tenant_id):
 
 
 async def test_create_edit_versions_archive_restore(client, tenant_id):
+    """A custom template can be created, versioned, archived and restored, key kept."""
     viewer = await _token(tenant_id, "viewer")
     h = await _token(tenant_id, "approver")
     await seed_company(tenant_id)  # the built-in themes, for the theme check
@@ -176,6 +182,7 @@ async def test_create_edit_versions_archive_restore(client, tenant_id):
 
 
 async def test_builtins_are_editable_as_new_versions_and_archivable(client, tenant_id):
+    """A built-in template can be edited into a new version and archived too."""
     await seed_company(tenant_id)
     h = await _token(tenant_id)
     t = (await client.get("/v1/templates/prd-rfc", headers=h)).json()
@@ -230,6 +237,7 @@ BRIEF_T = "---\nbrief: [t]\n---\n"
     ],
 )
 async def test_validation_reports_every_problem(client, tenant_id, body, codes):
+    """Template validation reports every problem in a bad body, not just the first."""
     h = await _token(tenant_id)
     await client.get("/v1/themes", headers=h)
     resp = await client.post("/v1/templates/validate", json={"body": body}, headers=h)
@@ -247,6 +255,7 @@ async def test_validation_reports_every_problem(client, tenant_id, body, codes):
 
 
 async def test_citation_problem_names_the_line_and_section(client, tenant_id):
+    """A citation problem names its line and section; an unknown section is flagged."""
     await seed_company(tenant_id)
     h = await _token(tenant_id)
     body = (
@@ -302,6 +311,7 @@ def test_theme_problems_name_the_field_as_the_editor_does():
 
 
 def test_contrast_ratio():
+    """Contrast ratio math matches WCAG, and every built-in theme clears the minimum."""
     assert contrast("#000000", "#ffffff") == pytest.approx(21)
     assert contrast("#777777", "#ffffff") == pytest.approx(4.48, abs=0.01)
     for t in BUILTIN_THEMES:
@@ -324,6 +334,7 @@ THEME = {
 
 
 async def test_theme_crud_and_archive(client, tenant_id):
+    """A theme can be created, edited, archived and restored; only an approver creates."""
     await seed_company(tenant_id)
     h = await _token(tenant_id, "approver")
     viewer = await _token(tenant_id, "viewer")
@@ -358,6 +369,7 @@ async def test_theme_crud_and_archive(client, tenant_id):
 
 
 async def test_low_contrast_is_rejected_with_a_clear_error(client, tenant_id):
+    """A theme with too little contrast is rejected, naming colors and ratio needed."""
     h = await _token(tenant_id)
     bad = {
         **THEME,
@@ -394,6 +406,7 @@ async def test_low_contrast_is_rejected_with_a_clear_error(client, tenant_id):
     ],
 )
 async def test_unsafe_css_is_rejected(client, tenant_id, css):
+    """Theme CSS that imports, loads remote files or injects script is rejected."""
     h = await _token(tenant_id)
     resp = await client.post("/v1/themes", json={**THEME, "css": css}, headers=h)
     assert resp.status_code == 422
@@ -401,6 +414,7 @@ async def test_unsafe_css_is_rejected(client, tenant_id, css):
 
 
 async def test_unsafe_tokens_are_rejected(client, tenant_id):
+    """Theme font or color tokens that could break out into raw CSS are rejected."""
     h = await _token(tenant_id)
     tokens = {**THEME["tokens"], "fonts": {"body": "x; } body { background: red"}}
     resp = await client.post("/v1/themes", json={**THEME, "tokens": tokens}, headers=h)
@@ -412,6 +426,7 @@ async def test_unsafe_tokens_are_rejected(client, tenant_id):
 
 
 async def test_theme_preview_renders_unsaved_tokens(client, tenant_id):
+    """Theme preview renders unsaved tokens live and still strips unsafe CSS."""
     h = await _token(tenant_id, "viewer")
     resp = await client.post(
         "/v1/themes/preview",

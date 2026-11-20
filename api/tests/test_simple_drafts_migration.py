@@ -70,11 +70,13 @@ def scratch_db():
 
 
 def test_chains_on_the_single_head():
+    """This migration chains after the branch's own prior head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_up_down_up(scratch_db):
+    """The migration's upgrade and downgrade both leave the expected table state."""
     cfg = _cfg()
     upgrade(cfg, REVISION)
     assert _state() == (TABLES, True, True)

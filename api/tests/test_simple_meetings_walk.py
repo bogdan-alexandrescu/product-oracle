@@ -94,6 +94,7 @@ async def set_job(w, **values) -> None:
 
 
 async def test_failed_minutes_job_and_draft_again(client):
+    """Only a decider or owner may redraft minutes after the drafting job failed."""
     w = await world()
     m = await ended(client, w)
     redraft = f"{MEETINGS}/{m['id']}/minutes/redraft"
@@ -119,6 +120,7 @@ async def test_failed_minutes_job_and_draft_again(client):
 
 
 async def test_redraft_refused_by_the_job_switch(client):
+    """Redrafting minutes is refused once meeting minutes are turned off for the PRD."""
     from oracle.docs.models import Document
 
     w = await world()
@@ -134,6 +136,7 @@ async def test_redraft_refused_by_the_job_switch(client):
 
 
 async def test_slow_minutes_job(client):
+    """A minutes job stuck past its time limit reads as slow, with redraft turned off."""
     w = await world()
     m = await ended(client, w)
     await set_job(w, updated_at=datetime.now(UTC) - timedelta(minutes=3))
@@ -142,6 +145,7 @@ async def test_slow_minutes_job(client):
 
 
 async def test_send_without_a_job_answer(client):
+    """Sent minutes keep their written text even if the drafting job answers late."""
     w = await world()
     m = await ended(client, w)
     body = {"summary": "We kept the ledger.", "open_questions": ["Who tells support?"],
@@ -175,6 +179,7 @@ async def test_send_without_a_job_answer(client):
 
 
 async def test_upcoming_lists_ritual_next_review(client):
+    """A ritual's next review lists as upcoming, and starting it advances its due date."""
     w = await world()
     due = (company_time.now() + timedelta(days=3)).replace(microsecond=0)
     async with tenant_session(w.ctx.tenant_id) as s:
@@ -226,6 +231,7 @@ async def ritual_state(w, ritual_id: str) -> tuple[datetime, int]:
 
 
 async def test_ritual_start_owners_only(client):
+    """Only a ritual's owner may start its review meeting from the upcoming list."""
     w = await world()
     ritual_id, due = await ritual(w, owner="approver")
     for who, can in [("owner", True), ("decider", False), ("approver", True), ("viewer", False)]:
@@ -242,6 +248,7 @@ async def test_ritual_start_owners_only(client):
 
 
 async def test_ritual_start_pins_its_due_time(client):
+    """Starting a ritual meeting pins its due time, refusing a stale or missed one."""
     w = await world()
     ritual_id, due = await ritual(w, owner="decider")
     r = await client.post(MEETINGS, json={"prd": PRD, "ritual_id": ritual_id},
@@ -265,6 +272,7 @@ async def test_ritual_start_pins_its_due_time(client):
 
 
 async def test_upcoming_one_row_per_ritual(client):
+    """Upcoming reviews list one row per ritual, even once its meeting has started."""
     w = await world()
     ritual_id, due = await ritual(w, owner="decider")
     far_id, _ = await ritual(w, owner="decider", days=60)  # no horizon: listed, after the soon one
@@ -285,6 +293,7 @@ async def test_upcoming_one_row_per_ritual(client):
 
 
 async def test_approve_in_meeting_publishes_the_one_pager(client):
+    """Approving in a meeting publishes a one-pager's proposed edits like any draft."""
     from tests import test_simple_one_pager_api as op
 
     ctx = await op.world(client)
@@ -312,6 +321,7 @@ async def test_approve_in_meeting_publishes_the_one_pager(client):
 
 
 async def test_withdrawn_in_meeting_is_a_withdrawal(client):
+    """A proposal withdrawn in a meeting is recorded as a withdrawal, not a decision."""
     from tests import test_simple_one_pager_api as op
 
     ctx = await op.world(client)

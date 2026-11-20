@@ -113,6 +113,7 @@ async def messages(client, ctx, d_id, who="commenter") -> list[dict]:
 # protects=criterion 2: a commenter starts an open discussion on a section, a viewer reads it
 # and cannot write; fails_when=the viewer writes or cannot read; no_claim=the screens.
 async def test_a_commenter_starts_an_open_discussion_and_a_viewer_only_reads(client):
+    """An open discussion lets a viewer read it but never write in it or start one."""
     ctx, doc = await company(client)
     d = await start(client, ctx, subject=section(doc), message={"body": SECRET})
     assert d["visibility"] == "open" and d["status"] == "open" and d["origin"] == "discuss"
@@ -146,6 +147,7 @@ async def test_a_commenter_starts_an_open_discussion_and_a_viewer_only_reads(cli
 # exists; fails_when=the owner reads it, or the row carries any key beyond id, visibility,
 # hidden, summary; no_claim=a shared summary's wording.
 async def test_a_private_discussion_is_a_bare_row_for_everyone_else(client):
+    """A private discussion shows outsiders only a bare row, never its title or body."""
     ctx, doc = await company(client)
     d = await private_with_approver(client, ctx, doc, messages=1)
     resp = await client.get(f"/v1/discussions/{d['id']}", headers=ctx.as_("owner"))
@@ -168,6 +170,7 @@ async def test_a_private_discussion_is_a_bare_row_for_everyone_else(client):
 # protects=criterion 4: a mention adds a person to an open discussion; fails_when=the viewer
 # is not added, or is added as a writer; no_claim=the Inbox row (G6).
 async def test_a_mention_makes_a_viewer_a_participant_who_cannot_write(client):
+    """Mentioning a viewer makes them a participant who still cannot write."""
     ctx, doc = await company(client)
     d = await start(client, ctx, subject=section(doc))
     msg = await post(
@@ -187,6 +190,7 @@ async def test_a_mention_makes_a_viewer_a_participant_who_cannot_write(client):
 # mention; fails_when=a non-starter's mention adds someone or stores the message;
 # no_claim=the picker's amber chip (E2E).
 async def test_only_the_starter_mentions_someone_into_a_private_discussion(client):
+    """Only a private discussion's starter can mention someone new into it."""
     ctx, doc = await company(client)
     d = await private_with_approver(client, ctx, doc)
     resp = await client.post(
@@ -207,6 +211,7 @@ async def test_only_the_starter_mentions_someone_into_a_private_discussion(clien
 # protects=criterion 6: removing a person from a private discussion ends their reading;
 # fails_when=they still read it; no_claim=Leave in the UI.
 async def test_a_removed_participant_can_no_longer_read_it(client):
+    """A removed participant loses read access; the starter cannot leave while private."""
     ctx, doc = await company(client)
     d = await private_with_approver(client, ctx, doc)
     resp = await client.delete(
@@ -228,6 +233,7 @@ async def test_a_removed_participant_can_no_longer_read_it(client):
 # protects=criterion 7.1: the starter shares a private discussion's summary on its hidden row;
 # fails_when=the summary shows unshared, or not once shared; no_claim=Oracle's draft (G3).
 async def test_make_open_1_a_shared_summary_shows_on_the_hidden_row(client):
+    """A private summary reaches outsiders only once the starter shares it."""
     ctx, doc = await company(client)
     d = await private_with_approver(client, ctx, doc, messages=3)
     assert d["summary_shared"] is False
@@ -250,6 +256,7 @@ async def test_make_open_1_a_shared_summary_shows_on_the_hidden_row(client):
 # protects=criterion 7.2: only the starter makes a private discussion open; fails_when=another
 # participant opens it; no_claim=whether others agree (the owner decided they are not asked).
 async def test_make_open_2_a_participant_who_is_not_the_starter_is_refused(client):
+    """Only the starter can make a private discussion open, not another participant."""
     ctx, doc = await company(client)
     d = await private_with_approver(client, ctx, doc, messages=3)
     body = await patch(
@@ -263,6 +270,7 @@ async def test_make_open_2_a_participant_who_is_not_the_starter_is_refused(clien
 # protects=criterion 7.3: make open needs the current counts of what it exposes;
 # fails_when=a missing or stale count is accepted, or anything changes; no_claim=the dialog.
 async def test_make_open_3_without_current_counts_nothing_changes(client):
+    """Making a discussion open needs the current counts confirmed, or nothing changes."""
     ctx, doc = await company(client)
     d = await private_with_approver(client, ctx, doc, messages=3)
     starter = await get(client, ctx, d["id"], "commenter")
@@ -293,6 +301,7 @@ async def test_make_open_3_without_current_counts_nothing_changes(client):
 # still gets 403 or the hidden row, the line is missing, or the audit holds message text;
 # no_claim=G5's agent view.
 async def test_make_open_4_with_current_counts_everyone_reads_it(client):
+    """Confirming the right counts opens a private discussion to everyone, kept whole."""
     ctx, doc = await company(client)
     d = await private_with_approver(client, ctx, doc, messages=3)
     out = await patch(
@@ -322,6 +331,7 @@ async def test_make_open_4_with_current_counts_everyone_reads_it(client):
 # protects=criterion 7.5: a rule 3.4.3 discussion and a panel chat are never made open;
 # fails_when=either opens; no_claim=G7's Share as discussion.
 async def test_make_open_5_a_private_finding_or_a_panel_chat_stays_private(client):
+    """A private finding or a panel chat cannot be made open through this route."""
     ctx, doc = await company(client)
     finding = await private_finding(ctx)
     d = await start(client, ctx, subject_kind="gap", subject={"gap_id": finding["gap_id"]})
@@ -348,6 +358,7 @@ async def test_make_open_5_a_private_finding_or_a_panel_chat_stays_private(clien
 # made open keeps its status and payload; fails_when=making it open rewrites or drops its
 # changes; no_claim=from_private on staged changes (G4 One staging list is not on main).
 async def test_make_open_6_changes_recorded_before_stay_as_they_were(client):
+    """A staged change recorded before a discussion opens keeps its own status."""
     ctx, doc = await company(client)
     d = await private_with_approver(client, ctx, doc, messages=1)
     payload = {"section_key": "problem", "instruction": "Name the drop-off"}
@@ -407,6 +418,7 @@ async def private_finding(ctx: Ctx) -> dict[str, str]:
 # learns it exists; fails_when=a non-author starts, sees or is added to it;
 # no_claim=Oracle's reading of the finding (G2).
 async def test_a_private_finding_discussion_is_the_authors_alone(client):
+    """A private finding's discussion is the author's alone till the finding is shared."""
     ctx, _doc = await company(client)
     finding = await private_finding(ctx)
     subject = {"gap_id": finding["gap_id"]}
@@ -450,6 +462,7 @@ async def test_a_private_finding_discussion_is_the_authors_alone(client):
 # fails_when=a message lands in a closed discussion or a stale PATCH wins; no_claim=Reopen in
 # the UI.
 async def test_closed_discussions_and_stale_versions_are_refused(client):
+    """A closed discussion refuses a new message and a stale edit, until reopened."""
     ctx, doc = await company(client)
     d = await start(client, ctx, subject=section(doc))
     # Any approver who can read it closes it, not a commenter who did not start it.
@@ -470,6 +483,7 @@ async def test_closed_discussions_and_stale_versions_are_refused(client):
 # protects=criterion 10: a discussion follows its section across versions; fails_when=it is
 # not listed on the new version's section; no_claim=the "Started on v1" marker (E2E).
 async def test_a_section_discussion_follows_the_section_to_the_next_version(client):
+    """A section's discussion follows that section into the document's next version."""
     ctx, doc = await company(client)
     d = await start(client, ctx, subject=section(doc, version=1))
     v2 = draft("prd_v1.md").replace("draft for review", "second draft")
@@ -501,6 +515,7 @@ async def test_a_section_discussion_follows_the_section_to_the_next_version(clie
 # nothing (AC1); fails_when=a run token lists discussions or an oracle:read client posts;
 # no_claim=G5's own-run tool.
 async def test_run_tokens_and_read_only_clients_are_refused(client, runtime):  # noqa: F811
+    """A run token or a read-only client cannot read or write discussions."""
     ctx, doc = await company(client)
     d = await start(client, ctx, subject=section(doc))
     token = await run_token(
@@ -531,6 +546,7 @@ async def test_run_tokens_and_read_only_clients_are_refused(client, runtime):  #
 # protects=criterion 12: every write is audited with ids and lengths, never message text;
 # fails_when=an event is missing or holds text; no_claim=the audit screen.
 async def test_every_write_is_audited_without_message_text(client):
+    """Only a message's own author edits or deletes it, and a delete clears its text."""
     ctx, doc = await company(client)
     d = await start(client, ctx, subject=section(doc), message={"body": SECRET})
     m = await post(client, ctx, d["id"], "approver", SECRET + " Yes.")
@@ -592,6 +608,7 @@ async def test_every_write_is_audited_without_message_text(client):
 # id the directory does not return is refused; fails_when=an inactive member or another
 # company's person is mentioned; no_claim=the picker's search (E2E).
 async def test_mentions_come_from_the_member_directory(client):
+    """A mention must name a current member of the same company, not an outsider."""
     ctx, doc = await company(client)
     other, _ = await company(client)
     people = (
@@ -627,6 +644,7 @@ async def test_mentions_come_from_the_member_directory(client):
 # not, and people are the distinct writers; fails_when=a deleted or system line is counted, or
 # a writer twice; no_claim=the warning's wording (E2E).
 async def test_exposure_counts(client):
+    """The exposure count skips a deleted message but still counts an Oracle reply."""
     ctx, doc = await company(client)
     d = await private_with_approver(client, ctx, doc, messages=3)
     gone = await post(client, ctx, d["id"], "approver", "Scratch that")
@@ -647,6 +665,7 @@ async def test_exposure_counts(client):
 # earliest-added remaining approver or above becomes the starter, audited; fails_when=nobody
 # can manage a discussion whose starter is gone; no_claim=member removal itself.
 async def test_a_removed_starter_hands_the_discussion_to_an_approver(client):
+    """Disabling a discussion's starter hands it to an approver who can manage it."""
     ctx, doc = await company(client)
     d = await private_with_approver(client, ctx, doc)
     resp = await client.post(
@@ -664,6 +683,7 @@ async def test_a_removed_starter_hands_the_discussion_to_an_approver(client):
 # checkpoint of another run is accepted or the key holds the checkpoint id; no_claim=the run
 # page's sheet (E2E).
 async def test_a_checkpoint_discussion_is_keyed_by_the_run_and_the_checkpoint_kind(client):
+    """A checkpoint discussion's key ties its run to its checkpoint kind, not any pair."""
     ctx, _doc = await company(client)
     async with tenant_session(ctx.tenant_id) as s:
         run, other = Run(flow="baseline_to_prd"), Run(flow="baseline_to_prd")

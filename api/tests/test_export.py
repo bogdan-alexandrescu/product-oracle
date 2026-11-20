@@ -162,6 +162,7 @@ def _text(html: str) -> str:
 
 
 async def test_html_renders_all_sections_in_order(client, fx):
+    """An HTML export renders every section in order, each under its own heading."""
     resp = await _export(client, fx, "html")
     assert resp.headers["content-type"].startswith("text/html")
     assert 'filename="checkout-redesign-v2.html"' in resp.headers["content-disposition"]
@@ -179,6 +180,7 @@ async def test_html_renders_all_sections_in_order(client, fx):
 
 
 async def test_html_citations_are_numbered_sources_in_the_appendix(client, fx):
+    """An HTML export numbers citations by first use, each source listed once."""
     # No theme chosen: the built-in default theme (clean-document for a PRD), whose body
     # carries no evidence markers and whose Sources and data points appendix lists them.
     html = (await _export(client, fx, "html")).text
@@ -208,6 +210,7 @@ async def test_html_citations_are_numbered_sources_in_the_appendix(client, fx):
 
 
 async def test_html_version_banner(client, fx):
+    """A version's export banner shows its number, approval status and date."""
     html = (await _export(client, fx, "html", n=2)).text
     banner = _text(html[html.index("<header") : html.index("</header>")])
     assert "Version 2" in banner
@@ -224,6 +227,7 @@ async def test_html_version_banner(client, fx):
 
 
 async def test_html_stamps_hold_together(client, fx):
+    """A date and time stamp in an export never wraps between its day and zone."""
     # PR 1300 round 3: as on the slides, a stamp's day and its time each stay on one line.
     nb = "\u00a0"
     html = (await _export(client, fx, "html", n=2)).text
@@ -239,6 +243,7 @@ async def test_html_stamps_hold_together(client, fx):
 
 
 async def test_html_is_self_contained_and_escapes_raw_html(client, fx):
+    """An HTML export inlines its style, drops scripts, and escapes raw HTML."""
     html = (await _export(client, fx, "html")).text
     assert "<style>" in html and "@page" in html  # stylesheet inlined
     assert "<link" not in html
@@ -247,6 +252,7 @@ async def test_html_is_self_contained_and_escapes_raw_html(client, fx):
 
 
 async def test_export_by_document_id_and_404s(client, fx):
+    """Export works by document id too, and 404s on an unknown document or version."""
     await _export(client, fx, "html", doc=str(fx.document_id))
     missing_doc = await client.get(URL.format(doc="nope", n=1), headers=fx.headers)
     assert missing_doc.status_code == 404
@@ -259,6 +265,7 @@ async def test_export_by_document_id_and_404s(client, fx):
 
 
 async def test_export_is_tenant_scoped(client, fx):
+    """A document export is refused for a token belonging to another tenant."""
     from tests.conftest import make_tenant
 
     other = await make_tenant("Other Co")
@@ -284,6 +291,7 @@ requires_pdf = pytest.mark.skipif(
 
 @requires_pdf
 async def test_pdf_is_valid_and_matches_html(client, fx):
+    """A PDF export is a real PDF with the same banner and sources as the HTML."""
     resp = await _export(client, fx, "pdf")
     assert resp.headers["content-type"] == "application/pdf"
     assert 'filename="checkout-redesign-v2.pdf"' in resp.headers["content-disposition"]
@@ -325,6 +333,8 @@ async def test_pdf_is_valid_and_matches_html(client, fx):
 
 
 async def test_pdf_without_system_libraries_is_503(client, fx, monkeypatch):
+    """Exporting a PDF with no PDF library installed fails with a 503, not a crash."""
+
     def missing():
         raise PdfUnavailable("PDF export is unavailable: no Pango")
 
@@ -361,6 +371,8 @@ async def test_markdown_is_stored_markdown_without_a_banner(client, fx):
 
 
 def test_markdown_without_front_matter_has_no_banner():
+    """A markdown export with no front matter has no banner, dates spelled out."""
+
     @dataclass
     class _V:
         number: int = 3

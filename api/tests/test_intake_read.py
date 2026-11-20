@@ -92,6 +92,7 @@ async def _jobs(ctx) -> list[LlmJob]:
 # swarmcloud; fails_when=a pool job is queued, the run is someone else's, or the price is
 # not analyst at quick; no_claim=what SwarmCloud does with it.
 async def test_create_starts_one_quick_run_as_the_author_and_no_job(client):
+    """Creating an intake starts one quick read run as its author, with no job too."""
     ctx = await company()
     _runtime()
     intake_id = await _new(client, ctx)
@@ -113,6 +114,7 @@ async def test_create_starts_one_quick_run_as_the_author_and_no_job(client):
 # a run nor a job, and the summary says off; fails_when=either is created;
 # no_claim=the Settings screen.
 async def test_off_per_intake_or_for_the_company_starts_nothing(client):
+    """Turning off reads per intake or for the whole company starts nothing at all."""
     ctx = await company()
     _runtime()
     intake_id = await _new(client, ctx, ai_extraction=False)
@@ -130,6 +132,7 @@ async def test_off_per_intake_or_for_the_company_starts_nothing(client):
 # protects=Q2: the company switch defaults on, only owners change it, and it takes a boolean
 # only; fails_when=an approver flips it or a string is stored; no_claim=the audit text.
 async def test_the_company_switch_is_on_by_default_and_owners_only(client):
+    """The company's AI-read switch defaults on and only an owner may turn it off."""
     ctx = await company()
     url = "/v1/settings/intake_ai_read"
     got = await client.get(url, headers=ctx.as_("owner"))
@@ -147,6 +150,7 @@ async def test_the_company_switch_is_on_by_default_and_owners_only(client):
 # swarmcloud with what was added; fails_when=a src:99 ref is kept, results are shared, or the
 # path is not recorded; no_claim=the model's quality.
 async def test_a_finished_run_imports_its_analysis_as_private_inferences(client):
+    """A finished read run imports its findings as inferences private to the author."""
     ctx = await company()
     _runtime(Outcome(artifacts={"analysis.yaml": ANALYSIS}))
     intake_id = await _new(client, ctx)
@@ -176,6 +180,7 @@ async def test_a_finished_run_imports_its_analysis_as_private_inferences(client)
 # snapshot; fails_when=two reads run at once or the old snapshot is read again;
 # no_claim=SwarmCloud confirming the cancel.
 async def test_repin_cancels_the_running_read_and_starts_a_new_one(client):
+    """Repinning an intake cancels its running read and starts a fresh one."""
     ctx = await company()
     _runtime(Outcome(polls=50), Outcome(polls=50))
     intake_id = await _new(client, ctx)
@@ -192,6 +197,8 @@ async def test_repin_cancels_the_running_read_and_starts_a_new_one(client):
 # produced the read and why; fails_when=the read is left failed with no fallback, or the
 # fallback is not said; no_claim=the pool's retry policy.
 async def test_a_read_that_cannot_start_falls_back_to_the_built_in_job(client, fake):
+    """If the agent runtime refuses a read, the built-in extraction job takes over."""
+
     class Refusing(FakeRuntime):
         async def submit(self, spec):
             raise RuntimeUnavailable("agent service unavailable", status=503)
@@ -216,6 +223,7 @@ async def test_a_read_that_cannot_start_falls_back_to_the_built_in_job(client, f
 # nothing and the read falls back to the job; fails_when=a partial import lands or the run's
 # empty result is shown as done; no_claim=the validation message's wording.
 async def test_invalid_analysis_imports_nothing_and_falls_back(client, fake):
+    """An unparsable analysis file imports nothing and falls back to the built-in job."""
     ctx = await company()
     await add_account(ctx.tenant_id, "personal", windows={"five_hour": window(0.2)})
     fake(_answer)
@@ -232,6 +240,7 @@ async def test_invalid_analysis_imports_nothing_and_falls_back(client, fake):
 # imports nothing and notes why; fails_when=findings land on a closed intake;
 # no_claim=the converted case's own wording.
 async def test_a_read_finishing_after_the_intake_closed_imports_nothing(client):
+    """A read that finishes after its intake is archived imports none of its findings."""
     ctx = await company()
     _runtime(Outcome(artifacts={"analysis.yaml": ANALYSIS}, polls=1))
     intake_id = await _new(client, ctx)
@@ -251,6 +260,7 @@ async def test_a_read_finishing_after_the_intake_closed_imports_nothing(client):
 # author one Inbox row, and a success ends it; fails_when=a row after one failure, two rows,
 # a row for someone else, or the row outlives a success; no_claim=the Inbox screen.
 async def test_two_failed_reads_in_a_row_make_one_inbox_row_until_a_success(client):
+    """Repeated failed reads collapse into one inbox row until a read finally succeeds."""
     ctx = await company()
     set_runtime(FakeRuntime({"read": [Outcome(state="failed", error="boom")] * 10}))
     intake_id = await _new(client, ctx)  # no Claude account: the fallback job fails too
@@ -279,6 +289,7 @@ async def test_two_failed_reads_in_a_row_make_one_inbox_row_until_a_success(clie
 # and a run token get 403; fails_when=a non-author starts a read or two run at once;
 # no_claim=the button's placement (lane 2).
 async def test_ai_read_route_roles_and_conflicts(client):
+    """Only the author may trigger a read, and one already running refuses another."""
     from tests.test_mcp import run_token
 
     ctx = await company()
@@ -309,6 +320,7 @@ async def test_ai_read_route_roles_and_conflicts(client):
 # run, and the summary reads the job's state on path job; fails_when=a run is created under
 # the rollback; no_claim=the job's own behaviour (test_intake_jobs).
 async def test_the_rollback_flag_queues_the_old_job(client, monkeypatch):
+    """The rollback setting makes an intake use the old job path instead of a run."""
     ctx = await company()
     monkeypatch.setattr(get_settings(), "intake_read_runtime", "job")
     intake_id = await _new(client, ctx)
@@ -324,6 +336,7 @@ async def test_the_rollback_flag_queues_the_old_job(client, monkeypatch):
 # fails_when=more than 20 start in one tick, or a closed intake gets one;
 # no_claim=the migration SQL (test_intake_read_migration).
 async def test_pending_reads_start_at_most_twenty_per_tick(client):
+    """Starting pending reads is capped at twenty per tick, never flooding the queue."""
     ctx = await company()
     _runtime(*[Outcome(polls=50)] * 30)
     ids = [await _new(client, ctx, ai_extraction=False, title=f"Idea {n}") for n in range(22)]
@@ -351,6 +364,7 @@ async def test_pending_reads_start_at_most_twenty_per_tick(client):
 async def test_a_run_that_cannot_be_created_keeps_the_intake_and_queues_the_job(
     client, monkeypatch
 ):
+    """If a read run cannot be created, the intake survives and the job falls back."""
     from oracle.runs import service as runs_service
 
     async def refuse(*args, **kwargs):
@@ -375,6 +389,7 @@ async def test_a_run_that_cannot_be_created_keeps_the_intake_and_queues_the_job(
 # intake still gets the row; fails_when=a reader with no such intake pays a query for
 # them, or the row is lost; no_claim=the Inbox screen.
 async def test_the_inbox_reads_intake_rows_only_for_a_reader_who_has_one(client):
+    """The inbox lists an intake's read failure only to the reader who owns it."""
     from sqlalchemy import event
 
     from oracle.db import get_engine
@@ -434,6 +449,7 @@ class _SlowRuntime(FakeRuntime):
 # the read's run is submitted after the response; fails_when=POST /v1/intakes awaits the
 # submission (25-28 s on production); no_claim=how long SwarmCloud itself takes.
 async def test_create_answers_before_the_read_is_submitted(client):
+    """Creating an intake answers fast even while its read is still being submitted."""
     ctx = await company()
     set_runtime(_SlowRuntime({"read": []}))
     await make_item(ctx, "commenter", content=PAIN, title="#support thread")
@@ -458,6 +474,8 @@ async def test_create_answers_before_the_read_is_submitted(client):
 # intake row (StaleDataError, a 500 on POST /v1/intakes); fails_when=the second follower
 # raises or queues a second job; no_claim=which follower wins.
 async def test_two_followers_of_a_refused_read_fall_back_once(client, monkeypatch):
+    """Two sessions following a refused read fall back to the job only once."""
+
     class Refusing(FakeRuntime):
         async def submit(self, spec):
             raise RuntimeUnavailable("agent service unavailable", status=503)
@@ -517,6 +535,7 @@ async def _fallen_back(client, ctx, monkeypatch) -> uuid.UUID:
 # fails_when=the second follower's commit raises or the failure is counted twice;
 # no_claim=which follower wins.
 async def test_two_followers_of_a_failed_job_end_the_read_once(client, monkeypatch):
+    """Two sessions noticing a failed job end the read once, counting a single failure."""
     ctx = await company()
     intake_id = await _fallen_back(client, ctx, monkeypatch)
     [job] = await _jobs(ctx)
@@ -542,6 +561,7 @@ async def test_two_followers_of_a_failed_job_end_the_read_once(client, monkeypat
 # committed; fails_when=the caller's earlier, uncommitted work is rolled back with the
 # follower's; no_claim=which follower wins.
 async def test_a_follower_that_loses_the_race_keeps_its_callers_work(client, monkeypatch):
+    """A session that loses the sync race still keeps the work it did beforehand."""
     ctx = await company()
     intake_id = await _refused(client, ctx, monkeypatch)
     async with tenant_session(ctx.tenant_id) as first, tenant_session(ctx.tenant_id) as second:

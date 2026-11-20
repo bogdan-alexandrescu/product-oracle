@@ -108,6 +108,7 @@ def _company_folder(drive: Drive) -> None:
 
 
 async def test_removing_a_shared_drive_deletes_every_members_docs_from_it_on_save(tenant_id, drive):
+    """Removing a shared drive from company settings deletes every member's docs."""
     owner, member = await _people(tenant_id)
     _company_folder(drive)
     assert (await _put(owner, "company_email_domains", ["example.com"])).status_code == 200
@@ -135,6 +136,7 @@ async def test_removing_a_shared_drive_deletes_every_members_docs_from_it_on_sav
 
 
 async def test_removing_a_domain_deletes_every_members_docs_owned_there_on_save(tenant_id, drive):
+    """Removing a company email domain deletes every member's docs owned under it."""
     owner, member = await _people(tenant_id)
     _company_folder(drive)
     domains = ["example.com", "partner.example"]
@@ -159,6 +161,7 @@ async def test_removing_a_domain_deletes_every_members_docs_owned_there_on_save(
 
 
 async def test_resetting_the_domains_deletes_what_they_let_in(tenant_id, drive):
+    """Clearing the company domains deletes every doc that only a domain had let in."""
     owner, _ = await _people(tenant_id)
     _company_folder(drive)
     assert (await _put(owner, "company_email_domains", ["example.com"])).status_code == 200
@@ -170,6 +173,7 @@ async def test_resetting_the_domains_deletes_what_they_let_in(tenant_id, drive):
 
 
 async def test_a_doc_whose_drive_or_owner_is_unknown_is_deleted_then_read_again(tenant_id, drive):
+    """A doc with no known owner or drive is deleted on narrowing, then read again."""
     owner, _ = await _people(tenant_id)
     _company_folder(drive)
     domains = ["example.com", "partner.example"]
@@ -190,6 +194,7 @@ async def test_a_doc_whose_drive_or_owner_is_unknown_is_deleted_then_read_again(
 
 
 async def test_include_and_flag_deletes_nothing_on_save(tenant_id, drive, monkeypatch):
+    """Include-and-flag keeps outside docs on save instead of deleting them."""
     monkeypatch.setenv("ORACLE_DRIVE_DOCS_OWNED_OUTSIDE", "include_and_flag")
     get_settings.cache_clear()
     owner, _ = await _people(tenant_id)
@@ -210,6 +215,7 @@ async def test_include_and_flag_deletes_nothing_on_save(tenant_id, drive, monkey
      "protonmail.com", "gmx.de", "gmx.net", "gmx.at"],
 )  # fmt: skip
 async def test_public_mail_providers_are_refused_as_company_domains(tenant_id, domain):
+    """A public mail provider cannot be set as a company email domain."""
     owner, _ = await _people(tenant_id)
     resp = await _put(owner, "company_email_domains", ["example.com", domain])
     assert resp.status_code == 422, resp.text
@@ -217,6 +223,7 @@ async def test_public_mail_providers_are_refused_as_company_domains(tenant_id, d
 
 
 async def test_company_domains_on_a_provider_name_are_not_refused(tenant_id):
+    """A domain that only contains a public provider's name is still accepted."""
     owner, _ = await _people(tenant_id)
     for domain in ("live.example.com", "mail.example.com", "gmx-partners.com"):
         resp = await _put(owner, "company_email_domains", [domain])

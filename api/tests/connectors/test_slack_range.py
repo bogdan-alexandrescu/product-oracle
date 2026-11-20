@@ -60,6 +60,7 @@ def with_thread(world: SlackWorld) -> tuple[str, str]:
     ],
 )
 async def test_validate_refuses_a_bad_until(config, match):
+    """An until date before since, or the wrong format, is refused clearly."""
     world = SlackWorld()
     with pytest.raises(ConnectorConfigError, match=match):
         await connector(world).validate({"channels": ["C0PRODUCT"], **config}, CREDENTIAL)
@@ -67,11 +68,13 @@ async def test_validate_refuses_a_bad_until(config, match):
 
 
 async def test_validate_accepts_a_range_of_one_day():
+    """A Slack date range of exactly one day, since equal to until, is valid."""
     config = {"channels": ["C0PRODUCT"], "since": "2025-10-05", "until": "2025-10-05"}
     await connector(SlackWorld()).validate(config, CREDENTIAL)
 
 
 async def test_first_sync_reads_up_to_the_end_of_until():
+    """A first sync with an until bound reads only up to the end of that day."""
     world = SlackWorld()
     world.ignore_bounds = True  # the connector's own filter must hold too
     config = {"channels": ["C0PRODUCT"], "since": "2025-10-02", "until": "2025-10-05"}
@@ -84,6 +87,7 @@ async def test_first_sync_reads_up_to_the_end_of_until():
 
 
 async def test_until_alone_keeps_everything_before_it():
+    """An until date alone keeps every message up to it, excludes anything later."""
     world = SlackWorld()
     events = await collect(connector(world), {"channels": ["C0PRODUCT"], "until": "2025-10-05"})
     (call,) = history_calls(world)
@@ -92,6 +96,7 @@ async def test_until_alone_keeps_everything_before_it():
 
 
 async def test_replies_after_until_are_clipped_from_a_thread_started_inside_it():
+    """A thread's content is clipped at until, even for a reply inside the same thread."""
     world = SlackWorld()
     parent_ts, reply_ts = with_thread(world)
     inside = ts("2025-10-05", 18)
@@ -111,6 +116,7 @@ async def test_replies_after_until_are_clipped_from_a_thread_started_inside_it()
 
 
 async def test_later_syncs_never_fetch_past_until():
+    """Later incremental syncs never fetch anything past the configured until date."""
     world = SlackWorld()
     parent_ts, _ = with_thread(world)
     config = {"channels": ["C0PRODUCT"], "until": "2025-10-05"}
@@ -138,6 +144,7 @@ async def test_later_syncs_never_fetch_past_until():
 
 
 async def test_a_reply_inside_the_range_still_updates_its_thread():
+    """A reply still inside the until boundary still updates its thread on resync."""
     world = SlackWorld()
     parent_ts, _ = with_thread(world)  # replied to on 2025-10-08 at 12:00
     config = {"channels": ["C0PRODUCT"], "until": "2025-10-08"}
@@ -153,6 +160,7 @@ async def test_a_reply_inside_the_range_still_updates_its_thread():
 
 
 def test_scope_follows_the_range():
+    """A Slack connector's scope mirrors its configured channels and date range."""
     config = {"channels": ["C0PRODUCT"], "since": "2025-10-02", "until": "2025-10-05"}
     assert SlackConnector().scope(config) == Scope(
         groups=frozenset({"C0PRODUCT"}),

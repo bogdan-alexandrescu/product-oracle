@@ -57,6 +57,7 @@ def days(body: dict) -> list[tuple[str, str, str | None]]:
 
 
 async def test_prd_milestones_are_read_only_key_dates(client):
+    """A PRD's milestones are read-only key dates that move when its version changes."""
     ctx = await make_ctx()
     ids = await seed(ctx, items=("f-01", "f-03"))
     async with tenant_session(ctx.tenant_id) as s:
@@ -136,6 +137,7 @@ async def _items(ctx, *rows: tuple[str, str, str]) -> None:
 
 
 async def test_item_takes_its_own_bet_not_the_first_naming_its_title(client, monkeypatch):
+    """An item's linked bet is the one that is really its own, not the first one named."""
     ctx, sids = await _drawn(client, monkeypatch, "bets-1", "bets-2")
     await _items(ctx, ("alerts", "Alerts", "f-02"), ("alerts-too", "Alerts", "build"))
     items = by_key(await get(client, ctx, "owner"))
@@ -146,6 +148,7 @@ async def test_item_takes_its_own_bet_not_the_first_naming_its_title(client, mon
 
 
 async def test_roadmap_read_builds_a_one_pager_only_for_a_drawn_bet(client, monkeypatch):
+    """Reading the roadmap builds a one-pager only for a drawn bet, and only once."""
     calls: list[uuid.UUID] = []
     real = one_pager.built
 
@@ -170,6 +173,7 @@ async def test_roadmap_read_builds_a_one_pager_only_for_a_drawn_bet(client, monk
 
 
 async def test_bet_drawn_without_its_prd_still_gives_its_item_a_flow(client, monkeypatch):
+    """A bet drawn without its own PRD still gives its roadmap item a flow link."""
     ctx, sids = await _drawn(client, monkeypatch, "bets-2")
     async with tenant_session(ctx.tenant_id) as s:
         await s.execute(

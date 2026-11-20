@@ -121,6 +121,7 @@ def _populate() -> dict[str, uuid.UUID]:
 
 
 def test_upgrade_lapses_approvals_of_members_demoted_before_it(scratch_db):
+    """The disable migration lapses only approvals from members already demoted."""
     cfg = _cfg()
     upgrade(cfg, "0014_review")
     ids = _populate()

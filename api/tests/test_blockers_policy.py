@@ -48,6 +48,7 @@ COMPLIANT = [
     + [(t, "unauthorized_messaging") for t in MESSAGING],
 )
 def test_the_screen_flags_prohibited_tactics(text, category):
+    """The policy screen flags evasion, identity abuse and unauthorized messaging."""
     flags = policy.screen(text)
     assert flags, text
     assert category in {f.category for f in flags}, (text, flags)
@@ -55,10 +56,12 @@ def test_the_screen_flags_prohibited_tactics(text, category):
 
 @pytest.mark.parametrize("text", COMPLIANT)
 def test_the_screen_leaves_compliant_options_alone(text):
+    """The policy screen leaves genuinely compliant option text unflagged."""
     assert policy.screen(text) == []
 
 
 def test_every_suggested_compliant_path_passes_the_screen():
+    """Every suggested compliant path's own wording passes the policy screen."""
     for kind in policy.LIMIT_KINDS:
         for path in policy.compliant_paths(kind):
             assert policy.screen(f"{path.label}. {path.guidance}") == [], (kind, path)
@@ -86,6 +89,7 @@ def test_limit_kinds_are_separated_with_their_own_paths():
 
 
 async def test_four_third_party_limits_are_classified_separately(client):
+    """Each third-party limit kind is listed and shown with its own compliant paths."""
     ctx = await make_ctx()
     kinds = {
         "capacity": "Posting is capped at 50 an hour per account",
@@ -127,6 +131,7 @@ async def test_four_third_party_limits_are_classified_separately(client):
     ],
 )
 async def test_a_prohibited_option_is_flagged_and_can_never_be_chosen(client, title, category):
+    """A prohibited option is auto-rejected and can never be selected or fallback."""
     ctx = await make_ctx()
     b = (await create_blocker(client, ctx))["blocker"]
     resp = await add_option(
@@ -158,6 +163,7 @@ async def test_a_prohibited_option_is_flagged_and_can_never_be_chosen(client, ti
 
 
 async def test_hiding_a_tactic_in_the_details_is_flagged_too(client):
+    """A prohibited tactic hidden in the details field is flagged too."""
     ctx = await make_ctx()
     b = (await create_blocker(client, ctx))["blocker"]
     resp = await add_option(client, ctx, b["id"], details={"fallback": IDENTITY[1]})
@@ -165,6 +171,7 @@ async def test_hiding_a_tactic_in_the_details_is_flagged_too(client):
 
 
 async def test_a_selected_option_cannot_be_edited_into_a_prohibited_one(client):
+    """A selected option cannot be edited to add a prohibited tactic or reworded."""
     ctx = await make_ctx()
     b = (await create_blocker(client, ctx))["blocker"]
     opt = await approve_compliance(client, ctx, (await add_option(client, ctx, b["id"])).json())
@@ -189,6 +196,7 @@ async def test_a_selected_option_cannot_be_edited_into_a_prohibited_one(client):
 
 
 async def test_the_recommendation_is_always_a_compliant_option(client):
+    """The recommended option is always compliant, never the best-scoring evader."""
     ctx = await make_ctx()
     b = (await create_blocker(client, ctx))["blocker"]
     # The evasive option claims the best feasibility; it must still lose.
@@ -259,12 +267,14 @@ STILL_COMPLIANT = [
 
 @pytest.mark.parametrize(("text", "category"), NEGATION_DOES_NOT_HIDE + SYNONYMS)
 def test_negations_and_synonyms_are_screened(text, category):
+    """The policy screen still flags negated phrasing and synonyms for a tactic."""
     flags = policy.screen(text)
     assert category in {f.category for f in flags}, (text, flags)
 
 
 @pytest.mark.parametrize("text", STILL_COMPLIANT)
 def test_a_tactic_named_only_to_rule_it_out_is_not_flagged(text):
+    """Naming a tactic only to rule it out is not flagged by the policy screen."""
     assert policy.screen(text) == [], text
 
 

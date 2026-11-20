@@ -58,6 +58,7 @@ def runtime():
     ],
 )
 def test_recognises_unknown_that_is_part_of_the_work(text):
+    """An answer that makes finding something out part of the work is recognized."""
     assert discovery.is_discovery(text)
 
 
@@ -78,10 +79,12 @@ def test_recognises_unknown_that_is_part_of_the_work(text):
     ],
 )
 def test_other_answers_are_not_work(text):
+    """An answer that treats a fact as already known is never read as work."""
     assert not discovery.is_discovery(text)
 
 
 def test_the_requirement_names_what_to_find_out():
+    """The requirement text names exactly what the gap needs found out."""
     assert discovery.requirement_for("third_party_policy", STATEMENT) == (
         "Find out the platform's policy and API limits"
     )
@@ -122,6 +125,7 @@ async def _brief_with_work(client, ctx, kind: str = "answer"):
 
 @pytest.mark.parametrize("kind", ["answer", "dont_know"])
 async def test_the_answer_clears_the_draft_gate_and_becomes_work(client, kind):
+    """An honest unknown clears the draft gate and becomes tracked work."""
     ctx = await company()
     intake_id, gap, question, given = await _brief_with_work(client, ctx, kind)
     assert given["gap"]["status"] == "answered"
@@ -145,6 +149,7 @@ async def test_the_answer_clears_the_draft_gate_and_becomes_work(client, kind):
 
 
 async def test_a_bare_unknown_still_holds_the_draft(client):
+    """A bare unknown, not tied to the work, still blocks the draft."""
     ctx = await company()
     out = await intake_with_source(client, ctx)
     intake_id = out["intake"]["id"]
@@ -157,6 +162,7 @@ async def test_a_bare_unknown_still_holds_the_draft(client):
 
 
 async def test_a_known_fact_with_testing_planned_is_not_work(client):
+    """A known fact with testing planned is not treated as unknown work."""
     ctx = await company()
     out = await intake_with_source(client, ctx)
     intake_id = out["intake"]["id"]
@@ -226,12 +232,14 @@ def _work(answer_id: str) -> list[discovery.Work]:
 
 
 def test_the_check_takes_a_requirement_cited_to_the_answer():
+    """A draft that cites its required discovery to the answer has no problem."""
     a = str(uuid.uuid4())
     assert discovery.draft_problems(_draft(a, PLANNED), _work(a)) == []
 
 
 @pytest.mark.parametrize("body", [AS_BLOCKER, BLOCKED_LINE])
 def test_the_check_refuses_a_draft_that_blocks_on_it(body):
+    """A draft that lists its required discovery as a blocker is refused."""
     a = str(uuid.uuid4())
     problems = discovery.draft_problems(_draft(a, body), _work(a))
     assert [p.code for p in problems] == ["discovery_as_blocker"]
@@ -245,6 +253,7 @@ def test_the_check_refuses_a_draft_that_blocks_on_it(body):
 
 
 def test_the_check_takes_a_requirement_that_mentions_blocking_something_else():
+    """A requirement that merely mentions blocking something else is allowed."""
     a = str(uuid.uuid4())
     body = [
         "## Requirements {#requirements}",
@@ -256,12 +265,14 @@ def test_the_check_takes_a_requirement_that_mentions_blocking_something_else():
 
 
 def test_the_check_refuses_a_front_matter_blocker():
+    """A draft that lists its required discovery as a front matter blocker is refused."""
     a = str(uuid.uuid4())
     problems = discovery.draft_problems(_draft(a, PLANNED, blockers=["a1"]), _work(a))
     assert [p.code for p in problems] == ["discovery_as_blocker"]
 
 
 def test_the_check_refuses_a_draft_that_leaves_it_out():
+    """A draft that leaves out a required discovery item is refused."""
     a = str(uuid.uuid4())
     other = str(uuid.uuid4())
     problems = discovery.draft_problems(_draft(other, PLANNED), _work(a))
@@ -275,6 +286,7 @@ def test_the_check_refuses_a_draft_that_leaves_it_out():
 
 
 async def test_a_draft_that_blocks_on_it_is_refused(client, runtime):
+    """A run's drafted PRD is refused if it lists required discovery as a blocker."""
     ctx = await company()
     intake_id, _gap, _question, given = await _brief_with_work(client, ctx)
     run_id = (await _create_run(client, ctx, intake_id)).json()["id"]
@@ -290,6 +302,7 @@ async def test_a_draft_that_blocks_on_it_is_refused(client, runtime):
 
 
 async def test_a_malformed_pinned_answer_id_is_skipped(client, runtime):
+    """A malformed pinned answer id is skipped rather than breaking the check."""
     ctx = await company()
     intake_id, _gap, _question, given = await _brief_with_work(client, ctx)
     run_id = (await _create_run(client, ctx, intake_id)).json()["id"]
@@ -302,6 +315,7 @@ async def test_a_malformed_pinned_answer_id_is_skipped(client, runtime):
 
 
 async def test_the_writer_is_told_unknowns_are_work(client, runtime):
+    """The writer is told, in its prompt, that unknowns become work, not blockers."""
     ctx = await company()
     intake_id, *_ = await _brief_with_work(client, ctx)
     run_id = (await _create_run(client, ctx, intake_id)).json()["id"]
@@ -328,6 +342,7 @@ ITEMS = [
     "blocker", ["find-limits", "find-out-the-platform-s-policy-and-api-limits", "answer"]
 )
 def test_the_items_check_refuses_a_discovery_item_as_a_blocker(blocker):
+    """A roadmap item cannot list a needed discovery item as its blocker."""
     a = str(uuid.uuid4())
     key = a if blocker == "answer" else blocker
     items = [ITEMS[0], {**ITEMS[1], "blockers": [key]}]
@@ -336,12 +351,14 @@ def test_the_items_check_refuses_a_discovery_item_as_a_blocker(blocker):
 
 
 def test_the_items_check_takes_a_discovery_item_depended_on():
+    """A roadmap item may depend on a needed discovery item, just not block on it."""
     a = str(uuid.uuid4())
     items = [ITEMS[0], {**ITEMS[1], "blockers": ["vendor-contract"]}]
     assert discovery.items_problems(items, _work(a)) == []
 
 
 async def test_a_roadmap_item_blocked_on_the_discovery_is_refused(client, runtime):
+    """A submitted roadmap item is refused if it blocks on required discovery."""
     ctx = await company()
     intake_id, _gap, _question, given = await _brief_with_work(client, ctx)
     answer_id = given["answer"]["id"]

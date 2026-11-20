@@ -26,6 +26,7 @@ RULES = (
 
 
 def test_job_prompts_that_write_text_are_new_versions_with_the_rules():
+    """New prompt versions carry the named-code rules; old runs keep their own version."""
     # refinement_batch.v2 is main's discussion-instructions version; the rules go in v3.
     versions = {"refinement": "v2", "refinement_batch": "v3", "review_comments": "v3"}
     for kind, version in versions.items():
@@ -48,6 +49,7 @@ def _prompt(flow_key: str, segment: str, role: str, *, last: bool = True) -> str
 
 
 def test_drafting_and_note_prompts_carry_the_named_code_rules():
+    """Every drafting and note prompt in the main flow repeats the named-code rules."""
     flow = flows.FLOWS["baseline_to_prd"]
     for seg in flow.segments:
         for i, role in enumerate(seg.roles):
@@ -80,6 +82,7 @@ def test_the_roadmap_items_prompt_does_not_carry_the_named_code_rules():
 
 
 def test_named_first_use_and_lists_pass():
+    """A code is fine unnamed if already named nearby, even in a list or heading."""
     body = (
         "F-28 Retire the legacy deploy path comes first. F-28 frees the old hosts.\n\n"
         "The failed delivery flow (F-34) takes the rest.\n\n"
@@ -90,6 +93,7 @@ def test_named_first_use_and_lists_pass():
 
 
 def test_a_bare_first_use_and_a_run_of_codes_are_found():
+    """A bare code on first use, or an unnamed run of codes in a list, gets flagged."""
     body = "This needs F-28 first.\n\nThen F-31, F-32 and F-33 ship together."
     found = named_codes.findings(body)
     assert found.unnamed == ["F-28"]
@@ -100,6 +104,7 @@ def test_a_bare_first_use_and_a_run_of_codes_are_found():
 
 
 def test_undashed_goal_requirement_and_milestone_codes_are_checked():
+    """Goal, requirement and milestone codes are checked like feature codes are."""
     body = "This serves G1 first and needs R1.\n\nG2, R2 and M2 land together."
     found = named_codes.findings(body)
     assert found.unnamed == ["G1", "R1"]
@@ -182,6 +187,7 @@ def test_the_prompt_puts_a_prose_name_in_brackets():
 
 
 def test_the_warning_says_plainly_which_codes_lack_names():
+    """The unnamed-code warning names the section, the code, and how to fix it."""
     md = replace(DRAFT, "Calendar sync may lag.", f"Calendar sync may lag until M3 {MILESTONE}.")
     [warning] = named_codes.check(parse_draft(md).sections)
     assert warning.code == "unnamed_code"
@@ -199,6 +205,7 @@ FIXTURE = replace(
 
 
 def test_check_flags_sections_by_rule():
+    """Each rule's warning is tied to the section it found the problem in."""
     draft = parse_draft(FIXTURE)
     warnings = named_codes.check(draft.sections)
     assert [(w.code, w.section_keys) for w in warnings] == [
@@ -210,6 +217,7 @@ def test_check_flags_sections_by_rule():
 
 
 async def test_a_run_draft_with_bare_codes_imports_with_warnings(client):
+    """Importing a run's draft keeps bare-code warnings but does not fail the import."""
     from oracle.auth.deps import Principal
     from oracle.docs import service as docs_service
 
@@ -228,6 +236,7 @@ async def test_a_run_draft_with_bare_codes_imports_with_warnings(client):
 
 
 async def test_a_persons_import_is_not_checked(client):
+    """A person's own import is not checked for unnamed or unlisted codes."""
     ctx = await setup(client)
     from tests.review_v2_helpers import import_md
 

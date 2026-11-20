@@ -36,6 +36,7 @@ async def track_of(client, auth) -> dict:
 
 
 async def test_an_accepted_prd_starts_a_track(client, owner, runtime):  # noqa: F811
+    """A track can start only from an approved PRD, not a draft, and only once."""
     tenant_id, auth = owner
     await approved_prd(client, auth, approve=False)
     # A draft PRD cannot start a track.
@@ -96,6 +97,7 @@ async def test_the_publish_hook_starts_a_track(client, owner):  # noqa: F811
 
 
 async def test_milestone_dates_need_verified_bases(client, owner, runtime):  # noqa: F811
+    """A milestone gets a target date only when a verified basis supports it."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)
@@ -174,6 +176,7 @@ async def test_milestone_dates_need_verified_bases(client, owner, runtime):  # n
 
 
 async def test_schedule_bases(client, owner):  # noqa: F811
+    """A schedule basis linked to a tracker record must agree with its target date."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     day = (TODAY + timedelta(days=10)).isoformat()
@@ -208,6 +211,7 @@ async def test_schedule_bases(client, owner):  # noqa: F811
 
 
 async def test_schedule_bases_list_in_the_order_they_were_recorded(client, owner):  # noqa: F811
+    """Schedule bases list in the order they were recorded, not by today's date."""
     # sched-order: one order whatever today is (it was supports_date then reference, so a
     # basis dated today + n swapped places with ENG-412's fixed Nov 30 as the days went by).
     _, auth = owner
@@ -222,6 +226,7 @@ async def test_schedule_bases_list_in_the_order_they_were_recorded(client, owner
 
 
 async def test_read_only_alignment_and_drift(client, owner, runtime):  # noqa: F811
+    """Tracker dates later or earlier than a milestone both count as drift."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)
@@ -294,6 +299,7 @@ async def test_read_only_alignment_and_drift(client, owner, runtime):  # noqa: F
 
 
 async def test_blocked_and_stale_items_put_a_track_at_risk(client, owner, runtime):  # noqa: F811
+    """Clearing a blocker can leave the item and what depends on it stale."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await seed_baseline(tenant_id)
@@ -319,6 +325,7 @@ async def test_blocked_and_stale_items_put_a_track_at_risk(client, owner, runtim
 
 
 async def test_monitoring_records_change_events_only_on_change(client, owner, runtime):  # noqa: F811
+    """A track logs a change event only when monitoring finds something changed."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)
@@ -362,6 +369,7 @@ async def test_monitoring_records_change_events_only_on_change(client, owner, ru
 
 
 async def test_tracker_writes_stay_behind_a_disabled_gate(client, owner, runtime, monkeypatch):  # noqa: F811
+    """Tracker pushes stay blocked unless two-way sync is explicitly enabled."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await seed_baseline(tenant_id)
@@ -394,6 +402,7 @@ async def test_tracker_writes_stay_behind_a_disabled_gate(client, owner, runtime
 
 
 async def test_track_patch_and_roles(client, owner, runtime):  # noqa: F811
+    """Monitoring a track leaves its lock version alone, so edits stay in sync."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)
@@ -417,6 +426,7 @@ async def test_track_patch_and_roles(client, owner, runtime):  # noqa: F811
 
 
 async def test_track_routes_are_company_scoped(client, owner, runtime):  # noqa: F811
+    """Every track, milestone and schedule-basis route is scoped to its own company."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)
@@ -465,6 +475,7 @@ async def test_track_routes_are_company_scoped(client, owner, runtime):  # noqa:
 
 
 async def test_patches_refuse_nulls_and_duplicate_names(client, owner, runtime):  # noqa: F811
+    """A track or milestone patch refuses null fields and duplicate names."""
     _, auth = owner
     await approved_prd(client, auth)
     await built_roadmap(client, auth, runtime)

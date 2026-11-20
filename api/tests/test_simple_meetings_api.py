@@ -147,6 +147,7 @@ async def meeting_decisions(w: World) -> list[Decision]:
     [("owner", 201), ("decider", 201), ("approver", 403), ("commenter", 403), ("viewer", 403)],
 )
 async def test_start_permissions(client, who, code):
+    """Only an owner or decider may start a review meeting; others get refused."""
     w = await world(reviewers=("reviewer2",))
     r = await client.get(f"{MEETINGS}/options", params={"prd": PRD}, headers=w.ctx.as_(who))
     assert r.status_code == 200, r.text
@@ -205,6 +206,7 @@ async def test_decisions_page_meeting_lists_its_comments(client):
 
 
 async def test_every_action_is_a_meeting_decision(client):
+    """Every change decided in a meeting is recorded as a decision; a comment never is."""
     w = await world()
     m = await start(client, w)
     sid = m["session_id"]
@@ -302,6 +304,7 @@ async def test_every_action_is_a_meeting_decision(client):
 
 
 async def test_approve_absent_reviewer_then_publish(client):
+    """Approving with a required reviewer absent waits for their approval to publish."""
     w = await world(reviewers=("approver", "reviewer2"))
     # The roadmap names the same required reviewers (its draft's review policy).
     m = await start(client, w, attendee_ids=[uid(w, "approver"), uid(w, "reviewer2")])
@@ -354,6 +357,7 @@ async def end(client, w: World, mid: str, who: str = "decider") -> dict:
 
 
 async def test_end_and_minutes_job(client):
+    """Ending a meeting drafts minutes from its chat's decisions and open questions."""
     w = await world()
     m = await start(client, w)
     assert (await edit_title(client, w, "decider", m["session_id"])).status_code == 201
@@ -417,6 +421,7 @@ async def test_end_and_minutes_job(client):
 
 
 async def test_delivery_choices(client, monkeypatch):
+    """Sending minutes requires picking a channel, and Slack needs one connected first."""
     from oracle.members import mailer
 
     w = await world()
@@ -503,6 +508,7 @@ async def test_minutes_inbox_row_is_dated_by_its_send(client, clock):
 
 
 async def test_decisions_page_grouping_and_filters(client):
+    """The decisions page groups decisions under their meeting; a filter excludes rest."""
     w = await world()
     m = await start(client, w)
     assert (await edit_title(client, w, "decider", m["session_id"])).status_code == 201
@@ -556,6 +562,7 @@ async def test_decisions_page_grouping_and_filters(client):
 
 
 async def test_an_open_decision_named_in_minutes_is_not_listed_twice(client):
+    """A decision named in the minutes' questions is not also listed outside meetings."""
     w = await world()
     m = await start(client, w)
     await end(client, w, m["id"])

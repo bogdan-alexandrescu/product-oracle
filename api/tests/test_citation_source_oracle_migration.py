@@ -91,6 +91,7 @@ def _cite(t: uuid.UUID, v: uuid.UUID, key: str, source: str) -> None:
 
 
 def test_chains_on_the_refinement_batch_head():
+    """This migration chains on the refinement batch head, keeping one head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == "0016_refinement_batch"
     # 0018_runtime_features chains on it, 0019_citation_confidence on that, the intake
@@ -107,6 +108,7 @@ def test_chains_on_the_refinement_batch_head():
 
 
 def test_an_oracle_citation_inserts_after_upgrade(scratch_db):
+    """A citation with source oracle can only be inserted after this upgrade."""
     upgrade(_cfg(), "0016_refinement_batch")
     t, v = _version()
     with pytest.raises(IntegrityError):
@@ -121,6 +123,7 @@ def test_an_oracle_citation_inserts_after_upgrade(scratch_db):
 
 
 def test_extends_the_live_check_and_the_downgrade_refuses_oracle_rows(scratch_db):
+    """Downgrading refuses to run while any oracle-sourced citation rows remain."""
     upgrade(_cfg(), "0016_refinement_batch")
     # Another lane's source, added after 0001, must survive both ways.
     _run("ALTER TABLE citations DROP CONSTRAINT ck_citations_source")

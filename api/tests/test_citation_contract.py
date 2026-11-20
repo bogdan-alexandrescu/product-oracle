@@ -56,6 +56,7 @@ def _says_the_contract(text: str) -> None:
 
 @pytest.mark.parametrize(("flow", "segment", "kind"), DRAFT_SEGMENTS)
 def test_draft_tasks_state_the_citation_contract(flow, segment, kind):
+    """Every draft-writing task and prompt states the citation contract's rules."""
     sdef = flows.FLOWS[flow].segment(segment)
     _says_the_contract(sdef.task_for(kind))
     ctx = flows.PromptContext(run_id="r1", document="d", snapshot_as_of=None, low_confidence=0.4)
@@ -95,6 +96,7 @@ def test_the_contract_is_read_when_used_not_at_import(monkeypatch):
 
 
 def test_push_draft_states_the_citation_contract():
+    """The push_draft tool's description also states the citation contract."""
     tool = next(c for c in CURATED if c.name == "push_draft")
     _says_the_contract(tool.description)
 
@@ -104,6 +106,7 @@ CONFIDENCE_PROBLEM = "confidence must be a number from 0 to 1"
 
 
 def test_the_contract_says_confidence_is_a_number_from_0_to_1():
+    """The citation contract text states confidence is a number from 0 to 1."""
     text = citation_contract()
     assert "confidence (a number from 0 to 1" in text, text
     assert "confidence_note" in text and "low_confidence" in text and "item" in text
@@ -159,12 +162,14 @@ def _confidence_draft(value: str) -> str:
 
 @pytest.mark.parametrize(("value", "stored"), [("0", 0), ("1", 1), ("0.75", 0.75), ("null", None)])
 def test_a_confidence_from_0_to_1_is_accepted(value, stored):
+    """A citation confidence from 0 to 1, or null, is accepted and stored as given."""
     [citation] = parse_draft(_confidence_draft(value)).citations
     assert citation.confidence == stored
 
 
 @pytest.mark.parametrize("value", ["1.5", "-0.1", "75", "high"])
 def test_a_confidence_outside_0_to_1_is_refused_in_plain_words(value):
+    """An out-of-range citation confidence is refused with a plain-words error."""
     with pytest.raises(DraftError) as exc:
         parse_draft(_confidence_draft(value))
     invalid = [p for p in exc.value.problems if p.code == "invalid_citation"]
@@ -179,6 +184,7 @@ def test_a_confidence_outside_0_to_1_is_refused_in_plain_words(value):
     "t", [t for t in BUILTIN_TEMPLATES if t.kind == "prd"], ids=lambda t: t.key
 )
 def test_builtin_prd_templates_list_oracle_as_a_source_kind(t):
+    """Every built-in PRD template lists Oracle itself among its citation sources."""
     body = builtins.builtin_body(t)
     # prd-source-words (PR 1350): Oracle's default lists its sources by title, each kind in
     # plain words; the other built-ins keep the kinds as citation ids. Either way every kind,

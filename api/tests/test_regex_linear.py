@@ -149,6 +149,7 @@ def cpu_seconds(setup: str, call: str, make: str, n: int) -> float:
 )
 @pytest.mark.timing  # a CPU budget: runs alone in the api-timing job
 def test_adversarial_input_runs_in_linear_time(name, make, n):
+    """Each guarded regex stays linear in time on input crafted to make it explode."""
     setup, call, _ = CASES[name]
     assert cpu_seconds(setup, call, make, n) < CPU_LIMIT
 
@@ -167,10 +168,12 @@ def test_adversarial_input_runs_in_linear_time(name, make, n):
     ],
 )
 def test_threshold_finds_the_same_lines(line, found):
+    """The if/then threshold regex finds real threshold language, not a lookalike word."""
     assert bool(quality_text.THRESHOLD.search(line)) is found
 
 
 def test_threshold_if_then_spans_one_line():
+    """An if/then threshold match stops at the end of its own line."""
     m = quality_text.THRESHOLD.search("If completion stays under 60% then roll back.")
     assert m.group(0) == "If completion stays under 60% then"
 
@@ -189,6 +192,7 @@ def test_threshold_if_then_spans_one_line():
     ],
 )
 def test_clause_ends_at_the_same_place(phrase, clause):
+    """Extracting a clause stops at the same punctuation or connector every time."""
     assert extract._clause(phrase) == clause
 
 
@@ -211,6 +215,7 @@ def test_clause_ends_at_the_same_place(phrase, clause):
     ],
 )
 def test_percent_claims_are_the_same(text, claims):
+    """A percent claim is paired with its subject phrase only when one is named."""
     assert extract.percent_claims(text) == claims
 
 
@@ -226,6 +231,7 @@ def test_percent_claims_are_the_same(text, claims):
     ],
 )
 def test_success_metric_cue_matches_the_same(text, found):
+    """The success-metric cue regex finds a percent or plain cue, not stray text."""
     m = extract.CATEGORY_CUES["success_metric"].search(text)
     assert (m and m.group(0)) == found
 
@@ -241,10 +247,12 @@ def test_success_metric_cue_matches_the_same(text, found):
     ],
 )
 def test_slack_mentions_are_the_same(text, users):
+    """Slack mention ids are found only from real mention markup, never a mailto link."""
     assert slack.MENTION.findall(text) == users
 
 
 async def test_slack_text_names_every_mention():
+    """A Slack message shows each mentioned user by their name, not their raw id."""
     reader = slack._Slack(None, "token")  # type: ignore[arg-type]
     reader.users.update({"U0LIN": "Lin", "W123": "Ana"})
     message = {"text": "<@W123|ana> asked <@U0LIN>, then <@U0LIN|lin> and <@W123> agreed"}
@@ -270,6 +278,7 @@ async def test_slack_text_names_every_mention():
     ],
 )
 def test_blocker_anchors_are_stripped_the_same(text, stripped):
+    """Stripping a heading anchor never leaves part of a nested one behind."""
     assert render._ANCHOR.sub("", text) == stripped
 
 
@@ -289,6 +298,7 @@ def test_blocker_anchors_are_stripped_the_same(text, stripped):
     ],
 )
 def test_notion_title_suffix_is_stripped_the_same(title, stripped):
+    """A title's trailing Notion suffix is stripped, not a title that just mentions it."""
     assert public_links._strip_title(title, "notion") == stripped
 
 
@@ -304,6 +314,7 @@ def test_notion_title_suffix_is_stripped_the_same(title, stripped):
     ],
 )
 def test_quality_bullets_are_the_same(md, bullets):
+    """A section's bullets are read as items; a markdown table is never read as one."""
     assert quality_text.SectionText("k", "h", "", md=md).bullets == bullets
 
 
@@ -329,5 +340,6 @@ def test_quality_bullets_are_the_same(md, bullets):
     ],
 )
 def test_rejection_reads_what_is_invalid_the_same(message, summary):
+    """A refused import's citation errors are summarized into one readable sentence."""
     problem = ImportProblem(code="invalid_citation", message=message, cite_key="k")
     assert rejection.summary("prd.md", [problem]) == summary

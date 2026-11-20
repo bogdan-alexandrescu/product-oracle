@@ -69,6 +69,7 @@ async def _confirm(client, ctx, who="approver", slug=SLUG, **body):
 
 
 def test_every_route_is_an_mcp_tool():
+    """Every HTTP route is also registered as an MCP tool by its own name."""
     ops = {(o.method, o.path): o for o in app_operations(app)}
     for key, tool in OPERATIONS.items():
         assert key in ops, key
@@ -77,11 +78,13 @@ def test_every_route_is_an_mcp_tool():
 
 @pytest.mark.parametrize(("method", "path"), ROUTES)
 async def test_routes_require_auth(client, method, path):
+    """Every route refuses an unauthenticated request."""
     resp = await client.request(method, path, json={})
     assert resp.status_code == 401
 
 
 async def test_a_viewer_reads_the_catalogue_packs_policy_and_manifests(client):
+    """A viewer can read the catalogue, packs, policy and template manifests."""
     ctx = await seeded_ctx()
     viewer = ctx.as_("viewer")
     catalogue = (await client.get("/v1/module-catalog", headers=viewer)).json()
@@ -111,6 +114,7 @@ async def test_a_viewer_reads_the_catalogue_packs_policy_and_manifests(client):
 
 
 async def test_writes_need_their_roles(client):
+    """Policy, catalogue and manifest writes need approver or owner to run."""
     ctx = await seeded_ctx()
     await _doc(client, ctx)
     contract = {"id": "company.extra", "version": "1.0.0", "title": "Extra", "policy": "optional"}
@@ -138,6 +142,7 @@ async def test_writes_need_their_roles(client):
 
 
 async def test_owner_adds_company_modules_and_overrides_with_audit(client):
+    """An owner's module add and version override are each audited."""
     ctx = await seeded_ctx()
     owner = ctx.as_("owner")
     contract = {
@@ -204,6 +209,7 @@ async def test_recommend_for_an_intake_with_one_source(client):
 
 
 async def test_composition_lifecycle_records_who_why_changes_and_publish(client):
+    """A composition records who confirmed it and why, and refuses a stale base."""
     ctx = await seeded_ctx()
     doc = await _doc(client, ctx)
     viewer, approver = ctx.as_("viewer"), ctx.as_("approver")
@@ -302,6 +308,7 @@ async def test_composition_lifecycle_records_who_why_changes_and_publish(client)
 
 
 async def test_a_published_document_version_event_pins_the_composition(client):
+    """Publishing a document version pins its composition revision published."""
     ctx = await seeded_ctx()
     doc = await _doc(client, ctx)
     assert (await _confirm(client, ctx)).status_code == 201
@@ -319,6 +326,7 @@ async def test_a_published_document_version_event_pins_the_composition(client):
 
 
 async def test_the_company_policy_route_changes_recommendations(client):
+    """Company policy makes a module mandatory; an unknown module fails."""
     ctx = await seeded_ctx()
     await _doc(client, ctx)
     owner = ctx.as_("owner")
@@ -336,6 +344,7 @@ async def test_the_company_policy_route_changes_recommendations(client):
 
 
 async def test_template_manifest_edits_are_company_edits(client):
+    """Editing a template manifest marks it edited; a bad manifest is refused."""
     ctx = await seeded_ctx()
     resp = await client.put(
         "/v1/template-manifests/one-pager",
@@ -357,6 +366,7 @@ async def test_template_manifest_edits_are_company_edits(client):
 
 
 async def test_roadmaps_have_no_composition(client):
+    """A roadmap document has no composition endpoint to read."""
     ctx = await seeded_ctx()
     roadmap = "---\ndocument: placeholder-roadmap\ntitle: Roadmap\nkind: roadmap\n---\n# R {#r}\n"
     resp = await import_md(client, ctx.as_("approver"), "placeholder-roadmap", roadmap)

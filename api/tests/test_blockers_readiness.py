@@ -31,12 +31,14 @@ async def _report(ctx, doc_id) -> readiness.ReadinessReport:
 
 
 def test_the_check_is_registered_as_hard():
+    """The critical blockers readiness check is registered as hard-blocking."""
     regs = {r.key: r for r in readiness.checks()}
     assert CHECK_KEY == "critical_blockers"
     assert regs[CHECK_KEY].hard is True
 
 
 async def test_no_blockers_is_not_applicable():
+    """With no blockers linked, the readiness check reports not applicable."""
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
     out = await _check(ctx, doc_id)
@@ -44,6 +46,7 @@ async def test_no_blockers_is_not_applicable():
 
 
 async def test_a_critical_unresolved_hard_blocker_blocks(client):
+    """An unresolved critical hard blocker fails the check and blocks the report."""
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
     b = (
@@ -65,6 +68,7 @@ async def test_a_critical_unresolved_hard_blocker_blocks(client):
 
 
 async def test_mitigating_is_still_unresolved(client):
+    """A blocker only marked mitigating still counts as unresolved and blocks."""
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
     await create_blocker(client, ctx, document_ids=[str(doc_id)], status="mitigating")
@@ -72,6 +76,7 @@ async def test_mitigating_is_still_unresolved(client):
 
 
 async def test_lesser_blockers_warn_but_do_not_block(client):
+    """Soft or unknown-type blockers warn but never block the readiness check."""
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
     await create_blocker(client, ctx, key="hard-high", severity="high", document_ids=[str(doc_id)])
@@ -85,6 +90,7 @@ async def test_lesser_blockers_warn_but_do_not_block(client):
 
 
 async def test_a_resolved_blocker_passes(client):
+    """A blocker marked resolved passes the readiness check."""
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
     b = (await create_blocker(client, ctx, document_ids=[str(doc_id)]))["blocker"]
@@ -97,6 +103,7 @@ async def test_a_resolved_blocker_passes(client):
 
 
 async def test_an_accepted_risk_passes_until_its_review_date(client):
+    """An accepted risk passes readiness only until its review date arrives."""
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
     b = (await create_blocker(client, ctx, document_ids=[str(doc_id)]))["blocker"]
@@ -120,6 +127,7 @@ async def test_an_accepted_risk_passes_until_its_review_date(client):
 
 
 async def test_an_approved_feasibility_experiment_passes(client):
+    """A feasibility scope passes readiness until its experiment is cancelled."""
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
     b = (await create_blocker(client, ctx, document_ids=[str(doc_id)]))["blocker"]
@@ -175,6 +183,7 @@ async def test_a_status_written_around_the_strategy_is_refused(client):
 
 
 async def test_a_blocker_linked_from_a_section_counts(client):
+    """A blocker linked only from a document section still counts as blocking."""
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
     b = (await create_blocker(client, ctx))["blocker"]
@@ -192,6 +201,7 @@ async def test_a_blocker_linked_from_a_section_counts(client):
 
 
 async def test_unreadable_blocker_data_fails_closed():
+    """Blocker data that cannot be read fails closed as critical, not ignored."""
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
     entity_id = await make_entity(
@@ -210,6 +220,7 @@ async def test_unreadable_blocker_data_fails_closed():
 
 
 async def test_an_advisory_result_alone_never_blocks(client):
+    """An advisory check's critical result alone never blocks the readiness report."""
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
 

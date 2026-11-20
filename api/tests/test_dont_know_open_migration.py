@@ -90,11 +90,13 @@ def _status() -> dict[uuid.UUID, str]:
 
 
 def test_chains_on_the_single_head():
+    """The dont-know-open migration chains onto the branch's one head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_dont_know_questions_open_again_and_back(scratch_db):
+    """Migrating dont-know statuses sorts each question by its real state, reversibly."""
     cfg = _cfg()
     upgrade(cfg, PREVIOUS)
     t, live, archived = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()

@@ -48,6 +48,7 @@ NEW_ROUTES = [
 
 
 def test_every_new_route_is_in_openapi_and_an_mcp_tool():
+    """Every new review route appears in OpenAPI and as an MCP tool with its op id."""
     paths = app.openapi()["paths"]
     ops = {(o.method, o.path): o for o in app_operations(app)}
     for method, path, op_id, _ in NEW_ROUTES:
@@ -71,6 +72,7 @@ def _concrete(path: str) -> str:
 
 @pytest.mark.parametrize(("method", "path", "op_id", "role"), NEW_ROUTES)
 async def test_new_routes_require_auth(client, method, path, op_id, role):
+    """Every new review route refuses an unauthenticated request."""
     resp = await client.request(method, _concrete(path), json={})
     assert resp.status_code == 401
 
@@ -92,6 +94,7 @@ WRITE_BODIES = {
     ("method", "path", "op_id", "role"), [r for r in NEW_ROUTES if r[3] != "viewer"]
 )
 async def test_write_routes_refuse_lower_roles(client, method, path, op_id, role):
+    """Every write route refuses a caller below its required role."""
     ctx = await setup(client)
     for lower in ROLES[: ROLES.index(role)]:
         who = await person(ctx.tenant_id, lower)
@@ -135,6 +138,7 @@ async def _seed_review_data(client, ctx):
 
 
 async def test_another_company_sees_none_of_it(client):
+    """Another company sees none of this company's review data or notifications."""
     ctx = await setup(client)
     reviewer, campaign_id, note_id = await _seed_review_data(client, ctx)
     other = await other_company(client)  # with its own document of that slug
@@ -174,6 +178,7 @@ async def test_another_company_sees_none_of_it(client):
 
 
 async def test_notifications_are_the_callers_own(client):
+    """A notification can only be read or marked by the user it belongs to."""
     ctx = await setup(client)
     reviewer, _, note_id = await _seed_review_data(client, ctx)
     colleague = await person(ctx.tenant_id, "approver", "colleague")
@@ -195,6 +200,7 @@ async def test_notifications_are_the_callers_own(client):
 
 
 async def test_comment_notifications_reach_owner_reviewers_and_thread(client):
+    """A comment notifies a section's owner and reviewers; a reply notifies the thread."""
     ctx = await setup(client)
     owner = await person(ctx.tenant_id, "commenter", "owner")
     reviewer = await person(ctx.tenant_id, "commenter", "reviewer")
@@ -232,6 +238,7 @@ async def test_comment_notifications_reach_owner_reviewers_and_thread(client):
 
 
 async def test_campaign_counts_and_closing(client):
+    """A review campaign invites only commenters and above; counts reflect activity."""
     ctx = await setup(client)
     a = await person(ctx.tenant_id, "commenter", "a")
     await person(ctx.tenant_id, "viewer", "v")
@@ -269,6 +276,7 @@ async def test_campaign_counts_and_closing(client):
 
 
 async def test_review_queue_lists_my_sections(client):
+    """The review queue lists a person's owned and reviewed sections, overdue or not."""
     ctx = await setup(client)
     me = await person(ctx.tenant_id, "approver", "me")
     await client.put(
@@ -294,6 +302,7 @@ async def test_review_queue_lists_my_sections(client):
 
 
 async def test_state_changes_are_audited(client):
+    """Section, campaign, approval and publish actions each record an audit event."""
     ctx = await setup(client)
     await _seed_review_data(client, ctx)
     async with tenant_session(ctx.tenant_id) as s:

@@ -36,6 +36,7 @@ SLIDE_CSS = '.deck .slide-title::after { content: " SLIDECSS"; }'
 
 
 def test_every_builtin_passes_with_its_brief():
+    """Every built-in template passes its own brief check and has brief sections."""
     for t in BUILTIN_TEMPLATES:
         check = check_template(builtin_body(t))
         assert check.ok, (t.key, check.problems)
@@ -43,6 +44,7 @@ def test_every_builtin_passes_with_its_brief():
 
 
 async def test_validate_refuses_a_template_without_brief_and_says_how_to_fix_it(client, tenant_id):
+    """A template missing brief markers is refused with a message on how to add them."""
     h = await _token(tenant_id, "viewer")
     out = (await client.post("/v1/templates/validate", json={"body": BRIEFLESS}, headers=h)).json()
     assert out["valid"] is False and out["warnings"] == [] and out["brief_sections"] == []
@@ -56,6 +58,7 @@ async def test_validate_refuses_a_template_without_brief_and_says_how_to_fix_it(
 
 
 async def test_create_and_edit_refuse_a_template_without_brief(client, tenant_id):
+    """Creating or editing a template without a brief is refused, built-ins included."""
     h = await _token(tenant_id, "approver")
     await seed_company(tenant_id)
     payload = {"key": "plain", "name": "Plain", "kind": "prd", "body": BRIEFLESS}
@@ -84,6 +87,7 @@ async def test_create_and_edit_refuse_a_template_without_brief(client, tenant_id
 
 
 async def test_a_stored_template_without_brief_keeps_working_until_its_next_edit(client, tenant_id):
+    """An old template saved without a brief keeps working until its next edit."""
     h = await _token(tenant_id, "approver")
     await seed_company(tenant_id)
     # A company template saved before O1g, with no brief markers.
@@ -132,6 +136,7 @@ async def test_a_stored_template_without_brief_keeps_working_until_its_next_edit
 
 
 async def test_template_roles_are_unchanged(client, tenant_id):
+    """Template roles are unchanged: validation is open; create and edit stay gated."""
     viewer = await _token(tenant_id, "viewer")
     commenter = await _token(tenant_id, "commenter")
     payload = {"key": "x", "name": "X", "kind": "prd", "body": MARKED}
@@ -169,6 +174,7 @@ _IMAGE_SET = '.slide{background-image:image-set("https://evil.example/p.png" 1x)
     ],
 )
 async def test_slide_css_is_checked_like_the_theme_css(client, tenant_id, bad):
+    """Slide CSS is checked for unsafe content the same way theme CSS is."""
     h = await _token(tenant_id, "approver")
     resp = await client.post("/v1/themes", json={**THEME, "slide_css": bad}, headers=h)
     assert resp.status_code == 422
@@ -198,6 +204,7 @@ async def test_slide_css_is_checked_like_the_theme_css(client, tenant_id, bad):
     ],
 )
 async def test_slide_css_may_not_style_the_host(client, tenant_id, bad):
+    """Slide CSS may not target or style the host element."""
     h = await _token(tenant_id, "approver")
     resp = await client.post("/v1/themes", json={**THEME, "slide_css": bad}, headers=h)
     assert resp.status_code == 422
@@ -208,6 +215,7 @@ async def test_slide_css_may_not_style_the_host(client, tenant_id, bad):
 
 @pytest.mark.timing
 def test_the_host_check_is_linear():
+    """The host-selector CSS check runs in linear time even on adversarial input."""
     # Many comments after a colon with no host: a backtracking pattern takes minutes.
     started = time.perf_counter()
     assert check_slide_css(":" + "/**/" * 40 + "x")
@@ -224,6 +232,7 @@ def test_the_host_check_is_linear():
     ],
 )
 async def test_ordinary_slide_css_still_passes(client, tenant_id, ok):
+    """Ordinary, safe slide CSS still passes the check."""
     h = await _token(tenant_id, "approver")
     resp = await client.post("/v1/themes", json={**THEME, "slide_css": ok}, headers=h)
     assert resp.status_code == 201, resp.text
@@ -231,10 +240,12 @@ async def test_ordinary_slide_css_still_passes(client, tenant_id, ok):
 
 @pytest.mark.parametrize("theme", BUILTIN_THEMES, ids=lambda t: t.key)
 def test_every_builtin_theme_css_passes_the_check(theme):
+    """Every built-in theme's CSS passes the safety check."""
     assert check_theme_css(theme.css or "") == []
 
 
 async def test_a_builtin_theme_stays_editable(client, tenant_id):
+    """A built-in theme's non-CSS fields stay editable."""
     h = await _token(tenant_id, "approver")
     await client.get("/v1/themes", headers=h)
     resp = await client.patch("/v1/themes/roadmap-board", json={"description": "Ours"}, headers=h)
@@ -242,6 +253,7 @@ async def test_a_builtin_theme_stays_editable(client, tenant_id):
 
 
 async def test_slide_css_is_stored_updated_cleared_and_audited(client, tenant_id):
+    """Slide CSS can be set, updated, cleared, and every change is audited."""
     h = await _token(tenant_id, "approver")
     viewer = await _token(tenant_id, "viewer")
     resp = await client.post("/v1/themes", json={**THEME, "slide_css": SLIDE_CSS}, headers=h)
@@ -284,6 +296,7 @@ async def test_slide_css_is_stored_updated_cleared_and_audited(client, tenant_id
 
 
 async def test_builtin_themes_keep_their_slide_variant(client, tenant_id):
+    """A built-in theme keeps its own slide variant and refuses a custom slide CSS."""
     h = await _token(tenant_id, "approver")
     await seed_company(tenant_id)
     resp = await client.patch("/v1/themes/clean-document", json={"slide_css": SLIDE_CSS}, headers=h)
@@ -297,6 +310,7 @@ async def test_builtin_themes_keep_their_slide_variant(client, tenant_id):
 
 
 async def test_theme_roles_are_unchanged(client, tenant_id):
+    """Theme roles are unchanged by the slide CSS feature."""
     viewer = await _token(tenant_id, "viewer")
     commenter = await _token(tenant_id, "commenter")
     h = await _token(tenant_id, "approver")
@@ -332,6 +346,7 @@ async def _themed_doc(client, tenant_id, h, slide_css: str | None) -> None:
 
 
 async def test_present_data_applies_slide_css_after_the_shared_layout(client, tenant_id):
+    """Present mode applies slide CSS after the shared layout, and live edits reach it."""
     h = await _token(tenant_id, "approver")
     await _themed_doc(client, tenant_id, h, SLIDE_CSS)
     deck = (await client.get("/v1/documents/checkout/versions/1/deck", headers=h)).json()
@@ -351,6 +366,7 @@ async def test_present_data_applies_slide_css_after_the_shared_layout(client, te
 
 
 async def test_stored_unsafe_slide_css_never_reaches_a_deck(client, tenant_id):
+    """Unsafe slide CSS stored before a check existed never reaches a rendered deck."""
     h = await _token(tenant_id, "approver")
     await _themed_doc(client, tenant_id, h, SLIDE_CSS)
     async with tenant_session(tenant_id) as s:
@@ -368,6 +384,7 @@ async def test_stored_unsafe_slide_css_never_reaches_a_deck(client, tenant_id):
 
 
 async def test_deck_html_and_pptx_with_slide_css(client, tenant_id):
+    """Exported deck HTML and PPTX both carry the slide CSS where each applies."""
     h = await _token(tenant_id, "approver")
     await _themed_doc(client, tenant_id, h, SLIDE_CSS)
     base = "/v1/documents/checkout/versions/1/export"
@@ -383,6 +400,7 @@ async def test_deck_html_and_pptx_with_slide_css(client, tenant_id):
 
 @requires_pdf
 async def test_deck_pdf_uses_the_slide_css(client, tenant_id):
+    """Exported deck PDF renders with the slide CSS applied."""
     h = await _token(tenant_id, "approver")
     await _themed_doc(client, tenant_id, h, SLIDE_CSS)
     resp = await client.get(
@@ -402,6 +420,7 @@ async def test_deck_pdf_uses_the_slide_css(client, tenant_id):
 
 
 async def test_slide_preview(client, tenant_id):
+    """The theme preview shows slide CSS, strips unsafe CSS, and skips it for builtins."""
     h = await _token(tenant_id, "viewer")
     tokens = {"colors": {"accent": "#7a1fa2", "background": "#ffffff", "text": "#111111"}}
     resp = await client.post(
@@ -448,6 +467,7 @@ async def test_slide_preview(client, tenant_id):
 
 
 def test_mcp_theme_tools_carry_slide_css():
+    """The MCP theme tools and the theme schema both expose the slide CSS field."""
     tools = {o.tool_name: o for o in app_operations(app)}
     for name in ("create_theme", "update_theme", "preview_theme"):
         schema = tools[name].input_schema()
@@ -472,6 +492,7 @@ GUIDED = DRAFT.replace(
 
 
 async def test_notes_come_only_from_notes_blocks(client, tenant_id):
+    """Speaker notes come only from explicit notes blocks, never guidance or drafting."""
     h = await _token(tenant_id, "approver")
     await seed_company(tenant_id)
     assert (await _import(client, h, GUIDED)).status_code == 201
@@ -498,6 +519,7 @@ async def test_notes_come_only_from_notes_blocks(client, tenant_id):
 
 
 async def test_notes_rule_applies_to_versions_imported_before_o1g(client, tenant_id):
+    """The notes rule applies even to versions imported before it existed."""
     h = await _token(tenant_id, "approver")
     await seed_company(tenant_id)
     assert (await _import(client, h, GUIDED)).status_code == 201
@@ -511,6 +533,7 @@ async def test_notes_rule_applies_to_versions_imported_before_o1g(client, tenant
 
 
 async def test_themeless_export_strips_notes_and_guidance(client, tenant_id):
+    """A themeless export strips speaker notes and template guidance from the HTML."""
     h = await _token(tenant_id, "approver")
     await seed_company(tenant_id)
     assert (await _import(client, h, GUIDED)).status_code == 201

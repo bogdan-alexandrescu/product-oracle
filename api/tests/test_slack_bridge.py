@@ -229,6 +229,7 @@ async def slack_messages(ctx, d_id) -> list[DiscussionMessage]:
 # secret and at most 300 s old passes; fails_when=a bad, empty or old signature passes;
 # no_claim=Slack's own delivery guarantees.
 def test_signature_good_bad_and_old():
+    """A Slack signature check needs a matching secret and a timestamp in window."""
     body = b'{"type":"event_callback"}'
     now = time.time()
     headers = signed(body, at=now)
@@ -244,6 +245,7 @@ def test_signature_good_bad_and_old():
 # protects=splitting and the backoff schedule; fails_when=a post over 3,000 characters goes
 # whole, or the waits are not 1, 5, 30 minutes then hourly; no_claim=Slack's own limits.
 def test_text_splitting_and_backoff():
+    """Long Slack messages split under the size limit; backoff and escaping work."""
     assert bridge.split("short") == ["short"]
     long = ("word " * 1300).strip()
     parts = bridge.split(long)
@@ -260,6 +262,7 @@ def test_text_splitting_and_backoff():
 # 401 and stores nothing; url_verification answers its challenge; fails_when=an unsigned or
 # old event is processed; no_claim=Slack's retries.
 async def test_unsigned_or_old_events_are_refused(client, slack):
+    """Unsigned, mis-signed or stale Slack events are refused before storing."""
     ctx, _doc = await setup(client)
     d, thread = await mirrored(client, ctx, slack)
     slack.emails["U0COMM"] = "commenter@example.com"
@@ -282,6 +285,7 @@ async def test_unsigned_or_old_events_are_refused(client, slack):
 # no_claim=Slack's latency.
 @pytest.mark.timing
 async def test_a_commenters_reply_becomes_one_message_once(client, slack):
+    """A commenter's Slack reply becomes one discussion message, even if resent."""
     ctx, _doc = await setup(client)
     d, thread = await mirrored(client, ctx, slack)
     slack.emails["U0COMM"] = "Commenter@Example.com"
@@ -303,6 +307,7 @@ async def test_a_commenters_reply_becomes_one_message_once(client, slack):
 # protects=edits and deletes in Slack edit or delete the Oracle message; fails_when=the
 # message keeps the old text; no_claim=Slack's edit window.
 async def test_edits_and_deletes_follow_slack(client, slack):
+    """Edits and deletes in Slack are mirrored onto the matching message."""
     ctx, _doc = await setup(client)
     d, thread = await mirrored(client, ctx, slack)
     slack.emails["U0COMM"] = "commenter@example.com"
@@ -324,6 +329,7 @@ async def test_edits_and_deletes_follow_slack(client, slack):
 # tick completes it and queues one post, delivered with the link's thread_ts; fails_when=no
 # reply, two posts, or a post outside the thread; no_claim=the model's answer.
 async def test_mentioning_oracle_gets_a_reply_posted_in_the_thread(client, slack, fake, ticker_on):
+    """Mentioning Oracle in a multi-person thread gets a reply in that thread."""
     ctx, _doc = await setup(client)
     await with_key(ctx)
     d, thread = await mirrored(client, ctx, slack)
@@ -394,6 +400,7 @@ async def test_mentioning_oracle_gets_a_reply_posted_in_the_thread(client, slack
 # not stored, and each author gets one ephemeral notice with 3.1's copy; fails_when=either
 # is stored or told nothing; no_claim=Slack's channel membership.
 async def test_viewers_and_non_members_are_told_privately(client, slack):
+    """A viewer or non-member posting in the mirror is told privately, not mirrored."""
     ctx, _doc = await setup(client)
     d, thread = await mirrored(client, ctx, slack)
     slack.emails["U0VIEW"] = "viewer@example.com"
@@ -413,6 +420,7 @@ async def test_viewers_and_non_members_are_told_privately(client, slack):
 # outside a live mirrored thread store nothing and leave no text in audit; fails_when=the
 # bot's message comes back or a channel message is read; no_claim=other apps' bots.
 async def test_own_posts_dms_and_other_messages_are_ignored(client, slack):
+    """Oracle's posts, DMs and unrelated messages never become discussion messages."""
     ctx, _doc = await setup(client)
     d, thread = await mirrored(client, ctx, slack)
     slack.emails["U0COMM"] = "commenter@example.com"
@@ -439,6 +447,7 @@ async def test_own_posts_dms_and_other_messages_are_ignored(client, slack):
 # one open, mirroring answers 201; fails_when=a private discussion mirrors or the title
 # reaches the channel on close; no_claim=the screens.
 async def test_private_discussions_stay_in_oracle(client, slack):
+    """A private discussion is never mirrored, and going private closes a mirror."""
     ctx, doc = await setup(client)
     d, _thread = await mirrored(client, ctx, slack)
     root = slack.of("chat.postMessage")[0]
@@ -479,6 +488,7 @@ async def test_private_discussions_stay_in_oracle(client, slack):
 # Slack thread, or is refused with the private wording that hides Share as discussion;
 # no_claim=the panel's screens.
 async def test_a_panel_chat_is_mirrored_only_once_shared(client, slack):
+    """A panel chat is mirrored to Slack only once shared as a discussion."""
     ctx, doc = await setup(client)
     await install(client, ctx)
     body = {"subject_kind": "section", "subject": section(doc), "origin": "panel",
@@ -514,6 +524,7 @@ async def test_a_panel_chat_is_mirrored_only_once_shared(client, slack):
 # protects=who mirrors and the status every member reads; fails_when=a viewer or another
 # commenter mirrors, or an F6-only install claims mirroring; no_claim=the screens.
 async def test_who_mirrors_and_the_status(client, slack):
+    """Mirroring needs a reconnect with the bridge's scopes; status shows that."""
     ctx, doc = await setup(client)
     status = await client.get("/v1/company-integrations/slack/status", headers=ctx.as_("viewer"))
     assert status.json() == {"connected": False, "label": None, "mirroring": False,
@@ -559,6 +570,7 @@ async def test_who_mirrors_and_the_status(client, slack):
 # mirroring posts the closing line with the link; fails_when=earlier messages are copied or
 # a post goes after Stop; no_claim=Slack's rendering.
 async def test_new_messages_post_in_the_thread_until_stopped(client, slack):
+    """New messages keep posting to the thread until mirroring is stopped."""
     ctx, _doc = await setup(client)
     d, thread = await mirrored(client, ctx, slack)
     resp = await client.post(
@@ -587,6 +599,7 @@ async def test_new_messages_post_in_the_thread_until_stopped(client, slack):
 # failures the item is failed, and after 3 in a row the discussion shows it failing;
 # fails_when=Slack is hammered or an item retries forever; no_claim=Slack's limits.
 async def test_rate_limits_wait_and_failures_give_up(client, slack):
+    """A rate limit makes Oracle wait; repeated failures stop instead of looping."""
     ctx, _doc = await setup(client)
     await install(client, ctx)
     d = await start(client, ctx, subject=section(ctx_doc[ctx.tenant_id][1]))
@@ -646,6 +659,7 @@ async def queue_posts(ctx, d_id: str, n: int) -> None:
 # takes the oldest items whatever their next try and holds them, so nothing else is sent;
 # no_claim=Slack's ordering.
 async def test_a_waiting_mirror_does_not_stop_the_others(client, slack):
+    """A mirror waiting on its backoff does not block other discussions posting."""
     ctx, doc = await setup(client)
     await install(client, ctx)
     stuck = await start(client, ctx, subject=section(doc), message={"body": "Stuck one."})
@@ -671,6 +685,7 @@ async def test_a_waiting_mirror_does_not_stop_the_others(client, slack):
 # flowing; fails_when=the posts stay queued forever or the starter is not told why;
 # no_claim=a retry of the failed mirror (Stop mirroring, then Mirror again).
 async def test_a_failed_root_post_fails_its_mirror_only(client, slack):
+    """A mirror whose root post failed fails only that mirror, not others."""
     ctx, doc = await setup(client)
     await install(client, ctx)
     stuck = await start(client, ctx, subject=section(doc), message={"body": "Stuck one."})
@@ -710,6 +725,7 @@ async def test_a_failed_root_post_fails_its_mirror_only(client, slack):
 # credential left); a reconnect makes the same row active again; fails_when=a thread is left
 # open, the token stays, or the row is deleted; no_claim=Slack's revoke.
 async def test_disconnect_closes_every_mirror_then_revokes(client, slack):
+    """Disconnecting closes every live mirror and revokes the token first."""
     ctx, _doc = await setup(client)
     d, thread = await mirrored(client, ctx, slack)
     (row,) = (await client.get("/v1/company-integrations", headers=ctx.as_("owner"))).json()
@@ -742,6 +758,7 @@ async def test_disconnect_closes_every_mirror_then_revokes(client, slack):
 # fails_when=the revoked install's ``bot_user_id`` is lost and Oracle's posts become
 # evidence; no_claim=the connector's own skip (tests/connectors/test_slack_oracle_skip.py).
 async def test_a_slack_source_sync_skips_oracle_after_disconnect(client, slack, monkeypatch):
+    """A source sync still tags content as the bot user after disconnecting."""
     service.load_connectors()
     connector = FakeConnector(kind="slack")
     monkeypatch.setitem(base._registry, "slack", connector)
@@ -774,6 +791,7 @@ async def test_a_slack_source_sync_skips_oracle_after_disconnect(client, slack, 
 # ``close`` waits forever for a thread that never comes and BATCH of them fill every tick;
 # no_claim=Slack's ordering.
 async def test_mirrors_stopped_before_their_root_post_do_not_stop_later_ones(client, slack):
+    """Stopping a mirror before its root post went out does not stop later ones."""
     ctx, doc = await setup(client)
     await install(client, ctx)
     stopped = []
@@ -800,6 +818,7 @@ async def test_mirrors_stopped_before_their_root_post_do_not_stop_later_ones(cli
 # not posted yet; fails_when=a ``close`` goes to the channel without a thread;
 # no_claim=Slack's revoke.
 async def test_disconnect_sends_no_close_for_a_mirror_without_a_thread(client, slack):
+    """Disconnecting sends no closing message for a mirror without a thread."""
     ctx, doc = await setup(client)
     row = await install(client, ctx)
     d = await start(client, ctx, subject=section(doc), message={"body": "Not posted yet."})
@@ -818,6 +837,7 @@ async def test_disconnect_sends_no_close_for_a_mirror_without_a_thread(client, s
 # accepted for mirroring (its replies would never come back), or F6 loses it;
 # no_claim=Slack's membership itself.
 async def test_the_mirror_picker_offers_only_channels_oracle_is_in(client, slack):
+    """The mirror channel picker only offers channels Oracle's bot is already in."""
     ctx, doc = await setup(client)
     await install(client, ctx)
     mirror = await client.get(
@@ -846,6 +866,7 @@ async def test_the_mirror_picker_offers_only_channels_oracle_is_in(client, slack
 # fails_when=the ``close`` items stay queued and the next tick after a reconnect posts them;
 # no_claim=Slack's revoke (it cannot be called without the token).
 async def test_disconnect_with_an_unreadable_token_drops_the_closing_lines(client, slack):
+    """Disconnecting with an unreadable token still clears the mirror cleanly."""
     ctx, _doc = await setup(client)
     d, _thread = await mirrored(client, ctx, slack)
     async with tenant_session(ctx.tenant_id) as s:
@@ -869,6 +890,7 @@ async def test_disconnect_with_an_unreadable_token_drops_the_closing_lines(clien
 # ``bot_user_id`` is overwritten and Oracle's earlier posts there become evidence;
 # no_claim=the connector's own skip.
 async def test_reconnecting_to_another_slack_keeps_the_first_apps_user(client, slack, monkeypatch):
+    """Reconnecting another Slack keeps crediting the first app's bot user too."""
     service.load_connectors()
     connector = FakeConnector(kind="slack")
     monkeypatch.setitem(base._registry, "slack", connector)
@@ -900,6 +922,7 @@ async def test_reconnecting_to_another_slack_keeps_the_first_apps_user(client, s
 # protects=criterion 11: the MCP tool list has the mirror routes but no Slack events or
 # callback tool; fails_when=the public endpoint becomes a tool; no_claim=the tools' use.
 async def test_no_mcp_tool_for_slack_events(client):
+    """Slack event handling is never exposed as an MCP tool."""
     ctx, _doc = await setup(client)
     token = await user_token(ctx.tenant_id, ctx.users["owner"])
     async with mcp_client(token) as c:

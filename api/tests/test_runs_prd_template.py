@@ -54,6 +54,7 @@ async def test_prd_run_takes_template(client, runtime):
 
 
 async def test_the_run_body_overrides_and_no_template_takes_the_default(client, runtime):
+    """A run request can override an intake's template, or fall back to the default."""
     ctx = await company()
     out = await create_intake(client, ctx, who="approver", template="one-pager")
     resp = await client.post(
@@ -85,6 +86,7 @@ async def test_the_run_body_overrides_and_no_template_takes_the_default(client, 
 
 
 async def test_a_feedback_loop_still_refuses_a_template(client, runtime):
+    """A feedback-loop run still refuses a template or theme in its request."""
     ctx = await company()
     resp = await client.post(
         "/v1/runs",
@@ -287,6 +289,7 @@ def _source() -> flows.SourceContext:
 
 @pytest.mark.parametrize("case", sorted(ROADMAP_PINS, key=str))
 def test_the_roadmap_draft_prompt_is_byte_for_byte_unchanged(case):
+    """The roadmap draft prompt stays byte for byte unchanged across these cases."""
     with_source, theme, attached = case
     flow = flows.FLOWS["prd_to_roadmap"]
     knobs = flows.resolve_knobs(flow, {})

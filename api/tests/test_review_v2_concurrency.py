@@ -23,6 +23,7 @@ from tests.review_v2_helpers import (
 
 
 async def test_the_same_section_changed_since_is_a_conflict_with_its_current_text(client):
+    """Editing on a stale base conflicts; retrying on the current revision succeeds."""
     ctx = await setup(client)
     s1 = await states(client, ctx.auth, 1)
     rev = s1["problem"]["revision"]
@@ -49,6 +50,7 @@ async def test_the_same_section_changed_since_is_a_conflict_with_its_current_tex
 
 
 async def test_different_sections_are_edited_in_parallel(client):
+    """Concurrent edits to different sections both succeed; neither is overwritten."""
     ctx = await setup(client)
     s1 = await states(client, ctx.auth, 1)
     a = await person(ctx.tenant_id, "approver", "a")
@@ -65,6 +67,7 @@ async def test_different_sections_are_edited_in_parallel(client):
 
 
 async def test_concurrent_edits_of_one_section_never_both_win(client):
+    """Concurrent edits to the same section let only one win; the rest conflict."""
     ctx = await setup(client)
     s1 = await states(client, ctx.auth, 1)
     rev = s1["solution"]["revision"]
@@ -79,6 +82,7 @@ async def test_concurrent_edits_of_one_section_never_both_win(client):
 
 
 async def test_edit_roles_and_the_section_owner(client):
+    """Only a section's owner or an approver may edit it; other edits are refused."""
     ctx = await setup(client)
     s1 = await states(client, ctx.auth, 1)
     commenter = await person(ctx.tenant_id, "commenter")
@@ -105,6 +109,7 @@ async def test_edit_roles_and_the_section_owner(client):
 
 
 async def test_an_edit_can_resolve_feedback(client):
+    """Saving a section edit can resolve a feedback item in the same request."""
     ctx = await setup(client)
     created = await client.post(
         ctx.v(1, "/comments"),
@@ -131,6 +136,7 @@ async def test_an_edit_can_resolve_feedback(client):
 
 
 async def test_a_draft_on_an_older_base_is_a_409_naming_both_versions(client):
+    """A draft based on a stale version conflicts, naming both versions, unless merged."""
     ctx = await setup(client)
     v2 = replace(DRAFT, "Teams miss shared deadlines.", "Teams miss deadlines (v2).")
     assert (await import_md(client, ctx.auth, v2, base=1)).status_code == 201
@@ -159,6 +165,7 @@ async def test_a_draft_on_an_older_base_is_a_409_naming_both_versions(client):
 
 
 async def test_both_sides_changing_one_section_conflicts(client):
+    """A draft import that changes a section another import already changed conflicts."""
     ctx = await setup(client)
     v2 = replace(DRAFT, "Teams miss shared deadlines.", "Version two's problem.")
     assert (await import_md(client, ctx.auth, v2)).status_code == 201
@@ -170,6 +177,7 @@ async def test_both_sides_changing_one_section_conflicts(client):
 
 
 async def test_base_version_edge_cases_and_legacy_imports(client):
+    """Importing with the latest, an unknown, or no base each behaves as documented."""
     ctx = await setup(client)
     v2 = replace(DRAFT, "Calendar sync may lag.", "Sync lags.")
     # The latest as base: no conflict.
@@ -192,6 +200,7 @@ async def test_base_version_edge_cases_and_legacy_imports(client):
 
 
 async def test_cli_push_with_base_refuses_a_stale_draft(client, tmp_path):
+    """CLI push with a stale base refuses it, naming both versions; plain push works."""
     ctx = await setup(client)
     v2 = replace(DRAFT, "Teams miss shared deadlines.", "Changed in v2.")
     assert (await import_md(client, ctx.auth, v2)).status_code == 201
@@ -207,6 +216,7 @@ async def test_cli_push_with_base_refuses_a_stale_draft(client, tmp_path):
 
 
 async def test_assignment_lock_version_conflict(client):
+    """Section assignment updates need the current lock version, or they are refused."""
     ctx = await setup(client)
     reviewer = await person(ctx.tenant_id, "commenter")
     url = f"/v1/documents/{DOC}/sections/problem/assignment"

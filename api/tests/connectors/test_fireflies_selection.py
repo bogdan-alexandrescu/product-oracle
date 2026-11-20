@@ -91,10 +91,12 @@ def deleted(events) -> list[str]:
     ],
 )
 def test_series_title_drops_dated_suffixes(title, normal):
+    """A series title drops its date, number or weekday suffix before matching."""
     assert series_title(title).lower() == normal
 
 
 def test_series_title_keeps_case_and_drops_the_dated_suffix():
+    """Stripping a series title's dated suffix keeps its original case and spacing."""
     assert series_title("AI agents sprint planning - Oct 14") == "AI agents sprint planning"
     assert series_title("  AI Agents  daily standup ") == "AI Agents daily standup"
 
@@ -150,6 +152,7 @@ def test_series_title_worst_case_is_bounded():
 
 
 def test_series_title_cuts_long_titles_and_strips_every_suffix():
+    """A very long title is capped and every trailing suffix is stripped in turn."""
     assert series_title("Standup" + " 1" * 8000) == "Standup"
     assert len(series_title("x" * 5000)) <= fireflies.MAX_TITLE
     assert series_title("Sprint planning - Oct 14 (2) #3") == "Sprint planning"
@@ -158,6 +161,7 @@ def test_series_title_cuts_long_titles_and_strips_every_suffix():
 
 
 def test_series_key_prefers_the_calendar_event_and_strips_the_instance_suffix():
+    """Recurring meetings share a series key from their event; one-offs get none."""
     keys = {series_key(m) for m in SAMPLE if m["id"].startswith("S")}
     assert keys == {STANDUP}
     assert {series_key(m) for m in SAMPLE if m["id"].startswith("P")} == {PLANNING}
@@ -187,6 +191,7 @@ def test_a_split_google_series_keeps_its_key(calendar_id):
 
 
 async def test_a_split_series_keeps_taking_new_meetings():
+    """A picked series keeps picking up its later meetings on each new sync."""
     fake = FakeFireflies(
         [meeting("A1", "Standup", "2026-10-01T16:00:00Z", calendar_id="abc123def")]
     )
@@ -239,6 +244,7 @@ async def test_a_picked_series_takes_its_calendar_series_only():
 
 
 async def test_the_pickers_series_count_is_what_a_sync_of_it_takes():
+    """A series' picker count always matches how many meetings syncing it fetches."""
     fake = _one_offs_beside_a_series()
     conn = connector(fake)
     listed = await conn.browse_series(CREDENTIAL, date_from=None, date_to=None)
@@ -268,6 +274,7 @@ async def test_a_full_pass_drops_one_offs_an_older_rule_took_with_the_series():
 
 
 def test_legacy_configs_map_to_a_title_rule():
+    """A legacy config's 'meetings' key is read as a title filter, not meeting ids."""
     assert selection({}) == Selection(mode="all")
     legacy = selection({"from_date": "2026-10-01", "title_contains": ["Product"]})
     assert legacy.mode == "all"
@@ -280,6 +287,7 @@ def test_legacy_configs_map_to_a_title_rule():
 
 
 def test_new_config():
+    """A new-style selection keeps its date range, picked series and meetings exactly."""
     sel = selection(
         {
             "mode": "selected",
@@ -306,6 +314,7 @@ def test_new_config():
     ],
 )
 async def test_config_errors(config, match):
+    """Every selection config error gives the same message from validate as parsing."""
     with pytest.raises(ConnectorConfigError, match=match):
         selection(config)
     with pytest.raises(ConnectorConfigError, match=match):
@@ -316,12 +325,14 @@ async def test_config_errors(config, match):
 
 
 async def test_all_meetings():
+    """Selecting mode 'all' syncs every meeting in Fireflies, none left out."""
     fake = FakeFireflies(SAMPLE)
     events = await collect(connector(fake), {"mode": "all"})
     assert upserted(events) == ["O1", "S1", "P1", "K1", "S2", "S3", "P2"]
 
 
 async def test_all_in_a_date_range_queries_only_that_range():
+    """A date range on mode all limits both what is queried and what is synced."""
     fake = FakeFireflies(SAMPLE)
     config = {"mode": "all", "date_from": "2026-10-01", "date_to": "2026-10-12"}
     events = await collect(connector(fake), config)
@@ -334,6 +345,7 @@ async def test_all_in_a_date_range_queries_only_that_range():
 
 
 async def test_selected_series_and_meetings():
+    """Selected mode syncs the union of picked series and individually picked meetings."""
     fake = FakeFireflies(SAMPLE)
     config = {"mode": "selected", "series": [STANDUP, PLANNING], "meetings": ["K1"]}
     events = await collect(connector(fake), config)
@@ -342,6 +354,7 @@ async def test_selected_series_and_meetings():
 
 
 async def test_date_range_applies_to_what_is_picked():
+    """A date range on selected mode still filters which picked meetings sync."""
     fake = FakeFireflies(SAMPLE)
     config = {
         "mode": "selected",
@@ -354,6 +367,7 @@ async def test_date_range_applies_to_what_is_picked():
 
 
 async def test_a_new_meeting_of_a_series_is_picked_up_on_the_next_sync():
+    """A new meeting in a picked series is caught on the next incremental sync."""
     fake = FakeFireflies(list(SAMPLE))
     conn = connector(fake)
     config = {"mode": "selected", "series": [STANDUP]}
@@ -379,6 +393,7 @@ async def test_a_new_meeting_of_a_series_is_picked_up_on_the_next_sync():
 
 
 async def test_a_full_pass_deletes_what_is_no_longer_picked_and_skips_what_is_stored():
+    """A full pass deletes items no longer picked while skipping ones already stored."""
     fake = FakeFireflies(SAMPLE)
     config = {"mode": "selected", "series": [STANDUP]}
     # Stored from the previous selection: the standups, the planning and the interview.
@@ -400,6 +415,7 @@ async def test_a_full_pass_deletes_what_is_no_longer_picked_and_skips_what_is_st
 
 
 async def test_a_full_pass_with_nothing_to_fetch_still_commits_its_deletes():
+    """A full pass with nothing new to fetch still commits the deletes it found."""
     fake = FakeFireflies(SAMPLE)
     config = {"mode": "all", "date_from": "2026-10-10"}
     events = await collect(connector(fake), config, None, known=known("S3", "P2", "K1"))
@@ -410,6 +426,7 @@ async def test_a_full_pass_with_nothing_to_fetch_still_commits_its_deletes():
 
 
 async def test_an_incremental_sync_deletes_nothing_and_does_not_read_stored_ids():
+    """An incremental sync never deletes items and skips loading the stored id set."""
     calls = []
 
     async def load() -> set[str]:
@@ -453,6 +470,7 @@ async def test_an_old_pick_does_not_make_every_sync_reread_the_history(monkeypat
 
 
 async def test_a_full_pass_that_matches_and_deletes_nothing_still_checkpoints():
+    """A full pass that changes nothing still checkpoints to keep the next sync short."""
     fake = FakeFireflies(SAMPLE)
     conn = connector(fake)
     config = {"mode": "selected", "meetings": ["gone"]}
@@ -488,6 +506,7 @@ async def test_narrowing_rescopes_to_a_full_pass_and_new_labels_keep_the_positio
 
 
 def test_the_scope_is_the_date_range():
+    """A connector's scope mirrors its configured date range, end date made exclusive."""
     conn = connector(FakeFireflies(SAMPLE))
     scope = conn.scope({"mode": "all", "date_from": "2026-10-10", "date_to": "2026-10-12"})
     assert scope.groups is None
@@ -500,12 +519,14 @@ def test_the_scope_is_the_date_range():
 
 
 async def test_legacy_title_rule_still_filters():
+    """An old-style title filter with no mode still filters which meetings sync."""
     fake = FakeFireflies(SAMPLE)
     events = await collect(connector(fake), {"title_contains": ["planning"]})
     assert upserted(events) == ["P1", "P2"]
 
 
 async def test_rate_limited_while_listing():
+    """A rate limit hit while listing meetings still carries its retry-after seconds."""
     with pytest.raises(ConnectorRateLimited) as raised:
         await collect(connector(FakeFireflies(SAMPLE, error=rate_limited(30))), {"mode": "all"})
     assert raised.value.retry_after == 30
@@ -524,6 +545,7 @@ async def test_rate_limited_while_listing():
     ],
 )
 async def test_a_full_pass_on_a_broken_answer_fails_and_deletes_nothing(response):
+    """A malformed or empty response fails the sync without deleting anything."""
     fake = FakeFireflies(SAMPLE, error=response)
     events: list = []
     with pytest.raises(ConnectorError):
@@ -547,16 +569,19 @@ async def test_a_full_pass_on_a_broken_answer_fails_and_deletes_nothing(response
     ],
 )
 def test_out_of_range_or_mistyped_values_are_config_errors(config):
+    """Out-of-range dates and the wrong value types are config errors, not crashes."""
     with pytest.raises(ConnectorConfigError):
         selection(config)
 
 
 def test_a_thousand_labels_are_fine():
+    """A selection with a thousand labels is still accepted as valid."""
     labels = {f"m{i}": "Meeting" for i in range(1000)}
     assert selection({"mode": "selected", "meetings": ["m1"], "labels": labels}).meetings
 
 
 async def test_retry_after_as_an_http_date():
+    """A Retry-After given as an HTTP date converts to seconds, or is ignored."""
     later = datetime.now(UTC) + timedelta(seconds=120)
     response = rate_limited()
     response.headers["Retry-After"] = format_datetime(later, usegmt=True)
@@ -572,6 +597,7 @@ async def test_retry_after_as_an_http_date():
 
 @pytest.mark.parametrize("header", ["inf", "-inf", "nan", "Infinity", "1e400"])
 async def test_a_retry_after_that_is_no_number_of_seconds_is_ignored(header):
+    """A Retry-After header that is not a real number of seconds is ignored."""
     response = rate_limited()
     response.headers["Retry-After"] = header
     with pytest.raises(ConnectorRateLimited) as raised:
@@ -580,6 +606,7 @@ async def test_a_retry_after_that_is_no_number_of_seconds_is_ignored(header):
 
 
 async def test_a_very_long_retry_after_is_capped_at_a_day():
+    """An absurdly long Retry-After is capped at one day, not kept as given."""
     response = rate_limited(10**12)
     with pytest.raises(ConnectorRateLimited) as raised:
         await collect(connector(FakeFireflies(SAMPLE, error=response)), {"mode": "all"})
@@ -597,6 +624,7 @@ async def test_a_very_long_retry_after_is_capped_at_a_day():
     ],
 )
 async def test_error_entries_that_are_not_objects_are_errors_not_crashes(errors):
+    """A GraphQL error list with non-object entries still raises cleanly, not a crash."""
     fake = FakeFireflies(SAMPLE, error=httpx.Response(200, json={"errors": errors}))
     with pytest.raises(ConnectorError):
         await collect(connector(fake), {"mode": "all"}, known=known("S1"))
@@ -604,6 +632,7 @@ async def test_error_entries_that_are_not_objects_are_errors_not_crashes(errors)
 
 @pytest.mark.parametrize("value", [10**20, -(10**20), "not a date", "9999-99-99"])
 async def test_an_out_of_range_date_from_fireflies_reads_as_no_date(value):
+    """A meeting with an unreadable date from Fireflies reads as dateless, not broken."""
     odd = {**meeting("Z1", "Odd", "2026-10-03T10:00:00Z"), "date": value}
     fake = FakeFireflies([*SAMPLE, odd])
     conn = connector(fake)
@@ -624,6 +653,7 @@ async def test_an_out_of_range_date_from_fireflies_reads_as_no_date(value):
     ],
 )
 def test_picker_dates_are_plain_days(config):
+    """Picker dates must be plain YYYY-MM-DD, not a timestamp or other format."""
     with pytest.raises(ConnectorConfigError, match="YYYY-MM-DD"):
         selection(config)
 
@@ -668,6 +698,7 @@ async def test_a_transcript_fireflies_has_not_finished_is_asked_for_again():
 
 
 async def test_a_transcript_that_never_comes_is_skipped_after_a_few_syncs():
+    """A transcript that never finishes processing is given up on after a few tries."""
     fake = FakeFireflies(list(SAMPLE), processing={"S2": 100})
     conn = connector(fake)
     config = {"mode": "selected", "series": [STANDUP]}
@@ -684,6 +715,7 @@ async def test_a_transcript_that_never_comes_is_skipped_after_a_few_syncs():
 
 
 async def test_a_meeting_dated_in_the_future_does_not_move_the_position_past_now():
+    """A meeting dated in the future never pushes the sync position ahead of now."""
     later = datetime.now(UTC) + timedelta(days=400)
     fake = FakeFireflies([*SAMPLE, meeting("F1", "Future", _iso(later))])
     events = await collect(connector(fake), {"mode": "selected", "meetings": ["K1"]})
@@ -699,6 +731,7 @@ async def test_a_meeting_dated_in_the_future_does_not_move_the_position_past_now
 
 
 async def test_browse_meetings_pages_with_search_and_range():
+    """Browsing meetings pages correctly and a keyword search narrows the results."""
     fake = FakeFireflies(SAMPLE)
     conn = connector(fake)
     page = await conn.browse_meetings(CREDENTIAL, search="", date_from=None, date_to=None, skip=0)
@@ -720,6 +753,7 @@ async def test_browse_meetings_pages_with_search_and_range():
 
 
 async def test_browse_series_groups_with_counts_and_last_date():
+    """Browsing series groups meetings with the right count, title and newest first."""
     fake = FakeFireflies(SAMPLE)
     result = await connector(fake).browse_series(CREDENTIAL, date_from=None, date_to=None)
     by_key = {s.key: s for s in result.series}

@@ -101,6 +101,7 @@ async def _versions(tenant_id) -> list[SourceItemVersion]:
 async def test_create_validates_connection_kind_and_connector(
     a, tenant_id, alice, bob, slack, monkeypatch
 ):
+    """Creating a source checks its connection's kind, owner and connector."""
     # Every kind has a connector now (lanes B2a/B2b); drop one to see the refusal.
     monkeypatch.delitem(base._registry, "notion")
     mine = await make_connection(tenant_id, alice, "slack")
@@ -145,6 +146,7 @@ async def test_create_validates_connection_kind_and_connector(
 
 
 async def test_kinds_lists_my_connections_only(a, tenant_id, alice, bob, slack, monkeypatch):
+    """Listing source kinds shows only the requesting user's own connections."""
     monkeypatch.delitem(base._registry, "notion")
     await make_connection(tenant_id, alice, "slack")
     await make_connection(tenant_id, bob, "slack")
@@ -159,6 +161,7 @@ async def test_kinds_lists_my_connections_only(a, tenant_id, alice, bob, slack, 
 
 
 async def test_patch_pause_resume_delete(a, tenant_id, alice, slack):
+    """A source can be renamed, reconfigured, paused, resumed and deleted."""
     src = await _slack_source(a, tenant_id, alice)
     slack.pages = [[message("m1", "hello")]]
     await _sync(a, src["id"])
@@ -187,6 +190,7 @@ async def test_patch_pause_resume_delete(a, tenant_id, alice, slack):
 
 
 async def test_api_tokens_cannot_own_sources(tenant_id):
+    """An API token cannot be used to own or list sources."""
     async with tenant_session(tenant_id) as s:
         _, raw = await create_api_token(s, "agent")
         await s.commit()
@@ -199,6 +203,7 @@ async def test_api_tokens_cannot_own_sources(tenant_id):
 
 
 async def test_user_b_sees_nothing_of_a(a, b, tenant_id, alice, bob, slack):
+    """Another user's sources, items and snapshots are invisible to someone else."""
     src = await _slack_source(a, tenant_id, alice)
     slack.pages = [[message("m1", "pricing decision for the onboarding flow")]]
     await _sync(a, src["id"])
@@ -241,6 +246,7 @@ async def test_user_b_sees_nothing_of_a(a, b, tenant_id, alice, bob, slack):
 
 
 async def test_new_version_only_when_content_changes(a, tenant_id, alice, slack):
+    """A sync only writes a new content version when the content actually changed."""
     src = await _slack_source(a, tenant_id, alice)
     slack.pages = [[message("m1", "first draft", title="Plan"), message("m2", "other")]]
     result = await _sync(a, src["id"])
@@ -275,6 +281,7 @@ async def test_new_version_only_when_content_changes(a, tenant_id, alice, slack)
 
 
 async def test_deletes_are_applied(a, tenant_id, alice, slack):
+    """Items removed upstream are soft-deleted on sync and dropped from search."""
     src = await _slack_source(a, tenant_id, alice)
     slack.pages = [[message("m1", "keep"), message("m2", "remove me")], [ItemDelete("m2")]]
     result = await _sync(a, src["id"])
@@ -293,6 +300,7 @@ async def test_deletes_are_applied(a, tenant_id, alice, slack):
 
 
 async def test_interrupted_sync_resumes_from_cursor(a, tenant_id, alice, slack):
+    """A sync interrupted mid-run resumes from its checkpoint, not from scratch."""
     src = await _slack_source(a, tenant_id, alice)
     slack.pages = [
         [message("m1", "page one")],
@@ -321,6 +329,7 @@ async def test_interrupted_sync_resumes_from_cursor(a, tenant_id, alice, slack):
 
 
 async def test_auth_error_sets_status_error_without_leaking(a, tenant_id, alice, slack):
+    """An auth error during sync marks it as needing reconnect, without leaking."""
     src = await _slack_source(a, tenant_id, alice)
     slack.pages = [[message("m1", "x")]]
     slack.fail = {0: ConnectorAuthError(f"token {SECRET_TOKEN} was revoked")}
@@ -338,6 +347,7 @@ async def test_auth_error_sets_status_error_without_leaking(a, tenant_id, alice,
 
 
 async def test_rate_limit_stops_cleanly_and_keeps_cursor(a, tenant_id, alice, slack):
+    """A rate limit during sync stops cleanly, keeps its cursor, resumes after."""
     src = await _slack_source(a, tenant_id, alice)
     slack.pages = [[message("m1", "one")], [message("m2", "two")], [message("m3", "three")]]
     slack.fail = {1: ConnectorRateLimited(retry_after=30)}
@@ -356,6 +366,7 @@ async def test_rate_limit_stops_cleanly_and_keeps_cursor(a, tenant_id, alice, sl
 
 
 async def test_sync_without_connector_or_for_uploads(a, tenant_id, alice, slack, monkeypatch):
+    """Syncing with no connector, or for an upload source, is refused clearly."""
     src = await _slack_source(a, tenant_id, alice)
     monkeypatch.delitem(base._registry, "slack")
     resp = await a.post(f"/v1/sources/{src['id']}/sync")
@@ -367,6 +378,7 @@ async def test_sync_without_connector_or_for_uploads(a, tenant_id, alice, slack,
 
 
 async def test_revoked_connection_marks_source_error(a, tenant_id, alice, slack):
+    """A sync on an already-expired connection reports the error, not silence."""
     src = await _slack_source(a, tenant_id, alice)
     async with tenant_session(tenant_id) as s:
         from oracle.connections.models import Connection
@@ -404,6 +416,7 @@ def _pdf(text: str) -> bytes:
 
 
 async def test_uploads_markdown_and_pdf(a, tenant_id):
+    """Uploaded markdown and PDF files store as searchable items with content."""
     up = (await a.post("/v1/sources", json={"kind": "upload", "name": "Files"})).json()
     files = [
         (
@@ -451,6 +464,7 @@ async def test_uploads_markdown_and_pdf(a, tenant_id):
 
 
 async def test_upload_rejections(a, tenant_id, alice, slack):
+    """Bad or empty uploads are rejected by name; wrong source kind refuses too."""
     up = (await a.post("/v1/sources", json={"kind": "upload", "name": "Files"})).json()
     for name, data in [
         ("deck.pptx", b"binary"),
@@ -472,6 +486,7 @@ async def test_upload_rejections(a, tenant_id, alice, slack):
 
 
 async def test_snapshot_pins_reads(a, tenant_id, alice, slack):
+    """A snapshot pins what items looked like then, even after later syncs change them."""
     src = await _slack_source(a, tenant_id, alice)
     slack.pages = [
         [message("m1", "pricing is flat", title="Pricing v1"), message("m2", "to be deleted")]
@@ -525,6 +540,7 @@ async def test_snapshot_pins_reads(a, tenant_id, alice, slack):
 
 
 async def test_item_confidence_breakdown_and_planning_bonus(a, tenant_id, alice, slack):
+    """An item's confidence score breaks down by source, freshness and mentions."""
     src = await _slack_source(a, tenant_id, alice)
     now = datetime.now(UTC)
     slack.pages = [
@@ -544,6 +560,7 @@ async def test_item_confidence_breakdown_and_planning_bonus(a, tenant_id, alice,
 
 
 async def test_search_ranking_honours_confidence(a, tenant_id, alice, slack, github):
+    """Search ranks equally relevant results by confidence, not by source kind."""
     chat = await _slack_source(a, tenant_id, alice)
     conn = await make_connection(tenant_id, alice, "github")
     code = (
@@ -594,6 +611,7 @@ async def test_search_ranking_honours_confidence(a, tenant_id, alice, slack, git
 
 
 async def test_search_relevance_still_counts(a, tenant_id, alice, slack):
+    """Search still ranks by text relevance among items that tie on confidence."""
     src = await _slack_source(a, tenant_id, alice)
     slack.pages = [
         [

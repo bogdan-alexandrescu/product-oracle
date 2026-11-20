@@ -135,6 +135,7 @@ class Parts:
 
 
 async def test_set_parent_applies_reads_and_undoes(client):
+    """Making a feature part of another gives it the parent's dates unless it has one."""
     w = await Parts().build(await make_people())
     items = await w.read(client)
     assert items["p"]["parent_key"] is None and items["p"]["part_of"] is None
@@ -168,6 +169,7 @@ async def test_set_parent_applies_reads_and_undoes(client):
 
 
 async def test_set_parent_stale_roles_and_bad_parents(client):
+    """Setting a parent is refused when stale, by role, or if it would loop."""
     w = await Parts().build(await make_people())
     stale = await w.parent(client, "p", "b", "a")
     assert stale.status_code == 409, stale.text
@@ -207,6 +209,7 @@ async def test_set_parent_stale_roles_and_bad_parents(client):
 
 
 async def test_a_part_is_never_a_broken_link_against_its_parent(client):
+    """A dependency to a feature's own part or parent is never flagged as broken."""
     w = await Parts().build(await make_people())
     items = await w.read(client)
     # d starts Oct 10, but a, which it depends on, ends Oct 30.
@@ -232,6 +235,7 @@ async def test_a_part_is_never_a_broken_link_against_its_parent(client):
 
 
 async def test_merge_any_open_item(client):
+    """Merging an item into its own part still carries its dependents and flags along."""
     w = await Parts().build(await make_people())
     # c depends on b, d on a and c; p and own are parts of c. c merges into p, its own part.
     r = await client.post(CHANGES, headers=w.ctx.as_("owner"), json={
@@ -283,6 +287,7 @@ async def test_merge_any_open_item(client):
 
 
 async def test_a_merged_part_leaves_its_parent(client):
+    """A merged feature leaves its parent; merging across roadmaps is refused."""
     w = await Parts().build(await make_people())
     assert (await w.parent(client, "p", None, "a")).status_code == 201
     r = await w.merge(client, "p", "b")
@@ -300,6 +305,7 @@ ITEMS = "/v1/simple/roadmap/items"
 
 
 async def test_parts_at_any_depth(client):
+    """A feature with no dates reads its nearest dated ancestor's, at any depth."""
     w = await Parts().build(await make_people())
     # a (dated) > p (undated) > c (undated) > d (dated, depends on a).
     for key, parent in (("p", "a"), ("c", "p"), ("d", "c")):
@@ -321,6 +327,7 @@ async def test_parts_at_any_depth(client):
 
 
 async def test_never_its_own_ancestor(client):
+    """A feature can never become its own ancestor; the API refuses it by name."""
     w = await Parts().build(await make_people())
     assert (await w.parent(client, "p", None, "a")).status_code == 201
     assert (await w.parent(client, "c", None, "p")).status_code == 201
@@ -367,6 +374,7 @@ async def test_a_loop_names_each_feature_by_code_and_name(client):
 
 
 async def test_merge_into_a_part_keeps_every_part(client):
+    """Merging a feature into its own part keeps every part, and undo restores it."""
     w = await Parts().build(await make_people())
     # a > b; c > p, own. c merges into b, itself a part.
     for key, parent in (("b", "a"), ("p", "c"), ("own", "c")):
@@ -400,6 +408,7 @@ async def test_merge_into_a_part_keeps_every_part(client):
 
 
 async def test_restore_a_part_keeps_its_live_parent(client):
+    """Restoring a trashed part reattaches to its parent's place, never a loop."""
     w = await Parts().build(await make_people())
     owner = w.ctx.as_("owner")
     # p is part of a; p goes to Trash; a moves under b meanwhile: p comes back under a.
@@ -441,6 +450,7 @@ async def test_restore_a_part_keeps_its_live_parent(client):
 
 
 async def test_cut_parts_stay_parts(client):
+    """A cut feature stays listed as its parent's part, sorted below open ones."""
     w = await Parts().build(await make_people())
     for key in ("p", "c"):
         assert (await w.parent(client, key, None, "a")).status_code == 201
@@ -460,6 +470,7 @@ async def test_cut_parts_stay_parts(client):
 
 
 async def test_a_part_of_a_feature_in_trash(client):
+    """A part keeps its dates and parent link even after that parent is trashed."""
     w = await Parts().build(await make_people())
     assert (await w.parent(client, "p", None, "a")).status_code == 201
     shown = (await w.read(client))["p"]

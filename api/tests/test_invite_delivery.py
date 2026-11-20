@@ -169,6 +169,7 @@ async def _open_invites(client, headers) -> dict[str, dict]:
 
 
 async def test_creating_an_invite_grants_iap_access_on_each_backend(client, owner, iap, mail):
+    """Creating an invite grants IAP access on every configured backend."""
     tenant_id, headers = owner
     # Someone already bound stays bound; another role's binding is untouched.
     iap.policies["oracle-api-be"] = {
@@ -195,6 +196,7 @@ async def test_creating_an_invite_grants_iap_access_on_each_backend(client, owne
 
 
 async def test_the_grant_is_idempotent(client, owner, iap, mail):
+    """Granting access again when already bound writes nothing new."""
     _, headers = owner
     for b in BACKENDS:
         iap.policies[b] = {
@@ -210,6 +212,7 @@ async def test_the_grant_is_idempotent(client, owner, iap, mail):
 
 
 async def test_no_backends_skips_the_grant_and_records_it(client, owner, iap, mail, monkeypatch):
+    """With no backends configured, the grant is skipped and that is recorded."""
     tenant_id, headers = owner
     monkeypatch.setattr(get_settings(), "iap_backends", [])
     body = await _invite(client, headers)
@@ -221,6 +224,7 @@ async def test_no_backends_skips_the_grant_and_records_it(client, owner, iap, ma
 
 
 async def test_a_grant_failure_keeps_the_invite_pending_and_retry_grants(client, owner, iap, mail):
+    """A failed access grant leaves the invite pending, and a retry can grant it."""
     tenant_id, headers = owner
     iap.fail = "IAP answered 403: the caller does not have permission"
     body = await _invite(client, headers)
@@ -245,6 +249,7 @@ async def test_a_grant_failure_keeps_the_invite_pending_and_retry_grants(client,
 
 
 async def test_retry_access_refusals(client, owner, iap, mail):
+    """Retrying access on a missing or already revoked invite is refused."""
     _, headers = owner
     body = await _invite(client, headers)
     missing = await client.post(f"/v1/invites/{uuid.uuid4()}/access", headers=headers)
@@ -255,6 +260,7 @@ async def test_retry_access_refusals(client, owner, iap, mail):
 
 
 async def test_an_etag_conflict_is_retried_once(client, owner, iap, mail):
+    """One policy conflict is retried once; a second in a row leaves it pending."""
     _, headers = owner
     iap.conflicts = 1
     assert (await _invite(client, headers))["access"] == "granted"
@@ -268,6 +274,7 @@ async def test_an_etag_conflict_is_retried_once(client, owner, iap, mail):
 
 
 async def test_revoking_an_invite_takes_the_access_away(client, owner, iap, mail):
+    """Revoking an invite takes away the access it had granted."""
     tenant_id, headers = owner
     body = await _invite(client, headers)
     assert iap.bound("pat@example.com") == BACKENDS
@@ -278,6 +285,7 @@ async def test_revoking_an_invite_takes_the_access_away(client, owner, iap, mail
 
 
 async def test_revoking_keeps_the_access_of_an_active_member(client, owner, iap, mail):
+    """Revoking an invite never removes access an existing member still needs."""
     tenant_id, headers = owner
     body = await _invite(client, headers)
     # They became a member (a sign-in that raced the revoke) while the invite was open.
@@ -293,6 +301,7 @@ async def test_revoking_keeps_the_access_of_an_active_member(client, owner, iap,
 async def test_removing_a_member_takes_the_access_away_and_restore_grants_it(
     client, owner, iap, mail
 ):
+    """Disabling a member revokes their access; restoring them grants it back."""
     tenant_id, headers = owner
     async with tenant_session(tenant_id) as s:
         user = User(email="lee@example.com", password_hash=hash_password("x"), role="commenter")
@@ -319,6 +328,7 @@ async def test_removing_a_member_takes_the_access_away_and_restore_grants_it(
 async def test_the_domain_check_refuses_an_address_that_cannot_sign_in(
     client, owner, iap, mail, monkeypatch
 ):
+    """An address outside the allowed sign-in domains is refused."""
     _, headers = owner
     monkeypatch.setattr(get_settings(), "iap_allowed_domains", ["example.com"])
     resp = await client.post(
@@ -335,6 +345,7 @@ async def test_the_domain_check_refuses_an_address_that_cannot_sign_in(
 
 
 async def test_the_mail_is_queued_not_sent_on_the_request(client, owner, iap, mail):
+    """Sending an invite email never blocks the request that queues it."""
     _, headers = owner
     mail.gate = asyncio.Event()
     # A send held open never holds up the request.
@@ -356,6 +367,7 @@ async def test_the_mail_is_queued_not_sent_on_the_request(client, owner, iap, ma
 
 
 async def test_the_invite_email_says_who_what_and_where(client, owner, iap, mail):
+    """The invite email names the inviter, company, role and sign-in link."""
     tenant_id, headers = owner
     body = await _invite(client, headers, "pat@example.com", "approver")
     await delivery.drain()
@@ -375,6 +387,7 @@ async def test_the_invite_email_says_who_what_and_where(client, owner, iap, mail
 
 
 async def test_a_failed_send_is_retried_once_then_recorded_failed(client, owner, iap, mail):
+    """A failed send is retried once, then recorded as failed, and can resend."""
     tenant_id, headers = owner
     mail.fail_times = 1
     await _invite(client, headers)
@@ -408,6 +421,7 @@ async def test_a_failed_send_is_retried_once_then_recorded_failed(client, owner,
 
 
 async def test_with_no_sender_nothing_is_sent(client, owner, iap, mail, monkeypatch):
+    """With no mail sender configured, nothing is ever sent."""
     _, headers = owner
     monkeypatch.setattr(mailer, "get_mailer", lambda: None)
     body = await _invite(client, headers)
@@ -421,6 +435,7 @@ async def test_with_no_sender_nothing_is_sent(client, owner, iap, mail, monkeypa
 
 
 async def test_resend_refuses_a_closed_invite(client, owner, iap, mail):
+    """A closed or missing invite cannot have its email resent."""
     _, headers = owner
     body = await _invite(client, headers)
     await delivery.drain()
@@ -432,6 +447,7 @@ async def test_resend_refuses_a_closed_invite(client, owner, iap, mail):
 
 
 async def test_the_tick_sends_a_queued_email_a_lost_process_left(client, owner, iap, mail):
+    """A background tick sends a queued email a dead process left behind."""
     tenant_id, headers = owner
     body = await _invite(client, headers)
     await delivery.drain()
@@ -460,6 +476,7 @@ async def test_the_tick_sends_a_queued_email_a_lost_process_left(client, owner, 
 
 
 def test_get_mailer_needs_the_provider_and_the_sender(monkeypatch):
+    """The mailer needs both a provider and a sender address to exist."""
     settings = get_settings()
     monkeypatch.setattr(settings, "mail_provider", "")
     monkeypatch.setattr(settings, "mail_sender", "oracle@example.com")
@@ -474,6 +491,7 @@ def test_get_mailer_needs_the_provider_and_the_sender(monkeypatch):
 
 
 def test_get_client_needs_the_project(monkeypatch):
+    """The IAP client needs a configured project to exist."""
     monkeypatch.setattr(get_settings(), "gcp_project", "")
     assert iap_access.get_client() is None
     monkeypatch.setattr(get_settings(), "gcp_project", "oracle-prod")
@@ -490,6 +508,7 @@ class FakeMinter:
 
 
 async def test_the_gmail_mailer_posts_a_base64url_rfc822_message():
+    """The Gmail mailer posts a correctly encoded RFC 822 message."""
     seen: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -522,6 +541,7 @@ async def test_the_gmail_mailer_posts_a_base64url_rfc822_message():
 
 
 async def test_the_gmail_mailer_raises_on_a_refusal():
+    """The Gmail mailer raises when Google refuses to send the message."""
     transport = httpx.MockTransport(lambda r: httpx.Response(403, json={"error": "no"}))
     sender = mailer.GmailApiMailer("oracle@example.com", FakeMinter())
     message = mailer.invite_email(
@@ -545,6 +565,7 @@ class FakeAuth:
 
 
 async def test_the_delegated_token_is_signed_by_iam_and_cached():
+    """The delegated token is signed through IAM and then cached."""
     seen: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -574,6 +595,7 @@ async def test_the_delegated_token_is_signed_by_iam_and_cached():
 
 
 async def test_the_google_iap_client_reads_and_writes_the_policy():
+    """The Google IAP client both reads and writes the access policy."""
     seen: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -598,6 +620,7 @@ async def test_the_google_iap_client_reads_and_writes_the_policy():
 
 
 def test_the_jwt_claims_expire_within_an_hour():
+    """A minted token's claims never live longer than an hour."""
     claims = mailer.delegation_claims("sa@p.iam", "oracle@example.com", now=1_000)
     assert claims["exp"] - claims["iat"] <= 3600
     assert claims["iat"] == 1_000
@@ -655,6 +678,7 @@ ENCODED = [
 async def test_a_crafted_or_malformed_address_is_refused_and_nothing_happens(
     client, owner, iap, mail, monkeypatch, address
 ):
+    """A crafted or malformed address is refused and nothing is sent or granted."""
     tenant_id, headers = owner
     monkeypatch.setattr(get_settings(), "iap_allowed_domains", ["corp.com"])
     resp = await client.post(
@@ -670,6 +694,7 @@ async def test_a_crafted_or_malformed_address_is_refused_and_nothing_happens(
 
 
 async def test_one_plain_address_is_taken_lowercased(client, owner, iap, mail, monkeypatch):
+    """A plain address is accepted after trimming and lowercasing it."""
     _, headers = owner
     monkeypatch.setattr(get_settings(), "iap_allowed_domains", ["corp.com"])
     body = await _invite(client, headers, "  Pat.Lee+oracle@Corp.COM ")
@@ -681,12 +706,14 @@ async def test_one_plain_address_is_taken_lowercased(client, owner, iap, mail, m
 
 @pytest.mark.parametrize("address", CRAFTED + MALFORMED + ENCODED)
 def test_a_crafted_malformed_or_encoded_address_is_not_a_plain_address(address):
+    """A crafted, malformed or encoded address is rejected as not plain."""
     with pytest.raises(ValueError):
         plain_address(address)
 
 
 @pytest.mark.parametrize("address", CRAFTED[:8] + ENCODED[:4])
 def test_the_mailer_never_addresses_more_than_one_plain_address(address):
+    """The mailer never addresses a message to more than one plain address."""
     sender = mailer.GmailApiMailer("oracle@corp.com", FakeMinter())
     message = mailer.invite_email(
         to=address, company="C", role="viewer", inviter="a@corp.com", link="/"
@@ -699,6 +726,7 @@ def test_the_mailer_never_addresses_more_than_one_plain_address(address):
     "address", ["pat@corp.com", "pat.lee+oracle@corp.com", "o'neil!#$%&*/?=^_`{|}~-@a-1.corp.com"]
 )
 def test_the_rendered_to_header_is_the_address_byte_for_byte(address):
+    """The rendered To header matches the given address byte for byte."""
     sender = mailer.GmailApiMailer("oracle@corp.com", FakeMinter())
     message = mailer.invite_email(
         to=address, company="C", role="viewer", inviter="a@corp.com", link="/"
@@ -711,6 +739,7 @@ def test_the_rendered_to_header_is_the_address_byte_for_byte(address):
 
 
 def test_the_mailer_refuses_a_to_header_that_does_not_render_as_the_address(monkeypatch):
+    """The mailer refuses a To header that would not render as the given address."""
     # Defence in depth: past plain_address, the rendered To line is still checked.
     monkeypatch.setattr(mailer, "plain_address", lambda v: v)
     sender = mailer.GmailApiMailer("oracle@corp.com", FakeMinter())
@@ -724,6 +753,7 @@ def test_the_mailer_refuses_a_to_header_that_does_not_render_as_the_address(monk
 
 @pytest.mark.parametrize("address", CRAFTED[:8] + ENCODED[:4])
 async def test_the_iap_member_is_only_ever_one_plain_address(address):
+    """The IAP grant only ever binds a single plain address, never more."""
     fake = FakeIap()
     with pytest.raises(iap_access.IapError):
         await iap_access.grant(fake, BACKENDS, address)
@@ -752,6 +782,7 @@ async def _tick(tenant_id) -> None:
 
 
 async def test_a_failed_revoke_is_queued_and_the_tick_removes_the_binding(client, owner, iap, mail):
+    """A failed revoke is queued and a later tick removes the binding."""
     tenant_id, headers = owner
     body = await _invite(client, headers)
     assert iap.bound("pat@example.com") == BACKENDS
@@ -779,6 +810,7 @@ async def test_a_failed_revoke_is_queued_and_the_tick_removes_the_binding(client
 
 
 async def test_a_queued_revoke_keeps_the_binding_of_someone_invited_again(client, owner, iap, mail):
+    """A queued revoke never removes access of someone invited again since."""
     tenant_id, headers = owner
     body = await _invite(client, headers)
     iap.fail = "Google returned 503 (unavailable)"
@@ -794,6 +826,7 @@ async def test_a_queued_revoke_keeps_the_binding_of_someone_invited_again(client
 async def test_a_failed_revoke_on_removal_shows_on_the_member_and_the_tick_retries(
     client, owner, iap, mail
 ):
+    """A failed revoke shows pending on the member and a tick retries it."""
     tenant_id, headers = owner
     async with tenant_session(tenant_id) as s:
         user = User(email="lee@example.com", password_hash=hash_password("x"), role="commenter")
@@ -822,6 +855,7 @@ async def test_a_failed_revoke_on_removal_shows_on_the_member_and_the_tick_retri
 
 
 async def test_a_failed_grant_on_restore_is_queued_and_the_tick_grants(client, owner, iap, mail):
+    """A failed grant on restore is queued and a later tick grants it."""
     tenant_id, headers = owner
     async with tenant_session(tenant_id) as s:
         user = User(
@@ -857,6 +891,7 @@ async def _invite_id(tenant_id, address: str) -> str:
 
 
 async def test_a_revoke_during_an_in_flight_grant_leaves_no_binding(client, owner, iap, mail):
+    """A revoke racing an in-flight grant leaves no access bound after."""
     tenant_id, headers = owner
     iap.hold = asyncio.Event()
     creating = asyncio.create_task(
@@ -879,6 +914,7 @@ async def test_a_revoke_during_an_in_flight_grant_leaves_no_binding(client, owne
 
 
 async def test_a_revoke_racing_a_new_invite_keeps_the_new_invites_binding(client, owner, iap, mail):
+    """A revoke racing a fresh invite keeps the fresh invite's own binding."""
     tenant_id, headers = owner
     first = await _invite(client, headers)
     assert iap.bound("pat@example.com") == BACKENDS
@@ -901,6 +937,7 @@ async def test_a_revoke_racing_a_new_invite_keeps_the_new_invites_binding(client
 
 
 async def test_the_body_less_invite_posts_refuse_another_origin(client, iap, mail):
+    """Invite actions with no body still enforce the same origin check."""
     from tests.test_oauth import PASSWORD
 
     await seed(password=PASSWORD)
@@ -929,6 +966,7 @@ async def test_the_body_less_invite_posts_refuse_another_origin(client, iap, mai
 
 
 async def test_run_and_read_only_tokens_cannot_retry_or_resend(client, iap, monkeypatch):
+    """Run tokens and read only credentials cannot retry access or resend mail."""
     from tests.test_account import _admin_id, _run_token
     from tests.test_read_only_credentials import _bearer
 
@@ -958,6 +996,7 @@ async def test_run_and_read_only_tokens_cannot_retry_or_resend(client, iap, monk
 
 
 async def test_resend_waits_a_minute_after_the_last_send(client, owner, iap, mail):
+    """Resending an invite email waits a minute after the last send."""
     tenant_id, headers = owner
     body = await _invite(client, headers)
     await delivery.drain()
@@ -987,6 +1026,7 @@ LEAKED = ("eyJhbGciOi.eyJzdWIiOi.c2lnbmF0dXJl", "po_faketoken123")
 
 
 async def test_the_iap_client_keeps_googles_own_message_with_the_status():
+    """A refusal from Google keeps Google's own message along with the status."""
     client = iap_access.GoogleIapClient("oracle-prod", FakeAuth())
     transport = httpx.MockTransport(lambda r: httpx.Response(400, json=GOOGLE_400))
     async with httpx.AsyncClient(transport=transport) as http:
@@ -1006,6 +1046,7 @@ async def test_the_iap_client_keeps_googles_own_message_with_the_status():
 
 
 def test_googles_message_is_capped_and_holds_no_tokens():
+    """Google's error message is capped in length and never carries a token."""
     leaky = {"error": {"message": f"Bearer {LEAKED[0]} and {LEAKED[1]} refused"}}
     said = iap_access.google_refusal(400, json.dumps(leaky))
     assert said.startswith("Google returned 400 (bad request): ")
@@ -1032,6 +1073,7 @@ def test_googles_message_is_capped_and_holds_no_tokens():
 
 
 async def test_the_gmail_mailer_keeps_googles_own_message_with_the_status():
+    """The Gmail mailer's error keeps Google's own message with the status."""
     transport = httpx.MockTransport(lambda r: httpx.Response(400, json=GOOGLE_400))
     sender = mailer.GmailApiMailer("oracle@example.com", FakeMinter())
     message = mailer.invite_email(
@@ -1053,6 +1095,7 @@ async def test_the_gmail_mailer_keeps_googles_own_message_with_the_status():
 async def test_the_invite_records_googles_message_never_an_exceptions_text(
     client, owner, iap, mail, monkeypatch
 ):
+    """A failed send records Google's own message, never a raw exception's text."""
     _, headers = owner
     real = iap_access.GoogleIapClient("oracle-prod", FakeAuth())
     transport = httpx.MockTransport(lambda r: httpx.Response(400, json=GOOGLE_400))

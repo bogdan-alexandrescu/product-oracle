@@ -106,6 +106,7 @@ async def _patch_experiment(client, ctx, exp_id: str, **body):
     ],
 )
 async def test_the_generic_patch_refuses_any_change_to_the_strategy(client, change):
+    """The generic entity patch refuses any change to a blocker's strategy fields."""
     ctx = await make_ctx()
     doc_id, b = await _gated(client, ctx)
     stored = dict((await _entity(ctx, b["id"])).attrs["blocker"])
@@ -129,6 +130,7 @@ async def test_the_generic_patch_refuses_any_change_to_the_strategy(client, chan
 
 
 async def test_other_attrs_of_a_blocker_entity_stay_editable(client):
+    """Non-strategy attrs of a blocker entity stay editable through the generic patch."""
     ctx = await make_ctx()
     doc_id, b = await _gated(client, ctx)
     resp = await client.patch(
@@ -149,6 +151,7 @@ async def test_other_attrs_of_a_blocker_entity_stay_editable(client):
 
 
 async def test_creating_an_entity_with_a_strategy_is_refused(client):
+    """Creating an entity with a blocker strategy already attached is refused."""
     ctx = await make_ctx()
     resp = await client.post(
         "/v1/baseline/entities",
@@ -166,6 +169,7 @@ async def test_creating_an_entity_with_a_strategy_is_refused(client):
 
 @pytest.mark.parametrize("op", ["update", "create"])
 async def test_a_proposal_cannot_carry_a_strategy_change(client, op):
+    """A baseline proposal cannot carry a change to the blocker strategy."""
     ctx = await make_ctx()
     _doc_id, b = await _gated(client, ctx)
     if op == "update":
@@ -220,6 +224,7 @@ async def test_an_open_proposal_from_before_cannot_be_accepted(client):
 
 
 async def test_an_agent_write_is_refused_not_proposed(client):
+    """An agent write that touches the strategy is refused outright, not proposed."""
     ctx = await make_ctx()
     _doc_id, b = await _gated(client, ctx)
     principal = Principal(
@@ -234,6 +239,7 @@ async def test_an_agent_write_is_refused_not_proposed(client):
 
 
 async def test_a_yaml_import_cannot_change_the_strategy(client):
+    """A YAML import can round-trip or omit the strategy but never rewrite it."""
     ctx = await make_ctx()
     doc_id, b = await _gated(client, ctx)
     stored = dict((await _entity(ctx, b["id"])).attrs["blocker"])
@@ -294,6 +300,7 @@ async def test_the_blocker_routes_still_reclassify(client):
     [("severity", "high"), ("type", "soft"), ("status", "resolved"), ("document_ids", [])],
 )
 async def test_a_strategy_edited_in_the_database_fails_closed(client, field, value):
+    """A strategy edited directly in the database fails the gate closed."""
     ctx = await make_ctx()
     doc_id, b = await _gated(client, ctx)
     async with tenant_session(ctx.tenant_id) as s:
@@ -306,6 +313,7 @@ async def test_a_strategy_edited_in_the_database_fails_closed(client, field, val
 
 
 async def test_a_strategy_deleted_in_the_database_fails_closed(client):
+    """A strategy deleted directly in the database fails the gate closed."""
     ctx = await make_ctx()
     doc_id, b = await _gated(client, ctx)
     async with tenant_session(ctx.tenant_id) as s:
@@ -317,6 +325,7 @@ async def test_a_strategy_deleted_in_the_database_fails_closed(client):
 
 
 async def test_a_resolved_blocker_downgraded_through_the_routes_still_passes(client):
+    """A resolved blocker edited through the normal routes keeps passing the gate."""
     ctx = await make_ctx()
     doc_id, b = await _gated(client, ctx)
     resp = await client.post(
@@ -338,6 +347,7 @@ async def test_a_resolved_blocker_downgraded_through_the_routes_still_passes(cli
 
 
 async def test_a_feasibility_scope_expires_at_its_decision_gate(client):
+    """A feasibility scope stops passing once its decision gate date has passed."""
     ctx = await make_ctx()
     doc_id, b = await _gated(client, ctx)
     exp = await _scoped(client, ctx, b["id"])
@@ -377,6 +387,7 @@ async def test_moving_the_gate_later_needs_a_new_approval(client):
 
 @pytest.mark.parametrize("cleared", ["owner_id", "success_threshold"])
 async def test_a_feasibility_scope_needs_its_owner_and_threshold(client, cleared):
+    """Clearing a feasibility scope's owner or threshold fails the gate."""
     ctx = await make_ctx()
     doc_id, b = await _gated(client, ctx)
     exp = await _scoped(client, ctx, b["id"])
@@ -388,6 +399,7 @@ async def test_a_feasibility_scope_needs_its_owner_and_threshold(client, cleared
 
 
 async def test_a_succeeded_experiment_is_time_boxed_to_its_gate(client):
+    """A succeeded experiment passes until its decision gate, then needs resolving."""
     ctx = await make_ctx()
     doc_id, b = await _gated(client, ctx)
     exp = await _scoped(client, ctx, b["id"])
@@ -421,6 +433,7 @@ async def test_a_succeeded_experiment_is_time_boxed_to_its_gate(client):
 
 
 async def test_the_b4_settings_have_their_defaults(client):
+    """The blocker risk settings default to owner acceptance and 90 review days."""
     ctx = await make_ctx()
     listed = (await client.get("/v1/settings", headers=ctx.as_("owner"))).json()
     values = {s["key"]: s["value"] for s in listed}
@@ -440,12 +453,14 @@ async def test_the_b4_settings_have_their_defaults(client):
     ],
 )
 async def test_the_b4_settings_are_validated(client, key, value):
+    """The blocker risk settings reject an invalid role or review day count."""
     ctx = await make_ctx()
     assert (await _put_setting(client, ctx, key, value)).status_code == 422
 
 
 @pytest.mark.parametrize("action", ["accept-risk", "feasibility-scope"])
 async def test_by_default_only_owners_decide_a_critical_hard_blocker(client, action):
+    """By default only an owner may accept risk or scope feasibility for it."""
     ctx = await make_ctx()
     doc_id, b = await _gated(client, ctx)
     if action == "accept-risk":
@@ -464,6 +479,7 @@ async def test_by_default_only_owners_decide_a_critical_hard_blocker(client, act
 
 
 async def test_the_company_can_let_approvers_decide(client):
+    """A tenant setting can let approvers accept risk on a critical blocker too."""
     ctx = await make_ctx()
     doc_id, b = await _gated(client, ctx)
     resp = await _put_setting(client, ctx, "blocker_risk_acceptance_role", "approver")
@@ -478,6 +494,7 @@ async def test_the_company_can_let_approvers_decide(client):
 
 
 async def test_approvers_still_decide_lesser_blockers(client):
+    """An approver may still accept risk on a blocker that is not critical."""
     ctx = await make_ctx()
     b = (await create_blocker(client, ctx, severity="high"))["blocker"]
     resp = await client.post(
@@ -489,6 +506,7 @@ async def test_approvers_still_decide_lesser_blockers(client):
 
 
 async def test_a_risk_acceptance_must_be_reviewed_within_the_horizon(client):
+    """A risk acceptance's review date must fall within the configured day limit."""
     ctx = await make_ctx()
     _doc_id, b = await _gated(client, ctx)
     url = f"/v1/blockers/{b['id']}/accept-risk"
@@ -522,6 +540,7 @@ async def _actions(ctx) -> dict[uuid.UUID, str]:
 
 
 async def test_a_risk_acceptance_is_audited_once(client):
+    """Accepting a risk writes exactly one audit event, not several."""
     ctx = await make_ctx()
     _doc_id, b = await _gated(client, ctx)
     before = await _actions(ctx)
@@ -537,6 +556,7 @@ async def test_a_risk_acceptance_is_audited_once(client):
 
 
 async def test_a_feasibility_scope_is_audited_once(client):
+    """Approving a feasibility scope writes exactly one audit event."""
     ctx = await make_ctx()
     _doc_id, b = await _gated(client, ctx)
     exp = await _experiment(client, ctx, b["id"])

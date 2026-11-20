@@ -222,12 +222,14 @@ def test_each_blocking_finding(text, code, word):
     ],
 )
 def test_warnings(text, code):
+    """A money figure, metric or concrete date in public text raises a warning."""
     findings = leak_check.check(text, _ctx())
     assert [f.code for f in findings] == [code]
     assert findings[0].severity == "warning"
 
 
 def test_a_date_inside_the_announced_quarter_is_fine_and_a_copied_title_warns():
+    """A date inside the announced quarter is fine; copying the internal title warns."""
     assert leak_check.check("Arrives in November", _ctx(), announced_quarter="2026-Q4") == []
     assert [f.code for f in leak_check.check("Arrives in March", _ctx(),
                                              announced_quarter="2026-Q4")] == ["date"]  # fmt: skip
@@ -236,6 +238,7 @@ def test_a_date_inside_the_announced_quarter_is_fine_and_a_copied_title_warns():
 
 
 def test_plain_customer_words_have_no_finding():
+    """Ordinary wording, a whole product name or a year range raises no warning."""
     text = "Import your accounts in one go. Bring every account over on day one."
     assert leak_check.check(text, _ctx()) == []
     # A name must match as words, not inside another word.
@@ -285,6 +288,7 @@ async def test_every_route_needs_an_approver_and_refuses_a_run(client, ctx, who,
 
 
 async def test_the_review_list_counts_shown_and_left_out(client, ctx):
+    """The public-texts review list counts items by state and updates live."""
     await seed(ctx)
     resp = await client.get(TEXTS, headers=ctx.as_("approver"))
     assert resp.status_code == 200, resp.text
@@ -391,6 +395,7 @@ def test_the_four_ticked_kinds_are_warnings_and_names_still_block():
 
 
 async def test_a_warning_needs_a_tick(client, ctx):
+    """A public text with an unacknowledged warning cannot be saved yet."""
     await seed(ctx)
     resp = await put_text(client, ctx, "bulk-import", description="Setup takes 40% less time.")
     assert resp.status_code == 422
@@ -403,6 +408,7 @@ async def test_a_warning_needs_a_tick(client, ctx):
 
 
 async def test_limits_and_unknown_items(client, ctx):
+    """A public text's fields are length- and format-limited; unknown items 404."""
     await seed(ctx)
     assert (await put_text(client, ctx, "bulk-import", title="x" * 81)).status_code == 422
     assert (await put_text(client, ctx, "bulk-import", description="x" * 281)).status_code == 422
@@ -415,6 +421,7 @@ async def test_limits_and_unknown_items(client, ctx):
 
 
 async def test_every_change_is_audited(client, ctx):
+    """Editing, approving or excluding a public text each writes its own audit event."""
     await seed(ctx)
     await put_text(client, ctx, "bulk-import", state="draft")
     await put_text(client, ctx, "bulk-import")
@@ -482,6 +489,7 @@ async def test_the_preview_holds_no_internal_marker(client, ctx):
 
 
 async def test_the_page_title_intro_quarter_and_changelog(client, ctx):
+    """The public page's title, intro and changelog render leak-checked and safe."""
     await seed(ctx)
     await approve_both(client, ctx)
     resp = await put_text(client, ctx, "bulk-import", announced_quarter="2026-Q4",
@@ -570,6 +578,7 @@ async def test_the_check_needs_every_shown_item_approved_then_lapses(client, ctx
 
 
 async def test_the_check_is_for_a_publication(client, ctx):
+    """Running the public-text check needs the document to actually be set to publish."""
     await seed(ctx, publish=False)
     resp = await client.post(CHECK, headers=ctx.as_("approver"))
     assert resp.status_code == 404
@@ -622,6 +631,7 @@ async def test_oracle_drafts_texts_and_never_approves_or_dates(client, ctx, fake
 
 
 async def test_the_job_can_be_switched_off_per_document(client, ctx):
+    """Drafting public texts can be turned off for one document, refusing new drafts."""
     await seed(ctx)
     async with tenant_session(ctx.tenant_id) as s:
         doc = await s.scalar(select(Document).where(Document.slug == SLUG))
@@ -633,6 +643,7 @@ async def test_the_job_can_be_switched_off_per_document(client, ctx):
 
 
 async def test_a_prd_has_no_public_texts(client, ctx):
+    """A PRD document has no public texts; only a roadmap does."""
     await seed(ctx)
     resp = await client.get("/v1/roadmaps/example-labs-prd/public-texts",
                             headers=ctx.as_("approver"))  # fmt: skip
@@ -640,6 +651,7 @@ async def test_a_prd_has_no_public_texts(client, ctx):
 
 
 def test_source_hash_is_title_and_outcome():
+    """A public text's source hash comes from title and outcome, blank as none."""
     assert public.source_hash("A", "B") == hashlib.sha256(b"A\nB").hexdigest()
     assert public.source_hash("A", None) == public.source_hash("A", "")
 
@@ -688,6 +700,7 @@ def test_a_customer_is_found_by_its_distinctive_part():
 
 
 def test_format_characters_are_told():
+    """Invisible formatting characters are flagged by code point, not accents."""
     assert leak_check.format_characters("Plain text, with a dash - and \u00e9migr\u00e9") == []
     assert leak_check.format_characters("Ja\u200bne\u00ad") == ["U+200B", "U+00AD"]
 

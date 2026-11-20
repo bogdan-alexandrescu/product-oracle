@@ -97,6 +97,7 @@ async def picked_line(ctx, question_id: str) -> tuple[SimpleChatRead, Discussion
 
 
 async def test_choose_records_who_picked_and_when(client, meetings):  # noqa: F811
+    """Choosing a clarify option records who picked it and when, posted as a line."""
     ctx = await ct.make_people()
     await ct.World(ctx).build()
     q = await ct.say(client, ctx, "owner", "move alert to Q2")
@@ -132,6 +133,7 @@ async def test_choose_records_who_picked_and_when(client, meetings):  # noqa: F8
 
 
 async def test_a_viewer_choosing_in_a_meeting_gets_the_viewer_note(client, meetings):  # noqa: F811
+    """A viewer's pick in a meeting posts but builds no card and changes nothing."""
     ctx = await ct.make_people()
     w = await ct.World(ctx).build()
     mid = _meeting(ctx, meetings)
@@ -154,6 +156,7 @@ async def test_a_viewer_choosing_in_a_meeting_gets_the_viewer_note(client, meeti
 
 
 async def test_suggest_feature_card_records_when(client, clock):  # noqa: F811
+    """Applying a suggest-feature card records exactly when and by whom it was done."""
     w = await AddWorld().build()
     c = (await add_say(client, w, "commenter", "suggest a feature for grow: Faster imports"))[
         "cards"
@@ -191,6 +194,7 @@ async def decision_row(ctx, decision_id) -> dict:
 
 
 async def test_record_decision_undo_keeps_the_decision(client, clock):  # noqa: F811
+    """Undoing a chat-recorded decision reverses it but keeps the decision intact."""
     from tests.test_simple_chat_actions import apply as apply_card
     from tests.test_simple_chat_actions import one_card
     from tests.test_simple_chat_actions import undo as undo_card
@@ -238,6 +242,7 @@ async def goal_jobs(ctx) -> int:
 
 
 async def test_suggest_goal_features_roles(client):
+    """Suggesting goal features is open to every role but refused to a viewer or run."""
     w = await AddWorld().build()
     other = await make_people()
     url = f"{GOALS}/{w.goals['grow']}/suggest"

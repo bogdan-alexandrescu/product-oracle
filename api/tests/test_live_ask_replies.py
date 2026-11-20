@@ -154,6 +154,7 @@ async def private_chat(client, ctx, doc) -> dict:
 # environment, config file, tool result, live_reads row or log; fails_when=any of these
 # drifts; no_claim=the real claude binary's MCP client.
 async def test_private_chat_run_gets_the_live_tools(client, sources, claude, caplog):
+    """A private chat's reply run gets live source tools scoped to that chat."""
     caplog.set_level(logging.DEBUG)
     ctx, doc = await company(client)
     await with_key(ctx, PLAN)
@@ -234,6 +235,7 @@ async def test_private_chat_run_gets_the_live_tools(client, sources, claude, cap
 # others can read it; fails_when=a shared chat's run can read the asker's sources;
 # no_claim=the panel's line (lane 3).
 async def test_shared_chat_run_gets_no_mcp(client, sources, claude):
+    """A shared chat's reply run gets no live source tools at all."""
     ctx, doc = await company(client)
     await with_key(ctx, PLAN)
     await _fireflies(ctx.tenant_id, ctx.users["commenter"], ARCHIVE_ENDPOINT)
@@ -253,6 +255,7 @@ async def test_shared_chat_run_gets_no_mcp(client, sources, claude):
 # protects=the rollback switch: ORACLE_LIVE_READS=off gives a private chat's run no MCP
 # server and no token; fails_when=the switch leaves live reads on in replies; no_claim=-.
 async def test_switch_off_gives_no_mcp(client, sources, claude, monkeypatch):
+    """Turning live reads off gives the reply run no live tools either."""
     from oracle.config import get_settings
 
     monkeypatch.setattr(get_settings(), "live_reads", "off")
@@ -274,6 +277,7 @@ async def test_switch_off_gives_no_mcp(client, sources, claude, monkeypatch):
 # fails_when=a failed or stopped reply leaves a token that still reads; no_claim=-.
 @pytest.mark.parametrize("ending", ["failed", "cancelled"])
 async def test_token_revoked_when_the_reply_fails_or_stops(client, sources, claude, ending):
+    """A reply that fails or is cancelled revokes its live source token."""
     ctx, doc = await company(client)
     await with_key(ctx, PLAN)
     await _fireflies(ctx.tenant_id, ctx.users["commenter"], ARCHIVE_ENDPOINT)
@@ -302,6 +306,7 @@ async def test_token_revoked_when_the_reply_fails_or_stops(client, sources, clau
 # live: the request carries no MCP server and no Live sources block; fails_when=the
 # Messages API gets the live tools; no_claim=-.
 async def test_messages_api_never_gets_mcp(client, sources):
+    """A plain API reply never gets live source tools."""
     model = Fake()
     previous = gateway.set_transports(
         gateway.Transports(plan=ClaudeCodeTransport(claude_bin="/nonexistent"), api_key=model)
@@ -323,6 +328,7 @@ async def test_messages_api_never_gets_mcp(client, sources):
 # (an API key), no live token is minted at all, not only no MCP server sent; fails_when=a
 # token is minted for a run that cannot use it; no_claim=-.
 async def test_messages_api_mints_no_token(client, sources):
+    """A plain API reply never mints a live source token."""
     model = Fake()
     previous = gateway.set_transports(
         gateway.Transports(plan=ClaudeCodeTransport(claude_bin="/nonexistent"), api_key=model)
@@ -351,6 +357,7 @@ class McpFake(Fake):
 # the prompt unchanged; fails_when=the line reaches a chat others can read or a transport
 # that has no live tools; no_claim=the line's words (test_no_connection_adds_one_line).
 async def test_no_connection_line_only_where_live_could_read(client):
+    """The no connection line appears only where a live read could happen."""
     ctx, doc = await company(client)
     await with_key(ctx, PLAN)
     base = prompting.current(replies.JOB)[1]
@@ -382,6 +389,7 @@ async def test_no_connection_line_only_where_live_could_read(client):
 # line is missing, worded otherwise, or anything else in the prompt changes;
 # no_claim=-.
 async def test_no_connection_adds_one_line(client):
+    """With no connection, exactly one extra line is added to the system prompt."""
     model = McpFake()
     previous = gateway.set_transports(gateway.Transports(plan=model, api_key=Fake()))
     try:
@@ -404,6 +412,7 @@ async def test_no_connection_adds_one_line(client):
 # next to [c:n] as before; fails_when=a live marker is kept without a read or loses its
 # read; no_claim=the stream (the end-to-end test above).
 async def test_live_citations_mapping():
+    """Live citations map their reference marks to the right cited call."""
     from oracle.discussions import context
 
     ctx = context.Context()
@@ -425,6 +434,7 @@ async def test_live_citations_mapping():
 # line for a source that is down; fails_when=the block tells it to say only the plain line
 # for every error; no_claim=the tool results (the test below).
 def test_live_block_passes_refusals_on():
+    """The live tools block always passes a source's own refusal on verbatim."""
     block = replies.live_block([])
     assert f'error, say only "{plan.SOURCE_DOWN}"' not in block
     assert "sentence" in block and "HTTP code" in block
@@ -437,6 +447,7 @@ def test_live_block_passes_refusals_on():
 # line, or the 5xx reaches the model raw; no_claim=the other refusals' sentences
 # (test_live_fireflies).
 async def test_live_token_errors_reach_the_model_in_words(client, sources):
+    """A down live source answers with a fixed line, and a call cap is enforced."""
     ctx, doc = await company(client)
     ctx.doc = doc
     conn = str(await _fireflies(ctx.tenant_id, ctx.users["commenter"], ARCHIVE_ENDPOINT))

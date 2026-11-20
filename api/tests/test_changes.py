@@ -19,6 +19,7 @@ def _no_lane_handlers():
 
 
 async def test_records_the_event_and_runs_handlers_in_order(db):
+    """Recording a change stores the event and runs its handlers in order."""
     seen: list[tuple[str, str]] = []
 
     async def first(session, event):
@@ -57,6 +58,7 @@ async def test_records_the_event_and_runs_handlers_in_order(db):
 
 
 async def test_handlers_can_filter_by_subject(db):
+    """A handler scoped to one subject kind is skipped for every other kind."""
     calls: list[str] = []
 
     async def only_sections(session, event):
@@ -92,6 +94,8 @@ async def test_a_handler_writes_in_the_same_transaction(db):
 
 
 async def test_a_failing_handler_aborts_the_change(db):
+    """A handler that raises an error aborts the change; nothing gets recorded."""
+
     async def boom(session, event):
         raise RuntimeError("cannot invalidate approvals")
 
@@ -103,6 +107,8 @@ async def test_a_failing_handler_aborts_the_change(db):
 
 
 async def test_registration_rules():
+    """Registering a handler on an unknown subject fails; the same name replaces it."""
+
     async def h(session, event):
         return None
 
@@ -116,6 +122,7 @@ async def test_registration_rules():
 
 
 async def test_record_change_validates_its_input(db):
+    """Recording a change rejects an unknown subject kind and an empty cause."""
     with pytest.raises(changes.UnknownSubjectError):
         await changes.record_change(db, "weather", cause="rain", actor=None)
     with pytest.raises(ValueError, match="needs a cause"):
@@ -123,6 +130,7 @@ async def test_record_change_validates_its_input(db):
 
 
 async def test_events_are_company_scoped(db, tenant_id):
+    """Change events are scoped per company; another company never sees them."""
     await changes.record_change(db, "decision", cause="made", actor=None)
     await db.commit()
     other = await make_tenant("Other Co")
@@ -131,6 +139,8 @@ async def test_events_are_company_scoped(db, tenant_id):
 
 
 def test_isolated_handlers_restores_the_registry():
+    """The isolated handlers context restores the original registry afterward."""
+
     async def h(session, event):
         return None
 

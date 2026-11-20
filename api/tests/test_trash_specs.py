@@ -46,6 +46,7 @@ async def _slugs(client, headers) -> set[str]:
 
 
 async def test_a_trashed_spec_leaves_the_spec_requests(client, runtime):
+    """Deleting a tech brief removes it from spec requests until it is restored."""
     world, owner, request_id, slug = await _spec_world(client, runtime)
     listed = await client.get("/v1/spec-requests", headers=owner)
     assert request_id in {s["request"]["id"] for s in listed.json()}
@@ -110,6 +111,7 @@ async def test_a_prds_tech_brief_goes_to_trash_with_it_and_comes_back(client, ru
 
 
 async def test_a_run_working_on_a_prds_tech_brief_refuses_the_prds_delete(client, runtime):
+    """A PRD cannot be deleted while a run is still working on its tech brief."""
     world, owner, request_id, slug = await _spec_world(client, runtime)
     async with tenant_session(world.ctx.tenant_id) as s:
         spec = await s.scalar(select(Document).where(Document.slug == slug))
@@ -125,6 +127,7 @@ async def test_a_run_working_on_a_prds_tech_brief_refuses_the_prds_delete(client
 
 
 async def test_estimating_a_spec_regeneration_changes_nothing(client, runtime):
+    """Estimating a regeneration twice changes nothing until it is actually started."""
     world, owner, request_id, slug = await _spec_world(client, runtime)
     approver = world.ctx.as_("approver")
     async with tenant_session(world.ctx.tenant_id) as s:
@@ -165,6 +168,7 @@ async def test_estimating_a_spec_regeneration_changes_nothing(client, runtime):
 
 
 async def test_restore_a_spec_whose_prd_was_purged_meanwhile(client, runtime):
+    """Restoring a spec reports its PRD as unrestorable if the PRD was purged."""
     world, owner, request_id, slug = await _spec_world(client, runtime)
     spec_entry = (await client.request("DELETE", f"/v1/documents/{slug}", headers=owner)).json()
     prd_entry = await client.request("DELETE", f"/v1/documents/{PRD}", headers=owner)
@@ -183,6 +187,7 @@ async def test_restore_a_spec_whose_prd_was_purged_meanwhile(client, runtime):
 
 
 async def test_restore_a_prd_whose_spec_was_trashed_separately(client, runtime):
+    """Restoring a PRD leaves its separately trashed spec in Trash on its own."""
     world, owner, request_id, slug = await _spec_world(client, runtime)
     await client.request("DELETE", f"/v1/documents/{slug}", headers=owner)
     prd_entry = (await client.request("DELETE", f"/v1/documents/{PRD}", headers=owner)).json()
@@ -204,6 +209,7 @@ async def test_restore_a_prd_whose_spec_was_trashed_separately(client, runtime):
 
 
 async def test_restore_a_spec_while_its_prd_is_still_in_trash(client, runtime):
+    """Restoring a spec reports its PRD as missing while the PRD is still trashed."""
     world, owner, request_id, slug = await _spec_world(client, runtime)
     spec_entry = (await client.request("DELETE", f"/v1/documents/{slug}", headers=owner)).json()
     await client.request("DELETE", f"/v1/documents/{PRD}", headers=owner)

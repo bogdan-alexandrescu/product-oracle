@@ -134,6 +134,7 @@ def review_of(result) -> list[dict]:
 async def test_decided_checkpoints_in_segment_then_decided_order_and_who_decided(
     client, owner, runtime
 ):
+    """Decided checkpoints list in order, each with who decided, open to any viewer."""
     tenant_id, auth = owner
     approver = await named(tenant_id, "approver", "pat.approver@example.com", "Pat Example")
     viewer = await as_user(tenant_id, "viewer")
@@ -191,6 +192,7 @@ async def test_decided_checkpoints_in_segment_then_decided_order_and_who_decided
 async def test_skipped_checkpoints_are_listed_and_a_run_without_decisions_is_empty(
     client, owner, runtime
 ):
+    """A run with no decisions lists none; a skipped checkpoint lists as skipped."""
     _, auth = owner
     run = await started(client, auth, checkpoints={"baseline_confirm": False})
     assert await decisions(client, auth, run["id"]) == []
@@ -205,6 +207,7 @@ async def test_skipped_checkpoints_are_listed_and_a_run_without_decisions_is_emp
 
 
 async def test_an_unknown_run_gets_nothing(client, owner, runtime):
+    """An unknown run id returns not found, and a malformed id is rejected."""
     _, auth = owner
     resp = await client.get(f"/v1/runs/{uuid.uuid4()}/decisions", headers=auth)
     assert resp.status_code == 404
@@ -213,6 +216,7 @@ async def test_an_unknown_run_gets_nothing(client, owner, runtime):
 
 
 async def test_edits_and_review_are_passed_through_when_recorded(client, owner, runtime):
+    """A decision keeps the edits and review recorded with it."""
     tenant_id, auth = owner
     run = await started(client, auth)
     run = await at(client, auth, run["id"], "baseline_confirm")
@@ -231,6 +235,7 @@ async def test_edits_and_review_are_passed_through_when_recorded(client, owner, 
 
 
 async def test_a_run_token_reads_its_own_runs_decisions_filtered(client, owner, runtime):
+    """A run token reads only its own run's decisions, filtered by kind."""
     tenant_id, auth = owner
     run = await started(client, auth)
     run = await at(client, auth, run["id"], "baseline_confirm")
@@ -276,6 +281,7 @@ async def test_a_run_token_reads_its_own_runs_decisions_filtered(client, owner, 
 
 
 async def test_people_get_the_run_token_error_and_use_the_generated_tool(client, owner, runtime):
+    """People use the generic tool; the curated one is only for a run's own agents."""
     tenant_id, auth = owner
     run = await started(client, auth)
     run = await at(client, auth, run["id"], "baseline_confirm")
@@ -299,6 +305,7 @@ async def test_people_get_the_run_token_error_and_use_the_generated_tool(client,
 
 
 def test_the_curated_tool_is_own_run_and_reads_list_run_decisions():
+    """The curated review tool is own-run only and warns late decisions are missed."""
     tool = next(c for c in CURATED if c.name == "get_checkpoint_review")
     assert tool.own_run is True
     assert "decisions made after your prompt was written are only here" in tool.description
@@ -310,6 +317,7 @@ def test_the_curated_tool_is_own_run_and_reads_list_run_decisions():
 async def test_an_approval_after_the_workflow_was_planned_reaches_its_agents(
     client, owner, swarmcloud
 ):
+    """An approval made after the workflow was planned still reaches its agents."""
     _, auth = owner
     swarm = swarmcloud
     use(swarm)
@@ -335,6 +343,7 @@ async def test_an_approval_after_the_workflow_was_planned_reaches_its_agents(
 async def test_a_held_console_approval_is_absent_until_an_approver_confirms_it(
     client, owner, swarmcloud
 ):
+    """A console approval is held back until an approver confirms it."""
     tenant_id, auth = owner
     swarm = swarmcloud
     await _member(tenant_id, "viewer.console@example.com", "viewer")
@@ -407,6 +416,7 @@ async def test_a_personal_tokens_decision_names_its_owner(client, owner, runtime
 
 
 async def test_a_counted_console_answer_is_listed_as_the_consoles(client, owner, swarmcloud):
+    """A console answer counted toward a decision is listed as the console's."""
     tenant_id, auth = owner
     swarm = swarmcloud
     await _member(tenant_id, "approver.console@example.com", "approver")
@@ -435,6 +445,7 @@ WITHOUT_CHECKPOINT_REVIEW = {"competitive_digest", "intake_analysis"}
 
 
 def test_every_segment_prompt_of_every_flow_names_the_tool():
+    """Every segment's prompt names the checkpoint review tool."""
     assert "get_checkpoint_review" in flows.MCP_TOOLS
     for flow in flows.FLOWS.values():
         if flow.key in WITHOUT_CHECKPOINT_REVIEW:
@@ -452,6 +463,7 @@ def test_every_segment_prompt_of_every_flow_names_the_tool():
 
 
 def test_the_read_first_sentence_only_where_mcp_reaches_and_the_run_has_more_segments():
+    """The read-first hint appears only when MCP reaches and segments remain."""
     multi = flows.FLOWS["baseline_to_prd"]
     single = flows.FLOWS["feedback_loop"]
     sdef = multi.segment("prd_draft")

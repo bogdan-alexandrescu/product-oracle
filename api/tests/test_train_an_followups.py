@@ -40,6 +40,8 @@ async def test_a_busy_items_check_is_raised_and_not_kept(monkeypatch):
 
 
 async def test_a_busy_check_for_a_person_with_parses_running_is_429(monkeypatch):
+    """A busy parser makes the roadmap items check return 429, not crash."""
+
     async def busy(*args, **kwargs):
         raise safe_yaml.ParseBusy("parse_busy_you")
 
@@ -53,6 +55,7 @@ async def test_a_busy_check_for_a_person_with_parses_running_is_429(monkeypatch)
 
 
 def test_doc_dates_words_a_day_through_company_time():
+    """Document dates are worded through the shared company-time day formatter."""
     assert doc_dates.shown_day is company_time.calendar_day_with_year
     assert doc_dates.shown_day(dt.date(2026, 11, 30)) == "Nov 30, 2026"
 

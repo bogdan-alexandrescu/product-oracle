@@ -315,6 +315,7 @@ async def _reset_cursor(tenant_id, source_id, config=None) -> None:
 
 
 async def test_a_removed_file_is_deleted_on_save(tenant_id, drive):
+    """Unpicking a file from a source deletes it on save, not on the next sync."""
     # The reviewer's probe: pick A and SENSITIVE, sync, remove SENSITIVE, save.
     drive.doc(DOC_A, "A")
     drive.doc(SENSITIVE, "SENSITIVE")
@@ -332,6 +333,7 @@ async def test_a_removed_file_is_deleted_on_save(tenant_id, drive):
 
 
 async def test_a_removed_folder_deletes_every_doc_from_it_on_save(tenant_id, drive):
+    """Unpicking a folder deletes every doc it brought in, including from a subfolder."""
     drive.folder(FOLDER, "Specs")
     drive.folder(SUB, "Old specs", parent=FOLDER)
     drive.doc(IN_FOLDER, "Spec", folder=FOLDER)
@@ -360,6 +362,7 @@ async def test_narrowing_with_an_expired_connection_deletes_on_save(tenant_id, d
 
 
 async def test_narrowing_a_paused_source_deletes_on_save(tenant_id, drive):
+    """Narrowing a paused source still deletes the removed doc on save."""
     drive.doc(DOC_A, "A")
     drive.doc(SENSITIVE, "SENSITIVE")
     pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A, SENSITIVE]})
@@ -392,6 +395,7 @@ async def test_narrowing_deletes_what_came_from_a_removed_folder_when_another_tr
 
 
 async def test_a_removed_doc_still_in_a_picked_folder_is_kept(tenant_id, drive):
+    """A doc dropped from its own pick but still inside a picked folder is kept."""
     drive.folder(FOLDER, "Specs")
     drive.doc(IN_FOLDER, "Spec", folder=FOLDER)
     pat, source = await _setup(tenant_id, drive, {"docs": [IN_FOLDER], "folders": [FOLDER]})
@@ -400,6 +404,7 @@ async def test_a_removed_doc_still_in_a_picked_folder_is_kept(tenant_id, drive):
 
 
 async def test_a_folder_picked_again_after_narrowing_brings_its_docs_back(tenant_id, drive):
+    """Picking a folder again after narrowing brings its docs back on the next sync."""
     drive.folder(FOLDER, "Specs")
     drive.doc(IN_FOLDER, "Spec", folder=FOLDER)
     drive.doc(DOC_A, "A")
@@ -414,6 +419,7 @@ async def test_a_folder_picked_again_after_narrowing_brings_its_docs_back(tenant
 
 
 async def test_a_doc_added_to_a_picked_folder_later_is_pulled_in(tenant_id, drive):
+    """A doc added to an already-picked folder later is pulled in by the next sync."""
     drive.folder(FOLDER, "Specs")
     drive.doc(IN_FOLDER, "Spec", folder=FOLDER)
     pat, source = await _setup(tenant_id, drive, {"folders": [FOLDER]})
@@ -424,6 +430,7 @@ async def test_a_doc_added_to_a_picked_folder_later_is_pulled_in(tenant_id, driv
 
 
 async def test_widening_keeps_what_is_there_and_adds(tenant_id, drive):
+    """Widening a source's picks adds the new pick and deletes nothing already synced."""
     drive.doc(DOC_A, "A")
     drive.doc(DOC_B, "B")
     pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A]})
@@ -436,6 +443,7 @@ async def test_widening_keeps_what_is_there_and_adds(tenant_id, drive):
 
 
 async def test_changing_connection_and_narrowing_together_deletes(tenant_id, drive):
+    """Changing a source's connection and narrowing its picks together still deletes."""
     # (a) A new connection resets the cursor; the removed doc is still deleted.
     drive.doc(DOC_A, "A")
     drive.doc(SENSITIVE, "SENSITIVE")
@@ -454,6 +462,7 @@ async def test_changing_connection_and_narrowing_together_deletes(tenant_id, dri
 
 
 async def test_a_source_narrowed_before_the_fix_is_cleaned_by_a_plain_sync(tenant_id, drive):
+    """A source narrowed before this fix existed is cleaned up by its next plain sync."""
     # (b) Narrowed on main: config {A}, no cursor, A and S still live. No edit needed.
     drive.doc(DOC_A, "A")
     drive.doc(SENSITIVE, "SENSITIVE")
@@ -468,6 +477,7 @@ async def test_a_source_narrowed_before_the_fix_is_cleaned_by_a_plain_sync(tenan
 
 
 async def test_a_sync_running_across_the_edit_saves_nothing_over_it(tenant_id, drive):
+    """A sync still running when the source is narrowed must not overwrite the edit."""
     # (c) A sync from no cursor is held at its first export; the source is narrowed;
     # the held sync must not save its cursor or report, and the next sync deletes S.
     drive.doc(DOC_A, "A")
@@ -573,6 +583,7 @@ async def test_a_persons_edit_stopping_a_sync_hides_only_what_they_removed(tenan
 
 
 async def test_a_company_narrowing_stopping_a_sync_hides_unknown_items(tenant_id, drive):
+    """A company narrowing that interrupts a running sync still hides unknown items."""
     from oracle.tenant_settings import TenantSetting
 
     drive.folder(FOLDER, "Specs")
@@ -600,6 +611,7 @@ async def test_a_company_narrowing_stopping_a_sync_hides_unknown_items(tenant_id
 async def test_a_failed_export_after_a_per_file_checkpoint_keeps_the_listing_undone(
     tenant_id, drive
 ):
+    """A sync that fails after exporting one file marks its folder listing unfinished."""
     drive.doc(DOC_A, "A")
     drive.doc(DOC_B, "B")
     pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A, DOC_B]})
@@ -619,6 +631,7 @@ async def test_a_failed_export_after_a_per_file_checkpoint_keeps_the_listing_und
 
 
 async def test_the_early_checkpoint_writes_the_lost_access_report(tenant_id, drive):
+    """A sync that fails partway still records which picked docs lost access."""
     drive.doc(DOC_A, "A")
     drive.doc("1DocMissing", "Unshared later")
     pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A, "1DocMissing"]})
@@ -650,6 +663,7 @@ async def test_a_rate_limited_sync_across_the_edit_writes_no_error_over_it(tenan
 
 
 async def test_a_rate_limited_sync_says_so_on_the_source(tenant_id, drive):
+    """A sync stopped by rate limiting records that reason on the source."""
     drive.doc(DOC_A, "A")
     pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A]})
     await _reset_cursor(tenant_id, source["id"])
@@ -684,6 +698,7 @@ async def test_the_sync_lock_does_not_wait_on_item_writes(tenant_id, drive):
 
 
 async def test_items_left_behind_by_an_earlier_edit_are_deleted_too(tenant_id, drive):
+    """Items left over from an edit made before a cursor reset are still deleted."""
     drive.doc(DOC_A, "A")
     drive.doc(SENSITIVE, "SENSITIVE")
     pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A, SENSITIVE]})
@@ -693,6 +708,7 @@ async def test_items_left_behind_by_an_earlier_edit_are_deleted_too(tenant_id, d
 
 
 async def test_an_allowlist_edit_keeps_the_cursor(tenant_id, drive):
+    """An edit that only renames picked items leaves the sync cursor unchanged."""
     drive.doc(DOC_A, "A")
     pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A]})
     before = (await _row(tenant_id, source["id"])).cursor
@@ -757,6 +773,7 @@ async def test_a_folder_drive_refuses_hides_its_docs_until_it_can_be_read_again(
 
 
 async def test_a_lost_folder_removed_from_the_source_leaves_no_note(tenant_id, drive):
+    """Dropping an already-lost folder leaves no unavailable-item note once unpicked."""
     drive.folder(FOLDER, "Specs")
     drive.doc(IN_FOLDER, "Spec", folder=FOLDER)
     drive.doc(DOC_A, "A")
@@ -785,6 +802,7 @@ async def test_narrowing_keeps_what_the_last_sync_said_about_the_rest(tenant_id,
 
 
 async def test_a_lost_folder_without_a_known_tree_still_hides_its_docs(tenant_id, drive):
+    """Losing access to a folder still hides its docs with no cached tree listing."""
     drive.folder(FOLDER, "Specs")
     drive.doc(IN_FOLDER, "Spec", folder=FOLDER)
     drive.doc(DOC_A, "A")
@@ -797,6 +815,7 @@ async def test_a_lost_folder_without_a_known_tree_still_hides_its_docs(tenant_id
 
 
 async def test_a_doc_picked_on_its_own_in_a_lost_folder_stays(tenant_id, drive):
+    """A doc picked on its own stays visible even when its folder becomes unreadable."""
     drive.folder(FOLDER, "Specs")
     drive.doc(IN_FOLDER, "Spec", folder=FOLDER)
     drive.doc(IN_SUB, "Shared with me directly", folder=FOLDER)
@@ -815,6 +834,7 @@ FAILURES = {
 
 @pytest.mark.parametrize("failure", list(FAILURES))
 async def test_a_folder_that_times_out_or_fails_hides_nothing(tenant_id, drive, failure):
+    """A folder listing that times out or fails deletes nothing already synced."""
     drive.folder(FOLDER, "Specs")
     drive.doc(IN_FOLDER, "Spec", folder=FOLDER)
     drive.doc(DOC_A, "A")
@@ -828,6 +848,7 @@ async def test_a_folder_that_times_out_or_fails_hides_nothing(tenant_id, drive, 
 
 
 async def test_folder_docs_are_capped_with_a_note(tenant_id, drive, monkeypatch):
+    """A folder's docs are capped at a limit, with a note on the source saying so."""
     monkeypatch.setattr(google_docs, "MAX_FOLDER_DOCS", 2)
     drive.folder(FOLDER, "Specs")
     for i in range(3):
@@ -841,6 +862,7 @@ async def test_folder_docs_are_capped_with_a_note(tenant_id, drive, monkeypatch)
 
 
 async def test_unchanged_folders_are_not_listed_again(tenant_id, drive):
+    """An unchanged folder is not listed again; only a real change triggers a relist."""
     drive.folder(FOLDER, "Specs")
     drive.doc(IN_FOLDER, "Spec", folder=FOLDER)
     pat, source = await _setup(tenant_id, drive, {"folders": [FOLDER]})
@@ -860,6 +882,7 @@ async def test_unchanged_folders_are_not_listed_again(tenant_id, drive):
 
 
 async def test_an_unreadable_picked_doc_is_reported_once_and_read_again_later(tenant_id, drive):
+    """An unreadable picked doc is reported once, then read again once shared back."""
     drive.folder(FOLDER, "Specs")
     drive.doc(IN_FOLDER, "Spec", folder=FOLDER)
     drive.doc(DOC_B, "B")
@@ -879,6 +902,7 @@ async def test_an_unreadable_picked_doc_is_reported_once_and_read_again_later(te
 
 
 async def test_folders_are_listed_again_after_a_while(tenant_id, drive, monkeypatch):
+    """A folder's listing is refreshed once its cached listing goes stale."""
     drive.folder(FOLDER, "Specs")
     drive.doc(IN_FOLDER, "Spec", folder=FOLDER)
     pat, source = await _setup(tenant_id, drive, {"folders": [FOLDER]})
@@ -896,6 +920,7 @@ async def test_folders_are_listed_again_after_a_while(tenant_id, drive, monkeypa
 
 
 async def test_folder_docs_owned_outside_the_company_are_skipped(tenant_id, drive):
+    """A folder doc owned outside the company is skipped and stays reported."""
     drive.folder(FOLDER, "Specs")
     drive.doc(IN_FOLDER, "Spec", folder=FOLDER)
     drive.doc(OUTSIDE, "Vendor plan", folder=FOLDER, owner=EVE)
@@ -917,6 +942,7 @@ async def test_folder_docs_owned_outside_the_company_are_skipped(tenant_id, driv
 
 
 async def test_a_doc_owned_outside_picked_on_its_own_is_pulled_in(tenant_id, drive):
+    """A doc owned outside the company is still pulled in when picked on its own."""
     drive.folder(FOLDER, "Specs")
     drive.doc(OUTSIDE, "Vendor plan", folder=FOLDER, owner=EVE)
     pat, source = await _setup(tenant_id, drive, {"folders": [FOLDER], "docs": [OUTSIDE]})
@@ -925,6 +951,7 @@ async def test_a_doc_owned_outside_picked_on_its_own_is_pulled_in(tenant_id, dri
 
 
 async def test_include_and_flag_is_one_setting(tenant_id, drive, monkeypatch):
+    """Include-and-flag pulls in an outside-owned folder doc but flags the item."""
     monkeypatch.setenv("ORACLE_DRIVE_DOCS_OWNED_OUTSIDE", "include_and_flag")
     get_settings.cache_clear()
     drive.folder(FOLDER, "Specs")
@@ -940,6 +967,7 @@ async def test_include_and_flag_is_one_setting(tenant_id, drive, monkeypatch):
 
 
 async def test_company_domains_come_from_the_setting_first(tenant_id, monkeypatch):
+    """Company email domains come from the stored setting before the env default."""
     await make_person(tenant_id, "pat@example.com")
     await make_person(tenant_id, "sam@gmail.com")
     async with tenant_session(tenant_id) as s:
@@ -951,6 +979,7 @@ async def test_company_domains_come_from_the_setting_first(tenant_id, monkeypatc
 
 
 async def test_people_cannot_set_the_company_domains(tenant_id, drive):
+    """A person cannot set the company domains through a source's own config."""
     drive.doc(DOC_A, "A")
     pat = (await make_person(tenant_id, "pat@example.com")).user
     conn = await make_connection(tenant_id, pat, "google", scopes=READONLY)
@@ -964,6 +993,7 @@ async def test_people_cannot_set_the_company_domains(tenant_id, drive):
 
 
 async def test_public_mail_domains_are_not_company_domains(tenant_id):
+    """A public mail domain never counts as a company's email domain."""
     for email in ("pat@example.com", "sam@yahoo.co.uk", "kim@pm.me", "lee@GMX.de"):
         await make_person(tenant_id, email)
     async with tenant_session(tenant_id) as s:
@@ -1003,6 +1033,7 @@ async def test_with_no_company_domain_folder_docs_are_skipped_and_say_why(tenant
 async def test_folders_walked_per_sync_are_capped_and_keep_what_came_from_the_rest(
     tenant_id, drive, monkeypatch
 ):
+    """Folders walked per sync are capped, and docs from unwalked folders stay."""
     drive.folder(FOLDER, "Specs")
     drive.doc(IN_FOLDER, "Top", folder=FOLDER)
     drive.folder(SUB, "Deeper", parent=FOLDER)
@@ -1029,6 +1060,7 @@ async def test_folders_walked_per_sync_are_capped_and_keep_what_came_from_the_re
 
 
 async def test_renaming_picked_items_does_not_ask_drive_again(tenant_id, drive):
+    """Renaming picked items saves without asking Drive; adding a pick still does."""
     drive.doc(DOC_A, "A")
     drive.doc(DOC_B, "B")
     drive.doc("1DocMissing", "Unshared later")
@@ -1064,6 +1096,7 @@ async def test_renaming_picked_items_does_not_ask_drive_again(tenant_id, drive):
 
 
 async def test_names_only_name_what_is_picked(tenant_id, drive):
+    """A name can only be given to a doc that is actually picked, and is length-capped."""
     drive.doc(DOC_A, "A")
     pat, source = await _setup(tenant_id, drive, {"docs": [DOC_A]})
     for names in (
@@ -1101,6 +1134,7 @@ async def test_company_domains_are_explicit_and_never_inferred_by_default(tenant
 async def test_folder_docs_skipped_in_production_until_a_domain_is_set(
     tenant_id, drive, monkeypatch
 ):
+    """Folder docs are skipped with a note until a company domain is configured."""
     from oracle.tenant_settings import TenantSetting
 
     monkeypatch.delenv("ORACLE_INFER_COMPANY_DOMAINS")
@@ -1157,6 +1191,7 @@ async def test_a_shared_drive_is_the_companys_only_when_the_owner_lists_it(tenan
 
 
 def test_owned_outside():
+    """The owned-outside check reads a file's owner and shared-drive membership."""
     from oracle.sources.connectors.google_docs import owned_outside
 
     mine = {"owners": [PAT]}

@@ -102,6 +102,7 @@ async def world(client) -> tuple[Ctx, dict]:
 
 
 async def test_one_active_company_roadmap(client):
+    """The company has exactly one active roadmap; a second is refused by the database."""
     ctx = await make_ctx()
     r = await client.get(COMPANY, headers=ctx.as_("viewer"))
     assert r.status_code == 404
@@ -121,6 +122,7 @@ async def test_one_active_company_roadmap(client):
 
 
 async def test_simple_reads_the_company_roadmap_only(client):
+    """Simple reads only the company roadmap, never the older per-PRD ones."""
     ctx, ids = await world(client)
     r = await client.get("/v1/simple/roadmap", headers=ctx.as_("owner"))
     assert r.status_code == 200, r.text
@@ -172,6 +174,7 @@ async def _items(s, version_id) -> dict[str, RoadmapItem]:
 
 
 async def test_two_prds_runs_feed_one_roadmap_without_touching_each_other(client):
+    """Two PRDs' runs merge into one roadmap draft without overwriting each other."""
     ctx, ids = await world(client)
     async with tenant_session(ctx.tenant_id) as s:
         v2 = await _version(s, ids, 2, ids["sv"])
@@ -195,6 +198,7 @@ async def test_two_prds_runs_feed_one_roadmap_without_touching_each_other(client
 
 
 async def test_a_prd_run_writes_into_the_company_roadmap(client):
+    """A PRD's roadmap run writes its items into the single company roadmap."""
     ctx, ids = await world(client)
     r = await client.post("/v1/runs", headers=ctx.as_("owner"),
                           json={"flow": "prd_to_roadmap", "source": "user-safety"})  # fmt: skip
@@ -213,6 +217,7 @@ async def _goal(s, key: str, title: str, position: int, feature_key: str) -> Ent
 
 
 async def test_one_capacity_queue_plans_every_prd_as_one_team(client):
+    """One capacity queue schedules every PRD's items as a single shared team."""
     ctx, ids = await world(client)
     r = await client.put("/v1/settings/team_capacity", headers=ctx.as_("owner"),
                          json={"value": {"team_size": 2, "focus": 0.5}})  # fmt: skip
@@ -254,6 +259,7 @@ async def test_one_capacity_queue_plans_every_prd_as_one_team(client):
 
 
 async def test_replaced_prd_carries_its_verified_bases(client):
+    """A verified date basis carries over to the replacing PRD, scoped to its own item."""
     ctx, ids = await world(client)
     owner = ctx.users["owner"].id
     verified_at = datetime(2026, 10, 20, tzinfo=UTC)
@@ -293,6 +299,7 @@ async def test_replaced_prd_carries_its_verified_bases(client):
 
 
 async def test_replaced_prd_is_read_only_and_stops_feeding(client):
+    """A replaced PRD becomes read-only and its items stop feeding the roadmap."""
     ctx, ids = await world(client)
     async with tenant_session(ctx.tenant_id) as s:
         old, ov = await _prd(s, "trust-plan", "Trust plan")
@@ -328,6 +335,7 @@ async def test_replaced_prd_is_read_only_and_stops_feeding(client):
 
 
 def test_plan_tables_cover_every_item_on_the_company_roadmap():
+    """A PRD's plan table that leaves out another PRD's roadmap item is refused."""
     from oracle.runs import plan_tables
 
     others = [{"key": "read-replicas", "title": "Read replicas", "end": "2026-12-18"}]
@@ -348,6 +356,7 @@ def test_plan_tables_cover_every_item_on_the_company_roadmap():
 
 
 async def test_a_prd_run_reads_the_shared_queue(client):
+    """A PRD run's prompt lists every item in the shared queue, marking its own."""
     from oracle.roadmap import company
 
     ctx, ids = await world(client)
@@ -360,6 +369,7 @@ async def test_a_prd_run_reads_the_shared_queue(client):
 
 
 async def test_a_feature_added_in_simple_lands_on_the_company_roadmap(client):
+    """A feature added in Simple lands on the company roadmap, never an old one."""
     from oracle.simple import additions
 
     ctx, ids = await world(client)
@@ -391,6 +401,7 @@ async def test_a_feature_added_in_simple_lands_on_the_company_roadmap(client):
 
 
 async def test_a_prd_runs_own_items_take_their_place_in_the_shared_queue(client):
+    """A run's own items take their dated place among the shared team's queue."""
     from oracle.roadmap import company
     from oracle.runs import plan_tables
 
@@ -413,6 +424,7 @@ async def test_a_prd_runs_own_items_take_their_place_in_the_shared_queue(client)
 
 
 async def test_the_queue_starts_on_the_companys_day(client, monkeypatch):
+    """The queue starts on the company's own calendar day, not UTC's."""
     # 3 AM UTC on Nov 4 is still Nov 3 in the company's time zone (Los Angeles).
     monkeypatch.setattr(company_time, "now", lambda: datetime(2026, 11, 4, 3, 0, tzinfo=UTC))
     ctx, _ = await world(client)
@@ -422,6 +434,7 @@ async def test_the_queue_starts_on_the_companys_day(client, monkeypatch):
 
 
 async def test_a_features_shown_name_comes_from_the_company_roadmap(client):
+    """A feature's shown name comes from the company roadmap, not an old one."""
     from oracle.simple import priorities
 
     ctx, ids = await world(client)
@@ -438,6 +451,7 @@ async def test_a_features_shown_name_comes_from_the_company_roadmap(client):
 
 
 async def test_a_runs_queue_is_the_roadmap_as_it_was_when_the_run_started(client):
+    """A run's queue reflects the roadmap as it stood when the run began."""
     from oracle.roadmap import company
 
     ctx, ids = await world(client)
@@ -478,6 +492,7 @@ items:
 
 
 async def test_a_run_item_that_names_a_milestone_takes_that_milestones_place(client):
+    """An item naming a milestone takes that milestone's place, not the queue's end."""
     from oracle.roadmap import company
 
     ctx, ids = await world(client)
@@ -541,6 +556,7 @@ items:
 
 
 async def test_a_run_items_place_in_its_horizon_is_the_one_landing_gives_it(client):
+    """A run's new item takes the place in its horizon that landing the file gives it."""
     from oracle.roadmap import company
 
     ctx, ids = await world(client)
@@ -568,6 +584,7 @@ QUICK_REPORT_ITEMS = REPORT_ITEMS + "    economics: {effort_weeks: 0.01}\n"
 
 
 async def test_a_runs_prompt_and_check_date_the_queue_from_the_runs_own_day(client, monkeypatch):
+    """A run's prompt and check date the queue from the run's own day, not a later one."""
     from oracle.roadmap import company
     from oracle.runs import plan_tables, service
     from oracle.runs.models import Run, RunSegment
@@ -619,6 +636,7 @@ items:
 
 
 async def test_an_item_moved_to_a_new_milestone_takes_the_place_it_will_have(client):
+    """An item moved to a new milestone takes that milestone's place, not its old one."""
     from oracle.roadmap import company
 
     ctx, ids = await world(client)
@@ -652,6 +670,7 @@ items:
 
 
 async def test_a_milestone_keeps_no_place_only_a_dropped_item_gave_it(client):
+    """Dropping the item that set a milestone's place lets another item set it instead."""
     from oracle.roadmap import company
 
     ctx, ids = await world(client)
@@ -811,6 +830,7 @@ items:
 
 
 async def test_a_run_items_goal_comes_from_the_feature_its_prd_section_links(client):
+    """An item's goal comes from its PRD section's linked feature, not its own key."""
     from oracle.docs.models import Section
     from oracle.roadmap import company
     from oracle.v2.models import DocumentSectionLink
@@ -851,6 +871,7 @@ items:
 
 @pytest.mark.parametrize("dep", ["read-replicas", "replica-fleet"])
 async def test_a_run_item_depending_on_another_prds_is_never_dated_before_it(client, dep):
+    """An item depending on another PRD's item never starts before that item ends."""
     # protects=in a run's prompt and its plan tables (with_run_items), an item depending on
     # another PRD's item, by item key or by its feature's key, is queued after it, as the
     # company queue puts it (queue's _after_dependencies); fails_when=the run's queue

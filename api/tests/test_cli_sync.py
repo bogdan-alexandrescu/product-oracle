@@ -51,6 +51,7 @@ def run(argv, handler):
 
 
 def test_sync_one_source():
+    """Syncing one source posts to just that source and reports what it saw."""
     code, out, err, reqs = run(
         ["sync", "--source", A], lambda r: httpx.Response(200, json=_result(A))
     )
@@ -62,6 +63,8 @@ def test_sync_one_source():
 
 
 def test_sync_all_skips_uploads_and_paused_and_reports_each():
+    """Syncing all sources skips paused and upload-only ones, reporting the rest."""
+
     def handler(r: httpx.Request) -> httpx.Response:
         if r.method == "GET":
             return httpx.Response(200, json=SOURCES)
@@ -82,11 +85,13 @@ def test_sync_all_skips_uploads_and_paused_and_reports_each():
 
 
 def test_sync_nothing_to_do():
+    """Syncing when every source is paused reports nothing to do, not a failure."""
     code, out, _, _ = run(["sync"], lambda r: httpx.Response(200, json=[SOURCES[2]]))
     assert code == 0 and out == "No sources to sync\n"
 
 
 def test_sync_refused_source():
+    """Syncing a source the server refuses reports its exact error detail."""
     code, _, err, _ = run(
         ["sync", "--source", UP],
         lambda r: httpx.Response(409, json={"detail": "Upload sources have nothing to sync"}),

@@ -94,6 +94,7 @@ URL = "/v1/simple/prds/guided-setup/fit-date"
 
 
 async def test_answer_reads_the_approved_plan(client):
+    """Fit-date reads a milestone's live numbers only from its approved plan."""
     ctx = await make_ctx()
     await seed(ctx, BODY)
     r = await client.get(URL, params={"milestone": "M2"}, headers=ctx.as_("viewer"))
@@ -118,6 +119,7 @@ async def test_answer_reads_the_approved_plan(client):
 
 
 async def test_live_date_of_a_picked_set(client):
+    """The live fit-date preview updates its date as picks are added, before saving."""
     ctx = await make_ctx()
     await seed(ctx, BODY)
     h = ctx.as_("viewer")
@@ -131,6 +133,7 @@ async def test_live_date_of_a_picked_set(client):
 
 
 async def test_approve_makes_the_next_version_live(client):
+    """Approving fit-date picks publishes a new PRD version carrying the re-plan."""
     ctx = await make_ctx()
     ids = await seed(ctx, BODY)
     h = ctx.as_("owner")
@@ -161,6 +164,7 @@ async def test_approve_makes_the_next_version_live(client):
 
 @pytest.mark.parametrize("route", ["draft", "approve"])
 async def test_viewer_cannot_draft_or_approve(client, route):
+    """A viewer is refused both drafting and approving a fit-date re-plan."""
     ctx = await make_ctx()
     await seed(ctx, BODY)
     r = await client.post(f"{URL}/{route}", json={"milestone": "M2", "picks": ["F-06"]},
@@ -169,6 +173,7 @@ async def test_viewer_cannot_draft_or_approve(client, route):
 
 
 async def test_approve_makes_the_roadmap_follow(client):
+    """Approving a fit-date re-plan also publishes the roadmap with the same dates."""
     ctx = await make_ctx()
     await seed(ctx, BODY, items=("f-06", "f-03"))
     h = ctx.as_("decider")
@@ -193,6 +198,7 @@ async def test_approve_makes_the_roadmap_follow(client):
 
 
 async def test_draft_claims_no_run(client):
+    """A fit-date draft reports no run cost, since no run does this work."""
     ctx = await make_ctx()
     await seed(ctx, BODY)
     d = await client.post(f"{URL}/draft", json={"milestone": "M2", "picks": ["F-06"]},
@@ -204,6 +210,7 @@ async def test_draft_claims_no_run(client):
 
 
 async def test_hard_case_says_what_an_engineer_does(client):
+    """An unreachable target is told what hiring one more engineer would do, and when."""
     ctx = await make_ctx()
     await seed(ctx, BODY.replace("| 30 Nov 2026 | 25 Dec 2026 |", "| 30 Nov 2026 | 1 Dec 2026 |"))
     a = (await client.get(URL, params={"milestone": "M2"}, headers=ctx.as_("owner"))).json()
@@ -215,6 +222,7 @@ async def test_hard_case_says_what_an_engineer_does(client):
 
 
 async def test_roadmap_waits_on_its_decider(client):
+    """A fit-date approval by anyone but the decider waits on them, shown by name."""
     ctx = await make_ctx()
     await seed(ctx, BODY, items=("f-06", "f-03"))
     async with tenant_session(ctx.tenant_id) as s:
@@ -240,6 +248,7 @@ async def test_roadmap_waits_on_its_decider(client):
 
 
 async def test_approve_refuses_a_foreign_draft_edit(client):
+    """Approving a re-plan is refused while someone else has unsaved draft changes."""
     ctx = await make_ctx()
     ids = await seed(ctx, BODY, items=("f-06", "f-03"))
     async with tenant_session(ctx.tenant_id) as s:
@@ -275,6 +284,7 @@ async def test_approve_refuses_a_foreign_draft_edit(client):
 
 
 async def test_resized_items_wait_on_an_estimate(client):
+    """A resized item from a re-plan is marked pending estimate and its owner told."""
     from oracle.review.models import Notification
 
     ctx = await make_ctx()
@@ -323,6 +333,7 @@ async def _activation(client, ctx, target=55):
 
 
 async def test_answer_ties_its_baseline_goal(client):
+    """Fit-date ties its answer to a milestone's baseline goal; some roles can edit it."""
     ctx = await make_ctx()
     await seed(ctx, HARD)
     goal = await _activation(client, ctx)
@@ -336,6 +347,7 @@ async def test_answer_ties_its_baseline_goal(client):
 
 
 async def test_no_baseline_goal_reads_none(client):
+    """A milestone with no baseline goal reads that field as none, not an error."""
     ctx = await make_ctx()
     await seed(ctx, HARD)
     a = (await client.get(URL, params={"milestone": "M2"}, headers=ctx.as_("owner"))).json()
@@ -391,6 +403,7 @@ def _sizes(a: dict) -> tuple[float, float, float]:
 
 
 async def test_smaller_goal_keeps_locked_work_whole(client):
+    """Lowering a goal's target shrinks only its unlocked work, never a locked item."""
     ctx = await make_ctx()
     await seed(ctx, RULED)
     goal = await _activation(client, ctx)
@@ -407,6 +420,7 @@ async def test_smaller_goal_keeps_locked_work_whole(client):
 
 
 async def test_smaller_goal_floor(client):
+    """A goal target just above its start still scales size down, never to zero."""
     from oracle.simple.fit_date_router import FitBaselineGoalOut, _scale
 
     g = FitBaselineGoalOut(id="00000000-0000-0000-0000-000000000001", title="Activation",

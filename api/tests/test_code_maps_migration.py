@@ -71,11 +71,13 @@ def scratch_db():
 
 
 def test_chains_on_the_single_head():
+    """The code maps migration chains onto the branch's own previous head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_upgrade_and_downgrade_keep_existing_rows(scratch_db):
+    """Upgrading to add the code maps table, and downgrading, keep existing rows."""
     upgrade(_cfg(), PREVIOUS)
     assert "code_maps" not in _tables()
     # Another lane's flow value added after its own migration survives either way.

@@ -33,6 +33,7 @@ def feature(key: str, *, goals=(), attrs=None, deps=(), evidence=(), stored=None
 
 
 def test_goal_weighted_sums_goals_times_confidence_over_effort():
+    """Goal-weighted score multiplies goal value by confidence and divides by effort."""
     f = feature(
         "checkout",
         goals=[("activation", 3, 2), ("revenue", 2, 1)],
@@ -54,6 +55,7 @@ def test_goal_weighted_sums_goals_times_confidence_over_effort():
 
 
 def test_confidence_falls_back_to_stored_then_attrs_then_default():
+    """Confidence falls back from stored to attrs to a default, flagging each step."""
     base = {"goals": [("g", 1, 1)], "attrs": {"effort": 1}}
     assert (
         score_feature(feature("a", stored=0.9, **base), "goal_weighted").explanation["confidence"][
@@ -81,6 +83,7 @@ def test_confidence_falls_back_to_stored_then_attrs_then_default():
 
 
 def test_assumed_weight_and_contribution_are_marked():
+    """Missing goal weight or contribution is assumed and flagged; effort reads sizes."""
     f = feature("x", goals=[("g", None, None)], attrs={"effort": "M"}, evidence=[1.0])
     s = score_feature(f, "goal_weighted")
     term = s.explanation["goals"][0]
@@ -90,6 +93,7 @@ def test_assumed_weight_and_contribution_are_marked():
 
 
 def test_missing_effort_is_not_scored_and_flagged():
+    """A feature missing effort is left unscored and flagged as missing inputs."""
     s = score_feature(feature("x", goals=[("g", 1, 3)]), "goal_weighted")
     assert s.score is None
     assert s.explanation["missing"] == ["effort"]
@@ -98,6 +102,7 @@ def test_missing_effort_is_not_scored_and_flagged():
 
 
 def test_rice():
+    """The RICE score multiplies reach, impact and confidence and divides by effort."""
     f = feature(
         "x",
         goals=[("g", 1, 1)],
@@ -114,6 +119,7 @@ def test_rice():
 
 
 def test_wsjf():
+    """The WSJF score divides cost of delay (value + urgency + risk) by job size."""
     f = feature(
         "x",
         goals=[("g", 1, 1)],
@@ -125,6 +131,7 @@ def test_wsjf():
 
 
 def test_moscow_orders_by_category_then_goal_value():
+    """MoSCoW ranking orders features by category first, then by their goal value."""
     features = [
         feature("could", goals=[("g", 5, 3)], attrs={"moscow": "could"}),
         feature("must-small", goals=[("g", 1, 1)], attrs={"moscow": "Must"}),
@@ -147,6 +154,7 @@ def test_moscow_orders_by_category_then_goal_value():
 
 
 def test_features_serving_no_goal_sink_and_are_flagged():
+    """A feature serving no goal sinks to the bottom and scores zero."""
     features = [
         feature("orphan", attrs={"effort": 0.1}, evidence=[1.0]),
         feature("low", goals=[("g", 1, 1)], attrs={"effort": 10}),
@@ -161,6 +169,7 @@ def test_features_serving_no_goal_sink_and_are_flagged():
 
 
 def test_dependencies_come_first_and_pull_prerequisites_up():
+    """A feature's prerequisites are ranked ahead of it, even if they serve no goal."""
     features = [
         feature("top", goals=[("g", 3, 3)], attrs={"effort": 1}, deps=["base"]),
         feature("mid", goals=[("g", 2, 2)], attrs={"effort": 1}),
@@ -182,6 +191,7 @@ def test_dependencies_come_first_and_pull_prerequisites_up():
 
 
 def test_cycles_are_reported_not_hidden():
+    """A dependency cycle is reported and its members flagged, kept together by score."""
     features = [
         feature("a", goals=[("g", 1, 3)], attrs={"effort": 1}, deps=["b"]),
         feature("b", goals=[("g", 1, 1)], attrs={"effort": 1}, deps=["c"]),
@@ -262,6 +272,7 @@ async def _baseline(tenant_id: uuid.UUID) -> None:
 
 
 async def test_api_ranks_baseline_features(client, tenant_id):
+    """GET /v1/priorities ranks features by method and rejects an unknown one."""
     await _baseline(tenant_id)
     headers = await _token(tenant_id, "viewer")
     resp = await client.get("/v1/priorities", headers=headers)
@@ -291,6 +302,7 @@ async def test_api_ranks_baseline_features(client, tenant_id):
 
 
 async def test_snapshots_need_an_approver_and_store_the_ranking(client, tenant_id):
+    """Only an approver can save a priority snapshot, and it stores the full ranking."""
     await _baseline(tenant_id)
     viewer = await _token(tenant_id, "viewer")
     approver = await _token(tenant_id, "approver")
@@ -318,6 +330,7 @@ async def test_snapshots_need_an_approver_and_store_the_ranking(client, tenant_i
 
 
 async def test_priorities_are_tenant_scoped(client, tenant_id):
+    """Priorities are scoped to the caller's own company and refused without a token."""
     await _baseline(tenant_id)
     other = await make_tenant("Other Co")
     resp = await client.get("/v1/priorities", headers=await _token(other))
@@ -326,6 +339,7 @@ async def test_priorities_are_tenant_scoped(client, tenant_id):
 
 
 async def test_unscored_evidence_is_scored_by_the_baseline(client, tenant_id):
+    """Fresh evidence is scored automatically through the baseline confidence formula."""
     await _baseline(tenant_id)
     async with tenant_session(tenant_id) as s:
         theme = (await s.scalars(select(Entity).where(Entity.key == "dark-mode"))).one()

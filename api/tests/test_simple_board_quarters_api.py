@@ -63,6 +63,7 @@ async def seed_more(w: World) -> None:
 
 
 async def test_the_read_puts_items_in_the_quarter_of_their_dates(client):
+    """Each roadmap item is placed in the quarter its own dates actually fall in."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["change_horizon"])
     await seed_more(w)
@@ -82,6 +83,7 @@ async def test_the_read_puts_items_in_the_quarter_of_their_dates(client):
 
 
 async def test_a_column_move_shifts_dates_by_quarters(client):
+    """Moving an item to another quarter column shifts its dates by that many quarters."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["change_horizon"])
     await seed_more(w)

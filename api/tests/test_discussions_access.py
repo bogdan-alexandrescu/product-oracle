@@ -33,6 +33,7 @@ CASES = list(itertools.product(ROLES, ["open", "private"], [True, False], [True,
 # non-starter adds people to a private one; no_claim=the screens (covered by E2E).
 @pytest.mark.parametrize(("role", "visibility", "participant", "starter"), CASES)
 def test_the_access_truth_table(role, visibility, participant, starter):
+    """Every role, visibility and participant mix gets exactly its right access."""
     seat = _seat(role, visibility, participant, starter)
     reads = visibility == "open" or participant
     assert access.can_read(seat) is reads
@@ -52,6 +53,7 @@ def test_the_access_truth_table(role, visibility, participant, starter):
 # cannot be made open; panel chats are never made open; fails_when=either is allowed;
 # no_claim=what Oracle reads of the finding (G2).
 def test_the_private_finding_and_panel_chats_restrict_the_starter_too():
+    """A private finding or panel chat denies even its starter add or make-open rights."""
     finding = _seat("commenter", "private", True, True, author_only=True)
     assert access.can_read(finding) and access.can_write(finding)
     assert not access.can_add(finding)
@@ -67,6 +69,7 @@ def test_the_private_finding_and_panel_chats_restrict_the_starter_too():
 # fails_when=a kind is missing, unvalidated, or switched off; no_claim=proposing or staging
 # (G3, G4).
 def test_the_registry_covers_every_kind_and_only_landed_ones_are_available():
+    """Every change kind is registered with a role, subjects and a landing spot."""
     assert set(kinds.REGISTRY) == set(CHANGE_KINDS)
     for name, kind in kinds.REGISTRY.items():
         assert kind.name == name
@@ -140,6 +143,7 @@ BAD = {
 # any kind is accepted or a well-formed one refused; no_claim=whether the target exists.
 @pytest.mark.parametrize("name", sorted(GOOD))
 def test_payload_validation_per_kind(name):
+    """Each change kind's payload accepts its good shape and refuses the bad one."""
     assert set(GOOD) == set(BAD) == set(CHANGE_KINDS)
     parsed = kinds.validate_payload(name, GOOD[name])
     assert isinstance(parsed, dict)
@@ -151,6 +155,7 @@ def test_payload_validation_per_kind(name):
 # protects=the plain sentence a change reads as (3.3); fails_when=the wording drifts;
 # no_claim=names looked up from ids.
 def test_change_labels_read_as_the_spec_says():
+    """A change's label reads in plain words, matching its kind's spec exactly."""
     assert (
         kinds.label("section_edit", {"section_key": "outcomes", "instruction": "Add a target"})
         == "Change outcomes: Add a target"
@@ -166,6 +171,7 @@ DOC, RUN, CP = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
 # send-backs; fails_when=the version or the checkpoint id enters a key; no_claim=whether the
 # subject exists (the API tests check that).
 def test_subject_keys():
+    """A subject's key stays stable across versions and is built the same way per kind."""
     section = {"document_id": str(DOC), "version": 3, "section_key": "outcomes"}
     assert subject_key("section", parse_subject("section", section)) == f"section:{DOC}:outcomes"
     v4 = {**section, "version": 4}

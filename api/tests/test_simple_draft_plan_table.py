@@ -76,6 +76,7 @@ async def _approve(client, ctx, w: World) -> dict:
 
 
 async def test_the_approved_draft_matches_its_version(client):
+    """An approved draft's published version matches it, keeping each item's own dates."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["move_dates"])
     await _base(ctx, w)

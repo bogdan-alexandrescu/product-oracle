@@ -16,6 +16,7 @@ from tests.test_draft_roadmaps import (  # noqa: F401  (fixtures)
 
 
 async def test_the_tab_reads_problems_without_keys_or_iso_dates(client, owner, runtime):  # noqa: F811
+    """The Roadmap tab's problems name items and dates in plain words, not raw keys."""
     _, auth = owner
     await new_version(client, auth, 1)
     bad = items_file(1).replace("depends_on: [payment-step]", "depends_on: [nowhere]")
@@ -33,6 +34,7 @@ async def test_the_tab_reads_problems_without_keys_or_iso_dates(client, owner, r
 
 
 def test_readable_check_words():
+    """Rewriting a roadmap check into plain words leaves the stored check untouched."""
     check = {
         "items": 2,
         "by_horizon": {"now": 1, "next": 1, "later": 0},

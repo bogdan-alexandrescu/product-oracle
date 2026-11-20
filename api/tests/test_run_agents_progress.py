@@ -31,6 +31,7 @@ def _running(seg: dict) -> bool:
 
 
 async def test_a_tick_records_the_running_agents_and_their_cost(client, owner):
+    """A tick records a running segment's live agents and their cost on the run."""
     _, auth = owner
     swarm = on()
     use(swarm)
@@ -59,6 +60,7 @@ async def test_a_tick_records_the_running_agents_and_their_cost(client, owner):
 
 
 async def test_waiting_and_finished_steps_are_not_listed_as_running_agents(client, owner):
+    """A step only queued or waiting on dependencies is not listed as a running agent."""
     _, auth = owner
     swarm = on()
     use(swarm)
@@ -73,6 +75,7 @@ async def test_waiting_and_finished_steps_are_not_listed_as_running_agents(clien
 
 
 async def test_the_adapter_reads_an_agent_s_role_times_and_cost():
+    """The SwarmCloud adapter reads a step's role and cost, falling back to lease time."""
     rt = object.__new__(SwarmCloudRuntime)
 
     async def read(workflow_id):
@@ -99,6 +102,7 @@ async def test_the_adapter_reads_an_agent_s_role_times_and_cost():
 
 
 async def test_a_later_segment_of_the_workflow_shows_what_its_own_agents_spent(client, owner):
+    """A later segment in a shared workflow shows only its own agents' spend, once."""
     # Review fix: segment 2 runs in the workflow submitted for segment 1; its cost so far
     # is what its own agents spent, not $0.00 with the whole workflow's on segment 1.
     _, auth = owner
@@ -122,6 +126,7 @@ async def test_a_later_segment_of_the_workflow_shows_what_its_own_agents_spent(c
 
 
 async def test_a_segment_that_starts_during_a_check_shows_what_that_check_read(client, owner):
+    """A segment starting during a checkpoint check still shows what that check read."""
     # Review fix: segment 1 finishes during the check (its checkpoint off) and segment 2
     # starts in the same workflow; segment 2 shows what that check read, not "not checked".
     _, auth = owner
@@ -161,6 +166,7 @@ def _wf_cost(swarm) -> float:
 
 
 async def test_a_cancel_that_winds_down_counts_a_later_segment_s_cost_once(client, owner):
+    """Cancelling a multi-segment run counts its winding-down cost once, not twice."""
     # Second review fix: the cancel's last read of the workflow is its whole cost; segment
     # 2 already carries its own share, so segment 1 carries the rest, not the whole again.
     _, auth = owner
@@ -180,6 +186,7 @@ async def test_a_cancel_that_winds_down_counts_a_later_segment_s_cost_once(clien
 
 
 async def test_an_overrun_pause_that_winds_down_counts_a_later_segment_s_cost_once(client, owner):
+    """A pause over the cost ceiling also counts its winding-down spend only once."""
     tenant_id, auth = owner
     swarm = on()
     run = await _second_spending(client, auth, swarm)
@@ -198,6 +205,7 @@ async def test_an_overrun_pause_that_winds_down_counts_a_later_segment_s_cost_on
 
 
 async def test_a_detached_workflow_s_later_segment_keeps_its_own_share(client, owner):
+    """A segment on a detached workflow still keeps its own cost share, counted once."""
     # The tick of a segment left running on a detached workflow: the workflow's cost is
     # counted once, and segment 2 keeps what its own agents spent.
     tenant_id, auth = owner
@@ -219,6 +227,7 @@ def _seg(seq: int, attempts: list[dict]) -> RunSegment:
 
 
 def test_a_workflow_s_last_read_never_counts_its_later_segments_shares_again():
+    """A workflow's last cost read never re-adds what later segments claimed."""
     # Three segments in one workflow: segments 2 and 3 carry their own agents' shares;
     # the workflow's last read ($3.75) leaves segment 1 the rest, every dollar once.
     first = _seg(1, [{"workflow_id": "wf_1", "cost_usd": 2.0, "workflow_cost_usd": 3.0}])

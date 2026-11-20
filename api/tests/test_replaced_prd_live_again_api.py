@@ -132,11 +132,13 @@ async def _assert_history(client, ctx: Ctx) -> None:
 
 
 async def test_a_live_replacement_keeps_the_prd_history_everywhere(client):
+    """A PRD replaced by a live PRD stays read-only history on every page showing it."""
     ctx = await world(client)
     await _assert_history(client, ctx)
 
 
 async def test_with_its_only_replacement_in_trash_the_prd_is_live_everywhere(client):
+    """A PRD goes live again everywhere once its only replacement is sent to trash."""
     ctx = await world(client)
     await _trash(client, ctx, "user-safety")
     r = await _run(client, ctx)
@@ -153,6 +155,7 @@ async def test_with_its_only_replacement_in_trash_the_prd_is_live_everywhere(cli
 
 
 async def test_restoring_the_replacement_from_trash_makes_the_prd_history_again(client):
+    """Restoring a trashed replacement makes the original PRD history again."""
     ctx = await world(client)
     entry = await _trash(client, ctx, "user-safety")
     assert "trust-plan" in await _draft_prds(client, ctx)
@@ -161,6 +164,7 @@ async def test_restoring_the_replacement_from_trash_makes_the_prd_history_again(
 
 
 async def test_a_prd_whose_replacement_is_in_trash_may_replace_another(client):
+    """A PRD that is itself history cannot replace another, until its own is trashed."""
     ctx = await world(client)
     async with tenant_session(ctx.tenant_id) as s:
         await _prd(s, "old-notes", "Old notes")

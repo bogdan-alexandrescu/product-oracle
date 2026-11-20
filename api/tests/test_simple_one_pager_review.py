@@ -49,11 +49,13 @@ def facts(md: str) -> list[str]:
 
 @pytest.mark.parametrize("sep", ["|--|--|", "|-|-|", "|:-|-:|", "--|--", "| - | - |"])
 def test_short_separator_rows_hide_the_header(sep):
+    """A table's header row never becomes a fact line, whatever separator is used."""
     md = f"| Bet | What it does |\n{sep}\n| Spend alerts | Warns at 80% |\n| Digest | Weekly |"
     assert facts(md) == ["Spend alerts: Warns at 80%", "Digest: Weekly"]
 
 
 def test_prose_with_pipes_keeps_its_words():
+    """A pipe inside ordinary prose stays as written, not read as a table."""
     assert facts("- Latency p50 | p95 | p99 targets\n- Ship it") == [
         "Latency p50 | p95 | p99 targets",
         "Ship it",
@@ -68,6 +70,7 @@ def test_prose_with_pipes_keeps_its_words():
 
 @pytest.mark.parametrize("case", CASES, ids=[c["name"] for c in CASES])
 def test_plan_strip_cases(case):
+    """The plan strip's row grouping matches a shared suite of fixture cases."""
     items = [
         plan_strip.PlanItem(
             date.fromisoformat(i["start"]),
@@ -181,6 +184,7 @@ def test_problem_line_is_cut_at_a_word_with_its_whole_text():
 
 
 def test_items_carry_their_linked_milestone_record():
+    """An item's milestone name is its own text or the linked record's, in one row."""
     track = SimpleNamespace(id=uuid.uuid4())
     beta = SimpleNamespace(id=uuid.uuid4(), name="Beta launch", target_date=None)
     links = {(track.id, "invites"): beta, (track.id, "form"): beta}
@@ -212,6 +216,7 @@ def test_items_carry_their_linked_milestone_record():
 
 
 def test_rows_name_their_items():
+    """A plan-strip row lists exactly the items it holds and skips cut ones."""
     day = SimpleNamespace(date=date(2026, 11, 2))
     later = SimpleNamespace(date=date(2026, 12, 1))
     m1 = SimpleNamespace(name="M1 · Prove it", date=date(2026, 11, 20), record_id=None,
@@ -253,6 +258,7 @@ SETUP = (
 
 
 def test_legacy_shortened_line_shows_its_own_fact():
+    """A cut line's full text is its own fact, never the section's bullets joined."""
     stored = "Spend alerts warn at 80% of the…"
     text, full = one_pager._tidy(stored, 6, None, [sec("bets", SETUP)])
     assert text.endswith("…")
@@ -265,6 +271,7 @@ def test_legacy_shortened_line_shows_its_own_fact():
 
 
 def test_legacy_long_whole_line_keeps_its_last_word():
+    """A whole line that just fits the length limit keeps its last word intact."""
     whole = " ".join(["word"] * 59) + " " + "x" * (one_pager.LINE_MAX - 59 * 5)
     assert len(whole) == one_pager.LINE_MAX and not whole.endswith("…")
     assert one_pager._tidy(whole, 60, None, [sec("problem", whole)]) == (whole, None)

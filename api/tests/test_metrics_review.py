@@ -130,6 +130,7 @@ async def _inbox(client, ctx, who: str) -> dict:
 # with no next date, so a company without metrics has no empty review; fails_when=it is
 # missing, active, or has a next date; no_claim=the Company › Rituals row.
 async def test_the_first_tick_seeds_the_review_paused(client, ctx, when):
+    """The first tick seeds the metrics review ritual, paused until set up."""
     await tick(ctx.tenant_id)
     review = (await rituals_of(ctx.tenant_id))["metrics_review"]
     assert review.title == "Weekly metrics review"
@@ -144,6 +145,7 @@ async def test_the_first_tick_seeds_the_review_paused(client, ctx, when):
 # own defaults, the check-in stays active, or a later value activates again;
 # no_claim=the Rituals page's words (lane 3).
 async def test_the_first_value_takes_over_the_goals_checkin_once(client, ctx, when):
+    """The first metric value takes over the goals check-in once, pausing it."""
     await tick(ctx.tenant_id)
     checkin = (await rituals_of(ctx.tenant_id))["goals_checkin"]
     approver, commenter = ctx.users["approver"].id, ctx.users["commenter"].id
@@ -188,6 +190,7 @@ async def test_the_first_value_takes_over_the_goals_checkin_once(client, ctx, wh
 # variance is missing; no_claim=the possible causes' order (lane 1's
 # test_causes_put_the_goals_launch_first) and the renderers (lane 3).
 async def test_the_pre_read_has_the_table_and_the_variances(client, ctx, when):
+    """The metrics review's pre-read lists each metric's values and variances."""
     occ = await _review_ready(client, ctx)
     keys = [b["key"] for b in occ["pre_read"]["blocks"]]
     assert keys[:2] == ["metrics_table", "variances"]
@@ -227,6 +230,7 @@ async def test_the_pre_read_has_the_table_and_the_variances(client, ctx, when):
 # failed; fails_when=a metric without this week's value is left out or shows a number;
 # no_claim=PostHog failures (test_pull_failed_inbox_row covers the error state).
 async def test_the_table_lists_a_metric_with_no_value_this_week(client, ctx, when):
+    """The metrics review's table shows a metric with no value yet this week."""
     await tick(ctx.tenant_id)
     await _jumping(client, ctx)
     late = (await create(client, ctx, title="Churned teams", unit="teams",
@@ -250,6 +254,7 @@ async def test_the_table_lists_a_metric_with_no_value_this_week(client, ctx, whe
 # $3.00, the draft is not stored, or an unreadable ref is kept; no_claim=the draft's
 # quality (fake runtime).
 async def test_explain_with_oracle_starts_one_variance_run(client, ctx, when):
+    """Explaining a review's variances starts one run reading the asker's sources."""
     occ = await _review_ready(client, ctx)
     (var,) = _block(occ, "variances")["rows"]
     # The run's creator (the approver who clicks) reads their own source's items.
@@ -305,6 +310,7 @@ async def test_explain_with_oracle_starts_one_variance_run(client, ctx, when):
 # are all answered is 409 and starts nothing; fails_when=a run starts with nothing to
 # explain; no_claim=the button's absence (lane 3).
 async def test_no_open_variance_is_409(client, ctx, when):
+    """Asking Oracle to explain a review with no open variance is refused."""
     occ = await _review_ready(client, ctx)
     (var,) = _block(occ, "variances")["rows"]
     resp = await client.post(f"{V}/{var['variance_id']}/noise", json={"reason": "Holiday"},
@@ -321,6 +327,7 @@ async def test_no_open_variance_is_409(client, ctx, when):
 # for it); fails_when=none starts, two start, or the generic summary starts instead;
 # no_claim=the run's content.
 async def test_always_starts_one_variance_run(client, ctx, when):
+    """Set to always summarize, a ready review starts one run, not a second."""
     set_runtime(FakeRuntime())
     try:
         resp = await client.put("/v1/rituals/summaries", json={"mode": "always"},
@@ -352,6 +359,7 @@ async def _act(client, ctx, max_run_usd: float) -> None:
 # Oracle action row reaches the ritual's owner; fails_when=no run starts, two start, or
 # the owner is not told; no_claim=the Inbox screen.
 async def test_act_within_limits_starts_one_run_and_tells_the_owner(client, ctx, when):
+    """Acting within its cost limit, a ready review starts one run and tells the owner."""
     set_runtime(FakeRuntime())
     try:
         await _act(client, ctx, 10)
@@ -375,6 +383,7 @@ async def test_act_within_limits_starts_one_run_and_tells_the_owner(client, ctx,
 # nothing starts and nobody is told; fails_when=the limit is ignored; no_claim=other
 # ritual kinds' own runs ($3.00, also above the limit here).
 async def test_act_below_the_runs_cost_starts_nothing(client, ctx, when):
+    """A cost limit below the run's price starts nothing and shows nothing."""
     set_runtime(FakeRuntime())
     try:
         await _act(client, ctx, 1)
@@ -392,6 +401,7 @@ async def test_act_below_the_runs_cost_starts_nothing(client, ctx, when):
 # $3.00; fails_when=the review is priced at $3.00 or left out; no_claim=the Settings
 # screen's rounding.
 async def test_the_estimate_counts_the_review_at_its_own_flow(client, ctx, when):
+    """The cost estimate counts the review under its own flow's price, not another's."""
     await tick(ctx.tenant_id)
     for r in (await rituals_of(ctx.tenant_id)).values():
         if r.status == "active":
@@ -410,6 +420,7 @@ async def test_the_estimate_counts_the_review_at_its_own_flow(client, ctx, when)
 # data and never to guess; fails_when=it writes a document, uses the writer, or misses a
 # tool; no_claim=the agent's behaviour.
 async def test_the_variance_flow_and_its_prompt(client, ctx, when):
+    """The variance flow's analyst step reads read-only tools and Oracle's limits."""
     from types import SimpleNamespace
 
     from oracle.rituals import summaries
@@ -443,6 +454,7 @@ async def test_the_variance_flow_and_its_prompt(client, ctx, when):
 # fails_when=either tool is missing or the task does not name list_metrics;
 # no_claim=the update's content.
 def test_update_draft_reads_the_weekly_metrics():
+    """The roadmap draft updater reads weekly metrics, outputs before drivers."""
     (sdef,) = flows.FLOWS["update_draft"].segments
     assert {"list_metrics", "get_metric"} <= set(sdef.tools)
     assert "and the weekly metrics (list_metrics), outputs before inputs" in sdef.task
@@ -454,6 +466,7 @@ def test_update_draft_reads_the_weekly_metrics():
 # drops by 1 once they explain; another member has none; fails_when=no row, an uncounted
 # row, a row for someone else, or a row left after explaining; no_claim=the Inbox screen.
 async def test_explain_a_variance_inbox_row(client, ctx, when):
+    """Explaining a variance inbox row clears it from the inbox but not another's."""
     occ = await _review_ready(client, ctx)
     before = await _inbox(client, ctx, "commenter")
     (row,) = before["metrics"]
@@ -476,6 +489,7 @@ async def test_explain_a_variance_inbox_row(client, ctx, when):
 # with its due day; explaining ends it; fails_when=the row shows before the day, is not
 # counted, or stays after explaining; no_claim=the words on screen.
 async def test_find_out_row_after_the_day(client, ctx, when):
+    """An unknown variance shows in the inbox only once its find-out date comes."""
     await tick(ctx.tenant_id)
     await _jumping(client, ctx)
     (var,) = (await client.get(V, headers=ctx.as_("viewer"))).json()
@@ -500,6 +514,7 @@ async def test_find_out_row_after_the_day(client, ctx, when):
 # succeeds ends it; fails_when=no row, an uncounted one, or one left after a good pull;
 # no_claim=the PostHog API's real shape (fake transport).
 async def test_pull_failed_inbox_row(client, ctx, when, fake_posthog):
+    """A metric whose pull keeps failing for a day gets an inbox row for its owner."""
     assert (await connect(client, ctx)).status_code == 200
     metric = (await create(client, ctx, source="posthog", query=QUERY)).json()
     fake_posthog.failing = {"12345"}
@@ -535,6 +550,7 @@ async def test_pull_failed_inbox_row(client, ctx, when, fake_posthog):
 # "unusual week", never "variance"; fails_when=any of them still says Variances or
 # variance; no_claim=the web's own words (metric-words.spec.ts).
 async def test_review_says_unusual_week(client, ctx, when):
+    """The review calls a variance an unusual week; a stale lock version is refused."""
     occ = await _review_ready(client, ctx)
     block = _block(occ, "variances")
     assert block["title"] == "Unusual weeks"
@@ -564,6 +580,7 @@ async def test_review_says_unusual_week(client, ctx, when):
 # protects=the explain run's import notes and its title read "unusual week"; fails_when=
 # they say variance; no_claim=the run page's layout.
 def test_explain_run_says_unusual_week():
+    """The variance explanation flow's text says unusual week, never variance."""
     from collections import Counter
 
     from oracle.metrics import explain
@@ -581,6 +598,7 @@ def test_explain_run_says_unusual_week():
 # protects=a metric's kind errors say Result and Driver, never output and input;
 # fails_when=a create is refused in the old words; no_claim=the form (PR 1316's).
 async def test_kind_errors_say_result_and_driver(client, ctx):
+    """A metric's kind rules give a plain error naming the result and driver."""
     resp = await metrics_helpers.create(client, ctx, kind="input")
     assert resp.json()["detail"] == "A driver needs the result it drives"
     result = (await metrics_helpers.create(client, ctx)).json()

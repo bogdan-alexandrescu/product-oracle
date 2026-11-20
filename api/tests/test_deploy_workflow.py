@@ -64,12 +64,14 @@ def _step(name: str) -> int:
 
 
 def test_deploy_needs_every_test_job():
+    """The deploy job waits on every test job in the workflow, missing none."""
     tests = set(_jobs()) - NOT_TESTS
     assert tests
     assert set(_deploy()["needs"]) == tests
 
 
 def test_deploy_is_off_until_the_owner_turns_it_on():
+    """Deploy runs only on main, only once the owner's flag turns it on."""
     condition = _deploy()["if"]
     assert "vars.ORACLE_DEPLOY_ENABLED == 'true'" in condition
     assert "github.ref == 'refs/heads/main'" in condition
@@ -77,6 +79,7 @@ def test_deploy_is_off_until_the_owner_turns_it_on():
 
 
 def test_backup_and_migration_come_before_any_traffic_moves():
+    """Backup and migration always run before any step moves live traffic."""
     steps = _deploy()["steps"]
     order = [
         _step("back up the database"),
@@ -100,6 +103,7 @@ def test_backup_and_migration_come_before_any_traffic_moves():
 
 
 def test_every_name_is_a_repository_variable():
+    """Every deploy env value comes from a repository variable, never a bare secret."""
     text = yaml.safe_dump(_deploy())
     assert "secrets." not in text
     for name, value in _deploy()["env"].items():
@@ -199,10 +203,12 @@ def _run_step(name: str, env: dict) -> subprocess.CompletedProcess:
 
 
 def test_deploy_job_is_the_production_environment():
+    """The deploy job runs under the production environment, not some other one."""
     assert _deploy()["environment"] == "production"
 
 
 def test_serving_api_must_not_migrate_at_start_before_the_migration(tmp_path):
+    """Deploy refuses to proceed if the serving revision still migrates at start."""
     steps = _deploy()["steps"]
     check = _step("the serving api does not migrate at start")
     assert check < _step("back up the database") < _step("migrate the database")
@@ -227,6 +233,7 @@ def test_serving_api_must_not_migrate_at_start_before_the_migration(tmp_path):
 
 
 def test_traffic_moves_to_the_staged_tag_and_the_tag_is_removed():
+    """Deploy moves traffic to the newly staged tag, then removes that tag once live."""
     steps = _deploy()["steps"]
     tag = "c-${SHA:0:12}"
 
@@ -247,6 +254,7 @@ def test_traffic_moves_to_the_staged_tag_and_the_tag_is_removed():
 
 
 def test_version_routes_are_asked_with_an_iap_id_token():
+    """Deploy checks the api and web are serving, using a signed IAP identity token."""
     env = _deploy()["env"]
     assert env["IAP_AUDIENCE_API"] == "${{ vars.ORACLE_IAP_AUDIENCE_API }}"
     assert env["IAP_AUDIENCE_WEB"] == "${{ vars.ORACLE_IAP_AUDIENCE_WEB }}"
@@ -281,6 +289,7 @@ def _laptop(env: dict, *extra: str) -> subprocess.CompletedProcess:
 
 
 def test_laptop_deploy_passes_migrate_at_start_through(tmp_path):
+    """A laptop deploy passes its migrate-at-start setting through, then moves traffic."""
     env = _fake(tmp_path, {"r1": {"ORACLE_MIGRATE_AT_START": "0", "ORACLE_ENV": "prod"}})
     r = _laptop(env)
     assert r.returncode == 0, r.stdout + r.stderr
@@ -293,6 +302,7 @@ def test_laptop_deploy_passes_migrate_at_start_through(tmp_path):
 
 
 def test_laptop_deploy_never_deploys_blind_or_over_the_kept_value(tmp_path):
+    """A laptop deploy refuses to run with a split, unknown, or overridden setting."""
     split = _fake(tmp_path / "split", {"r1": {"ORACLE_MIGRATE_AT_START": "0"}, "r2": {}})
     unknown = _fake(tmp_path / "unknown", None)
     for env in (split, unknown):
@@ -313,6 +323,7 @@ def test_laptop_deploy_never_deploys_blind_or_over_the_kept_value(tmp_path):
 
 
 def test_laptop_deploy_is_traffic_only_once_actions_deploys_are_on(tmp_path):
+    """Once Actions deploys are on, a laptop deploy only moves traffic."""
     env = _fake(tmp_path / "on", {"r1": {"ORACLE_MIGRATE_AT_START": "0"}}, enabled="true")
     r = _laptop(env)
     assert r.returncode != 0

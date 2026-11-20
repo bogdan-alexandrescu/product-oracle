@@ -104,10 +104,12 @@ async def _admin_id(tenant_id: uuid.UUID) -> uuid.UUID:
     ],
 )
 def test_reserved_email(email, reserved):
+    """A reserved example or test domain email, even disguised, is caught."""
     assert reserved_email(email) is reserved
 
 
 async def test_invite_for_a_reserved_domain_is_refused_outside_tests(client, real_build):
+    """Inviting a reserved domain is refused outside tests; a real one works."""
     r = await seed(email="owner@acme.io", password=PASSWORD)
     owner = await _owner_token(r.tenant_id)
     resp = await client.post(
@@ -122,6 +124,7 @@ async def test_invite_for_a_reserved_domain_is_refused_outside_tests(client, rea
 
 
 async def test_invite_for_a_reserved_domain_is_allowed_in_the_test_build(client):
+    """The test build's own setting allows inviting a reserved domain."""
     assert get_settings().allow_reserved_email_domains  # conftest sets it
     r = await seed(password=PASSWORD)
     resp = await client.post(
@@ -133,6 +136,7 @@ async def test_invite_for_a_reserved_domain_is_allowed_in_the_test_build(client)
 
 
 async def test_create_user_refuses_reserved_domains_outside_tests(tenant_id, real_build):
+    """Creating a user on a reserved domain is refused outside tests."""
     async with tenant_session(tenant_id) as s:
         with pytest.raises(ReservedEmailError):
             await create_user(s, "someone@acme.test", PASSWORD)
@@ -156,6 +160,7 @@ async def test_existing_reserved_members_are_not_touched(client, real_build, mon
 
 
 async def test_seed_mints_no_token_for_a_disabled_member(client):
+    """Seeding mints no token and refuses when every member is disabled."""
     from oracle.seed import SeedRefused
 
     r = await seed(password=PASSWORD)
@@ -169,6 +174,7 @@ async def test_seed_mints_no_token_for_a_disabled_member(client):
 
 
 def test_seed_password_needs_the_minimum_length(monkeypatch, capsys):
+    """Seeding from the command line refuses a too-short password."""
     monkeypatch.setattr("sys.argv", ["oracle.seed", "--email", "a@acme.io", "--password", "short"])
     with pytest.raises(SystemExit) as exit_:
         seed_main()
@@ -180,6 +186,7 @@ def test_seed_password_needs_the_minimum_length(monkeypatch, capsys):
     "prod", [{"cookie_secure": True}, {"iap_audiences": ["/projects/1/global/backendServices/2"]}]
 )
 def test_reserved_domains_cannot_be_allowed_in_production(prod):
+    """Allowing reserved email domains is refused once production is on."""
     from pydantic import ValidationError
 
     from oracle.config import Settings
@@ -192,6 +199,7 @@ def test_reserved_domains_cannot_be_allowed_in_production(prod):
 
 
 async def test_seed_requires_an_email_outside_tests(real_build, monkeypatch, capsys):
+    """Seeding requires an email outside tests, by call or command line."""
     with pytest.raises(ValueError, match="email"):
         await seed()
     monkeypatch.delenv("ORACLE_ADMIN_EMAIL", raising=False)
@@ -203,11 +211,13 @@ async def test_seed_requires_an_email_outside_tests(real_build, monkeypatch, cap
 
 
 async def test_seed_refuses_a_reserved_email_outside_tests(real_build):
+    """Seeding refuses a reserved email outside tests."""
     with pytest.raises(ReservedEmailError):
         await seed(email=ADMIN)
 
 
 async def test_iap_does_not_provision_reserved_domains_outside_tests(client, monkeypatch):
+    """Auto-provisioning refuses a reserved domain outside tests."""
     from oracle.auth import iap
     from tests import test_iap
     from tests.test_iap import HEADER, assertion
@@ -239,6 +249,7 @@ async def test_iap_does_not_provision_reserved_domains_outside_tests(client, mon
 
 
 async def test_members_show_last_sign_in_and_open_tokens(client):
+    """The members list shows last sign-in time and open token counts."""
     r = await seed(password=PASSWORD)  # the seed's token acts as the admin
     before = datetime.now(UTC)
     await _login(client)
@@ -256,12 +267,14 @@ async def test_members_show_last_sign_in_and_open_tokens(client):
 
 
 async def test_open_tokens_count_live_mcp_grants(client):
+    """Open token counts include a live MCP client grant too."""
     await full_flow(client)
     rows = (await client.get("/v1/members")).json()
     assert rows[0]["open_tokens"] == 2  # the seed's token and the MCP client's grant
 
 
 async def test_an_owner_cannot_remove_themselves(client):
+    """An owner cannot disable or remove their own account."""
     r = await seed(password=PASSWORD)
     await _add_user(r.tenant_id, "other-owner@example.com", "owner")
     await _login(client)
@@ -279,6 +292,7 @@ async def test_an_owner_cannot_remove_themselves(client):
 
 
 async def test_api_tokens_lists_every_kind(client):
+    """The api tokens list shows every kind, with owner and scopes, no secret."""
     reg, _ = await full_flow(client)  # signs in as the seeded admin (owner)
     async with tenant_session((await client.get("/v1/me")).json()["tenant_id"]) as s:
         admin = await s.scalar(select(User).where(User.email == ADMIN))
@@ -313,6 +327,7 @@ async def test_api_tokens_lists_every_kind(client):
 
 
 async def test_revoke_a_run_token_and_an_mcp_grant(client):
+    """Revoking a run token or mcp grant invalidates it, a no-op twice."""
     _, issued = await full_flow(client)
     tenant_id = uuid.UUID((await client.get("/v1/me")).json()["tenant_id"])
     raw_run = await _run_token(tenant_id, await _admin_id(tenant_id), ["read:documents"])
@@ -364,6 +379,7 @@ async def test_remove_revokes_every_token_of_the_member(client):
 
 
 async def test_my_account(client):
+    """A person's account page shows email, role, sign-in and password rules."""
     await seed(password=PASSWORD)
     await _login(client)
     body = (await client.get("/v1/me/account")).json()
@@ -374,6 +390,7 @@ async def test_my_account(client):
 
 
 async def test_iap_provisioned_users_have_no_password(client, monkeypatch):
+    """A Google-provisioned user has no password until they set one."""
     from oracle.auth import iap
     from tests import test_iap
 
@@ -409,6 +426,7 @@ async def test_iap_provisioned_users_have_no_password(client, monkeypatch):
 
 
 async def test_change_password(client):
+    """Changing a password refuses a wrong or unchanged one, signs out others."""
     await seed(password=PASSWORD)
     await _login(client)
     old_cookie = client.cookies.get(get_settings().session_cookie_name)
@@ -444,6 +462,7 @@ async def test_change_password(client):
 
 
 async def test_change_password_is_rate_limited(client):
+    """Repeated wrong passwords are rate limited, even the right one."""
     await seed(password=PASSWORD)
     await _login(client)
     body = {"current_password": _phrase("guess"), "new_password": _phrase("longer")}
@@ -458,6 +477,7 @@ async def test_change_password_is_rate_limited(client):
 
 
 async def test_personal_tokens(client):
+    """A personal token's secret is shown once, never listed again."""
     r = await seed(password=PASSWORD)
     await _login(client)
     created = await client.post(
@@ -495,6 +515,7 @@ async def test_personal_tokens(client):
 
 
 async def test_personal_token_validation_and_scope_cap(client):
+    """Creating a personal token refuses a bad name, scope, or expiry."""
     await seed(password=PASSWORD)
     await _login(client)
     for bad in ({"name": "", "scopes": ["oracle:read"]}, {"name": "x", "scopes": []}):
@@ -531,6 +552,7 @@ async def test_tokens_never_mint_tokens(client):
 
 
 async def test_read_only_credentials_change_nothing(client):
+    """A read-only token can read but not revoke, change or sign out."""
     r = await seed(password=PASSWORD)
     await _login(client)
     ro = (await client.post("/v1/me/tokens", json={"name": "ro", "scopes": ["oracle:read"]})).json()
@@ -568,6 +590,7 @@ async def test_my_account_says_when_the_credential_can_only_read(client):
 
 
 async def test_personal_tokens_expire(client):
+    """A personal token's expiry defaults to 90 days or can be open-ended."""
     r = await seed(password=PASSWORD)
     await _login(client)
     before = datetime.now(UTC)
@@ -609,6 +632,7 @@ async def test_personal_tokens_expire(client):
 
 
 async def test_my_mcp_clients(client):
+    """Revoking an mcp client grant invalidates its refresh token."""
     reg, issued = await full_flow(client)
     rows = (await client.get("/v1/me/oauth-clients")).json()
     assert len(rows) == 1
@@ -633,6 +657,7 @@ async def test_my_mcp_clients(client):
 
 
 async def test_another_members_grant_is_not_mine(client):
+    """Another member's mcp client grant is invisible and unrevokable."""
     _, _ = await full_flow(client)
     grant_id = (await client.get("/v1/me/oauth-clients")).json()[0]["id"]
     tenant_id = uuid.UUID((await client.get("/v1/me")).json()["tenant_id"])
@@ -643,6 +668,7 @@ async def test_another_members_grant_is_not_mine(client):
 
 
 async def test_sign_out_everywhere(client):
+    """Signing out everywhere kills every session, grant and token."""
     reg, issued = await full_flow(client)
     name = get_settings().session_cookie_name
     first = client.cookies.get(name)
@@ -727,6 +753,7 @@ BROWSER_ONLY = {"create_personal_token", "change_password", "sign_out_everywhere
 
 
 async def test_account_tools_exist_for_people(client):
+    """Account tools exist over MCP but cannot mint tokens or sign out."""
     r = await seed(password=PASSWORD)
     async with tenant_session(r.tenant_id) as s:
         token = await s.scalar(select(ApiToken))
@@ -779,6 +806,7 @@ async def test_an_mcp_client_cannot_mint_a_token_or_sign_out(client):
 
 
 async def test_a_read_only_mcp_client_cannot_revoke(client):
+    """A read-only mcp client's token cannot revoke its own grant."""
     _, issued = await full_flow(client, scope="oracle:read")
     grant_id = (await client.get("/v1/me/oauth-clients")).json()[0]["id"]
     client.cookies.clear()
@@ -800,6 +828,7 @@ def local_runtime():
 
 @pytest.mark.usefixtures("local_runtime")
 async def test_run_tokens_never_reach_account_tools(client):
+    """A run token can reach none of the account management tools."""
     r = await seed(password=PASSWORD)
     admin_id = await _admin_id(r.tenant_id)
     every_scope = [
@@ -850,6 +879,7 @@ async def test_rest_refuses_a_call_made_for_a_run(client):
 
 
 async def test_grant_ids_are_family_ids(client):
+    """An oauth client grant's id is its token family's id."""
     await full_flow(client)
     tenant_id = uuid.UUID(await _tenant_of_admin())
     async with tenant_session(tenant_id) as s:
@@ -954,6 +984,7 @@ async def test_creating_a_token_rechecks_the_caller_under_the_gate(client):
     ],
 )
 async def test_body_less_cookie_posts_refuse_another_origin(client, headers):
+    """A body-less cookie post refuses cross-site; a bearer token still works."""
     r = await seed(password=PASSWORD)
     other = await _add_user(r.tenant_id, "pm@acme.io", "approver")
     await _login(client)
@@ -1033,6 +1064,7 @@ async def test_a_read_only_personal_token_changes_no_preference(client, scope):
 
 
 async def test_a_read_only_personal_token_is_read_only_through_mcp(client):
+    """A read-only personal token can read prefs via mcp, not write them."""
     r = await seed(password=PASSWORD)
     raw = await _personal(r.tenant_id, await _admin_id(r.tenant_id), "oracle:read")
     async with mcp_client(raw) as c:
@@ -1048,6 +1080,7 @@ async def test_a_read_only_personal_token_is_read_only_through_mcp(client):
 
 
 def test_an_empty_scope_grants_nothing():
+    """An empty scope grants nothing; a missing one means full scopes."""
     from oracle.members.tokens import FULL_SCOPES, scopes_of
 
     assert scopes_of("") == [] and scopes_of("  ") == []
@@ -1138,6 +1171,7 @@ async def test_password_hashing_runs_off_the_event_loop(client, monkeypatch):
 
 @pytest.mark.parametrize("how", ["sign_out", "password"])
 async def test_authorization_codes_issued_before_a_sign_out_are_void(client, how):
+    """An oauth code before a sign-out or password change is voided."""
     from oracle.mcp.oauth.models import OAuthCode
     from tests.test_oauth import REDIRECT, approve, authorize_params, pkce, register, token
 
@@ -1167,6 +1201,7 @@ async def test_authorization_codes_issued_before_a_sign_out_are_void(client, how
 
 
 async def test_one_company_cannot_list_or_revoke_anothers_tokens(client):
+    """One company's tokens are invisible and unrevokable by another."""
     a = await seed(password=PASSWORD)
     from tests.conftest import make_tenant
 

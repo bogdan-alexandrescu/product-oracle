@@ -66,11 +66,13 @@ def scratch_db():
 
 
 def test_chains_on_mains_head_and_is_the_single_head():
+    """The question-retired migration chains on the branch's own head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 def test_backfill_retires_archived_briefs_open_questions_once(scratch_db):
+    """Backfilling retires only the open questions of archived intakes, once."""
     upgrade(_cfg(), PREVIOUS)
     tenant, archived, live = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:id, 'Example Co')", id=tenant)

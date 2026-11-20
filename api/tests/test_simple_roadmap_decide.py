@@ -76,6 +76,7 @@ def _d(day: date) -> Dated:
 
 
 def test_cut_item_is_not_checked_for_order():
+    """A cut item is skipped by every order check, both as dependency and dependent."""
     alpha = constraints.Node(id="a", title="Alpha", start=_d(date(2026, 11, 1)),
                              end=_d(date(2026, 12, 11)))  # fmt: skip
     beta = constraints.Node(id="b", title="Beta", start=_d(date(2026, 11, 13)),
@@ -99,6 +100,7 @@ async def _read(client, ctx, who: str, key_ids: dict[str, str]) -> dict[str, dic
 
 
 async def test_move_then_cut_clears_the_link(client):
+    """Fixing a broken dependency clears its flag; cutting the dependent clears it too."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["shift_dependents"])
     ids = {"a": w.ids["shift_dependents-a"], "b": w.ids["shift_dependents-b"]}
@@ -121,6 +123,7 @@ async def test_move_then_cut_clears_the_link(client):
 
 
 async def test_remove_dependency_and_restore_from_a_cut_item(client):
+    """Removing a dependency or restoring a cut item clears the flag that named it."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["cut"])
     ids = {"a": w.ids["cut-a"], "b": w.ids["cut-b"]}
@@ -154,6 +157,7 @@ async def test_remove_dependency_and_restore_from_a_cut_item(client):
 
 
 async def test_remove_dependency_under_a_filter(client):
+    """Removing a dependency checks the whole item, not just what a date filter shows."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["cut"])
     ids = {"a": w.ids["cut-a"], "b": w.ids["cut-b"]}
@@ -196,6 +200,7 @@ async def _links_in_read(client, ctx, who: str, **query) -> int:
 
 
 async def test_waiting_count_reads_the_whole_roadmap(client):
+    """The count of broken links waiting covers the whole roadmap, not a filtered view."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["cut"])
     r = await client.get(f"{ROADMAP}/waiting", headers=ctx.as_("decider"))
@@ -220,6 +225,7 @@ async def _dates_in_read(client, ctx, who: str) -> int:
 
 
 async def test_waiting_count_holds_the_dates_to_confirm(client):
+    """The count of dates waiting to confirm covers the whole roadmap, for any role."""
     ctx = await make_people()
     await World(ctx).build(decider=True, ops=["cut", "move_dates"])
     r = await client.get(f"{ROADMAP}/waiting", headers=ctx.as_("decider"))
@@ -231,6 +237,7 @@ async def test_waiting_count_holds_the_dates_to_confirm(client):
 
 
 async def test_waiting_count_reads_one_chosen_roadmap(client):
+    """Waiting counts scope to one roadmap, and 404 for one that does not exist."""
     ctx = await make_people()
     await World(ctx).build(decider=True, ops=["cut"])
     r = await client.get(ROADMAP, headers=ctx.as_("decider"))
@@ -250,6 +257,7 @@ async def test_waiting_count_reads_one_chosen_roadmap(client):
 
 
 async def test_remove_dependency_reads_the_subject_too(client):
+    """Removing a dependency also returns the fresh flags of the item it pointed to."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["cut"])
     ids = {"a": w.ids["cut-a"], "b": w.ids["cut-b"]}
@@ -265,6 +273,7 @@ async def test_remove_dependency_reads_the_subject_too(client):
 
 
 async def test_draft_change_list_names_the_item(client):
+    """A draft's change log names the real item each change touched, not just its key."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["shift_dependents"])
     r = await w.post(client, "decider", "shift_dependents")
@@ -282,6 +291,7 @@ async def test_draft_change_list_names_the_item(client):
 
 
 async def test_prd_owner_sees_and_decides_the_ask(client):
+    """A PRD's own owner decides an ask its commenters can only propose."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         owner = User(email="prdowner@example.com", name="Priya Owner", password_hash="x",
@@ -308,6 +318,7 @@ async def test_prd_owner_sees_and_decides_the_ask(client):
 
 
 async def test_sent_draft_waits_for_its_decider(client):
+    """A submitted draft waits on its own roadmap's decider, not on its author."""
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["move_dates"])
     r = await w.post(client, "owner", "move_dates")

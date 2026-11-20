@@ -20,10 +20,12 @@ async def ctx():
 
 
 def test_source_items_need_read_sources():
+    """Reading a source item requires the read:sources scope."""
     assert required_scope("GET", "/v1/source-items/{item_id}") == "read:sources"
 
 
 async def test_a_run_token_reads_its_creators_source_item_over_mcp(client, ctx):
+    """A run token with read:sources reads the item; without it, it is refused."""
     item = await make_item(ctx, "owner", title="#placeholder thread")
     token = await run_token(ctx.tenant_id, ["read:sources"], ctx.users["owner"].id)
     async with mcp_client(token) as c:
@@ -46,6 +48,7 @@ async def _inspected(client, headers) -> dict[str, dict]:
 
 
 async def test_the_inspector_shows_a_run_confidence_as_of_its_pin(client, ctx):
+    """A run's confidence stays as of its pin while a person's live score moves on."""
     feat = await entity(client, ctx, type="feature", key="guided-setup")
     updated = datetime.now(UTC) - timedelta(days=10)
     item = await make_item(ctx, "owner", updated=updated)

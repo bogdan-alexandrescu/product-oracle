@@ -42,6 +42,7 @@ async def items(tenant_id: uuid.UUID) -> list[FeedbackItem]:
 
 
 async def test_a_discuss_thread_during_a_review_is_whole_draft_feedback(client):
+    """A discuss thread during a review counts as whole-draft feedback."""
     tenant_id, auth = await two_versions(client)
     reviewer = await as_user(tenant_id, "commenter", "reviewer@example.com")
     approver = await as_user(tenant_id, "approver")
@@ -79,6 +80,7 @@ async def test_a_discuss_thread_during_a_review_is_whole_draft_feedback(client):
 
 
 async def test_a_discussion_stays_a_discussion_outside_a_review(client):
+    """A discussion in review but private or on one section is not feedback."""
     tenant_id, auth = await two_versions(client)
     reviewer = await as_user(tenant_id, "commenter")
     document_id = await doc_id(tenant_id)
@@ -127,6 +129,7 @@ async def first_message(client, headers, d: str) -> str:
 
 
 async def test_editing_the_first_message_updates_the_item(client):
+    """Editing a thread's first message updates the feedback item's summary."""
     tenant_id, _auth = await two_versions(client)
     reviewer = await as_user(tenant_id, "commenter")
     d = (await started(client, reviewer, await doc_id(tenant_id)))["id"]
@@ -141,6 +144,7 @@ async def test_editing_the_first_message_updates_the_item(client):
 
 
 async def test_deleting_the_first_message_withdraws_the_item(client):
+    """Deleting the first message withdraws the feedback item entirely."""
     tenant_id, _auth = await two_versions(client)
     reviewer = await as_user(tenant_id, "commenter")
     approver = await as_user(tenant_id, "approver")
@@ -158,6 +162,7 @@ async def test_deleting_the_first_message_withdraws_the_item(client):
 
 
 async def test_making_the_thread_private_withdraws_the_item(client):
+    """Making a feedback thread private withdraws its feedback item."""
     tenant_id, _auth = await two_versions(client)
     reviewer = await as_user(tenant_id, "commenter")
     out = await started(client, reviewer, await doc_id(tenant_id))
@@ -170,6 +175,7 @@ async def test_making_the_thread_private_withdraws_the_item(client):
 
 
 async def test_the_item_leads_to_its_thread_and_resolving_it_closes_the_thread(client):
+    """Resolving the item closes its thread, which still points back to it."""
     tenant_id, _auth = await two_versions(client)
     reviewer = await as_user(tenant_id, "commenter")
     approver = await as_user(tenant_id, "approver")
@@ -187,6 +193,7 @@ async def test_the_item_leads_to_its_thread_and_resolving_it_closes_the_thread(c
 
 
 async def test_a_first_message_too_long_for_whole_draft_feedback_is_refused(client):
+    """A first message over the length limit is refused outright."""
     tenant_id, _auth = await two_versions(client)
     reviewer = await as_user(tenant_id, "commenter")
     body = discuss(await doc_id(tenant_id), 2, message="x" * (GENERAL_FEEDBACK_MAX + 1))
@@ -202,6 +209,7 @@ async def test_a_first_message_too_long_for_whole_draft_feedback_is_refused(clie
 
 
 async def test_a_discussion_on_a_draft_does_not_start_its_review(client):
+    """A discuss thread on a draft does not start its document's review."""
     tenant_id, _auth = await two_versions(client)
     reviewer = await as_user(tenant_id, "commenter")
     async with tenant_session(tenant_id) as s:
@@ -217,6 +225,7 @@ async def test_a_discussion_on_a_draft_does_not_start_its_review(client):
 
 
 async def test_a_mentioned_approver_hears_of_the_remark_once(client):
+    """A mentioned approver sees the remark once, not twice over."""
     tenant_id, _auth = await two_versions(client)
     reviewer = await as_user(tenant_id, "commenter")
     approver = await as_user(tenant_id, "approver", "approver@example.com")
@@ -249,6 +258,7 @@ async def oracle_suggests(tenant_id: uuid.UUID, kind: str) -> str:
 
 
 async def test_a_decision_on_oracles_suggestion_that_closes_the_item_closes_the_thread(client):
+    """Accepting Oracle's suggestion on an item closes it and its thread."""
     tenant_id, _auth = await two_versions(client)
     reviewer = await as_user(tenant_id, "commenter")
     approver = await as_user(tenant_id, "approver")
@@ -265,6 +275,7 @@ async def test_a_decision_on_oracles_suggestion_that_closes_the_item_closes_the_
 
 
 async def test_declining_the_item_with_oracles_suggestion_closes_the_thread(client):
+    """Declining an item with Oracle's suggestion still closes its thread."""
     tenant_id, _auth = await two_versions(client)
     reviewer = await as_user(tenant_id, "commenter")
     approver = await as_user(tenant_id, "approver")
@@ -299,6 +310,7 @@ async def reopened(client, headers, d: str) -> dict:
 
 
 async def test_an_open_item_no_one_acted_on_is_withdrawn_with_its_suggestion(client):
+    """An unacted item is withdrawn with its suggestion when deleted."""
     tenant_id, _auth = await two_versions(client)
     reviewer = await as_user(tenant_id, "commenter")
     d = (await started(client, reviewer, await doc_id(tenant_id)))["id"]
@@ -313,6 +325,7 @@ async def test_an_open_item_no_one_acted_on_is_withdrawn_with_its_suggestion(cli
 
 
 async def test_an_item_resolved_by_accepting_oracles_suggestion_is_kept(client):
+    """Resolving an item by accepting a suggestion keeps it after reopening."""
     tenant_id, _auth = await two_versions(client)
     reviewer = await as_user(tenant_id, "commenter")
     approver = await as_user(tenant_id, "approver")
@@ -336,6 +349,7 @@ async def test_an_item_resolved_by_accepting_oracles_suggestion_is_kept(client):
 
 
 async def test_an_item_with_a_dismissed_suggestion_is_kept_when_the_thread_goes_private(client):
+    """A dismissed suggestion's item is kept once its thread goes private."""
     tenant_id, _auth = await two_versions(client)
     reviewer = await as_user(tenant_id, "commenter")
     approver = await as_user(tenant_id, "approver")
@@ -357,6 +371,7 @@ async def test_an_item_with_a_dismissed_suggestion_is_kept_when_the_thread_goes_
 
 
 async def test_an_item_the_approver_answered_is_kept_when_the_thread_goes_private(client):
+    """An answered item is kept once its thread goes private."""
     tenant_id, _auth = await two_versions(client)
     reviewer = await as_user(tenant_id, "commenter")
     approver = await as_user(tenant_id, "approver")

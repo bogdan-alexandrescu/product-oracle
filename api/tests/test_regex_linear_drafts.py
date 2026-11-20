@@ -122,6 +122,7 @@ def cpu_seconds(setup: str, call: str, make: str, n: int) -> float:
 )
 @pytest.mark.timing  # a CPU budget: runs alone in the api-timing job
 def test_adversarial_input_runs_in_linear_time(name, make, n):
+    """The draft parser's and template title's regexes stay linear on bad input."""
     setup, call, _ = CASES[name]
     assert cpu_seconds(setup, call, make, n) < CPU_LIMIT
 
@@ -146,11 +147,13 @@ def _fuzz(count: int, seed: int) -> list[str]:
     ],
 )
 def test_citations_are_stripped_the_same(text, stripped):
+    """The faster citation-strip regex still strips exactly what the old one did."""
     assert parser.CITATION_STRIP_RE.sub("", text) == stripped
     assert _OLD_CITATION_STRIP.sub("", text) == stripped
 
 
 def test_citation_strip_matches_the_old_pattern():
+    """The rewritten citation-strip regex matches the old one on fuzzed text."""
     for text in _fuzz(30_000, 1):
         old = _OLD_CITATION_STRIP.sub("", text)
         # A citation id holding another "[c:" is stripped from the inner one: not real input.
@@ -160,6 +163,7 @@ def test_citation_strip_matches_the_old_pattern():
 
 
 def test_body_text_still_strips_citations():
+    """A document's body text strips citations and link markup, leaving plain words."""
     md = "Some **bold** and `code` [c:c1], then a [link](https://example.com).\n\n- one\n- two"
     assert parser.body_text(md) == "Some bold and code, then a link.\none\ntwo"
 
@@ -180,18 +184,21 @@ def test_body_text_still_strips_citations():
     ],
 )
 def test_section_ids_are_found_the_same(raw, found):
+    """The faster section-id regex finds a heading's id just where the old one did."""
     for pattern in (parser.SECTION_ID_RE, _OLD_SECTION_ID):
         m = pattern.search(raw)
         assert (m and (m.start(), m.group(1))) == found
 
 
 def test_section_id_matches_the_old_pattern():
+    """The rewritten section-id regex matches the old one on fuzzed text."""
     for text in _fuzz(30_000, 2):
         old, new = _OLD_SECTION_ID.search(text), parser.SECTION_ID_RE.search(text)
         assert (old and (old.span(), old.groups())) == (new and (new.span(), new.groups())), text
 
 
 def test_parse_draft_reads_heading_ids():
+    """Parsing a draft reads each section's heading id along with its title text."""
     parsed = parser.parse_draft("---\ndocument: d\ntitle: T\n---\n# T   {#t}\n\nBody.\n")
     assert [(s.section_key, s.heading) for s in parsed.sections] == [("t", "T")]
 
@@ -208,11 +215,13 @@ def test_parse_draft_reads_heading_ids():
     ],
 )
 def test_title_line_is_replaced_the_same(md, titled):
+    """Replacing a draft's title line keeps its heading id as the old pattern did."""
     for pattern in (service._TITLE_LINE, _OLD_TITLE_LINE):
         assert pattern.sub(lambda m: f"{m.group(1)}T{m.group(3)}", md, count=1) == titled
 
 
 def test_title_line_matches_the_old_pattern():
+    """The rewritten title-line regex matches the old one on fuzzed text."""
     for text in _fuzz(30_000, 3):
         old = [(m.span(), m.groups()) for m in _OLD_TITLE_LINE.finditer(text)]
         assert [(m.span(), m.groups()) for m in service._TITLE_LINE.finditer(text)] == old, text
@@ -234,6 +243,7 @@ def test_title_line_matches_the_old_pattern():
     ],
 )
 def test_inline_leaves_no_citation_or_anchor(text, clean):
+    """Inline rendering strips every citation and anchor, even ones nested together."""
     out = render._inline(text)
     assert out == clean
     assert "{#" not in out
@@ -241,6 +251,7 @@ def test_inline_leaves_no_citation_or_anchor(text, clean):
 
 
 def test_inline_reaches_a_fixed_point():
+    """Inline rendering keeps stripping until none is left, even on fuzzed text."""
     for text in _fuzz(30_000, 4):
         out = render._inline(text)
         assert "{#" not in out, text

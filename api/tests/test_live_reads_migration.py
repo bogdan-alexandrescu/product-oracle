@@ -68,6 +68,7 @@ def scratch_db():
 # (0081_simple_review_reminders) is the single head; fails_when=the revision is re-parented
 # or a second head appears; no_claim=what the revision creates (test_upgrade_and_downgrade).
 def test_chains_on_the_single_head():
+    """The migration chains onto the branch's single existing head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
@@ -79,6 +80,7 @@ def test_chains_on_the_single_head():
 # gets another kind, or the downgrade leaves anything behind; no_claim=the routes' use of
 # the tables (tests/test_live_fireflies.py), live_tokens (lane 2).
 def test_upgrade_and_downgrade(scratch_db):
+    """Upgrading adds the live_reads table; downgrading removes it cleanly."""
     upgrade(_cfg(), PREVIOUS)
     tenant, user, conn = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=tenant)

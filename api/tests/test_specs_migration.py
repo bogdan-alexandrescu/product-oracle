@@ -51,6 +51,7 @@ def scratch_db():
 
 
 def test_0015_specs_chains_after_main_head():
+    """Migration 0015 for specs chains onto the branch's current head revision."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision("0015_specs").down_revision == "0020_feedback_author"
 
@@ -74,6 +75,7 @@ def _run_row(t, flow: str) -> None:
 
 
 def test_upgrade_allows_specs_and_downgrade_removes_them(scratch_db):
+    """Specs and prd_to_spec runs are blocked before, allowed after the migration."""
     cfg = _cfg()
     upgrade(cfg, "0014_intake")
     t = uuid.uuid4()

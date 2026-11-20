@@ -108,6 +108,7 @@ async def _at_dates(client, auth) -> dict:
 
 
 def test_the_flow_has_the_dates_stop_after_the_prd_draft_and_it_skips_when_off():
+    """The engineering dates stop sits after the PRD draft, on by default, one call."""
     # protects=AC1/AC2 segment order, skip_when_off, estimate; fails_when=the dates stop is
     # missing, sits before the PRD draft, is off by default or costs other than one
     # architect; no_claim=the run's wait for items (API tests below).
@@ -139,6 +140,7 @@ def test_the_flow_has_the_dates_stop_after_the_prd_draft_and_it_skips_when_off()
     ],
 )  # fmt: skip
 def test_the_dates_file_check_names_each_problem(text, code):
+    """The dates file check names a wrong PRD, a bad date, or a wrongly dated item."""
     # protects=AC12 check codes; fails_when=a file naming an unknown, Next/Later or
     # undated item passes, or a missing Now item goes unnoticed; no_claim=the screen.
     from oracle.engineering import dates
@@ -149,6 +151,7 @@ def test_the_dates_file_check_names_each_problem(text, code):
 
 
 def test_a_good_dates_file_passes_the_check():
+    """A correctly written dates file passes the check with no problems."""
     # protects=AC12; fails_when=the architect's well-formed file is a problem; no_claim=-.
     from oracle.engineering import dates
 
@@ -159,6 +162,7 @@ def test_a_good_dates_file_passes_the_check():
 
 
 async def test_a_new_run_has_both_stops_on_and_costs_36_50(client, owner, runtime):
+    """A new run's cost estimate counts the engineering dates stop by default."""
     # protects=AC1, AC2 estimate; fails_when=the dates stop is off by default, missing from
     # the estimate, or counted with its stop off; no_claim=the deep and quick depths.
     _, auth = owner
@@ -177,6 +181,7 @@ async def test_a_new_run_has_both_stops_on_and_costs_36_50(client, owner, runtim
 
 
 async def test_with_the_dates_off_the_run_ends_at_the_prd_review(client, owner, runtime):
+    """Turning off engineering dates ends the run at the PRD review, skipping it."""
     # protects=AC2; fails_when=the run waits for items or submits eng_dates with the stop
     # off; no_claim=workflow mode.
     _, auth = owner
@@ -187,6 +192,7 @@ async def test_with_the_dates_off_the_run_ends_at_the_prd_review(client, owner, 
 
 
 async def test_the_run_waits_for_the_items_then_submits_the_dates(client, owner, runtime):
+    """The dates stop waits for the roadmap items to be ready before it runs at all."""
     # protects=AC9, AC3-like checkpoint; fails_when=approving the PRD review ends the run,
     # submits eng_dates before the items are ready, or never shows waiting_for;
     # no_claim=E1's derivation itself (its own tests).
@@ -211,6 +217,7 @@ async def test_the_run_waits_for_the_items_then_submits_the_dates(client, owner,
 
 
 async def test_approve_needs_each_date_decided_then_records_verified_bases(client, owner, runtime):
+    """Approving the dates stop needs every date decided, recording one basis each."""
     # protects=AC13, AC14; fails_when=Approve passes with a proposed date undecided, the
     # accepted estimate is not a verified basis by the decider scoped to the item, the
     # draft item keeps an unverified date, or a second identical basis is made;
@@ -251,6 +258,7 @@ async def test_approve_needs_each_date_decided_then_records_verified_bases(clien
 
 
 async def test_a_basis_already_recorded_is_reused(client, owner, runtime):
+    """Accepting a date with an existing matching basis reuses it, not a copy."""
     # protects=AC14 reuse; fails_when=a second identical verified basis is created;
     # no_claim=a basis of another date (a new one is right then).
     tenant_id, auth = owner
@@ -271,6 +279,7 @@ async def test_a_basis_already_recorded_is_reused(client, owner, runtime):
 
 
 async def test_a_changed_estimate_and_no_date(client, owner, runtime):
+    """Editing a proposed date's basis records exactly the reference and date typed in."""
     # protects=AC14 changed estimates, AC13 no_date; fails_when=the changed reference and
     # date are not what is recorded, or No date records a basis; no_claim=-.
     tenant_id, auth = owner
@@ -290,6 +299,7 @@ async def test_a_changed_estimate_and_no_date(client, owner, runtime):
 
 
 async def test_no_date_records_no_basis(client, owner, runtime):
+    """Marking an item with no date records no schedule basis for it."""
     # protects=AC14 last clause; fails_when=No date dates the item; no_claim=-.
     tenant_id, auth = owner
     run = await _at_dates(client, auth)
@@ -326,6 +336,7 @@ async def _dates_row(client, auth, run) -> tuple[str, int]:
 async def test_the_decisions_page_counts_the_dates_the_approval_changed(
     client, owner, runtime, body, words
 ):
+    """The Decisions page counts a date as changed only when the approval changed it."""
     # protects=run-dates-changed review: the dates an approval at the stop records are the
     # ones Simple's Decisions page counts, a proposed date changed to another or to No date
     # alike; fails_when=an edit through the stop is not counted, No date on a proposed date
@@ -354,6 +365,7 @@ async def test_the_decisions_page_counts_the_dates_the_approval_changed(
 async def test_the_dates_vocabulary_refuses_what_it_does_not_allow(
     client, owner, runtime, body, words
 ):
+    """The dates stop's actions refuse an unknown item, a bad date, or a wrong field."""
     # protects=AC §7 422s; fails_when=an invalid estimate, no_date or item is stored;
     # no_claim=question actions (D8's own tests).
     _, auth = owner
@@ -364,6 +376,7 @@ async def test_the_dates_vocabulary_refuses_what_it_does_not_allow(
 
 
 async def test_with_a_lead_named_an_approver_cannot_decide_the_dates(client, owner, runtime):
+    """With an engineering lead named, only that lead can approve the dates stop."""
     # protects=AC4 at the dates stop; fails_when=an approver decides while a lead is named;
     # no_claim=the console path (A3's tests).
     tenant_id, auth = owner
@@ -385,6 +398,7 @@ async def test_with_a_lead_named_an_approver_cannot_decide_the_dates(client, own
 
 
 async def test_items_off_asks_for_a_derivation_by_the_runs_creator(client, owner, runtime):
+    """Turning off draft items makes the run request a derivation for its own creator."""
     # protects=AC10; fails_when=the run waits on items nobody derives, or the derivation
     # is not a person's derive for the run's creator; no_claim=its $5.50 (E1).
     tenant_id, auth = owner
@@ -398,6 +412,7 @@ async def test_items_off_asks_for_a_derivation_by_the_runs_creator(client, owner
 
 
 async def test_a_failed_derivation_skips_the_dates_and_the_run_ends(client, owner, runtime):
+    """A failed roadmap-items derivation skips the dates stop; the run still finishes."""
     # protects=AC11; fails_when=the run waits forever, runs the architect, or ends without
     # the note; no_claim=the Plan's line.
     tenant_id, auth = owner
@@ -414,6 +429,7 @@ async def test_a_failed_derivation_skips_the_dates_and_the_run_ends(client, owne
 
 
 async def test_a_draft_with_no_now_item_skips_the_dates(client, owner):
+    """A draft with no Now item skips the dates stop, since nothing needs dating."""
     # protects=AC11 second clause; fails_when=the architect runs with nothing to date;
     # no_claim=-.
     from oracle.swarm.fake import _default_content
@@ -440,6 +456,7 @@ async def test_a_draft_with_no_now_item_skips_the_dates(client, owner):
 
 
 async def test_a_version_saved_after_the_prd_review_is_not_the_one_dated(client, owner, runtime):
+    """The dates stop dates the PRD version its review approved, not a later saved one."""
     # protects=#590 review MAJOR 2: the stop dates the PRD version its review approved (the
     # PRD draft's import), not the document's newest; fails_when=a v2 saved while the run
     # waits for v1's items makes the stop wait for, summarize or date v2; no_claim=a run
@@ -474,6 +491,7 @@ async def test_a_version_saved_after_the_prd_review_is_not_the_one_dated(client,
 async def test_with_no_lead_named_an_approver_decides_the_dates_and_the_audit_says_so(
     client, owner, runtime
 ):
+    """With no lead named, an approver decides the dates stop, and the audit says so."""
     # protects=#590 review minor: the no-lead fallback (A3) at the dates stop; fails_when=
     # an approver cannot decide with no lead named, or the decision's audit does not record
     # engineering_lead_named: false; no_claim=the lead-named case (above).
@@ -503,6 +521,7 @@ async def test_with_no_lead_named_an_approver_decides_the_dates_and_the_audit_sa
 async def test_the_default_runs_ceiling_counts_the_dates_and_only_spend_past_it_pauses(
     client, owner, runtime
 ):
+    """The run's overrun ceiling counts the dates stop's cost before deciding to pause."""
     # protects=#670 review: the overrun gate with the six segments; fails_when=the ceiling
     # leaves out the dates segment's $5 (1.5x 31.50), a spend below 1.5x 36.50 pauses, a
     # spend past it does not, or a Resume lands anywhere but the baseline's stop;
@@ -534,6 +553,7 @@ async def test_the_default_runs_ceiling_counts_the_dates_and_only_spend_past_it_
 
 
 async def test_an_overrun_in_the_dates_segment_pauses_before_its_stop(client, owner, runtime):
+    """An overspend during the dates segment pauses before its own checkpoint opens."""
     # protects=#670 review: the overrun and checkpoint gates on the sixth segment;
     # fails_when=the dates segment's overspend opens its stop, ends the run, or a Resume
     # does not land on the dates stop; no_claim=the dates check (above).
@@ -563,6 +583,7 @@ async def test_an_overrun_in_the_dates_segment_pauses_before_its_stop(client, ow
 
 
 async def test_a_retried_items_run_is_waited_for_not_skipped(client, owner, runtime):
+    """Retrying a failed items run keeps the PRD run waiting, not skipping its dates."""
     # protects=review r1 blocker (eng_dates); fails_when=the PRD run's Engineering dates
     # skips as "items failed" while the items run it waits for is being retried;
     # no_claim=the retry route's own checks (test_run_segment_retry).

@@ -70,6 +70,7 @@ def run(argv, handler):
 
 
 def test_push_imports_draft_and_prints_version(draft):
+    """Pushing a draft posts its markdown verbatim and reports the version."""
     code, out, err, reqs = run(
         ["push", str(draft)], lambda r: httpx.Response(201, json=_version(3))
     )
@@ -85,6 +86,7 @@ def test_push_imports_draft_and_prints_version(draft):
 
 
 def test_push_prints_warnings(draft):
+    """A push that returns warnings reports each one's code and message."""
     warning = {
         "code": "locked_section_changed",
         "message": "Approved sections changed",
@@ -99,12 +101,14 @@ def test_push_prints_warnings(draft):
 
 
 def test_push_same_content_reports_existing_version(draft):
+    """Pushing unchanged content reports the existing version, not a new import."""
     code, out, _, _ = run(["push", str(draft)], lambda r: httpx.Response(200, json=_version(1)))
     assert code == 0
     assert "Unchanged: checkout-redesign version 1" in out
 
 
 def test_push_doc_flag_overrides_front_matter(draft, monkeypatch):
+    """The --doc and --url flags on push override the draft's front matter."""
     code, _, _, reqs = run(
         ["push", str(draft), "--doc", "other doc", "--url", "http://flag.test"],
         lambda r: httpx.Response(201, json=_version(1)),
@@ -114,6 +118,7 @@ def test_push_doc_flag_overrides_front_matter(draft, monkeypatch):
 
 
 def test_push_rejected_draft_lists_errors(draft):
+    """A push rejected as invalid lists every error's code and location."""
     body = {
         "detail": "Draft rejected",
         "errors": [
@@ -130,6 +135,7 @@ def test_push_rejected_draft_lists_errors(draft):
 
 
 def test_push_bad_token(draft):
+    """A push refused as unauthenticated tells the user to check the token."""
     code, _, err, _ = run(
         ["push", str(draft)], lambda r: httpx.Response(401, json={"detail": "Not authenticated"})
     )
@@ -138,6 +144,8 @@ def test_push_bad_token(draft):
 
 
 def test_push_needs_token_and_slug(draft, tmp_path, monkeypatch):
+    """Pushing without a token, a doc slug or a real file fails before any call."""
+
     def unreachable(r):
         raise AssertionError("no request expected")
 
@@ -156,6 +164,8 @@ def test_push_needs_token_and_slug(draft, tmp_path, monkeypatch):
 
 
 def test_push_connection_error(draft):
+    """A push that cannot reach the server names the URL it tried."""
+
     def boom(r):
         raise httpx.ConnectError("connection refused")
 
@@ -192,6 +202,7 @@ def _package() -> dict:
 
 
 def test_pull_writes_feedback_package(tmp_path):
+    """Pulling a version writes its draft and feedback files without escaping text."""
     package = _package()
     out_dir = tmp_path / "feedback" / "v2"
     code, out, err, reqs = run(
@@ -221,6 +232,7 @@ def test_pull_writes_feedback_package(tmp_path):
 
 
 def test_pull_defaults_to_current_directory(tmp_path, monkeypatch):
+    """Pulling without an --out path writes its files into the current directory."""
     monkeypatch.chdir(tmp_path)
     code, _, _, _ = run(
         ["pull", "checkout-redesign", "--version", "2"],
@@ -236,6 +248,7 @@ def test_pull_defaults_to_current_directory(tmp_path, monkeypatch):
 
 
 def test_pull_missing_version(tmp_path):
+    """Pulling a missing version reports the server's error and writes no files."""
     code, _, err, _ = run(
         ["pull", "checkout-redesign", "--version", "9", "--out", str(tmp_path / "x")],
         lambda r: httpx.Response(404, json={"detail": "Version not found"}),
@@ -246,12 +259,14 @@ def test_pull_missing_version(tmp_path):
 
 
 def test_pull_requires_version():
+    """Pulling without a --version is refused before any request is made."""
     with pytest.raises(SystemExit) as exc:
         main(["pull", "checkout-redesign"], err=io.StringIO())
     assert exc.value.code == 2
 
 
 def test_console_script_is_installed():
+    """The installed oracle console script points at the CLI's own entry point."""
     from importlib.metadata import entry_points
 
     (ep,) = [e for e in entry_points(group="console_scripts") if e.name == "oracle"]

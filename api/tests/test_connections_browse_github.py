@@ -101,6 +101,7 @@ def url(conn, **params) -> str:
 
 
 async def test_lists_user_and_org_repos(client, alice, conn, github):
+    """The GitHub picker lists owned and org repos, sorted by latest push."""
     resp = await client.get(url(conn), headers=alice.headers)
     assert resp.status_code == 200, resp.text
     body = resp.json()
@@ -126,6 +127,7 @@ async def test_lists_user_and_org_repos(client, alice, conn, github):
 
 
 async def test_next_page(client, alice, conn, github):
+    """The GitHub repo list's next page follows its cursor to the rest."""
     resp = await client.get(url(conn, cursor="2"), headers=alice.headers)
     assert resp.status_code == 200, resp.text
     assert [r["full_name"] for r in resp.json()["repos"]] == ["other-org/billing-api"]
@@ -133,12 +135,14 @@ async def test_next_page(client, alice, conn, github):
 
 
 async def test_bad_cursor(client, alice, conn, github):
+    """A malformed GitHub cursor is refused before any call to GitHub."""
     resp = await client.get(url(conn, cursor="nope"), headers=alice.headers)
     assert resp.status_code == 422
     assert github.calls == []
 
 
 async def test_search_owner_name_and_description_across_pages(client, alice, conn, github):
+    """A GitHub repo search matches owner, name or description across pages."""
     resp = await client.get(url(conn, search="invoices"), headers=alice.headers)
     assert resp.status_code == 200, resp.text
     assert [r["full_name"] for r in resp.json()["repos"]] == ["other-org/billing-api"]
@@ -153,12 +157,14 @@ async def test_search_owner_name_and_description_across_pages(client, alice, con
 
 
 async def test_another_users_connection_is_not_found(client, bob, conn, github):
+    """Another user's GitHub connection is not found, and GitHub is never called."""
     resp = await client.get(url(conn), headers=bob.headers)
     assert resp.status_code == 404
     assert github.calls == []
 
 
 async def test_a_slack_connection_is_not_found(client, tenant_id, alice, github):
+    """A Slack connection does not show up as a GitHub repo list."""
     other = await add_connection(tenant_id, alice.id, "slack")
     resp = await client.get(url(other), headers=alice.headers)
     assert resp.status_code == 404
@@ -166,6 +172,7 @@ async def test_a_slack_connection_is_not_found(client, tenant_id, alice, github)
 
 @pytest.mark.timing
 async def test_rate_limit_is_a_clear_retry(client, alice, conn, github):
+    """GitHub's rate limit reply becomes a clear retry-after message."""
     github.limited = True
     resp = await client.get(url(conn), headers=alice.headers)
     assert resp.status_code == 429
@@ -175,6 +182,7 @@ async def test_rate_limit_is_a_clear_retry(client, alice, conn, github):
 
 
 async def test_rejected_token_marks_the_connection(client, tenant_id, alice, conn, github):
+    """A GitHub token GitHub rejects marks the connection expired, not leaked."""
     github.status = 401
     resp = await client.get(url(conn), headers=alice.headers)
     assert resp.status_code == 409
@@ -186,12 +194,15 @@ async def test_rejected_token_marks_the_connection(client, tenant_id, alice, con
 
 
 async def test_provider_down_is_a_bad_gateway(client, alice, conn, github):
+    """GitHub returning a server error becomes a bad gateway, not a crash."""
     github.status = 500
     resp = await client.get(url(conn), headers=alice.headers)
     assert resp.status_code == 502
 
 
 async def test_github_unreachable_is_a_bad_gateway(client, alice, conn):
+    """GitHub being unreachable over the network becomes a bad gateway."""
+
     def down(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("no route", request=request)
 

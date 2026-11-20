@@ -69,6 +69,7 @@ def clock(monkeypatch):
 
 
 async def test_proposal_visual_follows_who_sees_the_proposal(client):
+    """A proposal's visual is seen by its required reviewers and who began the meeting."""
     ctx = await world(client)
     async with tenant_session(ctx.tenant_id) as s:
         peer = User(email="peer@example.com", name="Pat Peer", password_hash="x",
@@ -107,6 +108,7 @@ async def test_proposal_visual_follows_who_sees_the_proposal(client):
 
 
 async def test_documentless_visual_of_another_lane_is_closed(client):
+    """A visual with no document is closed to anyone but who asked for it or an owner."""
     ctx = await world(client)
     rm, _ = await roadmap_world(ctx)
     loose, mine, placed = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
@@ -133,6 +135,7 @@ async def test_documentless_visual_of_another_lane_is_closed(client):
 
 
 async def test_card_and_suggestion_visuals_follow_who_reads_them(client):
+    """A chat card's or suggestion's visual follows the same read rules as itself."""
     ctx = await world(client)
     rm, _ = await roadmap_world(ctx)
     owner, attendee = ctx.users["owner"].id, ctx.users["approver"].id
@@ -191,6 +194,7 @@ async def test_card_and_suggestion_visuals_follow_who_reads_them(client):
 
 
 async def test_item_visuals_follow_who_reads_the_roadmap(client):
+    """A roadmap item's visual opens to anyone reading the roadmap; owners can revise."""
     ctx = await world(client)
     _, item = await roadmap_world(ctx)
     async with tenant_session(ctx.tenant_id) as s:
@@ -215,6 +219,7 @@ async def test_item_visuals_follow_who_reads_the_roadmap(client):
 
 
 async def test_request_refuses_subjects_simple_cannot_look_up(client):
+    """A visual cannot be requested for a subject Simple has no way to look up."""
     ctx = await world(client)
     for kind in ("suggestion", "chat_card", "one_pager_line"):
         sid = uuid.uuid4()
@@ -229,6 +234,7 @@ async def test_request_refuses_subjects_simple_cannot_look_up(client):
 
 
 async def test_change_survives_a_failed_visual(client, monkeypatch):
+    """A change still saves even if drawing its visual throws an error."""
     ctx = await world(client)
     _, item = await roadmap_world(ctx)
 
@@ -246,6 +252,7 @@ async def test_change_survives_a_failed_visual(client, monkeypatch):
 
 
 async def test_direct_outcome_edit_queues_no_visual(client):
+    """A direct outcome edit queues no visual, but a proposed one over it does."""
     ctx = await world(client)
     _, item = await roadmap_world(ctx)
     body = {"op": "edit_outcome", "target": {"item_id": str(item.id)},

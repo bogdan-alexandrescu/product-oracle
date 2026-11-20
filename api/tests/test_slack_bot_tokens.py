@@ -60,6 +60,7 @@ async def alice(tenant_id):
 async def test_a_bot_token_is_refused_at_connect_browse_and_source_creation(
     client, tenant_id, alice, slack
 ):
+    """A Slack bot token is refused at connect, at browsing, and at adding a source."""
     # Connect: 422, not 400 (the token works; Oracle will not use it).
     resp = await client.post(
         "/v1/connections/slack/token", json={"token": BOT}, headers=alice.headers
@@ -95,6 +96,7 @@ async def test_a_bot_token_is_refused_at_connect_browse_and_source_creation(
 
 
 async def test_a_user_token_still_connects_and_browses(client, alice, slack):
+    """A normal user token still connects and lists channels as before."""
     resp = await client.post(
         "/v1/connections/slack/token", json={"token": USER}, headers=alice.headers
     )
@@ -106,6 +108,7 @@ async def test_a_user_token_still_connects_and_browses(client, alice, slack):
 
 
 async def test_reconnecting_with_a_bot_token_is_refused(client, tenant_id, alice, slack):
+    """Reconnecting an existing connection with a bot token is refused too."""
     conn = await add_connection(
         tenant_id, alice.id, "slack", bundle={"access_token": USER}, account_id="T0EXAMPLE:U0PAT"
     )
@@ -119,6 +122,7 @@ async def test_reconnecting_with_a_bot_token_is_refused(client, tenant_id, alice
 async def test_the_bot_check_is_asked_once_per_cache_window(
     client, tenant_id, alice, slack, monkeypatch
 ):
+    """A channel browse reuses the bot check within its cache window, not Slack."""
     now = [5000.0]
     monkeypatch.setattr(browse, "_clock", lambda: now[0])
     conn = await add_connection(
@@ -136,6 +140,7 @@ async def test_the_bot_check_is_asked_once_per_cache_window(
 
 
 async def test_identify_refuses_a_bot_token():
+    """Identify rejects a bot token and accepts a user token."""
     async with httpx.AsyncClient(transport=httpx.MockTransport(slack_api)) as c:
         with pytest.raises(CredentialRefused) as refused:
             await PROVIDERS["slack"].identify(c, BOT)
@@ -154,11 +159,13 @@ async def test_identify_refuses_a_bot_token():
     ],
 )
 def test_an_oauth_grant_without_a_user_token_is_refused(data):
+    """An OAuth grant missing a user token is refused, never using the bot token."""
     with pytest.raises(CredentialRefused):
         PROVIDERS["slack"].parse_token_response(data)
 
 
 def test_an_oauth_grant_with_a_user_token_uses_it():
+    """An OAuth grant with a user token uses it, even after a token refresh."""
     parse = PROVIDERS["slack"].parse_token_response
     user = {"id": "U1", "access_token": "xoxp-user", "token_type": "user"}
     grant = {"ok": True, "access_token": "xoxb-bot", "token_type": "bot", "authed_user": user}

@@ -62,6 +62,7 @@ async def _events(ctx) -> list[ChangeEvent]:
 
 
 async def test_decisions_are_cumulative_across_revisions(client):
+    """A module removed in one revision keeps its reason two revisions later."""
     ctx = await seeded_ctx()
     await _doc(client, ctx)
     resp = await _revise(client, ctx, None, "First", inputs=PLATFORM, packs=["ai-agent.platform"])
@@ -137,6 +138,7 @@ async def test_decisions_are_cumulative_across_revisions(client):
 
 
 async def test_a_later_add_of_a_removed_module_brings_it_back(client):
+    """Adding back a removed module restores it with the new reason."""
     ctx = await seeded_ctx()
     await _doc(client, ctx)
     assert (await _revise(client, ctx, None, "First", inputs=PLATFORM)).status_code == 201
@@ -152,6 +154,7 @@ async def test_a_later_add_of_a_removed_module_brings_it_back(client):
 
 
 async def test_a_working_save_never_supersedes_the_confirmed_revision(client):
+    """A working save makes no change events; the confirmed revision stays."""
     ctx = await seeded_ctx()
     await _doc(client, ctx)
     approver = ctx.as_("approver")
@@ -214,6 +217,7 @@ async def test_a_working_save_never_supersedes_the_confirmed_revision(client):
 
 
 async def test_a_first_working_save_leaves_the_document_legacy(client):
+    """A document's first working save stays legacy until confirmed."""
     ctx = await seeded_ctx()
     await _doc(client, ctx)
     # The import itself records a document_version change (the trace hook); the working
@@ -248,6 +252,7 @@ async def _counts(tenant_id) -> tuple[int, ...]:
 
 
 async def test_reads_never_write_as_a_viewer(client):
+    """A viewer's reads never seed company modules or change any row."""
     ctx = await make_ctx()  # not seeded: as before startup or company creation seeds it
     await _doc(client, ctx)
     before = await _counts(ctx.tenant_id)
@@ -277,6 +282,7 @@ async def test_reads_never_write_as_a_viewer(client):
 
 
 async def test_a_write_by_an_approver_seeds(client):
+    """An approver's first write seeds the company's built-in modules."""
     ctx = await make_ctx()
     await _doc(client, ctx)
     resp = await _revise(client, ctx, None, "First")
@@ -285,6 +291,7 @@ async def test_a_write_by_an_approver_seeds(client):
 
 
 async def test_manifest_refuses_archived_modules_and_unknown_sections(client):
+    """A manifest edit is refused for an unknown or archived module section."""
     ctx = await seeded_ctx()
     approver = ctx.as_("approver")
     url = "/v1/template-manifests/one-pager"
@@ -311,6 +318,7 @@ async def test_manifest_refuses_archived_modules_and_unknown_sections(client):
 
 
 async def test_a_module_policy_change_is_recorded_for_existing_compositions(client):
+    """A module policy change logs once per composition, never for a repeat."""
     ctx = await seeded_ctx()
     await _doc(client, ctx)
     assert (await _revise(client, ctx, None, "First")).status_code == 201
@@ -337,6 +345,7 @@ async def test_a_module_policy_change_is_recorded_for_existing_compositions(clie
 
 
 async def test_the_catalogue_lists_the_industry_packs_and_they_are_overridable(client):
+    """Industry pack modules list in the catalogue; a company can override them."""
     ctx = await seeded_ctx()
     viewer, owner = ctx.as_("viewer"), ctx.as_("owner")
     packs = {p["id"]: p for p in (await client.get("/v1/module-packs", headers=viewer)).json()}
@@ -364,6 +373,7 @@ async def test_the_catalogue_lists_the_industry_packs_and_they_are_overridable(c
 
 
 async def test_an_industry_pack_composes_for_a_document(client):
+    """A fintech category recommendation picks the fintech pack, explained."""
     ctx = await seeded_ctx()
     await _doc(client, ctx)
     resp = await client.post(
@@ -416,6 +426,7 @@ async def _policy(client, ctx, **body):
 
 
 async def test_one_company_failing_to_seed_does_not_stop_the_others(client, monkeypatch, caplog):
+    """One company's seeding failure never blocks the others; only its id logs."""
     first, second, third = [await make_ctx(f"Placeholder Co {n}") for n in (1, 2, 3)]
     real = registry.ensure_builtin_modules
 
@@ -449,6 +460,7 @@ async def test_one_company_failing_to_seed_does_not_stop_the_others(client, monk
 
 
 async def test_a_transient_seeding_failure_is_retried_in_the_same_startup(monkeypatch):
+    """A transient seeding failure is retried within the same startup run."""
     ctx = await make_ctx()
     real = registry.ensure_builtin_modules
     calls: list[int] = []
@@ -469,6 +481,7 @@ async def test_a_transient_seeding_failure_is_retried_in_the_same_startup(monkey
 
 
 async def test_a_default_packs_change_applies_on_the_next_revision(client):
+    """A default pack change applies starting only from the next revision."""
     ctx = await seeded_ctx()
     await _doc(client, ctx)
     first = await _revise_fixes2(client, ctx, None, "First")
@@ -486,6 +499,7 @@ async def test_a_default_packs_change_applies_on_the_next_revision(client):
 
 
 async def test_a_category_change_applies_on_the_next_revision(client):
+    """A category change switches the pack only on the next revision."""
     ctx = await seeded_ctx()
     await _doc(client, ctx)
     first = await _revise_fixes2(client, ctx, None, "First", inputs={"category": "fintech"})
@@ -497,6 +511,7 @@ async def test_a_category_change_applies_on_the_next_revision(client):
 
 
 async def test_an_explicitly_chosen_pack_survives_a_default_packs_change(client):
+    """A person's chosen pack survives a later company default pack change."""
     ctx = await seeded_ctx()
     await _doc(client, ctx)
     first = await _revise_fixes2(
@@ -521,6 +536,7 @@ async def test_an_explicitly_chosen_pack_survives_a_default_packs_change(client)
 
 
 async def test_resending_an_earlier_removal_refreshes_its_reason(client):
+    """Repeating an earlier removal refreshes its reason; a missing module fails."""
     ctx = await seeded_ctx()
     await _doc(client, ctx)
     resp = await _revise_fixes2(
@@ -552,6 +568,7 @@ async def test_resending_an_earlier_removal_refreshes_its_reason(client):
 
 
 async def test_template_and_theme_reads_never_seed(client):
+    """Reading templates and themes never seeds the built-ins; a write does."""
     ctx = await make_ctx()  # not seeded, as before startup or company creation seeds it
     viewer = ctx.as_("viewer")
 
@@ -584,6 +601,7 @@ async def test_template_and_theme_reads_never_seed(client):
 
 
 async def test_a_template_write_seeds_the_builtins(client):
+    """A first template write seeds every built-in template for the company."""
     ctx = await make_ctx()
     resp = await client.patch(
         "/v1/templates/oracle-default", json={"name": "Our PRD"}, headers=ctx.as_("owner")
@@ -594,6 +612,7 @@ async def test_a_template_write_seeds_the_builtins(client):
 
 
 async def test_a_decision_set_aside_is_a_problem_in_the_confirm_response(client):
+    """A policy override of a decision is a non-fatal confirm problem only."""
     ctx = await seeded_ctx()
     await _doc(client, ctx)
     resp = await _revise_fixes2(

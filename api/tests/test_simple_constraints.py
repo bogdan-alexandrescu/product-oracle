@@ -48,6 +48,7 @@ def kinds(flags) -> list[str]:
 
 
 def test_dependency_order():
+    """An item starting before its dependency ends is flagged red, naming the day."""
     dep = node("ledger", d(2026, 10, 1), d(2026, 11, 10))
     item = node("import", d(2026, 11, 10), d(2026, 12, 1), depends_on=["ledger"])
     ok = node("export", d(2026, 11, 11), d(2026, 12, 1), depends_on=["ledger"])
@@ -64,12 +65,14 @@ def test_dependency_order():
 
 
 def test_dependency_order_between_two_estimated_bars_is_no_flag():
+    """Two items with only estimated dates get no dependency-order flag."""
     dep = node("ledger", d(2026, 10, 1, True), d(2026, 12, 31, True))
     item = node("import", d(2026, 10, 1, True), d(2026, 12, 31, True), depends_on=["ledger"])
     assert constraints.check([dep, item])["import"] == []
 
 
 def test_blocker_date():
+    """An open blocker whose expected day is after the item's start is flagged."""
     late = Blocker(id="b1", title="Rate limit", expected=date(2026, 11, 20), open=True)
     early = Blocker(id="b2", title="Contract", expected=date(2026, 10, 1), open=True)
     closed = Blocker(id="b3", title="Old", expected=date(2026, 12, 20), open=False)
@@ -82,6 +85,7 @@ def test_blocker_date():
 
 
 def test_outside_milestone():
+    """An item ending after its milestone's day is flagged, naming the milestone."""
     item = node("import", d(2026, 11, 1), d(2026, 12, 1), milestone=("Beta", date(2026, 11, 15)))
     inside = node("export", d(2026, 11, 1), d(2026, 11, 15), milestone=("Beta", date(2026, 11, 15)))
     out = constraints.check([item, inside])
@@ -93,6 +97,7 @@ def test_outside_milestone():
 
 
 def test_cut_with_dependents():
+    """A cut item with live dependents is flagged, naming one and counting the rest."""
     cut = node("ledger", d(2026, 10, 1), d(2026, 10, 20), status="cut")
     a = node("import", d(2026, 11, 1), d(2026, 12, 1), depends_on=["ledger"])
     b = node("export", d(2026, 11, 1), d(2026, 12, 1), depends_on=["ledger"])
@@ -107,6 +112,7 @@ def test_cut_with_dependents():
 
 
 def test_draft_without_owner():
+    """A draft item with no owner is flagged; an owned or published item is not."""
     draft = node("idea", d(2026, 10, 1, True), d(2026, 12, 31, True), draft=True)
     owned = node("owned", d(2026, 10, 1, True), d(2026, 12, 31, True), draft=True,
                  owner_id="u1")  # fmt: skip
@@ -118,6 +124,7 @@ def test_draft_without_owner():
 
 
 def test_accepted_risk_turns_amber_not_gone():
+    """Accepting a flag's risk turns it amber and keeps the note, never removes it."""
     dep = node("ledger", d(2026, 10, 1), d(2026, 11, 10))
     late = Blocker(id="b1", title="Rate limit", expected=date(2026, 11, 20), open=True)
     risks = [{"flag": "dependency_order", "subject": "ledger", "note": "Ledger ships early"}]
@@ -130,6 +137,7 @@ def test_accepted_risk_turns_amber_not_gone():
 
 
 def test_every_reason_is_one_line():
+    """Every flag's reason is one line of at most 160 characters, whatever the input."""
     dep = node("a-very-long-dependency-title-" * 3, d(2026, 10, 1), d(2026, 11, 10))
     item = node("import", d(2026, 11, 1), d(2026, 12, 1), depends_on=[dep.id],
                 milestone=("Beta", date(2026, 11, 15)), draft=True,

@@ -11,5 +11,6 @@ from oracle.llm import gateway
 
 
 def test_every_job_runner_is_a_gateway_job():
+    """Every job kind the worker can run is also a job kind the LLM gateway recognizes."""
     missing = sorted(set(kinds.RUNNERS) - set(gateway.JOBS))
     assert missing == [], f"add these to oracle.llm.gateway.JOBS: {missing}"

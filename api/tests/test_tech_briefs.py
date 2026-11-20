@@ -43,6 +43,7 @@ def codes(problems) -> set[str]:
 
 
 def test_the_sample_checks_clean_against_its_feature_set_and_code_map():
+    """The tech briefs sample checks clean against its feature set and code map."""
     # protects=AC1 the contract's own sample is valid; fails_when=a rule refuses the
     # documented format; no_claim=what the brief says is true of the code.
     assert briefs.check(SAMPLE, FEATURES, CODE_MAP) == []
@@ -96,6 +97,7 @@ BIG = "x" * (briefs.MAX_BYTES + 1)
     ],
 )
 def test_each_problem_code_is_reported(code, text, features, code_map):
+    """Each tech brief problem code is reported for its matching bad input."""
     # protects=AC1 every listed problem code; fails_when=a crafted file passes or is
     # reported under another code; no_claim=the wording of the message.
     problems = briefs.check(text, features, code_map)
@@ -105,6 +107,7 @@ def test_each_problem_code_is_reported(code, text, features, code_map):
 
 
 def test_problems_name_the_feature_they_are_about():
+    """A tech brief problem names the feature it is about."""
     # protects=the error card can point at a feature; fails_when=feature is lost.
     text = SAMPLE.replace("size: m\n", "size: huge\n")
     (problem,) = briefs.check(text, FEATURES, CODE_MAP)
@@ -112,12 +115,14 @@ def test_problems_name_the_feature_they_are_about():
 
 
 def test_a_reuse_entry_is_a_ref_too():
+    """A reuse entry's id must also exist in the code map, like any ref."""
     # protects=reuse cites code map ids; fails_when=a reuse id outside the map passes.
     text = SAMPLE.replace('reuse: ["module:notifications"]', 'reuse: ["module:ghost"]')
     assert codes(briefs.check(text, FEATURES, CODE_MAP)) == {"unknown_ref"}
 
 
 def test_limits_on_features_and_questions():
+    """Tech briefs enforce limits on the number of features and questions."""
     # protects=the 100 features and 20 questions per feature limits; fails_when=more
     # pass; no_claim=the 200 KB limit (tested above as unreadable).
     entry = (
@@ -142,6 +147,7 @@ def test_limits_on_features_and_questions():
 
 
 def test_a_missing_or_mistyped_field_is_a_bad_entry():
+    """A brief entry missing a field or with the wrong type is a bad entry."""
     # protects=registration only reads well-formed entries; fails_when=a brief without
     # an approach or with a string for touches passes.
     no_approach = SAMPLE.replace(
@@ -153,6 +159,7 @@ def test_a_missing_or_mistyped_field_is_a_bad_entry():
 
 
 def test_the_task_text_states_the_contract():
+    """The architect's task text states the tech brief contract's own rules."""
     # protects=the architect's instructions (F4's Engineering check segment); fails_when
     # a rule of the task is dropped; no_claim=how a model follows it.
     task = flows.TECH_BRIEF_TASK
@@ -165,6 +172,7 @@ def test_the_task_text_states_the_contract():
 
 
 def test_the_markdown_rendering_carries_what_a_reader_needs():
+    """Brief markdown carries the approach, refs, questions and verdict readers need."""
     # protects=brief.md; fails_when=approach, refs, questions or the verdict are dropped.
     parsed = briefs.parse(SAMPLE)
     entry = parsed.features[0]
@@ -315,6 +323,7 @@ async def brief_rows(tenant_id: uuid.UUID):
 async def test_existing_prd_briefs_are_registered_when_the_engineering_check_is_approved(
     client, eng_flow, runtime
 ):
+    """An approved engineering check registers one tech brief per feature."""
     # protects=AC2 one approved tech_brief per feature with outputs and dependencies,
     # the draft version filled in at the import, and requirement edits marking it
     # potentially_stale; fails_when=a brief is missing, unapproved, without brief.json /
@@ -440,6 +449,7 @@ async def test_existing_prd_briefs_are_registered_when_the_engineering_check_is_
 
 
 async def test_a_new_prd_gets_its_briefs_with_the_prd_draft_import(client, eng_flow, runtime):
+    """A new PRD's briefs register in the same transaction as its draft import."""
     # protects=AC3 a new PRD's briefs are registered in the same transaction as the
     # prd_draft import; fails_when=they are registered before the PRD exists, later
     # than the import, or not at all; no_claim=the import's own checks.
@@ -474,6 +484,7 @@ async def test_a_new_prd_gets_its_briefs_with_the_prd_draft_import(client, eng_f
 async def test_with_the_engineering_check_off_briefs_are_registered_as_drafts(
     client, eng_flow, no_map_runtime
 ):
+    """With the engineering check off, briefs register as drafts, not approved."""
     # protects=status 'approved' only when the check was approved; fails_when=a brief
     # no one approved reads as approved. Without the check, a ref is checked against the
     # run's code map, which no run records yet (F5-2): the briefs here have no map.
@@ -501,6 +512,7 @@ def no_map_runtime():
 
 
 async def test_the_read_routes(client, eng_flow, no_map_runtime):
+    """Tech briefs are read by PRD and feature, scoped to the viewer's company."""
     # protects=GET /v1/tech-briefs (by PRD and feature) and /v1/tech-briefs/{id} for
     # viewers, company-scoped; fails_when=a filter is ignored, another company reads a
     # brief or a viewer is refused; no_claim=MCP transport (the tools are the routes).
@@ -563,6 +575,7 @@ async def seed_other_company() -> tuple[uuid.UUID, dict[str, str]]:
 
 
 async def test_registration_is_idempotent(client, eng_flow, runtime):
+    """Registering tech briefs twice adds no second brief for the same feature."""
     # protects=one brief per feature per run; fails_when=a repeated import or approval
     # registers a second brief.
     from oracle.engineering import store
@@ -589,6 +602,7 @@ async def test_registration_is_idempotent(client, eng_flow, runtime):
 
 
 def test_the_routes_are_mcp_tools():
+    """list_tech_briefs and get_tech_brief stay exposed as the named MCP tools."""
     # protects=list_tech_briefs and get_tech_brief (the issue's API summary);
     # fails_when=an operation id changes.
     from oracle.main import app
@@ -602,6 +616,7 @@ def test_the_routes_are_mcp_tools():
 
 
 def test_parse_reads_the_file_once(monkeypatch):
+    """Parsing tech briefs reads the yaml file only once, reusing it to check."""
     # protects=one YAML load per parse (check reuses parse's data); fails_when=parse
     # loads the untrusted file again to check it.
     from oracle import safe_yaml
@@ -621,6 +636,7 @@ def test_parse_reads_the_file_once(monkeypatch):
 
 @pytest.mark.timing
 async def test_a_slow_brief_parse_is_refused_off_the_event_loop(monkeypatch):
+    """A slow brief parse times out off the event loop, which keeps running."""
     # protects=the briefs' parse and rendering run on the parse pool with a time cap
     # (oracle.safe_yaml.run_parse_within); fails_when=they run on the event loop or wait
     # without a cap.
@@ -654,6 +670,7 @@ async def test_a_slow_brief_parse_is_refused_off_the_event_loop(monkeypatch):
 async def test_registration_parses_and_renders_on_the_parse_pool(
     client, eng_flow, runtime, monkeypatch
 ):
+    """Tech brief parsing and rendering run on the parse pool, not the event loop."""
     # protects=at the approval and at the draft import, tech_briefs.yaml is loaded and
     # brief.md rendered on the parse pool, never on the event loop; fails_when=a request
     # handler parses or renders the untrusted file itself.
@@ -695,6 +712,7 @@ async def test_registration_parses_and_renders_on_the_parse_pool(
 async def test_non_text_decisions_are_dropped_at_registration(
     client, eng_flow, runtime, monkeypatch
 ):
+    """A brief's read routes survive a checkpoint with non-text verdicts or answers."""
     # protects=the GET routes read a brief whose checkpoint recorded non-text verdicts or
     # answers; fails_when=such a value is stored and the routes answer 500.
     tenant_id, auth = await seed_auth()
@@ -748,6 +766,7 @@ UNQUOTED = SAMPLE.replace(
 
 
 def test_a_commit_or_as_of_that_is_not_text_is_a_bad_entry():
+    """A code map commit or as_of that is not text is refused as a bad entry."""
     # protects=check and parse refuse a code_map repo whose commit or as_of YAML read as
     # a number or a date; fails_when=check returns [] and parse raises a pydantic
     # ValidationError the callers do not catch.
@@ -780,6 +799,7 @@ def unquoted_runtime():
 async def test_an_unquoted_commit_is_a_file_problem_at_the_engineering_approval(
     client, eng_flow, unquoted_runtime
 ):
+    """An unquoted commit blocks engineering approval as a file-level problem."""
     # protects=an Engineering check whose tech_briefs.yaml has an unquoted commit and
     # as_of is refused as a file-level problem (F4: Send back is the only way on), and
     # nothing is registered; fails_when=the approval answers 500 on a pydantic
@@ -805,6 +825,7 @@ async def test_an_unquoted_commit_is_a_file_problem_at_the_engineering_approval(
 async def test_an_unquoted_commit_does_not_break_the_prd_draft_import(
     client, eng_flow, unquoted_runtime
 ):
+    """An unquoted commit in tech briefs does not break the PRD draft import."""
     # protects=a new PRD's prd_draft import goes through when the run's tech_briefs.yaml
     # has an unquoted commit and as_of; fails_when=the import raises on every tick.
     # F4's gate refuses such a check (a file-level problem), so its stop is off here: the
@@ -857,6 +878,7 @@ def unchecked_runtime():
 async def test_with_the_check_off_a_brief_with_an_unknown_feature_or_ref_is_refused(
     client, eng_flow, unchecked_runtime
 ):
+    """With the check off, a brief naming an unknown feature or ref is refused."""
     # protects=with the Engineering check turned off, registration runs the check against
     # the feature set and the code map and refuses a brief with unknown_feature or
     # unknown_ref; fails_when=such a brief is stored unchecked.

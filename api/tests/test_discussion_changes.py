@@ -155,6 +155,7 @@ def section_change(key="problem", instruction="Say detection follows activation"
 # text that only looked like the delimiter's start is emitted later; fails_when=a "<<<"
 # prefix or the JSON reaches the chat, or prose is lost; no_claim=the route (criterion 1).
 def test_the_hold_back_never_emits_the_delimiter_or_what_follows():
+    """The hold-back buffer never leaks the changes delimiter or its tail."""
     hb = changes.HoldBack()
     out = [hb.feed(c) for c in ["Keep it <<", "< in mind. ", "Move it.\n<<<CHAN", 'GES>>>{"a":1}']]
     out.append(hb.flush())
@@ -169,6 +170,8 @@ def test_the_hold_back_never_emits_the_delimiter_or_what_follows():
 # viewer gets an action, a commenter may stage, or a rule-4 change may act;
 # no_claim=the target's own role checks.
 def test_action_and_why_not_per_role_and_kind():
+    """Each role and change kind gets the right allowed action or reason."""
+
     def seat(role, **kw):
         return access.Seat(role=role, visibility="open", participant=True, starter=False, **kw)
 
@@ -215,6 +218,7 @@ def test_only_kinds_whose_pick_landed_are_available():
 # streamed or stored; fails_when=the JSON shows in the chat or no row is written;
 # no_claim=the model's judgement (the fake reply stands in).
 async def test_a_reply_with_changes_streams_prose_and_stores_one_proposed_change(review, model):  # noqa: F811
+    """A reply with changes streams only prose and stores one change."""
     rv = review
     _tenant[0] = rv.tenant_id
     await with_key(rv)
@@ -241,6 +245,7 @@ async def test_a_reply_with_changes_streams_prose_and_stores_one_proposed_change
 # entries are dropped, one audit event each with no text; fails_when=a dropped entry is
 # stored or its text audited; no_claim=the prompt's listing.
 async def test_invalid_entries_are_dropped_and_audited_without_text(client, monkeypatch):
+    """Invalid change entries are dropped and audited without their text."""
     ctx, doc = await company(client)
     d = await start(client, ctx, subject=section(doc))
 
@@ -281,6 +286,7 @@ async def test_invalid_entries_are_dropped_and_audited_without_text(client, monk
 # target supersedes the first, and never a person's suggestion; fails_when=duplicates stay
 # open or a suggestion is overwritten; no_claim=G4's list.
 async def test_a_second_proposal_supersedes_oracles_but_not_a_suggestion(review, model):  # noqa: F811
+    """A later proposal supersedes Oracle's own but not a person's."""
     rv = review
     _tenant[0] = rv.tenant_id
     await with_key(rv)
@@ -307,6 +313,7 @@ async def test_a_second_proposal_supersedes_oracles_but_not_a_suggestion(review,
 # 403 everywhere and gets no action; fails_when=any role acts beyond 3.2;
 # no_claim=D8's own role checks.
 async def test_commenters_suggest_approvers_stage_and_viewers_only_read(review):  # noqa: F811
+    """Commenters suggest, approvers stage, and viewers only read changes."""
     rv = review
     _tenant[0] = rv.tenant_id
     d_id = await item_discussion(rv)
@@ -336,6 +343,7 @@ async def test_commenters_suggest_approvers_stage_and_viewers_only_read(review):
 # protects=criterion 12: a stale lock_version is 409 on every action; fails_when=a stale
 # write applies; no_claim=concurrent transactions.
 async def test_a_stale_lock_version_is_409(client):
+    """Acting on a change with a stale lock version returns a conflict."""
     ctx, doc = await company(client)
     _tenant[0] = ctx.tenant_id
     d = await start(client, ctx, subject=section(doc))
@@ -352,6 +360,7 @@ async def test_a_stale_lock_version_is_409(client):
 # person's; fails_when=an edit loses the original payload or a withdrawn change vanishes;
 # no_claim=the form (E2E).
 async def test_edit_withdraw_dismiss_and_a_change_written_by_hand(client):
+    """A change can be edited, withdrawn, dismissed, or made by hand."""
     ctx, doc = await company(client)
     _tenant[0] = ctx.tenant_id
     d = await start(client, ctx, subject=section(doc))
@@ -391,6 +400,7 @@ async def test_edit_withdraw_dismiss_and_a_change_written_by_hand(client):
 # and an approver stages the copy through G3's path; fails_when=the copy loses its kind or
 # pushback, or cannot be staged; no_claim=the share dialog (G7's tests).
 async def test_a_shared_panel_chats_changes_keep_their_kind_and_can_be_staged(client):
+    """A shared panel chat's changes keep their kind and can be staged."""
     ctx, doc = await company(client)
     _tenant[0] = ctx.tenant_id
     resp = await client.post(
@@ -429,6 +439,7 @@ async def test_a_shared_panel_chats_changes_keep_their_kind_and_can_be_staged(cl
 # is stored and audited; fails_when=it stages unasked or the reason is lost;
 # no_claim=the pushback's wording (G2).
 async def test_a_pushed_back_change_needs_a_reason_to_stage(client):
+    """A change Oracle pushed back on needs a reason before staging."""
     ctx, doc = await company(client)
     _tenant[0] = ctx.tenant_id
     d = await start(client, ctx, subject=section(doc))
@@ -453,6 +464,7 @@ async def test_a_pushed_back_change_needs_a_reason_to_stage(client):
 # and the earlier row keeps its reason; fails_when=a private change stages with the rationale
 # unasked, or an earlier row is rewritten; no_claim=G5's agent view.
 async def test_private_staging_needs_a_reason_until_the_discussion_is_open(client):
+    """Staging from a private thread needs a reason until it goes open."""
     ctx, doc = await company(client)
     _tenant[0] = ctx.tenant_id
     d = await private_with_approver(client, ctx, doc, messages=1)
@@ -482,6 +494,7 @@ async def test_private_staging_needs_a_reason_until_the_discussion_is_open(clien
 # ends done; fails_when=the baseline is written directly or the change stays open;
 # no_claim=accepting the proposal (Baseline's tests).
 async def test_propose_and_resolve_end_done(client):
+    """Proposing and resolving a goal measure change ends in done."""
     ctx, _doc = await company(client)
     _tenant[0] = ctx.tenant_id
     goal = await entity(client, ctx, type="goal", key="activation", title="Raise activation")
@@ -531,6 +544,7 @@ async def test_propose_and_resolve_end_done(client):
 # resting on it with the note, staged ones stay; fails_when=an open change keeps resting on a
 # private finding or a staged one is touched; no_claim=the intake routes' own checks.
 async def test_a_finding_made_private_supersedes_the_open_changes_on_it(client):
+    """A private finding supersedes the open changes that cite it."""
     ctx, doc = await company(client)
     d = await start(client, ctx, subject=section(doc))
     intake_id = str(uuid.uuid4())
@@ -557,6 +571,7 @@ async def test_a_finding_made_private_supersedes_the_open_changes_on_it(client):
 # next tick writes; fails_when=a confirmed summary is replaced unasked, or a closed
 # discussion has none; no_claim=the summary's wording (the fake stands in).
 async def test_summary_draft_confirm_and_on_close(client, model):
+    """A discussion summary can be drafted, confirmed, and relocked."""
     ctx, doc = await company(client)
     await with_key(ctx)
     model.chunks = ["Decided: nothing yet.\nOpen: the thresholds.\nContext: " + "x" * 2000]
@@ -615,6 +630,7 @@ def basis(doc: str, reference: str = "Team estimate") -> dict:
 # verified basis for an approver while a lead is named, or the change stays open;
 # no_claim=what a proposed basis does to dates (F3's tests).
 async def test_record_a_date_basis_follows_date_rights(client):
+    """Recording a schedule date basis follows the usual date rights."""
     from oracle.roadmap.models import ScheduleBasis
 
     ctx, doc = await company(client)
@@ -668,6 +684,7 @@ def _goal_version(entity_id: str, **over) -> dict:
 # payload's entity is written, or the reason names the API path; no_claim=B6's own route
 # (test_goal_interview).
 async def test_propose_through_g3_keeps_b6s_goal_guards(client):
+    """Proposing a goal measure through extraction keeps its goal guards."""
     ctx, _doc = await company(client)
     _tenant[0] = ctx.tenant_id
     attrs = {"metric": "Accounts lost in their first 90 days", "owner": uid(ctx, "approver"),
@@ -723,6 +740,7 @@ async def test_propose_through_g3_keeps_b6s_goal_guards(client):
 # and refused (why_not) for a commenter without date rights; fails_when=basis_record is
 # dropped or offered to someone F3 refuses; no_claim=what the basis does to dates (F3).
 async def test_oracle_may_propose_record_in_its_change_block(client, model):
+    """Oracle may propose a basis_record, limited to who may record it."""
     ctx, doc = await company(client)
     _tenant[0] = ctx.tenant_id
     await with_key(ctx)
@@ -748,6 +766,7 @@ async def test_oracle_may_propose_record_in_its_change_block(client, model):
 # fails_when=the answer is not written, or anyone can answer for the person asked;
 # no_claim=the answers service's own rules (its tests).
 async def test_use_as_answer_by_the_person_asked(client):
+    """Answering a stakeholder question only works for who was asked."""
     from oracle.v2.models import StakeholderAnswer, StakeholderQuestion
 
     ctx, doc = await company(client)
@@ -783,6 +802,7 @@ async def test_use_as_answer_by_the_person_asked(client):
 # role); fails_when=a change resting on a private finding is used, or sharing at counts
 # still blocks it; no_claim=the gap discussion's reading of the finding (G2).
 async def test_rule_4_share_the_finding_first(client):
+    """A change on a private finding needs that finding shared first."""
     from tests.test_discussion_replies import private_gap
 
     ctx, _doc = await company(client)
@@ -815,6 +835,7 @@ async def test_rule_4_share_the_finding_first(client):
 # it with the note, and leaves staged ones; fails_when=either route stops calling
 # on_finding_lowered; no_claim=the intake routes' own sharing rules (their tests).
 async def test_lowering_a_finding_through_the_routes_supersedes_its_changes(client):
+    """Lowering a shared finding supersedes the changes based on it."""
     from tests.test_discussion_replies import private_gap
 
     ctx, doc = await company(client)
@@ -855,6 +876,7 @@ async def test_lowering_a_finding_through_the_routes_supersedes_its_changes(clie
 # next-draft row; fails_when=a change to a locked section is staged; no_claim=how a
 # section is approved (review's tests).
 async def test_stage_rechecks_the_section_lock(client, monkeypatch):
+    """Staging a change rechecks the section lock, not just at proposal."""
     ctx, doc = await company(client)
     _tenant[0] = ctx.tenant_id
     d = await start(client, ctx, subject=section(doc))
@@ -877,6 +899,7 @@ async def test_stage_rechecks_the_section_lock(client, monkeypatch):
 # is offered on a locked section or the reason is missing; no_claim=Stage's own re-check
 # (test_stage_rechecks_the_section_lock).
 async def test_a_locked_sections_change_says_why_it_cannot_be_staged(client, monkeypatch):
+    """A change blocked by a locked section says exactly why not."""
     ctx, doc = await company(client)
     _tenant[0] = ctx.tenant_id
     d = await start(client, ctx, subject=section(doc))
@@ -898,6 +921,7 @@ async def test_a_locked_sections_change_says_why_it_cannot_be_staged(client, mon
 # writes it as the item's suggested D8 action with the edited payload, as Suggest does;
 # fails_when=the review screen does not show an edited suggestion; no_claim=D8's screen.
 async def test_a_commenters_edit_at_a_checkpoint_is_a_suggested_action(review):  # noqa: F811
+    """A commenter's edit at a checkpoint is only a suggested action."""
     rv = review
     _tenant[0] = rv.tenant_id
     d_id = await item_discussion(rv)
@@ -923,6 +947,7 @@ async def test_a_commenters_edit_at_a_checkpoint_is_a_suggested_action(review): 
 # and the change goes back to proposed as replaced; no_claim=a fresh post (no keep_origin)
 # still replaces it, as before.
 async def test_undo_of_one_dependency_keeps_the_discussions_origin(review):  # noqa: F811
+    """Undoing one dependency keeps the discussion as origin till done."""
     rv = review
     _tenant[0] = rv.tenant_id
     d_id = await item_discussion(rv)
@@ -995,6 +1020,7 @@ async def summary_of(ctx, d_id: str) -> str:
 # fails_when=a later one jumps the queue (rows come back in table order); no_claim=the
 # tick's limit per tenant.
 async def test_the_summary_queue_drafts_the_longest_waiting_first(client, model):
+    """The summary queue drafts the longest-waiting discussion first."""
     from oracle.discussions import summary
 
     ctx, doc = await company(client)
@@ -1013,6 +1039,7 @@ async def test_the_summary_queue_drafts_the_longest_waiting_first(client, model)
 # after its backoff; the failure is audited with no text; fails_when=a failing discussion
 # calls the model every minute; no_claim=the backoff's exact schedule beyond the first step.
 async def test_a_failed_summary_waits_its_backoff(client, model):
+    """A failed summary job waits out its backoff before retrying."""
     from sqlalchemy import update
 
     from oracle.discussions import summary
@@ -1048,6 +1075,7 @@ async def test_a_failed_summary_waits_its_backoff(client, model):
 # fails_when=a close, rename or message waits on Oracle's draft (up to 60 s);
 # no_claim=two ticks drafting the same discussion at once (the second store is skipped).
 async def test_the_summary_tick_holds_no_row_lock_while_oracle_drafts(client, model):
+    """Drafting a summary holds no row lock while Oracle still writes."""
     from oracle.discussions import summary
 
     ctx, doc = await company(client)

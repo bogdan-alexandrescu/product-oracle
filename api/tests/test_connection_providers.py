@@ -20,6 +20,7 @@ def bearer(request: httpx.Request) -> str:
 
 
 def test_registry_covers_every_provider_and_valid_source_kinds():
+    """The provider registry lists every supported type with its own sign-in."""
     assert set(PROVIDERS) == {"github", "slack", "notion", "fireflies", "google"}
     for p in PROVIDERS.values():
         assert set(p.source_kinds) <= set(SOURCE_KINDS)
@@ -31,6 +32,8 @@ def test_registry_covers_every_provider_and_valid_source_kinds():
 
 
 async def test_github():
+    """GitHub's identify call reads the account id, login and scopes."""
+
     def handler(request):
         assert request.url == "https://api.github.com/user"
         if bearer(request) != "Bearer good":
@@ -50,6 +53,8 @@ async def test_github():
 
 
 async def test_slack_auth_test():
+    """Slack's identify call builds a user-in-team label and tells revoked apart."""
+
     def handler(request):
         assert request.method == "POST" and request.url.path == "/api/auth.test"
         if bearer(request) == "Bearer good":
@@ -71,6 +76,8 @@ async def test_slack_auth_test():
 
 
 async def test_notion_users_me():
+    """Notion's identify call reads the bot's workspace name via its own header."""
+
     def handler(request):
         assert request.url == "https://api.notion.com/v1/users/me"
         assert request.headers["Notion-Version"]
@@ -88,6 +95,8 @@ async def test_notion_users_me():
 
 
 async def test_fireflies_graphql_user():
+    """Fireflies identifies a token through its own GraphQL user query."""
+
     def handler(request):
         assert request.url == "https://api.fireflies.ai/graphql"
         assert b"user" in request.content
@@ -105,6 +114,8 @@ async def test_fireflies_graphql_user():
 
 
 async def test_google_userinfo():
+    """Google's identify call checks the token's scope before reading the user."""
+
     def handler(request):
         if request.url.path == "/tokeninfo":
             return httpx.Response(200, json={"scope": "openid email"})
@@ -121,6 +132,8 @@ async def test_google_userinfo():
 
 
 async def test_provider_down_is_unavailable_not_rejected():
+    """A provider that is unreachable is reported unavailable, never rejected."""
+
     def handler(request):
         raise httpx.ConnectError("down")
 
@@ -134,5 +147,6 @@ async def test_provider_down_is_unavailable_not_rejected():
 
 
 def test_claude_is_not_a_connection():
+    """Claude is never listed as a connection provider; it has its own pool."""
     # Oracle's own model calls run on the company's Claude account pool.
     assert "claude" not in PROVIDERS

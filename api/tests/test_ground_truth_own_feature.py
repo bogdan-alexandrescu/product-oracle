@@ -92,6 +92,7 @@ async def _named(w: dict, title: str) -> list[Entity]:
 
 
 async def test_an_item_joins_as_its_own_feature(client):
+    """An item made its own feature gets its own code, no longer waiting on a proposal."""
     w = await world()
     x = await shared(w)
     before = _flag(await _check(client, w["ctx"]), x["chat"])
@@ -120,6 +121,7 @@ async def test_an_item_joins_as_its_own_feature(client):
 
 
 async def test_a_declined_match_is_not_offered_again(client):
+    """A later run may re-offer a match the person declined, without overriding them."""
     w = await world()
     x = await shared(w)
     r = await client.post(own(x["forum"]), headers=w["ctx"].as_("owner"))
@@ -138,6 +140,7 @@ async def test_a_declined_match_is_not_offered_again(client):
 
 
 async def test_a_person_may_link_the_declined_match_again(client):
+    """A person can still link an item back to a proposal it once declined."""
     w = await world()
     x = await shared(w)
     r = await client.post(own(x["forum"]), headers=w["ctx"].as_("owner"))
@@ -155,6 +158,7 @@ async def test_a_person_may_link_the_declined_match_again(client):
 
 
 async def test_a_declined_row_links_back_as_it_reads(client):
+    """Linking a declined item back checks the before value the row currently reads."""
     w = await world()
     x = await shared(w)
     r = await client.post(own(x["forum"]), headers=w["ctx"].as_("owner"))
@@ -180,6 +184,7 @@ async def test_a_declined_row_links_back_as_it_reads(client):
 
 
 async def test_a_shared_proposal_keeps_the_other_item_flagged(client):
+    """Confirming a feature from one item leaves a sibling sharing it still flagged."""
     w = await world()
     x = await shared(w)
     confirm = f"/v1/baseline/entities/{x['proposal']}/confirm"
@@ -199,6 +204,7 @@ async def test_a_shared_proposal_keeps_the_other_item_flagged(client):
 
 
 async def test_an_add_reuses_an_entry_of_the_same_name(client):
+    """Making an item its own feature reuses an existing feature of the same name."""
     w = await world()
     x = await shared(w, "Forum alerts")
     [kept] = await _named(w, "Forum alerts")
@@ -225,6 +231,7 @@ async def test_an_add_reuses_an_entry_of_the_same_name(client):
 
 
 async def test_who_may_add_it(client):
+    """Only an approver or owner may make an item its own feature; others refused."""
     w = await world()
     x = await shared(w)
     for who in ("viewer", "commenter"):
@@ -236,6 +243,7 @@ async def test_who_may_add_it(client):
 
 
 async def test_a_shared_proposal_of_the_items_name_keeps_the_other_item_flagged(client):
+    """A proposal named like the item leaves a sibling flagged until it too confirms."""
     w = await world()
     async with tenant_session(w["ctx"].tenant_id) as s:
         seed = Seed(s)

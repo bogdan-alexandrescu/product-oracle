@@ -86,6 +86,7 @@ async def fix(client, ctx, who: str, f: dict, **over):
 
 
 async def test_each_numbers_item_carries_its_fix(client):
+    """Each mismatched number on a one-pager carries the one fix that corrects it."""
     ctx = await clear_world(client)
     view = await get(client, ctx, "owner", DOC)
     count, per = look(view, COUNT), look(view, PER)
@@ -135,6 +136,7 @@ async def test_each_numbers_item_carries_its_fix(client):
 
 
 async def test_stale_number_is_refused(client):
+    """Fixing a number changed by someone else since is refused, naming who changed it."""
     ctx = await clear_world(client)
     f = look(await get(client, ctx, "owner", DOC), COUNT)["fix"]
     assert (await fix(client, ctx, "owner", f)).status_code == 201
@@ -151,6 +153,7 @@ async def test_stale_number_is_refused(client):
 
 
 async def test_undo_puts_the_number_back(client):
+    """Undoing a number fix puts the one-pager's old number back."""
     ctx = await clear_world(client)
     f = look(await get(client, ctx, "owner", DOC), COUNT)["fix"]
     r = await fix(client, ctx, "owner", f)
@@ -165,6 +168,7 @@ async def test_undo_puts_the_number_back(client):
 
 
 async def test_who_may_fix(client):
+    """A non-owner's number fix is a proposal for the owner to accept, not applied yet."""
     ctx = await clear_world(client)
     f = look(await get(client, ctx, "owner", DOC), COUNT)["fix"]
     assert (await fix(client, ctx, "viewer", f)).status_code == 403
@@ -183,6 +187,7 @@ async def test_who_may_fix(client):
 
 
 async def test_another_company_cannot_fix(client):
+    """A number fix cannot be applied to another company's one-pager."""
     ctx = await clear_world(client)
     f = look(await get(client, ctx, "owner", DOC), COUNT)["fix"]
     other = await make_ctx("Other Example Co")
@@ -196,6 +201,7 @@ IN_REVIEW = "This PRD's draft is in review: changes wait until it is approved"
 
 
 async def test_a_draft_in_review_holds_the_fix(client):
+    """A one-pager fix offers no action while its draft is in review."""
     # Review finding (train AS replay review): one_pager._ensure refuses a change that applies
     # while the PRD's draft is in review, so the item offers no fix to who would apply it.
     from oracle.docs.models import Document
@@ -273,6 +279,7 @@ async def head_world(client):
 
 
 async def test_heading_count_gets_its_fix(client):
+    """A mismatched count in a heading carries a fix that changes only the heading."""
     ctx = await head_world(client)
     view = await get(client, ctx, "owner", HEAD_DOC)
     item = look(view, HEAD)
@@ -310,6 +317,7 @@ async def test_heading_count_gets_its_fix(client):
 
 
 async def test_stale_heading_is_refused(client):
+    """Fixing a heading number already changed by someone else is refused."""
     ctx = await head_world(client)
     f = look(await get(client, ctx, "owner", HEAD_DOC), HEAD)["fix"]
     assert (await fix(client, ctx, "owner", f)).status_code == 201
@@ -323,6 +331,7 @@ async def test_stale_heading_is_refused(client):
 
 
 async def test_undo_puts_the_heading_back(client):
+    """Undoing a heading fix puts its old heading back."""
     ctx = await head_world(client)
     f = look(await get(client, ctx, "owner", HEAD_DOC), HEAD)["fix"]
     r = await fix(client, ctx, "owner", f)
@@ -337,6 +346,7 @@ async def test_undo_puts_the_heading_back(client):
 
 
 async def test_heading_fix_as_a_proposal(client):
+    """A non-owner's heading fix is a proposal the owner must accept before it applies."""
     ctx = await head_world(client)
     f = look(await get(client, ctx, "owner", HEAD_DOC), HEAD)["fix"]
     r = await fix(client, ctx, "approver", f)
@@ -357,6 +367,7 @@ async def test_heading_fix_as_a_proposal(client):
 
 
 async def test_submitted_draft_imports_the_heading(client):
+    """Submitting a draft with a heading fix publishes the fixed heading and section."""
     ctx = await head_world(client)
     f = look(await get(client, ctx, "owner", HEAD_DOC), HEAD)["fix"]
     assert (await fix(client, ctx, "owner", f)).status_code == 201
@@ -379,6 +390,7 @@ async def test_submitted_draft_imports_the_heading(client):
 
 
 async def test_fixes_in_the_draft_are_listed_with_undo(client):
+    """A one-pager's live fixes list in the draft, each with its own undo."""
     ctx = await clear_world(client)
     view = await get(client, ctx, "owner", DOC)
     assert view["fixed"] == []
@@ -403,6 +415,7 @@ async def test_fixes_in_the_draft_are_listed_with_undo(client):
 
 
 async def test_fixes_are_listed_in_the_order_they_were_made(client):
+    """Fixes list in the order they were made, never by their random id."""
     # Two fixes made in the same instant (a frozen clock, or one second for a person) list
     # in the order they were made, not by their random ids: the later one is given the
     # smaller id here, so an order that falls back to the id lists them the wrong way.
@@ -424,6 +437,7 @@ async def test_fixes_are_listed_in_the_order_they_were_made(client):
 
 
 async def test_a_heading_fix_is_listed(client):
+    """A heading fix lists among the one-pager's fixes, with its own undo."""
     ctx = await head_world(client)
     f = look(await get(client, ctx, "owner", HEAD_DOC), HEAD)["fix"]
     assert (await fix(client, ctx, "owner", f)).status_code == 201
@@ -432,6 +446,7 @@ async def test_a_heading_fix_is_listed(client):
 
 
 async def test_a_count_in_words_stays_in_words(client):
+    """A number fix written in words stays in words, matching the text's own case."""
     ctx = await clear_world(client)
     f = look(await get(client, ctx, "owner", DOC), COUNT)["fix"]
     r = await fix(client, ctx, "owner", f)
@@ -446,6 +461,7 @@ async def test_a_count_in_words_stays_in_words(client):
 
 
 async def test_change_sentence_names_the_section(client):
+    """A fix's change sentence names the section and heading it changed, by name."""
     ctx = await head_world(client)
     f = look(await get(client, ctx, "owner", HEAD_DOC), HEAD)["fix"]
     c = (await fix(client, ctx, "owner", f)).json()["change"]
@@ -459,6 +475,7 @@ async def test_change_sentence_names_the_section(client):
 
 
 async def test_empty_before_is_refused(client):
+    """A number fix with no 'before' value is refused."""
     ctx = await clear_world(client)
     f = look(await get(client, ctx, "owner", DOC), COUNT)["fix"]
     r = await fix(client, ctx, "owner", f, before="")
@@ -466,6 +483,7 @@ async def test_empty_before_is_refused(client):
 
 
 def test_setext_heading_is_patched():
+    """A heading fix patches a setext-style heading too, refusing one that has moved."""
     md = "Later · 8 items {#later}\n---------------\n\n- One\n"
     sec = Section(section_key="later", heading="Later · 8 items", body_md="- One")
     got = one_pager.patched_markdown(
@@ -497,6 +515,7 @@ async def two_world(client):
 
 
 async def test_either_of_two_fixes_in_a_section_undoes(client):
+    """Either of two number fixes in the same section undoes on its own, not the other."""
     # Review finding: with two number fixes in one section only the newer could be undone;
     # the older's Undo said "Changed by <yourself>". Each undoes its own number only.
     ctx = await two_world(client)
@@ -527,6 +546,7 @@ async def test_either_of_two_fixes_in_a_section_undoes(client):
 
 
 async def test_undo_whose_number_is_gone_is_refused(client):
+    """Undoing a fix whose number has since changed again is refused, writing nothing."""
     # The older fix's number was changed again since: its undo is refused, nothing written.
     ctx = await clear_world(client)
     f = look(await get(client, ctx, "owner", DOC), COUNT)["fix"]
@@ -542,6 +562,7 @@ async def test_undo_whose_number_is_gone_is_refused(client):
 
 
 async def test_a_decider_who_is_no_owner_sees_the_proposal(client):
+    """A non-owner decider still sees and decides a fix proposal routed to them."""
     # Review finding: the Inbox's Open on "Section number on <PRD>" lands the PRD's decider
     # (no owner) on the one-pager, where "Needs a look" was owners-only: the proposal routed
     # to them shows on its item, with Accept and Decline; nothing else does.
@@ -569,6 +590,7 @@ async def test_a_decider_who_is_no_owner_sees_the_proposal(client):
 
 
 def test_a_fix_keeps_thousands_separators():
+    """A number fix keeps the thousands separators the PRD already wrote."""
     sec = Section(
         section_key="targets",
         heading="Targets",
@@ -583,6 +605,7 @@ def test_a_fix_keeps_thousands_separators():
 
 
 def test_a_word_between_number_and_noun_keeps_its_fix():
+    """A number fix still finds its count with a word between the number and noun."""
     sec = Section(
         section_key="later",
         heading="Later",
@@ -613,6 +636,7 @@ async def _heading_fixed_then_edited(client, heading: str, body_lead: str = ""):
 
 
 async def test_heading_fix_undoes_after_the_heading_was_edited(client):
+    """Undoing a heading fix after the heading was edited puts back only its number."""
     # Review minor (Nov 7): a heading fix undone once the heading was edited around its
     # number puts only the number back; the edit stays and the body is untouched.
     ctx, one = await _heading_fixed_then_edited(client, "Later, after spring · 6 items")
@@ -625,6 +649,7 @@ async def test_heading_fix_undoes_after_the_heading_was_edited(client):
 
 
 async def test_heading_fix_whose_number_left_the_heading_is_refused(client):
+    """Undoing a heading fix is refused once its number has left the heading entirely."""
     # Review minor (Nov 7): once the heading no longer holds the fixed number, the undo does
     # not look for it in the body (a body number the heading fix never set): it is refused
     # with the section's words now, and nothing is written.
@@ -642,6 +667,8 @@ async def test_heading_fix_whose_number_left_the_heading_is_refused(client):
 
 
 def test_a_fix_keeps_a_decimal_as_written():
+    """A number fix keeps a decimal's places and separators as the PRD wrote them."""
+
     # Review minor (Nov 7): a decimal keeps its places and separators ("1,200.5" -> "1,502.5",
     # never "1502.5"; "2.75" -> "2.50"), and a long value is never cut ("1.23457e+06").
     def value(said: str, before: str, to: float) -> str:
@@ -671,6 +698,7 @@ def _per_unit_text(body: str) -> list[str]:
 
 
 def test_the_target_is_quoted_as_written():
+    """A per-unit mismatch quotes the company-wide target exactly as the PRD wrote it."""
     # Review (Nov 7): the look text quotes the company-wide target as the PRD writes it,
     # its separators kept ("1,250.75", never "1250.75").
     [text] = _per_unit_text(
@@ -684,6 +712,7 @@ def test_the_target_is_quoted_as_written():
 
 
 def test_look_numbers_read_as_a_person_writes_them():
+    """A computed mismatch reads plainly, never scientific notation or long digits."""
     # Review (Nov 7): a computed number shows plain, as the mock shows it: "0.3", never
     # "0.30000000000000004"; "1,234,567.5", never "1.23457e+06" or "1234567.5".
     assert _per_unit_text(
@@ -703,6 +732,7 @@ def test_look_numbers_read_as_a_person_writes_them():
 
 
 def test_a_sum_that_matches_as_written_raises_no_look():
+    """A per-unit sum that matches the target as written raises no mismatch look."""
     # Review (Nov 7): "0.1 × 3 teams" against "0.3" company-wide agrees as a person reads it;
     # the float 0.30000000000000004 must not raise "is 0.3, but ... says 0.3".
     assert (
@@ -719,6 +749,7 @@ def test_a_sum_that_matches_as_written_raises_no_look():
 
 
 def test_an_exact_half_rounds_up_as_the_mock_does():
+    """An exact half rounds away from zero, matching the mock's own rounding."""
     # Review (Nov 7): an exact half in the 7th place rounds away from zero, as the mock's
     # toFixed(6) does ("0.007813", never the half-even "0.007812"), in the text and the fix.
     assert one_pager_checks._n(0.0078125) == "0.007813"

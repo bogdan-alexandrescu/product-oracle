@@ -41,6 +41,7 @@ FIXTURE = (Path(__file__).parent / "fixtures" / "prd_plan_invented.md").read_tex
 
 
 def test_invented_prd_tables_parse_into_the_plan():
+    """Plan markdown tables parse into milestones, goals, holidays and features."""
     data = plan.parse(FIXTURE, date(2026, 10, 28))
     assert data is not None
     ms = data["milestones"]
@@ -66,6 +67,7 @@ def test_invented_prd_tables_parse_into_the_plan():
 
 
 def test_slices_are_placed_inside_their_milestones():
+    """A feature's slices stay inside their milestone, skipping holiday weeks."""
     view = plan.compute(plan.parse(FIXTURE, date(2026, 10, 28)))
     s = {x.code: x for x in view.slices}
     assert sorted(s) == ["F-01", "F-02", "F-03a", "F-03b", "F-04", "F-05"]
@@ -94,6 +96,7 @@ def test_slices_are_placed_inside_their_milestones():
 
 
 def test_weeks_per_goal_and_span_label():
+    """Each milestone's effort splits correctly across its goals, with a right span."""
     view = plan.compute(plan.parse(FIXTURE, date(2026, 10, 28)))
     weeks = {(w.goal, w.milestone): w.weeks for w in view.goal_weeks}
     assert weeks == {
@@ -114,6 +117,7 @@ def test_weeks_per_goal_and_span_label():
 
 
 def test_undated_milestones_say_so():
+    """A plan with no milestone dates says plainly that it has no dates."""
     text = (
         "## Milestones\n\n| Milestone | Name | Done when |\n|---|---|---|\n"
         "| M1 | Prove it | Ten teams |\n| M2 | Scale volume | 1,000 rows |\n"
@@ -126,6 +130,7 @@ def test_undated_milestones_say_so():
 
 
 def test_part_fields_pass_through():
+    """A milestone's decisions, risks and a feature's extra fields reach the plan."""
     data = {
         "milestones": [
             {
@@ -168,6 +173,7 @@ def test_part_fields_pass_through():
 
 
 def test_features_table_with_a_risk_column_stays_features():
+    """A features table with a risk column stays a features table, not a risk one."""
     text = (
         "| Milestone | Name | Start | End |\n|---|---|---|---|\n"
         "| M1 | Prove it | 2 Nov 2026 | 27 Nov 2026 |\n"

@@ -50,6 +50,7 @@ async def documents(tenant_id) -> int:
 
 
 def test_the_baseline_flow_is_the_baseline_segment_alone():
+    """The baseline flow is exactly its one segment, and writes no document."""
     # protects=one built-in flow, one segment, no document, its D12 pointer; fails_when=the
     # flow has another segment, writes a document or is offered in the New run dialog;
     # no_claim=the segment's prompt (unchanged, owned by baseline_to_prd's tests).
@@ -64,6 +65,7 @@ def test_the_baseline_flow_is_the_baseline_segment_alone():
 
 
 def test_baseline_to_prd_shares_the_one_baseline_segment():
+    """The baseline-to-prd flow shares the identical segment, so the two cannot drift."""
     # protects=the two flows can never drift (criterion 9); fails_when=baseline_to_prd's
     # first segment differs from the new flow's in any field, or it loses a segment;
     # no_claim=the later segments' content.
@@ -86,6 +88,7 @@ def test_baseline_to_prd_shares_the_one_baseline_segment():
 
 
 async def test_the_catalog_lists_build_the_baseline(client, owner, runtime):
+    """The flow catalog lists baseline with its real title, segment, and starting link."""
     # protects=GET /v1/flows (criterion 1); fails_when=the flow, its segment, its
     # writes_document or its pointer line is missing, or an existing flow reports
     # writes_document false; no_claim=how the web draws the catalog.
@@ -117,6 +120,7 @@ async def test_the_catalog_lists_build_the_baseline(client, owner, runtime):
 
 
 async def test_an_approver_creates_a_run_with_no_document(client, owner, runtime):
+    """An approver can start a baseline run with no document; a commenter cannot."""
     # protects=POST /v1/runs {"flow": "baseline"} (criterion 2); fails_when=an approver is
     # refused, the run names a document, or a commenter may create one; no_claim=MCP
     # clients (same operation).
@@ -144,6 +148,7 @@ async def test_an_approver_creates_a_run_with_no_document(client, owner, runtime
     ],
 )
 async def test_a_document_source_template_or_theme_is_refused(client, owner, runtime, extra):
+    """Starting a baseline run is refused if it names a document, source, or theme."""
     # protects=the flow writes and reads no document (criterion 3); fails_when=any of the
     # five inputs is accepted or answers another message; no_claim=PATCH (same check).
     _, auth = owner
@@ -153,6 +158,7 @@ async def test_a_document_source_template_or_theme_is_refused(client, owner, run
 
 
 async def test_the_estimate_follows_the_depth(client, owner, runtime):
+    """The baseline run's estimate scales with depth and lists only its one segment."""
     # protects=the start sheet's figure (criterion 4): $3.50 / $7.00 / $14.00 at default
     # roles; fails_when=the flow costs more segments than its one, or depth is ignored;
     # no_claim=what SwarmCloud bills.
@@ -171,6 +177,7 @@ async def test_the_estimate_follows_the_depth(client, owner, runtime):
 
 
 async def test_baseline_run_writes_no_document(client, owner, runtime):
+    """A baseline run never creates a document, and its proposals carry the run's id."""
     # protects=a baseline run never creates a document (criteria 5 and 8); fails_when=
     # approving the checkpoint creates or names a document, the run does not stop at
     # Confirm the baseline, or its entities and proposals lack the run's id; no_claim=the
@@ -210,6 +217,7 @@ async def test_baseline_run_writes_no_document(client, owner, runtime):
 
 
 async def test_request_changes_reruns_the_segment(client, owner, runtime):
+    """Requesting changes reruns the same segment, carrying the person's own note."""
     # protects=Request changes re-runs the one segment with the note, as today;
     # fails_when=the run ends or moves on; no_claim=what the agents do with the note.
     _, auth = owner
@@ -221,6 +229,7 @@ async def test_request_changes_reruns_the_segment(client, owner, runtime):
 
 
 async def test_review_off_finishes_after_the_import(client, owner, runtime):
+    """Turning off review lets a baseline run finish, with goals only proposed."""
     # protects=the Stop for my review knob (criterion 6); fails_when=the run waits, the
     # checkpoint is not recorded skipped, or a goal lands confirmed; no_claim=the web.
     _, auth = owner
@@ -240,6 +249,7 @@ async def test_review_off_finishes_after_the_import(client, owner, runtime):
 
 
 async def test_second_baseline_build_refused(client, owner, runtime):
+    """A second baseline build is refused while one is under way, naming the first."""
     # protects=one build at a time (criterion 7); fails_when=two runs reach running, the
     # 409 does not name the first run, or a build after the first ended is refused;
     # no_claim=does not test two builds racing in separate transactions at the same

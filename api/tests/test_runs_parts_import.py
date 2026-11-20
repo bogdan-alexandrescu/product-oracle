@@ -16,11 +16,13 @@ PARTS = sorted(
 
 
 def test_the_parts_are_found():
+    """The expected parts split out of the runs service module are all found."""
     assert {"advance", "inbox", "reads", "tick", "submission"} <= set(PARTS)
 
 
 @pytest.mark.parametrize("part", PARTS)
 def test_a_part_imports_before_service(part):
+    """Each split-out runs module imports cleanly before the service module does."""
     probe = (
         f"import oracle.runs.{part}\n"
         "from oracle.runs import service\n"
@@ -42,6 +44,7 @@ def _imports(node: ast.AST) -> list[tuple[str | None, str]]:
 
 
 def test_type_checkers_read_the_names_the_parts_give():
+    """The service module's type-checking imports match what the split parts give."""
     tree = ast.parse((API / "oracle" / "runs" / "service.py").read_text())
     typed = [
         n for n in tree.body if isinstance(n, ast.If) and ast.unparse(n.test) == "TYPE_CHECKING"

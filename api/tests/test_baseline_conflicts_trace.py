@@ -29,6 +29,7 @@ def claim(value, conf, kind=None, observed=None):
 
 
 def test_precedence_classes():
+    """Each evidence source maps to the right precedence class, or to none."""
     assert source_class("github:pull_request") == "code"
     assert source_class("github:issue") == "tracker"
     assert source_class("notion:page") == "docs"
@@ -39,6 +40,7 @@ def test_precedence_classes():
 
 
 def test_pick_winner_rules():
+    """A winner is picked by confidence, then source, then newer, then no one."""
     # Clear confidence gap wins regardless of precedence.
     w, why = pick_winner([claim("a", 0.4, "github"), claim("b", 0.8, "slack")], {})
     assert w == 1 and why.startswith("confidence 0.80 beats 0.40")
@@ -84,6 +86,7 @@ async def _evidence(client, ctx, target, confs: list[float], kind="entities", it
 
 
 async def test_immaterial_conflict_is_logged_and_applied(client, ctx):
+    """A conflict below the materiality bar is logged and applied right away."""
     req = await entity(
         client, ctx, type="requirement", key="sso", origin="agent", attrs={"protocol": "saml"}
     )
@@ -113,6 +116,7 @@ async def test_immaterial_conflict_is_logged_and_applied(client, ctx):
 
 
 async def test_tie_falls_back_to_precedence(client, ctx):
+    """A tied conflict falls back to the source's precedence to pick a winner."""
     req = await entity(
         client, ctx, type="requirement", key="limits", origin="agent", attrs={"max_seats": 10}
     )
@@ -149,6 +153,7 @@ async def test_tie_falls_back_to_precedence(client, ctx):
 
 
 async def test_immaterial_change_to_locked_item_becomes_proposal(client, ctx):
+    """An immaterial conflict on a locked item becomes a proposal, not an edit."""
     req = await entity(client, ctx, type="requirement", key="sso", attrs={"protocol": "saml"})
     a, b = await _evidence(client, ctx, req, [0.9, 0.2])
     c = (
@@ -172,6 +177,7 @@ async def test_immaterial_change_to_locked_item_becomes_proposal(client, ctx):
 
 
 async def test_material_conflict_is_escalated_then_resolved(client, ctx):
+    """A material conflict is escalated open, never applied, and stays listed."""
     feat = await entity(
         client, ctx, type="feature", key="guided-setup", origin="agent", attrs={"status": "planned"}
     )
@@ -224,6 +230,7 @@ async def test_material_conflict_is_escalated_then_resolved(client, ctx):
 
 
 async def test_goal_link_conflict_is_material_and_ties_escalate(client, ctx):
+    """A conflict on a goal-supporting edge is material, and a true tie stays open."""
     goal = await entity(client, ctx, type="goal", key="activation")
     feat = await entity(client, ctx, type="feature", key="guided-setup")
     sup = await edge(client, ctx, feat, goal, "supports", attrs={"contribution": 1}, origin="agent")
@@ -274,6 +281,7 @@ async def test_goal_link_conflict_is_material_and_ties_escalate(client, ctx):
 
 
 async def test_conflict_validation(client, ctx):
+    """A conflict's claims must each cite real evidence, or it is refused."""
     feat = await entity(client, ctx, type="feature", key="guided-setup")
     body = {"entity_id": feat["id"], "field": "status", "claims": [{"value": "a"}]}
     resp = await client.post(f"{B}/conflicts", json=body, headers=ctx.as_("owner"))
@@ -284,6 +292,7 @@ async def test_conflict_validation(client, ctx):
 
 
 async def test_traceability_report(client, ctx):
+    """The traceability report gives codes in join order and counts features correctly."""
     activation = await entity(
         client, ctx, type="goal", key="activation", title="Raise activation", attrs={"weight": 3}
     )

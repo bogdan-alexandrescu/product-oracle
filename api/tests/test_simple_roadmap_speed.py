@@ -63,6 +63,7 @@ def _digest(body: bytes, tenant_id) -> str:
 
 
 async def test_reads_answer_the_same_on_a_company_sized_seed(client):
+    """On a large seeded company, every roadmap read still answers byte for byte alike."""
     ctx = await seed_company()
     got = {}
     for name, (url, role, params) in VIEWS.items():
@@ -94,6 +95,7 @@ async def _statements(client, url: str, headers: dict, **params) -> int:
 
 
 async def test_reads_take_few_statements(client):
+    """Roadmap and waiting reads stay within a fixed budget of database statements."""
     ctx = await seed_company()
     owner = ctx.as_("owner")
     roadmap = await _statements(client, ROADMAP, owner)
@@ -105,6 +107,7 @@ async def test_reads_take_few_statements(client):
 
 @pytest.mark.timing
 async def test_reads_answer_within_budget(client):
+    """Roadmap and waiting reads stay fast even on a large seeded company."""
     ctx = await seed_company()
     owner = ctx.as_("owner")
     best = {}

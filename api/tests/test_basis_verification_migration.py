@@ -60,6 +60,7 @@ def scratch_db():
 
 
 def test_chains_on_mains_head():
+    """This migration chains directly onto main's current alembic head."""
     # protects=one alembic head; fails_when=a second head appears or the revision chains
     # on a fixed number other than main's head; no_claim=the schema (below).
     script = ScriptDirectory.from_config(_cfg())
@@ -80,6 +81,7 @@ def _basis(tenant, doc, reference: str, status: str, **cols) -> uuid.UUID:
 
 
 def test_up_down_up_keeps_bases_and_backfills_reasons(scratch_db):
+    """The migration backfills a withdrawn reason from audit, and reverses cleanly."""
     # protects=AC6 (backfill) and AC10; fails_when=a verified or withdrawn row changes, a
     # withdrawn row's reason is not read from its audit event, the downgrade leaves a
     # proposed or rejected row or the new columns, or verified_at may be null for a

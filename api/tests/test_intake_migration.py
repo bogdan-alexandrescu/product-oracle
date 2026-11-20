@@ -51,6 +51,7 @@ def scratch_db():
 
 
 def test_0014_intake_chains_after_mains_head():
+    """The intake migration and its PRD review chain both sit on one migration head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision("0014_intake").down_revision == "0019_citation_confidence"
     # The PRD review chain (0014_review ... 0014_member_follow_up_retry) chains on it and
@@ -83,6 +84,7 @@ def test_widened_checks_keep_other_lanes_values(scratch_db):
 
 
 def test_upgrade_keeps_document_jobs_and_downgrade_reverses(scratch_db):
+    """Adding intakes to llm_jobs keeps old document jobs working; downgrade undoes it."""
     cfg = _cfg()
     upgrade(cfg, "0013")
     t, doc = uuid.uuid4(), uuid.uuid4()

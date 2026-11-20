@@ -63,6 +63,7 @@ async def _a_feature_with_a_goal(s, scope_id):
 
 
 async def test_a_left_out_feature_shows_its_baseline_goal(client, owner, runtime):  # noqa: F811
+    """A feature excluded from scope review still shows the baseline goal it served."""
     tenant_id, auth = owner
     _, _, scope_id = await _open(client, owner, runtime)
     async with tenant_session(tenant_id) as s:
@@ -77,6 +78,7 @@ async def test_a_left_out_feature_shows_its_baseline_goal(client, owner, runtime
 
 
 async def test_evidence_is_named_by_its_source(client, owner, runtime):  # noqa: F811
+    """A scope item's evidence is shown by its source's own title and link."""
     tenant_id, auth = owner
     _, _, scope_id = await _open(client, owner, runtime)
     async with tenant_session(tenant_id) as s:

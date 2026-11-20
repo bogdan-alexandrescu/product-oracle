@@ -110,6 +110,7 @@ def _body(display_name="Example Labs", accent=None, disclaimer=DEFAULT_DISCLAIME
 
 
 async def test_every_member_reads_the_defaults_and_only_owners_may_edit(client, ctx):
+    """Every role reads the branding defaults, but only owners may edit them."""
     for who in ("viewer", "commenter", "approver", "owner", "token"):
         resp = await client.get("/v1/branding", headers=ctx.as_(who))
         assert resp.status_code == 200, (who, resp.text)
@@ -124,6 +125,7 @@ async def test_every_member_reads_the_defaults_and_only_owners_may_edit(client, 
 
 
 async def test_a_run_reads_branding_but_never_changes_it(client, ctx):
+    """An automated run may read branding but can never change it."""
     bound = await run_headers(ctx, "owner")
     assert (await client.get("/v1/branding", headers=bound)).status_code == 200
     scoped = await _scoped_run_token(ctx)
@@ -138,6 +140,7 @@ async def test_a_run_reads_branding_but_never_changes_it(client, ctx):
 
 
 async def test_only_owners_change_branding(client, ctx):
+    """Only an owner, or an owner's API token, may change company branding."""
     for who in ("viewer", "commenter", "approver"):
         resp = await client.put("/v1/branding", json=_body("Not Mine"), headers=ctx.as_(who))
         assert resp.status_code == 403, who
@@ -160,6 +163,7 @@ async def test_only_owners_change_branding(client, ctx):
 
 
 async def test_accent_is_contrast_checked_and_values_are_validated(client, ctx):
+    """An accent color must pass a contrast check and bad field values are rejected."""
     owner = ctx.as_("owner")
     resp = await client.put("/v1/branding", json=_body(accent="#e0f2fe"), headers=owner)
     assert resp.status_code == 422
@@ -180,6 +184,7 @@ async def test_accent_is_contrast_checked_and_values_are_validated(client, ctx):
 
 
 async def test_the_generic_settings_route_does_not_write_branding(client, ctx):
+    """The generic settings route refuses to write branding directly."""
     owner = ctx.as_("owner")
     keys = [s["key"] for s in (await client.get("/v1/settings", headers=owner)).json()]
     assert "branding" in keys
@@ -194,6 +199,7 @@ async def test_the_generic_settings_route_does_not_write_branding(client, ctx):
 
 
 async def test_only_png_jpeg_or_webp_logos_within_the_limits_are_stored(client, ctx):
+    """Only png, jpeg or webp logos within the size and pixel limits are stored."""
     owner = ctx.as_("owner")
     cases = [
         (SVG, "logo.svg", "image/svg+xml"),
@@ -220,6 +226,7 @@ async def test_only_png_jpeg_or_webp_logos_within_the_limits_are_stored(client, 
 
 
 async def test_a_logo_is_re_encoded_to_png_and_served_safely_to_members_only(client, ctx):
+    """An uploaded logo is re-encoded to png and served safely to members only."""
     owner = ctx.as_("owner")
     resp = await _upload(client, owner, _image("JPEG"), name="logo.jpg", ctype="image/jpeg")
     assert resp.status_code == 200, resp.text
@@ -248,6 +255,7 @@ async def test_a_logo_is_re_encoded_to_png_and_served_safely_to_members_only(cli
 
 
 async def test_a_dark_variant_and_removing_logos(client, ctx):
+    """A dark logo variant can be set and removed independently of the light one."""
     owner = ctx.as_("owner")
     light = (await _upload(client, owner, _image())).json()
     dark = await _upload(
@@ -290,6 +298,7 @@ async def branded(client, ctx):
 
 
 async def test_every_html_export_header_holds_the_logo_as_its_one_data_image(client, branded):
+    """Every HTML export header embeds the logo as its one inline data image."""
     ctx, logo = branded
     base = "/v1/documents/checkout/versions/1/export"
     for query in ("format=html", "layer=brief&format=html", "layer=deck&format=html"):
@@ -307,6 +316,7 @@ async def test_every_html_export_header_holds_the_logo_as_its_one_data_image(cli
 
 
 async def test_an_unthemed_export_carries_the_logo_and_accent_too(client, ctx):
+    """An export with no theme still carries the company logo and accent."""
     md = "---\ntitle: Plain notes\n---\n\n# Plain notes {#title}\n\n## Background {#bg}\nText.\n"
     assert (await _import(client, ctx.as_("token"), md, doc="plain-notes")).status_code == 201
     owner = ctx.as_("owner")
@@ -322,6 +332,7 @@ async def test_an_unthemed_export_carries_the_logo_and_accent_too(client, ctx):
 
 
 async def test_a_data_image_in_a_body_still_does_not_render(client, branded):
+    """A data image pasted into the document body is stripped from the export."""
     ctx, _ = branded
     md = DRAFT.replace(
         "We will cut checkout to one page for returning buyers.",
@@ -336,6 +347,7 @@ async def test_a_data_image_in_a_body_still_does_not_render(client, branded):
 
 
 async def test_without_a_logo_the_header_shows_the_company_name(client, ctx):
+    """With no logo set, the export header shows the company name instead."""
     assert (await _import(client, ctx.as_("token"), DRAFT)).status_code == 201
     resp = await client.get(
         "/v1/documents/checkout/versions/1/export?format=html", headers=ctx.as_("viewer")
@@ -345,6 +357,7 @@ async def test_without_a_logo_the_header_shows_the_company_name(client, ctx):
 
 
 async def test_the_pptx_and_present_title_slides_carry_the_logo(client, branded):
+    """The pptx and Present title slides carry the logo, other slides do not."""
     ctx, logo = branded
     viewer = ctx.as_("viewer")
     resp = await client.get(
@@ -375,6 +388,7 @@ async def test_the_pptx_and_present_title_slides_carry_the_logo(client, branded)
 
 @requires_pdf
 async def test_the_pdf_shows_the_logo(client, branded):
+    """The exported PDF includes the branding logo image."""
     ctx, _ = branded
     resp = await client.get(
         "/v1/documents/checkout/versions/1/export?format=pdf", headers=ctx.as_("viewer")
@@ -388,6 +402,7 @@ async def test_the_pdf_shows_the_logo(client, branded):
 
 
 async def test_the_shared_header_has_the_mark_unless_an_owner_switches_it_off(client, branded):
+    """A shared header shows the Oracle mark unless an owner switches it off."""
     from oracle.branding import load_brand, render_brand_header
 
     ctx, _ = branded
@@ -409,6 +424,7 @@ async def test_the_shared_header_has_the_mark_unless_an_owner_switches_it_off(cl
 
 
 async def test_the_render_key_changes_with_the_mark_and_the_disclaimer(client, branded):
+    """The cached render key changes whenever the mark or disclaimer changes."""
     from oracle.branding import load_brand
 
     ctx, _ = branded
@@ -426,6 +442,7 @@ async def test_the_render_key_changes_with_the_mark_and_the_disclaimer(client, b
 
 
 async def test_a_reset_keeps_the_revision_counting_and_drops_the_logos(client, branded):
+    """Resetting branding drops its logos but keeps counting revisions onward."""
     from sqlalchemy import func, select
 
     from oracle.branding import BrandAsset
@@ -502,6 +519,7 @@ async def test_the_same_logo_uploaded_twice_at_once_is_stored_once(client, ctx):
 
 
 async def test_an_image_mode_pillow_cannot_convert_is_refused_not_a_crash(client, ctx, monkeypatch):
+    """An image mode Pillow cannot convert is refused cleanly, not a crash."""
     from PIL import Image as PILImage
 
     def refuse(self, *args, **kwargs):
@@ -548,6 +566,7 @@ async def two_logos(client, ctx):
 
 
 def test_the_luminance_rule_picks_dark_below_one_half():
+    """The luminance rule picks the dark logo for backgrounds below half luminance."""
     from oracle.branding import dark_background
 
     assert dark_background(DARK_BG) is True
@@ -560,6 +579,7 @@ def test_the_luminance_rule_picks_dark_below_one_half():
 
 
 async def test_a_dark_theme_uses_the_dark_logo_and_a_light_theme_the_light_one(two_logos):
+    """Exports pick the dark or light logo to match the theme's background."""
     from oracle.export import deck as decks
     from oracle.export.pptx import deck_to_pptx
     from oracle.export.render import render_html
@@ -579,6 +599,7 @@ async def test_a_dark_theme_uses_the_dark_logo_and_a_light_theme_the_light_one(t
 
 
 async def test_without_a_dark_logo_the_light_logo_is_used_everywhere(client, ctx):
+    """With no dark logo set, the light logo is used on every background."""
     from oracle.export import deck as decks
     from oracle.export.render import render_html
 
@@ -592,6 +613,7 @@ async def test_without_a_dark_logo_the_light_logo_is_used_everywhere(client, ctx
 
 
 async def test_the_present_key_changes_when_the_logo_choice_changes(two_logos):
+    """The Present cache key changes whenever the chosen logo variant changes."""
     from types import SimpleNamespace
 
     from oracle.export import present
@@ -606,6 +628,7 @@ async def test_the_present_key_changes_when_the_logo_choice_changes(two_logos):
 
 
 async def test_the_branding_preview_says_which_logo_each_built_in_theme_uses(client, two_logos):
+    """The branding preview lists which logo each built-in theme will use."""
     from oracle.templates.builtins import BUILTIN_THEMES
 
     ctx, _, _ = two_logos

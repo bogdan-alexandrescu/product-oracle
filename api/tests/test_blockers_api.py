@@ -63,6 +63,7 @@ async def _events(ctx, blocker_id: str) -> list[m.BlockerResolutionEvent]:
 
 
 def test_every_new_route_is_an_mcp_tool():
+    """Every new blocker route is also exposed as an MCP tool, not excluded."""
     ops = {(o.method, o.path): o for o in app_operations(app)}
     for method, path in NEW_ROUTES:
         op = ops[(method, path)]
@@ -70,6 +71,7 @@ def test_every_new_route_is_an_mcp_tool():
 
 
 async def test_routes_require_auth(client):
+    """Every blocker route refuses a request with no authentication."""
     some = uuid.uuid4()
     assert (await client.get("/v1/blockers")).status_code == 401
     assert (await client.post("/v1/blockers", json={})).status_code == 401
@@ -81,6 +83,7 @@ async def test_routes_require_auth(client):
 
 
 async def test_create_a_blocker_makes_a_constraint_entity_with_the_strategy(client):
+    """Creating a blocker makes a locked constraint entity holding its strategy."""
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
     out = await create_blocker(client, ctx, document_ids=[str(doc_id)])
@@ -108,6 +111,7 @@ async def test_create_a_blocker_makes_a_constraint_entity_with_the_strategy(clie
 
 
 async def test_an_existing_constraint_entity_becomes_a_blocker(client):
+    """An existing constraint entity can become a blocker once, not a second time."""
     ctx = await make_ctx()
     entity_id = await make_entity(ctx, "constraint", "data-residency")
     resp = await client.post(
@@ -172,6 +176,7 @@ async def test_a_non_constraint_entity_is_refused_everywhere(client):
 
 
 async def test_a_constraint_without_a_strategy_is_not_a_blocker_yet(client):
+    """A constraint with no blocker strategy cannot take blocker-only actions yet."""
     ctx = await make_ctx()
     entity_id = await make_entity(ctx, "constraint", "plain-constraint")
     resp = await add_option(client, ctx, str(entity_id))
@@ -180,6 +185,7 @@ async def test_a_constraint_without_a_strategy_is_not_a_blocker_yet(client):
 
 
 async def test_roles(client):
+    """Viewers and commenters cannot create a blocker or decide its outcome."""
     ctx = await make_ctx()
     for who in ("viewer", "commenter"):
         resp = await client.post(
@@ -266,6 +272,7 @@ async def test_another_companys_blockers_are_invisible(client):
 
 
 async def test_a_third_party_limit_must_be_classified(client):
+    """A third-party limit must be classified into a known limit kind, not 'other'."""
     ctx = await make_ctx()
     resp = await client.post(
         "/v1/blockers",
@@ -283,6 +290,7 @@ async def test_a_third_party_limit_must_be_classified(client):
 
 
 async def test_patch_needs_the_current_revision(client):
+    """A blocker patch needs its current revision and cannot change status directly."""
     ctx = await make_ctx()
     b = (await create_blocker(client, ctx, severity="high"))["blocker"]
     h = ctx.as_("approver")
@@ -306,6 +314,7 @@ async def test_patch_needs_the_current_revision(client):
 
 
 async def test_impacted_requirements_get_affects_edges(client):
+    """Impacted requirements get affects edges, replaced when the list changes."""
     ctx = await make_ctx()
     req = await make_entity(ctx, "requirement", "saved-addresses")
     outcome = await make_entity(ctx, "outcome", "faster-repeat-checkout")
@@ -335,6 +344,7 @@ async def test_impacted_requirements_get_affects_edges(client):
 
 
 async def test_a_status_change_records_a_change_event(client):
+    """A blocker status change fires a change event with the before and after status."""
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
     b = (await create_blocker(client, ctx, document_ids=[str(doc_id)]))["blocker"]
@@ -373,6 +383,7 @@ async def test_a_status_change_records_a_change_event(client):
 
 
 async def test_a_handler_that_fails_aborts_the_status_change(client):
+    """A failing change handler rolls back the status change entirely."""
     ctx = await make_ctx()
     b = (await create_blocker(client, ctx))["blocker"]
 
@@ -392,6 +403,7 @@ async def test_a_handler_that_fails_aborts_the_status_change(client):
 
 
 async def test_status_route_rules(client):
+    """Resolving a blocker needs a reason, and only some statuses are reachable here."""
     ctx = await make_ctx()
     b = (await create_blocker(client, ctx))["blocker"]
     h = ctx.as_("approver")
@@ -424,6 +436,7 @@ async def test_status_route_rules(client):
 
 
 async def test_select_an_option_with_a_reason(client):
+    """An option can only be selected once it has passed compliance review."""
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
     b = (await create_blocker(client, ctx, document_ids=[str(doc_id)]))["blocker"]
@@ -496,6 +509,7 @@ async def test_select_an_option_with_a_reason(client):
 
 
 async def test_fallback_and_reject(client):
+    """A fallback option must pass compliance review first, and cannot be reworded."""
     ctx = await make_ctx()
     b = (await create_blocker(client, ctx))["blocker"]
     h = ctx.as_("approver")
@@ -528,6 +542,7 @@ async def test_fallback_and_reject(client):
 
 
 async def test_editing_a_reviewed_option_needs_a_new_review(client):
+    """Editing a reviewed option resets its compliance to needing review again."""
     ctx = await make_ctx()
     b = (await create_blocker(client, ctx))["blocker"]
     opt = await approve_compliance(client, ctx, (await add_option(client, ctx, b["id"])).json())
@@ -541,6 +556,7 @@ async def test_editing_a_reviewed_option_needs_a_new_review(client):
 
 
 async def test_option_evidence_must_be_this_companys(client):
+    """An option cannot cite evidence that belongs to another tenant."""
     a = await make_ctx("Company A")
     b = await make_ctx("Company B")
     from tests.blocker_helpers import make_evidence
@@ -572,6 +588,7 @@ async def _experiment(client, ctx, blocker_id, **body):
 
 
 async def test_experiment_lifecycle(client):
+    """An experiment must belong to its blocker and run before it can succeed."""
     ctx = await make_ctx()
     b = (await create_blocker(client, ctx))["blocker"]
     other = (await create_blocker(client, ctx, key="other-limit"))["blocker"]
@@ -606,6 +623,7 @@ async def test_experiment_lifecycle(client):
 
 
 async def test_feasibility_scope_needs_a_scoped_experiment(client):
+    """Scoping feasibility needs an experiment with an owner and a decision gate."""
     ctx = await make_ctx()
     b = (await create_blocker(client, ctx))["blocker"]
     loose = await _experiment(client, ctx, b["id"], owner_id=None, decision_gate_at=None)
@@ -645,6 +663,7 @@ async def test_feasibility_scope_needs_a_scoped_experiment(client):
 
 
 async def test_risk_acceptance_records_who_and_why(client):
+    """Accepting a risk needs a reason and a future review date, and records who."""
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
     b = (await create_blocker(client, ctx, document_ids=[str(doc_id)]))["blocker"]
@@ -686,6 +705,7 @@ async def test_risk_acceptance_records_who_and_why(client):
 
 
 async def test_document_strategy_lists_linked_blockers(client):
+    """A document's strategy lists its linked blockers, most severe one first."""
     ctx = await make_ctx()
     doc_id = await make_document(ctx)
     other_doc = await make_document(ctx, "another-prd")

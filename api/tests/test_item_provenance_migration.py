@@ -54,6 +54,7 @@ def scratch_db():
 
 
 def test_the_chain_ends_here_after_0014_intake():
+    """The migration chain after the intake branch still has one head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision("0016_source_needs_attention").down_revision == "0014_intake"
     assert script.get_revision("0016_browse_calls").down_revision == "0016_source_needs_attention"
@@ -66,6 +67,7 @@ def test_the_chain_ends_here_after_0014_intake():
 
 
 def test_no_table_uses_row_level_security(scratch_db):
+    """No table in the schema uses row level security."""
     upgrade(_cfg(), "0017_item_provenance")
     assert _run("SELECT count(*) FROM pg_class WHERE relrowsecurity OR relforcerowsecurity") == [
         (0,)
@@ -73,6 +75,7 @@ def test_no_table_uses_row_level_security(scratch_db):
 
 
 def test_the_backfill_fills_the_rows_of_two_companies(scratch_db):
+    """The provenance backfill fills in every company's existing rows."""
     cfg = _cfg()
     upgrade(cfg, "0016_browse_calls")
     root = "11111111111141118111111111111111"

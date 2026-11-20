@@ -115,6 +115,7 @@ async def row(ctx, reply_id) -> DiscussionMessage:
 # protects=reply rule and marker mapping (units); fails_when=@Oracle is missed, an e-mail
 # address counts, or a marker pointing at nothing survives; no_claim=the routes.
 def test_addressing_and_citation_markers():
+    """Addressing checks and citation markers parse correctly."""
     assert replies.addressed("@Oracle what now?", False)
     assert replies.addressed("hi", True)
     assert not replies.addressed("mail ops@oracle.test", False)
@@ -134,6 +135,7 @@ def test_addressing_and_citation_markers():
 # when addressed; fails_when=a team thread gets unasked replies, or a solo one none;
 # no_claim=the composer's copy (E2E).
 async def test_oracle_replies_alone_and_when_addressed(client):
+    """Oracle replies when addressed or mentioned, not to every message."""
     ctx, doc = await company(client)
     d = await start(client, ctx, subject=section(doc))
     solo = await say(client, ctx, d["id"], "commenter", ASK)
@@ -153,6 +155,7 @@ async def test_oracle_replies_alone_and_when_addressed(client):
 # reader gets the same text; one model call; fails_when=text is lost, repeated or the model
 # is called twice; no_claim=the browser's rendering.
 async def test_the_stream_and_a_second_reader_share_one_call(client, fake):
+    """Two readers of one streaming reply share a single model call."""
     ctx, doc = await company(client)
     await with_key(ctx)
     d = await start(client, ctx, subject=section(doc))
@@ -183,6 +186,7 @@ async def test_the_stream_and_a_second_reader_share_one_call(client, fake):
 # signed tick once 10 s old, and counted; fails_when=it is never answered or answered
 # twice; no_claim=Cloud Scheduler's timing.
 async def test_the_tick_completes_a_reply_nobody_streamed(client, fake, ticker_on):  # noqa: F811
+    """A background tick completes a reply nobody is streaming."""
     ctx, doc = await company(client)
     await with_key(ctx)
     d = await start(client, ctx, subject=section(doc))
@@ -208,6 +212,7 @@ async def test_the_tick_completes_a_reply_nobody_streamed(client, fake, ticker_o
 # protects=a lease that ran out fails the reply as interrupted with its partial text;
 # fails_when=it stays streaming forever; no_claim=a real instance dying.
 async def test_a_lapsed_lease_is_interrupted(client):
+    """A reply whose stream lease lapsed is marked failed, interrupted."""
     ctx, doc = await company(client)
     d = await start(client, ctx, subject=section(doc))
     reply = (await say(client, ctx, d["id"], "commenter", ASK))["reply"]
@@ -243,6 +248,7 @@ time.sleep(60)
 # claude binary.
 @pytest.mark.timing
 async def test_stop_cancels_the_call_and_retry_asks_again(client, tmp_path):
+    """Stopping a reply cancels its call fast, and retry asks again."""
     from tests.test_llm_gateway import _running
 
     script, pidfile = tmp_path / "claude", tmp_path / "pid"
@@ -312,6 +318,7 @@ async def intake_by(ctx, who: str, levels: dict[str, str]) -> ProductIntake:
 # search, and an open discussion reads only the finding shared at summary; fails_when=a
 # source item is read or the private finding enters; no_claim=what the model writes.
 async def test_the_context_reads_only_what_everyone_may_see(client, fake, monkeypatch):
+    """A reply's context reads only what everyone may see, never live."""
     ctx, _doc = await company(client)
     await with_key(ctx)
     intake = await intake_by(
@@ -375,6 +382,7 @@ async def private_gap(ctx) -> tuple[ProductIntake, uuid.UUID]:
 
 
 async def test_the_authors_own_discussion_reads_the_private_finding(client, fake):
+    """A finding's own author can read it in their own discussion."""
     ctx, _doc = await company(client)
     await with_key(ctx)
     _intake, gap_id = await private_gap(ctx)
@@ -390,6 +398,7 @@ async def test_the_authors_own_discussion_reads_the_private_finding(client, fake
 # everyone does; fails_when=the stored author_only flag still lets the private statement
 # into the context; no_claim=what the model writes.
 async def test_a_finding_shared_at_summary_is_read_as_everyone_sees_it(client, fake):
+    """A summary-shared finding is read in a reply as its summary only."""
     ctx, _doc = await company(client)
     await with_key(ctx)
     intake, gap_id = await private_gap(ctx)
@@ -412,6 +421,7 @@ async def test_a_finding_shared_at_summary_is_read_as_everyone_sees_it(client, f
 # the key is absent for anyone else; fails_when=another reader learns the count;
 # no_claim=the notice's wording (E2E).
 async def test_private_findings_notice_is_the_authors_only(client):
+    """The private findings notice shows only to that finding's author."""
     ctx, _doc = await company(client)
     intake = await intake_by(ctx, "commenter", {"private": "Hidden", "summary": "Shown"})
     d = await start(
@@ -428,6 +438,7 @@ async def test_private_findings_notice_is_the_authors_only(client):
 # its copy, and the message is still stored; fails_when=the limit is missing or the
 # message is lost; no_claim=the per-discussion daily limit (same code path).
 async def test_the_reply_limit(client):
+    """Replies are capped; past the limit the message posts without one."""
     ctx, doc = await company(client)
     d = await start(client, ctx, subject=section(doc))
     for i in range(20):
@@ -445,6 +456,7 @@ async def test_the_reply_limit(client):
 # protects=a failed reply reads the gateway's message to approvers and owners and the plain
 # copy to others, with Retry; fails_when=a commenter sees account details; no_claim=the UI.
 async def test_no_account_fails_the_reply_with_the_right_copy(client):
+    """A reply with no account still posts with readable error copy."""
     ctx, doc = await company(client)
     d = await start(client, ctx, subject=section(doc))
     reply = (await say(client, ctx, d["id"], "commenter", ASK))["reply"]
@@ -465,6 +477,7 @@ async def test_no_account_fails_the_reply_with_the_right_copy(client):
 # wait=true answers with the finished reply; fails_when=the raw stream is a tool or wait
 # returns a pending reply; no_claim=other MCP clients.
 async def test_mcp_waits_for_the_reply_instead_of_streaming(client, fake):
+    """The MCP tool waits for a finished reply instead of streaming it."""
     ctx, doc = await company(client)
     await with_key(ctx)
     d = await start(client, ctx, subject=section(doc))
@@ -492,6 +505,7 @@ async def test_mcp_waits_for_the_reply_instead_of_streaming(client, fake):
 # protects=a person removed while a reply streams stops reading it (forbidden);
 # fails_when=a removed person keeps reading a private discussion; no_claim=the UI.
 async def test_a_removed_participant_stops_reading(client, fake):
+    """A removed participant stops reading, but the reply still finishes."""
     fake.pause = 0.4
     ctx, doc = await company(client)
     await with_key(ctx)
@@ -536,6 +550,7 @@ async def again(client, ctx, d_id, reply_id, who="commenter", expect=200, **head
 # reply limit, and each retry counts as an answer; fails_when=a 21st answer within 10
 # minutes runs through Retry; no_claim=the per-discussion daily limit (same code path).
 async def test_retry_is_held_to_the_reply_limit(client):
+    """A reply retried repeatedly is still held to the reply rate limit."""
     ctx, doc = await company(client)
     d = await start(client, ctx, subject=section(doc))
     asked = [await say(client, ctx, d["id"], "commenter", f"Question {i}") for i in range(20)]
@@ -561,6 +576,7 @@ async def test_retry_is_held_to_the_reply_limit(client):
 # the session cookie; fails_when=another site stops or re-runs a reply; no_claim=bearer
 # tokens (never sent by a browser on its own).
 async def test_stop_and_retry_refuse_a_cross_site_request(client):
+    """Stop and retry both refuse a cross-site request."""
     ctx, doc = await company(client)
     d = await start(client, ctx, subject=section(doc))
     reply = (await say(client, ctx, d["id"], "commenter", ASK))["reply"]["id"]

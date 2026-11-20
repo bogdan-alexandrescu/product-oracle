@@ -39,11 +39,13 @@ def _leaves(node):
 
 
 def test_the_catalogue_has_all_eight_packs_in_order():
+    """The pack catalogue lists all eight packs in a fixed order."""
     assert list(builtin_packs()) == ["startup.standard", "ai-agent.platform", *INDUSTRY]
 
 
 @pytest.mark.parametrize("pack_id", INDUSTRY)
 def test_each_pack_reuses_the_shared_core_and_adds_its_own_modules(pack_id):
+    """Each industry pack reuses the shared core and adds its own modules."""
     title, namespace, _ = INDUSTRY[pack_id]
     pack = builtin_packs()[pack_id]
     contracts = builtin_contracts()
@@ -64,6 +66,7 @@ def test_each_pack_reuses_the_shared_core_and_adds_its_own_modules(pack_id):
 
 @pytest.mark.parametrize("pack_id", INDUSTRY)
 def test_each_pack_uses_all_three_tiers(pack_id):
+    """Each industry pack uses all three policy tiers, bounded by size."""
     contracts = builtin_contracts()
     own = builtin_packs()[pack_id].own
     tiers = {p: [k for k in own if contracts[k].policy == p] for p in _TIERS}
@@ -83,6 +86,7 @@ _TIERS = ("required", "conditional", "optional")
 @pytest.mark.parametrize("pack_id", INDUSTRY)
 @pytest.mark.parametrize("template", PRD_TEMPLATES)
 def test_each_pack_composes_a_valid_explained_composition(pack_id, template):
+    """Each industry pack composes validly, explained, appendix last."""
     comp = compose(context(pack_id, template))
     assert comp.valid, (pack_id, template, comp.problems)
     contracts = builtin_contracts()
@@ -108,6 +112,7 @@ def test_each_pack_composes_a_valid_explained_composition(pack_id, template):
 
 @pytest.mark.parametrize("pack_id", INDUSTRY)
 def test_conditional_modules_are_suggested_by_their_capabilities(pack_id):
+    """A pack's conditional modules are suggested once their capability shows."""
     contracts = builtin_contracts()
     conditional = [k for k in builtin_packs()[pack_id].own if contracts[k].policy == "conditional"]
     tags = sorted(
@@ -133,6 +138,7 @@ def test_conditional_modules_are_suggested_by_their_capabilities(pack_id):
 
 @pytest.mark.parametrize("pack_id", INDUSTRY)
 def test_a_person_can_add_every_optional_module(pack_id):
+    """A person can add every optional module in a pack."""
     from oracle.modules.composer import Changes
 
     contracts = builtin_contracts()
@@ -145,12 +151,14 @@ def test_a_person_can_add_every_optional_module(pack_id):
 
 @pytest.mark.parametrize("pack_id", INDUSTRY)
 def test_a_category_selects_the_pack(pack_id):
+    """Each industry category selects its own pack."""
     _, category, _ = INDUSTRY[pack_id]
     assert default_pack_for(category) == pack_id
     assert category in builtin_packs()[pack_id].categories
 
 
 def test_section_ids_are_stable_and_unique_across_every_pack():
+    """Every pack's section ids are unique and prefixed with its name."""
     sections = [s for c in builtin_contracts().values() for s in c.effective_section_ids()]
     assert len(sections) == len(set(sections))
     for pack_id in INDUSTRY:
@@ -265,6 +273,7 @@ def _yaml_texts(obj) -> list[str]:
 
 @pytest.mark.parametrize("name", ["packs.yaml", *(v[2] for v in INDUSTRY.values())])
 def test_no_pack_contains_example_content(name):
+    """No pack's yaml names a real brand or leaves an example field value."""
     raw = (BUILTIN_DIR / name).read_text(encoding="utf-8")
     data = yaml.safe_load(raw)
     for text in _yaml_texts(data):

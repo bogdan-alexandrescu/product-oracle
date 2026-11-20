@@ -85,6 +85,7 @@ async def recorded(w, action: str, who: str, since: datetime, entity_id) -> Audi
 
 
 async def test_meeting_start_and_rules_record_when(client, clock):
+    """Starting a meeting and changing its rules both record who and when."""
     w = await world()
     clock["now"] = clock["now"] + timedelta(minutes=7)
     since = datetime.now(UTC)
@@ -106,6 +107,7 @@ async def test_meeting_start_and_rules_record_when(client, clock):
 
 
 async def test_meeting_approve_records_its_own_decision(client, clock):
+    """Approving in a meeting records its own decision, tied to what it approves."""
     w = await world()
     m = await start(client, w)
     assert (await edit_title(client, w, "decider", m["session_id"])).status_code == 201
@@ -137,6 +139,7 @@ async def test_meeting_approve_records_its_own_decision(client, clock):
 
 
 async def test_minutes_redraft_and_send_record_who_and_when(client, clock):
+    """Redrafting failed minutes and sending them both record who and when."""
     w = await world()
     m = await ended(client, w)
     await set_job(w, status="failed", error="the model said no", attempts=3)
@@ -166,6 +169,7 @@ async def card_row(ctx, card_id) -> SimpleChatCard:
 
 
 async def test_chat_card_records_who_and_when_on_apply_undo_and_apply_all(client, clock):
+    """Applying, undoing, and apply-all on chat cards each record who and when."""
     ctx = await make_people()
     await World(ctx).build()
     owner = ctx.users["owner"].id
@@ -202,6 +206,7 @@ async def test_chat_card_records_who_and_when_on_apply_undo_and_apply_all(client
 
 
 async def test_cut_with_dependents_change_records_who_and_when(client, clock):
+    """Cutting a feature with its dependents records one change, who and when."""
     from tests.test_simple_cut_dependents_api import world as cut_world
 
     ctx, _w = await cut_world()
@@ -217,6 +222,7 @@ async def test_cut_with_dependents_change_records_who_and_when(client, clock):
 
 
 async def test_feature_ask_names_who_filed_it(client, clock):
+    """Filing a feature ask records who filed it, apart from the customer's name."""
     ctx = await make_people()
     await World(ctx).build()
     clock["now"] = at = clock["now"] + timedelta(minutes=4)
@@ -233,6 +239,7 @@ async def test_feature_ask_names_who_filed_it(client, clock):
 
 
 async def test_record_decision_records_who_and_when(client, clock):
+    """Recording a decision through a chat card logs who decided it and when."""
     from tests.test_simple_chat_actions import apply as apply_card
     from tests.test_simple_chat_actions import one_card
 

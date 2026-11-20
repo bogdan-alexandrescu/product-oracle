@@ -102,6 +102,7 @@ async def _confirm(client, ctx, fid: str) -> dict:
 
 
 async def test_confirm_keys_by_its_own_code(client):
+    """Confirming a feature with its own code keys it by that code, unflagged."""
     ctx, fid, _, _ = await world(section=None)
     assert (await _confirm(client, ctx, fid))["key"] == "F-07"
     out = await _check(client, ctx)
@@ -110,11 +111,13 @@ async def test_confirm_keys_by_its_own_code(client):
 
 
 async def test_confirm_keys_by_its_items_code(client):
+    """Confirming a feature with no code of its own keys it by its roadmap item's code."""
     ctx, fid, _, _ = await world(code=None, section="f-07a")
     assert (await _confirm(client, ctx, fid))["key"] == "F-07"
 
 
 async def test_a_taken_code_falls_back_unflagged(client):
+    """Confirming a feature whose code is taken falls back to another code, unflagged."""
     ctx, fid, _, _ = await world(taken=True)
     key = (await _confirm(client, ctx, fid))["key"]
     assert key not in ("F-07", "usage-sync") and key.startswith("F-")
@@ -125,6 +128,7 @@ async def test_a_taken_code_falls_back_unflagged(client):
 
 
 async def test_confirm_confirms_its_proposed_goal_links(client):
+    """Confirming a feature also confirms its still-proposed links to goals it serves."""
     ctx, fid, grow, _ = await world()
     await _confirm(client, ctx, fid)
     out = await _check(client, ctx)
@@ -135,6 +139,7 @@ async def test_confirm_confirms_its_proposed_goal_links(client):
 
 
 async def test_picking_an_already_proposed_goal_confirms_it(client):
+    """Picking a goal link for an already-confirmed feature confirms that link too."""
     ctx, fid, grow, _ = await world()
     async with tenant_session(ctx.tenant_id) as s:
         # Confirmed before this fix: the feature, not its link.
@@ -170,6 +175,7 @@ async def _mis_keyed(ctx, fid: str) -> None:
 
 @pytest.mark.parametrize("code", ["F-07", None])
 async def test_the_repair_rekeys_a_mis_keyed_feature(client, code):
+    """Repairing a mis-keyed feature restores its code and frees the one wrongly used."""
     ctx, fid, _, _ = await world(code=code)
     await _mis_keyed(ctx, fid)
     out = await _check(client, ctx)
@@ -203,6 +209,7 @@ async def test_the_repair_rekeys_a_mis_keyed_feature(client, code):
 
 
 async def test_the_repair_is_for_approvers(client):
+    """Repairing a mis-keyed feature's own code is refused to a viewer."""
     ctx, fid, _, _ = await world()
     await _mis_keyed(ctx, fid)
     r = await client.post(f"/v1/baseline/entities/{fid}/own-code", headers=ctx.as_("viewer"))
@@ -220,6 +227,7 @@ async def _link(ctx, fid: str, grow: str) -> Edge:
 
 
 async def test_picking_a_proposed_link_keeps_the_chosen_contribution(client):
+    """Confirming a proposed goal link keeps the contribution value chosen for it."""
     ctx, fid, grow, _ = await world()
     r = await client.post(
         "/v1/baseline/edges",
@@ -237,6 +245,7 @@ async def test_picking_a_proposed_link_keeps_the_chosen_contribution(client):
     ("origin", "status"), [("agent", "proposed"), ("agent", None), ("user", "proposed")]
 )
 async def test_only_a_person_confirming_confirms_a_proposed_link(client, origin, status):
+    """Only a person's own confirm action confirms a proposed link, not an agent's."""
     ctx, fid, grow, _ = await world()
     body = {"src_id": fid, "dst_id": grow, "type": "supports", "origin": origin,
             "attrs": {"contribution": 3}}  # fmt: skip
@@ -249,6 +258,7 @@ async def test_only_a_person_confirming_confirms_a_proposed_link(client, origin,
 
 
 async def test_confirm_leaves_links_to_a_proposed_goal_proposed(client):
+    """Confirming a feature leaves its link to a proposed goal proposed, not confirmed."""
     ctx, fid, _, _ = await world()
     async with tenant_session(ctx.tenant_id) as s:
         idea = await s.scalar(select(Entity).where(Entity.key == "grow"))

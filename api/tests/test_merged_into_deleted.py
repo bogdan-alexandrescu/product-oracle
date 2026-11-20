@@ -12,6 +12,7 @@ ITEMS = "/v1/simple/roadmap/items"
 
 
 async def test_merged_into_a_deleted_item_names_no_key(client):
+    """An item merged into a feature later deleted shows no key for it, just a name."""
     w = await World().build()
     added = await w.add(client, "owner", "Import from spreadsheets")
     draft = added["change"]["target"]["item_id"]

@@ -74,6 +74,7 @@ CASES = [
 
 @pytest.mark.parametrize(("item", "when", "start", "end"), CASES)
 async def test_relative_times_move_dates(client, item, when, start, end):
+    """A relative time phrase like next quarter resolves to the right start and end."""
     ctx = await make_people()
     w = await World(ctx).build()
     m = await say(client, ctx, "owner", f"move {item} to {when}")
@@ -90,6 +91,7 @@ async def test_relative_times_move_dates(client, item, when, start, end):
 
 
 async def test_now_next_later_stay_horizon_moves(client):
+    """Moving an item to Now, Next or Later sets its horizon, not specific dates."""
     ctx = await make_people()
     await World(ctx).build()
     for h in ("Now", "next", "Later"):
@@ -102,6 +104,7 @@ async def test_now_next_later_stay_horizon_moves(client):
 
 
 async def test_relative_times_use_the_company_time_zone(client, monkeypatch):
+    """Relative time phrases resolve in the company's own time zone, not UTC."""
     ctx = await make_people()
     await World(ctx).build()
     # Dec 31 2026, 9 PM in Pacific time: already Jan 1 2027 in UTC.
@@ -115,6 +118,7 @@ async def test_relative_times_use_the_company_time_zone(client, monkeypatch):
 
 
 async def test_a_period_already_begun_says_so(client):
+    """Moving to a period already under way warns the move starts on a past day."""
     ctx = await make_people()
     await World(ctx).build()
     for when, began in (("this quarter", "Oct 1"), ("this month", "Nov 1"), ("Q4", "Oct 1")):
@@ -127,6 +131,7 @@ async def test_a_period_already_begun_says_so(client):
 
 
 async def test_only_understood_routes_the_rest_to_ask(client):
+    """only_understood drops lines it cannot read and sends the rest to the reader."""
     ctx = await make_people()
     await World(ctx).build()
 
@@ -165,6 +170,7 @@ async def test_only_understood_routes_the_rest_to_ask(client):
 
 
 async def test_constraint_line_names_the_dependent_and_the_dependency(client):
+    """A dependency flag names both the dependent item and the dependency it breaks."""
     ctx = await make_people()
     await World(ctx).build()
     # Bulk import (Nov 20 - Dec 20 2026) depends on Ledger v2.

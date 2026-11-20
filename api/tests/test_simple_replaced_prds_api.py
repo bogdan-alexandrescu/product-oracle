@@ -66,6 +66,7 @@ async def _get(client, ctx: Ctx, path: str) -> dict | list:
 
 
 async def test_simple_one_pagers_list_only_the_area_prds(client):
+    """Simple's one-pager list shows only the area PRDs, not a replaced one."""
     ctx = await world(client)
     rows = await _get(client, ctx, "/v1/simple/one-pagers")
     assert {d["title"] for d in rows} == AREAS
@@ -77,18 +78,21 @@ async def test_simple_one_pagers_list_only_the_area_prds(client):
 
 
 async def test_simple_drafts_leave_out_the_replaced_prd(client):
+    """Simple's drafts list leaves out a PRD that has been replaced."""
     ctx = await world(client)
     drafts = await _get(client, ctx, "/v1/simple/drafts")
     assert {d["document"]["title"] for d in drafts} == AREAS
 
 
 async def test_review_start_sheet_offers_only_the_area_prds(client):
+    """The review start sheet offers only the area PRDs, not a replaced one."""
     ctx = await world(client)
     options = await _get(client, ctx, "/v1/simple/meetings/options")
     assert {p["document"]["title"] for p in options["prds"]} == AREAS
 
 
 async def test_decisions_filter_and_questions_only_the_area_prds(client):
+    """Decisions' PRD filter and open questions cover only the area PRDs."""
     ctx = await world(client)
     page = await _get(client, ctx, "/v1/simple/decisions")
     assert {o["title"] for o in page["prds"]} == AREAS
@@ -120,6 +124,7 @@ async def test_one_pager_of_the_replaced_prd_names_only_the_prds_that_replaced_i
 
 
 async def test_start_sheet_refuses_the_replaced_prd(client):
+    """Starting a review on a replaced PRD is refused, naming what replaced it."""
     ctx = await world(client)
     r = await client.get("/v1/simple/meetings/options?prd=trust-plan", headers=ctx.as_("owner"))
     assert r.status_code == 404, r.text

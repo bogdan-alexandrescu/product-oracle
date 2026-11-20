@@ -37,6 +37,7 @@ from tests.test_cross_prd_dependencies import (  # noqa: F401  (clock: the pinne
 
 
 async def test_a_ground_truth_feature_in_no_prd_is_caught_at_the_engineering_check():
+    """A dependency on a feature no PRD holds is caught at the engineering check."""
     # protects=a dependency on a confirmed feature no PRD holds is named at the Engineering
     # check; fails_when=the check accepts it and the roadmap items stop refuses it later.
     w = await world(roadmap=False)
@@ -56,6 +57,7 @@ async def test_a_ground_truth_feature_in_no_prd_is_caught_at_the_engineering_che
 
 
 async def test_an_unknown_dependency_is_named_in_words():
+    """An unknown dependency's message names the feature and what it could not find."""
     # protects=the unknown-dependency message names the feature and what was not found;
     # fails_when=it reads "features[0] (observability): depends on 'made-up-feature', ...".
     w = await world()
@@ -80,6 +82,7 @@ async def _stopped_scope(tenant, status: str, *, key: str, title: str) -> None:
 
 
 async def test_a_cancelled_or_failed_run_s_scope_is_not_on_the_company_roadmap():
+    """Only live runs and published PRDs feed the company roadmap."""
     # protects=only live runs and published PRDs feed the company roadmap; fails_when=a
     # cancelled or failed run's approved scope still counts.
     w = await world()
@@ -134,6 +137,7 @@ async def _safety_kept(w: dict) -> None:
 
 
 async def test_a_cancelled_update_run_keeps_the_prd_s_earlier_scope_on_the_roadmap():
+    """A cancelled PRD update falls back to the scope it was meant to replace."""
     # protects=a cancelled update of a published PRD falls back to the scope it superseded;
     # fails_when=none of the PRD's features are on the company roadmap any more.
     w = await world(roadmap=False)
@@ -142,6 +146,7 @@ async def test_a_cancelled_update_run_keeps_the_prd_s_earlier_scope_on_the_roadm
 
 
 async def test_a_failed_update_run_keeps_the_prd_s_earlier_scope_on_the_roadmap():
+    """A failed PRD update falls back to the scope it was meant to replace."""
     # protects=a failed update of a published PRD falls back to the scope it superseded;
     # fails_when=the PRD's features read as in no PRD yet.
     w = await world(roadmap=False)
@@ -150,6 +155,7 @@ async def test_a_failed_update_run_keeps_the_prd_s_earlier_scope_on_the_roadmap(
 
 
 async def test_a_live_update_run_s_scope_replaces_the_one_it_superseded():
+    """A live update run's scope replaces the one it supersedes, not beside it."""
     # protects=the fallback is only for a stopped run; fails_when=a superseded scope still
     # shows beside the live run's newer one.
     w = await world(roadmap=False)
@@ -161,6 +167,7 @@ async def test_a_live_update_run_s_scope_replaces_the_one_it_superseded():
 
 
 async def test_a_feature_with_no_title_in_no_prd_is_named_in_words_with_its_key():
+    """A nameless Ground Truth feature still reads as words plus its key."""
     # protects=a nameless Ground Truth feature reads as a name and its key; fails_when=the
     # message names it by its bare key ("usage-meter is in no PRD yet").
     w = await world(roadmap=False)
@@ -175,6 +182,7 @@ async def test_a_feature_with_no_title_in_no_prd_is_named_in_words_with_its_key(
 
 
 async def test_a_waiting_check_with_a_key_still_unknown_is_not_parsed_again(monkeypatch):
+    """A waiting check with the same unknown key parses its brief only once."""
     # protects=a stop read again and again with the same unknown key parses its briefs
     # once; fails_when=every read parses the file again.
     w = await world()
@@ -221,6 +229,7 @@ async def _safety_scope(s, w):
 
 
 async def test_the_trash_filter_builds_its_criteria_once(monkeypatch):
+    """The trash filter builds its query criteria once, reused on every read."""
     # protects=each read (the Inbox makes about 75) reuses the trash filter's criteria;
     # fails_when=every SELECT builds one loader criteria per trashable class again.
     from oracle.trash import filter as trash_filter

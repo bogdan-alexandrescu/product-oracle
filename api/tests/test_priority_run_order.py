@@ -218,6 +218,7 @@ CLEAN_ABCD = order(("a", 1), ("b", 2), ("c", 3), ("d", 4))
 
 
 def test_check_a_clean_order_has_no_problem():
+    """A clean priority order passes its check with every rank matching its position."""
     out = run_order.check_order(CLEAN_ABCD, known=known())
     assert out.problems == [] and out.blocking == 0
     assert out.method == "goal_weighted"
@@ -238,12 +239,14 @@ def test_check_a_clean_order_has_no_problem():
     ],
 )
 def test_check_unreadable_yaml(text):
+    """Unreadable or malformed priority YAML is a blocking problem."""
     out = run_order.check_order(text, known=known())
     assert [c for c, _, _ in codes(out)][:1] == ["unreadable_yaml"]
     assert out.blocking >= 1
 
 
 def test_check_wrong_version():
+    """A priority order with the wrong version number is a blocking problem."""
     out = run_order.check_order(
         order(("a", 1), ("b", 2), ("c", 3), ("d", 4), version=2), known=known()
     )
@@ -251,11 +254,13 @@ def test_check_wrong_version():
 
 
 def test_check_unknown_method():
+    """A priority order naming an unknown scoring method is a blocking problem."""
     out = run_order.check_order(CLEAN_ABCD.replace("goal_weighted", "gut_feel"), known=known())
     assert codes(out) == [("unknown_method", True, None)]
 
 
 def test_check_duplicate_key():
+    """A feature key listed twice in the order is a blocking problem, named by key."""
     out = run_order.check_order(
         order(("a", 1), ("b", 2), ("c", 3), ("d", 4), ("a", 5)), known=known()
     )
@@ -263,17 +268,20 @@ def test_check_duplicate_key():
 
 
 def test_check_duplicate_rank():
+    """Two features sharing a rank is a blocking problem, named by the later key."""
     out = run_order.check_order(order(("a", 1), ("b", 2), ("c", 2), ("d", 3)), known=known())
     assert codes(out) == [("duplicate_rank", True, "c")]
 
 
 def test_check_rank_gap():
+    """A gap in the rank sequence is a blocking problem that names the missing rank."""
     out = run_order.check_order(order(("a", 1), ("b", 2), ("c", 3), ("d", 5)), known=known())
     assert codes(out) == [("rank_gap", True, None)]
     assert "4" in out.problems[0]["message"]
 
 
 def test_check_unknown_feature():
+    """An order naming a feature Oracle does not know is a blocking problem."""
     text = order(("a", 1), ("b", 2), ("c", 3), ("d", 4), ("ghost", 5))
     out = run_order.check_order(text, known=known())
     assert codes(out) == [("unknown_feature", True, "ghost")]
@@ -290,16 +298,19 @@ def test_check_a_scope_feature_not_in_the_baseline_is_known():
 
 
 def test_check_not_in_scope_and_missing_feature():
+    """A feature outside the baseline scope, or missing from it, is its own problem."""
     out = run_order.check_order(order(("a", 1), ("b", 2), ("d", 3)), known=known(scope="abc"))
     assert codes(out) == [("not_in_scope", True, "d"), ("missing_feature", True, "c")]
 
 
 def test_check_no_scope_skips_the_scope_codes():
+    """Without a baseline scope, the scope checks are skipped rather than failing."""
     out = run_order.check_order(order(("a", 1), ("b", 2)), known=known())
     assert out.problems == []
 
 
 def test_check_before_prerequisite_names_both_features():
+    """A feature ranked above what it depends on is flagged, naming both by name."""
     out = run_order.check_order(
         order(("b", 1), ("a", 2), ("c", 3), ("d", 4)), known=known(depends_on={"b": ["a"]})
     )
@@ -310,6 +321,7 @@ def test_check_before_prerequisite_names_both_features():
 
 
 def test_check_before_prerequisite_names_codes_with_their_names():
+    """When keys are codes, the before-prerequisite message pairs each with its name."""
     # detailed-b 2: a code-shaped key reads with its feature's name, never bare ("F-2").
     keys = ("F-2", "F-5", "F-7")
     out = run_order.check_order(
@@ -332,6 +344,7 @@ def test_check_before_prerequisite_names_codes_with_their_names():
 
 
 def test_check_differs_from_live_and_no_goal_are_advisory():
+    """An order differing from the live ranking, or lacking a goal, is only advisory."""
     live = [
         live_row("a", 1),
         live_row("b", 2),
@@ -391,6 +404,7 @@ def test_live_rank_is_restricted_to_the_ranked_features():
 
 
 async def test_segment_end_stores_a_proposed_snapshot(client, owner, runtime):  # noqa: F811
+    """Finishing the priority segment stores a snapshot tied to its checkpoint."""
     tenant_id, auth = owner
     text = ORDER.replace("method: goal_weighted", "method: rice")
     run = await at_priority(client, owner, runtime, text)
@@ -428,6 +442,7 @@ async def test_segment_end_stores_a_proposed_snapshot(client, owner, runtime):  
 
 
 async def test_priority_approve_saves(client, owner, runtime):  # noqa: F811
+    """Approving the priority checkpoint saves its snapshot and records an audit event."""
     tenant_id, auth = owner
     run = await at_priority(client, owner, runtime)
     approver = await as_user(tenant_id, "approver")
@@ -447,6 +462,7 @@ async def test_approve_refused_with_blocking_then_request_changes_discards(
     owner,  # noqa: F811
     runtime,  # noqa: F811
 ):
+    """A blocking problem refuses approval everywhere; requesting changes discards it."""
     tenant_id, auth = owner
     run = await at_priority(client, owner, runtime, BLOCKING)
     cp = pending(run)
@@ -476,6 +492,7 @@ async def test_approve_refused_with_blocking_then_request_changes_discards(
 
 
 async def test_a_rerun_proposal_discards_the_earlier_one(client, owner):  # noqa: F811
+    """Re-proposing a priority order discards the earlier one, never duplicating."""
     tenant_id, _ = owner
     await seed_baseline(tenant_id)
     async with tenant_session(tenant_id) as s:
@@ -503,6 +520,7 @@ async def test_a_rerun_proposal_discards_the_earlier_one(client, owner):  # noqa
 
 
 async def test_stop_off_saves_a_clean_order_by_oracle(client, owner, runtime):  # noqa: F811
+    """Stopping off the checkpoint auto-saves a clean order as Oracle's decision."""
     tenant_id, auth = owner
     run = await at_priority(client, owner, runtime, checkpoints={"priority_order": False})
     assert run["status"] in ("running", "awaiting_checkpoint") and run["error"] is None
@@ -516,6 +534,7 @@ async def test_stop_off_saves_a_clean_order_by_oracle(client, owner, runtime):  
 
 
 async def test_stop_off_fails_the_run_on_a_blocking_problem(client, owner, runtime):  # noqa: F811
+    """Stopping off the checkpoint still fails the run on a blocking problem."""
     tenant_id, auth = owner
     run = await at_priority(client, owner, runtime, BLOCKING, checkpoints={"priority_order": False})
     assert run["status"] == "failed"
@@ -525,6 +544,7 @@ async def test_stop_off_fails_the_run_on_a_blocking_problem(client, owner, runti
 
 
 async def test_the_draft_import_fills_the_document(client, owner, runtime):  # noqa: F811
+    """An approved priority snapshot is linked to the PRD document it filled in."""
     tenant_id, auth = owner
     run = await at_priority(client, owner, runtime)
     run = await decide(client, auth, run)
@@ -591,6 +611,7 @@ async def add_snapshot(
 
 
 async def test_list_and_read_show_saved_unless_asked(client, owner):  # noqa: F811
+    """Priority snapshots list and read as saved by default, others need asking."""
     tenant_id, auth = owner
     saved = await add_snapshot(tenant_id, "saved")
     proposed = await add_snapshot(tenant_id, "proposed", minutes=1)
@@ -616,6 +637,7 @@ async def test_list_and_read_show_saved_unless_asked(client, owner):  # noqa: F8
 
 
 async def test_compare_rows_follow_the_check_and_the_live_ranking(client, owner, runtime):  # noqa: F811
+    """Comparing a snapshot shows each feature's run rank, live rank and delta."""
     tenant_id, auth = owner
     run = await at_priority(client, owner, runtime, BLOCKING)
     (snap,) = await snapshots(tenant_id, run["id"])
@@ -646,6 +668,7 @@ async def test_compare_rows_follow_the_check_and_the_live_ranking(client, owner,
 
 
 async def test_compare_is_404_for_an_unknown_snapshot(client, owner):  # noqa: F811
+    """Comparing an unknown priority snapshot returns 404."""
     _, auth = owner
     resp = await client.get(f"/v1/priorities/snapshots/{uuid.uuid4()}/compare", headers=auth)
     assert resp.status_code == 404
@@ -659,6 +682,7 @@ async def roadmap_prompt(client, auth, runtime) -> str:  # noqa: F811
 
 
 async def test_roadmap_reads_only_saved(client, owner, runtime):  # noqa: F811
+    """The roadmap prompt uses only a saved priority order, never proposed."""
     from tests.test_roadmap import approved_prd
     from tests.test_roadmap import seed_baseline as seed_roadmap_baseline
 
@@ -680,6 +704,7 @@ async def test_roadmap_reads_only_saved(client, owner, runtime):  # noqa: F811
 
 
 async def test_roadmap_reads_this_prds_approved_order(client, owner, runtime):  # noqa: F811
+    """A PRD's roadmap prompt uses that PRD's own approved order, not another's."""
     from tests.test_roadmap import PRD, approved_prd
     from tests.test_roadmap import seed_baseline as seed_roadmap_baseline
 
@@ -773,6 +798,7 @@ order:
 
 
 async def test_a_new_feature_is_scored_and_ranked_with_the_rest(client, owner, runtime):  # noqa: F811
+    """A feature new to a PRD is scored and ranked alongside the rest, marked as new."""
     tenant_id, auth = owner
     run = await at_priority(client, owner, runtime, ORDER_NEW)
     (snap,) = await snapshots(tenant_id, run["id"])
@@ -824,6 +850,7 @@ async def test_a_new_feature_keeps_what_it_depends_on(client, owner, runtime):  
 
 
 async def test_a_new_feature_ranked_above_what_it_depends_on_is_blocking(client, owner, runtime):  # noqa: F811
+    """A new feature ranked above its own dependency is still a blocking problem."""
     tenant_id, _ = owner
     above = ORDER_NEW.replace("rank: 1\n", "rank: X\n").replace("rank: 2\n", "rank: 1\n")
     above = above.replace("rank: X\n", "rank: 2\n")
@@ -871,6 +898,7 @@ async def test_two_open_creates_of_one_new_feature_approve_once(client, owner, r
 
 
 async def test_approving_the_order_adds_its_new_features_as_proposed(client, owner, runtime):  # noqa: F811
+    """Approving an order with a new feature creates that feature as proposed."""
     tenant_id, auth = owner
     run = await at_priority(client, owner, runtime, ORDER_NEW)
     approver = await as_user(tenant_id, "approver")
@@ -963,6 +991,7 @@ NEW_ONE = order(("a", 1), ("b", 2), ("new-one", 3))
     ids=["no-goal", "does-not-serve"],
 )
 def test_check_a_new_feature_naming_no_goal_is_blocking(goals):
+    """A new feature that names no goal it serves is a blocking problem."""
     out = run_order.check_order(NEW_ONE, known=new_known(goals))
     assert codes(out) == [("new_feature_no_goal", True, "new-one")]
     assert out.problems[0]["message"] == (
@@ -980,12 +1009,14 @@ def test_check_a_new_feature_naming_no_goal_is_blocking(goals):
     ids=["feature-set-key-alone", "row-goal-alone", "row-goal-and-contribution"],
 )
 def test_check_a_new_feature_naming_its_goal_is_clean(goals, extra):
+    """A new feature naming its served goal, by feature set or row, raises no problem."""
     text = NEW_ONE + extra
     out = run_order.check_order(text, known=new_known(goals))
     assert out.problems == []
 
 
 def test_check_a_row_goal_that_does_not_serve_is_no_goal():
+    """A row's goal link with zero contribution counts as naming no goal at all."""
     text = NEW_ONE + "    goal: activation\n    contribution: 0\n"
     out = run_order.check_order(text, known=new_known([]))
     assert codes(out) == [("new_feature_no_goal", True, "new-one")]
@@ -1002,6 +1033,7 @@ def test_check_a_row_goal_that_does_not_serve_is_no_goal():
     ids=["row-key-alone", "row-with-contribution", "feature-set"],
 )
 def test_check_a_new_feature_naming_an_unknown_goal_is_blocking(goals, extra):
+    """A new feature naming a goal that does not exist is a blocking problem."""
     out = run_order.check_order(NEW_ONE + extra, known=new_known(goals))
     assert codes(out) == [("unknown_goal", True, "new-one")]
     # No goal of that key was ever named: never its key (follow-up to PR 1244).
@@ -1011,6 +1043,7 @@ def test_check_a_new_feature_naming_an_unknown_goal_is_blocking(goals, extra):
 
 
 def test_check_an_unknown_goal_beside_a_known_one_is_still_blocking():
+    """One unknown goal still blocks even when another named goal is valid."""
     text = NEW_ONE + "    goal: no-such-goal\n"
     out = run_order.check_order(text, known=new_known([{"key": "activation", "contribution": 2}]))
     assert codes(out) == [("unknown_goal", True, "new-one")]
@@ -1029,6 +1062,7 @@ def test_check_an_unknown_goal_beside_a_known_one_is_still_blocking():
     ids=["row-zero", "feature-set-zero", "feature-set-zero-row-two"],
 )
 def test_check_a_contribution_of_0_from_either_source_wins(goals, extra):
+    """A zero contribution from either source rules out serving that goal."""
     out = run_order.check_order(NEW_ONE + extra, known=new_known(goals))
     assert codes(out) == [("new_feature_no_goal", True, "new-one")]
 
@@ -1074,6 +1108,7 @@ async def test_a_goal_named_by_key_alone_is_proposed_with_an_assumed_contributio
 
 
 async def test_a_row_goal_with_no_contribution_is_proposed_as_assumed(client, owner, runtime):  # noqa: F811
+    """A new feature's goal link with no contribution is proposed with it assumed."""
     tenant_id, _ = owner
     """goals: [] in the feature set, the row naming its goal with no contribution: the link
     is proposed, its contribution assumed; a feature-set contribution would win over it."""

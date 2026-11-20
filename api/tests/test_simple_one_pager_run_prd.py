@@ -146,6 +146,7 @@ async def pdf(ctx, who: str = "viewer") -> str:
 
 
 async def test_quick_read_never_shows_a_citation_token(client):
+    """A citation token never reaches a reader, mid-write or finished, in page or PDF."""
     ctx = await run_world(client)
     view = await get(client, ctx, "owner", "photo-sorting")
     assert view["built_by"] == "extract"
@@ -195,6 +196,7 @@ async def test_quick_read_never_shows_a_citation_token(client):
 
 
 async def test_only_a_cut_citation_is_dropped():
+    """Only a cut-off citation marker is dropped; the PRD's own brackets stay."""
     # A cut one ends in "…" or holds its ":"; text that only ends in "[c" is the PRD's own.
     assert checks.resolved("sorting time [c…") == "sorting time…"
     assert checks.resolved("sorting time [c:c4…") == "sorting time…"
@@ -204,6 +206,7 @@ async def test_only_a_cut_citation_is_dropped():
 
 
 async def test_stored_quick_read_with_tokens_reads_clean(client):
+    """Old stored lines with citation tokens still read clean for every role."""
     ctx = await run_world(client)
     await get(client, ctx, "owner", "photo-sorting")
     async with tenant_session(ctx.tenant_id) as s:
@@ -235,6 +238,7 @@ async def test_stored_quick_read_with_tokens_reads_clean(client):
 
 
 async def test_who_has_it_from_labelled_lines(client):
+    """Who has it names the audience from its own words, never a row's label."""
     ctx = await run_world(client)
     view = await get(client, ctx, "owner", "photo-sorting")
     assert block(view, "problem")["who"] == (
@@ -258,6 +262,7 @@ async def test_who_has_it_from_labelled_lines(client):
 
 
 async def test_measure_from_its_source_never_ids(client):
+    """An outcome's measure comes only from the PRD's words, never a citation."""
     ctx = await run_world(client)
     view = await get(client, ctx, "owner", "photo-sorting")
     sorted_, find, renamed = block(view, "outcomes")["lines"]
@@ -273,6 +278,7 @@ async def test_measure_from_its_source_never_ids(client):
 
 
 async def test_code_named_right_after_it(client):
+    """A feature code's name is only taken from right after it, not later text."""
     ctx = await run_world(client)
     view = await get(client, ctx, "owner", "photo-sorting")
     codes = [x for x in view["needs_look"] if x["kind"] == "code"]

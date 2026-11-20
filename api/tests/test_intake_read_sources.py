@@ -136,6 +136,7 @@ def _quiet(payload):
 
 
 async def test_every_uploaded_document_is_read_with_its_relevant_sections(client, fake):
+    """A read scans a whole uploaded document for sections, even past its first part."""
     _, _, payload, _ = await _read(client, fake, _quiet)
     prd = _source(payload, "Quote builder v1 PRD.md")
     # The engines are described past the first 1,500 characters: the read holds them.
@@ -149,6 +150,7 @@ async def test_every_uploaded_document_is_read_with_its_relevant_sections(client
 
 
 async def test_the_baseline_features_the_brief_names_are_read_with_their_evidence(client, fake):
+    """A read pulls in the baseline features the brief names, with their own evidence."""
     _, _, payload, _ = await _read(client, fake, _quiet)
     features = {f["key"]: f for f in payload["untrusted_data"]["features"]}
     # Confirmed, each joined the Ground Truth with a code (its slug stays an alias).
@@ -189,6 +191,7 @@ def _calls_them_missing(payload):
 
 
 async def test_the_read_cites_them_and_never_calls_them_missing(client, fake):
+    """A described feature or section is never called missing by a read's new gaps."""
     ctx, intake_id, _, prd = await _read(client, fake, _calls_them_missing)
     after = await summary(client, ctx, intake_id, who="commenter")
     statements = [g["statement"] for g in after["gaps"]]
@@ -209,6 +212,7 @@ async def test_the_read_cites_them_and_never_calls_them_missing(client, fake):
 
 
 def test_described_check_reads_features_and_sections():
+    """The described check matches a gap's words to known feature and section names."""
     features = [{"key": "pricing-engine", "title": "Pricing engine", "description": "x"}]
     sections = ["Pricing engine", "Routing engine"]
     assert intake_job.described(MISSING, features, sections)
@@ -219,6 +223,7 @@ def test_described_check_reads_features_and_sections():
 
 
 def test_described_drops_only_a_gap_about_the_feature_or_section_itself():
+    """A gap asking more than a feature or heading name stays open, not dropped."""
     # An old PRD carries headings for goals, metrics, risks and timeline: a gap that asks
     # for more than the feature or the heading names is still open.
     features = [{"key": "pricing-engine", "title": "Pricing engine", "description": "x"}]
@@ -237,6 +242,7 @@ def test_described_drops_only_a_gap_about_the_feature_or_section_itself():
 
 
 def test_the_tasks_say_read_everything_before_calling_it_missing():
+    """The draft and critic prompts require reading every source before flagging gaps."""
     task = flows.INTAKE_ANALYSIS_TASK
     assert "features" in task and "not described" in task
     ctx = flows.PromptContext(
@@ -254,6 +260,7 @@ def test_the_tasks_say_read_everything_before_calling_it_missing():
 
 
 def test_a_long_upload_is_read_by_the_sections_that_speak_to_the_brief():
+    """A long document is read only by the sections matching the brief's words, capped."""
     wanted = {"prici", "engin", "routi"}
     got = intake_job.read_of(OLD_PRD, wanted, 600)
     assert got["whole"] is False
@@ -298,6 +305,7 @@ async def test_a_prd_draft_that_calls_a_described_feature_missing_goes_back(
     fake,
     runtime,  # noqa: F811
 ):
+    """A PRD draft that calls a described feature missing is sent back for the mistake."""
     ctx, intake_id, _, _ = await _read(client, fake, _quiet)
     out = await _imported(
         client, ctx, intake_id,
@@ -314,6 +322,7 @@ async def test_a_prd_draft_that_asks_for_more_than_a_feature_is_kept(
     fake,
     runtime,  # noqa: F811
 ):
+    """A draft only asking for more detail than a feature gives is kept, not rejected."""
     ctx, intake_id, _, _ = await _read(client, fake, _quiet)
     out = await _imported(
         client, ctx, intake_id, _prd("Refund rules for the pricing engine are not described.")

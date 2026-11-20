@@ -46,6 +46,7 @@ GHOST = CLEAN.replace(
 
 
 def test_the_registry_holds_every_merged_kind():
+    """The gate registry covers every merged checkpoint kind and blocks on each."""
     assert {"roadmap_items", "feature_set", "priority_order"} <= set(gate.BLOCKING_SOURCES)
     problem = {"code": "depends_on_excluded", "blocking": True, "feature": "saved-addresses"}
     cp = Checkpoint(
@@ -69,6 +70,7 @@ def test_the_registry_holds_every_merged_kind():
 
 
 async def test_a_feature_set_problem_is_refused_through_the_gate(client, owner, runtime):  # noqa: F811
+    """Approving a checkpoint with an unresolved feature-set problem is refused."""
     _, auth = owner
     run = await at_feature_set(client, owner, runtime, BLOCKING)
     cp = pending(run)
@@ -91,6 +93,7 @@ async def test_a_feature_set_problem_is_refused_through_the_gate(client, owner, 
 
 
 async def test_a_staged_waiver_opens_the_feature_set_gate(client, owner, runtime):  # noqa: F811
+    """An owner's waiver of a feature-set problem opens the gate for approval."""
     tenant_id, auth = owner
     run = await at_feature_set(client, owner, runtime, BLOCKING)
     cp = pending(run)
@@ -116,6 +119,7 @@ async def test_a_staged_waiver_opens_the_feature_set_gate(client, owner, runtime
 
 
 async def test_an_unknown_feature_is_never_waived(client, owner, runtime):  # noqa: F811
+    """A waiver naming a feature Oracle does not know is rejected, not accepted."""
     _, auth = owner
     run = await at_feature_set(client, owner, runtime, GHOST)
     cp = pending(run)
@@ -136,6 +140,7 @@ async def test_an_unknown_feature_is_never_waived(client, owner, runtime):  # no
 
 
 async def test_a_priority_order_problem_is_refused_through_the_gate(client, owner, runtime):  # noqa: F811
+    """A priority-order problem blocks approval and cannot be waived away."""
     _, auth = owner
     run = await at_priority(client, owner, runtime, ORDER_BLOCKING)
     cp = pending(run)

@@ -74,6 +74,7 @@ def scratch_db():
 
 
 def test_chains_on_mains_head_and_is_the_only_head():
+    """The metrics migration chains onto main's head and is the only head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
@@ -88,6 +89,7 @@ def _posthog(t: uuid.UUID, by: uuid.UUID) -> None:
 
 
 def test_upgrade_and_downgrade_on_a_seeded_database(scratch_db):
+    """The metrics migration adds its tables and columns and removes them cleanly."""
     cfg = _cfg()
     upgrade(cfg, PREVIOUS)
     t, other, owner, metric = (uuid.uuid4() for _ in range(4))
@@ -135,6 +137,7 @@ def _flows() -> list[str]:
 # lost, or a run in use breaks the downgrade; no_claim=the run itself
 # (tests/test_metrics_review.py).
 def test_the_metrics_variance_flow_comes_and_goes(scratch_db):
+    """This migration adds the metrics-variance flow, removed alone on downgrade."""
     cfg = _cfg()
     upgrade(cfg, PREVIOUS)
     assert "metrics_variance" not in _flows()

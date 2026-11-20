@@ -59,6 +59,7 @@ def unplaced(body: dict) -> dict[str, str | None]:
 
 
 async def test_unplaced_names_the_goal_it_serves(client):
+    """An unplaced feature still names the goal it serves, for every reader."""
     ctx, ids = await world()
     assert unplaced(await read(client, ctx))[ids["f3"]] is None
     async with tenant_session(ctx.tenant_id) as s:
@@ -71,6 +72,7 @@ async def test_unplaced_names_the_goal_it_serves(client):
 
 
 async def test_detach_a_feature_from_a_milestone(client):
+    """Detaching a feature frees it to the unplaced list and drops its stored link."""
     ctx, ids = await world()
     body = {"feature": ids["f2"], "milestone": ids["m2"]}
     for role in ("commenter", "viewer"):
@@ -103,6 +105,7 @@ async def trash_entries(client, ctx) -> list[dict]:
 
 
 async def test_a_milestone_goes_to_trash_and_back(client):
+    """A deleted milestone goes to trash and unplaces its features; restore undoes it."""
     ctx, ids = await world()
     r = await client.delete(MILESTONE.format(ids["m1"]), headers=ctx.as_("owner"))
     assert r.status_code == 204, r.text
@@ -123,6 +126,7 @@ async def test_a_milestone_goes_to_trash_and_back(client):
 
 
 async def test_undo_of_a_milestone_delete_empties_its_trash_entry(client):
+    """Restoring a deleted milestone clears its trash entry and returns it to the map."""
     ctx, ids = await world()
     r = await client.delete(MILESTONE.format(ids["m2"]), headers=ctx.as_("owner"))
     assert r.status_code == 204, r.text
@@ -134,6 +138,7 @@ async def test_undo_of_a_milestone_delete_empties_its_trash_entry(client):
 
 
 async def test_purging_a_milestone_deletes_it(client):
+    """Purging a milestone's trash entry deletes it and its feature links for good."""
     ctx, ids = await world()
     r = await client.delete(MILESTONE.format(ids["m3"]), headers=ctx.as_("owner"))
     assert r.status_code == 204, r.text
@@ -151,6 +156,7 @@ async def test_purging_a_milestone_deletes_it(client):
 
 
 async def test_a_milestone_delete_names_who_deleted_it(client):
+    """A deleted milestone records who deleted it."""
     ctx, ids = await world()
     r = await client.delete(MILESTONE.format(ids["m1"]), headers=ctx.as_("owner"))
     assert r.status_code == 204, r.text
@@ -161,6 +167,7 @@ async def test_a_milestone_delete_names_who_deleted_it(client):
 
 
 async def test_a_milestone_of_a_goal_in_trash_stays_in_trash(client):
+    """A milestone cannot be restored while its own goal is still in trash."""
     ctx, ids = await world()
     r = await client.delete(MILESTONE.format(ids["m3"]), headers=ctx.as_("owner"))
     assert r.status_code == 204, r.text
@@ -184,6 +191,7 @@ async def test_a_milestone_of_a_goal_in_trash_stays_in_trash(client):
 
 
 async def test_a_commenters_milestone_trash_accepted_goes_to_trash(client):
+    """A commenter's accepted ask to remove a milestone sends it to trash, as a delete."""
     # protects=a commenter's Move to Trash on the ladder is a suggestion (edit_goal_milestone,
     # after.milestone null); the decider's accept sends it to Settings > Trash like their own
     # delete, so Restore brings it back; fails_when=the accept only hides it, out of Trash.

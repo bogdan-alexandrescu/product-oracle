@@ -28,6 +28,7 @@ from tests.test_simple_meetings_walk import ritual
 
 
 async def test_held_review_leaves_upcoming(client):
+    """Ending a meeting marks its review held and schedules the next one for everyone."""
     w = await meeting_world()
     ritual_id, due = await ritual(w, owner="owner")
     m = await start(client, w, "owner", ritual_id=ritual_id, due_at=due.isoformat())
@@ -53,6 +54,7 @@ async def test_held_review_leaves_upcoming(client):
 
 
 async def test_held_by_a_meeting_is_audited_and_recordable(client):
+    """Only an owner can mark a review held by hand, and it is logged exactly once."""
     w = await meeting_world()
     ritual_id, due = await ritual(w, owner="owner")
     m = await start(client, w, "owner", ritual_id=ritual_id, due_at=due.isoformat())

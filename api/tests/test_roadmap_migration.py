@@ -66,6 +66,7 @@ def scratch_db():
 
 
 def test_0016_roadmap_follows_the_wave_1_head():
+    """The roadmap migration and the chain after it lead to one single alembic head."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == "0014_blockers_snapshot"
     # 0016_refinement_batch (C1e) chains on it, 0017_citation_source_oracle on that, then
@@ -93,6 +94,7 @@ def _event(tenant: uuid.UUID, subject: str) -> None:
 
 
 def test_upgrade_adds_tables_and_the_subject_and_downgrade_reverses(scratch_db):
+    """Upgrading adds roadmap tables and a basis-only date rule; downgrading undoes it."""
     cfg = _cfg()
     upgrade(cfg, "0014_blockers_snapshot")
     tenant, doc = uuid.uuid4(), uuid.uuid4()
@@ -225,6 +227,7 @@ def test_the_migration_imports_no_application_code():
 
 
 def test_the_model_lists_every_subject_the_migrated_check_allows(scratch_db):
+    """The database's allowed change subjects match the model's list exactly."""
     from oracle.v2.models import CHANGE_SUBJECTS
 
     upgrade(_cfg(), "head")

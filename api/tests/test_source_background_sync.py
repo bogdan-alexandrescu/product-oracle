@@ -75,6 +75,7 @@ async def _due(tenant_id, now=None) -> background.Synced:
 
 
 async def test_the_ticker_syncs_a_source_never_synced(a, tenant_id, slack):
+    """A source never synced before is picked up by the background ticker."""
     sid = await _source(a, tenant_id)
     out = ticker.TickerOut()
     await ticker._tick_company(tenant_id, out, ticker._Failures(out))
@@ -85,6 +86,7 @@ async def test_the_ticker_syncs_a_source_never_synced(a, tenant_id, slack):
 
 
 async def test_a_source_synced_within_the_hour_waits(a, tenant_id, slack):
+    """A source synced within the last hour is skipped until an hour passes."""
     sid = await _source(a, tenant_id)
     assert (await _due(tenant_id)).synced == 1
     calls = _syncs(slack)
@@ -96,6 +98,7 @@ async def test_a_source_synced_within_the_hour_waits(a, tenant_id, slack):
 
 
 async def test_paused_uploads_and_disconnected_sources_are_left_alone(a, tenant_id, slack):
+    """Paused, upload and disconnected sources are left out of background sync."""
     paused = await _source(a, tenant_id, "Paused chat")
     assert (await a.post(f"/v1/sources/{paused}/pause")).status_code == 200
     await _source(a, tenant_id, "Files", kind="upload")
@@ -119,6 +122,7 @@ async def test_paused_uploads_and_disconnected_sources_are_left_alone(a, tenant_
 
 
 async def test_a_tick_is_bounded_stalest_first_and_one_per_connection(a, tenant_id, slack):
+    """A background tick syncs a bounded set, stalest first, once per connection."""
     now = datetime.now(UTC)
     ids = []
     for i in range(background.SOURCES_PER_TICK + 2):
@@ -141,6 +145,7 @@ async def test_a_tick_is_bounded_stalest_first_and_one_per_connection(a, tenant_
 
 
 async def test_a_failed_sync_backs_off_then_recovers(a, tenant_id, slack):
+    """A failing sync backs off with growing delays, then recovers once fixed."""
     sid = await _source(a, tenant_id)
     slack.fail = {0: ConnectorError("upstream down")}
     now = datetime.now(UTC)
@@ -169,6 +174,7 @@ async def test_a_failed_sync_backs_off_then_recovers(a, tenant_id, slack):
 
 
 async def test_the_backoff_stops_at_a_day(a, tenant_id, slack):
+    """The backoff after repeated failures never grows past one day."""
     sid = await _source(a, tenant_id)
     slack.fail = {0: ConnectorError("upstream down")}
     await _set(tenant_id, sid, sync_failures=9)
@@ -178,6 +184,7 @@ async def test_the_backoff_stops_at_a_day(a, tenant_id, slack):
 
 
 async def test_a_rate_limit_waits_for_the_provider(a, tenant_id, slack):
+    """A rate limit makes the next sync wait exactly as long as asked."""
     sid = await _source(a, tenant_id)
     slack.fail = {0: ConnectorRateLimited(retry_after=7200)}
     now = datetime.now(UTC)
@@ -189,6 +196,7 @@ async def test_a_rate_limit_waits_for_the_provider(a, tenant_id, slack):
 
 
 async def test_a_short_rate_limit_still_waits_the_minimum(a, tenant_id, slack):
+    """A short rate limit wait is still bumped to the configured minimum."""
     sid = await _source(a, tenant_id)
     slack.fail = {0: ConnectorRateLimited(retry_after=5)}
     now = datetime.now(UTC)
@@ -197,6 +205,7 @@ async def test_a_short_rate_limit_still_waits_the_minimum(a, tenant_id, slack):
 
 
 async def test_a_manual_sync_clears_the_backoff(a, tenant_id, slack):
+    """Triggering a sync by hand clears any backoff a source had built up."""
     sid = await _source(a, tenant_id)
     await _set(tenant_id, sid, sync_failures=3, next_sync_at=datetime.now(UTC) + timedelta(hours=8))
     resp = await a.post(f"/v1/sources/{sid}/sync")
@@ -206,6 +215,7 @@ async def test_a_manual_sync_clears_the_backoff(a, tenant_id, slack):
 
 
 async def test_the_deadline_stops_new_syncs(a, tenant_id, slack):
+    """Background sync stops starting new syncs once its time budget runs out."""
     await _source(a, tenant_id)
     async with tenant_session(tenant_id) as s:
         result = await background.sync_due(s, now=datetime.now(UTC), deadline=0.0)
@@ -237,6 +247,7 @@ class _BadChannel(FakeConnector):
 async def test_one_failing_source_does_not_stop_the_others(
     a, tenant_id, monkeypatch, error, outcome
 ):
+    """One source failing in a tick does not stop the other sources syncing."""
     service.load_connectors()
     fake = _BadChannel(kind="slack", pages=[[message("m1", "one")]])
     fake.error = error
@@ -268,6 +279,7 @@ async def test_one_failing_source_does_not_stop_the_others(
 
 
 async def test_a_sync_that_cannot_start_backs_off_and_says_why(a, tenant_id, slack, monkeypatch):
+    """A source whose connector vanished after being picked backs off and logs why."""
     sid = await _source(a, tenant_id)
     # The connector went away after the source was picked.
     monkeypatch.setattr(service, "connector_for", lambda kind: None)
@@ -281,6 +293,7 @@ async def test_a_sync_that_cannot_start_backs_off_and_says_why(a, tenant_id, sla
 
 
 async def test_a_source_paused_after_it_was_picked_is_skipped(a, tenant_id, slack, monkeypatch):
+    """A source paused after being picked for a tick is skipped, not synced."""
     sid = await _source(a, tenant_id)
     picked = background.due
 

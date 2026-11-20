@@ -25,6 +25,7 @@ def _close(a: float, b: float) -> bool:
 
 
 async def test_evidence_from_own_item_copies_and_stays_private(client, ctx):
+    """Evidence cited from a person's own item copies its text; the item stays private."""
     feat = await entity(client, ctx, type="feature", key="guided-setup")
     item_id = await make_item(ctx, "owner", content="x" * 900)
 
@@ -71,6 +72,7 @@ async def test_evidence_from_own_item_copies_and_stays_private(client, ctx):
 
 
 async def test_free_standing_evidence_and_detach(client, ctx):
+    """Evidence can stand alone, needs a field, and only an approver may delete it."""
     feat = await entity(client, ctx, type="feature", key="guided-setup")
     resp = await client.post(
         f"{B}/entities/{feat['id']}/evidence", json={}, headers=ctx.as_("owner")
@@ -116,6 +118,7 @@ async def test_detach_keeps_the_reason_in_the_audit_log(client, ctx):
 
 
 async def test_scoring_factors_and_aggregate(client, ctx):
+    """Evidence counts a goal's contribution only once that goal is confirmed."""
     goal = await entity(client, ctx, type="goal", key="activation")
     feat = await entity(client, ctx, type="feature", key="guided-setup")
     await edge(client, ctx, feat, goal, "supports", attrs={"contribution": 2})
@@ -187,6 +190,7 @@ async def test_scoring_factors_and_aggregate(client, ctx):
 
 
 async def test_goal_itself_counts_three_and_edges_use_their_source(client, ctx):
+    """A goal's own evidence always scores full credit; an edge follows its own weight."""
     goal = await entity(client, ctx, type="goal", key="activation")
     feat = await entity(client, ctx, type="feature", key="guided-setup")
     await confirm(client, ctx, goal)
@@ -210,6 +214,7 @@ async def test_goal_itself_counts_three_and_edges_use_their_source(client, ctx):
 
 
 async def test_company_weights_and_rescore(client, ctx):
+    """A company's own confidence weights take effect only after an explicit rescore."""
     feat = await entity(client, ctx, type="feature", key="guided-setup")
     item = await make_item(ctx, "owner")
     ev = await cite(client, ctx, feat, source_item_id=str(item))
@@ -238,6 +243,7 @@ async def test_company_weights_and_rescore(client, ctx):
 
 
 async def test_stored_columns(ctx, client):
+    """A new evidence row stores a valid confidence and its scoring inputs."""
     feat = await entity(client, ctx, type="feature", key="guided-setup")
     await cite(
         client,

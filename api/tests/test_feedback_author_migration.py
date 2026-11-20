@@ -55,11 +55,13 @@ def scratch_db():
 
 
 def test_it_follows_the_prd_review_chain():
+    """This migration chains onto the prd review branch's own head, keeping one lineage."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == "0014_member_follow_up_retry"
 
 
 def test_upgrade_fills_the_author_and_downgrade_drops_it(scratch_db):
+    """Upgrading fills in who raised each feedback item; downgrading drops the column."""
     cfg = _cfg()
     upgrade(cfg, "0014_member_follow_up_retry")
     tenant, author, reviewer = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()

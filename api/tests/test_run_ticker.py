@@ -107,6 +107,7 @@ def runtime():
 
 
 async def test_a_valid_token_advances_a_waiting_run(client, ticker_on, runtime):
+    """A valid scheduler token advances a waiting run and its counts carry no ids."""
     tenant_id, auth = await seed_auth()
     run = await started(client, auth)
     assert run["segments"][0]["status"] == "running"
@@ -137,6 +138,7 @@ async def test_a_valid_token_advances_a_waiting_run(client, ticker_on, runtime):
 
 
 async def test_the_unprefixed_issuer_is_accepted(client, ticker_on):
+    """The ticker accepts Google's issuer with or without its https prefix."""
     resp = await client.post(PATH, headers=bearer(id_token(iss="accounts.google.com")))
     assert resp.status_code == 200, resp.text
 
@@ -144,6 +146,7 @@ async def test_the_unprefixed_issuer_is_accepted(client, ticker_on):
 async def test_every_company_ticks_and_one_failure_stops_none(
     client, ticker_on, runtime, monkeypatch
 ):
+    """One company's tick failing does not stop the others from ticking."""
     _, auth = await seed_auth()
     run = await started(client, auth)
     broken = await make_tenant("Broken Co")
@@ -165,6 +168,7 @@ async def test_every_company_ticks_and_one_failure_stops_none(
 
 
 async def test_run_errors_are_counted_not_shown(client, ticker_on, runtime, monkeypatch):
+    """A run tick error is counted, never shown with its secret detail."""
     _, auth = await seed_auth()
     await started(client, auth)
 
@@ -179,6 +183,7 @@ async def test_run_errors_are_counted_not_shown(client, ticker_on, runtime, monk
 
 
 async def test_companies_past_the_budget_are_deferred(client, ticker_on, monkeypatch):
+    """Companies past the time budget are deferred, not skipped or failed."""
     await make_tenant("One")
     await make_tenant("Two")
     monkeypatch.setattr(ticker, "BUDGET_SECONDS", 0)
@@ -188,6 +193,7 @@ async def test_companies_past_the_budget_are_deferred(client, ticker_on, monkeyp
 
 
 async def test_a_tick_that_overruns_is_cut_off(client, ticker_on, monkeypatch):
+    """A tick that runs past its hard limit is cut off and reports timing out."""
     await make_tenant("Slow Co")
 
     async def slow(*args):
@@ -201,6 +207,7 @@ async def test_a_tick_that_overruns_is_cut_off(client, ticker_on, monkeypatch):
 
 
 async def test_an_overlapping_tick_is_skipped(client, ticker_on):
+    """A tick that finds the lock held skips, and runs again once the lock is free."""
     async with get_engine().connect() as conn:
         held = await conn.scalar(
             text("SELECT pg_try_advisory_lock(:k)"), {"k": ticker.ADVISORY_LOCK_KEY}
@@ -258,18 +265,21 @@ REFUSALS = {
 
 @pytest.mark.parametrize("case", list(REFUSALS))
 async def test_refused(client, ticker_on, case):
+    """Every case of a bad or missing credential is refused the same way."""
     resp = await client.post(PATH, headers=REFUSALS[case]())
     assert resp.status_code == 401, resp.text
     assert resp.json() == REFUSED
 
 
 async def test_an_api_token_is_refused(client, ticker_on):
+    """An ordinary API token cannot call the scheduler's tick endpoint."""
     _, auth = await seed_auth()
     resp = await client.post(PATH, headers=auth)
     assert resp.status_code == 401 and resp.json() == REFUSED
 
 
 async def test_an_oauth_token_and_a_session_are_refused(client, ticker_on):
+    """An oauth token or a signed-in session cannot call the scheduler endpoint."""
     from tests.test_oauth import full_flow
 
     _, tokens = await full_flow(client)  # also leaves a signed-in session cookie
@@ -280,6 +290,7 @@ async def test_an_oauth_token_and_a_session_are_refused(client, ticker_on):
 
 
 async def test_the_id_token_opens_nothing_else(client, ticker_on):
+    """The scheduler's id token opens only its own route, not runs or the v1 tick."""
     await seed_auth()
     headers = bearer(id_token())
     assert (await client.get("/v1/runs", headers=headers)).status_code == 401
@@ -287,6 +298,8 @@ async def test_the_id_token_opens_nothing_else(client, ticker_on):
 
 
 async def test_certs_that_cannot_be_fetched_are_503(client, ticker_on, monkeypatch):
+    """Unreachable signing certs fail the request without leaking the raw error."""
+
     async def down() -> dict:
         raise OSError("connection refused")
 
@@ -299,6 +312,7 @@ async def test_certs_that_cannot_be_fetched_are_503(client, ticker_on, monkeypat
 
 @pytest.mark.parametrize("unset", ["ticker_audience", "ticker_service_account"])
 async def test_disabled_when_unset(client, ticker_on, monkeypatch, unset):
+    """The ticker route is off, with no cert fetch, unless both settings are set."""
     monkeypatch.setattr(get_settings(), unset, "")
     resp = await client.post(PATH, headers=bearer(id_token()))
     assert resp.status_code == 404
@@ -306,12 +320,14 @@ async def test_disabled_when_unset(client, ticker_on, monkeypatch, unset):
 
 
 async def test_disabled_by_default(client):
+    """The ticker route is off by default, with no audience or service account set."""
     settings = get_settings()
     assert settings.ticker_audience == "" and settings.ticker_service_account == ""
     assert (await client.post(PATH)).status_code == 404
 
 
 def test_not_in_openapi_nor_an_mcp_tool():
+    """The scheduler's tick route is hidden from the OpenAPI schema and MCP tools."""
     from oracle.main import app
 
     app.openapi_schema = None
@@ -320,6 +336,7 @@ def test_not_in_openapi_nor_an_mcp_tool():
 
 
 async def test_refusals_log_at_debug_only(client, ticker_on, caplog, monkeypatch):
+    """A refused scheduler call logs only at debug level, not louder."""
     # alembic's logging config (run by the test harness) disables existing loggers.
     monkeypatch.setattr(ticker.log, "disabled", False)
     caplog.set_level(logging.DEBUG, logger=ticker.__name__)
@@ -330,6 +347,7 @@ async def test_refusals_log_at_debug_only(client, ticker_on, caplog, monkeypatch
 
 
 async def test_unreachable_certs_are_fetched_once_then_backed_off(client, ticker_on, monkeypatch):
+    """Unreachable certs are fetched once, then retried only after a backoff."""
     fetched: list[int] = []
 
     async def down() -> dict:
@@ -361,6 +379,7 @@ async def test_unreachable_certs_are_fetched_once_then_backed_off(client, ticker
 
 @pytest.mark.parametrize("answer", [{"keys": []}, {"keys": [{"kid": "x", "alg": "ES256"}]}])
 async def test_certs_without_a_usable_key_back_off_too(client, ticker_on, monkeypatch, answer):
+    """Certs with no usable signing key back off the same as an unreachable fetch."""
     fetched: list[int] = []
 
     async def empty() -> dict:
@@ -377,6 +396,7 @@ async def test_certs_without_a_usable_key_back_off_too(client, ticker_on, monkey
 
 
 async def test_a_failure_after_taking_the_lock_releases_it(client, ticker_on, monkeypatch):
+    """A failure right after taking the advisory lock still releases it."""
     real_commit = AsyncConnection.commit
     commits: list[int] = []
 
@@ -442,6 +462,7 @@ async def _age_sweep(tenant_id: uuid.UUID, seconds: float) -> None:
 
 
 async def test_the_account_sweep_runs_once_per_interval(client, ticker_on, usage_polls):
+    """An account is swept once per interval, not again before it is due."""
     polls, _ = usage_polls
     tenant_id, _ = await seed_auth()
     await add_account(tenant_id, "one")
@@ -464,6 +485,7 @@ async def test_the_account_sweep_runs_once_per_interval(client, ticker_on, usage
 async def test_the_ticker_sweeps_at_most_every_five_minutes_whatever_the_setting(
     client, ticker_on, usage_polls, monkeypatch, interval
 ):
+    """The ticker sweeps at most every five minutes, whatever the setting says."""
     # 0 turns the in-process sweep off; it must not make the ticker sweep every minute.
     monkeypatch.setattr(claude_sweep.get_pool_settings(), "sweep_seconds", interval)
     polls, _ = usage_polls
@@ -483,6 +505,7 @@ async def test_the_ticker_sweeps_at_most_every_five_minutes_whatever_the_setting
 
 
 async def test_a_longer_interval_is_kept(client, ticker_on, usage_polls, monkeypatch):
+    """A sweep interval longer than the floor is kept, not shortened."""
     monkeypatch.setattr(claude_sweep.get_pool_settings(), "sweep_seconds", 900)
     tenant_id, _ = await seed_auth()
     await add_account(tenant_id, "one")
@@ -496,6 +519,7 @@ async def test_a_longer_interval_is_kept(client, ticker_on, usage_polls, monkeyp
 async def test_the_v1_tick_sweeps_only_when_due(
     client, ticker_on, usage_polls, monkeypatch, interval
 ):
+    """The v1 tick endpoint shares the same sweep lease and sweeps only when due."""
     # POST /v1/internal/tick is what `oracle tick` (and a cron running it) calls.
     monkeypatch.setattr(claude_sweep.get_pool_settings(), "sweep_seconds", interval)
     polls, _ = usage_polls
@@ -518,6 +542,7 @@ async def test_the_v1_tick_sweeps_only_when_due(
 
 
 async def test_a_429_backs_the_next_usage_poll_off(client, ticker_on, usage_polls):
+    """A rate-limited usage poll backs off until its retry time, then polls again."""
     polls, answers = usage_polls
     tenant_id, _ = await seed_auth()
     await add_account(tenant_id, "one")
@@ -548,6 +573,7 @@ async def test_a_429_backs_the_next_usage_poll_off(client, ticker_on, usage_poll
 
 @pytest.mark.parametrize("retry_after", [10**30, 10**12, -(10**30)])
 async def test_a_huge_retry_after_is_clamped(client, ticker_on, usage_polls, retry_after):
+    """An extreme retry-after value is clamped to a sane backoff time."""
     _, answers = usage_polls
     tenant_id, _ = await seed_auth()
     await add_account(tenant_id, "one")
@@ -569,6 +595,7 @@ async def _always_due(*args) -> bool:
 
 
 async def test_a_stale_due_check_does_not_sweep_again(client, ticker_on, usage_polls, monkeypatch):
+    """A due check made before another sweep took the lease does not sweep twice."""
     # The scheduled tick reads the company as due, then POST /v1/internal/tick sweeps it
     # before the scheduled tick takes the lease: the recheck under the lease stops it.
     polls, _ = usage_polls
@@ -599,6 +626,7 @@ async def test_a_stale_due_check_does_not_sweep_again(client, ticker_on, usage_p
 
 
 async def test_two_in_process_schedulers_sweep_a_company_once(usage_polls, monkeypatch):
+    """Two schedulers racing on the same company sweep it only once."""
     # Two API instances' background tasks, waking every 10 ms, every due check stale.
     monkeypatch.setattr(claude_sweep.get_pool_settings(), "sweep_seconds", 60)
     monkeypatch.setattr(claude_sweep, "is_due", _always_due)
@@ -618,6 +646,7 @@ async def test_two_in_process_schedulers_sweep_a_company_once(usage_polls, monke
 async def test_a_sweep_completed_ten_seconds_ago_blocks_the_next(
     client, ticker_on, usage_polls, monkeypatch
 ):
+    """A sweep finished moments ago blocks every other path from sweeping again."""
     polls, _ = usage_polls
     tenant_id, _ = await seed_auth()
     await add_account(tenant_id, "one")
@@ -649,6 +678,7 @@ async def test_a_sweep_completed_ten_seconds_ago_blocks_the_next(
 async def test_the_background_sweep_at_sixty_seconds_sweeps_at_most_every_five_minutes(
     usage_polls, monkeypatch
 ):
+    """A background sweep waking every minute still sweeps only every five minutes."""
     # ORACLE_CLAUDE_SWEEP_SECONDS=60: the task wakes every minute (simulated here by
     # ageing the last sweep a minute per wake), and sweeps only past the 300 s floor.
     monkeypatch.setattr(claude_sweep.get_pool_settings(), "sweep_seconds", 60)
@@ -674,6 +704,7 @@ async def test_the_background_sweep_at_sixty_seconds_sweeps_at_most_every_five_m
 
 
 async def test_no_in_process_sweep_runs_while_the_ticker_is_configured(ticker_on, monkeypatch):
+    """The in-process sweep stays off while the scheduler ticker is configured."""
     from oracle import main
 
     started: list[float] = []
@@ -699,6 +730,7 @@ async def test_no_in_process_sweep_runs_while_the_ticker_is_configured(ticker_on
 
 
 def test_the_default_model_call_fits_in_a_tick(monkeypatch):
+    """The default model call timeout fits inside the tick's hard time limit."""
     from oracle.llm.transports import LlmSettings
 
     monkeypatch.delenv("ORACLE_LLM_TIMEOUT_SECONDS", raising=False)
@@ -710,6 +742,7 @@ def test_the_default_model_call_fits_in_a_tick(monkeypatch):
 async def test_a_model_call_timeout_no_tick_can_fit_is_warned_at_startup(
     ticker_on, monkeypatch, caplog, timeout, warned
 ):
+    """Startup warns when the model timeout cannot fit inside a single tick."""
     from oracle import main
 
     async def keep_engine() -> None:
@@ -769,6 +802,7 @@ async def _jobs(tenant_id: uuid.UUID) -> list[LlmJob]:
 
 
 async def test_a_job_is_never_cut_mid_call_by_the_tick(client, ticker_on, claude, monkeypatch):
+    """A tick never cuts a job mid call; only jobs with time left are claimed."""
     tenant_id = await _backlog(client, 5)
     monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 1.0)
     monkeypatch.setattr(ticker, "HARD_LIMIT_SECONDS", 2.5)
@@ -795,6 +829,7 @@ async def test_a_job_is_never_cut_mid_call_by_the_tick(client, ticker_on, claude
 async def test_no_job_is_claimed_when_less_than_a_call_remains(
     client, ticker_on, claude, monkeypatch
 ):
+    """No job is claimed when less time remains than one model call needs."""
     tenant_id = await _backlog(client, 1)
     monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 300.0)
     out = (await client.post(PATH, headers=bearer(id_token()))).json()
@@ -806,6 +841,7 @@ async def test_no_job_is_claimed_when_less_than_a_call_remains(
 async def test_a_job_whose_calls_keep_overrunning_fails_after_its_attempts(
     client, ticker_on, claude, monkeypatch
 ):
+    """A job whose calls keep being cut fails for good after its attempts run out."""
     tenant_id = await _backlog(client, 1)
     # A call that outlives the tick's hard limit anyway (a model call past its timeout).
     monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 0.01)
@@ -890,6 +926,7 @@ class _StillTick(_TickAsyncio):
 async def test_a_job_cut_before_its_call_started_goes_back_to_the_queue(
     client, ticker_on, claude, monkeypatch
 ):
+    """A job cut while reading inputs, before its call starts, returns to the queue."""
     tenant_id = await _backlog(client, 1)
     monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 0.01)
     # The cut is fired while the job reads its inputs, not left to a short hard limit: under
@@ -928,6 +965,7 @@ async def test_a_job_cut_before_its_call_started_goes_back_to_the_queue(
 async def test_a_job_out_of_time_before_its_call_started_is_put_back_unspent(
     client, ticker_on, claude, monkeypatch
 ):
+    """A job that runs out of time before its call starts is put back unspent."""
     tenant_id = await _backlog(client, 1)
     monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 0.6)
     # The time runs out while the job reads its inputs, not left to a 1 s read against a short
@@ -964,6 +1002,7 @@ async def test_a_job_out_of_time_before_its_call_started_is_put_back_unspent(
 
 @pytest.mark.timing
 async def test_the_v1_tick_runs_jobs_only_inside_the_ticks_time_limit(client, claude, monkeypatch):
+    """The v1 tick endpoint also runs jobs only within its own time limit."""
     tenant_id = await _backlog(client, 5)
     headers = await token_with_role(tenant_id, "owner")
     monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 1.0)
@@ -985,6 +1024,7 @@ async def test_the_v1_tick_runs_jobs_only_inside_the_ticks_time_limit(client, cl
 async def test_a_job_swaps_to_no_account_it_has_no_time_left_for(
     client, ticker_on, claude, monkeypatch
 ):
+    """A job is retried on its own account, not swapped to one with too little time."""
     tenant_id = await _backlog(client, 1)
     spare = await add_account(tenant_id, "spare", windows={"five_hour": window(0.3)})
     monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 1.0)
@@ -1013,6 +1053,7 @@ async def test_a_job_swaps_to_no_account_it_has_no_time_left_for(
 
 
 async def test_no_job_runs_with_a_limit_of_zero(client, ticker_on, claude, monkeypatch):
+    """No job runs when the per-tick job limit is set to zero."""
     tenant_id = await _backlog(client, 2)
     monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 0.05)
     monkeypatch.setattr(llm_jobs.get_worker_settings(), "max_per_tick", 0)
@@ -1025,6 +1066,7 @@ async def test_no_job_runs_with_a_limit_of_zero(client, ticker_on, claude, monke
 async def test_a_backlog_defers_no_other_companys_runs(
     client, ticker_on, runtime, claude, monkeypatch
 ):
+    """One company's job backlog never delays another company's run from advancing."""
     _, auth = await seed_auth()
     run = await started(client, auth)
     backlog = await _backlog(client, 10)
@@ -1045,6 +1087,7 @@ async def test_a_backlog_defers_no_other_companys_runs(
 
 
 async def test_companies_take_turns_at_built_in_jobs(client, ticker_on, claude, monkeypatch):
+    """Companies take turns running jobs; one backlog cannot starve another's."""
     first = await _backlog(client, 3)
     second = await make_tenant("Second Co")
     headers = await token_with_role(second, "owner")

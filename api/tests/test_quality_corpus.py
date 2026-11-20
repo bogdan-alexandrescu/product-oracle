@@ -31,6 +31,7 @@ STATUSES = {"pass", "warning", "critical", "not_applicable"}
 
 
 def test_the_corpus_covers_every_case_section_10_lists():
+    """The evaluation corpus covers every case the quality spec section 10 requires."""
     covered = set()
     for path in case_paths():
         covered |= set(load_case(path).get("covers") or [])
@@ -38,6 +39,7 @@ def test_the_corpus_covers_every_case_section_10_lists():
 
 
 def test_every_expectation_names_a_known_check_and_status():
+    """Every corpus case names only a real check key and a real status, never a typo."""
     keys = set(criteria.KEYS) | set(criteria.HARD_KEYS)
     for path in case_paths():
         case = load_case(path)
@@ -58,6 +60,7 @@ def test_every_criterion_is_exercised_beyond_pass():
 
 @pytest.mark.parametrize("path", case_paths(), ids=lambda p: p.stem)
 async def test_corpus_case(client, path):
+    """Readiness evaluation gives each corpus case its expected status and rationale."""
     case = load_case(path)
     ctx = await make_ctx()
     seeded = await seed_case(client, ctx, case)

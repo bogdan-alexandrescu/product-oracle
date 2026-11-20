@@ -23,6 +23,7 @@ def outcome(status: str, **kw) -> readiness.Check:
 
 
 async def test_results_carry_status_rationale_evidence_and_owner(db):
+    """A readiness result carries its check's rationale, evidence, owner and sections."""
     owner, ev = uuid.uuid4(), uuid.uuid4()
     readiness.register_check("problem_clarity", outcome("pass"))
     readiness.register_check(
@@ -56,6 +57,8 @@ async def test_only_a_critical_hard_check_blocks(db):
 
 
 async def test_a_hard_check_that_raises_fails_closed(db):
+    """A hard check that raises fails closed as critical; an advisory one just warns."""
+
     async def broken(ctx):
         raise RuntimeError("source index unavailable")
 
@@ -69,6 +72,8 @@ async def test_a_hard_check_that_raises_fails_closed(db):
 
 
 async def test_a_check_returning_the_wrong_type_is_an_error(db):
+    """A check returning the wrong result type is reported as a critical error."""
+
     async def sloppy(ctx):
         return {"status": "pass"}
 
@@ -78,6 +83,8 @@ async def test_a_check_returning_the_wrong_type_is_an_error(db):
 
 
 async def test_a_failed_query_does_not_poison_later_checks(db):
+    """One check's failed database query never stops the checks that run after it."""
+
     async def bad_sql(ctx):
         await ctx.db.execute(text("SELECT * FROM no_such_table"))
         return CheckOutcome(status="pass", rationale="unreachable")
@@ -94,6 +101,7 @@ async def test_a_failed_query_does_not_poison_later_checks(db):
 
 
 async def test_evaluate_a_subset_and_pass_the_context(db):
+    """Evaluating a chosen subset of checks runs only those, with the same context."""
     seen: list[ReadinessContext] = []
 
     async def spy(ctx):
@@ -110,6 +118,7 @@ async def test_evaluate_a_subset_and_pass_the_context(db):
 
 
 def test_registration_rules():
+    """Re-registering a check's key replaces it, and an empty key is refused."""
     readiness.register_check("k", outcome("pass"))
     readiness.register_check("k", outcome("critical"), hard=True)  # replaces
     assert [(r.key, r.hard) for r in readiness.checks()] == [("k", True)]
@@ -120,5 +129,6 @@ def test_registration_rules():
 
 
 def test_bad_status_is_refused():
+    """A check outcome with an unknown status value is refused."""
     with pytest.raises(ValueError):
         CheckOutcome(status="green", rationale="nope")

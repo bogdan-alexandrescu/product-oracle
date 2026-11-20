@@ -79,6 +79,7 @@ def scratch_db():
 
 
 def test_market_up_down_up(scratch_db):
+    """The market migration's up, down and up again leaves the schema correct."""
     upgrade(_cfg(), PREVIOUS)
     assert not TABLES & _tables()
     assert "competitive_digest" not in _check("ck_runs_flow")

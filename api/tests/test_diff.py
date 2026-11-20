@@ -39,11 +39,13 @@ def _side_json(ops, side: str) -> str:
 
 
 def test_tokenize_round_trips():
+    """Tokenizing text and joining it back together reproduces the text exactly."""
     text = "Show an estimated cost, based on the postcode.\n\nNext  line"
     assert "".join(tokenize(text)) == text
 
 
 def test_word_diff_marks_changed_words_only():
+    """A word-level diff marks only the words that changed, keeping the rest equal."""
     old = "Show the shipping cost on the cart page."
     new = "Show an estimated shipping cost on the cart page."
     ops = word_diff(old, new)
@@ -54,10 +56,12 @@ def test_word_diff_marks_changed_words_only():
 
 
 def test_word_diff_of_equal_text_is_one_equal_op():
+    """Diffing identical text yields one equal operation, not many no-op pieces."""
     assert [(o.op, o.text) for o in word_diff("a b", "a b")] == [("equal", "a b")]
 
 
 def test_insertion_does_not_mark_followers_as_moved():
+    """Inserting a new section does not mark the sections after it as moved."""
     diffs = diff_sections(_seq("a", "b", "c"), _seq("a", "new", "b", "c"))
     assert _summary(diffs) == [
         ("a", "unchanged", False),
@@ -68,6 +72,7 @@ def test_insertion_does_not_mark_followers_as_moved():
 
 
 def test_moved_and_changed_and_removed():
+    """A section diff tells a moved-and-changed section from removed or unchanged."""
     diffs = diff_sections(_seq("a", "b", "c", "d"), _seq("c", "a", "b", c="h2"))
     assert _summary(diffs) == [
         ("c", "changed", True),
@@ -81,6 +86,7 @@ def test_moved_and_changed_and_removed():
 
 
 def test_removed_first_section_comes_first():
+    """A removed section that was first in the old list is still reported first."""
     assert _summary(diff_sections(_seq("x", "a"), _seq("a"))) == [
         ("x", "removed", False),
         ("a", "unchanged", False),
@@ -88,6 +94,7 @@ def test_removed_first_section_comes_first():
 
 
 async def test_diff_v1_to_v2(client):
+    """The diff endpoint reports each section's change status between two versions."""
     tenant_id, auth = await seed_auth()
     v1 = (await import_draft(client, auth, draft("prd_v1.md"))).json()
     async with tenant_session(tenant_id) as s:
@@ -176,6 +183,7 @@ title: Checkout redesign
 
 
 async def test_diff_of_a_changed_table_cell_keeps_rows(client):
+    """Changing one table cell's value marks only that value, not the row structure."""
     _, auth = await seed_auth()
     for target in ("60%", "65%"):
         resp = await import_draft(client, auth, TABLE_DRAFT.replace("TARGET", target))
@@ -196,6 +204,7 @@ async def test_diff_of_a_changed_table_cell_keeps_rows(client):
 
 
 async def test_diff_same_version_and_missing_versions(client):
+    """Diffing a version against itself shows no change; a missing version errors."""
     _, auth = await seed_auth()
     await import_draft(client, auth, draft("prd_v1.md"))
     same = (await client.get(f"{DOC}/diff", params={"from": 1, "to": 1}, headers=auth)).json()

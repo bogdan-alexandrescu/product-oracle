@@ -43,11 +43,13 @@ def _migration():
 
 
 def test_chains_on_the_single_head():
+    """The release-archived-briefs migration chains on the branch's own head."""
     script = ScriptDirectory.from_config(Config(str(API_DIR / "alembic.ini")))
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 async def test_releases_requests_behind_briefs_archived_before(client, ctx):
+    """Releasing requests frees them from an intake archived before the release only."""
     from tests.v2_helpers import seed_v2
 
     seeded = await seed_v2(ctx.tenant_id)

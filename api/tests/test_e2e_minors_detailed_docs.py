@@ -20,6 +20,7 @@ MONTH_FIRST = re.compile(
 
 
 def test_moment_in_words_is_month_first():
+    """A moment shown in words reads month first, in the reader's own time zone."""
     at = datetime(2026, 10, 30, 20, 28, tzinfo=UTC)
     assert company_time.moment_in_words(at, "America/Los_Angeles") == "Oct 30, 1:28 PM PDT"
     assert company_time.moment_in_words(at, "UTC") == "Oct 30, 8:28 PM UTC"
@@ -43,6 +44,7 @@ async def test_brief_summary_names_the_template_the_brief_chose(client):
 
 
 async def test_brief_summary_without_a_pick_names_the_recommendation(client):
+    """A brief's summary names the real reason for its recommended template."""
     ctx = await company()
     intake = await create_intake(client, ctx)
     out = await summary(client, ctx, intake["intake"]["id"])

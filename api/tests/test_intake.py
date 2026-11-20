@@ -52,6 +52,7 @@ KNOWLEDGE_STATES = {"verified_fact", "user_decision", "ai_inference", "hypothesi
 
 
 async def test_a_short_brief_and_one_source_make_an_intake_with_gaps_and_a_template(client):
+    """Intake from a short brief covers every question category, flagged unverified."""
     ctx = await company()
     out = await intake_with_source(client, ctx)
 
@@ -120,6 +121,7 @@ async def test_a_short_brief_and_one_source_make_an_intake_with_gaps_and_a_templ
 
 
 async def test_the_intake_is_audited_and_listed(client):
+    """Creating an intake is audited and shows up in the company's intake list."""
     ctx = await company()
     out = await create_intake(client, ctx)
     listed = (await client.get("/v1/intakes", headers=ctx.as_("viewer"))).json()
@@ -132,6 +134,7 @@ async def test_the_intake_is_audited_and_listed(client):
 
 
 async def test_signals_in_the_brief_raise_the_matching_gaps(client):
+    """Mentioning a partner API or personal data in a brief raises the matching gaps."""
     ctx = await company()
     out = await create_intake(
         client,
@@ -160,6 +163,7 @@ async def test_signals_in_the_brief_raise_the_matching_gaps(client):
 
 
 async def test_the_brief_must_be_short_but_present(client):
+    """An intake's brief must be neither empty, too short, nor far too long."""
     ctx = await company()
     for brief in ("", "too short", "x" * 4001):
         await create_intake(client, ctx, brief=brief, expect=422)
@@ -169,6 +173,7 @@ async def test_the_brief_must_be_short_but_present(client):
 
 
 async def test_a_feature_serving_no_confirmed_goal_is_flagged_with_its_rationale(client):
+    """A feature linked only to an unconfirmed goal is still flagged as serving none."""
     ctx = await company()
     goal = await entity(client, ctx, type="goal", key="repeat-purchases",
                         title="Grow repeat purchases")  # fmt: skip
@@ -208,6 +213,7 @@ async def test_a_feature_serving_no_confirmed_goal_is_flagged_with_its_rationale
 
 
 async def test_an_answer_updates_its_gap_and_is_never_asked_again(client):
+    """Answering an intake question never asks it again, only proposes a change."""
     ctx = await company()
     out = await intake_with_source(client, ctx)
     intake_id = out["intake"]["id"]
@@ -253,6 +259,7 @@ async def test_an_answer_updates_its_gap_and_is_never_asked_again(client):
 
 
 async def test_confirmed_and_locked_baseline_facts_are_not_asked(client):
+    """A goal's confirmed metric already answers its gaps, so no question is asked."""
     ctx = await company()
     goal = await entity(
         client, ctx, type="goal", key="repeat-purchases", title="Grow repeat purchases",
@@ -277,6 +284,7 @@ async def test_confirmed_and_locked_baseline_facts_are_not_asked(client):
 
 
 async def test_dont_know_on_a_critical_blocker_offers_research_and_a_decision(client, runtime):
+    """A critical blocker left unknown offers research or delegation, never a guess."""
     ctx = await company()
     doc = await _document(client, ctx)
     # Linking an intake to a PRD takes an approver.
@@ -358,6 +366,7 @@ async def test_dont_know_on_a_critical_blocker_offers_research_and_a_decision(cl
 
 
 async def test_research_this_proposes_a_run_and_only_a_person_creates_it(client, runtime):
+    """Choosing to research a gap only proposes a run; an approver must accept it."""
     ctx = await company()
     out = await intake_with_source(client, ctx)
     intake_id = out["intake"]["id"]
@@ -396,6 +405,7 @@ async def test_research_this_proposes_a_run_and_only_a_person_creates_it(client,
 
 
 async def test_research_can_start_from_a_gap_and_be_dismissed(client):
+    """Researching an already-open gap again reuses its existing proposal."""
     ctx = await company()
     out = await create_intake(client, ctx)
     gap = gaps_by_category(out)["economic_benefit"]
@@ -414,6 +424,7 @@ async def test_research_can_start_from_a_gap_and_be_dismissed(client):
 
 
 async def test_defer_and_delegate(client):
+    """Delegating a question limits who may answer it: the delegate or an approver."""
     ctx = await company()
     out = await create_intake(client, ctx)
     intake_id = out["intake"]["id"]
@@ -447,6 +458,7 @@ async def test_defer_and_delegate(client):
 
 
 async def test_answers_validate_their_body_and_evidence(client):
+    """An intake answer claiming a verified fact must cite evidence that is its own."""
     ctx = await company()
     out = await intake_with_source(client, ctx)
     q = (await batch(client, ctx, out["intake"]["id"]))["questions"][0]["question"]
@@ -464,6 +476,7 @@ async def test_answers_validate_their_body_and_evidence(client):
 
 
 async def test_an_answer_on_a_linked_prd_becomes_a_patch_proposal_not_an_edit(client):
+    """Answering a question on a PRD-linked intake proposes a patch, not an edit."""
     ctx = await company()
     doc = await _document(client, ctx)
     out = await create_intake(client, ctx, who="approver", document=doc)
@@ -488,6 +501,7 @@ async def test_an_answer_on_a_linked_prd_becomes_a_patch_proposal_not_an_edit(cl
 
 
 async def test_gaps_can_be_added_and_triaged_with_optimistic_locking(client):
+    """Changing a gap's importance needs an approver and a current lock version."""
     ctx = await company()
     out = await create_intake(client, ctx)
     intake_id = out["intake"]["id"]
@@ -513,6 +527,7 @@ async def test_gaps_can_be_added_and_triaged_with_optimistic_locking(client):
 
 
 async def test_conflicts_and_staleness_are_surfaced_with_a_recommendation(client):
+    """Conflicting source claims in an intake get a recommended winner, and the stale."""
     ctx = await company()
     await make_item(ctx, "commenter", kind="slack",
                     content="Repeat checkout conversion is 12% this month.",
@@ -537,6 +552,7 @@ async def test_conflicts_and_staleness_are_surfaced_with_a_recommendation(client
 
 
 async def test_baseline_conflicts_on_linked_entities_are_listed(client):
+    """A recorded conflict on a goal's field shows up among the intake's conflicts."""
     ctx = await company()
     goal = await entity(client, ctx, type="goal", key="repeat-purchases",
                         title="Grow repeat purchases")  # fmt: skip

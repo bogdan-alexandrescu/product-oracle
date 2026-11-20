@@ -61,6 +61,7 @@ def _state(**kw) -> oauth.State:
 
 
 def test_state_round_trip_is_encrypted_and_signed():
+    """OAuth state round-trips encrypted and signed, hiding the verifier and user id."""
     st = _state(connection_id=uuid.uuid4())
     value = oauth.encode_state(st)
     assert st.verifier not in value
@@ -69,6 +70,7 @@ def test_state_round_trip_is_encrypted_and_signed():
 
 
 def test_state_rejects_tampering_other_provider_and_age():
+    """Tampered, wrong-provider, garbled or stale OAuth state is always rejected."""
     value = oauth.encode_state(_state())
     with pytest.raises(oauth.InvalidState):
         oauth.decode_state(value[:-2] + ("AA" if not value.endswith("AA") else "BB"), "github")
@@ -82,6 +84,7 @@ def test_state_rejects_tampering_other_provider_and_age():
 
 
 def test_pkce_challenge_is_s256_of_verifier():
+    """The PKCE challenge is the SHA-256 of its own verifier, sized to spec."""
     verifier, challenge = oauth.pkce_pair()
     assert 43 <= len(verifier) <= 128
     expected = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=")
@@ -92,6 +95,7 @@ def test_pkce_challenge_is_s256_of_verifier():
 
 
 async def test_authorize_needs_a_configured_client(client, alice):
+    """Starting OAuth for an unconfigured provider asks to paste a token instead."""
     resp = await client.get("/v1/connections/github/authorize", headers=alice.headers)
     assert resp.status_code == 409
     assert "paste a token" in resp.json()["detail"]
@@ -100,6 +104,7 @@ async def test_authorize_needs_a_configured_client(client, alice):
 
 
 async def test_oauth_flow_end_to_end(client, tenant_id, alice, github_client):
+    """A full GitHub OAuth round trip exchanges a code for a token, leaking no secret."""
     resp = await client.get("/v1/connections/github/authorize", headers=alice.headers)
     assert resp.status_code == 200
     url = urlparse(resp.json()["url"])
@@ -153,6 +158,7 @@ async def test_oauth_flow_end_to_end(client, tenant_id, alice, github_client):
 async def test_callback_by_another_user_or_with_errors_connects_nothing(
     client, tenant_id, alice, github_client
 ):
+    """A stolen, denied, or forged OAuth callback connects nothing."""
     bob = await make_person(tenant_id, "bob@example.com", "viewer")
     started = await client.get("/v1/connections/github/authorize", headers=alice.headers)
     url = started.json()["url"]
@@ -184,6 +190,7 @@ async def test_callback_by_another_user_or_with_errors_connects_nothing(
 
 
 async def test_callback_with_refused_code(client, alice, github_client):
+    """GitHub refusing the OAuth code leaves no connection behind."""
     started = await client.get("/v1/connections/github/authorize", headers=alice.headers)
     url = started.json()["url"]
     state = parse_qs(urlparse(url).query)["state"][0]
@@ -199,6 +206,7 @@ async def test_callback_with_refused_code(client, alice, github_client):
 
 
 def test_slack_user_token_and_notion_basic_auth_shapes(monkeypatch):
+    """Slack's user-token OAuth shape and Notion's basic auth mode are both wired."""
     slack = PROVIDERS["slack"]
     user = {"access_token": "example-slack-user", "scope": "channels:read"}
     data = {"ok": True, "authed_user": user}
@@ -237,6 +245,7 @@ async def _oauth_conn(tenant_id, user_id, minutes: int, refresh: str | None = "r
 async def test_get_credential_returns_token_without_refresh_when_fresh(
     tenant_id, alice, github_client
 ):
+    """A still-fresh OAuth token is returned as is, with no refresh call made."""
     conn = await _oauth_conn(tenant_id, alice.id, minutes=30)
     http, calls = _token_endpoint(httpx.Response(500))
     async with tenant_session(tenant_id) as s:
@@ -248,6 +257,7 @@ async def test_get_credential_returns_token_without_refresh_when_fresh(
 
 
 async def test_get_credential_refreshes_within_five_minutes(tenant_id, alice, github_client):
+    """A token nearing expiry is refreshed early, using the stored refresh token."""
     conn = await _oauth_conn(tenant_id, alice.id, minutes=4)
     http, calls = _token_endpoint(
         httpx.Response(200, json={"access_token": "a2", "refresh_token": "r2", "expires_in": 3600})
@@ -264,6 +274,7 @@ async def test_get_credential_refreshes_within_five_minutes(tenant_id, alice, gi
 
 
 async def test_refresh_keeps_refresh_token_when_not_rotated(tenant_id, alice, github_client):
+    """A refresh that returns no new refresh token keeps the old one stored."""
     conn = await _oauth_conn(tenant_id, alice.id, minutes=1)
     http, _ = _token_endpoint(httpx.Response(200, json={"access_token": "a2", "expires_in": 60}))
     async with tenant_session(tenant_id) as s:
@@ -274,6 +285,7 @@ async def test_refresh_keeps_refresh_token_when_not_rotated(tenant_id, alice, gi
 
 
 async def test_refused_refresh_marks_expired(tenant_id, alice, github_client):
+    """A refused token refresh marks the connection expired and unusable."""
     conn = await _oauth_conn(tenant_id, alice.id, minutes=2)
     http, _ = _token_endpoint(httpx.Response(400, json={"error": "invalid_grant"}))
     async with tenant_session(tenant_id) as s:
@@ -293,6 +305,7 @@ async def test_refused_refresh_marks_expired(tenant_id, alice, github_client):
 async def test_provider_down_uses_token_until_it_expires_then_marks_error(
     tenant_id, alice, github_client
 ):
+    """A token keeps working while its provider is down, then errors once it expires."""
     still_valid = await _oauth_conn(tenant_id, alice.id, minutes=3)
     http, _ = _token_endpoint(httpx.ConnectError("down"))
     async with tenant_session(tenant_id) as s:
@@ -313,6 +326,7 @@ async def test_provider_down_uses_token_until_it_expires_then_marks_error(
 
 
 async def test_expired_without_refresh_token_is_marked_expired(tenant_id, alice, github_client):
+    """An expired token with no refresh token is marked expired, with no call made."""
     conn = await _oauth_conn(tenant_id, alice.id, minutes=-1, refresh=None)
     http, calls = _token_endpoint(httpx.Response(500))
     async with tenant_session(tenant_id) as s:
@@ -324,6 +338,7 @@ async def test_expired_without_refresh_token_is_marked_expired(tenant_id, alice,
 
 
 async def test_get_credential_never_serves_another_users_connection(tenant_id, alice):
+    """A connection's credential is never served to anyone but its own owner."""
     bob = await make_person(tenant_id, "bob@example.com", "viewer")
     conn = await add_connection(tenant_id, alice.id, "github")
     async with tenant_session(tenant_id) as s:
@@ -335,6 +350,7 @@ async def test_get_credential_never_serves_another_users_connection(tenant_id, a
 
 
 async def test_reconnect_oauth_refreshes(client, tenant_id, alice, github_client):
+    """Reconnecting refreshes an OAuth token without asking to sign in again."""
     conn = await _oauth_conn(tenant_id, alice.id, minutes=60)
 
     def handler(request):
@@ -353,6 +369,7 @@ async def test_reconnect_oauth_refreshes(client, tenant_id, alice, github_client
 async def test_reconnect_oauth_without_refresh_returns_sign_in_url(
     client, tenant_id, alice, github_client
 ):
+    """Reconnecting with no refresh token returns a fresh sign-in link instead."""
     conn = await _oauth_conn(tenant_id, alice.id, minutes=-5, refresh=None)
     use_provider_http(lambda r: pytest.fail("nothing to call"))
     resp = await client.post(f"/v1/connections/{conn.id}/reconnect", headers=alice.headers)
@@ -376,6 +393,7 @@ async def test_reconnect_oauth_without_refresh_returns_sign_in_url(
 async def test_disconnect_revokes_an_oauth_grant_then_deletes(
     client, tenant_id, alice, github_client, provider, method, url
 ):
+    """Disconnecting an OAuth connection revokes its grant before deleting it."""
     conn = await add_connection(
         tenant_id,
         alice.id,
@@ -397,6 +415,7 @@ async def test_disconnect_revokes_an_oauth_grant_then_deletes(
 
 
 async def test_disconnect_revokes_slack_and_survives_provider_failure(client, tenant_id, alice):
+    """Disconnecting Slack revokes its grant when configured, deleting it either way."""
     slack = await add_connection(
         tenant_id, alice.id, "slack", auth_mode="oauth", bundle={"access_token": "xoxp-1"}
     )
@@ -435,6 +454,7 @@ async def test_disconnect_revokes_slack_and_survives_provider_failure(client, te
 
 
 async def test_disconnect_leaves_pasted_tokens_alone(client, tenant_id, alice, github_client):
+    """Disconnecting a pasted token calls no provider revoke; there is no grant."""
     conn = await add_connection(tenant_id, alice.id, "github", bundle={"access_token": "pat"})
     seen = use_provider_http(lambda r: httpx.Response(204))
     assert (
