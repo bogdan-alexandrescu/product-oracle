@@ -642,7 +642,13 @@ async def build(db: AsyncSession, principal: Any, can_edit: bool) -> GoalMapOut:
         await db.execute(
             select(MilestoneFeature, RoadmapItem)
             .join(RoadmapItem, RoadmapItem.id == MilestoneFeature.item_id)
-            .order_by(RoadmapItem.position, RoadmapItem.title, MilestoneFeature.created_at)
+            # Links added in one go share their added time: the id keeps their order.
+            .order_by(
+                RoadmapItem.position,
+                RoadmapItem.title,
+                MilestoneFeature.created_at,
+                MilestoneFeature.id,
+            )
         )
     ).all()
     links = [(link, item) for link, item in links if link.milestone_id in shown]
