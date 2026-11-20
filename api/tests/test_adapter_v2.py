@@ -7,7 +7,7 @@ import asyncio
 import json
 import logging
 import uuid
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import replace
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -85,8 +85,8 @@ CONTRACT_BODY = {
 }
 
 
-@pytest.fixture(autouse=True)
-def settings(monkeypatch):
+@contextmanager
+def _environment(monkeypatch):
     monkeypatch.setenv("ORACLE_PUBLIC_URL", PUBLIC)
     for key in (
         "ORACLE_CHECKPOINT_WAIT_SECONDS",
@@ -99,6 +99,19 @@ def settings(monkeypatch):
     yield
     get_runtime_settings.cache_clear()
     set_runtime(None)
+
+
+@pytest.fixture(autouse=True)
+def settings(monkeypatch):
+    with _environment(monkeypatch):
+        yield
+
+
+@pytest.fixture
+def adapter_v2_env(monkeypatch):
+    """The same environment, for a module that takes it test by test."""
+    with _environment(monkeypatch):
+        yield
 
 
 def use(swarm: FakeSwarmCloud, **kw):
