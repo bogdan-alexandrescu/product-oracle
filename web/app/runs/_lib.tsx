@@ -1,6 +1,6 @@
 import { Chip, Icon, InfoTip, type ChipKind } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatMoney, formatMoneyOf } from "@/lib/format";
+import { formatMoney } from "@/lib/format";
 import { docLabel, runLabel } from "@/lib/labels";
 import { useQuery } from "@/lib/use-query";
 
@@ -73,7 +73,8 @@ export const COST_DECISION_STATUSES: RunStatus[] = ["awaiting_approval", "paused
 export function costText(run: Pick<RunSummary, "status" | "spent_usd" | "estimate_usd">): string {
   const est = run.estimate_usd;
   if (run.status === "awaiting_approval" || run.status === "draft") return est == null ? "No estimate yet" : `${formatMoney(est)} estimated`;
-  return est == null ? `${formatMoney(run.spent_usd)} spent` : `${formatMoneyOf(run.spent_usd, est)} estimated`;
+  // #1572: a spend nobody reported is unknown ("—"), never "$0.00".
+  return est == null ? `${usd(run.spent_usd)} spent` : `${usd(run.spent_usd)} of ${formatMoney(est)} estimated`;
 }
 
 /** P3d Cost prominence: a run's cost, prominent only on cost approvals and overruns; normal font everywhere. */

@@ -458,6 +458,11 @@ function buildUnderWay(ctx: RunsContext, flowKey: string): Response | null {
   return first ? fail(409, `A Ground Truth build is already under way (run ${first.id})`) : null;
 }
 const round2 = (n: number) => Math.round(n * 100) / 100;
+/** As the API (#1572): the sum of the known costs; null (unknown, never $0) when none is known. */
+const knownSum = (values: (number | null | undefined)[]): number | null => {
+  const known = values.filter((v): v is number => v != null);
+  return known.length ? round2(known.reduce((sum, v) => sum + v, 0)) : null;
+};
 // The Company time zone's day, as the API words it in notes (#463).
 const monthDay = (iso: string) => companyDayInWords(iso);
 
@@ -629,7 +634,7 @@ function targetFeatures(ctx: Omit<RunsContext, "db">, flowKey: string, raw: stri
 /** As the API: a failed run whose spend is over its ceiling stopped at its budget; it is not retried. */
 const BUDGET_STOPPED = "This run stopped at its budget; start it again with a new estimate";
 function budgetStopped(r: RunOut): boolean {
-  return r.status === "failed" && r.overrun_ceiling_usd != null && r.spent_usd > r.overrun_ceiling_usd;
+  return r.status === "failed" && r.overrun_ceiling_usd != null && (r.spent_usd ?? 0) > r.overrun_ceiling_usd;
 }
 
 /** The segment a failed run stopped at (its last failed one), as the API's retry_segment reads it. */
@@ -656,7 +661,7 @@ function segmentsFor(flowKey: string, knobs: RunOut["knobs"], uuid: () => string
     checkpoint: s.checkpoint,
     checkpoint_on: s.checkpoint ? (knobs.checkpoints[s.checkpoint] ?? true) : false,
     estimate_usd: null,
-    cost_usd: 0,
+    cost_usd: null,
     workflow_id: null,
     artifacts: [],
     attempts: [],
@@ -673,7 +678,6 @@ function segmentsFor(flowKey: string, knobs: RunOut["knobs"], uuid: () => string
     error: null,
     agents: [],
     checked_at: null,
-    cost_reported: false,
     proposals_written: 0,
   }));
 }
@@ -1143,9 +1147,7 @@ function refresh(r: RunOut) {
   r.draft_rejected = refused(r, false);
   r.sent_back = refused(r, true);
   for (const s of r.segments) s.sent_back = sentBack(r, s);
-  // As the API: a segment with a cost counted has one reported.
-  for (const s of r.segments) s.cost_reported = s.cost_reported || s.cost_usd > 0 || s.agents.some((a) => !!a.cost_usd);
-  r.spent_usd = round2(r.segments.reduce((sum, s) => sum + s.cost_usd, 0));
+  r.spent_usd = knownSum(r.segments.map((s) => s.cost_usd));
   r.waiting_on = r.checkpoints.find((c) => c.status === "pending")?.kind ?? null;
   // As the API: waiting on its checkpoint, a decision recorded there and not delivered yet.
   // Oracle's send-back means no decision is owed: Revising wins.
@@ -1180,8 +1182,8 @@ function submit(ctx: RunsContext, r: RunOut, s: SegmentOut, note: string | null 
   s.workflow_id = `mock-wf-${ctx.uuid().slice(0, 8)}`;
   s.started_at ??= ctx.now();
   s.finished_at = null;
-  Object.assign(s, { agents: [], checked_at: null, proposals_written: 0, cost_reported: s.cost_usd > 0 });
-  s.attempts.push({ attempt: s.attempts.length + 1, workflow_id: s.workflow_id, submitted_at: ctx.now(), cost_usd: 0, note, state: "running" });
+  Object.assign(s, { agents: [], checked_at: null, proposals_written: 0 });
+  s.attempts.push({ attempt: s.attempts.length + 1, workflow_id: s.workflow_id, submitted_at: ctx.now(), cost_usd: null, note, state: "running" });
   r.status = "running";
 }
 
@@ -1972,15 +1974,14 @@ function agentsWorking(ctx: RunsContext, r: RunOut): boolean {
     const wrote = new Date(new Date(now).getTime() - 30_000).toISOString();
     const started = new Date(new Date(now).getTime() - 5 * 60_000).toISOString();
     s.agents = s.roles.map((role) => ({ role, state: "running", started_at: started, heartbeat_at: null, cost_usd: null, event_at: null, last_work_at: wrote, last_work: "proposals" }));
-    Object.assign(s, { checked_at: now, proposals_written: 12, cost_reported: false });
+    Object.assign(s, { checked_at: now, proposals_written: 12 });
     return true;
   }
   s.agents = s.roles.map((role) => ({ role, state: "running", started_at: s.started_at, heartbeat_at: now, cost_usd: each, event_at: null, last_work_at: now, last_work: "heartbeat" }));
   s.checked_at = now;
-  s.cost_reported = true;
   const a = s.attempts[s.attempts.length - 1];
   a.cost_usd = round2(each * s.roles.length);
-  s.cost_usd = round2(s.attempts.reduce((sum, x) => sum + x.cost_usd, 0));
+  s.cost_usd = knownSum(s.attempts.map((x) => x.cost_usd));
   refresh(r);
   return true;
 }
@@ -1992,12 +1993,12 @@ function finishRunning(ctx: RunsContext, r: RunOut): "none" | "paused" | "advanc
   const a = s.attempts[s.attempts.length - 1];
   a.cost_usd = round2((s.estimate_usd ?? 0) * 0.9);
   a.state = "succeeded";
-  s.cost_usd = round2(s.attempts.reduce((sum, x) => sum + x.cost_usd, 0));
+  s.cost_usd = knownSum(s.attempts.map((x) => x.cost_usd));
   s.status = "succeeded";
   s.finished_at = ctx.now();
-  Object.assign(s, { agents: [], checked_at: null, proposals_written: 0, cost_reported: s.cost_usd > 0 });
+  Object.assign(s, { agents: [], checked_at: null, proposals_written: 0 });
   refresh(r);
-  if (r.overrun_ceiling_usd != null && r.spent_usd > r.overrun_ceiling_usd) {
+  if (r.overrun_ceiling_usd != null && (r.spent_usd ?? 0) > r.overrun_ceiling_usd) {
     r.status = "paused_overrun";
     return "paused";
   }
@@ -2346,7 +2347,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       template: roadmap ? (input.template ?? doc?.template ?? ROADMAP_DEFAULTS.template) : templated ? (input.template ?? doc?.template ?? PRD_DEFAULT_TEMPLATE) : null,
       theme: roadmap ? (input.theme ?? doc?.theme ?? ROADMAP_DEFAULTS.theme) : templated ? (input.theme ?? doc?.theme ?? null) : null,
       estimate_usd: null,
-      spent_usd: 0,
+      spent_usd: null,
       created_by: ctx.member?.id ?? ctx.userId,
       created_at: ctx.now(),
       started_at: null,
@@ -2510,7 +2511,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   }
   if (action === "resume" && m === "POST") {
     if (r.status !== "paused_overrun") return fail(409, `run is ${r.status}, not paused on overrun`);
-    r.overrun_ceiling_usd = round2(r.spent_usd + (r.estimate_usd ?? 0) * (FACTOR - 1));
+    r.overrun_ceiling_usd = round2((r.spent_usd ?? 0) + (r.estimate_usd ?? 0) * (FACTOR - 1));
     r.status = "running";
     const last = [...r.segments].reverse().find((s) => s.status === "succeeded");
     if (!r.segments.some((s) => s.status === "running") && last && !r.checkpoints.some((c) => c.segment_seq === last.seq)) {
@@ -2803,7 +2804,7 @@ function seedRun(ctx: Omit<RunsContext, "db">, db: RunsDb, flow: RunOut["flow"],
     template: null,
     theme: null,
     estimate_usd: estimate,
-    spent_usd: 0,
+    spent_usd: null,
     created_by: ctx.userId,
     created_at,
     started_at: null,
@@ -2984,7 +2985,7 @@ export const KEY_RENEWED_NOTE =
  */
 export function seedKeyRenewedRun(db: RunsDb, ctx: Omit<RunsContext, "db">): RunOut {
   const run = seedRun(ctx, db, "feedback_loop", "annual-billing", { checkpoints: { prd_review: false } }, "2026-10-20T03:00:00Z");
-  run.segments[0].attempts.push({ attempt: 1, workflow_id: "mock-wf-key-renewed", submitted_at: "2026-10-20T03:00:00Z", cost_usd: 0, note: null, state: "running" });
+  run.segments[0].attempts.push({ attempt: 1, workflow_id: "mock-wf-key-renewed", submitted_at: "2026-10-20T03:00:00Z", cost_usd: null, note: null, state: "running" });
   Object.assign(run.segments[0], { status: "running", started_at: "2026-10-20T03:00:00Z" });
   Object.assign(run, { status: "running", started_at: "2026-10-20T03:00:00Z", runtime: "swarmcloud", notes: [KEY_RENEWED_NOTE] });
   refresh(run);
@@ -5207,7 +5208,7 @@ export function startDraftItemsRun(
     status: "running",
     started_at: args.now,
     workflow_id: `mock-wf-${args.uuid().slice(0, 8)}`,
-    attempts: [{ attempt: 1, workflow_id: "mock-wf-draft-items", submitted_at: args.now, cost_usd: 0, note: null, note_by: null, state: "running" }],
+    attempts: [{ attempt: 1, workflow_id: "mock-wf-draft-items", submitted_at: args.now, cost_usd: null, note: null, note_by: null, state: "running" }],
   });
   const estimate = round2(segments.reduce((sum, s) => sum + (s.estimate_usd ?? 0), 0));
   const run: RunOut = {
@@ -5222,7 +5223,7 @@ export function startDraftItemsRun(
     template: null,
     theme: null,
     estimate_usd: estimate,
-    spent_usd: 0,
+    spent_usd: null,
     created_by: args.createdBy,
     created_at: args.now,
     started_at: args.now,
