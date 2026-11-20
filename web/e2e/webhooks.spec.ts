@@ -56,9 +56,9 @@ test("webhooks: an owner creates one, gets the secret once, sends a test event t
   const calls = await stubReceiver(page);
   await openWebhooks(page);
   // qa-settings-11: the intro is in the page's tip, as on every Settings tab.
-  await page.getByRole("button", { name: "About Webhooks" }).click();
+  await page.getByRole("button", { name: "About Webhooks", exact: true }).click();
   await expect(page.getByRole("tooltip").filter({ hasText: "Tell your other tools when runs, drafts and approvals change." })).toBeVisible();
-  await page.getByRole("button", { name: "About Webhooks" }).click();
+  await page.getByRole("button", { name: "About Webhooks", exact: true }).click();
 
   // https only, and an event to send.
   await page.getByRole("button", { name: "New webhook" }).click();

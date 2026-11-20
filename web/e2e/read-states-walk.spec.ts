@@ -48,10 +48,12 @@ test("Home's walk: decisions that could not be read say so with Try again, never
   await startWalk(page);
   expect(await walkKinds(page)).toContain("decision");
   await expect(walk.getByTestId("load-error")).toHaveCount(0);
+  // Failing before Done: Home's read again after Done fails too, so the walk never takes its
+  // answer, shared for a moment (lib/api/shared-reads), in place of its own.
+  await failGets(page, "/v1/simple/decisions/waiting");
   await page.getByRole("button", { name: "Done" }).click();
 
   // Failed: the walk still goes, and says which read failed and why.
-  await failGets(page, "/v1/simple/decisions/waiting");
   await startWalk(page);
   await expect(failed).toBeVisible();
   await failed.getByRole("button", { name: "About the error" }).click();

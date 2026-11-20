@@ -218,7 +218,7 @@ test("qa-settings-11: the tab bar does not move between tabs; intros sit in the 
   expect(new Set(tops).size, `tab bar tops: ${tops.join(", ")}`).toBe(1);
 
   await expect(page.getByText("Tell your other tools when runs, drafts and approvals change.")).toBeHidden();
-  await page.getByRole("button", { name: "About Webhooks" }).click();
+  await page.getByRole("button", { name: "About Webhooks", exact: true }).click();
   await expect(page.getByRole("tooltip").filter({ hasText: "Tell your other tools when runs, drafts and approvals change." })).toBeVisible();
 
   await page.goto("/settings/autonomy");
