@@ -1,6 +1,6 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useSearchParams } from "@/lib/nav";
 import { Suspense, useState, useSyncExternalStore } from "react";
 
 import { DeleteMenu } from "@/components/ArtifactMenu";

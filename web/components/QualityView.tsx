@@ -1,7 +1,7 @@
 "use client";
 
 import { RoleBadge } from "@/components/RoleBadge";
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { DocCrumb } from "@/components/DocToolbar";

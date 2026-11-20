@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 import { useCallback, useEffect, useState } from "react";
 
 import { toast } from "@/components/ds/Toast";

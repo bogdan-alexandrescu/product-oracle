@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 
 import { OnePager as Paper } from "@/components/simple/OnePager";
 import { SimplePage } from "@/components/simple/SimplePage";

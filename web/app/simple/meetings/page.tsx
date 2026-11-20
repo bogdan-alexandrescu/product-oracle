@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { notFound, useSearchParams } from "next/navigation";
+import { Link, notFound, useSearchParams } from "@/lib/nav";
 import { Suspense, useState } from "react";
 
 import { Button, PageSkeleton } from "@/components/ds";

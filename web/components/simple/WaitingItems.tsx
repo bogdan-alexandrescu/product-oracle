@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 import { useEffect, useRef, useState } from "react";
 import { InfoTip } from "@/components/ds/InfoTip";
 import { LoadError } from "@/components/ui";

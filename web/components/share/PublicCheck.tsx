@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 import { useId, useState, type ReactNode } from "react";
 
 import { usePolling } from "@/components/JobsPanel";

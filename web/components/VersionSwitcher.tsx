@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/nav";
 
 import { SegmentedControl } from "@/components/ds";
 import type { VersionSummary } from "@/lib/api/client";

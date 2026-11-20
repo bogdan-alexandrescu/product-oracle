@@ -1,8 +1,7 @@
 "use client";
 
 import { RoleBadge } from "@/components/RoleBadge";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Link, useRouter } from "@/lib/nav";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
 
 import { BuildRoadmapButton, SourceLink } from "@/components/BuildRoadmap";

@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Link, useRouter } from "@/lib/nav";
 import type { ReactNode } from "react";
 
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";

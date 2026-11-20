@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "@/lib/nav";
 import { Suspense, useMemo, useState, useSyncExternalStore } from "react";
 
 import { Button, Empty, Notice, Page, Panel, Sheet, Split } from "@/components/ds";

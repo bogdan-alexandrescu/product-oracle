@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/nav";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
 import { AuthCard } from "@/app/login/_components/AuthCard";

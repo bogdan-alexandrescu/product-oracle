@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "@/lib/nav";
 import { Suspense, useState, useSyncExternalStore } from "react";
 
 import { Button, Chip, type Column, DataTable, InfoTip, PageSkeleton, Panel, Sheet, Sparkline, Split, ViewOnly } from "@/components/ds";

@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { redirect } from "@/lib/nav";
 
 /**
  * rirs-36: the To decide tab moved to /requests/to-decide; an old link (with its ?request=)

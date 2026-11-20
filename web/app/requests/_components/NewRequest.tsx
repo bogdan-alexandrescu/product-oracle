@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "@/lib/nav";
 import { useRef, useState } from "react";
 
 import { Button, Dialog, SegmentedControl } from "@/components/ds";

@@ -8,8 +8,7 @@
  * opens Simple's one feature panel; the menus rename, add, move and trash, each with Undo, and open
  * the goal map's own editors (a gate, a proposed milestone, a goal's metric, a PRD from a milestone).
  */
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { Link, useRouter, useSearchParams } from "@/lib/nav";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import { toast as dsToast, type ToastAsk } from "@/components/ds";

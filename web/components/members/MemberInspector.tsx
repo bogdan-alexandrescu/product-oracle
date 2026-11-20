@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 import { Fragment, useEffect, useState, type FormEvent, type ReactNode } from "react";
 
 import { Field, INPUT } from "@/app/settings/_components/fields";

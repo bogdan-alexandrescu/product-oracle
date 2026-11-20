@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Link, useRouter } from "@/lib/nav";
 import { useId, useState } from "react";
 
 import { Field, Frame } from "@/components/DateBasisDialog";

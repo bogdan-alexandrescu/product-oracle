@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "@/lib/nav";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { setupReturn } from "@/app/settings/_nav";

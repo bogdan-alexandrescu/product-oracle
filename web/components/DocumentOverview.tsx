@@ -1,8 +1,7 @@
 "use client";
 
 import { RoleBadge } from "@/components/RoleBadge";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Link, useRouter } from "@/lib/nav";
 import { useMemo, useState } from "react";
 
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";

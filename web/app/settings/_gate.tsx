@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter } from "@/lib/nav";
 import { useEffect, type ReactNode } from "react";
 
 import { Empty, LinkButton, PageHeader, PageSkeleton, Panel } from "@/components/ds";

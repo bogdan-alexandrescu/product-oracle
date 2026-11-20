@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { Link, usePathname, useSearchParams } from "@/lib/nav";
 import { useMemo, useSyncExternalStore } from "react";
 
 import { ScrollStrip } from "@/components/ds";

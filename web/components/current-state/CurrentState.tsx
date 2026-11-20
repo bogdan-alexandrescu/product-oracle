@@ -6,8 +6,7 @@
  * Detailed's Ground Truth / Running today tabs, the proof table with Check again, and the
  * Ready to move band whose moves the owner confirms.
  */
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Link, useRouter } from "@/lib/nav";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { Button, InfoTip, PageHeader } from "@/components/ds";

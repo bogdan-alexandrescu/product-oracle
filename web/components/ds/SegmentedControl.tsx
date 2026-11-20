@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 import { useRef, type KeyboardEvent, type ReactNode } from "react";
 
 export type Segment<V extends string> = {

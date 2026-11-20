@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 
 import { QUESTIONS_CHANGED } from "@/components/AskTeammate";

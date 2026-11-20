@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "@/lib/nav";
 import { Suspense, useEffect, useRef, useSyncExternalStore } from "react";
 
 import { Sheet } from "@/components/ds";

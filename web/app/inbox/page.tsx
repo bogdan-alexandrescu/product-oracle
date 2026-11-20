@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { Link, usePathname, useSearchParams } from "@/lib/nav";
 import { Suspense, useEffect, useState, type ReactNode } from "react";
 
 import { Chip, Empty, InfoTip, Page, PageHeader, Panel } from "@/components/ds";

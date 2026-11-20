@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 
 import { MarkFor, WithFeatureMarks } from "@/components/current-state/CurrentState";
 import { Button, Chip, CodeChip, DataTable, type Column } from "@/components/ds";
