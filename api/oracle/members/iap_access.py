@@ -19,6 +19,7 @@ import httpx
 from oracle.config import get_settings
 from oracle.errors import exception_text
 from oracle.members.schemas import PLAIN_ADDRESS, plain_address
+from oracle.swarm.runtime import RuntimeUnavailable
 from oracle.swarm.swarmcloud import GoogleAccessToken
 
 ROLE = "roles/iap.httpsResourceAccessor"
@@ -112,7 +113,7 @@ class GoogleIapClient:
             resp = await http.post(url, json=body, headers=headers, timeout=TIMEOUT)
         except httpx.HTTPError as exc:
             raise IapError(f"Google could not be reached ({type(exc).__name__})") from None
-        except Exception:  # the token: RuntimeUnavailable from the metadata server
+        except RuntimeUnavailable:  # the token: raised by GoogleAccessToken.header
             raise IapError("Oracle has no access token for Google") from None
         if resp.status_code == 409:
             raise EtagConflict("Google returned 409 (the policy's etag changed)")

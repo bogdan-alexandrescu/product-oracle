@@ -65,6 +65,7 @@ and the last listing is younger than :data:`RELIST_SECONDS`.
 import asyncio
 import hashlib
 import json
+import logging
 import re
 from collections.abc import AsyncIterator, Collection, Iterable, Sequence
 from contextlib import asynccontextmanager
@@ -75,6 +76,7 @@ from urllib.parse import quote
 import httpx
 
 from oracle.config import get_settings
+from oracle.errors import exception_text
 from oracle.sources.base import (
     COMPANY_DOMAINS,
     COMPANY_SHARED_DRIVES,
@@ -90,6 +92,8 @@ from oracle.sources.base import (
     SyncEvent,
     register,
 )
+
+log = logging.getLogger(__name__)
 
 DRIVE_URL = "https://www.googleapis.com/drive/v3/"
 OAUTH = {
@@ -598,7 +602,11 @@ class GoogleDocsConnector:
                 try:
                     async with asyncio.TaskGroup() as group:
                         tasks = [group.create_task(drive.file(i)) for i, _, _ in batch]
-                except* Exception as group_error:
+                except* Exception as group_error:  # noqa: BLE001 - unwraps the task group's own error
+                    log.warning(
+                        "validating a picked Drive item failed: %s",
+                        exception_text(group_error.exceptions[0]),
+                    )
                     raise group_error.exceptions[0] from None
                 for (item, mime, label), task in zip(batch, tasks, strict=True):
                     file = task.result()

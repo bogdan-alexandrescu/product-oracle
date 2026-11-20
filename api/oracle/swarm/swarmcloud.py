@@ -467,8 +467,8 @@ class SwarmCloudRuntime:
         self._unsaved, self._over = {}, {}
         try:
             rows = await self.learned_store.sync(save, over)
-        except Exception as exc:  # the database is down or slow: keep what we know
-            log.warning("cannot sync the runtime's learned feature states: %s", exc)
+        except Exception as exc:  # noqa: BLE001 - the database is down or slow: keep what we know
+            log.warning("cannot sync the runtime's learned feature states: %s", exception_text(exc))
             for feature, learned in save.items():
                 self._unsaved.setdefault(feature, learned)
             for feature, at in over.items():
@@ -683,8 +683,10 @@ class SwarmCloudRuntime:
                 # Made in another event loop: its connections are closed, not leaked.
                 try:
                     await old.aclose()
-                except Exception as exc:  # its loop may be gone; nothing else to free
-                    log.debug("closing the HTTP client of an earlier event loop: %s", exc)
+                except Exception as exc:  # noqa: BLE001 - its loop may be gone; nothing else to free
+                    log.debug(
+                        "closing the HTTP client of an earlier event loop: %s", exception_text(exc)
+                    )
             self._http = httpx.AsyncClient(
                 base_url=self._base_url,
                 timeout=self._timeout,

@@ -160,7 +160,7 @@ async def run_queued(tenant_id: uuid.UUID, limit: int = 5) -> int:
                 continue
             try:
                 text = await draft(db, d)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - audited by class only, drafting retried later
                 log.info("discussion summary %s failed: %s", discussion_id, type(e).__name__)
                 await db.rollback()
                 attempt = 1 + (

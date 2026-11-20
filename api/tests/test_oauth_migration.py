@@ -52,7 +52,7 @@ def test_0004_up_down_up(scratch_db):  # noqa: F811
             u=user,
         )
         raise AssertionError("duplicate access hash accepted")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - the constraint violation's exact type varies
         assert "uq_oauth_tokens_access_hash" in str(e)
     # Deleting a user removes their tokens.
     _run("DELETE FROM users WHERE id = :u", u=user)

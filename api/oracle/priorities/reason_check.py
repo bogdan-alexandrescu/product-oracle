@@ -214,8 +214,8 @@ async def check_reason(
         )
     except (TimeoutError, LlmOutOfTime):
         check.status = "timed_out"
-    except Exception as e:  # any gateway failure: the rules decide alone
-        log.warning("override reason check failed: %s", type(e).__name__)
+    except Exception as e:  # noqa: BLE001 - any gateway failure: the rules decide alone
+        log.warning("override reason check failed: %s", exception_text(e))
     else:
         check.usage = dict(completion.usage or {})
         check.account_label = completion.account_label

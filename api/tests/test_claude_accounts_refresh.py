@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from oracle.claude_accounts import store, sweep
+from oracle.claude_accounts import credentials, store, sweep
 from oracle.claude_accounts.accounts import AccountState
 from oracle.claude_accounts.credentials import (
     DEFAULT_HELD_REFRESH_MARGIN,
@@ -278,3 +278,24 @@ async def test_the_refresh_button_goes_through_the_same_writer_and_recovers(
     ).json()
     assert body["refresh"]["reason"] == "reauth_required"
     assert body["account"]["state"] == "REAUTH_REQUIRED"
+
+
+async def test_an_unreadable_access_token_says_why_nothing_was_written(caplog, monkeypatch):
+    # #1574: a failed read of the access column was UNKNOWN with no trace of the cause.
+    r, s = _refresher({"a-refresh": _pair(timedelta(hours=12)), "a": "acc"})
+    s.fail_reads.add("a")
+    # Alembic's fileConfig in another test may have disabled the module's logger.
+    monkeypatch.setattr(credentials.log, "disabled", False)
+    with caplog.at_level("ERROR", logger="oracle.claude_accounts.credentials"):
+        out = await r.refresh_secret("a")
+    assert out.reason == "unverified_skipped"
+    assert out.error == "RuntimeError"
+    assert any(getattr(rec, "error", None) == "RuntimeError" for rec in caplog.records)
+
+
+async def test_a_store_that_cannot_be_read_carries_its_reason():
+    r, s = _refresher({"c-refresh": _pair(timedelta(hours=1))})
+    s.fail_reads.add("c-refresh")
+    out = await r.refresh_secret("c")
+    assert (out.reason, out.error) == ("store_unavailable", "RuntimeError")
+    assert "error" not in out.as_dict()

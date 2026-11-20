@@ -50,6 +50,7 @@ from oracle.claude_accounts.credentials import (
 )
 from oracle.claude_accounts.models import ClaudeAccountHold, ClaudeAccountSignin, ClaudeSweepLease
 from oracle.claude_accounts.oauth import PENDING_TTL, HttpTokenEndpoint, TokenEndpoint
+from oracle.errors import exception_text
 from oracle.tenancy import tenant_session, unscoped_session
 
 log = logging.getLogger(__name__)
@@ -212,7 +213,8 @@ async def liveness(session: Any) -> dict[str, Any]:
     """When the sweep last completed and how; both null when it never has."""
     try:
         row = await session.scalar(select(ClaudeSweepLease))
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 - a DB read failing must not crash liveness
+        log.warning("sweep lease liveness read failed: %s", exception_text(exc))
         return {"last_completed_at": None, "last_outcome": None, "readable": False}
     return {
         "last_completed_at": row.last_completed_at if row else None,
@@ -271,7 +273,8 @@ class LeaseFence:
             return False
         try:
             ok = await renew_lease(self.tenant_id, self.holder, datetime.now(UTC))
-        except Exception:
+        except Exception as exc:  # noqa: BLE001 - renew failing fails closed, lease is lost
+            log.warning("sweep lease renewal failed: %s", exception_text(exc))
             ok = False
         if not ok:
             self.lost = True
@@ -328,10 +331,11 @@ async def _record_refreshes(
                 expires_at=outcome.expires_at,
             ):
                 written += 1
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - one account's record failure must not stop the sweep
             log.error(
-                "could not record an account's refresh outcome",
-                extra={"account_id": outcome.account_id, "error": type(exc).__name__},
+                "could not record an account's refresh outcome: %s",
+                exception_text(exc),
+                extra={"account_id": outcome.account_id},
             )
     return written
 
@@ -352,8 +356,8 @@ async def sweep_account_pool(
         outcomes = await refresher.sweep_accounts(
             [store.secret_for(a) for a in due], keep_going=keep_going, held=held
         )
-    except Exception as exc:
-        log.error("account pool sweep failed", extra={"error": type(exc).__name__})
+    except Exception as exc:  # noqa: BLE001 - reported to the caller as the sweep's result
+        log.error("account pool sweep failed: %s", exception_text(exc))
         return {"error": type(exc).__name__}
 
     recorded = await _record_refreshes(tenant_id, outcomes, now)
@@ -383,10 +387,11 @@ async def sweep_account_pool(
             done = await store.mark_reauth_required(
                 tenant_id, account_id, f"refresh failed: {second.reason}"
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - one account's mark failure must not stop the sweep
             log.error(
-                "could not record that an account's credential is dead",
-                extra={"account_id": account_id, "error": type(exc).__name__},
+                "could not record that an account's credential is dead: %s",
+                exception_text(exc),
+                extra={"account_id": account_id},
             )
             continue
         if done is not None:
@@ -408,8 +413,8 @@ async def poll_usage(
     """One usage round, unless a 429's retry-after has not passed; a new 429's is kept."""
     try:
         retry_at = await usage_retry_at(tenant_id)
-    except Exception as exc:
-        log.error("account usage poll failed", extra={"error": type(exc).__name__})
+    except Exception as exc:  # noqa: BLE001 - reported to the caller as the poll's result
+        log.error("account usage poll failed: %s", exception_text(exc))
         return {"error": type(exc).__name__}
     if retry_at is not None and retry_at > datetime.now(UTC):
         return {"examined": 0, "polled": 0, "skipped": [], "backoff_until": retry_at.isoformat()}
@@ -439,8 +444,8 @@ async def poll_usage(
             longest = MAX_USAGE_RETRY_AFTER.total_seconds()
             wait = min(max(0, limited[0].retry_after_seconds or 0), longest)
             await set_usage_retry_at(tenant_id, datetime.now(UTC) + timedelta(seconds=wait))
-    except Exception as exc:
-        log.error("account usage poll failed", extra={"error": type(exc).__name__})
+    except Exception as exc:  # noqa: BLE001 - reported to the caller as the poll's result
+        log.error("account usage poll failed: %s", exception_text(exc))
         return {"error": type(exc).__name__}
     return {
         "examined": len(outcomes),
@@ -466,14 +471,15 @@ async def sweep(
     result: dict[str, Any] = {}
     try:
         result["holds"] = await prune_all_holds(tenant_id, now)
-    except Exception as exc:
-        log.error("account hold sweep failed", extra={"error": type(exc).__name__})
+    except Exception as exc:  # noqa: BLE001 - reported to the caller as this sweep's result
+        log.error("account hold sweep failed: %s", exception_text(exc))
         result["holds"] = {"error": type(exc).__name__}
 
     holder = new_holder()
     try:
         taken = await acquire_lease(tenant_id, holder, now, due_after=due_after)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - reported to the caller as this sweep's result
+        log.error("sweep lease acquisition failed: %s", exception_text(exc))
         result["sweep_lease"] = {"acquired": False, "error": type(exc).__name__}
         return result
     if taken.not_due:

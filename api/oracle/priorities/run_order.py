@@ -43,6 +43,7 @@ only. Moving and pinning rows is pick C9.
 """
 
 import json
+import logging
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -55,6 +56,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import safe_yaml
 from oracle.errors import exception_text
 from oracle.priorities.models import PRIORITY_METHODS, PrioritySnapshot
+
+log = logging.getLogger(__name__)
 
 FILE = "priority.yaml"
 # A parsed priority.yaml is at most this large as JSON (it is stored on the snapshot).
@@ -173,6 +176,7 @@ def load_order(text: str) -> Any:
     except PriorityOrderError:
         raise
     except Exception as exc:  # noqa: BLE001 - agent output: every failure is a refusal
+        log.warning("%s could not be read: %s", FILE, exception_text(exc))
         raise PriorityOrderError(
             "unreadable_yaml",
             f"{FILE} could not be read ({type(exc).__name__}: {exception_text(exc)[:200]})",
@@ -400,6 +404,7 @@ async def check_order_async(text: str, **kwargs: Any) -> OrderCheck:
         )
         return out
     except Exception as exc:  # noqa: BLE001 - agent output: every failure is a problem
+        log.warning("%s could not be checked: %s", FILE, exception_text(exc))
         out = OrderCheck()
         out.add("unreadable_yaml", f"{FILE} could not be checked ({type(exc).__name__})")
         return out
