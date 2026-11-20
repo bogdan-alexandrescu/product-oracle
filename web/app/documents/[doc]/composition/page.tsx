@@ -1,19 +1,20 @@
-import { Suspense } from 'react';
+'use client';
 
-import type { RouteProps } from '@/lib/route-props';
+import { useParams } from '@/lib/nav';
+import { Suspense } from 'react';
 
 import { CompositionView } from './_view';
 import { PageSkeleton } from '@/components/ds';
 
-async function Composition({ params }: { params: RouteProps<{ doc: string }>['params'] }) {
-  const { doc } = await params;
+function Composition() {
+  const { doc } = useParams<{ doc: string }>();
   return <CompositionView key={doc} doc={doc} />;
 }
 
-export default function CompositionPage({ params }: RouteProps<{ doc: string }>) {
+export default function CompositionPage() {
   return (
     <Suspense fallback={<PageSkeleton />}>
-      <Composition params={params} />
+      <Composition />
     </Suspense>
   );
 }

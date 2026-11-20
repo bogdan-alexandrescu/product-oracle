@@ -1,18 +1,20 @@
+'use client';
+
+import { useParams } from '@/lib/nav';
 import { Suspense } from 'react';
 
 import { ThemeDetail } from '@/components/ThemeDetail';
-import type { RouteProps } from '@/lib/route-props';
 import { PageSkeleton } from '@/components/ds';
 
-async function Detail({ params }: { params: RouteProps<{ key: string }>['params'] }) {
-  const { key } = await params;
+function Detail() {
+  const { key } = useParams<{ key: string }>();
   return <ThemeDetail themeKey={key} />;
 }
 
-export default function ThemePage({ params }: RouteProps<{ key: string }>) {
+export default function ThemePage() {
   return (
     <Suspense fallback={<PageSkeleton />}>
-      <Detail params={params} />
+      <Detail />
     </Suspense>
   );
 }

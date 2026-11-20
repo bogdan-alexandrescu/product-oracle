@@ -1,3 +1,5 @@
+'use client';
+
 import { Suspense } from 'react';
 
 import { AuthCard } from '@/app/login/_components/AuthCard';

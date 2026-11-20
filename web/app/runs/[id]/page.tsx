@@ -1,18 +1,20 @@
+'use client';
+
+import { useParams } from '@/lib/nav';
 import { Suspense } from 'react';
 
 import { RunDetail } from '../_run-detail';
-import type { RouteProps } from '@/lib/route-props';
 import { PageSkeleton } from '@/components/ds';
 
-async function Detail({ params }: { params: RouteProps<{ id: string }>['params'] }) {
-  const { id } = await params;
+function Detail() {
+  const { id } = useParams<{ id: string }>();
   return <RunDetail id={id} />;
 }
 
-export default function RunPage({ params }: RouteProps<{ id: string }>) {
+export default function RunPage() {
   return (
     <Suspense fallback={<PageSkeleton />}>
-      <Detail params={params} />
+      <Detail />
     </Suspense>
   );
 }

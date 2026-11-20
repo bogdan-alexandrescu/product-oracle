@@ -1,19 +1,20 @@
-import { Suspense } from 'react';
+'use client';
 
-import type { RouteProps } from '@/lib/route-props';
+import { useParams } from '@/lib/nav';
+import { Suspense } from 'react';
 
 import { OnePager } from './_one-pager';
 import { PageSkeleton } from '@/components/ds';
 
-async function Doc({ params }: { params: RouteProps<{ doc: string }>['params'] }) {
-  const { doc } = await params;
+function Doc() {
+  const { doc } = useParams<{ doc: string }>();
   return <OnePager slug={doc} />;
 }
 
-export default function OnePagerPage({ params }: RouteProps<{ doc: string }>) {
+export default function OnePagerPage() {
   return (
     <Suspense fallback={<PageSkeleton />}>
-      <Doc params={params} />
+      <Doc />
     </Suspense>
   );
 }

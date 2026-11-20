@@ -6,7 +6,7 @@ Moving `web/` from Next.js to Vite, TanStack Router and nginx (#1553), as ai-stu
 
 - [nginx.md](nginx.md): how nginx serves the built app: the `/v1`, `/uploads` and
   `/healthz` proxy (streaming, 120 s, same-origin session cookie), the CSP and the 4
-  redirects in a table generated from `web/next.config.ts`, the SPA fallback with a
+  redirects in a table generated from `web/next.config.ts` and `web/lib/redirects.ts`, the SPA fallback with a
   `no-store` 404 for a missing chunk, `NEXT_PUBLIC_*` / `ORACLE_SIMPLE_MODE` → `VITE_*`,
   `createViteConfig`, and a draft nginx config and image.
 - [dependencies.md](dependencies.md): every package the move adds or drops, with
