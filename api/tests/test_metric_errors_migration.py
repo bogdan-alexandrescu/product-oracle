@@ -21,6 +21,7 @@ from sqlalchemy.engine import make_url
 
 from oracle.metrics import posthog, pull
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0059_metric_errors_fixed"
 PREVIOUS = "0058_fireflies_endpoint"
@@ -73,11 +74,10 @@ def _metric(tenant: uuid.UUID, title: str, error: str | None) -> uuid.UUID:
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert len(script.get_heads()) == 1
 
 
 def test_old_posthog_text_becomes_the_fixed_sentence(scratch_db):
-    command.upgrade(_cfg(), PREVIOUS)
+    upgrade(_cfg(), PREVIOUS)
     tenant = uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:id, 'Example Co')", id=tenant)
     kept = {
@@ -89,7 +89,7 @@ def test_old_posthog_text_becomes_the_fixed_sentence(scratch_db):
     leaked = _metric(tenant, "leaked", "table secret_billing_ledger does not exist")
     reach = _metric(tenant, "reach", "Could not reach PostHog: [Errno -2] Name not known")
     clear = _metric(tenant, "clear", None)
-    command.upgrade(_cfg(), REVISION)
+    upgrade(_cfg(), REVISION)
     got = dict(_run("SELECT id, last_error FROM metrics"))
     assert got[leaked] == posthog.QUERY_FAILED
     assert got[reach] == posthog.UNREACHABLE

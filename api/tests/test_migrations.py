@@ -19,6 +19,7 @@ import oracle.models  # noqa: F401
 from oracle.db import Base
 from oracle.templates import defaults
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 V1_TABLES = {
     "invites",
@@ -84,7 +85,7 @@ def scratch_db():
 
 def test_upgrade_downgrade_round_trip(scratch_db):
     cfg = _cfg()
-    command.upgrade(cfg, "0001")
+    upgrade(cfg, "0001")
     tenant = uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:id, 'Example Co')", id=tenant)
     _run(
@@ -98,7 +99,7 @@ def test_upgrade_downgrade_round_trip(scratch_db):
         t=tenant,
     )
 
-    command.upgrade(cfg, "head")
+    upgrade(cfg, "head")
     assert V1_TABLES <= _tables()
     # Existing tokens act as owners; existing tenants get the default template.
     assert _run("SELECT role FROM api_tokens") == [("owner",)]
@@ -128,16 +129,12 @@ def test_upgrade_downgrade_round_trip(scratch_db):
     assert _run("SELECT count(*) FROM users") == [(1,)]
     with pytest.raises(Exception, match="ck_users_role"):
         _run("UPDATE users SET role = 'viewer'")
-
-    command.upgrade(cfg, "head")
-    assert V1_TABLES <= _tables()
-    command.downgrade(cfg, "base")
-    assert _tables() == {"alembic_version"}
+    # The whole chain up, down to empty and up again: tests/test_migration_graph.py.
 
 
 def test_models_match_migrations(scratch_db):
     """The models (Base.metadata) and the migrations describe the same schema."""
-    command.upgrade(_cfg(), "head")
+    upgrade(_cfg(), "head")
 
     async def diff():
         from sqlalchemy.ext.asyncio import create_async_engine
@@ -194,9 +191,9 @@ def test_baseline_flow_check_up_down_up(scratch_db):
     # outcomes-edit, roadmap-dates: renumbered on merge.
     assert script.get_heads() == ["0133_null_run_cost"]
 
-    command.upgrade(cfg, previous)
+    upgrade(cfg, previous)
     assert "'baseline'" not in _flow_check()
-    command.upgrade(cfg, BASELINE_FLOW)
+    upgrade(cfg, BASELINE_FLOW)
     check = _flow_check()
     assert "'baseline'" in check and "'launch_kit'" in check and "'prd_to_roadmap'" in check
 
@@ -220,7 +217,7 @@ def test_baseline_flow_check_up_down_up(scratch_db):
             t=tenant,
         )
 
-    command.upgrade(cfg, BASELINE_FLOW)
+    upgrade(cfg, BASELINE_FLOW)
     assert "'baseline'" in _flow_check()
 
 
@@ -248,11 +245,11 @@ def test_revision_run_up_down_up(scratch_db):
     assert REVISION_RUN in {r.revision for r in script.walk_revisions()}
     previous = script.get_revision(REVISION_RUN).down_revision
     assert previous == "0043_invite_message"
-    command.upgrade(cfg, REVISION_RUN)
+    upgrade(cfg, REVISION_RUN)
     assert "run_id" in _columns("entity_revisions")
     command.downgrade(cfg, previous)
     assert "run_id" not in _columns("entity_revisions")
-    command.upgrade(cfg, REVISION_RUN)
+    upgrade(cfg, REVISION_RUN)
     assert "run_id" in _columns("entity_revisions")
 
 
@@ -269,7 +266,7 @@ def test_simple_changes_seq_backfills_in_the_order_made(scratch_db):
 
     cfg = _cfg()
     previous = ScriptDirectory.from_config(cfg).get_revision(SIMPLE_CHANGES_SEQ).down_revision
-    command.upgrade(cfg, previous)
+    upgrade(cfg, previous)
     tenant = uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:id, 'Example Co')", id=tenant)
     ids = [uuid.UUID(int=n) for n in (9, 3, 7, 1, 5)]
@@ -292,7 +289,7 @@ def test_simple_changes_seq_backfills_in_the_order_made(scratch_db):
             at=at,
         )
 
-    command.upgrade(cfg, SIMPLE_CHANGES_SEQ)
+    upgrade(cfg, SIMPLE_CHANGES_SEQ)
     got = [r[0] for r in _run("SELECT id FROM simple_changes ORDER BY seq")]
     assert got == [ids[4], ids[3], ids[1], ids[2], ids[0]]
     assert [r[0] for r in _run("SELECT seq FROM simple_changes ORDER BY seq")] == [1, 2, 3, 4, 5]
@@ -309,5 +306,5 @@ def test_simple_changes_seq_backfills_in_the_order_made(scratch_db):
     ) == [("NO",)]
     command.downgrade(cfg, previous)
     assert "seq" not in _columns("simple_changes")
-    command.upgrade(cfg, SIMPLE_CHANGES_SEQ)
+    upgrade(cfg, SIMPLE_CHANGES_SEQ)
     assert "seq" in _columns("simple_changes")

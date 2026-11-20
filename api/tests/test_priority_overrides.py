@@ -35,6 +35,7 @@ from oracle.priorities.scoring import (
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import Ctx, make_ctx, make_item
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 from tests.test_mcp import mcp_client, run_token, text_of
 
 # --- unit: apply_overrides ----------------------------------------------------------------
@@ -770,7 +771,6 @@ def _run(sql: str, **params):
 
 def test_the_chain_ends_here_after_agent_staging():
     script = ScriptDirectory.from_config(_cfg())
-    assert len(script.get_heads()) == 1
     assert script.get_revision(REVISION).down_revision == "0022_priority_snapshot_runs"
 
 
@@ -778,7 +778,7 @@ def test_upgrade_adds_priority_overrides_and_downgrade_drops_it():
     asyncio.run(_reset_schema(SCRATCH_URL))
     try:
         cfg = _cfg()
-        command.upgrade(cfg, REVISION)
+        upgrade(cfg, REVISION)
         tenant, a, b = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
         _run("INSERT INTO tenants (id, name) VALUES (:t, 'Company')", t=tenant)
         for e, key in ((a, "a"), (b, "b")):

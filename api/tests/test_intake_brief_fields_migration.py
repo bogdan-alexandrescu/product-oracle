@@ -20,6 +20,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0023_intake_brief_fields"
 PREVIOUS = "0023_source_partial_sync"
@@ -70,12 +71,11 @@ def test_chains_on_mains_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
     # 0024_segment_skipped chains on it; one head.
-    assert len(script.get_heads()) == 1
     assert script.get_revision("0024_segment_skipped").down_revision == REVISION
 
 
 def test_upgrade_adds_the_brief_fields_and_downgrade_drops_them(scratch_db):
-    command.upgrade(_cfg(), PREVIOUS)
+    upgrade(_cfg(), PREVIOUS)
     tenant, intake = uuid.uuid4(), uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:id, 'Example Co')", id=tenant)
     _run(
@@ -85,7 +85,7 @@ def test_upgrade_adds_the_brief_fields_and_downgrade_drops_them(scratch_db):
     )  # fmt: skip
     assert _columns() == set()
 
-    command.upgrade(_cfg(), REVISION)
+    upgrade(_cfg(), REVISION)
     assert _columns() == COLUMNS
     row = _run(
         "SELECT goal_ids, out_of_scope, draft_template, draft_theme, prd_answers "

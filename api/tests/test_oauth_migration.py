@@ -4,6 +4,7 @@ import uuid
 
 from alembic import command
 
+from tests.migration_db import upgrade
 from tests.test_migrations import _cfg, _run, _tables, scratch_db  # noqa: F401
 
 OAUTH_TABLES = {"oauth_clients", "oauth_codes", "oauth_tokens"}
@@ -11,10 +12,10 @@ OAUTH_TABLES = {"oauth_clients", "oauth_codes", "oauth_tokens"}
 
 def test_0004_up_down_up(scratch_db):  # noqa: F811
     cfg = _cfg()
-    command.upgrade(cfg, "0003")
+    upgrade(cfg, "0003")
     assert not (OAUTH_TABLES & _tables())
 
-    command.upgrade(cfg, "0004")
+    upgrade(cfg, "0004")
     assert OAUTH_TABLES <= _tables()
     tenant, user, client = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:id, 'Example Co')", id=tenant)
@@ -61,5 +62,5 @@ def test_0004_up_down_up(scratch_db):  # noqa: F811
     assert not (OAUTH_TABLES & _tables())
     assert _run("SELECT count(*) FROM tenants") == [(1,)]
 
-    command.upgrade(cfg, "head")
+    upgrade(cfg, "head")
     assert OAUTH_TABLES <= _tables()

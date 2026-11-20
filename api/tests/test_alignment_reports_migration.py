@@ -21,6 +21,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
@@ -67,7 +68,6 @@ def scratch_db():
 def test_0020_chains_on_mains_head_and_is_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == BEFORE
-    assert len(script.get_heads()) == 1
 
 
 def _report(tenant: uuid.UUID, kind: str, week: date = date(2026, 10, 19)) -> None:
@@ -82,9 +82,9 @@ def _report(tenant: uuid.UUID, kind: str, week: date = date(2026, 10, 19)) -> No
 
 def test_upgrade_adds_the_tables_and_downgrade_drops_them(scratch_db):
     cfg = _cfg()
-    command.upgrade(cfg, BEFORE)
+    upgrade(cfg, BEFORE)
     assert not TABLES & _tables()
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     assert TABLES <= _tables()
 
     tenant = uuid.uuid4()
@@ -115,5 +115,5 @@ def test_upgrade_adds_the_tables_and_downgrade_drops_them(scratch_db):
     _run("DELETE FROM company_integrations")
     command.downgrade(cfg, BEFORE)
     assert not TABLES & _tables()
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     assert TABLES <= _tables()

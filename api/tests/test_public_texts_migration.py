@@ -6,6 +6,7 @@ import pytest
 from alembic import command
 from sqlalchemy.exc import IntegrityError
 
+from tests.migration_db import upgrade
 from tests.test_migrations import _cfg, _run, scratch_db  # noqa: F401
 
 
@@ -27,10 +28,10 @@ def _doc_columns() -> set[str]:
 
 def test_0056_up_down_up(scratch_db):  # noqa: F811
     cfg = _cfg()
-    command.upgrade(cfg, "0071_roadmap_audience")
+    upgrade(cfg, "0071_roadmap_audience")
     assert _tables() == set() and _doc_columns() == set()
 
-    command.upgrade(cfg, "0072_public_texts")
+    upgrade(cfg, "0072_public_texts")
     assert _tables() == {"roadmap_public_texts", "roadmap_public_checks"}
     assert _doc_columns() == {"public_title", "public_intro"}
     tenant, doc = uuid.uuid4(), uuid.uuid4()
@@ -64,5 +65,5 @@ def test_0056_up_down_up(scratch_db):  # noqa: F811
     assert _tables() == set() and _doc_columns() == set()
     assert _run("SELECT count(*) FROM llm_jobs") == [(0,)]
 
-    command.upgrade(cfg, "head")
+    upgrade(cfg, "head")
     assert _tables() == {"roadmap_public_texts", "roadmap_public_checks"}

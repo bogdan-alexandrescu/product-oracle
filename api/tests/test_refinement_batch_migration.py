@@ -12,6 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0016_refinement_batch"
 SCRATCH_URL = (
@@ -60,21 +61,20 @@ def test_chains_on_the_roadmap_head():
     # 0017_citation_source_oracle chains on it, then 0018_runtime_features,
     # 0019_citation_confidence, the intake lane's 0014_intake and the PRD review chain;
     # one head.
-    assert len(script.get_heads()) == 1
     assert script.get_revision("0017_citation_source_oracle").down_revision == REVISION
     assert script.get_revision("0014_intake").down_revision == "0019_citation_confidence"
     assert script.get_revision("0014_review").down_revision == "0018_source_unavailable_items"
 
 
 def test_extends_the_live_check_and_keeps_other_kinds(scratch_db):
-    command.upgrade(_cfg(), "0016_roadmap")
+    upgrade(_cfg(), "0016_roadmap")
     # Another lane's kind, added after 0013, must survive.
     _run("ALTER TABLE llm_jobs DROP CONSTRAINT ck_llm_jobs_kind")
     _run(
         "ALTER TABLE llm_jobs ADD CONSTRAINT ck_llm_jobs_kind CHECK (kind IN "
         "('review_comments', 'reporting', 'refinement', 'quality_review', 'other_lane'))"
     )
-    command.upgrade(_cfg(), REVISION)
+    upgrade(_cfg(), REVISION)
     check = _check()
     for kind in ("review_comments", "quality_review", "other_lane", "refinement_batch"):
         assert f"'{kind}'" in check

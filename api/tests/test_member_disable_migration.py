@@ -15,6 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
@@ -121,9 +122,9 @@ def _populate() -> dict[str, uuid.UUID]:
 
 def test_upgrade_lapses_approvals_of_members_demoted_before_it(scratch_db):
     cfg = _cfg()
-    command.upgrade(cfg, "0014_review")
+    upgrade(cfg, "0014_review")
     ids = _populate()
-    command.upgrade(cfg, "0014_member_disable")
+    upgrade(cfg, "0014_member_disable")
 
     reviews = {
         r[0]: (r[1], r[2])
@@ -173,7 +174,7 @@ def test_upgrade_requests_rereview_like_a_runtime_lapse(scratch_db, rereview_on_
     says so (its own policy, else the company's, else the default: yes), as
     oracle.review.state.lapse_approvals does at runtime."""
     cfg = _cfg()
-    command.upgrade(cfg, "0014_review")
+    upgrade(cfg, "0014_review")
     ids = _populate()
     if rereview_on_change is not None:
         _run(
@@ -191,7 +192,7 @@ def test_upgrade_requests_rereview_like_a_runtime_lapse(scratch_db, rereview_on_
         d=ids["doc_b"],
         o=ids["approver"],
     )
-    command.upgrade(cfg, "0014_member_disable")
+    upgrade(cfg, "0014_member_disable")
     states = {
         (r[0], r[1]): r[2]
         for r in _run(

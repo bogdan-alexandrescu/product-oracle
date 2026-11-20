@@ -24,6 +24,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0050_metrics"
 PREVIOUS = "0049_request_replies"
@@ -75,7 +76,6 @@ def scratch_db():
 def test_chains_on_mains_head_and_is_the_only_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert len(script.get_heads()) == 1
 
 
 def _posthog(t: uuid.UUID, by: uuid.UUID) -> None:
@@ -89,11 +89,11 @@ def _posthog(t: uuid.UUID, by: uuid.UUID) -> None:
 
 def test_upgrade_and_downgrade_on_a_seeded_database(scratch_db):
     cfg = _cfg()
-    command.upgrade(cfg, PREVIOUS)
+    upgrade(cfg, PREVIOUS)
     t, other, owner, metric = (uuid.uuid4() for _ in range(4))
     for tenant in (t, other):
         _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=tenant)
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     assert TABLES <= _tables()
     assert "metric_id" in _columns("goal_measurements")
     assert "config" in _columns("company_integrations")
@@ -118,7 +118,7 @@ def test_upgrade_and_downgrade_on_a_seeded_database(scratch_db):
     assert "metric_id" not in _columns("goal_measurements")
     assert "config" not in _columns("company_integrations")
     assert _run("SELECT count(*) FROM company_integrations")[0][0] == 0
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     assert TABLES <= _tables()
 
 
@@ -136,9 +136,9 @@ def _flows() -> list[str]:
 # (tests/test_metrics_review.py).
 def test_the_metrics_variance_flow_comes_and_goes(scratch_db):
     cfg = _cfg()
-    command.upgrade(cfg, PREVIOUS)
+    upgrade(cfg, PREVIOUS)
     assert "metrics_variance" not in _flows()
-    command.upgrade(cfg, REVISION)
+    upgrade(cfg, REVISION)
     assert "'metrics_variance'" in _flows() and "'ritual_summary'" in _flows()
     command.downgrade(cfg, PREVIOUS)
     assert "metrics_variance" not in _flows() and "'ritual_summary'" in _flows()

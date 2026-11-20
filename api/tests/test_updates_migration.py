@@ -21,6 +21,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0022_updates"
 PREVIOUS = "0022_checkpoint_actions"
@@ -89,7 +90,6 @@ def test_chains_on_mains_head():
     assert script.get_revision(REVISION).down_revision == PREVIOUS
     # 0023_source_partial_sync (#249) chains on it, then 0023_intake_brief_fields (C4)
     # and 0024_segment_skipped; one head.
-    assert len(script.get_heads()) == 1
     assert script.get_revision("0023_source_partial_sync").down_revision == REVISION
 
 
@@ -101,7 +101,7 @@ def test_upgrade_adds_the_kind_and_visibility_and_downgrade_removes_them(scratch
     value is dropped, an existing document is hidden, or the downgrade loses documents
     silently; no_claim=data written by the app."""
     monkeypatch.delenv("ORACLE_DOWNGRADE_DROP_UPDATES", raising=False)
-    command.upgrade(_cfg(), PREVIOUS)
+    upgrade(_cfg(), PREVIOUS)
     before = {name: _definition(name) for name in CHECKS}
     tenant = uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:id, 'Example Co')", id=tenant)
@@ -112,7 +112,7 @@ def test_upgrade_adds_the_kind_and_visibility_and_downgrade_removes_them(scratch
     )  # fmt: skip
     assert not _column("visibility")
 
-    command.upgrade(_cfg(), REVISION)
+    upgrade(_cfg(), REVISION)
     for name, values in CHECKS.items():
         after = _definition(name)
         for v in values:

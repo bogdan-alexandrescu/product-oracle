@@ -22,6 +22,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 REVISION = "0077_simple_roadmap_dates"
 PREVIOUS = "0076_board_wide_tables"
@@ -75,7 +76,6 @@ def scratch_db():
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert len(script.get_heads()) == 1
 
 
 def _seed_item() -> tuple[uuid.UUID, uuid.UUID]:
@@ -106,11 +106,11 @@ def _seed_item() -> tuple[uuid.UUID, uuid.UUID]:
 
 
 def test_upgrade_and_downgrade(scratch_db):
-    command.upgrade(_cfg(), PREVIOUS)
+    upgrade(_cfg(), PREVIOUS)
     tenant, item = _seed_item()
     assert _columns() == set()
 
-    command.upgrade(_cfg(), REVISION)
+    upgrade(_cfg(), REVISION)
     assert _columns() == COLUMNS
     assert _run("SELECT accepted_risks, draft, date_source FROM roadmap_items") == [
         ([], False, None)
@@ -137,5 +137,5 @@ def test_upgrade_and_downgrade(scratch_db):
     assert "roadmap_date_suggestions" not in _tables()
     assert _run("SELECT key FROM tenant_settings") == [("web_searches_per_month",)]
 
-    command.upgrade(_cfg(), REVISION)
+    upgrade(_cfg(), REVISION)
     assert _columns() == COLUMNS

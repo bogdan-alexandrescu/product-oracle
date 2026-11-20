@@ -120,6 +120,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from oracle import startup
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
+from tests.migration_db import upgrade
 
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
@@ -156,7 +157,7 @@ def at_head():
     """A scratch database at head (migrated once for the module; tests that move it put it
     back)."""
     asyncio.run(_reset_schema(SCRATCH_URL))
-    command.upgrade(_cfg(), "head")
+    upgrade(_cfg(), "head")
     yield
     asyncio.run(_reset_schema(SCRATCH_URL))
 
@@ -271,7 +272,7 @@ def test_empty_database_check_is_one_read(at_head, monkeypatch, statements):
         assert upgrades == ["head"]
     finally:
         monkeypatch.undo()
-        command.upgrade(_cfg(), "head")
+        upgrade(_cfg(), "head")
 
 
 HEAVY = ("mcp", "mcp_types", "pypdf", "sqlglot", "jinja2")
