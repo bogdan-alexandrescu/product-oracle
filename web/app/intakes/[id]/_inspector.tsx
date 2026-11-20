@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { Button, Chip, CodeChip, Inspector, InspectorRow, InspectorSection, type ChipKind } from "@/components/ds";
 import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
+import { LoadError } from "@/components/ui";
 import { assess, goalViews } from "@/app/home/_goals";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatCount, plural } from "@/lib/format";
@@ -140,6 +141,9 @@ function IntakeGoals({ summary: s }: { summary: Summary }) {
     <>
       {chosen.length ? (
         <div data-testid="intake-goals-picked">{chosen.map((g) => row(g))}</div>
+      ) : confirmed.error ? (
+        // #1586: goals that could not be read say so, never "No confirmed company goal yet".
+        <LoadError what="the goals" error={confirmed.error} onRetry={() => void confirmed.reload()} />
       ) : (
         <p className="text-sm text-text2">{confirmed.data?.length || suggested.length ? "No goal chosen yet" : "No confirmed company goal yet"}</p>
       )}
