@@ -22,8 +22,8 @@ Open for the owner (also in the lane's questions):
    `eslint-config-next` goes; drop the Next and import plugins.
 3. Fonts: vendor the Inter Tight and DM Mono `woff2` files rather than add `@fontsource`.
 
-ai-studio's #1786 and PR #2071 (its nginx config and `createViteConfig`) were not readable
-from this lane; the design follows what the issue quotes from them. Phase 1 diffs the
+ai-studio's #1786 and PR #2071 (its nginx config and `createViteConfig`) were not reachable
+from this lane (GitHub answers 404 without access); the design follows what the issue asks for. Phase 1 diffs the
 draft against ai-studio's files before copying.
 
 ## Later phases
