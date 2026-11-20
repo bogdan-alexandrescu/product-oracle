@@ -61,6 +61,7 @@ test("Launches: a list that could not be read says so, never No launches yet", a
   await expect(page.getByText("Mock failure")).toBeVisible();
   await expect(page.getByTestId("launches-table")).toBeVisible();
   await expect(page.getByTestId("launches-table")).not.toContainText("No launches");
+  await expect(page.getByTestId("launch-filters").getByRole("button", { name: /^All/ })).toHaveText("All");
 });
 
 test("Requests: the feature Oracle suggests, when the features could not be read, says so, never Loading for ever", async ({ page }) => {
@@ -136,6 +137,22 @@ test("Quality: a History whose review jobs could not be read says so, never no e
   await expect(history.getByText("Mock failure")).toBeVisible();
   await expect(history).not.toContainText("No evaluation reports");
   await expect(history).not.toContainText("No reports match");
+});
+
+test("Quality: a History whose readiness could not be read stops loading, never loading for ever", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("po-mock-role", "commenter"));
+  await login(page);
+  await page.goto("/documents/team-invites/v/2/quality");
+  const history = page.getByRole("region", { name: "History" });
+  await expect(history).toContainText("No evaluation reports for v2 yet");
+  await expect(history.locator("[aria-busy=true]")).toHaveCount(0);
+
+  await failGets(page, "/v1/documents/team-invites/versions/2/readiness");
+  await page.reload();
+  await expect(page.getByText("Mock failure").first()).toBeVisible();
+  await expect(history).toBeVisible();
+  await expect(history.locator("[aria-busy=true]")).toHaveCount(0);
+  await expect(history).not.toContainText(/No evaluation reports|No reports match/);
 });
 
 test("Plan: a milestone date whose estimates could not be read says so, never that none supports it", async ({ page }) => {
