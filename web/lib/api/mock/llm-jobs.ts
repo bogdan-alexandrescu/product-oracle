@@ -23,7 +23,7 @@ import {
   type NextDraftChangeRow,
   type StartRun,
 } from "./next-draft";
-import { reply } from "./typed";
+import { reply, rawReply } from "./typed";
 
 type Job = Schemas["LlmJobOut"];
 type Suggestion = Schemas["SuggestionOut"];
@@ -937,7 +937,7 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
     const done = shownJob(ctx, jobs.find((j) => j.status === "succeeded" && j.output));
     if (p[6] === "export") {
       const md = reportsMarkdown(doc, v.number, done?.output ?? null);
-      return new Response(md, { headers: { "content-type": q.get("format") === "html" ? "text/html" : "text/markdown" } });
+      return rawReply("/v1/documents/{doc}/versions/{n}/reports/export", "get", new Response(md, { headers: { "content-type": q.get("format") === "html" ? "text/html" : "text/markdown" } }));
     }
     const out = done?.output as { resolution: Schemas["ResolutionNarrative"]; changes: Schemas["ChangesReport"] } | null | undefined;
     return reply("/v1/documents/{doc}/versions/{n}/reports", "get", {

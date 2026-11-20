@@ -6,7 +6,7 @@
 import type { Schemas } from "@/lib/api/client";
 
 import { mockUuid, seeded } from "./ids";
-import { reply } from "./typed";
+import { reply, rawReply } from "./typed";
 
 type Role = Schemas["Me"]["role"];
 type Launch = Omit<Schemas["LaunchOut"], "tasks" | "task_counts" | "notes">;
@@ -385,7 +385,7 @@ export async function routeLaunches(ctx: LaunchesContext, db: LaunchesDb, req: R
       const since = q.get("since");
       const rows = db.changelog.filter((e) => e.status === "published" && e.audience === audience && (!since || e.released_on >= since));
       const format = q.get("format") ?? "md";
-      return new Response(exportText(rows, format), { status: 200, headers: { "Content-Type": format === "html" ? "text/html; charset=utf-8" : "text/markdown; charset=utf-8" } });
+      return rawReply("/v1/changelog/export", "get", new Response(exportText(rows, format), { status: 200, headers: { "Content-Type": format === "html" ? "text/html; charset=utf-8" : "text/markdown; charset=utf-8" } }));
     }
     if (!approver) return forbidden("approver");
     if (p.length === 2 && m === "POST") {

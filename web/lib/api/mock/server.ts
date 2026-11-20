@@ -11,7 +11,7 @@ import { sortGoals } from "@/lib/goal-order";
 import { citationHref, formatDate, formatDay, goalFigure } from "@/lib/format";
 import { parseBlocks, plainText, type Inline } from "@/lib/markdown";
 import { mockName as displayName } from "./people";
-import { reply } from "./typed";
+import { reply, rawReply } from "./typed";
 
 import { MOCK_SCENARIO_KEY, mockUuid, newCompany, seeded, stableUuid } from "./ids";
 import { prdCode } from "./item-code";
@@ -9638,7 +9638,7 @@ function exportRoute(db: Db, doc: DocumentRow, v: VersionRow, sub: string | unde
       });
     }
     if (format === "pdf") return new Response(exportPdf(doc, v, badge), { headers: { "content-type": "application/pdf" } });
-    return new Response(exportHtml(doc, v, db.branding, badge), { headers: { "content-type": "text/html" } });
+    return rawReply("/v1/documents/{doc}/versions/{n}/export", "get", new Response(exportHtml(doc, v, db.branding, badge), { headers: { "content-type": "text/html" } }));
   }
   return notFound("Route");
 }

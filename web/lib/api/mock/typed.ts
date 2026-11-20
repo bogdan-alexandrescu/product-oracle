@@ -37,3 +37,10 @@ export function bodyOf<P extends MockPath, M extends MockMethod>(path: P, method
   void method;
   return body;
 }
+
+/** Names the route of a reply whose body is not JSON (html, pdf, markdown, yaml), for the route coverage check. */
+export function rawReply<P extends MockPath, M extends MockMethod>(path: P, method: M & keyof paths[P], res: Response): Response {
+  void path;
+  void method;
+  return res;
+}

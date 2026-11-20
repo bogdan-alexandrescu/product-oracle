@@ -8,7 +8,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 
-import { reply } from "./typed";
+import { reply, rawReply } from "./typed";
 
 type Role = Schemas["Me"]["role"];
 type Spec = Schemas["SpecOut"];
@@ -451,10 +451,14 @@ export async function routeSpecs(ctx: SpecsContext, req: Request, p: string[], q
     if (p[3] === "outputs" && p[4] && m === "GET") {
       const file = ctx.db.files[`${p[2]}/${p[4]}`];
       if (!file) return fail(404, `output '${p[4]}' not found`);
-      return new Response(file.content, {
-        status: 200,
-        headers: { "Content-Type": `${file.media_type}; charset=utf-8`, "Content-Security-Policy": CSP, "X-Content-Type-Options": "nosniff" },
-      });
+      return rawReply(
+        "/v1/design-artifacts/{version_id}/outputs/{name}",
+        "get",
+        new Response(file.content, {
+          status: 200,
+          headers: { "Content-Type": `${file.media_type}; charset=utf-8`, "Content-Security-Policy": CSP, "X-Content-Type-Options": "nosniff" },
+        }),
+      );
     }
     if (p[3] === "reviews" && m === "POST") {
       const denied = need("commenter");

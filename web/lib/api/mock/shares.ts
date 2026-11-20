@@ -15,7 +15,7 @@ import { mockName as personName } from "./people";
 
 import { NO_GOAL_FLAG, boardGroup, type BoardItem } from "./audience";
 import type { SectionSeed } from "./fixtures";
-import { reply } from "./typed";
+import { reply, rawReply } from "./typed";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
 type Audience = Schemas["ShareLinkOut"]["audience"];
@@ -595,7 +595,7 @@ export async function routeShares(ctx: SharesContext, req: Request, p: string[],
     if (p[3] === "versions" && p[5] === "public-preview" && m === "GET") {
       const v = pick(Number(p[4]));
       if (!v) return json(404, { detail: "Version not found" });
-      return html(200, renderPublic(review(ctx, doc, v), "On a shared link, this shows when it was shared and when it ends."));
+      return rawReply("/v1/roadmaps/{doc}/versions/{n}/public-preview", "get", html(200, renderPublic(review(ctx, doc, v), "On a shared link, this shows when it was shared and when it ends.")));
     }
     if (p[3] === "publications" && p[5] === "public-check" && m === "POST") {
       const pub = ctx.publications.find((x) => x.document_id === doc.id && x.number === Number(p[4]));
@@ -991,9 +991,9 @@ export async function routePublicShares(ctx: SharesContext, req: Request, p: str
   if (p[4] === "pdf" && m === "GET") {
     if (!link!.allow_download) return json(404, { reason: "not_found" });
     record(ctx, link!, "download");
-    return new Response("%PDF-1.4\n% mock shared roadmap\n", { status: 200, headers: { "content-type": "application/pdf", "content-disposition": 'attachment; filename="roadmap.pdf"' } });
+    return rawReply("/v1/public/shares/{token}/pdf", "get", new Response("%PDF-1.4\n% mock shared roadmap\n", { status: 200, headers: { "content-type": "application/pdf", "content-disposition": 'attachment; filename="roadmap.pdf"' } }));
   }
-  if (!p[4] && m === "GET") return showPage(ctx, link!, "page");
+  if (!p[4] && m === "GET") return rawReply("/v1/public/shares/{token}", "get", showPage(ctx, link!, "page"));
   return null;
 }
 

@@ -33,7 +33,7 @@ import { annotate, asWritten, resolved, setNumber } from "./one-pager-checks";
 import { roadmapOut } from "./simple-roadmap";
 import { betSubject, flowFor, flowsOfBets, onePagerFlow, requestVisual, type VisualsDb } from "./simple-visuals";
 import { madeOrder } from "./made-order";
-import { reply } from "./typed";
+import { reply, rawReply } from "./typed";
 
 type Role = Schemas["Me"]["role"];
 type Change = Schemas["SimpleChangeOut"];
@@ -1265,7 +1265,7 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
       // The page's lines as the read resolves them (the API's PDF renders one_pager.read).
       const lines = onePager(db, ctx).blocks.flatMap((b) => b.lines.map((l) => `% line: ${l.text}\n`));
       // As the API: a one-pager past its page says so in X-Oracle-Overflow-Pages, never in the PDF.
-      return new Response(`%PDF-1.7\n${pages.map((t, i) => `% page ${i + 1}: ${t}\n`).join("")}${lines.join("")}`, {
+      const pdf = new Response(`%PDF-1.7\n${pages.map((t, i) => `% page ${i + 1}: ${t}\n`).join("")}${lines.join("")}`, {
         status: 200,
         headers: {
           "content-type": "application/pdf",
@@ -1273,6 +1273,7 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
           ...(over ? { "x-oracle-overflow-pages": String(over) } : {}),
         },
       });
+      return rawReply("/v1/simple/one-pagers/{doc}/pdf", "get", pdf);
     }
     return reply("/v1/simple/one-pagers/{doc}", "get", onePager(db, ctx));
   }
