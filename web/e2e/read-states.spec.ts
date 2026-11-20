@@ -145,11 +145,11 @@ test("a PRD's review states that could not be read say so, never no re-review as
   await page.goto("/documents/visit-reminders/v/1");
   const doc = page.getByRole("article", { name: "Document" }).filter({ visible: true });
   await expect(doc.locator("h2, h3").first()).toBeVisible();
-  await expect(doc.getByTestId("load-error")).toHaveCount(0);
+  await expect(page.getByTestId("load-error")).toHaveCount(0);
 
   await failGets(page, "/v1/documents/visit-reminders/versions/1/section-states");
   await page.reload();
-  await expect(doc.getByTestId("load-error")).toContainText("Could not load the sections' review states.");
+  await expect(page.getByTestId("load-error").filter({ visible: true })).toContainText("Could not load the sections' review states.");
   await expect(doc.locator("h2, h3").first()).toBeVisible();
 });
 
