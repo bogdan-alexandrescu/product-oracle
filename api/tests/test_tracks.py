@@ -186,7 +186,7 @@ async def test_schedule_bases(client, owner):  # noqa: F811
     assert row["status"] == "verified" and row["verified_by"] and row["prd_document_id"]
     listed = (await client.get("/v1/schedule-bases", params={"prd": PRD}, headers=viewer)).json()
     # Every basis belongs to a PRD: approved_prd recorded ENG-412 for this one.
-    assert [b["reference"] for b in listed] == ["Q1 launch", "ENG-412"]
+    assert [b["reference"] for b in listed] == ["ENG-412", "Q1 launch"]
 
     # From a tracker record: the record's own target date must agree, and the record
     # must be this PRD's (on its track; round 3: a track-less record is refused).
@@ -205,6 +205,20 @@ async def test_schedule_bases(client, owner):  # noqa: F811
         "/v1/schedule-bases", json={**body, "tracker_record_id": record_id}, headers=auth
     )
     assert resp.status_code == 201
+
+
+async def test_schedule_bases_list_in_the_order_they_were_recorded(client, owner):  # noqa: F811
+    # sched-order: one order whatever today is (it was supports_date then reference, so a
+    # basis dated today + n swapped places with ENG-412's fixed Nov 30 as the days went by).
+    _, auth = owner
+    await approved_prd(client, auth)
+    for reference, days in (("Zeta plan", 60), ("Alpha plan", 3)):
+        day = (TODAY + timedelta(days=days)).isoformat()
+        body = {"kind": "commitment", "reference": reference, "supports_date": day, "prd": PRD}
+        resp = await client.post("/v1/schedule-bases", json=body, headers=auth)
+        assert resp.status_code == 201, resp.text
+    listed = (await client.get("/v1/schedule-bases", params={"prd": PRD}, headers=auth)).json()
+    assert [b["reference"] for b in listed] == ["ENG-412", "Zeta plan", "Alpha plan"]
 
 
 async def test_read_only_alignment_and_drift(client, owner, runtime):  # noqa: F811

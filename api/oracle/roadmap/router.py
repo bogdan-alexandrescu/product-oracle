@@ -616,7 +616,9 @@ async def list_schedule_bases(
     status_: Annotated[BasisStatus | None, Query(alias="status")] = None,
     item_key: str | None = None,
 ) -> list[ScheduleBasis]:
-    query = select(ScheduleBasis).order_by(ScheduleBasis.supports_date, ScheduleBasis.reference)
+    # sched-order: one order, the order they were recorded (the mock's): created time, then
+    # id for a tie. supports_date, reference let a dated-today+n basis swap places by day.
+    query = select(ScheduleBasis).order_by(ScheduleBasis.created_at, ScheduleBasis.id)
     if item_key is not None:
         query = query.where(ScheduleBasis.item_key == item_key)
     if prd is not None:

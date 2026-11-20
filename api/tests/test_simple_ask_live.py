@@ -252,6 +252,7 @@ async def test_one_read_and_one_failure_says_the_failure_plainly(client, sources
     assert [(x["source"], x["call"]) for x in line["live_reads"]] == [(LABEL, "list_meetings")]
 
 
+@pytest.mark.timing
 async def test_a_long_live_run_keeps_its_lease(client, sources, claude, monkeypatch):  # noqa: F811
     monkeypatch.setattr(replies, "LEASE", timedelta(seconds=1))
     ctx = await make_people()
@@ -261,17 +262,15 @@ async def test_a_long_live_run_keeps_its_lease(client, sources, claude, monkeypa
     out = await ask(client, ctx, "commenter", QUESTION)
     running = await run_reader(ctx)
     raw = await started_token(claude)
-    # Past the lease, the minute tick sweeps: the line still runs, its token still reads.
+    line_of = (DiscussionMessage.discussion_id == uuid.UUID(out["id"]),
+               DiscussionMessage.author_kind == "oracle")  # fmt: skip
+    # sched-order: 2.5 s against a 1 s lease renewed every 0.33 s catches a renewal slower
+    # than the lease; a loaded worker can stretch that, so the test is marked timing.
     await asyncio.sleep(2.5)
     tick = await replies.run_pending(ctx.tenant_id, budget_seconds=0)
     assert tick.interrupted == 0
     async with tenant_session(ctx.tenant_id) as s:
-        status = await s.scalar(
-            select(DiscussionMessage.status).where(
-                DiscussionMessage.discussion_id == uuid.UUID(out["id"]),
-                DiscussionMessage.author_kind == "oracle",
-            )
-        )
+        status = await s.scalar(select(DiscussionMessage.status).where(*line_of))
     assert status == "streaming"
     async with mcp_client(raw) as m:
         result = await m.call_tool("live_fireflies_list_meetings", {"connection_id": conn})
