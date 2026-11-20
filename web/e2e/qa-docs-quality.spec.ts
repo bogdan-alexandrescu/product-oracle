@@ -75,7 +75,8 @@ test.describe("desktop", () => {
     await page.clock.fastForward("10:00");
     await page.reload();
     await expect(page.getByTestId("criterion-row")).toHaveCount(13);
-    await expect(line).toHaveText(before);
+    // The visible line (the (i)'s hidden tip is not in innerText).
+    await expect(line).toHaveText(before, { useInnerText: true });
   });
 
   test("qa-docs-32: Oracle's review says when in words; model, tokens, cost and ids are an owner's details", async ({ page }) => {
