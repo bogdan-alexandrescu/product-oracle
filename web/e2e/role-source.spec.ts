@@ -12,7 +12,7 @@ import { expect, test } from "./test";
 
 const ROOTS = ["app", "components"];
 // Signed-in role checks: hasRole(role, ...), hasRole(me.role, ...), role === "owner" and the like.
-const SELF_ROLE = /hasRole\(\s*(role|me\??\.role)\s*,|(^|[^.\w])role\s*[!=]==\s*"(owner|approver|commenter|viewer)"/;
+const SELF_ROLE = /hasRole\(\s*(role|me\??\.role)\s*,|(^|[^.\w])role\s*[!=]==\s*["'](owner|approver|commenter|viewer)["']/;
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {

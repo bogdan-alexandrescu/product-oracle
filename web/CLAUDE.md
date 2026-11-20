@@ -12,7 +12,8 @@ still apply; the commands are in `docs/agents/lane-rules.md` (Building a lane, B
 - The mock API (`lib/api/mock`) matches the real API for every route and field a page reads.
   `lib/api/openapi.json` and `lib/api/schema.d.ts` are generated (`make openapi`); never edit
   or read them whole.
-- Checks: `npx next typegen && npx tsc --noEmit -p .`, then `npm run lint`.
+- Checks: `npx next typegen && npx tsc --noEmit -p .`, then `npm run lint`, then
+  `npm run format:check` (Prettier; `npm run format` writes it).
 - Unit tests (Vitest, `npm run test:unit`): pure logic in `*.test.ts` beside its module, a render
   test (happy-dom, Testing Library) in `*.test.tsx` beside its component. Playwright keeps the
   flows a person drives; a spec that only calls a module, with no page, is a unit test. A test with a

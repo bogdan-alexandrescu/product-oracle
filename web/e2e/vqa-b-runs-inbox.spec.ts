@@ -66,7 +66,8 @@ const overlaps = (a: { x: number; y: number; width: number; height: number }, b:
 async function seedGroupSeen(page: Page): Promise<void> {
   await page.evaluate(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const write = (globalThis as { __poMockWrite?: (change: (db: any) => string) => Promise<string> }).__poMockWrite;
+    type MockWrite = (change: (db: any) => string) => Promise<string>;
+    const write = (globalThis as { __poMockWrite?: MockWrite }).__poMockWrite;
     if (!write) throw new Error("The mock API is not loaded: sign in before seeding");
     return write((db) => {
       type C = { status: string; created_at: string };

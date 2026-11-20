@@ -242,7 +242,8 @@ export async function seedStuckRuns(page: Page): Promise<string> {
   return page.evaluate(() => {
     // In the mock's own turn (seedRun): a call of the app's in flight cannot save over the runs.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const write = (globalThis as { __poMockWrite?: (change: (db: any) => string) => Promise<string> }).__poMockWrite;
+    type MockWrite = (change: (db: any) => string) => Promise<string>;
+    const write = (globalThis as { __poMockWrite?: MockWrite }).__poMockWrite;
     if (!write) throw new Error("The mock API is not loaded: sign in before seeding");
     return write((db) => {
       type R = Record<string, unknown> & { id: string; document_slug: string; segments: Record<string, unknown>[] };
@@ -300,7 +301,8 @@ export async function seedSentBack(page: Page): Promise<string> {
     ({ id, summary }) => {
       // In the mock's own turn (seedRun): a call of the app's in flight cannot save over the run.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const write = (globalThis as { __poMockWrite?: (change: (db: any) => string) => Promise<string> }).__poMockWrite;
+      type MockWrite = (change: (db: any) => string) => Promise<string>;
+      const write = (globalThis as { __poMockWrite?: MockWrite }).__poMockWrite;
       if (!write) throw new Error("The mock API is not loaded: sign in before seeding");
       return write((db) => {
         type S = Record<string, unknown> & { seq: number; checkpoint: string };
@@ -454,7 +456,8 @@ export async function seedDecidedRun(page: Page): Promise<string> {
   return page.evaluate((id) => {
     // In the mock's own turn (seedRun): a call of the app's in flight cannot save over the run (#520).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const write = (globalThis as { __poMockWrite?: (change: (db: any) => string) => Promise<string> }).__poMockWrite;
+    type MockWrite = (change: (db: any) => string) => Promise<string>;
+    const write = (globalThis as { __poMockWrite?: MockWrite }).__poMockWrite;
     if (!write) throw new Error("The mock API is not loaded: sign in before seeding");
     return write((db) => {
       type S = Record<string, unknown> & { seq: number; checkpoint: string };

@@ -94,16 +94,20 @@ function Preview({ name, accent, light, dark }: { name: string; accent: string |
     <div className="grid grid-cols-2 gap-3 max-[600px]:grid-cols-1">
       <div data-testid="brand-preview-light" className="flex h-16 items-center gap-3 rounded-lg px-4" style={{ ...PREVIEW_LIGHT, ...edge }}>
         {/* A data: URL: next/image would fetch it again through its optimiser. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        {light && <img src={light} alt={name} className="h-10 w-auto max-w-[200px] object-contain" />}
+        {light && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={light} alt={name} className="h-10 w-auto max-w-[200px] object-contain" />
+        )}
         <span className="truncate text-[15px] font-semibold" style={{ color: PREVIEW_LIGHT.color }}>
           {name}
         </span>
       </div>
       <div data-testid="brand-preview-dark" className="flex h-16 items-center gap-3 rounded-lg px-4" style={{ ...PREVIEW_DARK, ...edge }}>
         {/* A data: URL: next/image would fetch it again through its optimiser. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        {dark && <img src={dark} alt={name} className="h-10 w-auto max-w-[200px] object-contain" />}
+        {dark && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={dark} alt={name} className="h-10 w-auto max-w-[200px] object-contain" />
+        )}
         <span className="truncate text-[15px] font-semibold" style={{ color: PREVIEW_DARK.color }}>
           {name}
         </span>
