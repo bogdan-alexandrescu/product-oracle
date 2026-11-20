@@ -238,6 +238,9 @@ jobs:
         run: node scripts/check-timing-tags.mjs
       - name: Repo tools pass their self-tests
         run: node scripts/replace.mjs --self-test && node scripts/mutate.mjs --self-test
+      # Node's own runner, no package: the repo tools' units, the deploy's containment check with them.
+      - name: Repo tools' unit tests
+        run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/*.test.ts
       - run: npm run build
 
   e2e:
@@ -325,3 +328,130 @@ jobs:
         with:
           name: e2e-timing-results
           path: web/test-results/
+
+  # #1569 (owner, Nov 20: Cloud Run, oracle-api and oracle-web, deployed from here). After every
+  # test job above passes on a main push: both images built with the commit stamped in, a Cloud SQL
+  # backup, the API's new revision staged with no traffic, the migration (Cloud Run job, the new
+  # image), the API's traffic moved to that revision, the web deployed, and the containment check.
+  # A failed migration stops the job before any traffic moves: the staged revision never serves, and
+  # the old one keeps the old schema (Alembic runs every pending revision in one transaction).
+  # Why the API revision is staged before the migration (Oct 18: a migration before the new image
+  # was live, a 503): docs/deploy/actions-deploy.md. OFF until the owner applies that runbook and
+  # sets the repository variable ORACLE_DEPLOY_ENABLED to 'true'. Every name is a repository
+  # variable; there is no key or secret: the job signs in with GitHub's OIDC token (Workload
+  # Identity Federation), without an extra Action. Job name "deploy": cancel-superseded never
+  # cancels a run whose deploy has started.
+  deploy:
+    needs: [api, coverage-floors, pyright, api-timing, web, e2e, mock-e2e, e2e-timing]
+    if: vars.ORACLE_DEPLOY_ENABLED == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # One deploy at a time; a newer run's deploy waits for this one, never cancels it.
+    concurrency:
+      group: oracle-deploy
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      SHA: ${{ github.sha }}
+      PROJECT: ${{ vars.ORACLE_GCP_PROJECT }}
+      REGION: ${{ vars.ORACLE_GCP_REGION }}
+      # <region>-docker.pkg.dev/<project>/<repository>
+      REGISTRY: ${{ vars.ORACLE_ARTIFACT_REGISTRY }}
+      # projects/<number>/locations/global/workloadIdentityPools/<pool>/providers/<provider>
+      WIF_PROVIDER: ${{ vars.ORACLE_WIF_PROVIDER }}
+      DEPLOY_SA: ${{ vars.ORACLE_DEPLOY_SERVICE_ACCOUNT }}
+      SQL_INSTANCE: ${{ vars.ORACLE_SQL_INSTANCE }}
+      API_SERVICE: ${{ vars.ORACLE_API_SERVICE || 'oracle-api' }}
+      WEB_SERVICE: ${{ vars.ORACLE_WEB_SERVICE || 'oracle-web' }}
+      MIGRATE_JOB: ${{ vars.ORACLE_MIGRATE_JOB || 'oracle-api-migrate' }}
+      # The web image's /v1 proxy target, fixed at build time (web/Dockerfile).
+      API_INTERNAL_URL: ${{ vars.ORACLE_API_INTERNAL_URL }}
+      # Each service's /version, reachable from GitHub's runners.
+      API_VERSION_URL: ${{ vars.ORACLE_API_VERSION_URL }}
+      WEB_VERSION_URL: ${{ vars.ORACLE_WEB_VERSION_URL }}
+    steps:
+      # Full history: the containment check asks git whether a served commit contains this one.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24"
+      - name: Every repository variable is set
+        run: |
+          missing=""
+          for v in PROJECT REGION REGISTRY WIF_PROVIDER DEPLOY_SA SQL_INSTANCE API_INTERNAL_URL API_VERSION_URL WEB_VERSION_URL; do
+            [ -n "${!v}" ] || missing="$missing $v"
+          done
+          [ -z "$missing" ] || { echo "Repository variables not set (docs/deploy/actions-deploy.md):$missing"; exit 1; }
+      # A run whose tests finished after a newer run deployed must not roll the services back:
+      # 0 (served: the commit serving contains this one) skips the rest.
+      - name: Skip when this commit is already served
+        id: served
+        run: |
+          code=0
+          node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON web/scripts/deploy-serves.ts "$SHA" "$API_VERSION_URL" "$WEB_VERSION_URL" || code=$?
+          echo "skip=$([ "$code" = 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      # Workload Identity Federation by hand (what google-github-actions/auth writes): GitHub's
+      # OIDC token for this job, exchanged for the deploy service account's short-lived token.
+      - name: Sign in to Google Cloud
+        if: steps.served.outputs.skip != 'true'
+        run: |
+          cred="$RUNNER_TEMP/gcp-wif.json"
+          umask 077
+          jq -n \
+            --arg audience "//iam.googleapis.com/$WIF_PROVIDER" \
+            --arg url "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://iam.googleapis.com/$WIF_PROVIDER" \
+            --arg token "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            --arg sa "$DEPLOY_SA" \
+            '{type: "external_account", audience: $audience,
+              subject_token_type: "urn:ietf:params:oauth:token-type:jwt",
+              token_url: "https://sts.googleapis.com/v1/token",
+              service_account_impersonation_url: ("https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/" + $sa + ":generateAccessToken"),
+              credential_source: {url: $url, headers: {Authorization: ("Bearer " + $token)},
+                                  format: {type: "json", subject_token_field_name: "value"}}}' > "$cred"
+          gcloud auth login --cred-file="$cred" --quiet
+          gcloud config set project "$PROJECT"
+          gcloud auth configure-docker "${REGISTRY%%/*}" --quiet
+      - name: Build and push both images, the commit stamped in
+        if: steps.served.outputs.skip != 'true'
+        run: |
+          docker build --build-arg GIT_SHA="$SHA" -t "$REGISTRY/oracle-api:$SHA" api
+          docker build --build-arg GIT_SHA="$SHA" --build-arg API_INTERNAL_URL="$API_INTERNAL_URL" -t "$REGISTRY/oracle-web:$SHA" web
+          docker push "$REGISTRY/oracle-api:$SHA"
+          docker push "$REGISTRY/oracle-web:$SHA"
+          # Deployed by digest: what was built here is what runs.
+          echo "API_IMAGE=$(docker inspect --format '{{index .RepoDigests 0}}' "$REGISTRY/oracle-api:$SHA")" >> "$GITHUB_ENV"
+          echo "WEB_IMAGE=$(docker inspect --format '{{index .RepoDigests 0}}' "$REGISTRY/oracle-web:$SHA")" >> "$GITHUB_ENV"
+      - name: Back up the database
+        if: steps.served.outputs.skip != 'true'
+        run: gcloud sql backups create --instance="$SQL_INSTANCE" --description="before deploying $SHA" --quiet
+      # The new API revision, started and warm, with no traffic. ORACLE_MIGRATE_AT_START=0: it
+      # serves without migrating (api/oracle/startup.py), so only the next step changes the schema.
+      - name: Stage the API's new revision with no traffic
+        if: steps.served.outputs.skip != 'true'
+        run: |
+          gcloud run deploy "$API_SERVICE" --image="$API_IMAGE" --region="$REGION" \
+            --no-traffic --tag="c-${SHA:0:12}" --update-env-vars=ORACLE_MIGRATE_AT_START=0 --quiet
+      # A failure here ends the job before any traffic moves.
+      - name: Migrate the database (the new image, as a Cloud Run job)
+        if: steps.served.outputs.skip != 'true'
+        run: |
+          gcloud run jobs update "$MIGRATE_JOB" --image="$API_IMAGE" --region="$REGION" \
+            --command=python --args=-m,oracle.startup,migrate --max-retries=0 --quiet
+          gcloud run jobs execute "$MIGRATE_JOB" --region="$REGION" --wait --quiet
+      - name: Move the API's traffic to the new revision
+        if: steps.served.outputs.skip != 'true'
+        run: |
+          gcloud run services update-traffic "$API_SERVICE" --region="$REGION" --to-latest --quiet
+          gcloud run services update-traffic "$API_SERVICE" --region="$REGION" --remove-tags="c-${SHA:0:12}" --quiet
+      - name: Deploy the web
+        if: steps.served.outputs.skip != 'true'
+        run: gcloud run deploy "$WEB_SERVICE" --image="$WEB_IMAGE" --region="$REGION" --quiet
+      # 0 served, 1 not served, 2 could not ask (web/scripts/deploy-serves.ts); asked again for up
+      # to 5 minutes while the new revisions take their traffic. Anything but 0 fails the job.
+      - name: Containment check
+        if: steps.served.outputs.skip != 'true'
+        run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON web/scripts/deploy-serves.ts "$SHA" "$API_VERSION_URL" "$WEB_VERSION_URL" --wait 300
