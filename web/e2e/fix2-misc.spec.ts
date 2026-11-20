@@ -136,7 +136,12 @@ test("webhooks and trash: their empty states explain themselves", async ({ page 
   await login(page);
   await settings(page, "webhooks");
   const empty = page.getByTestId("webhooks-empty");
-  await expect(empty).toContainText("No webhooks yet. Add one to tell Slack, Zapier or your own tools when runs change.");
+  await expect(empty.getByText("No webhooks yet.")).toBeVisible();
+  // #1590: the how-to sits behind its (i), not on the page.
+  await expect(page.getByText("Add one to tell Slack, Zapier or your own tools when runs change.").filter({ visible: true })).toHaveCount(0);
+  await empty.getByTestId("webhooks-empty-tip").click();
+  await expect(page.getByRole("tooltip").filter({ hasText: "Add one to tell Slack, Zapier or your own tools when runs change.", visible: true })).toBeVisible();
+  await page.keyboard.press("Escape");
   await empty.getByRole("button", { name: "Add your first webhook" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
 
