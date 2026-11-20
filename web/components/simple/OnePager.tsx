@@ -20,7 +20,7 @@ import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { quoteLine } from "@/components/simple/quote-line";
 import { NotInGt } from "@/components/simple/FeatureName";
 import { InReviewBar, PresentMenu, SendForApproval } from "@/components/simple/ReviewFlow";
-import { ErrorNote, Loading } from "@/components/ui";
+import { ErrorNote, LoadError, Loading } from "@/components/ui";
 import { api, ApiError, fixHref, unwrap, type ImportFix, type Schemas } from "@/lib/api/client";
 import { useCompanyZone } from "@/lib/dates";
 import { DownloadNote, useDownloadNote } from "@/components/DownloadNote";
@@ -117,12 +117,12 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   const reloadPage = q.reload;
   // prd-timeline: the PRD's plan leads the page (its timeline, goal lanes and milestone parts).
   const planQ = useQuery(`simple-prd-plan|${doc}`, () =>
-    unwrap(api.GET("/v1/simple/prds/{prd}/plan", { params: { path: { prd: doc } } })).catch(() => null),
+    unwrap(api.GET("/v1/simple/prds/{prd}/plan", { params: { path: { prd: doc } } })),
   );
   const reloadPlan = planQ.reload;
   // qa-simple-prd-p3-16: the PRD's status chip reads the same summary as the One-pagers list
   // (the document's own, written by the same code), not the whole list of PRDs.
-  const docQ = useQuery(`simple-prd-doc|${doc}`, () => unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } } })).catch(() => null));
+  const docQ = useQuery(`simple-prd-doc|${doc}`, () => unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } } })));
   const reloadDoc = docQ.reload;
   // qa-simple-prd-p3-4: a plan-led page shows the PRD's lines (and their Edit) on asking.
   const [linesShown, setLinesShown] = useState(false);
@@ -282,7 +282,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   // one-feature-panel: a feature named on the page (its plan rows, a milestone's parts) opens
   // the roadmap's feature panel; the roadmap gives the plan rows their codes.
   const [feature, setFeature] = useState<Parameters<OpenFeature>[0] | null>(null);
-  const codesQ = useQuery("simple-roadmap-codes", () => unwrap(api.GET("/v1/simple/roadmap", {})).catch(() => null));
+  const codesQ = useQuery("simple-roadmap-codes", () => unwrap(api.GET("/v1/simple/roadmap", {})));
   const codes = new Map((codesQ.data?.items ?? []).map((i) => [i.id, i.code ?? null]));
   // one-pager-milestone-rename (the owner, Nov 10): a Timeline strip row's milestone is renamed in place with the
   // Roadmap's own card, as Home's rows are: its rights, the proposal to the roadmap's decider, Undo.
@@ -539,7 +539,8 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   const plan = planNow ?? planQ.data ?? null;
   const planShown = !!plan && plan.status !== "none" && plan.milestones.length > 0;
   // Owner, Nov 10: the plan's card also lists the PRD's roadmap items with no plan milestone (the strip's "No milestone" row).
-  const loose = looseItems(v, codes);
+  // #1586: until the codes are read (or when they could not be), no item is called Not in the Ground Truth.
+  const loose = looseItems(v, codesQ.data ? codes : undefined);
   const summary = docQ.data ?? null;
   // qa-simple-prd-18: a draft whose changes were all undone shows no banner.
   const draftShown = !!v.draft && (v.draft.changes > 0 || v.draft.status === "submitted");
@@ -728,6 +729,8 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
           v={v}
           plan={planShown ? plan : null}
           summary={summary}
+          summaryError={docQ.error}
+          onRetrySummary={() => void reloadDoc()}
           phone={phone}
           draft={draftShown || v.changes_in_review > 0}
           actions={actions}
@@ -745,6 +748,9 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
               Add a date source
             </Link>
           ))}
+        {/* #1586: a plan that could not be read says so, never reads as no plan. */}
+        {!planNow && planQ.error && <LoadError what="the plan" error={planQ.error} onRetry={() => void reloadPlan()} />}
+        {codesQ.error && <LoadError what="the features' codes" error={codesQ.error} onRetry={() => void codesQ.reload()} />}
         {planShown && updating && (
           <p role="status" data-testid="plan-updating" className="text-[14px] text-text2">
             Oracle is reading the plan again. This is the last plan until it is done.
@@ -1088,7 +1094,7 @@ function Glyph({ d }: { d: string }) {
  * A phone (D2) keeps the title, the facts and the actions, smaller; its header bar names
  * the page (One-pagers), so the title there is a level-1 heading that is not an H1.
  */
-function PrdHeader({ v, plan, summary, phone, draft, actions, inMeeting = false, onRunApproved }: { v: View; plan: Schemas["SimplePlanOut"] | null; summary: Schemas["DocumentSummary"] | null; phone: boolean; draft: boolean; actions: ReactNode; inMeeting?: boolean; onRunApproved?: () => void }) {
+function PrdHeader({ v, plan, summary, summaryError = null, onRetrySummary, phone, draft, actions, inMeeting = false, onRunApproved }: { v: View; plan: Schemas["SimplePlanOut"] | null; summary: Schemas["DocumentSummary"] | null; summaryError?: string | null; onRetrySummary?: () => void; phone: boolean; draft: boolean; actions: ReactNode; inMeeting?: boolean; onRunApproved?: () => void }) {
   // qa-simple-prd-3: the plan's own span only; with no dated milestone the header says so.
   // qa-simple-prd-p3-16: a PRD without a plan heads its one-pager the same way, with its own span.
   // OP7 (QA Nov 12): a plan with no span of its own (a milestone still undated) spans its dated milestones.
@@ -1108,7 +1114,7 @@ function PrdHeader({ v, plan, summary, phone, draft, actions, inMeeting = false,
   // this screen, every line names the version under review, dated by its own day, not the last published one.
   const reviewed = run && summary?.latest_version != null && summary.latest_version !== v.version ? summary.latest_version : null;
   const reviewedQ = useQuery(`simple-prd-reviewed|${v.document.slug}|${reviewed ?? "none"}`, () =>
-    reviewed != null ? unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc: v.document.slug, n: reviewed } } })).catch(() => null) : Promise.resolve(null),
+    reviewed != null ? unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc: v.document.slug, n: reviewed } } })) : Promise.resolve(null),
   );
   const shownVersion = reviewed ?? v.version;
   const reviewedAt = reviewedQ.data?.approved_at ?? reviewedQ.data?.created_at ?? null;
@@ -1165,6 +1171,9 @@ function PrdHeader({ v, plan, summary, phone, draft, actions, inMeeting = false,
           </>
         )}
       </div>
+      {/* #1586: a status or a version's day that could not be read says so, never reads as none. */}
+      {summaryError && <LoadError what="the PRD's status" error={summaryError} onRetry={() => onRetrySummary?.()} />}
+      {reviewed != null && reviewedQ.error && <LoadError what="the version's day" error={reviewedQ.error} onRetry={() => void reviewedQ.reload()} />}
       {phone && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
       {!inMeeting && summary?.latest_version != null && (
         <RunReviewStep doc={v.document.slug} title={v.document.title} n={summary.latest_version} approved={latestApproved} onState={setRun} onApproved={() => onRunApproved?.()} />

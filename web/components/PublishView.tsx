@@ -20,7 +20,7 @@ import {
   useFocusTrap,
   type ChipKind,
 } from "@/components/ds";
-import { ErrorNote, INPUT } from "@/components/ui";
+import { ErrorNote, INPUT, LoadError } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { blockedLabel } from "@/lib/blocked";
 import { addDays, todayIn, useCompanyZone, zoneInstant } from "@/lib/dates";
@@ -565,12 +565,12 @@ export function PublishView({ doc }: { doc: string }) {
   );
   const sections = versionQ.data?.sections ?? [];
   const unreviewed = sections.filter((s) => !s.verdict).length;
-  // Optional reads: without them the blocks fall back to the verdict's own rows.
+  // Without the strategy the blocks fall back to the verdict's own rows; a failed read says so.
   const strategyQ = useQuery(`blocker-strategy|${doc}`, () =>
-    unwrap(api.GET("/v1/documents/{doc}/blocker-strategy", { params: { path: { doc } } })).catch(() => undefined),
+    unwrap(api.GET("/v1/documents/{doc}/blocker-strategy", { params: { path: { doc } } })),
   );
   const stagedQ = useQuery(`staged|${doc}`, () =>
-    unwrap(api.GET("/v1/documents/{doc}/staged-changes", { params: { path: { doc } } })).catch(() => undefined),
+    unwrap(api.GET("/v1/documents/{doc}/staged-changes", { params: { path: { doc } } })),
   );
   const questionsQ = useQuery(`questions|${d?.id}`, async () => {
     if (!d) return undefined;
@@ -578,7 +578,7 @@ export function PublishView({ doc }: { doc: string }) {
     const [gaps, questions] = await Promise.all([
       unwrap(api.GET("/v1/gaps", { params: { query } })),
       unwrap(api.GET("/v1/questions", { params: { query } })),
-    ]).catch(() => [[], []] as const);
+    ]);
     return { gaps, questions };
   });
 
@@ -727,7 +727,11 @@ export function PublishView({ doc }: { doc: string }) {
   const whoPublishes = d && OWNER_APPROVES[d.kind] ? "Only an owner can publish" : "Only an approver or owner can publish";
   // qa-docs-62: the header's chip says "Published v2"; the headline says when, not that again.
   const approvedAt = versionQ.data?.approved_at;
-  const headline = published
+  // #1586: what could not be read is never drawn as "every section reviewed" or "not published".
+  const unchecked = versionQ.error ? "the sections" : sharable && pubsQ.error ? "the publications" : null;
+  const headline = unchecked
+    ? `Could not check ${unchecked}`
+    : published
     ? approvedAt
       ? `Published on ${formatDate(approvedAt)}`
       : "Published"
@@ -794,8 +798,11 @@ export function PublishView({ doc }: { doc: string }) {
       />
       {docQ.error && <ErrorNote>{docQ.error}</ErrorNote>}
       {readinessQ.error && <ErrorNote>{readinessQ.error}</ErrorNote>}
-      {versionQ.error && <ErrorNote>{versionQ.error}</ErrorNote>}
-      {pubsQ.error && <ErrorNote>{pubsQ.error}</ErrorNote>}
+      {versionQ.error && <LoadError what="the sections" error={versionQ.error} onRetry={() => void versionQ.reload()} />}
+      {pubsQ.error && <LoadError what="the publications" error={pubsQ.error} onRetry={() => void pubsQ.reload()} />}
+      {strategyQ.error && <LoadError what="the blocker plan" error={strategyQ.error} onRetry={() => void strategyQ.reload()} />}
+      {stagedQ.error && <LoadError what="the staged changes" error={stagedQ.error} onRetry={() => void stagedQ.reload()} />}
+      {questionsQ.error && <LoadError what="the open questions" error={questionsQ.error} onRetry={() => void questionsQ.reload()} />}
       {notice && <Notice tone="pass">{notice}</Notice>}
       {sharable && n != null && d && (
         // build-review (QV4 a): one line says what Publish does, and once published, Share a link.
@@ -845,9 +852,9 @@ export function PublishView({ doc }: { doc: string }) {
                 className="flex min-h-12 items-center gap-2.5 px-4 py-2 font-display text-lg font-bold tracking-heading max-[600px]:px-3"
               >
                 <Icon
-                  name={!published && !canPublish ? "lock" : !published && caveats.length > 0 ? "alert" : "check"}
+                  name={unchecked ? "alert" : !published && !canPublish ? "lock" : !published && caveats.length > 0 ? "alert" : "check"}
                   size={20}
-                  className={`flex-none ${!published && !canPublish ? "text-text2" : !published && caveats.length > 0 ? "text-warn" : "text-pass"}`}
+                  className={`flex-none ${unchecked ? "text-warn" : !published && !canPublish ? "text-text2" : !published && caveats.length > 0 ? "text-warn" : "text-pass"}`}
                 />
                 <span className="min-w-0">{headline}</span>
               </p>
@@ -945,9 +952,9 @@ export function PublishView({ doc }: { doc: string }) {
               </h2>
             </div>
             <div className="px-5 py-3.5 max-[600px]:px-4">
-              {unreviewed > 0 && (
+              {(versionQ.error || unreviewed > 0) && (
                 <p data-testid="unreviewed-sections" className="mb-2 font-semibold text-warn">
-                  {unreviewedText(unreviewed, sections.length)}
+                  {versionQ.error ? "Could not check the sections" : unreviewedText(unreviewed, sections.length)}
                 </p>
               )}
               <OnPublish n={n} kind={d?.kind} />

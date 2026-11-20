@@ -7,7 +7,7 @@ import { useCallback, useMemo, useState } from "react";
 import { FilterChips, InfoTip, Panel, Sheet, Split, type Column } from "@/components/ds";
 import { ItemInspector } from "@/components/review/ItemInspector";
 import { ItemsTable } from "@/components/review/ItemsTable";
-import { ErrorNote, Loading } from "@/components/ui";
+import { ErrorNote, LoadError, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { sectionHref } from "@/lib/section-link";
 import { useQuery } from "@/lib/use-query";
@@ -52,13 +52,13 @@ export function RoadmapItemsPane({
   // The PRD version's headings, for "§ heading".
   const prdQ = useQuery(`roadmap-items-prd|${source?.slug ?? ""}|${source?.version ?? ""}`, () =>
     source?.slug && source.version != null
-      ? unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc: source.slug, n: source.version } } })).catch(() => null)
+      ? unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc: source.slug, n: source.version } } }))
       : Promise.resolve(null),
   );
   // The PRD's schedule bases: a dated milestone's references.
   const basesQ = useQuery(`roadmap-items-bases|${source?.slug ?? ""}`, () =>
     source?.slug
-      ? unwrap(api.GET("/v1/schedule-bases", { params: { query: { prd: source.slug } } })).catch(() => [])
+      ? unwrap(api.GET("/v1/schedule-bases", { params: { query: { prd: source.slug } } }))
       : Promise.resolve([]),
   );
 
@@ -168,6 +168,9 @@ export function RoadmapItemsPane({
   return (
     <div data-testid="roadmap-items-pane">
       <Split inspector={row ? <div className="max-[639px]:hidden">{inspector(row)}</div> : undefined}>
+        {/* #1586: a read that failed says so; the items stay. */}
+        {prdQ.error && <LoadError what="the PRD's section names" error={prdQ.error} onRetry={() => void prdQ.reload()} />}
+        {basesQ.error && <LoadError what="the milestone references" error={basesQ.error} onRetry={() => void basesQ.reload()} />}
         {diff && <CompareBar diff={diff} compare={compare} onCompare={setCompare} />}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <p data-testid="items-summary" className="tnum text-sm text-text2">

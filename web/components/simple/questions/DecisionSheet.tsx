@@ -507,7 +507,8 @@ export const OUTDATED_NOTICE = "Not accepted: this decision changed since the su
  */
 export async function showOutdated(sheet: SheetApi | null, e: unknown, changeId: string, title: string): Promise<boolean> {
   if (!sheet || !isOutdated(e)) return false;
-  const proposed = await unwrap(api.GET("/v1/simple/changes", { params: { query: { status: "proposed" } } })).catch(() => []);
+  // #1586: proposals that could not be read throw (the caller shows it), never "not proposed".
+  const proposed = await unwrap(api.GET("/v1/simple/changes", { params: { query: { status: "proposed" } } }));
   const id = proposed.find((c) => c.id === changeId)?.target.decision_id;
   if (typeof id !== "string") return false;
   sheet.open({ kind: "decision-id", id, title, notice: OUTDATED_NOTICE });

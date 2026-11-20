@@ -516,7 +516,8 @@ export type Started = {
 const GONE = new Set<Intake["status"]>(["archived"]);
 
 async function loadStarted(me: string): Promise<Started[]> {
-  const goals = await unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })).catch(() => []);
+  // #1586: goals that could not be read fail the read, never a PRD "for" no goal.
+  const goals = await unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } }));
   const intakes = (await unwrap(api.GET("/v1/intakes", { params: { query: { limit: 200 } } })))
     .filter((i) => i.author_id === me && !i.document_id && !GONE.has(i.status))
     .sort((a, b) => b.created_at.localeCompare(a.created_at))

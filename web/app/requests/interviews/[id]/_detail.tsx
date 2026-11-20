@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
 import { Button, Chip, confirmInPage, Dialog, Empty, Label, Page, PageHeader, Panel } from "@/components/ds";
-import { ErrorNote, Loading } from "@/components/ui";
-import { api, unwrap } from "@/lib/api/client";
+import { ErrorNote, LoadError, Loading } from "@/components/ui";
+import { ApiError, api, unwrap } from "@/lib/api/client";
 import { INTERVIEW_STATUS_KIND, INTERVIEW_STATUS_LABEL, interviewsCall, type InterviewLink, type InterviewOut } from "@/lib/api/interviews";
 import { formatDateTime, formatDay } from "@/lib/format";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -35,7 +35,11 @@ export function InterviewDetail({ id }: { id: string }) {
   const requests = useQuery(`interview-requests:${iv?.request_ids.join(",") ?? ""}`, () =>
     Promise.all(
       (iv?.request_ids ?? []).map((rid) =>
-        unwrap(api.GET("/v1/requests/{request_id}", { params: { path: { request_id: rid } } })).catch(() => null),
+        // #1586: a request deleted since is an answer (its link stays); any other failure is shown.
+        unwrap(api.GET("/v1/requests/{request_id}", { params: { path: { request_id: rid } } })).catch((e) => {
+          if (e instanceof ApiError && e.status === 404) return null;
+          throw e;
+        }),
       ),
     ),
   );
@@ -231,7 +235,11 @@ export function InterviewDetail({ id }: { id: string }) {
         </Panel>
 
         <Panel title="Requests created" count={iv.request_ids.length} testId="interview-requests">
-          {iv.request_ids.length ? (
+          {iv.request_ids.length && requests.error ? (
+            <div className="px-4 pt-3">
+              <LoadError what="the requests" error={requests.error} onRetry={() => void requests.reload()} />
+            </div>
+          ) : iv.request_ids.length ? (
             <ul className="flex flex-col gap-1.5 px-4 py-3 text-[15px]">
               {iv.request_ids.map((rid, i) => (
                 <li key={rid}>

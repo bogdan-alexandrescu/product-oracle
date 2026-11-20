@@ -187,7 +187,7 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
     },
     failed: new Set([
       ...(waiting ? [] : ["Decisions"]),
-      ...(waiting && goalSuggestions ? [] : ["Roadmap"]),
+      ...(waiting && goalSuggestions && roadmap ? [] : ["Roadmap"]),
       ...(inbox && questions ? [] : ["Inbox"]),
       ...(meetings ? [] : ["Meetings"]),
     ]),
@@ -209,8 +209,8 @@ const rail = (staleOk: boolean) => (staleOk ? { headers: { [STALE_OK]: "1" } } :
 const READS_INBOX = (path: string) => path === SIMPLE_HOME || path === "/simple/inbox";
 const PART_READS = {
   waiting: (signal: AbortSignal, staleOk: boolean) => unwrap(api.GET("/v1/simple/decisions/waiting", { ...rail(staleOk), signal })),
-  // A failed light count falls back to the one list (never a failed part).
-  roadmap: (signal: AbortSignal, staleOk: boolean) => unwrap(api.GET("/v1/simple/roadmap/waiting", { ...rail(staleOk), signal })).catch(() => null),
+  // #1586: a failed light count is a failed part of the Roadmap count (its links and dates fall back to the one list, said so).
+  roadmap: (signal: AbortSignal, staleOk: boolean) => unwrap(api.GET("/v1/simple/roadmap/waiting", { ...rail(staleOk), signal })),
   inbox: (signal: AbortSignal, staleOk: boolean, path: string) =>
     READS_INBOX(path) ? railInbox(signal, staleOk).then(inboxCounts) : railInboxCounts(signal, staleOk),
   questions: (signal: AbortSignal, staleOk: boolean) => railQuestions(signal, staleOk),

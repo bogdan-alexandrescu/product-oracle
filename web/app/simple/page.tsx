@@ -616,7 +616,9 @@ export default function SimpleHome() {
       await run();
       toast({ message: done });
     } catch (e) {
-      if (!(await refused?.(e))) toast({ message: errorMessage(e) });
+      // #1586: a refusal shown elsewhere reads first; a read that failed is the toast.
+      const shown = await refused?.(e).catch((r) => (toast({ message: errorMessage(r) }), true));
+      if (!shown) toast({ message: errorMessage(e) });
     }
     reloadAll();
   }
@@ -811,7 +813,8 @@ export default function SimpleHome() {
 
       {!walking && (
       <>
-      <StartedCard started={started.data ?? []} />
+      {/* #1586: PRDs you started that could not be read say so, never no card. */}
+      {started.error ? <LoadError what="the PRDs you started" error={started.error} onRetry={() => void started.reload()} /> : <StartedCard started={started.data ?? []} />}
       {/* qa-onboarding-6: an invited member's role welcome, in Simple too (dismissed in one mode, gone in both). */}
       <SimpleWelcome show={setupQ.data?.welcome === true} onDismissed={() => void setupQ.reload()} />
       {setupFirst && setup && (can("put_setting") || !setupQ.data?.welcome) && <SetupCard setup={setup} owner={can("put_setting")} onHide={() => void hideSetup()} />}
