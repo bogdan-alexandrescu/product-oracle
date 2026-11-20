@@ -14,14 +14,12 @@ from oracle.priorities import run_order
 from oracle.runs import feature_set, flows, service, waits, workflow
 from oracle.runs.models import Run, RunSegment
 from oracle.runs.service import (
-    _SPENDING,
     COST_UNKNOWN_SECONDS,
     FINAL,
     ITEMS_FILE,
     NOT_FOUND_TRIES,
     SEARCH_SECONDS,
     STUCK_LOOKUP_SECONDS,
-    _add_attempt,
     _advance,
     _art,
     _attempts_cost,
@@ -37,9 +35,7 @@ from oracle.runs.service import (
     _not_found,
     _note,
     _note_art,
-    _overrun,
     _parse_at,
-    _pause_overrun,
     _plan_entry,
     _recompute_spend,
     _record_workflow_wait,
@@ -49,7 +45,6 @@ from oracle.runs.service import (
     _shown,
     _spent,
     _submit,
-    _take_cost,
     _target_kind,
     _TickStats,
     log,
@@ -294,7 +289,7 @@ async def _search_earlier(
                 continue
             e["id"] = found
             if segment is not None:
-                _add_attempt(segment, found, label, "cancelled", mode="abandoned")
+                service._add_attempt(segment, found, label, "cancelled", mode="abandoned")
         elif e.get("unread") and _rests(e.get("read_at")):
             # Its last read failed: read again now and then. One that reads is read on
             # every tick until it ends, so the ceiling is never overshot by a rest.
@@ -334,9 +329,9 @@ async def _after_search(
                 "cancelling_since": e.get("winding_since"),
             },
         )
-    if (ceiling := _overrun(run)) is not None:
-        if run.status in _SPENDING:
-            await _pause_overrun(db, run, ceiling, stats)
+    if (ceiling := service._overrun(run)) is not None:
+        if run.status in service._SPENDING:
+            await service._pause_overrun(db, run, ceiling, stats)
         elif run.status in FINAL and _new_overrun_after_end(run, ceiling):
             await _overrun_after_end(db, run, ceiling, target)
 
@@ -675,7 +670,7 @@ async def _tick_workflow(
     workflow's status, when the pass read it already."""
     if status is None:
         status = await _rt().status(wf["id"])
-    start = _take_cost(run, wf, status, segments)
+    start = service._take_cost(run, wf, status, segments)
     current = next((s for s in segments if s.status == "running"), None)
     service._record_running(wf, status, segments)
     _record_workflow_wait(run, wf, status, segments)
@@ -694,8 +689,8 @@ async def _tick_workflow(
         return
     # The ceiling first, before anything that follows an answer or submits: it holds while
     # the run waits too (a workflow can spend while its run waits on a checkpoint).
-    if (ceiling := _overrun(run)) is not None:
-        await _pause_overrun(db, run, ceiling, stats)
+    if (ceiling := service._overrun(run)) is not None:
+        await service._pause_overrun(db, run, ceiling, stats)
         await service._pause_workflow(db, run, wf, status, segments)
         return
     if run.status == "awaiting_checkpoint":

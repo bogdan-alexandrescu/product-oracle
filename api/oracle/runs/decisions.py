@@ -59,8 +59,6 @@ from oracle.runs.service import (
     _open_questions,
     _record_decider,
     _replay,
-    _resetter,
-    _retry_pending_cancel,
     _segments,
     _set_art,
     _set_knob,
@@ -658,7 +656,7 @@ async def _complete_decision(
             db,
             deadline,
             lambda: _finish_decision(db, run_id, checkpoint_id, mine),
-            reset=_resetter(mine),
+            reset=service._resetter(mine),
         )
     except (service._PostNotFound, service._Unread):
         raise  # the decision was undone: a person decides again (_finish_decision)
@@ -816,7 +814,7 @@ async def _deliver_decision(
     if held is not None and held.get("cancel_pending"):
         # A cancel not confirmed yet (an earlier try, or the one the run was cancelled
         # with): made again; nothing is submitted after a workflow that may still run.
-        if not await _retry_pending_cancel(db, run, held, segments, stats):
+        if not await service._retry_pending_cancel(db, run, held, segments, stats):
             await db.commit()  # the cancel's tries and cost, counted
             raise _unconfirmed("go on with the decision")
     wf = _drivable(run)

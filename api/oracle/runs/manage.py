@@ -35,8 +35,6 @@ from oracle.runs.service import (
     RunError,
     Unavailable,
     _accepted,
-    _add_attempt,
-    _adopt,
     _advance,
     _art,
     _can_dismiss_overrun,
@@ -59,7 +57,6 @@ from oracle.runs.service import (
     _live,
     _note,
     _note_art,
-    _overrun,
     _parse_at,
     _segments,
     _set_art,
@@ -1091,9 +1088,9 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
                 if isinstance(result, str):
                     if wf is None:
                         wf = service._attach_for_cancel(run, s, result, label, since, until)
-                        _adopt(segments, wf)
+                        service._adopt(segments, wf)
                     else:
-                        _add_attempt(s, result, label, "cancelled", mode=lost.get("mode"))
+                        service._add_attempt(s, result, label, "cancelled", mode=lost.get("mode"))
                         service._search_for(
                             run,
                             label=label,
@@ -1184,7 +1181,7 @@ def _retryable_seq(run: Run, segments: list[RunSegment]) -> int | None:
     """The segment a failed run can be retried from: the one that failed (its stop's
     approvals before it kept), while no workflow of the run is still attached and its
     spend is within its ceiling."""
-    if run.status != "failed" or _live(run) is not None or _overrun(run) is not None:
+    if run.status != "failed" or _live(run) is not None or service._overrun(run) is not None:
         return None
     failed = [s for s in segments if s.status == "failed"]
     return failed[-1].seq if failed else None
@@ -1207,7 +1204,7 @@ async def retry_segment(
     segment = next((s for s in segments if s.seq == seq), None)
     if segment is None:
         raise NotFound("Segment not found")
-    if run.status == "failed" and _overrun(run) is not None:
+    if run.status == "failed" and service._overrun(run) is not None:
         raise RunError(BUDGET_STOPPED)
     if _retryable_seq(run, segments) != seq:
         raise RunError("nothing to retry: only the segment a failed run stopped at can be retried")
