@@ -990,19 +990,25 @@ function StateControls({ account, reload }: { account: Account; reload: () => Pr
 
   return (
     <InspectorSection label="State">
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {TARGETS.map((t) => (
-          <Button
-            key={t.to}
-            title={t.to === "AVAILABLE" && signInFirst ? SIGN_IN_FIRST : t.why}
-            disabled={account.state === t.to || (t.to === "AVAILABLE" && signInFirst)}
-            onClick={() => setAsking(t.to)}
-          >
-            {t.verb}
-          </Button>
+          <span key={t.to} className="inline-flex items-center gap-1">
+            <Button
+              title={t.to === "AVAILABLE" && signInFirst ? SIGN_IN_FIRST : t.why}
+              disabled={account.state === t.to || (t.to === "AVAILABLE" && signInFirst)}
+              onClick={() => setAsking(t.to)}
+            >
+              {t.verb}
+            </Button>
+            {t.to === "AVAILABLE" && signInFirst && (
+              // #1590: why Make available is disabled sits behind the (i).
+              <InfoTip label="making it available" align="start" testId="claude-account-signin-tip">
+                {SIGN_IN_FIRST}
+              </InfoTip>
+            )}
+          </span>
         ))}
       </div>
-      {signInFirst && <p className="mt-2 text-sm text-text2">{SIGN_IN_FIRST}</p>}
       {asked && (
         <div
           role="dialog"

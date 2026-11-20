@@ -206,7 +206,10 @@ export function DriftList({
           {/* qa-company-13: an empty list still says what Drift looks for; pass F F-45: in one line, the rest behind the (i). */}
           {state === "open" ? (
             <span data-testid="drift-what">
-              Goals and items that do not follow the strategy show here.{" "}
+              {/* #1590: what shows here sits behind the (i). */}
+              <InfoTip label="what shows here" align="end" testId="strategy-drift-tip">
+                Goals and items that do not follow the strategy show here.
+              </InfoTip>{" "}
               <InfoTip label="drift" align="end">
                 Oracle checks every day that each goal follows from the product strategy and each roadmap item from a goal, and that the
                 vision and strategy are reviewed on time.

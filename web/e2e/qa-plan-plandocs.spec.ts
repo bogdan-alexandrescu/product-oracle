@@ -112,9 +112,14 @@ test("qa-shell-35: on a phone the learnings empty text is padded and reads plain
   await start(page);
   await openTab(page, "outcomes");
   const empty = page.getByTestId("learnings-empty");
-  await expect(empty).toHaveText(
-    "No learnings yet. When an outcome is checked, Oracle drafts one for you to keep. You can also add your own.",
-  );
+  await expect(empty).toContainText("No learnings yet.");
+  await empty.getByTestId("outcomes-empty-tip").filter({ visible: true }).first().click();
+  await expect(
+    page.getByRole("tooltip").filter({
+      hasText: "When an outcome is checked, Oracle drafts one for you to keep. You can also add your own.",
+      visible: true,
+    }),
+  ).toBeVisible();
   await insetBy(page, '[data-testid="learnings-empty"]', '[data-testid="learnings-panel"]', 12);
 });
 
@@ -123,9 +128,14 @@ for (const role of ["viewer", "commenter"] as const) {
     await start(page, { role });
     await openTab(page, "outcomes");
     const empty = page.getByTestId("learnings-empty");
-    await expect(empty).toHaveText(
-      "No learnings yet. When an outcome is checked, Oracle drafts one, and an approver can keep it or add their own.",
-    );
+    await expect(empty).toContainText("No learnings yet.");
+    await empty.getByTestId("outcomes-empty-tip").filter({ visible: true }).first().click();
+    await expect(
+      page.getByRole("tooltip").filter({
+        hasText: "When an outcome is checked, Oracle drafts one, and an approver can keep it or add their own.",
+        visible: true,
+      }),
+    ).toBeVisible();
     await expect(page.getByTestId("learnings-panel").getByRole("button", { name: "Add learning" })).toHaveCount(0);
   });
 }

@@ -35,9 +35,19 @@ test.describe("desktop", () => {
     await login(page, "approver@example.com");
     await page.goto("/priorities");
     const empty = page.getByTestId("changes-empty");
-    await expect(empty).toContainText("move or pin a feature");
+    await empty.getByTestId("priorities-move-tip").filter({ visible: true }).first().click();
+    await expect(
+      page.getByRole("tooltip").filter({ hasText: "move or pin a feature", visible: true }),
+    ).toBeVisible();
     await page.getByRole("radiogroup", { name: "Changes filter" }).getByRole("radio", { name: "All" }).click();
-    await expect(empty).toHaveText("No changes yet. Use ▲ ▼ or More actions on a row to move or pin a feature, with a reason.");
+    await expect(empty).toContainText("No changes yet.");
+    await empty.getByTestId("priorities-move-tip").filter({ visible: true }).first().click();
+    await expect(
+      page.getByRole("tooltip").filter({
+        hasText: "Use ▲ ▼ or More actions on a row to move or pin a feature, with a reason.",
+        visible: true,
+      }),
+    ).toBeVisible();
   });
 
   // protects=qa-plan-8 on the Flagged tab: a feature with no evidence shows no score there, as in

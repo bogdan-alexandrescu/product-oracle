@@ -10,7 +10,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useState } from "react";
 
-import { Button, confirmInPage, Notice, PageHeader, Panel } from "@/components/ds";
+import { Button, confirmInPage, InfoTip, Notice, PageHeader, Panel } from "@/components/ds";
 import { LoadError, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useCompanyZone } from "@/lib/dates";
@@ -161,14 +161,22 @@ function SlackPanel({
   };
 
   return (
-    <Panel title="Slack" testId="slack-notifications">
+    <Panel
+      title="Slack"
+      testId="slack-notifications"
+      tools={
+        !slack && (
+          // #1590: what Oracle's Slack app does sits behind the (i).
+          <InfoTip label="Slack" align="start" testId="slack-about-tip">
+            Oracle&apos;s Slack app posts the weekly alignment report to a channel you pick, and people can mirror discussions to a Slack thread. It
+            is installed once for the company and posts as Product Oracle.
+          </InfoTip>
+        )
+      }
+    >
       <div className="space-y-3 px-4 py-3 text-[15px] max-[600px]:px-3">
         {!slack ? (
           <>
-            <p className="text-text2">
-              Oracle&apos;s Slack app posts the weekly alignment report to a channel you pick, and people can mirror discussions to a Slack
-              thread. It is installed once for the company and posts as Product Oracle.
-            </p>
             <Button variant="solid" disabled={busy !== null} onClick={connect}>
               Connect Oracle to Slack
             </Button>
@@ -257,17 +265,23 @@ function SchedulePanel({ setting, slackConnected, onSaved }: { setting: ReportSe
   }
 
   return (
-    <Panel title="Weekly alignment report" testId="report-schedule">
-      <div className="space-y-3 px-4 py-3 text-[15px] max-[600px]:px-3">
-        {/* qa-settings-38: where the report goes, from whether Slack is connected and a channel picked. */}
-        <p className="text-text2" data-testid="report-where">
+    <Panel
+      title="Weekly alignment report"
+      testId="report-schedule"
+      tools={
+        // qa-settings-38: where the report goes, from whether Slack is connected and a channel picked.
+        // #1590: where the report goes sits behind the (i).
+        <InfoTip label="where the report goes" align="start" testId="weekly-report-tip">
           Every week Oracle reports the roadmap against engineering for the week that ended
           {!slackConnected
             ? ", in owners' Inbox. Inbox only until Slack is connected."
             : setting.slack_channel
               ? `: in owners' Inbox and in #${setting.slack_channel.name} on Slack.`
               : ", in owners' Inbox. Inbox only until a Slack channel is picked."}
-        </p>
+        </InfoTip>
+      }
+    >
+      <div className="space-y-3 px-4 py-3 text-[15px] max-[600px]:px-3">
         {/* qa-settings-42: on a phone the whole row is the tap target, at least 44 px high. */}
         <label className="flex items-center gap-2 font-medium max-[600px]:min-h-11 max-[600px]:min-w-11 max-[600px]:gap-3" data-testid="report-enabled">
           <input

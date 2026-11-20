@@ -121,7 +121,9 @@ test.describe("desktop", () => {
     await openVersionImpact(page);
     const sidebar = page.getByRole("complementary", { name: "Regeneration plan" });
     const tests = sidebar.getByTestId("plan-row").filter({ hasText: "Acceptance tests v1" });
-    await expect(tests).toContainText("Propose a new version of these acceptance tests");
+    await tests.getByTestId("propose-version-tip").filter({ visible: true }).first().click();
+    await expect(page.getByRole("tooltip").filter({ hasText: "Propose a new version of these acceptance tests", visible: true })).toBeVisible();
+    await page.keyboard.press("Escape");
     await expect(sidebar).not.toContainText("this acceptance tests");
   });
 

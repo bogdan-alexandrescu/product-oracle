@@ -115,7 +115,8 @@ test.describe("desktop", () => {
     action = page.getByRole("button", { name: "Save as new version" });
     await expect(action).toBeDisabled();
     await expect(header().getByRole("button", { name: "Save as new version" })).toHaveCount(0);
-    await expect(page.getByTestId("version-save-reason")).toHaveText("Change the template to save a new version.");
+    await page.getByTestId("template-save-tip").filter({ visible: true }).first().click();
+    await expect(page.getByRole("tooltip").filter({ hasText: "Change the template to save a new version.", visible: true })).toBeVisible();
     // qa-F-75: sections are rows by default; the raw body sits behind Edit as Markdown.
     await page.getByRole("button", { name: "Edit as Markdown" }).click();
     expect((await action.boundingBox())!.y).toBeGreaterThan((await page.getByLabel("Template body").boundingBox())!.y);
@@ -189,7 +190,8 @@ test.describe("desktop", () => {
     // Picking a font by name writes its stack.
     await heading.selectOption("Georgia");
     await expect(stack).toHaveValue('Georgia, "Times New Roman", serif');
-    await expect(page.getByTestId("font-heading-hint")).toHaveText("Uses Georgia; without it, Times New Roman, then serif.");
+    await page.getByRole("button", { name: "About Heading font fallback" }).click();
+    await expect(page.getByRole("tooltip").filter({ hasText: "Uses Georgia; without it, Times New Roman, then serif.", visible: true })).toBeVisible();
   });
 });
 

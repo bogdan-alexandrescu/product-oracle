@@ -58,7 +58,12 @@ test.describe("desktop", () => {
     await expect(gapHeads.first()).toContainText("no links or citations");
 
     const note = page.getByTestId("evidence-coverage").locator("p").last();
-    await expect(note).toContainText("A red column is a section with no links or citations, in it or in its subsections");
+    await expect(note.getByText("A red column is a section with no links or citations", { exact: false }).filter({ visible: true })).toHaveCount(0);
+    await note.getByTestId("evidence-red-tip").filter({ visible: true }).first().click();
+    await expect(
+      page.getByRole("tooltip").filter({ hasText: "A red column is a section with no links or citations, in it or in its subsections", visible: true }),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
     await expect(note).not.toContainText(/nor has any section|rejected and superseded|Rendered pages|Per section:/);
     // Two sentences, then when the sources were read.
     const sentences = (await note.innerText()).split(/(?<=\.)\s+/).filter(Boolean);

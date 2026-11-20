@@ -433,7 +433,17 @@ function Outcomes() {
             tools={
               // qa-plan-48: with no outcome at all, no filters (each would read 0) and no
               // table headers: only the empty state and its action.
-              !none && (
+              none ? (
+                // #1590: how outcomes are recorded sits behind the (i), in the head, so the
+                // empty state holds no button but its action.
+                <InfoTip label="how outcomes are recorded" align="end" testId="outcomes-empty-tip">
+                  Approving a roadmap records a prediction for each item that
+                  serves a goal.
+                  {canApprove
+                    ? " You can also track an outcome for an item yourself."
+                    : ""}
+                </InfoTip>
+              ) : (
                 <FilterChips
                   label="Outcomes by state"
                   testId="outcome-filters"
@@ -451,13 +461,6 @@ function Outcomes() {
               >
                 <p className="font-display text-lg font-bold text-text">
                   No outcomes yet
-                </p>
-                <p>
-                  Approving a roadmap records a prediction for each item that
-                  serves a goal.
-                  {canApprove
-                    ? " You can also track an outcome for an item yourself."
-                    : ""}
                 </p>
                 {canApprove && !tracking && (
                   <Button variant="primary" onClick={() => setTracking(true)} data-testid="outcome-track">
@@ -1426,9 +1429,13 @@ function LearningsPanel({
         <Loading />
       ) : rows.length === 0 ? (
         <p className="text-sm text-text2" data-testid="learnings-empty">
-          {canApprove
-            ? "No learnings yet. When an outcome is checked, Oracle drafts one for you to keep. You can also add your own."
-            : "No learnings yet. When an outcome is checked, Oracle drafts one, and an approver can keep it or add their own."}
+          No learnings yet.
+          {/* #1590: how learnings get drafted sits behind the (i). */}
+          <InfoTip label="how learnings get drafted" align="start" testId="outcomes-empty-tip">
+            {canApprove
+              ? "When an outcome is checked, Oracle drafts one for you to keep. You can also add your own."
+              : "When an outcome is checked, Oracle drafts one, and an approver can keep it or add their own."}
+          </InfoTip>
         </p>
       ) : (
         <ul className="divide-y divide-line">

@@ -27,7 +27,9 @@ test("qa-plan-13: with no approved roadmap, New launch is disabled with the reas
   const button = empty.getByRole("button", { name: "New launch" });
   await expect(button).toBeDisabled();
   const why = empty.getByTestId("new-launch-blocked");
-  await expect(why).toContainText("Usage alerts PRD has no approved roadmap yet");
+  await why.getByTestId("launches-empty-tip").filter({ visible: true }).first().click();
+  await expect(page.getByRole("tooltip").filter({ hasText: "Usage alerts PRD has no approved roadmap yet", visible: true })).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(button).toHaveAttribute("aria-describedby", "new-launch-why");
   await expect(why.getByRole("link", { name: "Usage alerts roadmap" })).toHaveAttribute("href", "/documents/usage-alerts-roadmap");
   // No dialog that can only say Close.
@@ -77,9 +79,12 @@ test("qa-plan-57: an approver still sees why Export waits", async ({ page }) => 
   await start(page);
   await page.goto("/roadmap/changelog");
   await expect(page.getByTestId("export-md")).toBeDisabled();
-  await expect(page.getByTestId("export-why")).toHaveText(
-    "Nothing to export yet: export gives the published public entries. Publish a public entry to export it.",
-  );
+  const why = page.getByTestId("export-why");
+  await expect(why).toContainText("Nothing to export yet.");
+  await expect(why).toContainText("Publish a public entry to export it.");
+  await why.getByTestId("changelog-export-tip").filter({ visible: true }).first().click();
+  await expect(page.getByRole("tooltip").filter({ hasText: "export gives the published public entries.", visible: true })).toBeVisible();
+  await page.keyboard.press("Escape");
 });
 
 test("qa-plan-58: the empty Changelog holds its New entry button, and it opens the form", async ({ page }) => {
