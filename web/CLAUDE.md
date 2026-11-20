@@ -15,7 +15,8 @@ still apply; the commands are in `docs/agents/lane-rules.md` (Building a lane, B
 - Checks: `npx next typegen && npx tsc --noEmit -p .`, then `npm run lint`.
 - Unit tests (Vitest, `npm run test:unit`): pure logic in `*.test.ts` beside its module, a render
   test (happy-dom, Testing Library) in `*.test.tsx` beside its component. Playwright keeps the
-  flows a person drives; a spec that only calls a module, with no page, is a unit test.
+  flows a person drives; a spec that only calls a module, with no page, is a unit test. A test with a
+  wall-clock budget goes in `*.timing.test.ts`, tagged @timing; `npm run test:timing` runs those alone.
 - Playwright: `--reporter=line`, trace off, `rm -rf test-results` between runs; it builds the
   mock app itself. Port from `E2E_PORT`.
 - No new visible prose: the prose guard (`e2e/prose-guard.spec.ts`) counts it against
