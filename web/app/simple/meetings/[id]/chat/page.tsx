@@ -1,13 +1,12 @@
-import type { RouteProps } from '@/lib/route-props';
+'use client';
+
+import { useParams, useSearchParams } from '@/lib/nav';
 
 import { MeetingChatPage } from './_chat';
 
 /** Simple S9 (#723): one meeting's shared chat on its own page; S8's meeting screen renders the same MeetingChat in its right column. */
-export default async function SimpleMeetingChat({
-  params,
-  searchParams,
-}: RouteProps<{ id: string }>) {
-  const { id } = await params;
-  const session = (await searchParams).session;
-  return <MeetingChatPage id={id} session={typeof session === 'string' ? session : ''} />;
+export default function SimpleMeetingChat() {
+  const { id } = useParams<{ id: string }>();
+  const session = useSearchParams().getAll('session');
+  return <MeetingChatPage id={id} session={session.length === 1 ? session[0] : ''} />;
 }

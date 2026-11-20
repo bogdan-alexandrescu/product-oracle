@@ -12,7 +12,7 @@ place of `next start` (the standalone `server.js` in `web/Dockerfile`).
 | `rewrites()`: `/v1/*`, `/healthz`, `/uploads/*` to `API_INTERNAL_URL` | `proxy_pass` locations, same origin ([Proxy](#proxy-v1-uploads-healthz)) |
 | `experimental.proxyTimeout: 120_000` (brief-answers: a 25 s model call plus saving) | `proxy_read_timeout 120s` on `/v1/` |
 | `headers()`: the CSP on every page | `add_header Content-Security-Policy … always`, from one include ([CSP](#csp)) |
-| `redirects()`: 4 redirects | `return 308` / `return 307` locations ([table](#generated-from-nextconfigts)) |
+| `web/lib/redirects.ts` (4 redirects, applied by `web/proxy.ts`, #1580) | `return 308` / `return 307` locations ([table](#generated-from-nextconfigts)) |
 | App Router pages, one HTML per route | SPA fallback to `index.html`; TanStack Router picks the route |
 | `/_next/static/*` immutable chunks | `/assets/*` (Vite's hashed output), immutable; a missing one is a `no-store` 404 |
 | `env` / `NEXT_PUBLIC_*` inlined at build | `VITE_*` inlined at build ([Env](#env-oracle_simple_mode-and-next_public_-to-vite_)) |
@@ -21,15 +21,15 @@ place of `next start` (the standalone `server.js` in `web/Dockerfile`).
 ## Generated from next.config.ts
 
 Regenerate with `node docs/vite-migration/next-config-tables.mjs --write` whenever
-`next.config.ts` changes before the move lands; the nginx config must match these rows.
+`next.config.ts` or `lib/redirects.ts` changes before the move lands; the nginx config must match these rows.
 
 <!-- generated:next-config begin -->
-| Next `redirects()` source | Destination | Status | nginx |
+| `lib/redirects.ts` from | Destination | Status | nginx |
 |---|---|---|---|
 | `/roadmap` | `/plan` | 308 | `location = /roadmap { return 308 /plan$is_args$args; }` |
-| `/baseline` | `/ground-truth` | 308 | `location = /baseline { return 308 /ground-truth$is_args$args; }` |
 | `/baseline/:path*` | `/ground-truth/:path*` | 308 | `location ~ ^/baseline(/.*)?$ { return 308 /ground-truth$1$is_args$args; }` |
 | `/simple/prds/:doc` | `/simple/one-pagers/:doc` | 307 | `location ~ ^/simple/prds/([^/]+)$ { return 307 /simple/one-pagers/$1$is_args$args; }` |
+| `/requests/new` | `/requests/to-decide` (no query: `/requests?compose=request`) | 307 | `location = /requests/new { if ($args = "") { return 307 /requests?compose=request; } return 307 /requests/to-decide$is_args$args; }` |
 
 | Next `rewrites()` source | Upstream today | nginx |
 |---|---|---|

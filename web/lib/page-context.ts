@@ -67,7 +67,6 @@ export const PAGE_CONTEXT: Record<string, PageContext> = {
   '/requests': shown('The requests as listed'),
   '/requests/interviews': shown('The interviews as listed'),
   '/requests/interviews/[id]': shown('The interview as shown'),
-  '/requests/new': none('Goes on to Requests or To decide'),
   '/requests/themes': shown('The themes as listed'),
   '/requests/to-decide': shown('The requests to decide as listed'),
   '/roadmap/changelog': shown('The changelog as listed'),
@@ -112,7 +111,6 @@ export const PAGE_CONTEXT: Record<string, PageContext> = {
   '/simple/meetings/[id]/chat': shown("The plan and the meeting's chat as shown"),
   '/simple/one-pagers': shown('The plan and the one-pagers as listed'),
   '/simple/one-pagers/[doc]': shown('The plan and the one-pager as shown'),
-  '/simple/prds/[doc]': none('Goes on to the one-pager'),
   '/simple/priorities': shown('The plan and the priorities as shown'),
   '/simple/roadmap': shown("The plan, the open card's item (its subject) and the roadmap as shown"),
   // Without the shell: no Ask Oracle

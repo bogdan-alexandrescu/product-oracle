@@ -59,13 +59,12 @@ through `lib/dates.ts`) carry over unchanged.
 
 ## Fonts without next/font
 
-`app/layout.tsx` self-hosts Inter Tight (latin, variable) and DM Mono (latin, 400 and 500)
-through `next/font/google`. Under Vite the plan is to commit the `woff2` files (SIL Open Font
-Licence 1.1, which allows bundling) under `web/fonts/` with `@font-face` rules in
-`globals.css` setting the same `--font-inter-tight` / `--font-dm-mono` variables, and
-`font-display: swap`. No package; Vite hashes them into `/assets/`, so nginx serves them
-immutable. The `@fontsource/inter-tight` and `@fontsource/dm-mono` packages would do the
-same as a dependency; not needed.
+Done in #1580, still on Next: Inter Tight (latin, variable) and DM Mono (latin, 400 and 500)
+are committed `woff2` files (SIL Open Font Licence 1.1, which allows bundling) under
+`web/public/fonts/`, with `@font-face` rules in `app/globals.css` setting the same
+`--font-inter-tight` / `--font-dm-mono` variables, `font-display: swap` and the metric-matched
+Arial fallbacks next/font made; `app/layout.tsx` preloads them. No package. Under Vite they
+can move to `web/fonts/` so Vite hashes them into `/assets/` (served immutable).
 
 ## The whole tree
 

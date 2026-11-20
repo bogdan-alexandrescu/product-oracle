@@ -1,14 +1,18 @@
+'use client';
+
 import { Suspense } from 'react';
 
-import type { RouteProps } from '@/lib/route-props';
+import { useParams, useSearchParams } from '@/lib/nav';
 
 import { ReviewShell } from './_shell';
 import { PageSkeleton } from '@/components/ds';
 
-async function Shell({ params, searchParams }: RouteProps<{ id: string; checkpoint: string }>) {
-  const [{ id, checkpoint }, query] = await Promise.all([params, searchParams]);
-  const item = typeof query.item === 'string' ? query.item : null;
-  return <ReviewShell runId={id} checkpointId={checkpoint} item={item} />;
+function Shell() {
+  const { id, checkpoint } = useParams<{ id: string; checkpoint: string }>();
+  const item = useSearchParams().getAll('item');
+  return (
+    <ReviewShell runId={id} checkpointId={checkpoint} item={item.length === 1 ? item[0] : null} />
+  );
 }
 
 /**
@@ -16,10 +20,10 @@ async function Shell({ params, searchParams }: RouteProps<{ id: string; checkpoi
  * checkpoint and opens the view of the checkpoint's kind (./_shell.tsx VIEWS); any other
  * kind goes to the run page's decision. `?item=<key>` selects a row on arrival.
  */
-export default function ReviewPage(props: RouteProps<{ id: string; checkpoint: string }>) {
+export default function ReviewPage() {
   return (
     <Suspense fallback={<PageSkeleton />}>
-      <Shell {...props} />
+      <Shell />
     </Suspense>
   );
 }

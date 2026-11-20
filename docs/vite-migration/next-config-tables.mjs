@@ -1,5 +1,6 @@
-// Vite phase 0 (#1578): the tables in nginx.md, generated from web/next.config.ts so the
-// nginx config is written from what Next serves today, not from memory.
+// Vite phase 0 (#1578): the tables in nginx.md, generated from web/next.config.ts and the
+// redirect table (web/lib/redirects.ts, #1580) so the nginx config is written from what Next
+// serves today, not from memory.
 //
 //   node docs/vite-migration/next-config-tables.mjs          # print the tables
 //   node docs/vite-migration/next-config-tables.mjs --write  # replace them in nginx.md
@@ -14,6 +15,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 process.env.NODE_ENV = "production";
 process.env.API_INTERNAL_URL ??= "http://api:8000";
 const { default: config } = await import(pathToFileURL(join(here, "../../web/next.config.ts")).href);
+const { REDIRECTS } = await import(pathToFileURL(join(here, "../../web/lib/redirects.ts")).href);
 
 /** A Next path pattern as an nginx location and the target with its captures. */
 function toNginx(source, destination) {
@@ -31,11 +33,14 @@ function toNginx(source, destination) {
 }
 
 const lines = [];
-lines.push("| Next `redirects()` source | Destination | Status | nginx |", "|---|---|---|---|");
-for (const r of await config.redirects()) {
+lines.push("| `lib/redirects.ts` from | Destination | Status | nginx |", "|---|---|---|---|");
+for (const r of REDIRECTS) {
   const status = r.permanent ? 308 : 307;
-  const { location, target } = toNginx(r.source, r.destination);
-  lines.push(`| \`${r.source}\` | \`${r.destination}\` | ${status} | \`${location} { return ${status} ${target}$is_args$args; }\` |`);
+  const { location, target } = toNginx(r.from, r.to);
+  // `bare`: a request with no query goes there instead.
+  const bare = r.bare ? `if ($args = "") { return ${status} ${r.bare}; } ` : "";
+  const to = r.bare ? `\`${r.to}\` (no query: \`${r.bare}\`)` : `\`${r.to}\``;
+  lines.push(`| \`${r.from}\` | ${to} | ${status} | \`${location} { ${bare}return ${status} ${target}$is_args$args; }\` |`);
 }
 lines.push("", "| Next `rewrites()` source | Upstream today | nginx |", "|---|---|---|");
 for (const w of await config.rewrites()) {

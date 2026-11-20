@@ -1,18 +1,20 @@
+'use client';
+
+import { useParams } from '@/lib/nav';
 import { Suspense } from 'react';
 
 import { VersionView } from '@/components/VersionView';
-import type { RouteProps } from '@/lib/route-props';
 import { PageSkeleton } from '@/components/ds';
 
-async function Version({ params }: { params: RouteProps<{ doc: string; n: string }>['params'] }) {
-  const { doc, n } = await params;
+function Version() {
+  const { doc, n } = useParams<{ doc: string; n: string }>();
   return <VersionView key={`${doc}/${n}`} doc={doc} n={Number(n)} />;
 }
 
-export default function VersionPage({ params }: RouteProps<{ doc: string; n: string }>) {
+export default function VersionPage() {
   return (
     <Suspense fallback={<PageSkeleton />}>
-      <Version params={params} />
+      <Version />
     </Suspense>
   );
 }

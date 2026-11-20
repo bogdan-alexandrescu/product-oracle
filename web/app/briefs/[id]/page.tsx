@@ -1,20 +1,20 @@
+'use client';
+
+import { useParams } from '@/lib/nav';
 import { Suspense } from 'react';
 
 import { BriefDetail } from '../_brief-detail';
 import { PageSkeleton } from '@/components/ds';
 
-/** Spelled out rather than Next's generated PageProps, so tsc passes without a build first. */
-type Params = { params: Promise<{ id: string }> };
-
-async function Detail({ params }: Params) {
-  const { id } = await params;
+function Detail() {
+  const { id } = useParams<{ id: string }>();
   return <BriefDetail id={id} />;
 }
 
-export default function BriefPage({ params }: Params) {
+export default function BriefPage() {
   return (
     <Suspense fallback={<PageSkeleton />}>
-      <Detail params={params} />
+      <Detail />
     </Suspense>
   );
 }
