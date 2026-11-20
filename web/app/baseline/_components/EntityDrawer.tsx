@@ -7,7 +7,7 @@ import { AddEvidenceLink } from "@/components/AddEvidenceLink";
 import { peopleByIds } from "@/components/PersonPicker";
 import { inTextField, useSplitPanel } from "@/components/ds/panel-close";
 import { Button, Chip, CodeChip, InfoTip, Inspector, InspectorSection, Notice } from "@/components/ds";
-import { INPUT, Loading } from "@/components/ui";
+import { INPUT, LoadError, Loading } from "@/components/ui";
 import { api, unwrap, type EdgeOut, type EntityDetail, type EntityOut, type GraphOut, type Schemas } from "@/lib/api/client";
 import { formatDate, formatDateRange, formatDateTime } from "@/lib/format";
 import { named } from "@/lib/codes";
@@ -1651,7 +1651,10 @@ function History({ entityId, updatedAt, graph, goal }: { entityId: string; updat
   const rows = q.data ?? [];
   return (
     <InspectorSection label="History" testId="entity-history">
-      {q.loading && !q.data ? (
+      {/* #1586: a history that could not be read says so, never "No changes recorded". */}
+      {q.error ? (
+        <LoadError what="the history" error={q.error} onRetry={() => void q.reload()} />
+      ) : q.loading && !q.data ? (
         <Loading />
       ) : rows.length === 0 ? (
         <p className="text-text2">No changes recorded</p>

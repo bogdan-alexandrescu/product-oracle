@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 
 import { Button } from "@/components/ds";
-import { INPUT } from "@/components/ui";
+import { INPUT, LoadError } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { docLabel, runLabel } from "@/lib/labels";
 import { prdsFirst, usePrds } from "@/lib/prd-order";
@@ -126,7 +126,8 @@ export function LinksPicker({ value, onChange, known }: { value: Links; onChange
           </ul>
         )}
         <input className={INPUT} aria-label="Find an item to link" value={find} onChange={(e) => setFind(e.target.value)} placeholder="Find a goal, feature, risk…" />
-        {needle && (
+        {needle && entitiesQ.error && <LoadError what="the Ground Truth" error={entitiesQ.error} onRetry={() => void entitiesQ.reload()} />}
+        {needle && !entitiesQ.error && (
           <ul className="flex flex-col gap-0.5">
             {matches.length === 0 ? (
               <li className="text-sm text-text2">{entitiesQ.loading ? "Loading…" : "No Ground Truth item matches"}</li>
@@ -168,7 +169,10 @@ function ItemEvidence({ entity, title, chosen, onTick }: { entity: string; title
   return (
     <div className="flex flex-col gap-0.5">
       <p className="text-sm font-medium">{title}</p>
-      {q.loading && !q.data ? (
+      {/* #1586: evidence that could not be read says so, never "No evidence on this item". */}
+      {q.error ? (
+        <LoadError what="the evidence" error={q.error} onRetry={() => void q.reload()} />
+      ) : q.loading && !q.data ? (
         <p className="text-sm text-text2">Loading…</p>
       ) : rows.length === 0 ? (
         <p className="text-sm text-text2">No evidence on this item</p>

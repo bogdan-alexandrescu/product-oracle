@@ -170,6 +170,7 @@ export function PlanTable({
   onSelect,
   me,
   loading,
+  failed = false,
   onLink,
 }: {
   items: PlanItem[] | undefined;
@@ -180,6 +181,8 @@ export function PlanTable({
   onSelect: (id: string) => void;
   me: string | null | undefined;
   loading: boolean;
+  /** #1586: the read failed (its reason shows above): no empty row. */
+  failed?: boolean;
   /** F7: set for those who may link tracker issues; the Next cell's Link issue opens the dialog. */
   onLink?: (i: PlanItem) => void;
 }) {
@@ -297,7 +300,7 @@ export function PlanTable({
         )}
         groupProps={() => ({ "data-testid": "plan-group" })}
         rowProps={(i) => ({ "data-testid": "plan-row", "data-origin": i.origin, "data-item": i.key, "data-id": i.id })}
-        empty="No roadmap items yet"
+        empty={failed ? null : "No roadmap items yet"}
       />
     </WithFeatureMarks>
   );
