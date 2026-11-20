@@ -242,11 +242,16 @@ async function openRitual(page: Page) {
 }
 
 test("Rituals: occurrences that could not be read say so, never nothing", async ({ page }) => {
+  await page.addInitScript(([key, s]) => localStorage.setItem(key, s), ["po-mock-scenario", "rituals"] as const);
   await login(page);
   let recent = await openRitual(page);
-  await expect(recent.getByRole("link").first()).toBeVisible();
+  // Answered: its occurrences, or that there is no pre-read yet.
+  await expect(recent.getByRole("link").or(recent.getByText("No pre-read yet")).first()).toBeVisible();
   await expect(recent.getByTestId("load-error")).toHaveCount(0);
-  const url = await calledUrl(page, /^\/v1\/rituals\/[^/?]+\/occurrences/);
+  // The last one read: the page may open another ritual's inspector first.
+  const url = await page.evaluate(() =>
+    ((globalThis as { __poMockCalls?: string[] }).__poMockCalls ?? []).map((l) => l.replace(/^GET /, "")).filter((p) => /^\/v1\/rituals\/[^/?]+\/occurrences/.test(p)).at(-1)!,
+  );
 
   await failGets(page, url.split("?")[0]);
   await page.reload();
