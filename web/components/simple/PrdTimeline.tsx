@@ -6,7 +6,7 @@ import { MarkFor, WithFeatureMarks } from "@/components/current-state/CurrentSta
 import { NotInGt } from "@/components/simple/FeatureName";
 import { FlowDiagram } from "@/components/simple/FlowViews";
 import { useOpenFeature } from "@/components/simple/OpenFeature";
-import { ErrorNote } from "@/components/ui";
+import { ErrorNote, LoadError } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { calendarDay, todayIn, useCompanyZone, utcDay } from "@/lib/dates";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -334,7 +334,7 @@ const SliceItems = createContext<Map<string, string> | null>(null);
  * so each "What we build" line finds the item its feature stands for, and the features' marks.
  */
 function PlanMarks({ prd, children }: { prd?: string; children: ReactNode }) {
-  const q = useQuery(`simple-prd-items|${prd ?? ""}`, () => (prd ? unwrap(api.GET("/v1/simple/roadmap", { params: { query: { prd } } })).catch(() => null) : Promise.resolve(null)));
+  const q = useQuery(`simple-prd-items|${prd ?? ""}`, () => (prd ? unwrap(api.GET("/v1/simple/roadmap", { params: { query: { prd } } })) : Promise.resolve(null)));
   const items = useMemo(() => {
     const m = new Map<string, string>();
     for (const i of q.data?.items ?? []) {
@@ -346,6 +346,8 @@ function PlanMarks({ prd, children }: { prd?: string; children: ReactNode }) {
   if (!prd) return <>{children}</>;
   return (
     <WithFeatureMarks>
+      {/* #1586: marks that could not be read say so, never read as no marks. */}
+      {q.error && <LoadError what="the features' marks" error={q.error} onRetry={() => void q.reload()} />}
       <SliceItems.Provider value={items}>{children}</SliceItems.Provider>
     </WithFeatureMarks>
   );
@@ -376,16 +378,17 @@ export type Loose = { id: string; title: string; code?: string | null };
 
 /**
  * Owner, Nov 10: the PRD's roadmap items with no plan milestone (the strip's "No milestone" row),
- * for the When card on the page and on the Present slide alike.
+ * for the When card on the page and on the Present slide alike. Without `codes` (not read) an item's
+ * code is unknown (undefined), never "no code" (null).
  */
-export function looseItems(v: Pick<Schemas["OnePagerOut"], "plan" | "timeline">, codes: Map<string, string | null>): Loose[] {
+export function looseItems(v: Pick<Schemas["OnePagerOut"], "plan" | "timeline">, codes: Map<string, string | null> | undefined): Loose[] {
   const timelineById = new Map(v.timeline.map((t) => [t.id, t]));
   return (v.plan?.rows ?? [])
     .filter((r) => !r.milestone)
     .flatMap((r) => r.item_ids ?? [])
     .flatMap((id) => {
       const t = timelineById.get(id);
-      return t ? [{ id, title: t.title, code: codes.get(id) ?? null }] : [];
+      return t ? [{ id, title: t.title, code: codes ? (codes.get(id) ?? null) : undefined }] : [];
     });
 }
 
@@ -412,7 +415,7 @@ function NoMilestone({ loose }: { loose: Loose[] }) {
                 <b className="text-[15px] leading-5 font-bold">{x.title}</b>
               )}
               {/* OP1: an item with no code is flagged, never hidden. */}
-              {!x.code && <NotInGt />}
+              {x.code !== undefined && !x.code && <NotInGt />}
               <MarkFor itemId={x.id} checked />
             </span>
           </li>

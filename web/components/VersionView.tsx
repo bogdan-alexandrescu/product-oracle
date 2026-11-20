@@ -46,7 +46,7 @@ import { VersionTabs } from "@/components/roadmap/VersionTabs";
 import { ApproveButton, ExportButtons } from "@/components/VersionActions";
 import { EvidencePane } from "@/components/evidence/EvidencePane";
 import { VersionSwitcher } from "@/components/VersionSwitcher";
-import { ErrorNote, Loading } from "@/components/ui";
+import { ErrorNote, LoadError, Loading } from "@/components/ui";
 import { resolveSelector, selectorFromRange, type TextQuoteSelector } from "@/lib/anchor";
 import { ApiError, api, unwrap, type CitationOut, type DateMarkOut, type SectionOut, type Verdict } from "@/lib/api/client";
 import { draftRoadmapOf } from "@/lib/api/draft-roadmap";
@@ -166,7 +166,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   const [refreshKey, setRefreshKey] = useState(0);
   // #347: each section's review state (re-review asked, its owner) and the held agent rewrites.
   const statesQ = useQuery(`section-states|${doc}|${n}`, () =>
-    unwrap(api.GET("/v1/documents/{doc}/versions/{n}/section-states", { params: { path: { doc, n } } })).catch(() => null),
+    unwrap(api.GET("/v1/documents/{doc}/versions/{n}/section-states", { params: { path: { doc, n } } })),
   );
   const held = useHeldRewrites(doc);
   const [heldOpen, setHeldOpen] = useState(false);
@@ -1499,6 +1499,10 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
         )}
         {pane !== "document" && !document_ && !error && <Loading label="Loading version…" />}
         {pane !== "document" && error && !(pane === "evidence" && document_) && <ErrorNote>{error}</ErrorNote>}
+        {/* #1586: without the review states no section reads as "no re-review asked": say so. */}
+        {onDocument && !error && statesQ.error && (
+          <LoadError what="the sections' review states" error={statesQ.error} onRetry={() => void statesQ.reload()} />
+        )}
 
         {/* The outline rail (>= 1280 px), the section with the switcher above it below that,
             and the review panel; each column sticks and scrolls inside itself. */}

@@ -65,7 +65,8 @@ function runTitle(r: RunSummary, docs: Map<string, DocNamed>): string {
 export default function RunsPage() {
   const q = useQuery("runs", () => unwrap(api.GET("/v1/runs")));
   // Document titles, to name each run by its document; the slug in words until they load.
-  const docsQ = useQuery("runs|documents", () => unwrap(api.GET("/v1/documents")).catch(() => []));
+  // #1586: titles that could not be read say so above the list; the runs stay.
+  const docsQ = useQuery("runs|documents", () => unwrap(api.GET("/v1/documents")));
   const docs = new Map<string, DocNamed>((docsQ.data ?? []).map((d) => [d.id, d]));
   const { can, capsReady } = useMe();
   const router = useRouter();
@@ -284,57 +285,60 @@ export default function RunsPage() {
       {q.error ? (
         <LoadError what="your runs" error={q.error} onRetry={() => void q.reload()} />
       ) : (
-        <Split
-          byRoom
-          inspector={
-            selected && (
-              <div className="max-[600px]:hidden">
-                <RunInspector run={selected} name={runTitle(selected, docs)} />
-              </div>
-            )
-          }
-        >
-          <Panel
-            title="Runs"
-            count={q.data ? shown.length : undefined}
+        <>
+          {docsQ.error && <LoadError what="the document names" error={docsQ.error} onRetry={() => void docsQ.reload()} />}
+          <Split
+            byRoom
+            inspector={
+              selected && (
+                <div className="max-[600px]:hidden">
+                  <RunInspector run={selected} name={runTitle(selected, docs)} />
+                </div>
+              )
+            }
           >
-            {q.data && runs.length === 0 ? (
-              <Empty testId="runs-empty">
-                No runs yet.{" "}
-                {can("create_run", true) ? "Start one from Start a run… or from the page it works on." : "Runs show here once an approver starts one."}{" "}
-                <InfoTip label="runs" align="start">
-                  Runs turn the Ground Truth into a PRD draft: each one plans the work, gathers evidence from your sources and
-                  writes a cited draft for review.
-                </InfoTip>
-              </Empty>
-            ) : (
-              // qa-work-25: on a phone a tap on a row (not its link or button) opens the run.
-              <div
-                className="contents"
-                onClick={(e) => {
-                  if (!phone) return;
-                  const t = e.target as HTMLElement;
-                  if (t.closest("a,button")) return;
-                  const key = t.closest<HTMLElement>("tr[data-key]")?.dataset.key;
-                  if (key) router.push(`/runs/${key}`);
-                }}
-              >
-                <DataTable
-                  label="Runs"
-                  testId="runs-table"
-                  columns={columns}
-                  rows={q.data ? shown : undefined}
-                  loading={q.loading}
-                  rowKey={(r) => r.id}
-                  selected={selected?.id ?? null}
-                  onSelect={(k) => setPicked(k)}
-                  onActivate={(k) => router.push(`/runs/${k}`)}
-                  rowProps={(r) => ({ "data-testid": "run-row", "data-document": r.document_slug ?? undefined })}
-                />
-              </div>
-            )}
-          </Panel>
-        </Split>
+            <Panel
+              title="Runs"
+              count={q.data ? shown.length : undefined}
+            >
+              {q.data && runs.length === 0 ? (
+                <Empty testId="runs-empty">
+                  No runs yet.{" "}
+                  {can("create_run", true) ? "Start one from Start a run… or from the page it works on." : "Runs show here once an approver starts one."}{" "}
+                  <InfoTip label="runs" align="start">
+                    Runs turn the Ground Truth into a PRD draft: each one plans the work, gathers evidence from your sources and
+                    writes a cited draft for review.
+                  </InfoTip>
+                </Empty>
+              ) : (
+                // qa-work-25: on a phone a tap on a row (not its link or button) opens the run.
+                <div
+                  className="contents"
+                  onClick={(e) => {
+                    if (!phone) return;
+                    const t = e.target as HTMLElement;
+                    if (t.closest("a,button")) return;
+                    const key = t.closest<HTMLElement>("tr[data-key]")?.dataset.key;
+                    if (key) router.push(`/runs/${key}`);
+                  }}
+                >
+                  <DataTable
+                    label="Runs"
+                    testId="runs-table"
+                    columns={columns}
+                    rows={q.data ? shown : undefined}
+                    loading={q.loading}
+                    rowKey={(r) => r.id}
+                    selected={selected?.id ?? null}
+                    onSelect={(k) => setPicked(k)}
+                    onActivate={(k) => router.push(`/runs/${k}`)}
+                    rowProps={(r) => ({ "data-testid": "run-row", "data-document": r.document_slug ?? undefined })}
+                  />
+                </div>
+              )}
+            </Panel>
+          </Split>
+        </>
       )}
       {open && <NewRunDialog onClose={() => setOpen(false)} />}
     </Page>

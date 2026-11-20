@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { NewRunDialog } from "@/app/runs/_new-run-dialog";
 import { Button, Icon } from "@/components/ds";
+import { LoadError } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -18,8 +19,10 @@ export function DraftNewItems({ doc, slug, n }: { doc: string; slug: string; n: 
   const { can } = useMe();
   const [open, setOpen] = useState(false);
   const q = useQuery(`draft-new-items|${doc}|${n}`, () =>
-    unwrap(api.GET("/v1/documents/{doc}/versions/{n}/new-items", { params: { path: { doc, n } } })).catch(() => null),
+    unwrap(api.GET("/v1/documents/{doc}/versions/{n}/new-items", { params: { path: { doc, n } } })),
   );
+  // #1586: a count that could not be read says so, never "no new items".
+  if (q.error) return <LoadError what="the new items" error={q.error} onRetry={() => void q.reload()} />;
   const count = q.data?.visible ? (q.data.count ?? 0) : 0;
   // The count is of items new, changed or deleted since the sources the draft read (its run's
   // pin, which can be well before the draft was written), so the line names that moment.

@@ -26,7 +26,7 @@ import { MilestoneEditor, TrackPanel, useTracks, type MilestonePick } from "./_t
 
 /** The goals band; with no confirmed goal, one line and the way to the Baseline. */
 function GoalsBand({ canImport }: { canImport: boolean }) {
-  const { goals, history, historyPending, error, loading } = useGoals("plan");
+  const { goals, history, historyPending, historyFailed, error, loading } = useGoals("plan");
   if (goals && !goals.some((g) => !g.proposed)) {
     return (
       <Panel title="Goals" testId="plan-goals">
@@ -39,7 +39,18 @@ function GoalsBand({ canImport }: { canImport: boolean }) {
       </Panel>
     );
   }
-  return <GoalsPanel goals={goals} history={history} historyPending={historyPending} error={error} loading={loading} canImport={canImport} testId="plan-goals" />;
+  return (
+    <GoalsPanel
+      goals={goals}
+      history={history}
+      historyPending={historyPending}
+      historyFailed={historyFailed}
+      error={error}
+      loading={loading}
+      canImport={canImport}
+      testId="plan-goals"
+    />
+  );
 }
 
 /** Approved PRDs that have no roadmap yet: each can build one (shown while the Plan has no items). */

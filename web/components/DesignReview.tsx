@@ -5,7 +5,7 @@ import { useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { Button, Chip, Icon, Inspector, InspectorSection, LinkButton, NotFoundPanel, Notice, Page, PageHeader, Panel, SegmentedControl, Sheet, Split, type ChipKind } from "@/components/ds";
 import { FRESHNESS, reasonText, type PrdWords } from "@/components/tech-brief";
-import { ErrorNote } from "@/components/ui";
+import { ErrorNote, LoadError } from "@/components/ui";
 import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -92,7 +92,7 @@ const SLUG_IN_REASON = /\b(?:in|of) ([a-z0-9]+(?:-[a-z0-9]+)+)\b/;
  * The PRD by its title and its sections by their headings: from the spec's PRD, the version's
  * dependencies, or the slug its staleness reasons name.
  */
-function usePrdWords(spec: Spec | undefined, d: Design | undefined): PrdWords {
+function usePrdWords(spec: Spec | undefined, d: Design | undefined): Words {
   const view = spec && d ? spec.stale.find((x) => x.artifact_version_id === d.version.id) : undefined;
   const deps = [...(d?.lineage?.dependencies ?? []), ...(view?.dependencies ?? []), ...(spec?.stale ?? []).flatMap((x) => x.dependencies)];
   const reasons = (spec?.stale ?? []).flatMap((x) => x.reasons);
@@ -105,7 +105,13 @@ function usePrdWords(spec: Spec | undefined, d: Design | undefined): PrdWords {
   const guess = known ? null : (reasons.map((r) => SLUG_IN_REASON.exec(r)?.[1]).find(Boolean) ?? null);
   const asked = known ?? guess;
   const docQ = useQuery(`doc|${asked}`, () =>
-    asked ? unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc: asked } } })).catch(() => null) : Promise.resolve(null),
+    // A guess that names no document is an answer (no such PRD); any other failure is not.
+    asked
+      ? unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc: asked } } })).catch((e) => {
+          if (e instanceof ApiError && e.status === 404) return null;
+          throw e;
+        })
+      : Promise.resolve(null),
   );
   const slug = known ?? (guess && docQ.data?.slug === guess && docQ.data.kind === "prd" ? guess : null);
   const n = slug ? (docQ.data?.latest_version ?? null) : null;
@@ -113,8 +119,17 @@ function usePrdWords(spec: Spec | undefined, d: Design | undefined): PrdWords {
     slug && n ? unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc: slug, n } } })) : Promise.resolve(null),
   );
   const headings = new Map((versionQ.data?.sections ?? []).map((x) => [x.section_key, x.heading]));
-  return { slug, title: spec?.prd?.title ?? (slug ? docQ.data?.title : null) ?? null, heading: (key) => headings.get(key) ?? null };
+  return {
+    slug,
+    title: spec?.prd?.title ?? (slug ? docQ.data?.title : null) ?? null,
+    heading: (key) => headings.get(key) ?? null,
+    error: docQ.error,
+    reload: () => void docQ.reload(),
+  };
 }
+
+/** The PRD's words, and why they could not be read (#1586: never drawn as "no PRD"). */
+type Words = PrdWords & { error: string | null; reload: () => void };
 
 /** A section by its heading ("5.2 Shipping step"), or "a section" while it is not known. */
 const sectionName = (w: PrdWords, key: string) => w.heading(key) ?? "a section";
@@ -288,6 +303,7 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
         })}
       </nav>
       <Split inspector={phone ? undefined : inspector}>
+        {words.error && <LoadError what="the PRD" error={words.error} onRetry={words.reload} />}
         {v.freshness === "potentially_stale" && (
           <Notice
             tone="warn"
@@ -468,7 +484,7 @@ function ReviewInspector({
   d: Design;
   shown: Output[];
   reasons: string[];
-  words: PrdWords;
+  words: Words;
   chips: ReactNode;
   roles: Roles;
   meId: string | null;
@@ -866,7 +882,7 @@ function approverName(d: Design, meId: string | null): string {
   return meId && v.approved_by === meId ? "you" : "a member";
 }
 
-function VersionMeta({ spec, d, reasons, words, meId }: { spec: Spec; d: Design; reasons: string[]; words: PrdWords; meId: string | null }) {
+function VersionMeta({ spec, d, reasons, words, meId }: { spec: Spec; d: Design; reasons: string[]; words: Words; meId: string | null }) {
   const v = d.version;
   const p = v.provenance as Record<string, unknown>;
   const str = (k: string) => (typeof p[k] === "string" || typeof p[k] === "number" ? String(p[k]) : null);
@@ -922,7 +938,9 @@ function VersionMeta({ spec, d, reasons, words, meId }: { spec: Spec; d: Design;
             ))
           : words.slug
             ? prd
-            : "Nothing recorded"}
+            : words.error
+              ? "–"
+              : "Nothing recorded"}
       </MetaRow>
       {/* qa4-docs-share-43: staleness on its own line, never under "Depends on". */}
       {reasons.length > 0 && <MetaRow k="May be stale">{reasons.join("; ")}</MetaRow>}
