@@ -7,6 +7,7 @@ import { useState } from "react";
 
 import { Icon } from "@/components/ds/Icon";
 import { InfoTip } from "@/components/ds/InfoTip";
+import { LoadError, Loading } from "@/components/ui";
 import { Named, NOT_IN_GT, NotInGt } from "@/components/simple/FeatureName";
 
 import { api, unwrap } from "@/lib/api/client";
@@ -270,6 +271,12 @@ export function PanelFields({
       ? unwrap(api.GET("/v1/people", { params: { query: { limit: 200 } } }))
       : Promise.resolve([]),
   );
+  // #1586 review: members that could not be read say why (still loading says so), never a pick with no one in it.
+  const peopleRead = people.data ? null : people.error ? (
+    <LoadError what="the people" error={people.error} onRetry={() => void people.reload()} />
+  ) : (
+    <Loading />
+  );
   const target = { item_id: item.id };
   const change = (
     what: string,
@@ -525,7 +532,8 @@ export function PanelFields({
         value={
           item.owner?.name ?? <span className="text-text2">No owner yet</span>
         }
-        editor={(done) => (
+        editor={(done) =>
+          peopleRead ?? (
           <Pick
             label="Owner"
             value={item.own_owner_id ?? ""}
@@ -545,7 +553,8 @@ export function PanelFields({
               )
             }
           />
-        )}
+          )
+        }
       />
       {/* Who decides changes to this item: its own decider, else its roadmap's. */}
       <Field
@@ -555,7 +564,8 @@ export function PanelFields({
         value={
           item.deciders.length ? item.deciders.join(", ") : <span className="text-text2">No decider yet</span>
         }
-        editor={(done) => (
+        editor={(done) =>
+          peopleRead ?? (
           <Pick
             label="Decider"
             value={item.own_decider_id ?? ""}
@@ -575,7 +585,8 @@ export function PanelFields({
               )
             }
           />
-        )}
+          )
+        }
       />
       {!noHorizon && (
         <Field

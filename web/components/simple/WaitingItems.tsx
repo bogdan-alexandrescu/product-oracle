@@ -104,6 +104,19 @@ export function useItemRef(id: string | null | undefined): ItemRefRead {
 /** An answered read's item; undefined while loading, when it failed, or when not on the roadmap. */
 export const itemRefOf = (r: ItemRefRead): ItemRef | undefined => (r.state === "answered" ? r.ref : undefined);
 
+/** #1586: a feature whose roadmap read failed says its code could not be checked, and why; never "no code". */
+export function ItemRefFailed({ read }: { read: ItemRefRead }) {
+  if (read.state !== "failed") return null;
+  return (
+    <span data-testid="item-ref-failed" role="status" className="ml-1.5 inline-flex items-center gap-1 text-[13px] text-text2">
+      Could not check its code.
+      <InfoTip label="the error" align="start">
+        {read.error}
+      </InfoTip>
+    </span>
+  );
+}
+
 /** A roadmap item's code by its id (or its date suggestion's id); null when it has none or is not read yet. */
 export function useItemCode(id: string | null | undefined): string | null {
   return itemRefOf(useItemRef(id))?.code ?? null;
@@ -245,7 +258,8 @@ export function WaitingRow({ item, links }: { item: WaitingItem; links?: Waiting
   // A broken link fixes in place too, as Home's broken-links card does: "Fix the link" opens its
   // fixes (the item and its dependency read from the roadmap, as the change engine needs them).
   const [fixing, setFixing] = useState(false);
-  const ref = itemRefOf(useItemRef(itemOf(item)));
+  const refRead = useItemRef(itemOf(item));
+  const ref = itemRefOf(refRead);
   const code = ref?.code ?? null;
   // simple-home-qa-nov14 #2: the feature's name opens its one panel where the page gives an opener.
   const open = useOpenFeature();
@@ -305,6 +319,7 @@ export function WaitingRow({ item, links }: { item: WaitingItem; links?: Waiting
           )}
           {/* simple-home-qa-nov14 #1: a roadmap item with no code is flagged, never hidden. */}
           {ref && <NotInGt item={ref} />}
+          <ItemRefFailed read={refRead} />
           {/* port-AN 5: the row's why sits in its (i), so the one list stays one line a row. */}
           {detail && (
             <>

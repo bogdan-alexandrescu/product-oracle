@@ -8,6 +8,7 @@
 
 import { Icon } from "@/components/ds/Icon";
 import { dmy } from "@/components/simple/PrdTimeline";
+import { LoadError } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useQuery } from "@/lib/use-query";
 
@@ -108,6 +109,8 @@ export function ReplacesField({ value, onChange, field, label }: { value: Replac
           </option>
         ))}
       </select>
+      {/* #1586: PRDs that could not be read say why, never only "None: a new PRD". */}
+      {prds.error && <LoadError what="the approved PRDs" error={prds.error} onRetry={() => void prds.reload()} />}
       {id && (
         <>
           <p className="simple-small">Name the part of it this PRD covers. Its decisions and verified estimates for that part come with it.</p>
