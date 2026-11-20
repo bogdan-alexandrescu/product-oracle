@@ -1,7 +1,10 @@
 // #1569: node --test web/lib/deployContainment.test.ts (Node's own runner; no new package).
 import assert from "node:assert/strict";
-import { spawn, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
@@ -81,10 +84,29 @@ async function serving(routes: Record<string, [number, string]>) {
   return { base, close: () => new Promise<void>((done) => server.close(() => done())) };
 }
 
-async function run(args: string[]) {
+// A scratch repository: TARGET, LATER (which contains it) and OTHER (a branch beside it).
+function scratchRepo() {
+  const dir = mkdtempSync(join(tmpdir(), "deploy-serves-"));
+  const git = (...a: string[]) =>
+    execFileSync("git", ["-c", "user.name=Example Dev", "-c", "user.email=dev@example.com", ...a], {
+      cwd: dir,
+      encoding: "utf8",
+    }).trim();
+  git("init", "-q");
+  const commit = (m: string) => (git("commit", "-q", "--allow-empty", "-m", m), git("rev-parse", "HEAD"));
+  const base = commit("base");
+  const target = commit("target");
+  const later = commit("later");
+  git("checkout", "-q", "-b", "side", base);
+  const other = commit("other");
+  return { dir, target, later, other, remove: () => rmSync(dir, { recursive: true, force: true }) };
+}
+
+async function run(args: string[], cwd?: string) {
   // Async, so the stand-in server above keeps answering while the script runs.
   return new Promise<number | null>((done) => {
     const child = spawn(process.execPath, ["--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", SCRIPT, ...args], {
+      cwd,
       stdio: "ignore",
     });
     child.on("exit", (code) => done(code));
@@ -92,19 +114,26 @@ async function run(args: string[]) {
 }
 
 test("deploy-serves exits 0, 1 or 2", async () => {
+  const repo = scratchRepo();
   const s = await serving({
-    "/api": [200, JSON.stringify({ git_sha: A })],
-    "/web": [200, JSON.stringify({ git_sha: A })],
-    "/old": [200, JSON.stringify({ git_sha: B })],
+    "/api": [200, JSON.stringify({ git_sha: repo.target })],
+    "/later": [200, JSON.stringify({ git_sha: repo.later })],
+    "/other": [200, JSON.stringify({ git_sha: repo.other })],
+    "/stranger": [200, JSON.stringify({ git_sha: A })],
+    "/unstamped": [200, JSON.stringify({ git_sha: "unknown" })],
     "/down": [503, "{}"],
   });
+  const check = (...urls: string[]) => run([repo.target, ...urls.map((u) => `${s.base}${u}`)], repo.dir);
   try {
-    assert.equal(await run([A, `${s.base}/api`, `${s.base}/web`]), 0);
-    assert.equal(await run([A, `${s.base}/api`, `${s.base}/old`]), 1);
-    assert.equal(await run([A, `${s.base}/api`, `${s.base}/down`]), 2);
-    assert.equal(await run([A, "http://127.0.0.1:1/version"]), 2);
+    assert.equal(await check("/api", "/later"), 0);
+    assert.equal(await check("/api", "/other"), 1);
+    assert.equal(await check("/api", "/down"), 2);
+    assert.equal(await check("/api", "/unstamped"), 2);
+    assert.equal(await check("/api", "/stranger"), 2);
+    assert.equal(await run([repo.target, "http://127.0.0.1:1/version"], repo.dir), 2);
   } finally {
     await s.close();
+    repo.remove();
   }
 });
 

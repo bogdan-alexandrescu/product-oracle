@@ -328,6 +328,7 @@ NOT_OFFERED: frozenset[str] = frozenset(
         "ask_discussion_change",
         "ask_next_question_batch",
         "assess_outcome",
+        "build_commit",
         "build_next_draft",
         "build_next_draft_with_agents",
         "cancel_again_run",
