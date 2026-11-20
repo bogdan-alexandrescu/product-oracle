@@ -283,9 +283,9 @@ test('qa-shell-10: a page that is still loading draws its skeleton, not a bare L
   page,
 }) => {
   await login(page);
-  // Hold the page's scripts: what shows is the server's first paint, the Suspense fallback.
-  // Scripts only: the stylesheets block the first paint.
-  await page.route(/\/_next\/static\/chunks\/.*\.js$/, async (route) => {
+  // Hold the page's own scripts (its code-split chunks, not the app's entry): what shows is the
+  // router's pending page, the skeleton.
+  await page.route(/\/assets\/(?!index-)[^/]*\.js$/, async (route) => {
     await new Promise((r) => setTimeout(r, 4_000));
     await route.continue();
   });

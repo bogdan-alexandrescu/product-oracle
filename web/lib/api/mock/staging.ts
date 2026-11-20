@@ -1,5 +1,5 @@
 /**
- * Mock of G4 One staging list for NEXT_PUBLIC_API_MOCKS=1: GET /v1/staging over the mock's
+ * Mock of G4 One staging list for VITE_API_MOCKS=1: GET /v1/staging over the mock's
  * C1e suggestions, discussions' next-draft rows (./next-draft.ts) and D8's checkpoint draft
  * actions (./runs.ts), and POST /v1/next-draft-changes/{id}/unstage.
  *

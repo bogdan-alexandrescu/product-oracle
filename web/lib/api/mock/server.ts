@@ -1,5 +1,5 @@
 /**
- * In-browser stand-in for the API, used when NEXT_PUBLIC_API_MOCKS=1. It is plugged
+ * In-browser stand-in for the API, used when VITE_API_MOCKS=1. It is plugged
  * into openapi-fetch as its `fetch`, so pages call the typed client exactly as they
  * will against the real API. State lives in localStorage, so it survives reloads.
  */

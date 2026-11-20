@@ -2,7 +2,9 @@ import { RouterProvider, createRouter } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
+import { parseQuery, stringifyQuery } from './lib/router-query';
 import { routeTree } from './routeTree.gen';
+import { PageSkeleton } from '@/components/ds';
 
 /**
  * #1581: the app is a single page served as static files (nginx in production, `vite preview`
@@ -12,12 +14,11 @@ import { routeTree } from './routeTree.gen';
 const router = createRouter({
   routeTree,
   notFoundMode: 'root',
+  // qa-shell-10: a page whose code is still loading draws its skeleton, as Next's fallback did.
+  defaultPendingComponent: PageSkeleton,
   defaultRemountDeps: ({ params }) => params,
-  parseSearch: (search) => Object.fromEntries(new URLSearchParams(search)),
-  stringifySearch: (search) => {
-    const query = new URLSearchParams(search as Record<string, string>).toString();
-    return query ? `?${query}` : '';
-  },
+  parseSearch: parseQuery,
+  stringifySearch: stringifyQuery,
   scrollRestoration: true,
 });
 

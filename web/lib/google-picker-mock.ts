@@ -1,5 +1,5 @@
 /**
- * qa-leftovers: the mock app's stand-in for Google (NEXT_PUBLIC_API_MOCKS=1), so a person can
+ * qa-leftovers: the mock app's stand-in for Google (VITE_API_MOCKS=1), so a person can
  * finish Choose from Drive there: the mock's picker config holds no real client id, and Google's
  * own sign-in refuses it. It fakes gapi, Google Identity Services and google.picker as
  * e2e/google-fake.ts does, with a small picker listing invented example docs and a folder to tick.

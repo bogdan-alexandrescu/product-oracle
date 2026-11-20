@@ -20,8 +20,8 @@ place of `next start` (the standalone `server.js` in `web/Dockerfile`).
 
 ## Generated from next.config.ts
 
-Regenerate with `node docs/vite-migration/next-config-tables.mjs --write` whenever
-`next.config.ts` or `lib/redirects.ts` changes before the move lands; the nginx config must match these rows.
+Generated before the move (#1581) from `next.config.ts`, which is gone; `web/lib/redirects.test.ts`
+and `web/lib/csp.test.ts` now keep `web/nginx/` in step with the app.
 
 <!-- generated:next-config begin -->
 | `lib/redirects.ts` from | Destination | Status | nginx |

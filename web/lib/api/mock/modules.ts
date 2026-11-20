@@ -1,6 +1,6 @@
 /**
  * Mock of the module catalogue and composition routes (api/oracle/modules/router.py) for
- * NEXT_PUBLIC_API_MOCKS=1. A small synthetic catalogue (a few Pack A core modules and two
+ * VITE_API_MOCKS=1. A small synthetic catalogue (a few Pack A core modules and two
  * Pack B conditional ones), the eight packs (the industry packs list only the shared core
  * here), the company module policy, one template manifest, and a confirmed composition
  * for the seeded PRD. A working revision is a draft beside the one in force; a person's

@@ -1,5 +1,5 @@
 /**
- * Mock of the runs API (flows, runs, checkpoints, tick, inbox) for NEXT_PUBLIC_API_MOCKS=1.
+ * Mock of the runs API (flows, runs, checkpoints, tick, inbox) for VITE_API_MOCKS=1.
  * Mirrors api/oracle/runs: the same flows, cost table, $50 approval gate and 1.5x
  * overrun pause. Agents "finish" a segment on POST /v1/internal/tick, at 90% of its
  * estimate, as the API's FakeRuntime does.
