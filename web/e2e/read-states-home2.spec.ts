@@ -242,6 +242,24 @@ test.describe("Roadmap: Needs a decision", () => {
     await reason(page, part.getByTestId("load-error"));
   });
 
+  test("proposals and suggested features still being read say loading in the tray, never None waiting", async ({ page }) => {
+    await login(page);
+    await page.goto("/simple/roadmap");
+    await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+    for (const path of ["/v1/simple/changes", "/v1/simple/goal-suggestions"]) {
+      await page.evaluate((p) => {
+        localStorage.setItem("po-mock-slow", p);
+        localStorage.setItem("po-mock-slow-ms", "60000");
+      }, path);
+      await page.reload();
+      await page.getByTestId("needs-decision").click();
+      const part = path.endsWith("changes") ? tray(page).locator("#review-proposals") : tray(page).getByTestId("tray-suggested");
+      await expect(part.getByRole("status").filter({ hasText: "Loading…" })).toBeVisible();
+      await expect(part.getByText("None waiting.")).toHaveCount(0);
+      await expect(part.getByTestId("load-error")).toHaveCount(0);
+    }
+  });
+
   test("suggested features that could not be read say so in the tray, never None waiting", async ({ page }) => {
     await login(page);
     await page.goto("/simple/roadmap");
