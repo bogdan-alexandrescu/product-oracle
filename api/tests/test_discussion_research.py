@@ -338,7 +338,7 @@ async def test_research_reads_as_a_member_in_the_reviewers_scenario(client):
 # (a line stored before the fix kept the approver's view) is dropped, its marker with it;
 # fails_when=the answer cites the memo; no_claim=entries of other kinds.
 async def test_the_importer_drops_a_citation_a_commenter_may_not_see(client):
-    """The importer drops a citation a commenter may not see."""
+    """Keeps an imported answer from leaking a document's title through a locked source."""
     text = "Pricing is settled [c:1] [c:77]."
     set_runtime(FakeRuntime({"research": [Outcome(artifacts={research.FILE: text})]}))
     try:
@@ -366,7 +366,7 @@ async def test_the_importer_drops_a_citation_a_commenter_may_not_see(client):
 # cites it loses that citation for them; fails_when=the commenter reads the memo's title
 # or link; no_claim=paraphrase.
 async def test_an_answer_stored_before_the_fix_is_withheld_from_a_commenter(client):
-    """An answer stored before the fix is still withheld from commenters."""
+    """Old answers saved before the fix still hide a restricted document from today's readers."""
     set_runtime(FakeRuntime())
     try:
         ctx, _doc = await company(client)

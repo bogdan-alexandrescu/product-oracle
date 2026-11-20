@@ -87,7 +87,7 @@ def test_other_errors_keep_their_words_but_lose_raw_times():
 
 
 async def test_a_reports_row_and_the_jobs_list_show_a_stored_refusal_rewritten(client, ctx):  # noqa: F811
-    """A reports row and the jobs list show a stored refusal rewritten, not raw."""
+    """Keeps the raw error safe in storage while users only ever see plain text."""
     await import_draft(client, ctx)
     async with tenant_session(ctx["tenant_id"]) as s:
         doc = (await s.execute(select(Document).where(Document.slug == SLUG))).scalar_one()
@@ -149,7 +149,7 @@ def test_a_failed_items_refusal_reads_in_the_past():
 
 
 def test_text_that_only_looks_like_a_time_passes_through_unchanged():
-    """Text that only looks like a timestamp passes through unchanged."""
+    """Keeps an invalid-looking timestamp from being misread and garbling the message."""
     quoted = "The model wrote 2026-13-40T99:99Z where a date goes"
     assert readable_refusal(quoted, "America/Los_Angeles") == quoted
     assert readable_refusal(quoted, "America/Los_Angeles", past=True) == quoted

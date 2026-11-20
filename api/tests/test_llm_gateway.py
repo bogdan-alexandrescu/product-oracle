@@ -77,7 +77,7 @@ async def _call(tenant_id, fakes, job="reporting"):
 async def test_a_call_runs_on_the_account_with_most_headroom_and_records_its_reading(
     tenant_id, fakes
 ):
-    """A call runs on the account with the most headroom and records its reading."""
+    """Spreads model calls to the least-used login so one busy account isn't driven to its cap."""
     await add_account(tenant_id, "busy", windows={"five_hour": window(0.8)})
     roomy = await add_account(tenant_id, "roomy", windows={"five_hour": window(0.1)})
     fakes.plan.answers["acc-roomy"] = _reading(0.33)

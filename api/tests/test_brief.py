@@ -270,7 +270,7 @@ async def _make_pre_o1f(s, key):
 async def test_seeding_leaves_an_edited_or_archived_default_template_alone(
     client, tenant_id, change
 ):
-    """Seeding leaves an edited or archived default template untouched."""
+    """Stops the upgrade seeding from overwriting a template someone already edited or removed."""
     h = await _token(tenant_id)
     await seed_company(tenant_id)
     if change == "edited":

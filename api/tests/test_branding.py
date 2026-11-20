@@ -226,7 +226,7 @@ async def test_only_png_jpeg_or_webp_logos_within_the_limits_are_stored(client, 
 
 
 async def test_a_logo_is_re_encoded_to_png_and_served_safely_to_members_only(client, ctx):
-    """An uploaded logo is re-encoded to png and served safely to members only."""
+    """Keeps a company's logo from leaking to another company, a run token, or as raw bytes."""
     owner = ctx.as_("owner")
     resp = await _upload(client, owner, _image("JPEG"), name="logo.jpg", ctype="image/jpeg")
     assert resp.status_code == 200, resp.text
@@ -519,7 +519,7 @@ async def test_the_same_logo_uploaded_twice_at_once_is_stored_once(client, ctx):
 
 
 async def test_an_image_mode_pillow_cannot_convert_is_refused_not_a_crash(client, ctx, monkeypatch):
-    """An image mode Pillow cannot convert is refused cleanly, not a crash."""
+    """Turns a Pillow conversion failure into a plain refusal instead of a server crash."""
     from PIL import Image as PILImage
 
     def refuse(self, *args, **kwargs):
@@ -628,7 +628,7 @@ async def test_the_present_key_changes_when_the_logo_choice_changes(two_logos):
 
 
 async def test_the_branding_preview_says_which_logo_each_built_in_theme_uses(client, two_logos):
-    """The branding preview lists which logo each built-in theme will use."""
+    """Shows ahead of time which logo variant each theme will actually use, before it is live."""
     from oracle.templates.builtins import BUILTIN_THEMES
 
     ctx, _, _ = two_logos

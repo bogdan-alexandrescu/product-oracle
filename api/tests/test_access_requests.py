@@ -226,7 +226,7 @@ async def test_decline_keeps_them_out_until_an_invite(client, fetches):
 
 
 async def test_reopen_an_approved_request_revokes_its_unclaimed_invite(client, fetches):
-    """Reopening an approved request revokes its unclaimed invite."""
+    """Stops a reopened request's unused invite from still letting that person sign in."""
     r = await _seed_request()
     await client.get("/v1/me", headers=_as(NEW))
     [req] = await _requests(r.tenant_id)

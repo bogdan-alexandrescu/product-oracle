@@ -73,7 +73,7 @@ async def test_add_validates_as_the_form_expects(client, ctx):
 
 
 async def test_viewers_and_commenters_cannot_add_confirm_or_reject(client, ctx):
-    """Viewers and commenters cannot add, confirm or reject an item."""
+    """Keeps read-only roles from changing baseline items even by calling the action directly."""
     item = (await _add(client, ctx, type="assumption", key="phones", title="Phones")).json()
     for role in ("viewer", "commenter"):
         resp = await _add(client, ctx, role, type="risk", key=f"r-{role}", title="R")

@@ -121,7 +121,7 @@ async def test_a_draft_listing_an_answered_question_as_open_is_refused_naming_it
     owner,  # noqa: F811
     runtime,  # noqa: F811
 ):
-    """A draft that lists an answered question as open is refused, naming it."""
+    """Tells a reviewer exactly which stale question to fix, not just that one exists."""
     # protects=the import check refuses a PRD that lists an answered question as open;
     # fails_when=the draft imports, or the refusal does not name the question; no_claim=a
     # paraphrased question.

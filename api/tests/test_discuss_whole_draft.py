@@ -42,7 +42,7 @@ async def items(tenant_id: uuid.UUID) -> list[FeedbackItem]:
 
 
 async def test_a_discuss_thread_during_a_review_is_whole_draft_feedback(client):
-    """A discuss thread during a review counts as whole-draft feedback."""
+    """A general comment during review counts as feedback so approvers see it, once only."""
     tenant_id, auth = await two_versions(client)
     reviewer = await as_user(tenant_id, "commenter", "reviewer@example.com")
     approver = await as_user(tenant_id, "approver")

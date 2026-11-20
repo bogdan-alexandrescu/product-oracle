@@ -131,7 +131,7 @@ async def test_a_later_mention_is_a_mentioned_row_with_a_short_excerpt(client):
 # the row for all of them; fails_when=a commenter gets it, an approver does not, or it
 # stays after Stage; no_claim=G3's Suggest and Stage routes (not built: status set here).
 async def test_a_suggested_change_waits_on_every_approver_until_staged(client):
-    """A suggested change waits on every approver and owner till staged."""
+    """Makes sure every approver sees a pending change, and it clears for all once staged."""
     ctx, doc = await company(client)
     d = await start(client, ctx, subject=section(doc), title=TITLE, message={"body": "Thoughts?"})
     before = {who: (await inbox(client, ctx, who))["total"] for who in ("approver", "owner")}
@@ -158,7 +158,7 @@ async def test_a_suggested_change_waits_on_every_approver_until_staged(client):
 # row for its suggested change and no invited row; fails_when=a row before, none after, or
 # an invited row; no_claim=G1's Make open warning.
 async def test_a_private_discussion_made_open_reaches_approvers_without_inviting(client):
-    """A private discussion opened reaches approvers without inviting."""
+    """Opening a private thread reaches approvers through its change, not a stray invite."""
     ctx, doc = await company(client)
     d = await start(
         client, ctx, subject=section(doc), title=SECRET_TITLE, visibility="private",

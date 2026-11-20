@@ -166,7 +166,7 @@ async def test_a_dependency_on_a_key_no_roadmap_knows_is_still_refused():
 # The waiver names the problem by its code, or by its own ref (gate.problem_ref).
 @pytest.mark.parametrize("answer", ["depends_on_excluded", "depends_on_excluded~3f9a1c2e"])
 async def test_a_dependency_waived_at_the_feature_set_stop_passes_the_engineering_check(answer):
-    """A dependency waived at the feature set stop passes the engineering check."""
+    """A dependency waived earlier must not block the brief later at engineering review."""
     # protects=a dependency waived at this run's feature set stop is accepted; fails_when=
     # a waived dependency still refuses the briefs.
     w = await world(roadmap=False)
@@ -415,7 +415,7 @@ async def _items_check(w: dict, horizon: str = "now", dep: str = "account-health
 
 
 async def test_a_cycle_across_two_prds_is_reported_naming_both_features_and_prds():
-    """A dependency cycle across two PRDs is reported naming both features and PRDs."""
+    """Flags a circular wait between two plans by name, not a silent infinite loop."""
     # protects=a cycle through another PRD's feature is a problem named in plain words;
     # fails_when=the cross-PRD link skips the cycle check and the queue keeps any order.
     w = await _two_prds_on_the_roadmap()
@@ -517,7 +517,7 @@ async def test_the_simple_panel_shows_a_dependency_named_by_a_feature_key():
 
 
 async def test_a_confirmed_ground_truth_feature_in_no_prd_is_named_at_the_engineering_check():
-    """A confirmed Ground Truth feature in no PRD is named at the engineering check."""
+    """Stops engineering from committing to work that no plan actually intends to build."""
     # protects=the feature set stop lets a brief depend on a confirmed feature, and the
     # Engineering check names it plainly while no PRD holds it (not first at the roadmap
     # items stop); area PRDs drafted side by side see each other's approved scopes

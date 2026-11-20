@@ -69,7 +69,7 @@ def test_refresh_sums_junit_times_per_file(tmp_path):
 
 
 def test_the_committed_durations_name_test_files_with_positive_seconds():
-    """The committed shard durations name real test files with positive seconds."""
+    """Keeps the sharding timing file free of stale paths or zero times that would skew CI."""
     durations = json.loads((API / "tests" / "shard_durations.json").read_text())
     assert len(durations) > 100
     for path, seconds in durations.items():

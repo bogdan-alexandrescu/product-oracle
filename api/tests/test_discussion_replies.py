@@ -576,7 +576,7 @@ async def test_retry_is_held_to_the_reply_limit(client):
 # the session cookie; fails_when=another site stops or re-runs a reply; no_claim=bearer
 # tokens (never sent by a browser on its own).
 async def test_stop_and_retry_refuse_a_cross_site_request(client):
-    """Stop and retry both refuse a cross-site request."""
+    """Blocks another site from canceling or resending a reply using the viewer's cookie."""
     ctx, doc = await company(client)
     d = await start(client, ctx, subject=section(doc))
     reply = (await say(client, ctx, d["id"], "commenter", ASK))["reply"]["id"]

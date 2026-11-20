@@ -146,7 +146,7 @@ def test_a_mandatory_module_cannot_be_removed():
 
 
 def test_a_dependency_cannot_be_removed_while_a_dependent_stays():
-    """A dependency cannot be removed while its dependent stays."""
+    """Stops a document from losing a module still needed by another part still included."""
     ctx = context(pack="ai-agent.platform", inputs=PLATFORM_INPUTS)
     comp = compose(ctx, Changes(remove=("agents.archetypes",), reason="not needed"))
     assert "required_dependency" in codes(comp)
@@ -184,7 +184,7 @@ def test_a_removed_suggestion_records_the_person_and_reason():
 
 
 def test_adding_a_module_pulls_in_its_dependencies_with_an_explanation():
-    """Adding a module pulls in its dependency too, with an explanation."""
+    """Adding a module brings in what it needs, and tells the person why it appeared."""
     comp = compose(context(), Changes(add=("platform.cost-quotas",), reason="usage pricing"))
     m = by_key(comp)
     assert comp.valid
@@ -196,7 +196,7 @@ def test_adding_a_module_pulls_in_its_dependencies_with_an_explanation():
 
 
 def test_disabled_and_unknown_modules_cannot_be_added():
-    """A disabled or unknown module cannot be added."""
+    """Blocks turning on a module the company disabled or one that was only typed in."""
     comp = compose(
         context(company_disabled=("economics.value",)),
         Changes(add=("economics.value", "made.up"), reason="x"),

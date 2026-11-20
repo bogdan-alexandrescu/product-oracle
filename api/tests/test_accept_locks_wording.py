@@ -20,7 +20,7 @@ def test_the_accept_tool_says_the_item_is_locked():
 
 
 def test_the_propose_change_tool_says_accepting_locks_the_item():
-    """The propose change tool also says accepting locks the item."""
+    """Warns the agent tool too, so accepting a change does not lock an item by surprise."""
     (propose,) = [c for c in CURATED if c.name == "propose_change"]
     assert LOCKED in propose.description
 

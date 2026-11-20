@@ -313,7 +313,7 @@ async def test_a_second_proposal_supersedes_oracles_but_not_a_suggestion(review,
 # 403 everywhere and gets no action; fails_when=any role acts beyond 3.2;
 # no_claim=D8's own role checks.
 async def test_commenters_suggest_approvers_stage_and_viewers_only_read(review):  # noqa: F811
-    """Commenters suggest, approvers stage, and viewers only read changes."""
+    """Keeps a viewer from editing the roadmap and a commenter from skipping sign-off."""
     rv = review
     _tenant[0] = rv.tenant_id
     d_id = await item_discussion(rv)
@@ -400,7 +400,7 @@ async def test_edit_withdraw_dismiss_and_a_change_written_by_hand(client):
 # and an approver stages the copy through G3's path; fails_when=the copy loses its kind or
 # pushback, or cannot be staged; no_claim=the share dialog (G7's tests).
 async def test_a_shared_panel_chats_changes_keep_their_kind_and_can_be_staged(client):
-    """A shared panel chat's changes keep their kind and can be staged."""
+    """A chat shared into a thread keeps its edit and pushback so it can still be approved."""
     ctx, doc = await company(client)
     _tenant[0] = ctx.tenant_id
     resp = await client.post(
@@ -921,7 +921,7 @@ async def test_a_locked_sections_change_says_why_it_cannot_be_staged(client, mon
 # writes it as the item's suggested D8 action with the edited payload, as Suggest does;
 # fails_when=the review screen does not show an edited suggestion; no_claim=D8's screen.
 async def test_a_commenters_edit_at_a_checkpoint_is_a_suggested_action(review):  # noqa: F811
-    """A commenter's edit at a checkpoint is only a suggested action."""
+    """Stops an edit from a non-approver acting as if someone already agreed to it."""
     rv = review
     _tenant[0] = rv.tenant_id
     d_id = await item_discussion(rv)
@@ -1020,7 +1020,7 @@ async def summary_of(ctx, d_id: str) -> str:
 # fails_when=a later one jumps the queue (rows come back in table order); no_claim=the
 # tick's limit per tenant.
 async def test_the_summary_queue_drafts_the_longest_waiting_first(client, model):
-    """The summary queue drafts the longest-waiting discussion first."""
+    """Keeps drafting fair so a newer item cannot jump ahead of one waiting longer."""
     from oracle.discussions import summary
 
     ctx, doc = await company(client)

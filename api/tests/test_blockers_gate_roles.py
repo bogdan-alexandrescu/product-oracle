@@ -179,7 +179,7 @@ async def _archive(client, ctx, entity_id, how: str, who: str):
 
 @pytest.mark.parametrize("how", ["reject", "patch", "delete"])
 async def test_an_approver_cannot_archive_a_blocker_that_still_gates(client, how):
-    """An approver cannot archive a blocker that still gates a document."""
+    """Stops an approver from clearing a blocker that is still holding back the document."""
     ctx = await make_ctx()
     doc_id, b = await _blocker(client, ctx)
     resp = await _archive(client, ctx, b["id"], how, "approver")
@@ -222,7 +222,7 @@ async def test_an_approver_may_archive_a_resolved_blocker(client, how):
 
 @pytest.mark.parametrize("start", [{"severity": "high"}, {"type": "soft"}])
 async def test_an_approver_may_archive_a_blocker_that_does_not_gate(client, start):
-    """An approver may archive a blocker that does not gate a document."""
+    """Lets an approver clear a blocker once it stops actually holding the document back."""
     ctx = await make_ctx()
     doc_id, b = await _blocker(client, ctx, **start)
     resp = await _archive(client, ctx, b["id"], "reject", "approver")
@@ -240,7 +240,7 @@ async def test_an_approver_may_still_archive_other_constraints(client):
 
 @pytest.mark.parametrize("op", ["delete", "update"])
 async def test_accepting_a_proposal_to_archive_a_gating_blocker_takes_an_owner(client, op):
-    """Accepting a proposal to archive a gating blocker still needs an owner."""
+    """Closes the proposal route an approver could use to end-run owner-only blocker rules."""
     ctx = await make_ctx()
     doc_id, b = await _blocker(client, ctx)
     body = {"op": op, "kind": "entity", "entity_id": b["id"], "fields": {}}

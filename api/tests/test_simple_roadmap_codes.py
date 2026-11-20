@@ -146,7 +146,7 @@ def test_a_goal_milestone_of_another_name_keeps_its_own_code():
 
 
 def test_a_goal_milestone_named_in_brackets_folds_into_its_track_milestone():
-    """A goal milestone named in brackets still folds into its track's milestone."""
+    """Strips bracket formatting so a goal's milestone still merges with its track's."""
     track = tm("M2 · Launch (beta)", None, [])
     own = gm("M2", "[Launch (beta)]", None)
     assign([own], [track], [item(track.id)], RANK)

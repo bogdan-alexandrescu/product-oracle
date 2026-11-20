@@ -100,7 +100,7 @@ async def test_validating_an_unanswered_critical_gap_takes_an_owner(client):
 
 
 async def test_an_approver_validates_an_answered_critical_gap_that_is_not_a_blocker(client):
-    """An approver may validate an answered critical gap that is not a hard blocker."""
+    """Lets staff clear a critical question once answered, saving owner sign-off for blockers."""
     ctx = await company()
     out = await create_intake(client, ctx)
     q = question_for(await batch(client, ctx, out["intake"]["id"]), "success_metric")

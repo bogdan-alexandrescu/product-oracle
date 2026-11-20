@@ -119,7 +119,7 @@ async def test_deleting_an_entity_keeps_its_dependants_stale_with_a_deleted_caus
 
 
 async def test_rejecting_an_entity_marks_its_criteria_features_sections_and_outputs(client):
-    """Rejecting an entity marks its criteria, features, sections and outputs stale."""
+    """Makes sure rejecting one item flags every downstream artifact built on it."""
     ctx = await make_ctx()
     chain = await seed_chain(ctx.tenant_id)
     v1 = await prd_v1(client, ctx)

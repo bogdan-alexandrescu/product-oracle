@@ -223,7 +223,7 @@ async def test_with_no_working_draft_the_run_reads_the_published_version():
 
 
 async def test_a_run_started_by_someone_who_may_not_see_the_draft_reads_the_published_one():
-    """A run started by someone who cannot see the draft reads the published one."""
+    """Keeps a run from leaking an unpublished plan's contents to someone barred from it."""
     # The draft's own rule (oracle.simple.drafts.sees): a commenter who took no part in it
     # reads the published version, so the PRD their run writes shows nothing of the draft.
     w = await world(starter="commenter")

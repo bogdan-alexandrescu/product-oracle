@@ -211,7 +211,7 @@ async def test_seed_requires_an_email_outside_tests(real_build, monkeypatch, cap
 
 
 async def test_seed_refuses_a_reserved_email_outside_tests(real_build):
-    """Seeding refuses a reserved email outside tests."""
+    """Keeps a reserved test email from being used to seed a real company by mistake."""
     with pytest.raises(ReservedEmailError):
         await seed(email=ADMIN)
 

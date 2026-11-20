@@ -43,7 +43,7 @@ def codes(problems) -> set[str]:
 
 
 def test_the_sample_checks_clean_against_its_feature_set_and_code_map():
-    """The tech briefs sample checks clean against its feature set and code map."""
+    """Makes sure the documented example brief does not quietly fall out of date."""
     # protects=AC1 the contract's own sample is valid; fails_when=a rule refuses the
     # documented format; no_claim=what the brief says is true of the code.
     assert briefs.check(SAMPLE, FEATURES, CODE_MAP) == []
@@ -878,7 +878,7 @@ def unchecked_runtime():
 async def test_with_the_check_off_a_brief_with_an_unknown_feature_or_ref_is_refused(
     client, eng_flow, unchecked_runtime
 ):
-    """With the check off, a brief naming an unknown feature or ref is refused."""
+    """Keeps a brief tied to a made-up feature from slipping in when review is off."""
     # protects=with the Engineering check turned off, registration runs the check against
     # the feature set and the code map and refuses a brief with unknown_feature or
     # unknown_ref; fails_when=such a brief is stored unchecked.

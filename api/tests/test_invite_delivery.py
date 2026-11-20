@@ -739,7 +739,7 @@ def test_the_rendered_to_header_is_the_address_byte_for_byte(address):
 
 
 def test_the_mailer_refuses_a_to_header_that_does_not_render_as_the_address(monkeypatch):
-    """The mailer refuses a To header that would not render as the given address."""
+    """Catches a crafted address that would smuggle extra text into the invite's header line."""
     # Defence in depth: past plain_address, the rendered To line is still checked.
     monkeypatch.setattr(mailer, "plain_address", lambda v: v)
     sender = mailer.GmailApiMailer("oracle@corp.com", FakeMinter())
@@ -782,7 +782,7 @@ async def _tick(tenant_id) -> None:
 
 
 async def test_a_failed_revoke_is_queued_and_the_tick_removes_the_binding(client, owner, iap, mail):
-    """A failed revoke is queued and a later tick removes the binding."""
+    """Keeps access bound until a failed cutoff truly succeeds, instead of only looking removed."""
     tenant_id, headers = owner
     body = await _invite(client, headers)
     assert iap.bound("pat@example.com") == BACKENDS
@@ -855,7 +855,7 @@ async def test_a_failed_revoke_on_removal_shows_on_the_member_and_the_tick_retri
 
 
 async def test_a_failed_grant_on_restore_is_queued_and_the_tick_grants(client, owner, iap, mail):
-    """A failed grant on restore is queued and a later tick grants it."""
+    """A restored person is marked pending, not silently missing access, until it finally works."""
     tenant_id, headers = owner
     async with tenant_session(tenant_id) as s:
         user = User(
@@ -1073,7 +1073,7 @@ def test_googles_message_is_capped_and_holds_no_tokens():
 
 
 async def test_the_gmail_mailer_keeps_googles_own_message_with_the_status():
-    """The Gmail mailer's error keeps Google's own message with the status."""
+    """Keeps the provider's own wording so a failed invite isn't hidden behind a vague error."""
     transport = httpx.MockTransport(lambda r: httpx.Response(400, json=GOOGLE_400))
     sender = mailer.GmailApiMailer("oracle@example.com", FakeMinter())
     message = mailer.invite_email(

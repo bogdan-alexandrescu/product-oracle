@@ -98,7 +98,7 @@ async def test_a_move_adds_the_feature_to_the_company_roadmap(client):
 
 
 async def test_a_commenter_cannot_add_to_the_company_roadmap(client):
-    """A commenter cannot add a feature to the company roadmap."""
+    """Keeps a comment-only role from quietly placing a feature on the roadmap."""
     w = await company_world()
     body = {"op": "override_priority", "target": {"feature_id": w.ids["insights"]},
             "before": {"override": None}, "after": {"position": 1, "reason": REASON}}  # fmt: skip

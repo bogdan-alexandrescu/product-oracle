@@ -2166,7 +2166,7 @@ async def test_a_retryable_wait_read_error_is_retried_next_tick(client, owner):
 
 
 async def test_a_console_change_request_over_the_ceiling_pauses_and_reruns_nothing(client, owner):
-    """A console change request over the ceiling pauses the run and reruns nothing."""
+    """Keeps a flagged redo from spending past the budget ceiling instead of pausing it."""
     tenant_id, auth = owner
     swarm = on()
     await _member(tenant_id, "lead@example.com")
@@ -2311,7 +2311,7 @@ async def test_a_counted_console_not_yet_mid_run_waits_and_continue_follows(clie
 
 
 async def test_redo_from_a_console_not_yet_reruns_the_segment_once_with_the_findings(client, owner):
-    """Redo after a console NOT_YET reruns the segment once with its findings."""
+    """Sends the reviewer's full feedback to the rerun once, not clipped or duplicated."""
     tenant_id, auth = owner
     swarm = on()
     await _member(tenant_id, "lead@example.com")
@@ -2861,7 +2861,7 @@ async def _writes(token: str) -> dict[str, str]:
 
 
 async def test_a_console_answer_that_does_not_count_makes_the_run_token_read_only(client, owner):
-    """A console answer that does not count makes the run token read only, not dead."""
+    """Keeps a non-counted answer from killing the run's token, only pausing its writes."""
     tenant_id, auth = owner
     swarm = on()
     await _member(tenant_id, "viewer@example.com", "viewer")
@@ -5213,7 +5213,7 @@ async def _cost_unknown_stopped(client, auth, tenant_id, swarm, clock) -> dict:
 async def test_retry_lookup_reads_one_entry_outside_the_row_lock_with_a_cooldown(
     client, owner, monkeypatch
 ):
-    """Retry lookup reads one search entry outside the row lock, with a cooldown."""
+    """Stops a retry click from locking the run or touching searches it was not asked for."""
     tenant_id, auth = owner
     swarm = on()
     clock = _Clock(monkeypatch)
@@ -5724,7 +5724,7 @@ async def _curated_writes(token: str) -> dict[str, tuple[bool, str]]:
 async def test_curated_writes_are_refused_while_held_and_write_nothing(
     client, owner, monkeypatch, why
 ):
-    """Curated writes are refused while a run is held, and write nothing."""
+    """Makes sure a held run's blocked writes never slip a document or change through anyway."""
     from dataclasses import replace
 
     from oracle.baseline.models import Proposal

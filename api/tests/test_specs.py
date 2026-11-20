@@ -159,7 +159,7 @@ async def test_request_checks_its_inputs(client, runtime):
 
 
 async def test_a_spec_run_writes_spec_flows_and_wireframes_linked_to_requirements(client, runtime):
-    """A spec run writes a spec, flows and wireframes linked to their requirements."""
+    """Keeps each generated artifact traceable back to the requirement it answers."""
     world = await make_world(client)
     created = await generated(client, runtime, world)
     owner, viewer = world.ctx.as_("owner"), world.ctx.as_("viewer")
@@ -885,7 +885,7 @@ async def test_an_edit_that_changes_a_prd_part_is_refused(client, runtime, old, 
 
 
 async def test_an_edit_that_drops_the_requirements_section_is_refused(client, runtime):
-    """An edit that drops the requirements section from a spec is refused."""
+    """Keeps the requirements trail from being deleted out of a spec."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     slug = created["spec"]["document_slug"]
@@ -1056,7 +1056,7 @@ async def test_linked_requirements_are_accepted(client, runtime):
 
 
 async def test_with_no_engineering_approvers_the_requester_approves_their_own_spec(client, runtime):
-    """With no engineering approvers named, the requester may approve their own spec."""
+    """Keeps a spec from being stuck forever when no approver list exists yet."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world, who="approver")
     slug = created["spec"]["document_slug"]
@@ -1566,7 +1566,7 @@ async def test_import_drops_and_reports_a_requirement_no_longer_adopted(client, 
 async def test_a_regeneration_whose_spec_import_fails_leaves_the_request_on_its_version(
     client, runtime
 ):
-    """A regeneration whose import fails leaves the spec request on its old version."""
+    """Stops a failed regeneration from quietly advancing the spec's version pointer."""
     world = await make_world(client)
     owner = world.ctx.as_("owner")
     request_id = await _spec_on_v1(client, runtime, world)
@@ -2023,7 +2023,7 @@ async def test_an_added_heading_may_not_take_oracles_note(client, runtime, headi
 
 
 async def test_sections_added_outside_oracles_parts_are_accepted(client, runtime):
-    """Sections added outside Oracle's own parts are accepted."""
+    """Lets a writer add their own sections without tripping the PRD-content guard."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     resp = await _edit(
@@ -2196,7 +2196,7 @@ async def test_get_document_markdown_over_mcp_carries_the_labels(client, runtime
 
 
 async def test_an_edit_may_not_change_the_front_matter_title(client, runtime):
-    """An edit may not change a spec's front-matter title."""
+    """Blocks an edit from silently renaming a spec through its title field."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     resp = await _edit(
@@ -2248,7 +2248,7 @@ async def test_an_html_comment_across_sections_is_refused(client, runtime, edit)
 
 
 async def test_the_design_check_runs_outside_a_database_transaction(client, runtime, monkeypatch):
-    """The design check runs outside any open database transaction."""
+    """Keeps a slow design check from holding a database lock that blocks others."""
     import asyncio
     import threading
 
@@ -2363,7 +2363,7 @@ INDENTED_SETEXT = "    Injected requirement {#injected}\n---\n\nThe quote servic
 
 
 async def test_an_indented_code_line_and_a_rule_do_not_open_a_section_in_a_run(client, runtime):
-    """An indented code line and a rule do not open a new section in a run's import."""
+    """Keeps crafted markdown from forging a hidden section during import."""
     world = await make_world(client)
     created, imported = await _run_with(
         client, runtime, world, _replace_body("approach", INDENTED_SETEXT)
@@ -2740,7 +2740,7 @@ def _add_citation(md: str) -> str:
 
 
 async def test_citations_added_in_an_edit_are_listed_apart_from_oracles_sources(client, runtime):
-    """Citations added in an edit are listed apart from Oracle's own sources."""
+    """Keeps a user-added source from being mistaken for one Oracle verified."""
     from pptx import Presentation
 
     from tests.test_mcp import api_token, mcp_client, text_of
@@ -2802,7 +2802,7 @@ async def test_citations_added_in_an_edit_are_listed_apart_from_oracles_sources(
 
 
 def test_an_edit_may_not_change_or_remove_oracles_citations():
-    """An edit may not change or remove Oracle's own citations."""
+    """Stops a citation that backs an Oracle claim from being edited away."""
     oracle = contract.oracle_citations("---\ntitle: T\n" + CITATION + "---\n\n# T {#spec}\n")
     same = "---\ntitle: T\n" + CITATION + "---\n\n# T {#spec}\n"
     changed = same.replace("Carrier adapter limits", "Something else")
@@ -3053,7 +3053,7 @@ def test_citation_ids_are_restricted_at_parse_time():
 
 
 async def test_an_edit_adding_a_citation_with_a_multiline_id_is_refused(client, runtime):
-    """An edit adding a citation with a multiline id is refused."""
+    """Blocks a citation id with embedded newlines from smuggling in extra markup."""
     world = await make_world(client)
     created = await generated_review2(client, runtime, world)
     probe = CITATION.replace("- id: ext-1", "- id: " + json.dumps(PROBE_ID))
@@ -3185,7 +3185,7 @@ def _agent_md() -> str:
 
 
 def test_oracle_written_text_is_escaped_in_the_intro_and_the_link():
-    """Oracle-written text is escaped in the intro line and the PRD link."""
+    """Stops a feature or PRD title from forging a link or Oracle's own label."""
     composed = contract.compose(
         _agent_md(),
         inputs(
@@ -3288,7 +3288,7 @@ def test_strip_leaves_a_multiline_scalar_alone():
 
 
 async def test_a_template_section_added_to_a_brief_keeps_its_title(client, runtime):
-    """A template section added to a brief keeps its fixed title."""
+    """Blocks a rename that would break a brief's fixed section headings."""
     pass
 
     world = await make_world(client)
@@ -3587,7 +3587,7 @@ async def test_an_edit_whose_markdown_parse_is_too_slow_is_refused(client, runti
 
 
 def test_exports_render_a_remote_image_as_a_link_and_a_stored_image_as_an_image():
-    """Exports render a remote image as a link but a stored image as an image."""
+    """Stops an exported document from auto-loading images from outside hosts."""
     from oracle.export import render
 
     for md in (render._markdown(), render._themed_markdown(False)):

@@ -45,7 +45,7 @@ def test_the_catalogue_has_all_eight_packs_in_order():
 
 @pytest.mark.parametrize("pack_id", INDUSTRY)
 def test_each_pack_reuses_the_shared_core_and_adds_its_own_modules(pack_id):
-    """Each industry pack reuses the shared core and adds its own modules."""
+    """Keeps an industry pack's modules from leaking into or duplicating another pack's core."""
     title, namespace, _ = INDUSTRY[pack_id]
     pack = builtin_packs()[pack_id]
     contracts = builtin_contracts()

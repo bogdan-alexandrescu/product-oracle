@@ -483,7 +483,7 @@ async def test_restore_of_a_goal_keeps_a_feature_moved_since_the_delete(client):
 
 @pytest.mark.asyncio
 async def test_a_new_feature_never_takes_a_trashed_key_and_restore_keeps_dependents(client):
-    """A new feature never reuses a trashed one's key, and restore keeps dependents."""
+    """Blocks a key clash on restore and keeps the restored item's dependents linked."""
     from tests.test_simple_additions_api import World as Additions
 
     w = await Additions().build()

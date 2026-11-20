@@ -219,7 +219,7 @@ async def test_a_counted_console_approval_at_the_dates_records_the_verified_base
     owner,  # noqa: F811
     monkeypatch,
 ):
-    """A counted console approval at the dates stop records a verified basis."""
+    """An approval made in the external console still saves the same verified schedule basis."""
     # protects=#590 review MAJOR 1: the lead stages Accept in Oracle, then approves the
     # Engineering dates in the SwarmCloud console; the counted answer records the dates as
     # Oracle's Approve does; fails_when=the stop is approved but no verified basis is made,

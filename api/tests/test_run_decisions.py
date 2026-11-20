@@ -317,7 +317,7 @@ def test_the_curated_tool_is_own_run_and_reads_list_run_decisions():
 async def test_an_approval_after_the_workflow_was_planned_reaches_its_agents(
     client, owner, swarmcloud
 ):
-    """An approval made after the workflow was planned still reaches its agents."""
+    """Keeps a late approval note visible to agents instead of being silently dropped."""
     _, auth = owner
     swarm = swarmcloud
     use(swarm)

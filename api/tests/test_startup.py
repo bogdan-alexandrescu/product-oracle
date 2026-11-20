@@ -235,7 +235,7 @@ def test_empty_database_is_migrated(at_head, served):
 
 
 def test_migrate_only_brings_the_database_to_head_without_serving(at_head, served):
-    """The migrate-only command brings the database to head without serving."""
+    """Keeps a migration-only run from also starting the web server by mistake."""
     command.downgrade(_cfg(), "-1")
     assert _stored() != {_head()}
 

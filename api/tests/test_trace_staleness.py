@@ -52,7 +52,7 @@ def test_the_trace_handler_is_registered_for_every_upstream_subject():
 
 
 async def test_a_changed_section_marks_its_stub_artifact_stale_and_never_rewrites_it(client):
-    """A changed section marks its stub artifact stale, never rewriting it."""
+    """Flags a spec as outdated instead of quietly rewriting it without review."""
     ctx = await make_ctx()
     v1 = await prd_v1(client, ctx)
     _, spec = await stub_artifact(ctx.tenant_id, v1.document_id, v1.id)

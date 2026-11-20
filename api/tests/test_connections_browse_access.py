@@ -236,7 +236,7 @@ async def test_slack_http_403_does_not_expire_the_connection(
 async def test_github_403_that_is_not_a_rate_limit_does_not_expire_the_connection(
     client, tenant_id, alice, github_conn, provider
 ):
-    """A GitHub 403 that is not a rate limit does not expire the connection."""
+    """A permissions refusal from GitHub must not be treated as an expired connection."""
     provider.github_answer = httpx.Response(
         403, json={"message": "Resource not accessible by personal access token"}
     )

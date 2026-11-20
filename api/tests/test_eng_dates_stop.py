@@ -491,7 +491,7 @@ async def test_a_version_saved_after_the_prd_review_is_not_the_one_dated(client,
 async def test_with_no_lead_named_an_approver_decides_the_dates_and_the_audit_says_so(
     client, owner, runtime
 ):
-    """With no lead named, an approver decides the dates stop, and the audit says so."""
+    """Lets a decision proceed with no owner named, and the record notes that gap honestly."""
     # protects=#590 review minor: the no-lead fallback (A3) at the dates stop; fails_when=
     # an approver cannot decide with no lead named, or the decision's audit does not record
     # engineering_lead_named: false; no_claim=the lead-named case (above).

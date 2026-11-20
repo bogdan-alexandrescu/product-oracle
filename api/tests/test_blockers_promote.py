@@ -69,7 +69,7 @@ def _form(detail: dict, **edits) -> dict:
 
 
 async def test_promoting_a_suggested_blocker_creates_it_and_clears_the_mark(client, ctx):
-    """Promoting a suggested blocker creates it and clears the suggested mark."""
+    """Keeps the suggestion's evidence attached once promoted, and blocks promoting it twice."""
     entity_id = await _suggested(ctx)
     await make_evidence(ctx, entity_id, excerpt="Addresses are kept for 30 days at most.")
     detail = (

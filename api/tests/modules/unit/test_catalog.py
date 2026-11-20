@@ -173,7 +173,7 @@ def test_module_text_keeps_to_oracle_words():
 
 
 def test_specialised_platform_modules_point_people_at_configuration_artifacts():
-    """Specialised platform modules point people at a configuration artifact."""
+    """Keeps advanced modules naming the actual settings file, not vague setup talk."""
     contracts = builtin_contracts()
     for key in ("agents.archetypes", "platform.brand-governance", "platform.config-precedence"):
         c = contracts[key]

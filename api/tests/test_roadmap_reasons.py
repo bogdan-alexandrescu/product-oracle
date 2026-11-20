@@ -359,7 +359,7 @@ def test_a_milestone_moment_reads_as_its_calendar_day_month_first():
 
 
 def test_a_milestone_date_given_as_a_quoted_string_reads_month_first():
-    """A milestone date written as a quoted string still reads month first."""
+    """Stops a YAML-quoted ISO date from leaking into the message a person reads."""
     body = """\
   - {id: a, title: A, outcome: o, horizon: now, prd_section: s-1,
      milestone: {name: Beta, date: "2026-11-30", date_source: a hunch}}

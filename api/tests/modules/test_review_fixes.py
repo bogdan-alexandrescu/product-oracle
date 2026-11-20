@@ -460,7 +460,7 @@ async def test_one_company_failing_to_seed_does_not_stop_the_others(client, monk
 
 
 async def test_a_transient_seeding_failure_is_retried_in_the_same_startup(monkeypatch):
-    """A transient seeding failure is retried within the same startup run."""
+    """A race with another replica seeding at startup is retried, not left half seeded."""
     ctx = await make_ctx()
     real = registry.ensure_builtin_modules
     calls: list[int] = []

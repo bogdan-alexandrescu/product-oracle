@@ -117,7 +117,7 @@ def test_an_estimated_span_is_the_effort_s_days_as_a_suggestion_s():
 
 
 def test_an_estimated_start_may_lie_before_the_window_never_after_the_end():
-    """An estimated start may lie before the window, but never after its own end."""
+    """Guards against a tiny effort estimate flipping a start past its end date."""
     early = Candidate(None, date(2026, 10, 10), "engineering", NEW)
     r = dates.resolve([early], WINDOW, effort_weeks=2)
     assert r.start == Dated(date(2026, 9, 27), "estimated", True)

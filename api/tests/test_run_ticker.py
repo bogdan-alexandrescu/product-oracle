@@ -485,7 +485,7 @@ async def test_the_account_sweep_runs_once_per_interval(client, ticker_on, usage
 async def test_the_ticker_sweeps_at_most_every_five_minutes_whatever_the_setting(
     client, ticker_on, usage_polls, monkeypatch, interval
 ):
-    """The ticker sweeps at most every five minutes, whatever the setting says."""
+    """Keeps a bad or tiny poll setting from hammering accounts every tick."""
     # 0 turns the in-process sweep off; it must not make the ticker sweep every minute.
     monkeypatch.setattr(claude_sweep.get_pool_settings(), "sweep_seconds", interval)
     polls, _ = usage_polls
@@ -965,7 +965,7 @@ async def test_a_job_cut_before_its_call_started_goes_back_to_the_queue(
 async def test_a_job_out_of_time_before_its_call_started_is_put_back_unspent(
     client, ticker_on, claude, monkeypatch
 ):
-    """A job that runs out of time before its call starts is put back unspent."""
+    """Avoids charging an attempt or cost to work that never reached the model."""
     tenant_id = await _backlog(client, 1)
     monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 0.6)
     # The time runs out while the job reads its inputs, not left to a 1 s read against a short

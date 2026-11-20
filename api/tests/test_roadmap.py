@@ -334,7 +334,7 @@ def test_knobs_and_estimate():
 
 
 def test_segment_prompts_carry_the_prd_version_priorities_and_edges():
-    """A segment's prompt carries the PRD's version, priorities and edges."""
+    """Keeps the draft prompt naming the exact plan version with its ranked order and links."""
     flow = flows.FLOWS["prd_to_roadmap"]
     knobs = flows.resolve_knobs(flow, {})
     source = flows.SourceContext(

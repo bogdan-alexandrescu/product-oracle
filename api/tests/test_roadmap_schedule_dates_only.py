@@ -66,7 +66,7 @@ def test_a_date_outside_any_item_passes_on_an_item_s_verified_basis():
 
 
 def test_a_date_outside_any_item_needs_a_basis_of_this_roadmap_s_items():
-    """A date outside any item needs a basis from one of this roadmap's own items."""
+    """Blocks a summary date from being verified by another roadmap's item data."""
     # walkb-roadmap review: a summary date is not backed by the verified basis of an item
     # this roadmap does not have.
     sections = [

@@ -260,7 +260,7 @@ async def test_narrowing_a_notion_source_deletes_pages_outside_it(
 async def test_unticking_a_root_deletes_its_pages_on_save_without_reading_notion(
     client, alice, notion_conn, notion_connector
 ):
-    """Unticking a root deletes its pages on save without re-reading Notion first."""
+    """Removing a synced folder clears its items locally instead of re-querying the source."""
     created = await client.post(
         "/v1/sources",
         headers=alice.headers,
@@ -414,7 +414,7 @@ def test_run_tokens_may_not_list_notion_pages():
 async def test_service_api_tokens_may_not_list_notion_pages(
     client, tenant_id, notion_conn, notion_http
 ):
-    """A service API token may not list Notion pages."""
+    """Stops a background token from reading a list of pages meant only for a signed-in person."""
     async with tenant_session(tenant_id) as s:
         _token, raw = await create_api_token(s, "service")
         await s.commit()

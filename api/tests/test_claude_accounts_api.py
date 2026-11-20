@@ -363,7 +363,7 @@ async def test_a_window_longer_than_the_retention_is_a_422(client, tenant_id, ow
 async def test_removing_an_account_closes_its_holds_and_deletes_its_credential(
     client, tenant_id, owner
 ):
-    """Removing an account closes its open holds and deletes its stored credential."""
+    """Makes sure removing an account frees its hold and erases its credential, not just itself."""
     a = await add_account(tenant_id, "work")
     await store.acquire_hold(tenant_id, a.account_id, now=now())
     resp = await client.delete(f"{BASE}/{a.account_id}", headers=owner.headers)
@@ -511,7 +511,7 @@ async def test_an_account_with_room_takes_calls_and_the_pool_with_it(client, ten
 async def test_a_paused_account_is_not_spent_and_a_paused_pool_takes_no_calls(
     client, tenant_id, owner
 ):
-    """A paused account is never marked spent, and a paused pool takes no calls."""
+    """Keeps a deliberately paused account from being mislabeled as out of spending budget."""
     from oracle.claude_accounts.accounts import AccountState
 
     await add_account(tenant_id, "resting", state=AccountState.PAUSED)
@@ -529,7 +529,7 @@ async def test_a_paused_account_is_not_spent_and_a_paused_pool_takes_no_calls(
 async def test_with_no_account_the_pool_takes_calls_only_through_a_fallback(
     client, tenant_id, owner
 ):
-    """With no account registered, the pool takes calls only through a fallback."""
+    """Lets a fallback credential keep calls working when no account has been registered yet."""
     empty = (await client.get(BASE, headers=owner.headers)).json()
     assert empty["pool"] == {
         "takes_calls": False,
@@ -596,7 +596,7 @@ async def _gateway_answer(tenant_id):
 async def test_a_spent_pool_with_a_fallback_takes_calls_on_it_as_the_gateway_does(
     client, tenant_id, owner
 ):
-    """A spent pool with a fallback set still takes calls on it, as the gateway does."""
+    """Checks the page's fallback claim matches what the gateway actually does when spent."""
     await add_account(
         tenant_id,
         "weekly",

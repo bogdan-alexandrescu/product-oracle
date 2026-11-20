@@ -172,7 +172,7 @@ async def test_no_other_account_keeps_the_hold_and_says_why(tenant_id):
 
 
 async def test_a_swap_off_an_unusable_account_keeps_the_next_ask_away_from_it(tenant_id):
-    """Swapping a job off an unusable account keeps the next ask away from it."""
+    """Stops the pool from handing the next job right back to an account just marked unusable."""
     a = await add_account(tenant_id, "alpha")
     b = await add_account(tenant_id, "bravo", windows={"five_hour": window(0.5)})
     got = await pool.assign(tenant_id, job="reporting", attempt_id="x")

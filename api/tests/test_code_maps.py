@@ -819,7 +819,7 @@ def briefs_runtime():
 async def test_a_run_records_the_code_maps_it_used_and_briefs_are_checked_against_them(
     client, eng_flow, briefs_runtime
 ):
-    """A run records the shared code maps it used, and briefs are checked on them."""
+    """Keeps a brief's citations checked against the exact map the run captured, not skipped."""
     # protects=F5-1's unchecked registration checks refs against the shared maps the run
     # recorded at its start: a brief citing the map's ids is registered; fails_when=the
     # run records no map, or a brief whose refs the map holds is refused as unknown_ref.

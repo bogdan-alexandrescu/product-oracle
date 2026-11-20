@@ -3669,7 +3669,7 @@ async def test_follow_ups_run_after_runs_and_jobs_within_a_time_budget(
 async def test_a_db_error_in_one_follow_up_rolls_it_back_and_the_others_run(
     client, monkeypatch, provider_security5
 ):
-    """A DB error in one follow-up rolls it back; the others still run."""
+    """A crash saving one queued job's log must not stop the rest of the queue from running."""
     from sqlalchemy import text
 
     from oracle.connections import service as connections
@@ -4172,7 +4172,7 @@ async def test_an_approver_moderating_a_comment_after_losing_standing_is_refused
 
 
 async def test_an_approver_still_moderates_and_an_author_still_edits_their_own(client):
-    """An approver still moderates; an author still edits their own comment."""
+    """A locking rule added elsewhere must not block normal moderation or self edits."""
     ctx = await setup(client)
     comment_id = await _comment(client, ctx)
     approver = await person(ctx.tenant_id, "approver", "approver")
@@ -4393,7 +4393,7 @@ def test_external_key_reads_every_uuid_spelling_in_any_case(spelling):
     "stored", ["uuid:{u}", "URN:{u}", "UUID:{h}", "{{URN:UUID:{u}}}", " urn:uuid:{U} "]
 )
 async def test_a_stored_id_in_any_uuid_spelling_reads_as_its_hex_in_sql(client, stored):
-    """A stored id in any uuid spelling reads back as the same hex in SQL."""
+    """Matches a record by its identifier no matter which old text format stored it."""
     from sqlalchemy import literal
 
     from oracle.review.publish import _hex32
@@ -4427,7 +4427,7 @@ async def _due(ctx) -> None:
 
 
 async def test_follow_ups_still_run_when_an_earlier_part_of_the_tick_fails(client, monkeypatch):
-    """Follow-ups still run when an earlier part of the same tick fails."""
+    """A crash in one scheduled job must not undo work a sibling job already finished."""
     from oracle.connections import service as connections
     from oracle.members.models import MemberFollowUp
     from oracle.runs import router as runs_router

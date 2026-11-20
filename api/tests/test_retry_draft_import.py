@@ -560,7 +560,7 @@ async def test_a_run_that_finished_with_no_document_gets_an_inbox_row(
 async def test_draft_rejected_clears_once_the_run_succeeded_past_the_refusal(
     client, owner, runtime, monkeypatch
 ):
-    """The draft_rejected flag clears once the run succeeds past the refusal."""
+    """Clears the rejected flag everywhere once retried, without losing the segment's old error."""
     tenant_id, auth = owner
     run = await _rejected(client, auth, runtime, monkeypatch)
     assert (await get(client, auth, run["id"]))["draft_rejected"]

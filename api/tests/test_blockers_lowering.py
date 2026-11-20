@@ -337,7 +337,7 @@ async def test_reopening_a_blocker_an_approver_lowered_while_resolved_takes_an_o
 async def test_reopening_a_blocker_whose_documents_were_dropped_while_resolved_takes_an_owner(
     client,
 ):
-    """Reopening a blocker whose document was dropped while resolved needs an owner."""
+    """Needs an owner to reopen a blocker whose gated documents changed while it was resolved."""
     ctx = await make_ctx()
     doc_id, b = await _blocker(client, ctx)
     await _resolve(client, ctx, b["id"])
@@ -624,7 +624,7 @@ async def test_a_reopen_returns_the_scope_experiment_to_planned(client, start_ru
 async def test_an_owner_reclassifying_an_approvers_decision_reopens_it_unless_confirmed(
     client, action
 ):
-    """An owner worsening an approver's decision reopens it unless confirmed."""
+    """Reopens an accepted risk automatically when it gets worse, unless the owner re-confirms."""
     ctx = await make_ctx()
     doc_id, b = await _blocker(client, ctx, severity="high")
     await _decide(client, ctx, b["id"], action, "approver")
