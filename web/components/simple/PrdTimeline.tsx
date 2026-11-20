@@ -8,7 +8,7 @@ import { FlowDiagram } from "@/components/simple/FlowViews";
 import { useOpenFeature } from "@/components/simple/OpenFeature";
 import { ErrorNote } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { calendarDay, todayIn, useCompanyZone } from "@/lib/dates";
+import { calendarDay, todayIn, useCompanyZone, utcDay } from "@/lib/dates";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 type Plan = Schemas["SimplePlanOut"];
@@ -671,7 +671,7 @@ function Strip({ plan, lanes, today, onPick }: { plan: Plan; lanes: Lane[]; toda
   const months: { label: string; x: number; at: number }[] = [];
   for (let d = new Date(T0); d.getTime() < T1; d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))) {
     const at = Math.max(T0, Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
-    months.push({ label: calendarDay(new Date(at).toISOString().slice(0, 10), { month: "short" }), x: ((at - T0) / (T1 - T0)) * W, at });
+    months.push({ label: calendarDay(utcDay(at), { month: "short" }), x: ((at - T0) / (T1 - T0)) * W, at });
   }
   // The first month's label gives way when the next one starts within a label's width; a
   // label the Today pill would cover moves just past the pill, unless today is in that month
@@ -680,7 +680,7 @@ function Strip({ plan, lanes, today, onPick }: { plan: Plan; lanes: Lane[]; toda
   const shown: typeof months = [];
   months.forEach((m, i) => {
     const covered = m.x + 40 > pill.from && m.x < pill.to + 4;
-    if (covered && new Date(m.at).toISOString().slice(0, 7) <= today.slice(0, 7)) return;
+    if (covered && utcDay(m.at).slice(0, 7) <= today.slice(0, 7)) return;
     // A clear gap either side of the pill, so a month's name never touches it.
     const x = covered ? pill.to + 4 : m.x;
     const next = months[i + 1];

@@ -26,6 +26,7 @@ import {
 import { PlanCrumb } from "@/app/plan/_crumb";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { AutonomyNote, useAutonomyLevel } from "@/lib/autonomy";
+import { todayIn, useCompanyZone } from "@/lib/dates";
 import { formatDate, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -788,7 +789,8 @@ function TaskRow({ task, canEdit, mine, busy, act }: { task: Task; canEdit: bool
 function NoteRow({ note, canEdit, busy, act }: { note: Note; canEdit: boolean; busy: string | null; act: Act }) {
   const [sending, setSending] = useState(false);
   const [channel, setChannel] = useState<Channel>("email");
-  const [on, setOn] = useState(() => new Date().toISOString().slice(0, 10));
+  const zone = useCompanyZone();
+  const [on, setOn] = useState(() => todayIn(zone));
   const [skipping, setSkipping] = useState(false);
   const [why, setWhy] = useState("");
   const [copied, setCopied] = useState(false);

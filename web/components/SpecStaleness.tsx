@@ -42,9 +42,10 @@ export function SpecStaleness({ doc, n, mayApprove, onChanged }: { doc: string; 
   // The spec's proposed regeneration, while its run has not ended.
   const runId = spec.regeneration_run_id ?? null;
   const label = av.freshness === "potentially_stale" && runId ? `${fresh.label} · regeneration running` : fresh.label;
-  // The spec's engineering approvers (all approvers when it names none) decide on it, as the API's checks.
+  // The spec's engineering approvers (all approvers when it names none) decide on it, as the API's checks;
+  // an owner always may (#1591: regenerate_spec's per-item role, through can()).
   const named = spec.engineering_approver_ids;
-  const engineer = me?.role === "owner" || named.length === 0 || (!!me?.user_id && named.includes(me.user_id));
+  const engineer = can("regenerate_spec", named.length === 0 || (!!me?.user_id && named.includes(me.user_id)));
   const changed = () => {
     void specQ.reload();
     onChanged();
@@ -75,7 +76,7 @@ export function SpecStaleness({ doc, n, mayApprove, onChanged }: { doc: string; 
           spec={spec}
           versionId={av.id}
           view={view}
-          mayRegenerate={!runId && can("regenerate_spec", engineer)}
+          mayRegenerate={!runId && engineer}
           onChanged={changed}
         />
       )}
