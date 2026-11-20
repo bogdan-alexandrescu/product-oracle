@@ -17,8 +17,7 @@ from oracle.auth.service import create_api_token, sign_run_binding
 from oracle.config import get_settings
 from oracle.runs.models import Run
 from oracle.tenancy import tenant_session
-from tests.test_intake_sharing import EXCERPT_A, share_all
-from tests.test_intake_sharing_round5 import fake, world  # noqa: F401
+from tests.test_intake_sharing import EXCERPT_A, fake, share_all, world  # noqa: F401
 from tests.test_oauth import full_flow
 
 FORGED = "x-oracle-run-id"

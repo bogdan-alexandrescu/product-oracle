@@ -16,9 +16,14 @@ from oracle.tenancy import tenant_session
 from oracle.v2.models import KnowledgeGap, StakeholderQuestion
 from tests.baseline_helpers import make_ctx
 from tests.blocker_helpers import make_evidence
-from tests.test_intake_sharing_round5 import ANSWER as INTAKE_ANSWER
-from tests.test_intake_sharing_round5 import MODEL_GAP, _blocker_gap, share, world
-from tests.test_intake_sharing_round6 import fake  # noqa: F401 (fixture)
+from tests.test_intake_sharing import ANSWER as INTAKE_ANSWER
+from tests.test_intake_sharing import (
+    MODEL_GAP,
+    _blocker_gap,
+    fake,  # noqa: F401 (fixture)
+    world,
+)
+from tests.test_intake_sharing import share_round5 as share
 
 SUGGESTED = {"type": "unknown", "limit_kind": "policy", "severity": "high", "status": "open"}
 ANSWER = "The carrier's terms forbid storing a buyer's address for longer than 30 days."
