@@ -714,7 +714,7 @@ async def tick(db: AsyncSession, principal: Principal | None = None) -> TickOut:
             errors.append(f"run {run_id}: {exception_text(exc)}")
             if not read:
                 unread.setdefault(run_id, _unchecked_reason(exc))
-        except Exception as exc:  # one broken run must not stop the others
+        except Exception as exc:  # noqa: BLE001 - one broken run must not stop the others
             if _dates_pending(exc):
                 # The run stays as it was and the next tick tries again: never a failed
                 # run. Its row lock and transaction end here.

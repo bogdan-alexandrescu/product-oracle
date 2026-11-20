@@ -20,6 +20,7 @@ stay in place to age out.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -28,6 +29,9 @@ from typing import Any
 import httpx
 
 from oracle.claude_accounts.accounts import Account, WindowReading
+from oracle.errors import exception_text
+
+log = logging.getLogger(__name__)
 
 ENDPOINT = "https://api.anthropic.com/api/oauth/usage"
 BETA_HEADER = "oauth-2025-04-20"
@@ -170,7 +174,8 @@ async def poll_round(
             break
         try:
             token = await read_token(account)
-        except Exception:
+        except Exception as exc:  # noqa: BLE001 - one account's bad token must not stop the round
+            log.warning("account token read failed: %s", exception_text(exc))
             outcomes.append(PollOutcome(account.account_id, False, "token_unreadable"))
             continue
         try:

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, webhooks
+from oracle.errors import exception_text
 from oracle.runs import service
 from oracle.runs.models import Run, RunSegment
 from oracle.runs.service import (
@@ -160,6 +161,7 @@ async def _replay[T](
                 await service._within(wanted.call(*wanted.args, **wanted.kwargs), deadline),
             )
         except Exception as exc:  # noqa: BLE001 - the code sees the call's own failure
+            log.warning("replayed call %s failed: %s", wanted.slot, exception_text(exc))
             cache[wanted.slot] = (False, exc)
     raise RuntimeUnavailable("this pass needed more calls to SwarmCloud than it may make")
 

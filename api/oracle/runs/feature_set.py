@@ -266,6 +266,7 @@ def load_feature_set(text: str) -> Any:
     except FeatureSetError:
         raise
     except Exception as exc:  # noqa: BLE001 - agent output: every failure is a refusal
+        log.warning("%s could not be read: %s", FILE, exception_text(exc))
         raise FeatureSetError(
             "unreadable_yaml",
             f"{FILE} could not be read ({type(exc).__name__}: {str(exc)[:200]})",
@@ -336,6 +337,7 @@ async def check_feature_set_async(text: str, **kwargs: Any) -> FeatureSetCheck:
         )
         return out
     except Exception as exc:  # noqa: BLE001 - agent output: every failure is a problem
+        log.warning("%s could not be checked: %s", FILE, exception_text(exc))
         out = FeatureSetCheck()
         out.add("unreadable_yaml", f"{FILE} could not be checked ({type(exc).__name__})")
         return out

@@ -721,3 +721,31 @@ async def test_a_partly_read_request_lists_every_part_it_did_not_use(client):
     assert "I can't change an item that is off the gate but still in Now from a chat yet" in body
     assert m["links"] == [{"label": "Priorities", "href": "/simple/priorities"},
                           {"label": "Roadmap", "href": "/simple/roadmap"}], m["links"]  # fmt: skip
+
+
+async def test_a_failed_agenda_read_tells_the_reader_why(client, meetings, monkeypatch, caplog):  # noqa: F811
+    # protects (#1574): the meeting's agenda read becoming None with no trace; the reader is
+    # told the agenda was read, could not be read (and why), or does not apply; fails_when:
+    # a failed read looks the same as a meeting with nothing on it, or leaves no log line.
+    ctx = await make_people()
+    await World(ctx).build()
+    mid = _meeting(ctx, meetings)
+    await post(client, ctx, "owner", "push that out a quarter", mid)
+    seen: list = []
+    await read(ctx, actions(), seen)
+    assert seen[0]["context"]["meeting"]["agenda_read"] == {"state": "fetched"}
+
+    async def down(db, principal, meeting_id):
+        raise RuntimeError("agenda store down")
+
+    monkeypatch.setattr(meetings.module, "one", down)
+    # Alembic's fileConfig in another test may have disabled the module's logger.
+    monkeypatch.setattr(chat.log, "disabled", False)
+    await post(client, ctx, "owner", "push that out a quarter", mid)
+    seen = []
+    with caplog.at_level("WARNING", logger="oracle.simple.chat"):
+        await read(ctx, actions(), seen)
+    m = seen[0]["context"]["meeting"]
+    assert m["agenda_read"] == {"state": "unavailable", "reason": "RuntimeError"}
+    assert "title" not in m
+    assert any("agenda store down" in r.getMessage() for r in caplog.records)

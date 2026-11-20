@@ -332,7 +332,7 @@ async def _build(
     try:
         async with db.begin_nested():
             built = await blocks.build(db, kind.blocks, ctx)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - never raises what a builder raises (see docstring)
         log.warning("rituals: the pre-read of occurrence %s failed: %s", occ.id, exc)
         if rebuild:
             return False

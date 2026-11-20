@@ -16,6 +16,7 @@ SwarmCloud API instead (``tests/swarmcloud_fake.py``).
 
 import hashlib
 import json
+import logging
 import re
 import secrets
 from dataclasses import dataclass, field
@@ -23,6 +24,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
+from oracle.errors import exception_text
 from oracle.swarm.runtime import (
     Answer,
     Features,
@@ -34,6 +36,8 @@ from oracle.swarm.runtime import (
     WorkflowState,
     WorkflowStatus,
 )
+
+log = logging.getLogger(__name__)
 
 _ID = re.compile(r"^fake-(?P<segment>[a-z_]+)-a(?P<attempt>\d+)-c(?P<cents>\d+)-[0-9a-f]+$")
 
@@ -126,7 +130,8 @@ def scope_order_of(prompt: str) -> list[str] | None:
 
     try:
         data = safe_yaml.load(m[1])
-    except Exception:  # noqa: BLE001 - a pasted scope the fake cannot read: the default order
+    except Exception as exc:  # noqa: BLE001 - unreadable pasted scope: fall back to default order
+        log.warning("the fake could not read a pasted PRD scope: %s", exception_text(exc))
         return None
     features = [
         f for f in (data or {}).get("features") or [] if isinstance(f, dict) and f.get("key")

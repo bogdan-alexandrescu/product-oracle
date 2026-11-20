@@ -673,7 +673,7 @@ async def _produce(
         return "cancelled"
     try:
         done = call.result()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - the reply is saved failed with its reason
         reason = _reason(e)
         log.info("discussion reply %s failed: %s", reply_id, reason)
         await _save(

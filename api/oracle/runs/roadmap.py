@@ -52,6 +52,7 @@ A check that timed out or could not read the file is not kept.
 import copy
 import hashlib
 import json
+import logging
 import re
 import threading
 from collections import OrderedDict
@@ -63,6 +64,8 @@ from typing import Any
 from oracle import safe_yaml
 from oracle.errors import exception_text
 from oracle.roadmap.schedule import Basis, supporting
+
+log = logging.getLogger(__name__)
 
 HORIZONS = ("now", "next", "later")
 CONFIDENCES = ("high", "medium", "low")
@@ -153,6 +156,7 @@ def load_items_yaml(text: str) -> Any:
     except ItemsYamlError:
         raise
     except Exception as exc:  # noqa: BLE001 - agent output: every failure is a refusal
+        log.warning("roadmap_items.yaml could not be read: %s", exception_text(exc))
         raise ItemsYamlError(
             "unreadable_yaml",
             f"roadmap_items.yaml could not be read ({type(exc).__name__}: {str(exc)[:200]})",
@@ -487,6 +491,7 @@ async def check_items_async(text: str, **kwargs: Any) -> ItemsCheck:
         )
         return out
     except Exception as exc:  # noqa: BLE001 - agent output: every failure is a problem
+        log.warning("roadmap_items.yaml could not be checked: %s", exception_text(exc))
         out = ItemsCheck()
         name = type(exc).__name__
         out.add("unreadable_yaml", f"roadmap_items.yaml could not be checked ({name})")

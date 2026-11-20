@@ -616,7 +616,7 @@ async def _advance(
                 )
         except safe_yaml.ParseBusy:
             raise  # no worker for it: this tick gives up, the next retries
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001 - a failed store fails the run, never the tick
             log.exception("storing the draft items of run %s failed", run.id)
             draft_error = f"the roadmap items could not be stored ({type(exc).__name__})"
         art["draft_items"] = {"error": draft_error} if draft_error else {"stored": stored}
@@ -669,7 +669,7 @@ async def _advance(
                 launch_import = await launches_service.import_kit_run(
                     db, run, art["files"].get(flows.LAUNCH_FILE)
                 )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001 - a bad file never fails the tick
             log.exception("importing %s of run %s failed", flows.LAUNCH_FILE, run.id)
             launch_import = {"error": f"{flows.LAUNCH_FILE} could not be imported "
                              f"({type(exc).__name__})"}  # fmt: skip
@@ -684,7 +684,7 @@ async def _advance(
                 triage_import = await triage.apply(db, run, art["files"].get(flows.TRIAGE_FILE))
         except safe_yaml.ParseBusy:
             raise  # no worker for it: this tick gives up, the next retries
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001 - a bad file never fails the tick
             log.exception("applying %s of run %s failed", flows.TRIAGE_FILE, run.id)
             triage_import = {"error": f"{flows.TRIAGE_FILE} could not be applied "
                              f"({type(exc).__name__})"}  # fmt: skip
@@ -734,7 +734,7 @@ async def _advance(
             imported = await _run_importer(db, run, sdef.importer, art["files"])
         except safe_yaml.ParseBusy:
             raise  # no worker for it: this tick gives up, the next retries
-        except Exception as exc:  # the checkpoint must open whatever the importer does
+        except Exception as exc:  # noqa: BLE001 - the checkpoint must open what the importer does
             log.exception("run %s: importer %s failed", run.id, sdef.importer)
             imported = {"error": f"the {sdef.importer} import failed ({type(exc).__name__})"}
         # The commit released the run's row lock: take it again.
