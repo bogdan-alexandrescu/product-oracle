@@ -5,25 +5,25 @@
  * (oracle.pricing.outcomes). Owners and approvers only, as the API. Made-up deals and
  * accounts only ("Account 14"); the company is the fictional "Example Co".
  */
-import type { Schemas } from "@/lib/api/client";
+import type { Schemas } from '@/lib/api/client';
 
-import type { SectionSeed } from "./fixtures";
-import { reply } from "./typed";
+import type { SectionSeed } from './fixtures';
+import { reply } from './typed';
 
-type DealOut = Schemas["DealOutcomeOut"];
-type DealIn = Schemas["DealOutcomeIn"];
-type Role = Schemas["Me"]["role"];
-export type Result = DealOut["result"];
-export type Reason = DealOut["reason"];
-export type EvidenceWindow = Schemas["UpdatePeriod"];
+type DealOut = Schemas['DealOutcomeOut'];
+type DealIn = Schemas['DealOutcomeIn'];
+type Role = Schemas['Me']['role'];
+export type Result = DealOut['result'];
+export type Reason = DealOut['reason'];
+export type EvidenceWindow = Schemas['UpdatePeriod'];
 
-export const PRICING_TEMPLATE = "pricing-options-memo";
-export const PRICING_BRIEF = ["question", "recommendation", "options"];
+export const PRICING_TEMPLATE = 'pricing-options-memo';
+export const PRICING_BRIEF = ['question', 'recommendation', 'options'];
 
 export interface PricingOption {
   id: string;
   title: string;
-  reversibility: "reversible" | "irreversible";
+  reversibility: 'reversible' | 'irreversible';
   recommended: boolean;
   summary: string;
 }
@@ -33,7 +33,12 @@ export interface PricingDb {
 }
 
 /** What the win and loss records read of H7's alternatives (the market mock's competitors). */
-export type DealAlternative = { id: string; name: string; aliases: string[]; status: "active" | "archived" };
+export type DealAlternative = {
+  id: string;
+  name: string;
+  aliases: string[];
+  status: 'active' | 'archived';
+};
 
 export interface PricingContext {
   me: { id: string; role: Role };
@@ -43,20 +48,37 @@ export interface PricingContext {
   today: () => string;
 }
 
-const RESULT_LABELS: Record<Result, string> = { won: "Won", lost: "Lost", no_decision: "No decision", churned: "Churned" };
-const REASON_LABELS: Record<Reason, string> = {
-  price: "Price",
-  value: "Value not clear",
-  product_gap: "Missing feature",
-  alternative: "Chose an alternative",
-  timing: "Timing",
-  no_budget: "No budget",
-  champion: "Lost the champion",
-  other: "Other",
+const RESULT_LABELS: Record<Result, string> = {
+  won: 'Won',
+  lost: 'Lost',
+  no_decision: 'No decision',
+  churned: 'Churned',
 };
-const CURRENCIES = ["USD", "EUR", "GBP"] as const;
-const REQUIRED = ["result", "account", "decided_on", "reason"];
-const COLUMNS = ["result", "account", "segment", "plan", "annual_value", "currency", "decided_on", "reason", "reason_note", "alternative", "price_quoted"];
+const REASON_LABELS: Record<Reason, string> = {
+  price: 'Price',
+  value: 'Value not clear',
+  product_gap: 'Missing feature',
+  alternative: 'Chose an alternative',
+  timing: 'Timing',
+  no_budget: 'No budget',
+  champion: 'Lost the champion',
+  other: 'Other',
+};
+const CURRENCIES = ['USD', 'EUR', 'GBP'] as const;
+const REQUIRED = ['result', 'account', 'decided_on', 'reason'];
+const COLUMNS = [
+  'result',
+  'account',
+  'segment',
+  'plan',
+  'annual_value',
+  'currency',
+  'decided_on',
+  'reason',
+  'reason_note',
+  'alternative',
+  'price_quoted',
+];
 const MAX_ROWS = 2000;
 const MAX_BYTES = 1024 * 1024;
 const ACCOUNT_MAX = 120;
@@ -64,11 +86,14 @@ const LABEL_MAX = 200;
 const NOTE_MAX = 2000;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
-const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
+const RANK: Role[] = ['viewer', 'commenter', 'approver', 'owner'];
 const atLeast = (role: Role, min: Role) => RANK.indexOf(role) >= RANK.indexOf(min);
 
 function json(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  });
 }
 const fail = (status: number, detail: string) => json(status, { detail });
 
@@ -78,95 +103,210 @@ const fail = (status: number, detail: string) => json(status, { detail });
 export function pricingTemplateSections(title: string): SectionSeed[] {
   const hint = (text: string) => `_${text}_`;
   return [
-    { key: "title", level: 1, heading: title, body: hint("Input for one pricing question. The price is decided by the pricing owner in the decision log, never here.") },
-    { key: "question", level: 2, heading: "The question", body: hint("The question, why it comes up now, and who decides it (the pricing owner).") },
-    { key: "recommendation", level: 2, heading: "Recommendation", body: hint("The recommended option and why, in one paragraph.") },
-    { key: "options", level: 2, heading: "Options", body: hint("One section per option.") },
-    { key: "full", level: 1, heading: "Full version", body: hint("Everything below is the detail behind the brief.") },
-    { key: "willingness-to-pay", level: 2, heading: "Willingness to pay", body: "_To write._" },
-    { key: "win-loss", level: 2, heading: "Win and loss", body: "_To write._" },
-    { key: "usage-by-plan", level: 2, heading: "Usage by plan", body: "_To write._" },
-    { key: "alternatives-pricing", level: 2, heading: "Alternatives' pricing", body: "_To write._" },
-    { key: "research-plan", level: 2, heading: "Research plan", body: "_To write._" },
-    { key: "risks", level: 2, heading: "Risks", body: "_To write._" },
-    { key: "sources", level: 2, heading: "Sources and data points", body: "_To write._" },
+    {
+      key: 'title',
+      level: 1,
+      heading: title,
+      body: hint(
+        'Input for one pricing question. The price is decided by the pricing owner in the decision log, never here.',
+      ),
+    },
+    {
+      key: 'question',
+      level: 2,
+      heading: 'The question',
+      body: hint('The question, why it comes up now, and who decides it (the pricing owner).'),
+    },
+    {
+      key: 'recommendation',
+      level: 2,
+      heading: 'Recommendation',
+      body: hint('The recommended option and why, in one paragraph.'),
+    },
+    { key: 'options', level: 2, heading: 'Options', body: hint('One section per option.') },
+    {
+      key: 'full',
+      level: 1,
+      heading: 'Full version',
+      body: hint('Everything below is the detail behind the brief.'),
+    },
+    { key: 'willingness-to-pay', level: 2, heading: 'Willingness to pay', body: '_To write._' },
+    { key: 'win-loss', level: 2, heading: 'Win and loss', body: '_To write._' },
+    { key: 'usage-by-plan', level: 2, heading: 'Usage by plan', body: '_To write._' },
+    {
+      key: 'alternatives-pricing',
+      level: 2,
+      heading: "Alternatives' pricing",
+      body: '_To write._',
+    },
+    { key: 'research-plan', level: 2, heading: 'Research plan', body: '_To write._' },
+    { key: 'risks', level: 2, heading: 'Risks', body: '_To write._' },
+    { key: 'sources', level: 2, heading: 'Sources and data points', body: '_To write._' },
   ];
 }
 
 /** The two options the mock's pricing_memo run sets out (the second recommended). */
 export const DRAFT_OPTIONS: PricingOption[] = [
   {
-    id: "keep",
-    title: "Keep per-seat pricing",
-    reversibility: "reversible",
+    id: 'keep',
+    title: 'Keep per-seat pricing',
+    reversibility: 'reversible',
     recommended: false,
-    summary: "Teams keep paying $20 per seat a month. Nothing changes for existing customers; growing teams still meet a bill that rises with every seat.",
+    summary:
+      'Teams keep paying $20 per seat a month. Nothing changes for existing customers; growing teams still meet a bill that rises with every seat.',
   },
   {
-    id: "flat-team",
-    title: "Flat price per team",
-    reversibility: "irreversible",
+    id: 'flat-team',
+    title: 'Flat price per team',
+    reversibility: 'irreversible',
     recommended: true,
-    summary: "Teams of 10 to 50 pay $400 a month, whatever their seat count. Larger teams pay less per seat; teams under 20 seats pay more.",
+    summary:
+      'Teams of 10 to 50 pay $400 a month, whatever their seat count. Larger teams pay less per seat; teams under 20 seats pay more.',
   },
 ];
 
 /** A memo version's front matter: kind, template, its brief, question, options and evidence window. */
-export function pricingFrontMatter(slug: string, title: string, question: string | null, window: EvidenceWindow, options: PricingOption[] = []): Record<string, unknown> {
+export function pricingFrontMatter(
+  slug: string,
+  title: string,
+  question: string | null,
+  window: EvidenceWindow,
+  options: PricingOption[] = [],
+): Record<string, unknown> {
   return {
     document: slug,
     title,
     template: PRICING_TEMPLATE,
-    template_version: "1",
-    kind: "pricing",
+    template_version: '1',
+    kind: 'pricing',
     brief: PRICING_BRIEF,
     question,
-    options: options.map(({ id, title, reversibility, recommended }) => ({ id, title, reversibility, recommended })),
+    options: options.map(({ id, title, reversibility, recommended }) => ({
+      id,
+      title,
+      reversibility,
+      recommended,
+    })),
     evidence_window: window,
   };
 }
 
 /** The draft a pricing_memo run writes for `question`: the question, the recommendation and the options first. */
-export function pricingDraftSections(title: string, question: string, window: EvidenceWindow, options: PricingOption[] = DRAFT_OPTIONS): SectionSeed[] {
+export function pricingDraftSections(
+  title: string,
+  question: string,
+  window: EvidenceWindow,
+  options: PricingOption[] = DRAFT_OPTIONS,
+): SectionSeed[] {
   const recommended = options.find((o) => o.recommended);
   return [
-    { key: "title", level: 1, heading: title, body: "Input for the pricing owner. Oracle sets out the options and the evidence; the price is decided in the decision log." },
-    { key: "question", level: 2, heading: "The question", body: `${question}\n\nWhy now: a third of lost deals this half named price. The pricing owner decides.` },
     {
-      key: "recommendation",
+      key: 'title',
+      level: 1,
+      heading: title,
+      body: 'Input for the pricing owner. Oracle sets out the options and the evidence; the price is decided in the decision log.',
+    },
+    {
+      key: 'question',
       level: 2,
-      heading: "Recommendation",
+      heading: 'The question',
+      body: `${question}\n\nWhy now: a third of lost deals this half named price. The pricing owner decides.`,
+    },
+    {
+      key: 'recommendation',
+      level: 2,
+      heading: 'Recommendation',
       body: recommended
         ? `Oracle recommends **${recommended.title}**, tested first with new teams of 10 to 50 for one quarter. The pricing owner decides.`
-        : "The options are set out without a recommendation.",
+        : 'The options are set out without a recommendation.',
     },
-    { key: "options", level: 2, heading: "Options", body: `${options.length} options, each with what it changes and the cost of being wrong.` },
+    {
+      key: 'options',
+      level: 2,
+      heading: 'Options',
+      body: `${options.length} options, each with what it changes and the cost of being wrong.`,
+    },
     ...options.map((o) => ({
       key: `option-${o.id}`,
       level: 3,
       heading: o.title,
-      body: `${o.summary}\n\n- Reversibility: ${o.reversibility === "reversible" ? "reversible" : "hard to reverse"}\n- How to test it first: offer it to new teams for one quarter.`,
+      body: `${o.summary}\n\n- Reversibility: ${o.reversibility === 'reversible' ? 'reversible' : 'hard to reverse'}\n- How to test it first: offer it to new teams for one quarter.`,
     })),
-    { key: "full", level: 1, heading: "Full version", body: "The detail behind the brief." },
-    { key: "willingness-to-pay", level: 2, heading: "Willingness to pay", body: "Two pricing interviews: a flat team price felt like a bargain below $450 a month." },
-    { key: "win-loss", level: 2, heading: "Win and loss", body: `From ${window.from} to ${window.to}: 4 won, 3 lost (2 on price), 1 no decision.` },
-    { key: "usage-by-plan", level: 2, heading: "Usage by plan", body: "No usage figures in Oracle." },
-    { key: "alternatives-pricing", level: 2, heading: "Alternatives' pricing", body: "No watched pricing pages in Oracle." },
-    { key: "research-plan", level: 2, heading: "Research plan", body: "- Five pricing interviews with teams of 10 or more.\n- Ask lost accounts what price they compared against." },
-    { key: "risks", level: 2, heading: "Risks", body: "- Teams under 20 seats pay more with a flat price; some may leave." },
-    { key: "sources", level: 2, heading: "Sources and data points", body: "Every number above, with its value, as-of date and source." },
-    { key: "sources-list", level: 3, heading: "Sources", body: "- d1: oracle, Win and loss records, retrieved 2026-10-20\n- i1: oracle, Pricing interviews, retrieved 2026-10-20" },
-    { key: "sources-data", level: 3, heading: "Data points", body: "- $20 per seat a month: the Team plan's price, from d1\n- $400 a month: the flat price asked for, from i1\n- 2 of 3 losses on price, from d1" },
-    { key: "sources-evidence", level: 3, heading: "Evidence by section", body: "- options: d1, i1\n- win-loss: d1\n- willingness-to-pay: i1" },
+    { key: 'full', level: 1, heading: 'Full version', body: 'The detail behind the brief.' },
+    {
+      key: 'willingness-to-pay',
+      level: 2,
+      heading: 'Willingness to pay',
+      body: 'Two pricing interviews: a flat team price felt like a bargain below $450 a month.',
+    },
+    {
+      key: 'win-loss',
+      level: 2,
+      heading: 'Win and loss',
+      body: `From ${window.from} to ${window.to}: 4 won, 3 lost (2 on price), 1 no decision.`,
+    },
+    {
+      key: 'usage-by-plan',
+      level: 2,
+      heading: 'Usage by plan',
+      body: 'No usage figures in Oracle.',
+    },
+    {
+      key: 'alternatives-pricing',
+      level: 2,
+      heading: "Alternatives' pricing",
+      body: 'No watched pricing pages in Oracle.',
+    },
+    {
+      key: 'research-plan',
+      level: 2,
+      heading: 'Research plan',
+      body: '- Five pricing interviews with teams of 10 or more.\n- Ask lost accounts what price they compared against.',
+    },
+    {
+      key: 'risks',
+      level: 2,
+      heading: 'Risks',
+      body: '- Teams under 20 seats pay more with a flat price; some may leave.',
+    },
+    {
+      key: 'sources',
+      level: 2,
+      heading: 'Sources and data points',
+      body: 'Every number above, with its value, as-of date and source.',
+    },
+    {
+      key: 'sources-list',
+      level: 3,
+      heading: 'Sources',
+      body: '- d1: oracle, Win and loss records, retrieved 2026-10-20\n- i1: oracle, Pricing interviews, retrieved 2026-10-20',
+    },
+    {
+      key: 'sources-data',
+      level: 3,
+      heading: 'Data points',
+      body: "- $20 per seat a month: the Team plan's price, from d1\n- $400 a month: the flat price asked for, from i1\n- 2 of 3 losses on price, from d1",
+    },
+    {
+      key: 'sources-evidence',
+      level: 3,
+      heading: 'Evidence by section',
+      body: '- options: d1, i1\n- win-loss: d1\n- willingness-to-pay: i1',
+    },
   ];
 }
 
 /** The front matter's options with each option section's first paragraph, as Decide reads them. */
-export function memoOptions(frontMatter: Record<string, unknown>, sections: { section_key: string; body_md: string }[]): PricingOption[] {
-  const listed = (frontMatter.options as Omit<PricingOption, "summary">[] | undefined) ?? [];
+export function memoOptions(
+  frontMatter: Record<string, unknown>,
+  sections: { section_key: string; body_md: string }[],
+): PricingOption[] {
+  const listed = (frontMatter.options as Omit<PricingOption, 'summary'>[] | undefined) ?? [];
   return listed.map((o) => ({
     ...o,
-    summary: (sections.find((s) => s.section_key === `option-${o.id}`)?.body_md.split(/\n\s*\n/)[0] ?? "").slice(0, 500),
+    summary: (
+      sections.find((s) => s.section_key === `option-${o.id}`)?.body_md.split(/\n\s*\n/)[0] ?? ''
+    ).slice(0, 500),
   }));
 }
 
@@ -174,13 +314,63 @@ export function memoOptions(frontMatter: Record<string, unknown>, sections: { se
 
 /** The pricing scenario's made-up deals: 8 records over the last months. */
 export function seedDeals(ctx: PricingContext, recorder: string): DealOut[] {
-  const rows: [Result, string, string, string, number | null, string, Reason, string | null, string | null][] = [
-    ["won", "Account 3", "Teams 10-50", "Team", 4800, "2026-09-12", "value", null, "$20 per seat a month"],
-    ["lost", "Account 7", "Teams 10-50", "Team", 6000, "2026-09-20", "price", "Asked for a flat team price", "$20 per seat a month"],
-    ["lost", "Account 9", "Teams 50+", "Business", null, "2026-09-28", "alternative", null, null],
-    ["won", "Account 11", "Teams under 10", "Starter", 960, "2026-10-02", "timing", null, null],
-    ["no_decision", "Account 12", "Teams 10-50", "Team", null, "2026-10-06", "no_budget", null, null],
-    ["churned", "Account 14", "Teams 10-50", "Team", 3600, "2026-10-09", "price", "Seat count grew faster than budget", "$20 per seat a month"],
+  const rows: [
+    Result,
+    string,
+    string,
+    string,
+    number | null,
+    string,
+    Reason,
+    string | null,
+    string | null,
+  ][] = [
+    [
+      'won',
+      'Account 3',
+      'Teams 10-50',
+      'Team',
+      4800,
+      '2026-09-12',
+      'value',
+      null,
+      '$20 per seat a month',
+    ],
+    [
+      'lost',
+      'Account 7',
+      'Teams 10-50',
+      'Team',
+      6000,
+      '2026-09-20',
+      'price',
+      'Asked for a flat team price',
+      '$20 per seat a month',
+    ],
+    ['lost', 'Account 9', 'Teams 50+', 'Business', null, '2026-09-28', 'alternative', null, null],
+    ['won', 'Account 11', 'Teams under 10', 'Starter', 960, '2026-10-02', 'timing', null, null],
+    [
+      'no_decision',
+      'Account 12',
+      'Teams 10-50',
+      'Team',
+      null,
+      '2026-10-06',
+      'no_budget',
+      null,
+      null,
+    ],
+    [
+      'churned',
+      'Account 14',
+      'Teams 10-50',
+      'Team',
+      3600,
+      '2026-10-09',
+      'price',
+      'Seat count grew faster than budget',
+      '$20 per seat a month',
+    ],
   ];
   return rows.map(([result, account, segment, plan, value, decided_on, reason, note, price]) => ({
     id: ctx.uuid(),
@@ -189,7 +379,7 @@ export function seedDeals(ctx: PricingContext, recorder: string): DealOut[] {
     segment,
     plan,
     annual_value: value,
-    currency: value == null ? null : "USD",
+    currency: value == null ? null : 'USD',
     decided_on,
     reason,
     reason_note: note,
@@ -206,29 +396,46 @@ export function seedDeals(ctx: PricingContext, recorder: string): DealOut[] {
 }
 
 /** As oracle.pricing.outcomes.rule_problem: the rules across fields; null when they hold. */
-function ruleProblem(r: { reason: Reason; reason_note: string | null; annual_value: number | null; currency: string | null; decided_on: string }, today: string): string | null {
-  if (r.reason === "other" && !r.reason_note) return "reason other needs a reason_note";
-  if (r.annual_value != null && r.currency == null) return "annual_value needs a currency";
-  if (r.currency != null && r.annual_value == null) return "currency needs an annual_value";
-  if (r.decided_on > today) return "decided_on is in the future";
+function ruleProblem(
+  r: {
+    reason: Reason;
+    reason_note: string | null;
+    annual_value: number | null;
+    currency: string | null;
+    decided_on: string;
+  },
+  today: string,
+): string | null {
+  if (r.reason === 'other' && !r.reason_note) return 'reason other needs a reason_note';
+  if (r.annual_value != null && r.currency == null) return 'annual_value needs a currency';
+  if (r.currency != null && r.annual_value == null) return 'currency needs an annual_value';
+  if (r.decided_on > today) return 'decided_on is in the future';
   return null;
 }
 
-const key = (text: string) => text.replace(/[_-]/g, " ").toLowerCase().split(/\s+/).filter(Boolean).join(" ");
+const key = (text: string) =>
+  text.replace(/[_-]/g, ' ').toLowerCase().split(/\s+/).filter(Boolean).join(' ');
 const lookup = <K extends string>(labels: Record<K, string>) =>
-  Object.fromEntries((Object.entries(labels) as [K, string][]).flatMap(([k, v]) => [[key(k), k], [key(v), k]])) as Record<string, K>;
+  Object.fromEntries(
+    (Object.entries(labels) as [K, string][]).flatMap(([k, v]) => [
+      [key(k), k],
+      [key(v), k],
+    ]),
+  ) as Record<string, K>;
 const RESULTS = lookup(RESULT_LABELS);
 const REASONS = lookup(REASON_LABELS);
 
 /** An alternative's name or alias as the import compares them (as _name): any case and spacing. */
-const altKey = (text: string) => text.toLowerCase().split(/\s+/).filter(Boolean).join(" ");
+const altKey = (text: string) => text.toLowerCase().split(/\s+/).filter(Boolean).join(' ');
 
 /** The active alternatives by name and alias (as _alternatives): a name wins over another's alias; an alias two share matches neither. */
 function alternativeKeys(all: DealAlternative[]): Map<string, string> {
-  const active = all.filter((a) => a.status === "active");
+  const active = all.filter((a) => a.status === 'active');
   const names = new Map(active.map((a) => [altKey(a.name), a.id]));
   const aliases = new Map<string, string | null>();
-  for (const a of active) for (const alias of a.aliases) aliases.set(altKey(alias), (aliases.get(altKey(alias)) ?? a.id) === a.id ? a.id : null);
+  for (const a of active)
+    for (const alias of a.aliases)
+      aliases.set(altKey(alias), (aliases.get(altKey(alias)) ?? a.id) === a.id ? a.id : null);
   const out = new Map<string, string>();
   for (const [k, v] of aliases) if (v && !names.has(k)) out.set(k, v);
   for (const [k, v] of names) out.set(k, v);
@@ -236,43 +443,60 @@ function alternativeKeys(all: DealAlternative[]): Map<string, string> {
 }
 
 /** One CSV row as a record's fields, or the first problem in plain words (as _row). */
-function rowOf(values: Record<string, string>, today: string, alternatives: Map<string, string>): [Omit<DealIn, "source_item_id"> | null, string | null] {
-  const result = RESULTS[key(values.result ?? "")];
-  if (!result) return [null, `result must be one of: ${Object.values(RESULT_LABELS).join(", ")}`];
-  const account = (values.account ?? "").trim();
-  if (!account) return [null, "account is required"];
-  if (account.length > ACCOUNT_MAX) return [null, `account is longer than ${ACCOUNT_MAX} characters`];
+function rowOf(
+  values: Record<string, string>,
+  today: string,
+  alternatives: Map<string, string>,
+): [Omit<DealIn, 'source_item_id'> | null, string | null] {
+  const result = RESULTS[key(values.result ?? '')];
+  if (!result) return [null, `result must be one of: ${Object.values(RESULT_LABELS).join(', ')}`];
+  const account = (values.account ?? '').trim();
+  if (!account) return [null, 'account is required'];
+  if (account.length > ACCOUNT_MAX)
+    return [null, `account is longer than ${ACCOUNT_MAX} characters`];
   const text = (name: string, cap: number): string | null | Error => {
-    const v = (values[name] ?? "").trim() || null;
+    const v = (values[name] ?? '').trim() || null;
     return v && v.length > cap ? new Error(`${name} is longer than ${cap} characters`) : v;
   };
   const texts: Record<string, string | null> = {};
-  for (const [name, cap] of [["segment", LABEL_MAX], ["plan", LABEL_MAX], ["price_quoted", LABEL_MAX], ["reason_note", NOTE_MAX]] as const) {
+  for (const [name, cap] of [
+    ['segment', LABEL_MAX],
+    ['plan', LABEL_MAX],
+    ['price_quoted', LABEL_MAX],
+    ['reason_note', NOTE_MAX],
+  ] as const) {
     const v = text(name, cap);
     if (v instanceof Error) return [null, v.message];
     texts[name] = v;
   }
-  const raw = (values.annual_value ?? "").trim().replace(/,/g, "");
+  const raw = (values.annual_value ?? '').trim().replace(/,/g, '');
   let annual_value: number | null = null;
   if (raw) {
     annual_value = /^\d+(\.\d+)?$/.test(raw) ? Number(raw) : NaN;
-    if (!Number.isFinite(annual_value) || annual_value < 0 || annual_value >= 1e12) return [null, "annual_value must be a number of 0 or more"];
+    if (!Number.isFinite(annual_value) || annual_value < 0 || annual_value >= 1e12)
+      return [null, 'annual_value must be a number of 0 or more'];
   }
-  const currency = (values.currency ?? "").trim().toUpperCase() || null;
-  if (currency && !(CURRENCIES as readonly string[]).includes(currency)) return [null, "currency must be USD, EUR or GBP"];
-  const decided_on = (values.decided_on ?? "").trim();
-  if (!DAY.test(decided_on) || Number.isNaN(Date.parse(`${decided_on}T00:00:00Z`)) || new Date(`${decided_on}T00:00:00Z`).toISOString().slice(0, 10) !== decided_on) {
-    return [null, "decided_on must be YYYY-MM-DD"];
+  const currency = (values.currency ?? '').trim().toUpperCase() || null;
+  if (currency && !(CURRENCIES as readonly string[]).includes(currency))
+    return [null, 'currency must be USD, EUR or GBP'];
+  const decided_on = (values.decided_on ?? '').trim();
+  if (
+    !DAY.test(decided_on) ||
+    Number.isNaN(Date.parse(`${decided_on}T00:00:00Z`)) ||
+    new Date(`${decided_on}T00:00:00Z`).toISOString().slice(0, 10) !== decided_on
+  ) {
+    return [null, 'decided_on must be YYYY-MM-DD'];
   }
-  const reason = REASONS[key(values.reason ?? "")];
-  if (!reason) return [null, `reason must be one of: ${Object.values(REASON_LABELS).join(", ")}`];
-  const alternative = (values.alternative ?? "").trim();
+  const reason = REASONS[key(values.reason ?? '')];
+  if (!reason) return [null, `reason must be one of: ${Object.values(REASON_LABELS).join(', ')}`];
+  const alternative = (values.alternative ?? '').trim();
   let note = texts.reason_note;
   const competitor_id = alternative ? (alternatives.get(altKey(alternative)) ?? null) : null;
   if (alternative && !competitor_id) {
     // Not one of the company's alternatives: kept as text.
     note = note ? `${note}\nAlternative: ${alternative}` : `Alternative: ${alternative}`;
-    if (note.length > NOTE_MAX) return [null, `reason_note and alternative are longer than ${NOTE_MAX} characters`];
+    if (note.length > NOTE_MAX)
+      return [null, `reason_note and alternative are longer than ${NOTE_MAX} characters`];
   }
   const fields = {
     result,
@@ -280,7 +504,7 @@ function rowOf(values: Record<string, string>, today: string, alternatives: Map<
     segment: texts.segment,
     plan: texts.plan,
     annual_value,
-    currency: currency as DealIn["currency"],
+    currency: currency as DealIn['currency'],
     decided_on,
     reason,
     reason_note: note,
@@ -296,20 +520,20 @@ function parseCsv(text: string): { header: string[]; rows: [number, string[]][] 
   const rows: [number, string[]][] = [];
   let header: string[] | null = null;
   let cells: string[] = [];
-  let cell = "";
+  let cell = '';
   let quoted = false;
   let line = 1;
   let start = 1;
   const endRow = () => {
     cells.push(cell);
-    cell = "";
+    cell = '';
     if (cells.some((c) => c.trim())) {
-      if (!header) header = cells.map((c) => key(c).replace(/ /g, "_"));
+      if (!header) header = cells.map((c) => key(c).replace(/ /g, '_'));
       else rows.push([start, cells]);
     }
     cells = [];
   };
-  const body = text.replace(/^﻿/, "");
+  const body = text.replace(/^﻿/, '');
   for (let i = 0; i < body.length; i++) {
     const ch = body[i];
     if (quoted) {
@@ -318,74 +542,106 @@ function parseCsv(text: string): { header: string[]; rows: [number, string[]][] 
         i++;
       } else if (ch === '"') quoted = false;
       else {
-        if (ch === "\n") line++;
+        if (ch === '\n') line++;
         cell += ch;
       }
     } else if (ch === '"') quoted = true;
-    else if (ch === ",") {
+    else if (ch === ',') {
       cells.push(cell);
-      cell = "";
-    } else if (ch === "\n" || ch === "\r") {
-      if (ch === "\r" && body[i + 1] === "\n") i++;
+      cell = '';
+    } else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && body[i + 1] === '\n') i++;
       endRow();
       line++;
       start = line;
-      if (rows.length > MAX_ROWS) return `The file has more than ${MAX_ROWS.toLocaleString("en-US")} rows`;
+      if (rows.length > MAX_ROWS)
+        return `The file has more than ${MAX_ROWS.toLocaleString('en-US')} rows`;
     } else cell += ch;
   }
   if (cell || cells.length) endRow();
-  if (rows.length > MAX_ROWS) return `The file has more than ${MAX_ROWS.toLocaleString("en-US")} rows`;
+  if (rows.length > MAX_ROWS)
+    return `The file has more than ${MAX_ROWS.toLocaleString('en-US')} rows`;
   const missing = REQUIRED.filter((c) => !(header ?? []).includes(c));
-  if (missing.length) return `The header row must name the columns ${COLUMNS.join(", ")}; missing: ${missing.join(", ")}`;
+  if (missing.length)
+    return `The header row must name the columns ${COLUMNS.join(', ')}; missing: ${missing.join(', ')}`;
   return { header: header ?? [], rows };
 }
 
 /** A form's record: its fields checked as the API's DealOutcomeIn and rules. */
 function checked(b: Partial<DealIn>, today: string): string | null {
-  if (!b.result || !(b.result in RESULT_LABELS)) return "result: Input should be 'won', 'lost', 'no_decision' or 'churned'";
-  if (!b.reason || !(b.reason in REASON_LABELS)) return "reason: Input should be one of the reasons";
-  const account = (b.account ?? "").trim();
+  if (!b.result || !(b.result in RESULT_LABELS))
+    return "result: Input should be 'won', 'lost', 'no_decision' or 'churned'";
+  if (!b.reason || !(b.reason in REASON_LABELS))
+    return 'reason: Input should be one of the reasons';
+  const account = (b.account ?? '').trim();
   if (!account || account.length > ACCOUNT_MAX) return `account: 1 to ${ACCOUNT_MAX} characters`;
-  if (!b.decided_on || !DAY.test(b.decided_on)) return "decided_on must be YYYY-MM-DD";
-  if (b.currency && !(CURRENCIES as readonly string[]).includes(b.currency)) return "currency must be USD, EUR or GBP";
-  const value = b.annual_value == null || b.annual_value === "" ? null : Number(b.annual_value);
-  if (value != null && (!Number.isFinite(value) || value < 0)) return "annual_value must be a number of 0 or more";
-  return ruleProblem({ reason: b.reason, reason_note: b.reason_note?.trim() || null, annual_value: value, currency: b.currency ?? null, decided_on: b.decided_on }, today);
+  if (!b.decided_on || !DAY.test(b.decided_on)) return 'decided_on must be YYYY-MM-DD';
+  if (b.currency && !(CURRENCIES as readonly string[]).includes(b.currency))
+    return 'currency must be USD, EUR or GBP';
+  const value = b.annual_value == null || b.annual_value === '' ? null : Number(b.annual_value);
+  if (value != null && (!Number.isFinite(value) || value < 0))
+    return 'annual_value must be a number of 0 or more';
+  return ruleProblem(
+    {
+      reason: b.reason,
+      reason_note: b.reason_note?.trim() || null,
+      annual_value: value,
+      currency: b.currency ?? null,
+      decided_on: b.decided_on,
+    },
+    today,
+  );
 }
 
 /** A link to an alternative as the API checks it (as _active_competitor); null when it holds. */
-function linkProblem(id: string | null | undefined, alternatives: DealAlternative[]): string | null {
+function linkProblem(
+  id: string | null | undefined,
+  alternatives: DealAlternative[],
+): string | null {
   if (!id) return null;
   const a = alternatives.find((x) => x.id === id);
   if (!a) return "competitor_id is not one of the company's alternatives";
-  return a.status === "active" ? null : "competitor_id is an archived alternative";
+  return a.status === 'active' ? null : 'competitor_id is an archived alternative';
 }
 
 /** /v1/deal-outcomes…; null for other routes. Owners and approvers only (403 for a write, an empty read is never shown below). */
-export async function routeDeals(ctx: PricingContext, db: PricingDb, req: Request, p: string[], q: URLSearchParams, alternatives: DealAlternative[]): Promise<Response | null> {
-  if (p[1] !== "deal-outcomes") return null;
+export async function routeDeals(
+  ctx: PricingContext,
+  db: PricingDb,
+  req: Request,
+  p: string[],
+  q: URLSearchParams,
+  alternatives: DealAlternative[],
+): Promise<Response | null> {
+  if (p[1] !== 'deal-outcomes') return null;
   const m = req.method;
-  if (!atLeast(ctx.me.role, "approver")) return fail(403, "Requires the approver role");
+  if (!atLeast(ctx.me.role, 'approver')) return fail(403, 'Requires the approver role');
   const today = ctx.today();
   // The linked alternative's name, archived or not, as read now (as out).
-  const named = (d: DealOut): DealOut => ({ ...d, competitor_name: alternatives.find((a) => a.id === d.competitor_id)?.name ?? null });
+  const named = (d: DealOut): DealOut => ({
+    ...d,
+    competitor_name: alternatives.find((a) => a.id === d.competitor_id)?.name ?? null,
+  });
 
-  if (p.length === 2 && m === "GET") {
+  if (p.length === 2 && m === 'GET') {
     const rows = db.deals
-      .filter((d) => !q.get("result") || d.result === q.get("result"))
-      .filter((d) => !q.get("reason") || d.reason === q.get("reason"))
-      .filter((d) => !q.get("from") || d.decided_on >= q.get("from")!)
-      .filter((d) => !q.get("to") || d.decided_on <= q.get("to")!)
-      .filter((d) => !q.get("competitor_id") || d.competitor_id === q.get("competitor_id"))
-      .sort((a, b) => b.decided_on.localeCompare(a.decided_on) || b.created_at.localeCompare(a.created_at));
-    return reply("/v1/deal-outcomes", "get", rows.map(named));
+      .filter((d) => !q.get('result') || d.result === q.get('result'))
+      .filter((d) => !q.get('reason') || d.reason === q.get('reason'))
+      .filter((d) => !q.get('from') || d.decided_on >= q.get('from')!)
+      .filter((d) => !q.get('to') || d.decided_on <= q.get('to')!)
+      .filter((d) => !q.get('competitor_id') || d.competitor_id === q.get('competitor_id'))
+      .sort(
+        (a, b) =>
+          b.decided_on.localeCompare(a.decided_on) || b.created_at.localeCompare(a.created_at),
+      );
+    return reply('/v1/deal-outcomes', 'get', rows.map(named));
   }
-  if (p.length === 2 && m === "POST") {
-    const b = JSON.parse((await req.text()) || "{}") as Partial<DealIn>;
+  if (p.length === 2 && m === 'POST') {
+    const b = JSON.parse((await req.text()) || '{}') as Partial<DealIn>;
     const problem = checked(b, today) ?? linkProblem(b.competitor_id, alternatives);
     if (problem) return fail(422, problem);
     const at = ctx.now();
-    const value = b.annual_value == null || b.annual_value === "" ? null : Number(b.annual_value);
+    const value = b.annual_value == null || b.annual_value === '' ? null : Number(b.annual_value);
     const row: DealOut = {
       id: ctx.uuid(),
       result: b.result!,
@@ -408,27 +664,29 @@ export async function routeDeals(ctx: PricingContext, db: PricingDb, req: Reques
       lock_version: 1,
     };
     db.deals.push(row);
-    return reply("/v1/deal-outcomes", "post", named(row), 201);
+    return reply('/v1/deal-outcomes', 'post', named(row), 201);
   }
-  if (p.length === 3 && p[2] === "import" && m === "POST") {
+  if (p.length === 3 && p[2] === 'import' && m === 'POST') {
     const text = await req.text();
-    if (new TextEncoder().encode(text).length > MAX_BYTES) return fail(422, "The file is larger than 1 MB");
+    if (new TextEncoder().encode(text).length > MAX_BYTES)
+      return fail(422, 'The file is larger than 1 MB');
     const parsed = parseCsv(text);
-    if (typeof parsed === "string") return fail(422, parsed);
-    const dry = q.get("dry_run") === "true";
-    const skipped: Schemas["ImportSkipped"][] = [];
+    if (typeof parsed === 'string') return fail(422, parsed);
+    const dry = q.get('dry_run') === 'true';
+    const skipped: Schemas['ImportSkipped'][] = [];
     const keys = alternativeKeys(alternatives);
     const unmatched = new Map<string, string>();
     let created = 0;
     for (const [line, cells] of parsed.rows) {
-      const values = Object.fromEntries(parsed.header.map((h, i) => [h, cells[i] ?? ""]));
+      const values = Object.fromEntries(parsed.header.map((h, i) => [h, cells[i] ?? '']));
       const [fields, problem] = rowOf(values, today, keys);
       if (problem || !fields) {
         skipped.push({ line, message: problem! });
         continue;
       }
-      const alternative = (values.alternative ?? "").trim();
-      if (alternative && !fields.competitor_id && !unmatched.has(altKey(alternative))) unmatched.set(altKey(alternative), alternative);
+      const alternative = (values.alternative ?? '').trim();
+      if (alternative && !fields.competitor_id && !unmatched.has(altKey(alternative)))
+        unmatched.set(altKey(alternative), alternative);
       created += 1;
       if (!dry) {
         const at = ctx.now();
@@ -452,25 +710,40 @@ export async function routeDeals(ctx: PricingContext, db: PricingDb, req: Reques
         });
       }
     }
-    const unmatched_alternatives = [...unmatched.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, name]) => name);
-    return reply("/v1/deal-outcomes/import", "post", { dry_run: dry, created, skipped, unmatched_alternatives } satisfies Schemas["ImportOut"]);
+    const unmatched_alternatives = [...unmatched.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, name]) => name);
+    return reply('/v1/deal-outcomes/import', 'post', {
+      dry_run: dry,
+      created,
+      skipped,
+      unmatched_alternatives,
+    } satisfies Schemas['ImportOut']);
   }
   const row = db.deals.find((d) => d.id === p[2]);
-  if (!row || p.length !== 3) return fail(404, "No such win or loss record");
-  if (m === "PATCH") {
-    const b = JSON.parse((await req.text()) || "{}") as Schemas["DealOutcomePatch"];
-    if (b.lock_version !== row.lock_version) return fail(409, "Someone else changed this since you loaded it; reload and try again");
-    const next = { ...row, ...Object.fromEntries(Object.entries(b).filter(([k, v]) => k !== "lock_version" && v !== undefined)) } as DealOut;
+  if (!row || p.length !== 3) return fail(404, 'No such win or loss record');
+  if (m === 'PATCH') {
+    const b = JSON.parse((await req.text()) || '{}') as Schemas['DealOutcomePatch'];
+    if (b.lock_version !== row.lock_version)
+      return fail(409, 'Someone else changed this since you loaded it; reload and try again');
+    const next = {
+      ...row,
+      ...Object.fromEntries(
+        Object.entries(b).filter(([k, v]) => k !== 'lock_version' && v !== undefined),
+      ),
+    } as DealOut;
     const relinked = b.competitor_id !== undefined && b.competitor_id !== row.competitor_id;
-    const problem = checked(next as unknown as DealIn, today) ?? (relinked ? linkProblem(b.competitor_id, alternatives) : null);
+    const problem =
+      checked(next as unknown as DealIn, today) ??
+      (relinked ? linkProblem(b.competitor_id, alternatives) : null);
     if (problem) return fail(422, problem);
     next.annual_value = next.annual_value == null ? null : Number(next.annual_value);
     Object.assign(row, next, { lock_version: row.lock_version + 1, updated_at: ctx.now() });
-    return reply("/v1/deal-outcomes/{outcome_id}", "patch", named(row));
+    return reply('/v1/deal-outcomes/{outcome_id}', 'patch', named(row));
   }
-  if (m === "DELETE") {
+  if (m === 'DELETE') {
     db.deals.splice(db.deals.indexOf(row), 1);
-    return reply("/v1/deal-outcomes/{outcome_id}", "delete", undefined, 204);
+    return reply('/v1/deal-outcomes/{outcome_id}', 'delete', undefined, 204);
   }
   return null;
 }

@@ -1,45 +1,55 @@
-"use client";
+'use client';
 
-import { Link, useSearchParams } from "@/lib/nav";
-import { useId, useState, type FormEvent } from "react";
+import { Link, useSearchParams } from '@/lib/nav';
+import { useId, useState, type FormEvent } from 'react';
 
-import { Button, Chip, InfoTip, Notice, PageHeader, Panel, type ChipKind } from "@/components/ds";
-import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
-import { useMe } from "@/lib/me";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import { Button, Chip, InfoTip, Notice, PageHeader, Panel, type ChipKind } from '@/components/ds';
+import { api, ApiError, unwrap, type Schemas } from '@/lib/api/client';
+import { useMe } from '@/lib/me';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-import { Field, INPUT } from "../_components/fields";
+import { Field, INPUT } from '../_components/fields';
 
-type Connection = Schemas["ConnectionOut"];
-type Provider = Schemas["ProviderOut"];
+type Connection = Schemas['ConnectionOut'];
+type Provider = Schemas['ProviderOut'];
 type Data = { providers: Provider[]; connections: Connection[] };
 
-const STATUS_KIND: Record<Connection["status"], ChipKind> = { active: "pass", expired: "warn", revoked: "na", error: "crit" };
-const STATUS_LABEL = { active: "Connected", expired: "Expired", revoked: "Revoked", error: "Error" } as const;
+const STATUS_KIND: Record<Connection['status'], ChipKind> = {
+  active: 'pass',
+  expired: 'warn',
+  revoked: 'na',
+  error: 'crit',
+};
+const STATUS_LABEL = {
+  active: 'Connected',
+  expired: 'Expired',
+  revoked: 'Revoked',
+  error: 'Error',
+} as const;
 /** An active row's chip says how it was connected, in words (qa-onboarding-22). */
-const connectedBy = (mode: Connection["auth_mode"]) =>
-  mode === "oauth" ? "Connected by signing in" : "Connected with a token";
+const connectedBy = (mode: Connection['auth_mode']) =>
+  mode === 'oauth' ? 'Connected by signing in' : 'Connected with a token';
 /** The chip on a card: what a provider pulls in, in a word or two. */
 const KIND_SHORT: Record<string, string> = {
-  github: "Repos",
-  slack: "Channels",
-  notion: "Pages",
-  fireflies: "Transcripts",
-  google_docs: "Docs",
+  github: 'Repos',
+  slack: 'Channels',
+  notion: 'Pages',
+  fireflies: 'Transcripts',
+  google_docs: 'Docs',
 };
 /** The (i) behind the chips: what exactly it pulls in. */
 const KIND_LABEL: Record<string, string> = {
-  github: "repos, issues, pull requests, releases",
-  slack: "channels you pick (never direct messages)",
-  notion: "pages you share",
-  fireflies: "meeting transcripts",
-  google_docs: "Google Docs",
+  github: 'repos, issues, pull requests, releases',
+  slack: 'channels you pick (never direct messages)',
+  notion: 'pages you share',
+  fireflies: 'meeting transcripts',
+  google_docs: 'Google Docs',
 };
 
 async function loadAll(): Promise<Data> {
   const [providers, connections] = await Promise.all([
-    unwrap(api.GET("/v1/connections/providers")),
-    unwrap(api.GET("/v1/connections")),
+    unwrap(api.GET('/v1/connections/providers')),
+    unwrap(api.GET('/v1/connections')),
   ]);
   return { providers, connections };
 }
@@ -47,14 +57,15 @@ async function loadAll(): Promise<Data> {
 /** Settings > Connections: the signed-in user's own accounts, one panel per provider. */
 export function ConnectionsSettings() {
   const params = useSearchParams();
-  const q = useQuery("connections", loadAll);
-  const connected = params.get("connected");
-  const callbackError = params.get("error");
+  const q = useQuery('connections', loadAll);
+  const connected = params.get('connected');
+  const callbackError = params.get('error');
 
   const providers = q.data?.providers ?? [];
   const nameOf = (key: string | null) => providers.find((p) => p.key === key)?.name ?? key;
-  const active = q.data?.connections.filter((c) => c.status === "active").length ?? 0;
-  const broken = q.data?.connections.filter((c) => c.status === "expired" || c.status === "error").length ?? 0;
+  const active = q.data?.connections.filter((c) => c.status === 'active').length ?? 0;
+  const broken =
+    q.data?.connections.filter((c) => c.status === 'expired' || c.status === 'error').length ?? 0;
 
   return (
     <>
@@ -62,8 +73,8 @@ export function ConnectionsSettings() {
         title="Connections"
         info={
           <InfoTip label="connections" align="start" side="bottom">
-            Your own accounts. Only you see these connections and what they pull in; nobody else in the company can
-            use them. Oracle&apos;s own Claude calls run on the company&apos;s{" "}
+            Your own accounts. Only you see these connections and what they pull in; nobody else in
+            the company can use them. Oracle&apos;s own Claude calls run on the company&apos;s{' '}
             <Link href="/settings/claude-accounts" className="underline">
               Claude accounts
             </Link>
@@ -74,7 +85,11 @@ export function ConnectionsSettings() {
           <>
             {/* The count leads to the cards it counts (detailed-b 11). */}
             {q.data && (
-              <a href="#connection-cards" className="rounded-full hover:underline" data-testid="connected-count">
+              <a
+                href="#connection-cards"
+                className="rounded-full hover:underline"
+                data-testid="connected-count"
+              >
                 <Chip kind="line">
                   <span className="tnum">{active}</span> connected
                 </Chip>
@@ -90,10 +105,12 @@ export function ConnectionsSettings() {
       />
 
       <div className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
-        {connected && !callbackError && <Notice tone="pass">{nameOf(connected)} is connected.</Notice>}
+        {connected && !callbackError && (
+          <Notice tone="pass">{nameOf(connected)} is connected.</Notice>
+        )}
         {callbackError && (
           <Notice tone="error">
-            {params.get("provider") ? `${nameOf(params.get("provider"))}: ` : ""}
+            {params.get('provider') ? `${nameOf(params.get('provider'))}: ` : ''}
             {callbackError}
           </Notice>
         )}
@@ -102,13 +119,19 @@ export function ConnectionsSettings() {
         {q.loading && !q.data && (
           <div aria-busy className="grid gap-4 md:grid-cols-2">
             {[0, 1].map((i) => (
-              <div key={i} className="h-40 animate-pulse rounded-panel border border-line bg-surface" />
+              <div
+                key={i}
+                className="h-40 animate-pulse rounded-panel border border-line bg-surface"
+              />
             ))}
           </div>
         )}
 
         {q.data && (
-          <div id="connection-cards" className="grid scroll-mt-20 items-start gap-4 md:grid-cols-2 max-[600px]:gap-3">
+          <div
+            id="connection-cards"
+            className="grid scroll-mt-20 items-start gap-4 md:grid-cols-2 max-[600px]:gap-3"
+          >
             {providers.map((p) => (
               <ProviderCard
                 key={p.key}
@@ -137,14 +160,16 @@ function ProviderCard({
   const [pending, setPending] = useState(false);
   // Adding an account: a provider with sign-in first offers the choice of signing in or a
   // token; a token-only provider opens the token form at once (detailed-b 9).
-  const [adding, setAdding] = useState<"choice" | "token" | null>(null);
+  const [adding, setAdding] = useState<'choice' | 'token' | null>(null);
 
   async function signIn() {
     setPending(true);
     setError(null);
     try {
       const { url } = await unwrap(
-        api.GET("/v1/connections/{provider}/authorize", { params: { path: { provider: provider.key } } }),
+        api.GET('/v1/connections/{provider}/authorize', {
+          params: { path: { provider: provider.key } },
+        }),
       );
       window.location.assign(url);
     } catch (e) {
@@ -166,12 +191,12 @@ function ProviderCard({
             </Chip>
           ))}
           <InfoTip label={`what ${provider.name} pulls in`}>
-            Pulls in {provider.source_kinds.map((k) => KIND_LABEL[k] ?? k).join(", ")}.
+            Pulls in {provider.source_kinds.map((k) => KIND_LABEL[k] ?? k).join(', ')}.
           </InfoTip>
         </>
       }
     >
-      {provider.key === "slack" && <CompanySlack />}
+      {provider.key === 'slack' && <CompanySlack />}
       {connections.length === 0 ? (
         <p className="px-4 py-3 text-[15px] text-text2">Not connected</p>
       ) : (
@@ -181,8 +206,10 @@ function ProviderCard({
           ))}
         </ul>
       )}
-      {adding === "token" && <TokenForm provider={provider} reload={reload} close={() => setAdding(null)} />}
-      {adding === "choice" && (
+      {adding === 'token' && (
+        <TokenForm provider={provider} reload={reload} close={() => setAdding(null)} />
+      )}
+      {adding === 'choice' && (
         <div
           role="group"
           aria-label={`Add a ${provider.name} account`}
@@ -191,7 +218,7 @@ function ProviderCard({
           <Button variant="solid" icon="link" onClick={signIn} disabled={pending}>
             Sign in with {provider.name}
           </Button>
-          <Button onClick={() => setAdding("token")}>Paste a token</Button>
+          <Button onClick={() => setAdding('token')}>Paste a token</Button>
           <Button variant="ghost" onClick={() => setAdding(null)}>
             Cancel
           </Button>
@@ -201,8 +228,12 @@ function ProviderCard({
         // One entry per provider: with an account already here, its row's Reconnect is the one
         // way to renew it; this adds another account (qa-onboarding-22).
         <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-2.5">
-          <Button onClick={() => setAdding(provider.oauth_configured ? "choice" : "token")}>
-            {connections.length ? "Add another account" : provider.oauth_configured ? "Connect" : "Paste a token"}
+          <Button onClick={() => setAdding(provider.oauth_configured ? 'choice' : 'token')}>
+            {connections.length
+              ? 'Add another account'
+              : provider.oauth_configured
+                ? 'Connect'
+                : 'Paste a token'}
           </Button>
         </div>
       )}
@@ -222,44 +253,67 @@ function ProviderCard({
  * Slack, which pulls channels they pick into Oracle.
  */
 function CompanySlack() {
-  const status = useQuery("slack-status", () => unwrap(api.GET("/v1/company-integrations/slack/status")));
-  const owner = useMe().can("list_company_integrations");
+  const status = useQuery('slack-status', () =>
+    unwrap(api.GET('/v1/company-integrations/slack/status')),
+  );
+  const owner = useMe().can('list_company_integrations');
   if (!status.data) return null;
   const s = status.data;
   return (
-    <div data-testid="company-slack" className="flex flex-col gap-1 border-b border-line px-4 py-3 text-sm max-[600px]:px-3">
+    <div
+      data-testid="company-slack"
+      className="flex flex-col gap-1 border-b border-line px-4 py-3 text-sm max-[600px]:px-3"
+    >
       <p className="flex flex-wrap items-center gap-2">
         <span className="font-semibold">Oracle&apos;s Slack app</span>
-        <Chip kind={s.connected ? (s.needs_reconnect ? "warn" : "pass") : "na"} dot>
-          {s.connected ? (s.needs_reconnect ? "Installed, needs a reconnect" : "Installed for notifications") : "Not installed"}
+        <Chip kind={s.connected ? (s.needs_reconnect ? 'warn' : 'pass') : 'na'} dot>
+          {s.connected
+            ? s.needs_reconnect
+              ? 'Installed, needs a reconnect'
+              : 'Installed for notifications'
+            : 'Not installed'}
         </Chip>
       </p>
       {/* Pass F F-56: what the app does behind the (i); only the way to set it up shows. */}
       <p className="flex flex-wrap items-center gap-1 text-text2">
         <InfoTip label="Oracle's Slack app" align="start">
-          {s.connected ? (s.label ? `Installed for the company in ${s.label}: it ` : "Installed for the company, it ") : "Once installed for the company, it "}
-          posts the weekly report and mirrors discussions. Your own Slack account, below, pulls channels you pick into Oracle.
+          {s.connected
+            ? s.label
+              ? `Installed for the company in ${s.label}: it `
+              : 'Installed for the company, it '
+            : 'Once installed for the company, it '}
+          posts the weekly report and mirrors discussions. Your own Slack account, below, pulls
+          channels you pick into Oracle.
         </InfoTip>
         {owner ? (
-          <Link href="/settings/notifications" className="font-medium text-accent underline underline-offset-2">
+          <Link
+            href="/settings/notifications"
+            className="font-medium text-accent underline underline-offset-2"
+          >
             Set up on Notifications
           </Link>
         ) : (
-          "An owner sets it up on Notifications"
+          'An owner sets it up on Notifications'
         )}
       </p>
     </div>
   );
 }
 
-function ConnectionRow({ connection: c, reload }: { connection: Connection; reload: () => Promise<void> }) {
+function ConnectionRow({
+  connection: c,
+  reload,
+}: {
+  connection: Connection;
+  reload: () => Promise<void>;
+}) {
   const { can } = useMe();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [changing, setChanging] = useState(false);
   // Pass F F-61: the confirm row names the sources that stop syncing.
-  const sources = useQuery("sources", () => unwrap(api.GET("/v1/sources")));
+  const sources = useQuery('sources', () => unwrap(api.GET('/v1/sources')));
   const using = (sources.data ?? []).filter((s) => s.connection_id === c.id).map((s) => s.name);
 
   async function reconnect() {
@@ -267,7 +321,9 @@ function ConnectionRow({ connection: c, reload }: { connection: Connection; relo
     setError(null);
     try {
       const res = await unwrap(
-        api.POST("/v1/connections/{connection_id}/reconnect", { params: { path: { connection_id: c.id } } }),
+        api.POST('/v1/connections/{connection_id}/reconnect', {
+          params: { path: { connection_id: c.id } },
+        }),
       );
       if (res.authorize_url) {
         window.location.assign(res.authorize_url);
@@ -285,7 +341,11 @@ function ConnectionRow({ connection: c, reload }: { connection: Connection; relo
     setPending(true);
     setError(null);
     try {
-      await unwrap(api.DELETE("/v1/connections/{connection_id}", { params: { path: { connection_id: c.id } } }));
+      await unwrap(
+        api.DELETE('/v1/connections/{connection_id}', {
+          params: { path: { connection_id: c.id } },
+        }),
+      );
       await reload();
     } catch (e) {
       setError(errorMessage(e));
@@ -295,32 +355,47 @@ function ConnectionRow({ connection: c, reload }: { connection: Connection; relo
 
   const name = c.account_label ?? c.account_id;
   return (
-    <li data-testid={`connection-${c.id}`} className="border-t border-line px-4 py-2 first:border-t-0 max-[600px]:px-3">
+    <li
+      data-testid={`connection-${c.id}`}
+      className="border-t border-line px-4 py-2 first:border-t-0 max-[600px]:px-3"
+    >
       <div className="flex min-h-9 flex-wrap items-center gap-x-2 gap-y-1.5">
-        <span className="min-w-0 flex-1 basis-32 truncate font-medium max-[600px]:break-all max-[600px]:whitespace-normal" title={name}>
+        <span
+          className="min-w-0 flex-1 basis-32 truncate font-medium max-[600px]:break-all max-[600px]:whitespace-normal"
+          title={name}
+        >
           {name}
         </span>
         <Chip kind={STATUS_KIND[c.status]} dot>
-          {c.status === "active" ? connectedBy(c.auth_mode) : STATUS_LABEL[c.status]}
+          {c.status === 'active' ? connectedBy(c.auth_mode) : STATUS_LABEL[c.status]}
         </Chip>
         {/* One (i) per row (detailed-b 10): why to reconnect, then the scopes. */}
         {c.reconnect_reason ? (
           <InfoTip label={`why reconnect ${name}`}>
-            This Google sign-in cannot read folders. Reconnect once, then choose files and folders on Sources.
-            Oracle can read your Drive; it pulls in only the files and folders you choose there.
-            {c.scopes.length > 0 && <span className="mt-1 block">Scopes: {c.scopes.join(", ")}</span>}
+            This Google sign-in cannot read folders. Reconnect once, then choose files and folders
+            on Sources. Oracle can read your Drive; it pulls in only the files and folders you
+            choose there.
+            {c.scopes.length > 0 && (
+              <span className="mt-1 block">Scopes: {c.scopes.join(', ')}</span>
+            )}
           </InfoTip>
         ) : (
-          c.scopes.length > 0 && <InfoTip label={`${name} scopes`}>Scopes: {c.scopes.join(", ")}</InfoTip>
+          c.scopes.length > 0 && (
+            <InfoTip label={`${name} scopes`}>Scopes: {c.scopes.join(', ')}</InfoTip>
+          )
         )}
         <span className="flex flex-none items-center gap-1">
-          {c.endpoint_url && can("set_connection_endpoint") && !changing && (
+          {c.endpoint_url && can('set_connection_endpoint') && !changing && (
             <Button variant="ghost" onClick={() => setChanging(true)}>
               Change endpoint
             </Button>
           )}
-          <Button onClick={reconnect} disabled={pending} variant={c.reconnect_reason ? "solid" : undefined}>
-            {c.reconnect_reason ?? "Reconnect"}
+          <Button
+            onClick={reconnect}
+            disabled={pending}
+            variant={c.reconnect_reason ? 'solid' : undefined}
+          >
+            {c.reconnect_reason ?? 'Reconnect'}
           </Button>
           {confirming ? (
             <>
@@ -341,12 +416,12 @@ function ConnectionRow({ connection: c, reload }: { connection: Connection; relo
       {confirming && (
         <p className="mt-1 break-words text-sm text-warn" data-testid="disconnect-stops">
           {sources.error
-            ? "Could not check which sources use it."
+            ? 'Could not check which sources use it.'
             : !sources.data
-              ? "Checking which sources use it…"
+              ? 'Checking which sources use it…'
               : using.length === 0
-                ? "No source uses it."
-                : `Stops syncing: ${using.join(", ")}`}
+                ? 'No source uses it.'
+                : `Stops syncing: ${using.join(', ')}`}
         </p>
       )}
       {c.endpoint_url && (
@@ -381,10 +456,10 @@ function TokenForm({
   const id = useId();
   const { can } = useMe();
   // Only an Oracle owner sets another GraphQL endpoint (Fireflies only).
-  const takesEndpoint = provider.key === "fireflies" && can("set_connection_endpoint");
-  const [token, setToken] = useState("");
-  const [label, setLabel] = useState("");
-  const [endpoint, setEndpoint] = useState("");
+  const takesEndpoint = provider.key === 'fireflies' && can('set_connection_endpoint');
+  const [token, setToken] = useState('');
+  const [label, setLabel] = useState('');
+  const [endpoint, setEndpoint] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [tokenError, setTokenError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -396,19 +471,27 @@ function TokenForm({
     setTokenError(null);
     try {
       await unwrap(
-        api.POST("/v1/connections/{provider}/token", {
+        api.POST('/v1/connections/{provider}/token', {
           params: { path: { provider: provider.key } },
-          body: { token, label: label.trim() || null, ...(takesEndpoint && endpoint.trim() ? { endpoint_url: endpoint.trim() } : {}) },
+          body: {
+            token,
+            label: label.trim() || null,
+            ...(takesEndpoint && endpoint.trim() ? { endpoint_url: endpoint.trim() } : {}),
+          },
         }),
       );
-      setToken("");
-      setLabel("");
+      setToken('');
+      setLabel('');
       close();
       await reload();
     } catch (e) {
       // The provider turned the token down (400): say so in words under the field (qa-settings-9).
       const rejected = e instanceof ApiError && e.status === 400;
-      setTokenError(rejected ? `${provider.name} did not accept this token. Check that you copied all of it, then paste it again.` : null);
+      setTokenError(
+        rejected
+          ? `${provider.name} did not accept this token. Check that you copied all of it, then paste it again.`
+          : null,
+      );
       setError(rejected ? null : errorMessage(e));
     } finally {
       setPending(false);
@@ -425,7 +508,10 @@ function TokenForm({
         {/* The token's help sits under the field, not in an (i) tip: the tip, opened under the
             pointer or the first Tab, covered the card (qa-onboarding-23). Its error sits here too. */}
         <div className="flex min-w-0 flex-col gap-1.5">
-          <label htmlFor={`${id}-token`} className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
+          <label
+            htmlFor={`${id}-token`}
+            className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2"
+          >
             Token
           </label>
           <input
@@ -437,7 +523,11 @@ function TokenForm({
             // Opening the form puts the cursor in the token field.
             autoFocus
             aria-invalid={tokenError ? true : undefined}
-            aria-describedby={[provider.token_help ? `${id}-help` : "", tokenError ? `${id}-error` : ""].filter(Boolean).join(" ") || undefined}
+            aria-describedby={
+              [provider.token_help ? `${id}-help` : '', tokenError ? `${id}-error` : '']
+                .filter(Boolean)
+                .join(' ') || undefined
+            }
             value={token}
             onChange={(e) => {
               setToken(e.target.value);
@@ -451,13 +541,23 @@ function TokenForm({
             </p>
           )}
           {tokenError && (
-            <p id={`${id}-error`} role="alert" className="text-sm font-medium text-crit" data-testid="token-error">
+            <p
+              id={`${id}-error`}
+              role="alert"
+              className="text-sm font-medium text-crit"
+              data-testid="token-error"
+            >
               {tokenError}
             </p>
           )}
         </div>
         <Field label="Label (optional)">
-          <input value={label} onChange={(e) => setLabel(e.target.value)} className={INPUT} maxLength={200} />
+          <input
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            className={INPUT}
+            maxLength={200}
+          />
         </Field>
         {takesEndpoint && (
           <Field label="GraphQL endpoint (optional)" htmlFor={`${id}-endpoint`}>
@@ -477,7 +577,7 @@ function TokenForm({
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Button type="submit" variant="solid" disabled={pending || !token.trim()}>
-          {pending ? "Checking…" : "Connect"}
+          {pending ? 'Checking…' : 'Connect'}
         </Button>
         <Button variant="ghost" onClick={close}>
           Cancel
@@ -489,13 +589,23 @@ function TokenForm({
   );
 }
 
-const FIREFLIES_DEFAULT_ENDPOINT = "https://api.fireflies.ai/graphql";
+const FIREFLIES_DEFAULT_ENDPOINT = 'https://api.fireflies.ai/graphql';
 
 /** Owners only: another GraphQL endpoint for a Fireflies connection, with the key again. */
-function EndpointForm({ connection: c, reload, close }: { connection: Connection; reload: () => Promise<void>; close: () => void }) {
+function EndpointForm({
+  connection: c,
+  reload,
+  close,
+}: {
+  connection: Connection;
+  reload: () => Promise<void>;
+  close: () => void;
+}) {
   const id = useId();
-  const [endpoint, setEndpoint] = useState(c.endpoint_url === FIREFLIES_DEFAULT_ENDPOINT ? "" : (c.endpoint_url ?? ""));
-  const [token, setToken] = useState("");
+  const [endpoint, setEndpoint] = useState(
+    c.endpoint_url === FIREFLIES_DEFAULT_ENDPOINT ? '' : (c.endpoint_url ?? ''),
+  );
+  const [token, setToken] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -505,7 +615,7 @@ function EndpointForm({ connection: c, reload, close }: { connection: Connection
     setError(null);
     try {
       await unwrap(
-        api.PUT("/v1/connections/{connection_id}/endpoint", {
+        api.PUT('/v1/connections/{connection_id}/endpoint', {
           params: { path: { connection_id: c.id } },
           body: { endpoint_url: endpoint.trim() || null, token },
         }),
@@ -520,7 +630,11 @@ function EndpointForm({ connection: c, reload, close }: { connection: Connection
   }
 
   return (
-    <form onSubmit={onSubmit} className="mt-2 flex flex-col gap-3 rounded bg-surface2 p-3" aria-label={`${c.account_label ?? c.account_id} endpoint`}>
+    <form
+      onSubmit={onSubmit}
+      className="mt-2 flex flex-col gap-3 rounded bg-surface2 p-3"
+      aria-label={`${c.account_label ?? c.account_id} endpoint`}
+    >
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="GraphQL endpoint" htmlFor={`${id}-endpoint`}>
           <input
@@ -548,10 +662,13 @@ function EndpointForm({ connection: c, reload, close }: { connection: Connection
           />
         </Field>
       </div>
-      <p className="text-sm text-text2">Empty reads Fireflies&apos; own API. The key is checked at the new endpoint and never sent elsewhere.</p>
+      <p className="text-sm text-text2">
+        Empty reads Fireflies&apos; own API. The key is checked at the new endpoint and never sent
+        elsewhere.
+      </p>
       <div className="flex items-center gap-2">
         <Button type="submit" variant="solid" disabled={pending || !token.trim()}>
-          {pending ? "Checking…" : "Save endpoint"}
+          {pending ? 'Checking…' : 'Save endpoint'}
         </Button>
         <Button variant="ghost" onClick={close}>
           Cancel

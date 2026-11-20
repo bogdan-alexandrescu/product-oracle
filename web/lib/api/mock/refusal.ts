@@ -4,23 +4,26 @@
  * UTC; one that is no moment stays as it was), and a refusal ends its sentence. `past`: the
  * item failed, so the refusal says what was so when it ran, not now.
  */
-import { inWords } from "@/lib/format";
+import { inWords } from '@/lib/format';
 
-import { companyZone } from "./connections";
+import { companyZone } from './connections';
 
 // A refusal, alone or after a lead-in ("{segment}: {error}", runs.service).
 const LEAD = /(^|: )No (other )?Claude account can take this call/;
 const ISO = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?/g;
 const PAST: [RegExp, string][] = [
-  [LEAD, "$1No $2Claude account could take this call"],
-  [/\bevery Claude account is spent\b/g, "every Claude account was spent"],
-  [/\bevery Claude account is paused, draining or needs a sign-in\b/g, "every Claude account was paused, draining or needed a sign-in"],
-  [/\bno Claude account is registered\b/g, "no Claude account was registered"],
+  [LEAD, '$1No $2Claude account could take this call'],
+  [/\bevery Claude account is spent\b/g, 'every Claude account was spent'],
+  [
+    /\bevery Claude account is paused, draining or needs a sign-in\b/g,
+    'every Claude account was paused, draining or needed a sign-in',
+  ],
+  [/\bno Claude account is registered\b/g, 'no Claude account was registered'],
   [
     /\bno Claude account has a recent usage reading; the next sweep reads them\b/g,
-    "no Claude account had a recent usage reading; the next sweep was due to read them",
+    'no Claude account had a recent usage reading; the next sweep was due to read them',
   ],
-  [/\bthe earliest window clears\b/g, "the earliest window was due to clear"],
+  [/\bthe earliest window clears\b/g, 'the earliest window was due to clear'],
 ];
 
 export function moment(iso: string, zone: string): string {
@@ -29,7 +32,17 @@ export function moment(iso: string, zone: string): string {
   const [y, mo, d, h, mi] = iso.match(/\d+/g)!.map(Number);
   const at = new Date(utc);
   const days = new Date(Date.UTC(y, mo, 0)).getUTCDate();
-  if (Number.isNaN(at.getTime()) || mo < 1 || mo > 12 || d < 1 || d > days || h > 23 || mi > 59 || y < 1) return iso;
+  if (
+    Number.isNaN(at.getTime()) ||
+    mo < 1 ||
+    mo > 12 ||
+    d < 1 ||
+    d > days ||
+    h > 23 ||
+    mi > 59 ||
+    y < 1
+  )
+    return iso;
   return inWords(at.toISOString(), zone);
 }
 
@@ -45,4 +58,4 @@ export function readableRefusal(text: string | null | undefined, past = false): 
 
 /** A job as the API returns it (oracle.jobs.service.jobs_out): its stored error read through readableRefusal, in the past once it failed. */
 export const jobOut = <J extends { error?: string | null; status: string }>(job: J): J =>
-  job.error ? { ...job, error: readableRefusal(job.error, job.status === "failed") } : job;
+  job.error ? { ...job, error: readableRefusal(job.error, job.status === 'failed') } : job;

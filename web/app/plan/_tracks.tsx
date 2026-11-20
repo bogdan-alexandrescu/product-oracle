@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from 'react';
 
-import { peopleByIds, PersonPicker } from "@/components/PersonPicker";
-import { FIELD_LABEL, InlineError } from "@/components/review/parts";
+import { peopleByIds, PersonPicker } from '@/components/PersonPicker';
+import { FIELD_LABEL, InlineError } from '@/components/review/parts';
 import {
   Button,
   Chip,
@@ -15,45 +15,42 @@ import {
   Panel,
   SegmentedControl,
   type ChipKind,
-} from "@/components/ds";
-import { INPUT, LoadError, Loading } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatShortDate, plural } from "@/lib/format";
-import { errorMessage, useQuery, type Query } from "@/lib/use-query";
+} from '@/components/ds';
+import { INPUT, LoadError, Loading } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { formatShortDate, plural } from '@/lib/format';
+import { errorMessage, useQuery, type Query } from '@/lib/use-query';
 
-import { HORIZON_LABEL, HORIZONS, trackHealth, type Horizon } from "./_lib";
-import { StartRunDialog } from "./_start-run";
+import { HORIZON_LABEL, HORIZONS, trackHealth, type Horizon } from './_lib';
+import { StartRunDialog } from './_start-run';
 
-export type Track = Schemas["TrackOverview"];
-type Milestone = Schemas["MilestoneOut"];
-type Status = Track["status"];
-type MilestoneStatus = Milestone["status"];
+export type Track = Schemas['TrackOverview'];
+type Milestone = Schemas['MilestoneOut'];
+type Status = Track['status'];
+type MilestoneStatus = Milestone['status'];
 
 /** Which milestone the inspector edits; `id` null adds a new one to the track. */
 export type MilestonePick = { trackId: string; id: string | null };
 
 const STATUS_LABEL: Record<Status, string> = {
-  active: "Active",
-  paused: "Paused",
-  closed: "Closed",
+  active: 'Active',
+  paused: 'Paused',
+  closed: 'Closed',
 };
-const MILESTONE_STATUS: Record<
-  MilestoneStatus,
-  { kind: ChipKind; label: string }
-> = {
-  planned: { kind: "na", label: "Planned" },
-  done: { kind: "pass", label: "Done" },
-  dropped: { kind: "line", label: "Dropped" },
+const MILESTONE_STATUS: Record<MilestoneStatus, { kind: ChipKind; label: string }> = {
+  planned: { kind: 'na', label: 'Planned' },
+  done: { kind: 'pass', label: 'Done' },
+  dropped: { kind: 'line', label: 'Dropped' },
 };
 
 /** Every track with its overview (owner, status, health and milestones). */
 export function useTracks(): Query<Track[]> {
-  return useQuery("plan|tracks", async () => {
-    const rows = await unwrap(api.GET("/v1/tracks"));
+  return useQuery('plan|tracks', async () => {
+    const rows = await unwrap(api.GET('/v1/tracks'));
     return Promise.all(
       rows.map((t) =>
         unwrap(
-          api.GET("/v1/tracks/{track_id}", {
+          api.GET('/v1/tracks/{track_id}', {
             params: { path: { track_id: t.id } },
           }),
         ),
@@ -65,10 +62,10 @@ export function useTracks(): Query<Track[]> {
 const day = (d: string) => formatShortDate(d);
 
 /** A date basis's kind in words. */
-const BASIS_KIND: Record<"estimate" | "capacity" | "commitment", string> = {
-  estimate: "Estimate",
-  capacity: "Capacity",
-  commitment: "Commitment",
+const BASIS_KIND: Record<'estimate' | 'capacity' | 'commitment', string> = {
+  estimate: 'Estimate',
+  capacity: 'Capacity',
+  commitment: 'Commitment',
 };
 
 /**
@@ -76,21 +73,29 @@ const BASIS_KIND: Record<"estimate" | "capacity" | "commitment", string> = {
  * from the overview the check returned for each field it says changed; "Nothing changed".
  */
 export function checkResult(changed: string[], o: Track): string {
-  if (changed.length === 0) return "Nothing changed since the last check.";
+  if (changed.length === 0) return 'Nothing changed since the last check.';
   const parts: string[] = [];
   for (const c of changed) {
-    if (c === "health") parts.push(`now ${trackHealth(o.health).label.toLowerCase()}`);
-    else if (c === "at_risk") parts.push(o.at_risk.length ? `${plural(o.at_risk.length, "item")} at risk` : "no items at risk");
-    else if (c === "next_milestone")
+    if (c === 'health') parts.push(`now ${trackHealth(o.health).label.toLowerCase()}`);
+    else if (c === 'at_risk')
+      parts.push(
+        o.at_risk.length ? `${plural(o.at_risk.length, 'item')} at risk` : 'no items at risk',
+      );
+    else if (c === 'next_milestone')
       parts.push(
         o.next_milestone
-          ? `next milestone ${o.next_milestone.name}${o.next_milestone.target_date ? `, ${day(o.next_milestone.target_date)}` : ""}`
-          : "no next milestone",
+          ? `next milestone ${o.next_milestone.name}${o.next_milestone.target_date ? `, ${day(o.next_milestone.target_date)}` : ''}`
+          : 'no next milestone',
       );
-    else if (c === "prd_moved") parts.push(o.prd_moved ? "the PRD has a newer approved version" : "the roadmap is on the PRD's latest approved version");
+    else if (c === 'prd_moved')
+      parts.push(
+        o.prd_moved
+          ? 'the PRD has a newer approved version'
+          : "the roadmap is on the PRD's latest approved version",
+      );
   }
-  if (parts.length === 0) return "Checked.";
-  const text = parts.join("; ");
+  if (parts.length === 0) return 'Checked.';
+  const text = parts.join('; ');
   return `${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
 }
 
@@ -100,14 +105,14 @@ export function checkResult(changed: string[], o: Track): string {
  * leaves the Plan unless a run is working on it. It can be made Active again.
  */
 const CLOSE_MESSAGE =
-  "Oracle stops checking this track and raising its alerts, the weekly alignment report leaves it out, and its PRD leaves the Plan unless a run is working on it. You can make it Active again later.";
+  'Oracle stops checking this track and raising its alerts, the weekly alignment report leaves it out, and its PRD leaves the Plan unless a run is working on it. You can make it Active again later.';
 
 /** A track's milestones in the API's order: dated first by date, then by when they were added. */
 export function sortedMilestones(t: Track): Milestone[] {
   return [...t.milestones].sort(
     (a, b) =>
       (a.target_date ? 0 : 1) - (b.target_date ? 0 : 1) ||
-      (a.target_date ?? "").localeCompare(b.target_date ?? "") ||
+      (a.target_date ?? '').localeCompare(b.target_date ?? '') ||
       a.created_at.localeCompare(b.created_at),
   );
 }
@@ -117,7 +122,7 @@ export function milestoneTitle(t: Track, id: string): string {
   const ms = sortedMilestones(t);
   const at = ms.findIndex((m) => m.id === id);
   const m = ms[at];
-  if (!m) return "New milestone";
+  if (!m) return 'New milestone';
   const n = `M${at + 1}`;
   if (!m.target_date) return `${n} · no date`;
   const prev = ms
@@ -163,36 +168,34 @@ export function TrackPanel({
     const form = renameForm.current;
     if (!renaming || !form) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+      if (e.key !== 'Escape') return;
       e.preventDefault();
       e.stopPropagation();
       setTitle(track.title);
       setRenaming(false);
     };
-    form.addEventListener("keydown", onKey);
-    return () => form.removeEventListener("keydown", onKey);
+    form.addEventListener('keydown', onKey);
+    return () => form.removeEventListener('keydown', onKey);
   }, [renaming, track.title]);
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{
-    tone: "pass" | "warn";
+    tone: 'pass' | 'warn';
     text: string;
   } | null>(null);
-  const owner = useQuery(`plan|track-owner|${track.owner_id ?? ""}`, () =>
+  const owner = useQuery(`plan|track-owner|${track.owner_id ?? ''}`, () =>
     peopleByIds([track.owner_id]),
   );
-  const ownerName = track.owner_id
-    ? owner.data?.get(track.owner_id)
-    : undefined;
+  const ownerName = track.owner_id ? owner.data?.get(track.owner_id) : undefined;
   // qa-plan-8: Push to tracker only does something when two-way tracker sync allows writes.
-  const connector = useQuery(`plan|tracker-connector|${may.push ? "on" : "off"}`, () =>
-    may.push ? unwrap(api.GET("/v1/tracker/connector")) : Promise.resolve(null),
+  const connector = useQuery(`plan|tracker-connector|${may.push ? 'on' : 'off'}`, () =>
+    may.push ? unwrap(api.GET('/v1/tracker/connector')) : Promise.resolve(null),
   );
   const pushOff = connector.data && !connector.data.writes_allowed ? connector.data.reason : null;
   const pushWhy = useId();
   const checkWhy = useId();
-  const paused = track.status === "paused";
+  const paused = track.status === 'paused';
   const health = trackHealth(track.health);
   const off = busy;
   const actions = may.check || may.draftRoadmap || may.push;
@@ -211,14 +214,11 @@ export function TrackPanel({
       setBusy(false);
     }
   }
-  const patch = (
-    body: Omit<Schemas["TrackPatch"], "lock_version">,
-    then?: () => void,
-  ) =>
+  const patch = (body: Omit<Schemas['TrackPatch'], 'lock_version'>, then?: () => void) =>
     act(
       () =>
         unwrap(
-          api.PATCH("/v1/tracks/{track_id}", {
+          api.PATCH('/v1/tracks/{track_id}', {
             params: { path: { track_id: track.id } },
             body: { ...body, lock_version: track.lock_version },
           }),
@@ -233,9 +233,9 @@ export function TrackPanel({
     if (status === track.status) return;
     // qa-plan-31: closing asks first, saying what it does.
     if (
-      status === "closed" &&
+      status === 'closed' &&
       !(await confirmInPage({
-        action: "Close track",
+        action: 'Close track',
         message: `Close ${track.title}? ${CLOSE_MESSAGE}`,
         destructive: true,
       }))
@@ -258,11 +258,7 @@ export function TrackPanel({
             {health.label}
           </Chip>
           {may.edit && (
-            <Button
-              variant="ghost"
-              disabled={off}
-              onClick={() => setRenaming(true)}
-            >
+            <Button variant="ghost" disabled={off} onClick={() => setRenaming(true)}>
               Rename
             </Button>
           )}
@@ -276,8 +272,7 @@ export function TrackPanel({
             className="flex flex-wrap items-end gap-2"
             onSubmit={(e) => {
               e.preventDefault();
-              if (title.trim())
-                void patch({ title: title.trim() }, () => setRenaming(false));
+              if (title.trim()) void patch({ title: title.trim() }, () => setRenaming(false));
             }}
           >
             <label className={`${FIELD_LABEL} min-w-0 flex-1`}>
@@ -290,11 +285,7 @@ export function TrackPanel({
                 autoFocus
               />
             </label>
-            <Button
-              type="submit"
-              variant="solid"
-              disabled={off || !title.trim()}
-            >
+            <Button type="submit" variant="solid" disabled={off || !title.trim()}>
               Save
             </Button>
             <Button
@@ -315,22 +306,18 @@ export function TrackPanel({
             {/* qa-plan-30: no owner reads "not set" in plain grey, and the action is Set owner. */}
             <span
               data-testid="track-owner"
-              className={`min-w-0 truncate ${track.owner_id ? "font-semibold" : "text-text2"}`}
+              className={`min-w-0 truncate ${track.owner_id ? 'font-semibold' : 'text-text2'}`}
               title={ownerName ? `${ownerName.name} · ${ownerName.email}` : undefined}
             >
               {ownerName
                 ? `${ownerName.name} · ${ownerName.email}`
                 : track.owner_id
-                  ? "…"
-                  : "not set"}
+                  ? '…'
+                  : 'not set'}
             </span>
             {may.edit && (
-              <Button
-                variant="ghost"
-                disabled={off}
-                onClick={() => setPicking((v) => !v)}
-              >
-                {track.owner_id ? "Change owner" : "Set owner"}
+              <Button variant="ghost" disabled={off} onClick={() => setPicking((v) => !v)}>
+                {track.owner_id ? 'Change owner' : 'Set owner'}
               </Button>
             )}
           </span>
@@ -340,7 +327,7 @@ export function TrackPanel({
               size="sm"
               value={track.status}
               onChange={(status) => void changeStatus(status)}
-              items={(["active", "paused", "closed"] as const).map((s) => ({
+              items={(['active', 'paused', 'closed'] as const).map((s) => ({
                 value: s,
                 label: STATUS_LABEL[s],
                 disabled: off,
@@ -357,17 +344,13 @@ export function TrackPanel({
             <PersonPicker
               writersOnly={false}
               autoFocus
-              onPick={(p) =>
-                void patch({ owner_id: p.user_id }, () => setPicking(false))
-              }
+              onPick={(p) => void patch({ owner_id: p.user_id }, () => setPicking(false))}
             />
             {track.owner_id && (
               <Button
                 variant="ghost"
                 className="self-start"
-                onClick={() =>
-                  void patch({ owner_id: null }, () => setPicking(false))
-                }
+                onClick={() => void patch({ owner_id: null }, () => setPicking(false))}
               >
                 No owner
               </Button>
@@ -377,9 +360,7 @@ export function TrackPanel({
       </div>
       <div className="border-t border-line">
         <div className="flex items-center gap-2 px-4 pt-3 pb-1 max-[600px]:px-3">
-          <span className="text-[13px] font-semibold tracking-[0.02em] text-text2">
-            Milestones
-          </span>
+          <span className="text-[13px] font-semibold tracking-[0.02em] text-text2">Milestones</span>
           {may.addMilestone && (
             <Button
               variant="ghost"
@@ -403,20 +384,20 @@ export function TrackPanel({
                   data-testid="track-milestone"
                   aria-pressed={on}
                   onClick={() => onPick({ trackId: track.id, id: m.id })}
-                  className={`flex w-full min-w-0 flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-left hover:bg-surface2 max-[600px]:px-3 ${on ? "bg-accent-soft" : ""}`}
+                  className={`flex w-full min-w-0 flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-left hover:bg-surface2 max-[600px]:px-3 ${on ? 'bg-accent-soft' : ''}`}
                 >
-                  <span
-                    data-testid="milestone-title"
-                    className="tnum flex-none font-semibold"
-                  >
+                  <span data-testid="milestone-title" className="tnum flex-none font-semibold">
                     {milestoneTitle(track, m.id)}
                   </span>
                   {/* qa-plan-8: the whole name, wrapping (under the dates on a phone), never "F…". */}
-                  <span data-testid="milestone-name-line" className="min-w-0 flex-1 break-words max-[600px]:basis-full">
+                  <span
+                    data-testid="milestone-name-line"
+                    className="min-w-0 flex-1 break-words max-[600px]:basis-full"
+                  >
                     {m.name}
                   </span>
                   <span className="flex-none text-sm text-text2">
-                    {HORIZON_LABEL[m.horizon]} · {plural(m.item_keys.length, "item")}
+                    {HORIZON_LABEL[m.horizon]} · {plural(m.item_keys.length, 'item')}
                   </span>
                   <Chip kind={st.kind} data-testid="milestone-status">
                     {st.label}
@@ -425,9 +406,7 @@ export function TrackPanel({
               </li>
             );
           })}
-          {track.milestones.length === 0 && (
-            <li className="px-4 py-2 text-text2">No milestones</li>
-          )}
+          {track.milestones.length === 0 && <li className="px-4 py-2 text-text2">No milestones</li>}
         </ul>
       </div>
       {(actions || result || error) && (
@@ -452,10 +431,10 @@ export function TrackPanel({
                   disabled={off}
                   onClick={() =>
                     void act(
-                      () => unwrap(api.POST("/v1/tracks/{track_id}/monitor", path)),
+                      () => unwrap(api.POST('/v1/tracks/{track_id}/monitor', path)),
                       (out) => {
                         onChange(out.overview);
-                        setResult({ tone: "pass", text: checkResult(out.changed, out.overview) });
+                        setResult({ tone: 'pass', text: checkResult(out.changed, out.overview) });
                       },
                     )
                   }
@@ -464,11 +443,21 @@ export function TrackPanel({
                 </Button>
               )}
               {may.draftRoadmap && (
-                <Button disabled={off} data-testid="track-draft-roadmap" onClick={() => setStarting(true)}>
+                <Button
+                  disabled={off}
+                  data-testid="track-draft-roadmap"
+                  onClick={() => setStarting(true)}
+                >
                   Draft roadmap from this track…
                 </Button>
               )}
-              {starting && <StartRunDialog trackId={track.id} prdTitle={track.title} onClose={() => setStarting(false)} />}
+              {starting && (
+                <StartRunDialog
+                  trackId={track.id}
+                  prdTitle={track.title}
+                  onClose={() => setStarting(false)}
+                />
+              )}
               {may.push && pushOff && (
                 // B-24: the disabled button keeps its reason in its (i) (one tooltip), not inline.
                 <span className="inline-flex items-center gap-1">
@@ -478,9 +467,7 @@ export function TrackPanel({
                   <span id={pushWhy} className="sr-only">
                     {pushOff}
                   </span>
-                  <InfoTip label="two-way sync">
-                    {pushOff}
-                  </InfoTip>
+                  <InfoTip label="two-way sync">{pushOff}</InfoTip>
                 </span>
               )}
               {may.push && !pushOff && (
@@ -492,12 +479,10 @@ export function TrackPanel({
                     setError(null);
                     setResult(null);
                     try {
-                      await unwrap(
-                        api.POST("/v1/tracks/{track_id}/tracker-push", path),
-                      );
-                      setResult({ tone: "pass", text: "Sent to the tracker." });
+                      await unwrap(api.POST('/v1/tracks/{track_id}/tracker-push', path));
+                      setResult({ tone: 'pass', text: 'Sent to the tracker.' });
                     } catch (e) {
-                      setResult({ tone: "warn", text: errorMessage(e) });
+                      setResult({ tone: 'warn', text: errorMessage(e) });
                     } finally {
                       setBusy(false);
                     }
@@ -561,9 +546,7 @@ function MilestoneView({ track, m }: { track: Track; m: Milestone }) {
           <dt className="text-text2">Horizon</dt>
           <dd>{HORIZON_LABEL[m.horizon]}</dd>
           <dt className="text-text2">Date</dt>
-          <dd data-testid="milestone-date">
-            {m.target_date ? day(m.target_date) : "No date"}
-          </dd>
+          <dd data-testid="milestone-date">{m.target_date ? day(m.target_date) : 'No date'}</dd>
           <dt className="text-text2">Status</dt>
           <dd>
             <Chip kind={st.kind} data-testid="milestone-state">
@@ -571,9 +554,7 @@ function MilestoneView({ track, m }: { track: Track; m: Milestone }) {
             </Chip>
           </dd>
           <dt className="text-text2">Items</dt>
-          <dd>
-            {plural(m.item_keys.length, "item")}
-          </dd>
+          <dd>{plural(m.item_keys.length, 'item')}</dd>
         </dl>
       </InspectorSection>
     </Inspector>
@@ -592,21 +573,21 @@ function MilestoneForm({
   onSaved: (m: Milestone) => void;
   onCancel?: () => void;
 }) {
-  const [name, setName] = useState(m?.name ?? "");
-  const [horizon, setHorizon] = useState<Horizon>(m?.horizon ?? "now");
-  const [date, setDate] = useState(m?.target_date ?? "");
+  const [name, setName] = useState(m?.name ?? '');
+  const [horizon, setHorizon] = useState<Horizon>(m?.horizon ?? 'now');
+  const [date, setDate] = useState(m?.target_date ?? '');
   const [basisIds, setBasisIds] = useState<string[]>(m?.basis_ids ?? []);
   const [itemKeys, setItemKeys] = useState<string[]>(m?.item_keys ?? []);
-  const [status, setStatus] = useState<MilestoneStatus>(m?.status ?? "planned");
+  const [status, setStatus] = useState<MilestoneStatus>(m?.status ?? 'planned');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // tracks-goal: a track with no PRD has no date bases (a basis is a PRD's).
   const prdSlug = track.prd?.slug;
-  const bases = useQuery(`plan|bases|${prdSlug ?? ""}`, () =>
+  const bases = useQuery(`plan|bases|${prdSlug ?? ''}`, () =>
     prdSlug
       ? unwrap(
-          api.GET("/v1/schedule-bases", {
-            params: { query: { prd: prdSlug, status: "verified" } },
+          api.GET('/v1/schedule-bases', {
+            params: { query: { prd: prdSlug, status: 'verified' } },
           }),
         )
       : Promise.resolve([]),
@@ -614,21 +595,17 @@ function MilestoneForm({
   // qa-plan-7: the track's roadmap items by name, as the Plan's table lists them (its approved
   // rows on this track), not the roadmap document's sections.
   const items = useQuery(`plan|track-items|${track.id}`, () =>
-    unwrap(api.GET("/v1/plan", { params: { query: { scope: "approved" } } })).then((p) =>
+    unwrap(api.GET('/v1/plan', { params: { query: { scope: 'approved' } } })).then((p) =>
       p.items
         .filter((i) => i.track_id === track.id)
         .map((i) => ({ item_key: i.key, title: i.title, horizon: i.horizon })),
     ),
   );
-  const supporting = (bases.data ?? []).filter(
-    (b) => date && b.supports_date === date,
-  );
+  const supporting = (bases.data ?? []).filter((b) => date && b.supports_date === date);
   // A new date picks the verified bases that support exactly it.
   const pickDate = (d: string) => {
     setDate(d);
-    setBasisIds(
-      (bases.data ?? []).filter((b) => b.supports_date === d).map((b) => b.id),
-    );
+    setBasisIds((bases.data ?? []).filter((b) => b.supports_date === d).map((b) => b.id));
   };
 
   const off = busy;
@@ -648,13 +625,13 @@ function MilestoneForm({
     try {
       const out = m
         ? await unwrap(
-            api.PATCH("/v1/milestones/{milestone_id}", {
+            api.PATCH('/v1/milestones/{milestone_id}', {
               params: { path: { milestone_id: m.id } },
               body: { ...fields, status, lock_version: m.lock_version },
             }),
           )
         : await unwrap(
-            api.POST("/v1/tracks/{track_id}/milestones", {
+            api.POST('/v1/tracks/{track_id}/milestones', {
               params: { path: { track_id: track.id } },
               body: fields,
             }),
@@ -669,9 +646,9 @@ function MilestoneForm({
 
   return (
     <Inspector
-      eyebrow={m ? "Milestone" : "New milestone"}
+      eyebrow={m ? 'Milestone' : 'New milestone'}
       title={m ? milestoneTitle(track, m.id) : undefined}
-      label={m ? `Milestone ${m.name}` : "New milestone"}
+      label={m ? `Milestone ${m.name}` : 'New milestone'}
       testId="plan-milestone"
       chips={<Chip hero>{track.title}</Chip>}
     >
@@ -682,7 +659,7 @@ function MilestoneForm({
         }}
         onKeyDown={(e) => {
           // qa-plan-30: Escape cancels the edit, as Cancel does.
-          if (e.key !== "Escape" || !onCancel) return;
+          if (e.key !== 'Escape' || !onCancel) return;
           e.preventDefault();
           e.stopPropagation();
           onCancel();
@@ -738,35 +715,23 @@ function MilestoneForm({
                 <Loading />
               ) : supporting.length ? (
                 <fieldset className="flex flex-col gap-1">
-                  <legend className="text-[13px] font-semibold text-text2">
-                    Verified by
-                  </legend>
+                  <legend className="text-[13px] font-semibold text-text2">Verified by</legend>
                   {supporting.map((b) => (
-                    <label
-                      key={b.id}
-                      className="flex items-center gap-2 text-[15px]"
-                    >
+                    <label key={b.id} className="flex items-center gap-2 text-[15px]">
                       <input
                         type="checkbox"
                         checked={basisIds.includes(b.id)}
                         disabled={off}
-                        onChange={(e) =>
-                          setBasisIds((ids) =>
-                            toggle(ids, b.id, e.target.checked),
-                          )
-                        }
+                        onChange={(e) => setBasisIds((ids) => toggle(ids, b.id, e.target.checked))}
                       />
                       {b.reference} · {BASIS_KIND[b.kind]}
                     </label>
                   ))}
                 </fieldset>
               ) : (
-                <p
-                  data-testid="milestone-no-basis"
-                  className="text-sm text-warn"
-                >
-                  No verified estimate, capacity or commitment supports this
-                  date. Oracle never invents dates.
+                <p data-testid="milestone-no-basis" className="text-sm text-warn">
+                  No verified estimate, capacity or commitment supports this date. Oracle never
+                  invents dates.
                 </p>
               ))}
             {m && (
@@ -779,7 +744,7 @@ function MilestoneForm({
                   fill
                   value={status}
                   onChange={setStatus}
-                  items={(["planned", "done", "dropped"] as const).map((s) => ({
+                  items={(['planned', 'done', 'dropped'] as const).map((s) => ({
                     value: s,
                     label: MILESTONE_STATUS[s].label,
                     disabled: off,
@@ -796,28 +761,21 @@ function MilestoneForm({
             className="flex max-h-60 flex-col gap-1 overflow-y-auto"
           >
             {items.error && <span className="text-text2">{items.error}</span>}
-            {items.data?.length === 0 && (
-              <span className="text-text2">No roadmap items yet</span>
-            )}
+            {items.data?.length === 0 && <span className="text-text2">No roadmap items yet</span>}
             {items.data?.map((i) => (
-              <label
-                key={i.item_key}
-                className="flex min-w-0 items-center gap-2 text-[15px]"
-              >
+              <label key={i.item_key} className="flex min-w-0 items-center gap-2 text-[15px]">
                 <input
                   type="checkbox"
                   checked={itemKeys.includes(i.item_key)}
                   disabled={off}
                   onChange={(e) =>
-                    setItemKeys((keys) =>
-                      toggle(keys, i.item_key, e.target.checked),
-                    )
+                    setItemKeys((keys) => toggle(keys, i.item_key, e.target.checked))
                   }
                 />
-                <span className="min-w-0 flex-1 truncate" title={i.title}>{i.title}</span>
-                <span className="flex-none text-sm text-text2">
-                  {HORIZON_LABEL[i.horizon]}
+                <span className="min-w-0 flex-1 truncate" title={i.title}>
+                  {i.title}
                 </span>
+                <span className="flex-none text-sm text-text2">{HORIZON_LABEL[i.horizon]}</span>
               </label>
             ))}
           </div>
@@ -831,12 +789,8 @@ function MilestoneForm({
                   Cancel
                 </Button>
               )}
-              <Button
-                type="submit"
-                variant="solid"
-                disabled={off || !name.trim()}
-              >
-                {m ? "Save milestone" : "Add milestone"}
+              <Button type="submit" variant="solid" disabled={off || !name.trim()}>
+                {m ? 'Save milestone' : 'Add milestone'}
               </Button>
             </div>
             {error && <InlineError>{error}</InlineError>}

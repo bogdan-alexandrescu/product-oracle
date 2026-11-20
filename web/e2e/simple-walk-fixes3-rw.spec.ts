@@ -1,5 +1,5 @@
-import { login, openRoadmapItem } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { login, openRoadmapItem } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /**
  * The owner's production walk of Simple mode, the roadmap (walk fixes 3, R4 and R5). Driven
@@ -24,51 +24,62 @@ import { expect, test, type Locator, type Page } from "./test";
 const DESKTOP = { width: 1366, height: 820 };
 const PHONE = { width: 390, height: 844 };
 
-const column = (page: Page, h: "now" | "next" | "later"): Locator => page.locator(`[data-testid="board-column"][data-horizon-column="${h}"]`);
-const boardCard = (page: Page, key: string): Locator => page.locator(`[data-testid="board-card"][data-item="${key}"]`);
+const column = (page: Page, h: 'now' | 'next' | 'later'): Locator =>
+  page.locator(`[data-testid="board-column"][data-horizon-column="${h}"]`);
+const boardCard = (page: Page, key: string): Locator =>
+  page.locator(`[data-testid="board-card"][data-item="${key}"]`);
 
 for (const phone of [false, true]) {
-  for (const scheme of ["light", "dark"] as const) {
-    const where = `${phone ? "phone" : "desktop"}, ${scheme}`;
+  for (const scheme of ['light', 'dark'] as const) {
+    const where = `${phone ? 'phone' : 'desktop'}, ${scheme}`;
     test.describe(where, () => {
-      test.use({ viewport: phone ? PHONE : DESKTOP, colorScheme: scheme, hasTouch: phone, isMobile: phone });
+      test.use({
+        viewport: phone ? PHONE : DESKTOP,
+        colorScheme: scheme,
+        hasTouch: phone,
+        isMobile: phone,
+      });
 
-      for (const email of ["admin@example.com", "viewer@example.com"]) {
-        test(`${email.split("@")[0]}: the card's Why line names the PRD and the feature, no draft number or code (${where})`, async ({ page }) => {
+      for (const email of ['admin@example.com', 'viewer@example.com']) {
+        test(`${email.split('@')[0]}: the card's Why line names the PRD and the feature, no draft number or code (${where})`, async ({
+          page,
+        }) => {
           await login(page, email);
-          await page.goto("/simple/roadmap");
-          await openRoadmapItem(page, "alert-digest");
-          let reasons = page.getByTestId("floating-card").getByTestId("card-reasons");
-          await expect(reasons).toContainText("From Usage alerts: Weekly digest of fired alerts.");
-          await expect(reasons).not.toContainText("section ");
-          await page.getByTestId("floating-card").getByRole("button", { name: "Close" }).click();
-          await expect(page.getByTestId("floating-card")).toHaveCount(0);
+          await page.goto('/simple/roadmap');
+          await openRoadmapItem(page, 'alert-digest');
+          let reasons = page.getByTestId('floating-card').getByTestId('card-reasons');
+          await expect(reasons).toContainText('From Usage alerts: Weekly digest of fired alerts.');
+          await expect(reasons).not.toContainText('section ');
+          await page.getByTestId('floating-card').getByRole('button', { name: 'Close' }).click();
+          await expect(page.getByTestId('floating-card')).toHaveCount(0);
 
-          await openRoadmapItem(page, "alert-rules");
-          reasons = page.getByTestId("floating-card").getByTestId("card-reasons");
-          await expect(reasons).toContainText("From Usage alerts: Alert rules engine.");
-          await expect(reasons).not.toContainText("section bets");
-          await expect(reasons).not.toContainText("section ");
+          await openRoadmapItem(page, 'alert-rules');
+          reasons = page.getByTestId('floating-card').getByTestId('card-reasons');
+          await expect(reasons).toContainText('From Usage alerts: Alert rules engine.');
+          await expect(reasons).not.toContainText('section bets');
+          await expect(reasons).not.toContainText('section ');
         });
       }
 
       test(`Later starts the day after Next ends, with no gap (${where})`, async ({ page }) => {
         await login(page);
-        await page.goto("/simple/roadmap");
-        await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-        await page.getByTestId("format-board").click();
-        await expect(page.getByTestId("format-board")).toHaveAttribute("aria-pressed", "true");
+        await page.goto('/simple/roadmap');
+        await expect(page.getByTestId('simple-roadmap')).toBeVisible();
+        await page.getByTestId('format-board').click();
+        await expect(page.getByTestId('format-board')).toHaveAttribute('aria-pressed', 'true');
         // board-quarters (owner, Nov 10): Next is next quarter and Later starts the day after.
-        await expect(column(page, "next").locator("header")).toContainText("Jan 1 – Mar 31");
-        const later = column(page, "later").locator("header");
+        await expect(column(page, 'next').locator('header')).toContainText('Jan 1 – Mar 31');
+        const later = column(page, 'later').locator('header');
         await later.scrollIntoViewIfNeeded();
-        await expect(later).toContainText("Apr 1, 2027 on");
-        await expect(later).not.toContainText("Oct 22, 2027");
+        await expect(later).toContainText('Apr 1, 2027 on');
+        await expect(later).not.toContainText('Oct 22, 2027');
         // walkb-roadmap (e4cdf478): an estimated item starts the day after what it depends on
         // ends, keeping its length. Welcome video has no dates of its own, so its card says so;
         // its estimate is the Timeline's (QA Nov 12 #6: one wording in every format); roadmap-dates:
         // Oracle's suggestion (after In-app tour), not Later's window.
-        await expect(boardCard(page, "setup-video").getByTestId("board-dates")).toHaveText("No dates yet · estimated Sep 15 – Oct 30, 2027");
+        await expect(boardCard(page, 'setup-video').getByTestId('board-dates')).toHaveText(
+          'No dates yet · estimated Sep 15 – Oct 30, 2027',
+        );
       });
     });
   }

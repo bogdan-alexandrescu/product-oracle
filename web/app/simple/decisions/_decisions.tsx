@@ -1,44 +1,67 @@
-"use client";
+'use client';
 
-import { Link, usePathname, useSearchParams } from "@/lib/nav";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
+import { Link, usePathname, useSearchParams } from '@/lib/nav';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 
-import { Icon } from "@/components/ds/Icon";
-import { InfoTip } from "@/components/ds/InfoTip";
-import { setToastPlace, toast } from "@/components/ds/Toast";
-import { FeatureFoundContext, OpenFeatureContext, type OpenFeature } from "@/components/simple/OpenFeature";
-import { usePhone } from "@/components/simple/PrdTimeline";
-import { DecisionSheetHost, editedWords, useDecisionSheet } from "@/components/simple/questions/DecisionSheet";
-import { FeaturePanel, itemFor, useItemChanged } from "../roadmap/_panel";
-import { QuestionRow, useQuestionActions, useSourceLine, type Question } from "@/components/simple/questions/Questions";
-import { SimpleEmpty, SimplePage } from "@/components/simple/SimplePage";
-import { ErrorNote, LoadError, Loading } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { calendarDay, useCompanyZone } from "@/lib/dates";
-import { zoneName } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { errorMessage, useQuery } from "@/lib/use-query";
-import { foldWaiting, useWaitingList, WaitingRow } from "@/components/simple/WaitingItems";
+import { Icon } from '@/components/ds/Icon';
+import { InfoTip } from '@/components/ds/InfoTip';
+import { setToastPlace, toast } from '@/components/ds/Toast';
+import {
+  FeatureFoundContext,
+  OpenFeatureContext,
+  type OpenFeature,
+} from '@/components/simple/OpenFeature';
+import { usePhone } from '@/components/simple/PrdTimeline';
+import {
+  DecisionSheetHost,
+  editedWords,
+  useDecisionSheet,
+} from '@/components/simple/questions/DecisionSheet';
+import { FeaturePanel, itemFor, useItemChanged } from '../roadmap/_panel';
+import {
+  QuestionRow,
+  useQuestionActions,
+  useSourceLine,
+  type Question,
+} from '@/components/simple/questions/Questions';
+import { SimpleEmpty, SimplePage } from '@/components/simple/SimplePage';
+import { ErrorNote, LoadError, Loading } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { calendarDay, useCompanyZone } from '@/lib/dates';
+import { zoneName } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { errorMessage, useQuery } from '@/lib/use-query';
+import { foldWaiting, useWaitingList, WaitingRow } from '@/components/simple/WaitingItems';
 
-import { DeliveryLine, emailWords, slackWords } from "../meetings/_delivery";
-import { DecidedItem, LINK, momentWords } from "../meetings/_flow";
+import { DeliveryLine, emailWords, slackWords } from '../meetings/_delivery';
+import { DecidedItem, LINK, momentWords } from '../meetings/_flow';
 
-type Row = Schemas["SimpleDecisionRow"];
-type Group = Schemas["SimpleMeetingGroup"];
-type RunGroup = Schemas["SimpleRunGroup"];
-type View = "list" | "board" | "meetings";
+type Row = Schemas['SimpleDecisionRow'];
+type Group = Schemas['SimpleMeetingGroup'];
+type RunGroup = Schemas['SimpleRunGroup'];
+type View = 'list' | 'board' | 'meetings';
 
 /** qa-simple-decide-35: the lead follows the view. */
 const LEADS: Record<View, string> = {
-  list: "What waits for you, soonest first. Then every decision, beside the meeting that took it.",
-  board: "The PRDs' questions by where they stand: missing a decider or a recommendation, recommended, decided.",
-  meetings: "Every decision, beside the meeting that took it, newest meeting first.",
+  list: 'What waits for you, soonest first. Then every decision, beside the meeting that took it.',
+  board:
+    "The PRDs' questions by where they stand: missing a decider or a recommendation, recommended, decided.",
+  meetings: 'Every decision, beside the meeting that took it, newest meeting first.',
 };
 
 const VIEWS: { value: View; label: string }[] = [
-  { value: "list", label: "List" },
-  { value: "board", label: "Board" },
-  { value: "meetings", label: "By meeting" },
+  { value: 'list', label: 'List' },
+  { value: 'board', label: 'Board' },
+  { value: 'meetings', label: 'By meeting' },
 ];
 /**
  * QA: a PRD's question codes are numbered per run, so two PRDs' runs both have a Q8 (and one
@@ -47,7 +70,7 @@ const VIEWS: { value: View; label: string }[] = [
  * chip's tooltip.
  */
 const RepeatedCodes = createContext<Set<string>>(new Set());
-function repeatedCodes(d: Schemas["SimpleDecisionsOut"]): Set<string> {
+function repeatedCodes(d: Schemas['SimpleDecisionsOut']): Set<string> {
   // A question and its own decided row (in a meeting or outside) are one decision, one id; two
   // decisions of one code and one title are still two.
   const ids = new Map<string, Set<string>>();
@@ -78,28 +101,42 @@ const FIRST = 5;
 export function SimpleDecisions() {
   const params = useSearchParams();
   const pathname = usePathname();
-  const prd = params.get("prd") ?? "";
-  const goal = params.get("goal") ?? "";
-  const meeting = params.get("meeting") ?? "";
-  const q = useQuery(`simple-decisions|${prd}|${goal}|${meeting}`, () =>
-    unwrap(api.GET("/v1/simple/decisions", { params: { query: { prd: prd || undefined, goal: goal || undefined, meeting: meeting || undefined } } })),
+  const prd = params.get('prd') ?? '';
+  const goal = params.get('goal') ?? '';
+  const meeting = params.get('meeting') ?? '';
+  const q = useQuery(
+    `simple-decisions|${prd}|${goal}|${meeting}`,
+    () =>
+      unwrap(
+        api.GET('/v1/simple/decisions', {
+          params: {
+            query: {
+              prd: prd || undefined,
+              goal: goal || undefined,
+              meeting: meeting || undefined,
+            },
+          },
+        }),
+      ),
     { keepPrevious: true },
   );
   // P-4: a message ("Decided Q5 ...") sits at the first spot clear of every control, never over the
   // next question's buttons.
-  useEffect(() => setToastPlace("top"), []);
+  useEffect(() => setToastPlace('top'), []);
   // An anchor (#d-12) scrolls once its decision is drawn.
   const loaded = !!q.data;
   useEffect(() => {
     if (!loaded || !window.location.hash) return;
-    document.getElementById(window.location.hash.slice(1))?.scrollIntoView({ block: "center" });
+    document.getElementById(window.location.hash.slice(1))?.scrollIntoView({ block: 'center' });
   }, [loaded]);
   // inbox-meeting-proposals fix: ?question= (the Inbox's Open on a proposal) lands on that
   // question, marked, wherever the view lists it.
-  const linked = params.get("question") ?? "";
+  const linked = params.get('question') ?? '';
   useEffect(() => {
     if (!loaded || !linked) return;
-    document.querySelector(`[data-question-id="${CSS.escape(linked)}"]`)?.scrollIntoView({ block: "center" });
+    document
+      .querySelector(`[data-question-id="${CSS.escape(linked)}"]`)
+      ?.scrollIntoView({ block: 'center' });
   }, [loaded, linked]);
   const set = (key: string, value: string) => {
     // The address as it is now, written at once (Next keeps useSearchParams in step): a
@@ -108,32 +145,33 @@ export function SimpleDecisions() {
     if (value) next.set(key, value);
     else next.delete(key);
     const s = next.toString();
-    window.history.replaceState(null, "", s ? `${pathname}?${s}` : pathname);
+    window.history.replaceState(null, '', s ? `${pathname}?${s}` : pathname);
   };
   const d = q.data;
   const repeated = useMemo(() => (d ? repeatedCodes(d) : new Set<string>()), [d]);
   // The person's pick this visit, else the remembered one the API returns, else List.
   // qa-simple-decide-36: the view is in the address (?view=), like the filters.
-  const inUrl = params.get("view");
+  const inUrl = params.get('view');
   const [picked, setPicked] = useState<View | null>(null);
-  const view: View = picked ?? (VIEWS.some((x) => x.value === inUrl) ? (inUrl as View) : null) ?? d?.view ?? "list";
+  const view: View =
+    picked ?? (VIEWS.some((x) => x.value === inUrl) ? (inUrl as View) : null) ?? d?.view ?? 'list';
   const pick = (v: View) => {
     setPicked(v);
-    set("view", v === "list" ? "" : v);
+    set('view', v === 'list' ? '' : v);
     api
-      .PATCH("/v1/me/preferences", { body: { simple_decisions_view: v } })
+      .PATCH('/v1/me/preferences', { body: { simple_decisions_view: v } })
       .then((r) => {
-        if (r.error) toast({ message: "Could not remember this view for next time" });
+        if (r.error) toast({ message: 'Could not remember this view for next time' });
       })
-      .catch(() => toast({ message: "Could not remember this view for next time" }));
+      .catch(() => toast({ message: 'Could not remember this view for next time' }));
   };
   const actions = useQuestionActions(() => q.reload());
   const questions = d?.questions ?? [];
   // inbox-meeting-proposals fix 4: the Inbox's Open on a question decided since says so here.
-  const linkedDecided = questions.find((x) => x.id === linked && x.column === "decided");
+  const linkedDecided = questions.find((x) => x.id === linked && x.column === 'decided');
   const filtered = !!(prd || goal || meeting);
   const clear = () => {
-    window.history.replaceState(null, "", inUrl ? `${pathname}?view=${inUrl}` : pathname);
+    window.history.replaceState(null, '', inUrl ? `${pathname}?view=${inUrl}` : pathname);
   };
   // qa-simple-decide-20: the API leaves out an open decision a shown meeting lists as its open question.
   const other = d?.other ?? [];
@@ -142,118 +180,195 @@ export function SimpleDecisions() {
   const [feature, setFeature] = useState<Parameters<OpenFeature>[0] | null>(null);
   const phone = usePhone();
   const { can } = useMe();
-  const roadmap = useQuery("simple-roadmap:decisions", () => unwrap(api.GET("/v1/simple/roadmap", {})));
+  const roadmap = useQuery('simple-roadmap:decisions', () =>
+    unwrap(api.GET('/v1/simple/roadmap', {})),
+  );
   useItemChanged(() => Promise.all([q.reload(), roadmap.reload()]));
   const narrow = useNarrow();
   const info = `${LEADS[view]} Dates are in ${zoneName(zone)}.`;
-  const found = useCallback((f: Parameters<OpenFeature>[0]) => !!itemFor(roadmap.data?.items ?? [], f), [roadmap.data]);
+  const found = useCallback(
+    (f: Parameters<OpenFeature>[0]) => !!itemFor(roadmap.data?.items ?? [], f),
+    [roadmap.data],
+  );
   // QA Nov 12 #16: on a phone the title is in the app bar, so its (i) sits on the filters' row, not alone above it.
   return (
     <SimplePage title="Decisions" info={narrow ? undefined : info}>
       <OpenFeatureContext.Provider value={setFeature}>
-      <FeatureFoundContext.Provider value={found}>
-      <DecisionSheetHost onChanged={() => q.reload()}>
-      {feature && (
-        <FeaturePanel key={`${feature.code}|${feature.name}`} feature={feature} phone={phone} canChange={can("create_simple_change")} onClose={() => setFeature(null)} />
-      )}
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        {/* qa4-simple-decide-35: the filters wrap among themselves, so the view switch keeps its place beside them when Ask Oracle narrows the page. */}
-        <div className="flex min-w-0 flex-1 flex-wrap gap-3 max-[600px]:w-full" role="group" aria-label="Filters">
-          <Filter label="PRD" value={prd} options={d?.prds ?? []} onChange={(v) => set("prd", v)} all="All PRDs" />
-          <Filter label="Goal" value={goal} options={d?.goals ?? []} onChange={(v) => set("goal", v)} all="All goals" />
-          <Filter label="Meeting" value={meeting} options={d?.meeting_options ?? []} onChange={(v) => set("meeting", v)} all="All meetings" />
-          {narrow && (
-            <span className="flex h-[38px] items-center self-end">
-              <InfoTip label="Decisions" testId="page-info" align="end" side="bottom">
-                {info}
-              </InfoTip>
-            </span>
-          )}
-        </div>
-        <ViewSwitch value={view} onChange={pick} />
-      </div>
-      {d && <NewDecision />}
-      {q.loading && !d && <Loading />}
-      {q.error && <ErrorNote>{q.error}</ErrorNote>}
-      {linkedDecided && (
-        <p className="simple-meta" role="status" data-testid="linked-decided">
-          {linkedDecided.code} {linkedDecided.title} is decided already{linkedDecided.decided_label ? `. ${linkedDecided.decided_label}` : ""}.
-        </p>
-      )}
-      <RepeatedCodes.Provider value={repeated}>
-      {d && view === "list" && <QuestionList d={d} actions={actions} filtered={filtered} onClear={clear} linked={linked} />}
-      {d && view === "board" && <Board questions={questions} actions={actions} linked={linked} />}
-      {d && view !== "board" && (
-        <>
-          {d.meetings.length === 0 && other.length === 0 && !d.runs?.length && (
-            <SimpleEmpty testId="decisions-empty">
-              {/* qa-shell-9: "matches" only when a filter is set; with none, what comes next. */}
-              {filtered ? (
+        <FeatureFoundContext.Provider value={found}>
+          <DecisionSheetHost onChanged={() => q.reload()}>
+            {feature && (
+              <FeaturePanel
+                key={`${feature.code}|${feature.name}`}
+                feature={feature}
+                phone={phone}
+                canChange={can('create_simple_change')}
+                onClose={() => setFeature(null)}
+              />
+            )}
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              {/* qa4-simple-decide-35: the filters wrap among themselves, so the view switch keeps its place beside them when Ask Oracle narrows the page. */}
+              <div
+                className="flex min-w-0 flex-1 flex-wrap gap-3 max-[600px]:w-full"
+                role="group"
+                aria-label="Filters"
+              >
+                <Filter
+                  label="PRD"
+                  value={prd}
+                  options={d?.prds ?? []}
+                  onChange={(v) => set('prd', v)}
+                  all="All PRDs"
+                />
+                <Filter
+                  label="Goal"
+                  value={goal}
+                  options={d?.goals ?? []}
+                  onChange={(v) => set('goal', v)}
+                  all="All goals"
+                />
+                <Filter
+                  label="Meeting"
+                  value={meeting}
+                  options={d?.meeting_options ?? []}
+                  onChange={(v) => set('meeting', v)}
+                  all="All meetings"
+                />
+                {narrow && (
+                  <span className="flex h-[38px] items-center self-end">
+                    <InfoTip label="Decisions" testId="page-info" align="end" side="bottom">
+                      {info}
+                    </InfoTip>
+                  </span>
+                )}
+              </div>
+              <ViewSwitch value={view} onChange={pick} />
+            </div>
+            {d && <NewDecision />}
+            {q.loading && !d && <Loading />}
+            {q.error && <ErrorNote>{q.error}</ErrorNote>}
+            {linkedDecided && (
+              <p className="simple-meta" role="status" data-testid="linked-decided">
+                {linkedDecided.code} {linkedDecided.title} is decided already
+                {linkedDecided.decided_label ? `. ${linkedDecided.decided_label}` : ''}.
+              </p>
+            )}
+            <RepeatedCodes.Provider value={repeated}>
+              {d && view === 'list' && (
+                <QuestionList
+                  d={d}
+                  actions={actions}
+                  filtered={filtered}
+                  onClear={clear}
+                  linked={linked}
+                />
+              )}
+              {d && view === 'board' && (
+                <Board questions={questions} actions={actions} linked={linked} />
+              )}
+              {d && view !== 'board' && (
                 <>
-                  No decision matches. <ClearFilters onClear={clear} />
-                </>
-              ) : (
-                <>
-                  No decisions yet. They are taken in{" "}
-                  <Link href="/simple/meetings" className="font-[650] text-accent-ink hover:underline">
-                    Meetings
-                  </Link>{" "}
-                  and on a PRD&apos;s open questions, then listed here.
+                  {d.meetings.length === 0 && other.length === 0 && !d.runs?.length && (
+                    <SimpleEmpty testId="decisions-empty">
+                      {/* qa-shell-9: "matches" only when a filter is set; with none, what comes next. */}
+                      {filtered ? (
+                        <>
+                          No decision matches. <ClearFilters onClear={clear} />
+                        </>
+                      ) : (
+                        <>
+                          No decisions yet. They are taken in{' '}
+                          <Link
+                            href="/simple/meetings"
+                            className="font-[650] text-accent-ink hover:underline"
+                          >
+                            Meetings
+                          </Link>{' '}
+                          and on a PRD&apos;s open questions, then listed here.
+                        </>
+                      )}
+                    </SimpleEmpty>
+                  )}
+                  {d.meetings.map((g) => (
+                    <MeetingGroup
+                      key={g.meeting.id}
+                      g={g}
+                      reload={() => q.reload()}
+                      filtered={!!(prd || goal)}
+                      rowNumbers={
+                        new Set(
+                          [...d.meetings.flatMap((x) => x.decisions), ...other].map(
+                            (r) => r.number,
+                          ),
+                        )
+                      }
+                    />
+                  ))}
+                  {!!d.runs?.length && <RunsGroup runs={d.runs} />}
+                  {other.length > 0 && (
+                    <section className="simple-card" aria-label="Outside meetings">
+                      <h2 className="simple-h2">Outside meetings</h2>
+                      <Rows rows={other} />
+                    </section>
+                  )}
                 </>
               )}
-            </SimpleEmpty>
-          )}
-          {d.meetings.map((g) => (
-            <MeetingGroup key={g.meeting.id} g={g} reload={() => q.reload()} filtered={!!(prd || goal)} rowNumbers={new Set([...d.meetings.flatMap((x) => x.decisions), ...other].map((r) => r.number))} />
-          ))}
-          {!!d.runs?.length && <RunsGroup runs={d.runs} />}
-          {other.length > 0 && (
-            <section className="simple-card" aria-label="Outside meetings">
-              <h2 className="simple-h2">Outside meetings</h2>
-              <Rows rows={other} />
-            </section>
-          )}
-        </>
-      )}
-      </RepeatedCodes.Provider>
-      {d && d.approvals_waiting > 0 && (
-        <p className="simple-plumb" data-testid="decisions-approvals">
-          <Icon name="flag" size={16} stroke={1.7} />
-          {/* qa-simple-decide-29: plain words, no internal terms. QA Nov 12 #14: short, to Simple's own Inbox, the why behind the (i). */}
-          <span className="inline-flex flex-wrap items-center gap-1">
-            <Link href="/simple/inbox" className="font-[650] text-accent-ink hover:underline">
-              {d.approvals_waiting === 1 ? "1 approval waits" : `${d.approvals_waiting} approvals wait`} in your Inbox
-            </Link>
-            <InfoTip label="Approvals in your Inbox" testId="decisions-approvals-info" align="start">
-              They approve Oracle&apos;s own work, not product decisions, so they are not listed or counted here.
-            </InfoTip>
-          </span>
-        </p>
-      )}
-      </DecisionSheetHost>
-      </FeatureFoundContext.Provider>
+            </RepeatedCodes.Provider>
+            {d && d.approvals_waiting > 0 && (
+              <p className="simple-plumb" data-testid="decisions-approvals">
+                <Icon name="flag" size={16} stroke={1.7} />
+                {/* qa-simple-decide-29: plain words, no internal terms. QA Nov 12 #14: short, to Simple's own Inbox, the why behind the (i). */}
+                <span className="inline-flex flex-wrap items-center gap-1">
+                  <Link href="/simple/inbox" className="font-[650] text-accent-ink hover:underline">
+                    {d.approvals_waiting === 1
+                      ? '1 approval waits'
+                      : `${d.approvals_waiting} approvals wait`}{' '}
+                    in your Inbox
+                  </Link>
+                  <InfoTip
+                    label="Approvals in your Inbox"
+                    testId="decisions-approvals-info"
+                    align="start"
+                  >
+                    They approve Oracle&apos;s own work, not product decisions, so they are not
+                    listed or counted here.
+                  </InfoTip>
+                </span>
+              </p>
+            )}
+          </DecisionSheetHost>
+        </FeatureFoundContext.Provider>
       </OpenFeatureContext.Provider>
     </SimplePage>
   );
 }
 
 /** The width at which SimplePage hides its H1 (the phone's app bar shows the title). */
-const NARROW = "(max-width: 600px)";
+const NARROW = '(max-width: 600px)';
 function subscribeNarrow(on: () => void) {
   const m = window.matchMedia(NARROW);
-  m.addEventListener("change", on);
-  return () => m.removeEventListener("change", on);
+  m.addEventListener('change', on);
+  return () => m.removeEventListener('change', on);
 }
-const useNarrow = () => useSyncExternalStore(subscribeNarrow, () => window.matchMedia(NARROW).matches, () => false);
+const useNarrow = () =>
+  useSyncExternalStore(
+    subscribeNarrow,
+    () => window.matchMedia(NARROW).matches,
+    () => false,
+  );
 
 /** ec1 b: + New decision opens the decision sheet, empty, with Pick for who decides. */
 function NewDecision() {
   const { can } = useMe();
   const sheet = useDecisionSheet();
-  if (!sheet || !can("create_decision")) return null;
+  if (!sheet || !can('create_decision')) return null;
   return (
     <div>
-      <button type="button" className="simple-button simple-button-primary" data-testid="decisions-new" onClick={() => sheet.open({ kind: "new-decision" })}>
+      <button
+        type="button"
+        className="simple-button simple-button-primary"
+        data-testid="decisions-new"
+        onClick={() => sheet.open({ kind: 'new-decision' })}
+      >
         + New decision
       </button>
     </div>
@@ -261,16 +376,27 @@ function NewDecision() {
 }
 
 /** eq2 b: + Ask a question, at the top of Waiting for you: the sheet, with its PRD to pick (every PRD the person reads, as the PRD filter lists them). */
-function AskQuestion({ prds: all, questions }: { prds: { id: string; title: string }[]; questions: Question[] }) {
+function AskQuestion({
+  prds: all,
+  questions,
+}: {
+  prds: { id: string; title: string }[];
+  questions: Question[];
+}) {
   const { can } = useMe();
   const sheet = useDecisionSheet();
   // The PRDs that already have questions first (the sheet starts on the first), then the others.
   const asked = new Set(questions.map((x) => x.prd.slug));
   const prds = [...all.filter((p) => asked.has(p.id)), ...all.filter((p) => !asked.has(p.id))];
-  if (!sheet || !prds.length || !can("create_simple_change")) return null;
+  if (!sheet || !prds.length || !can('create_simple_change')) return null;
   return (
     <div>
-      <button type="button" className="simple-button" data-testid="questions-ask" onClick={() => sheet.open({ kind: "new-question", prds })}>
+      <button
+        type="button"
+        className="simple-button"
+        data-testid="questions-ask"
+        onClick={() => sheet.open({ kind: 'new-question', prds })}
+      >
         + Ask a question
       </button>
     </div>
@@ -280,18 +406,41 @@ function AskQuestion({ prds: all, questions }: { prds: { id: string; title: stri
 /** qa-simple-decide-26: the empty message's way out when the filters match nothing. */
 function ClearFilters({ onClear }: { onClear: () => void }) {
   return (
-    <button type="button" className="simple-button" data-testid="decisions-clear-filters" onClick={onClear}>
+    <button
+      type="button"
+      className="simple-button"
+      data-testid="decisions-clear-filters"
+      onClick={onClear}
+    >
       Clear filters
     </button>
   );
 }
 
 /** The mock-up's compact segmented switch (full width on a phone). */
-function Seg<V extends string>({ label, value, items, onChange, className = "" }: { label: string; value: V; items: { value: V; label: string; count?: number; testId: string }[]; onChange: (v: V) => void; className?: string }) {
+function Seg<V extends string>({
+  label,
+  value,
+  items,
+  onChange,
+  className = '',
+}: {
+  label: string;
+  value: V;
+  items: { value: V; label: string; count?: number; testId: string }[];
+  onChange: (v: V) => void;
+  className?: string;
+}) {
   return (
     <div role="group" aria-label={label} className={`simple-seg ${className}`}>
       {items.map((v) => (
-        <button key={v.value} type="button" data-testid={v.testId} aria-pressed={v.value === value} onClick={() => onChange(v.value)}>
+        <button
+          key={v.value}
+          type="button"
+          data-testid={v.testId}
+          aria-pressed={v.value === value}
+          onClick={() => onChange(v.value)}
+        >
           {v.label}
           {v.count != null && <span className="tnum"> {v.count}</span>}
         </button>
@@ -302,13 +451,34 @@ function Seg<V extends string>({ label, value, items, onChange, className = "" }
 
 /** List | Board | By meeting (the owner's addition to A). */
 function ViewSwitch({ value, onChange }: { value: View; onChange: (v: View) => void }) {
-  return <Seg label="Show decisions as" value={value} onChange={onChange} items={VIEWS.map((v) => ({ ...v, testId: `decisions-view-${v.value}` }))} />;
+  return (
+    <Seg
+      label="Show decisions as"
+      value={value}
+      onChange={onChange}
+      items={VIEWS.map((v) => ({ ...v, testId: `decisions-view-${v.value}` }))}
+    />
+  );
 }
 
 type Actions = ReturnType<typeof useQuestionActions>;
 
 /** A card of questions: the round flag icon, its title and the count; (Waiting for you) where they were read, after the rows. */
-function QuestionCard({ label, testId, questions, count, source, children }: { label: string; testId: string; questions: Question[]; count: number; source?: boolean; children: ReactNode }) {
+function QuestionCard({
+  label,
+  testId,
+  questions,
+  count,
+  source,
+  children,
+}: {
+  label: string;
+  testId: string;
+  questions: Question[];
+  count: number;
+  source?: boolean;
+  children: ReactNode;
+}) {
   const line = useSourceLine(questions);
   return (
     <section className="simple-card" aria-label={label} data-testid={testId}>
@@ -336,32 +506,63 @@ function QuestionCard({ label, testId, questions, count, source, children }: { l
 }
 
 /** List: waiting for you (first five, then Show N more), then waiting for others; decided ones sit with the meeting that took them, or outside meetings. */
-function QuestionList({ d, actions, filtered, onClear, linked }: { d: Schemas["SimpleDecisionsOut"]; actions: Actions; filtered: boolean; onClear: () => void; linked: string }) {
+function QuestionList({
+  d,
+  actions,
+  filtered,
+  onClear,
+  linked,
+}: {
+  d: Schemas['SimpleDecisionsOut'];
+  actions: Actions;
+  filtered: boolean;
+  onClear: () => void;
+  linked: string;
+}) {
   const repeated = useContext(RepeatedCodes);
-  const open = d.questions.filter((x) => x.column !== "decided");
+  const open = d.questions.filter((x) => x.column !== 'decided');
   // eq2 b: one withdrawn here just now keeps its place, struck through, with Undo.
   const gone = useDecisionSheet()?.withdrawn ?? {};
   // qa-simple-decide-15: only what the person can act on waits for them (a viewer: nothing).
-  const mine = open.filter((x) => (x.waiting_for_me && x.status === "proposed" && (x.can.decide || x.can.propose)) || (x.status === "withdrawn" && !!gone[x.id]));
+  const mine = open.filter(
+    (x) =>
+      (x.waiting_for_me && x.status === 'proposed' && (x.can.decide || x.can.propose)) ||
+      (x.status === 'withdrawn' && !!gone[x.id]),
+  );
   // A linked question past the first five shows them all.
   const [all, setAll] = useState(() => mine.findIndex((x) => x.id === linked) >= FIRST);
-  const others = open.filter((x) => !mine.includes(x) && x.status !== "withdrawn");
+  const others = open.filter((x) => !mine.includes(x) && x.status !== 'withdrawn');
   const shown = all ? mine : mine.slice(0, FIRST);
   // home-waiting-one-list: and everything else that waits on me, from the one list Home reads
   // (run stops, broken links, dates, drafts, proposals, goal suggestions), each with its action;
   // the filters narrow the PRDs' questions only, so these show unfiltered.
   const waiting = useWaitingList();
-  const extra = filtered ? [] : (waiting.data?.items ?? []).filter((i) => i.kind !== "question");
+  const extra = filtered ? [] : (waiting.data?.items ?? []).filter((i) => i.kind !== 'question');
   // counts-wait: no number until the one list is read too (0 shows none), so it never jumps; and
   // none when it failed (counts-wait review): the PRDs' questions alone are not the whole count.
   const failed = !filtered && !!waiting.error;
-  const count = filtered || waiting.data ? Math.min(d.waiting_count, mine.filter((x) => x.status === "proposed").length) + extra.length : 0;
+  const count =
+    filtered || waiting.data
+      ? Math.min(d.waiting_count, mine.filter((x) => x.status === 'proposed').length) + extra.length
+      : 0;
   return (
     <>
-      <QuestionCard label="Waiting for you" testId="questions-mine" questions={mine.length ? mine : open} count={count} source>
+      <QuestionCard
+        label="Waiting for you"
+        testId="questions-mine"
+        questions={mine.length ? mine : open}
+        count={count}
+        source
+      >
         <AskQuestion prds={d.prds} questions={d.questions} />
         {/* counts-wait review: the list's read failed: the shared could-not-load mark, with Try again. */}
-        {failed && <LoadError what="what waits on you" error={errorMessage(waiting.error)} onRetry={waiting.reload} />}
+        {failed && (
+          <LoadError
+            what="what waits on you"
+            error={errorMessage(waiting.error)}
+            onRetry={waiting.reload}
+          />
+        )}
         {mine.length === 0 && extra.length === 0 ? (
           failed ? null : !filtered && !waiting.data ? (
             <p className="simple-meta" role="status">
@@ -374,55 +575,108 @@ function QuestionList({ d, actions, filtered, onClear, linked }: { d: Schemas["S
           )
         ) : (
           <ul>
-            {shown.map((x) => <QuestionRow key={x.id} q={x} mode="list" actions={actions} linked={x.id === linked} listCode={repeated.has(x.code.toUpperCase())} />)}
+            {shown.map((x) => (
+              <QuestionRow
+                key={x.id}
+                q={x}
+                mode="list"
+                actions={actions}
+                linked={x.id === linked}
+                listCode={repeated.has(x.code.toUpperCase())}
+              />
+            ))}
             {foldWaiting(extra).map((r) => (
               <WaitingRow key={r.key} item={r.item} links={r.links} />
             ))}
           </ul>
         )}
         {mine.length > FIRST && (
-          <button type="button" className="simple-more" aria-expanded={all} onClick={() => setAll((x) => !x)}>
-            {all ? "Show fewer" : `Show ${mine.length - FIRST} more`}
+          <button
+            type="button"
+            className="simple-more"
+            aria-expanded={all}
+            onClick={() => setAll((x) => !x)}
+          >
+            {all ? 'Show fewer' : `Show ${mine.length - FIRST} more`}
           </button>
         )}
       </QuestionCard>
       {others.length > 0 && (
-        <QuestionCard label="Waiting for others" testId="questions-others" questions={others} count={others.length}>
-          <ul>{others.map((x) => <QuestionRow key={x.id} q={x} mode="list" actions={actions} forOthers linked={x.id === linked} listCode={repeated.has(x.code.toUpperCase())} />)}</ul>
+        <QuestionCard
+          label="Waiting for others"
+          testId="questions-others"
+          questions={others}
+          count={others.length}
+        >
+          <ul>
+            {others.map((x) => (
+              <QuestionRow
+                key={x.id}
+                q={x}
+                mode="list"
+                actions={actions}
+                forOthers
+                linked={x.id === linked}
+                listCode={repeated.has(x.code.toUpperCase())}
+              />
+            ))}
+          </ul>
         </QuestionCard>
       )}
     </>
   );
 }
 
-const COLUMNS: { key: Question["column"]; title: string; tab: string }[] = [
+const COLUMNS: { key: Question['column']; title: string; tab: string }[] = [
   // qa4-simple-decide-8: the column holds questions with no decider or no recommendation yet
   // (some have a recommendation), so it says that, not "Needs input".
-  { key: "needs_input", title: "Missing a decider or a recommendation", tab: "Missing" },
-  { key: "recommended", title: "Recommended", tab: "Recommended" },
+  { key: 'needs_input', title: 'Missing a decider or a recommendation', tab: 'Missing' },
+  { key: 'recommended', title: 'Recommended', tab: 'Recommended' },
   // qa-simple-decide-21: the Board holds the PRDs' questions; decisions taken elsewhere are under By meeting.
   // qa4-simple-decide-9: the phone's tab says so too, so its count does not contradict the List's decisions.
-  { key: "decided", title: "Decided questions", tab: "Decided questions" },
+  { key: 'decided', title: 'Decided questions', tab: 'Decided questions' },
 ];
 
 /** Two columns (901-1599 px): Needs input over Decided on the left, Recommended down the right (its extra height goes to the second row). */
-const TWO_COLUMN_PLACE: Record<Question["column"], string> = {
-  needs_input: "min-[901px]:max-[1599px]:col-start-1 min-[901px]:max-[1599px]:row-start-1",
-  recommended: "min-[901px]:max-[1599px]:col-start-2 min-[901px]:max-[1599px]:row-span-2 min-[901px]:max-[1599px]:row-start-1",
-  decided: "min-[901px]:max-[1599px]:col-start-1 min-[901px]:max-[1599px]:row-start-2",
+const TWO_COLUMN_PLACE: Record<Question['column'], string> = {
+  needs_input: 'min-[901px]:max-[1599px]:col-start-1 min-[901px]:max-[1599px]:row-start-1',
+  recommended:
+    'min-[901px]:max-[1599px]:col-start-2 min-[901px]:max-[1599px]:row-span-2 min-[901px]:max-[1599px]:row-start-1',
+  decided: 'min-[901px]:max-[1599px]:col-start-1 min-[901px]:max-[1599px]:row-start-2',
 };
 
 /** Board: three columns by `column`, soonest first (the API's order); on a phone, one column at a time behind tabs. */
-function Board({ questions, actions, linked }: { questions: Question[]; actions: Actions; linked: string }) {
+function Board({
+  questions,
+  actions,
+  linked,
+}: {
+  questions: Question[];
+  actions: Actions;
+  linked: string;
+}) {
   const repeated = useContext(RepeatedCodes);
   // On a phone, the tab of a linked question.
-  const [tab, setTab] = useState<Question["column"]>(() => questions.find((x) => x.id === linked)?.column ?? "needs_input");
-  const of = (k: Question["column"]) => questions.filter((x) => x.column === k);
+  const [tab, setTab] = useState<Question['column']>(
+    () => questions.find((x) => x.id === linked)?.column ?? 'needs_input',
+  );
+  const of = (k: Question['column']) => questions.filter((x) => x.column === k);
   return (
     <div data-testid="questions-board" className="flex flex-col gap-3">
       <div className="hidden max-[600px]:block">
         {/* qa-simple-decide-4: short tab names that fit a 390 px phone (the column's own heading is the long one). */}
-        <Seg label="Column" value={tab} onChange={setTab} className="min-w-0 [&>button]:min-w-0 [&>button]:px-1.5 [&>button]:whitespace-normal" items={COLUMNS.map((c) => ({ value: c.key, label: c.tab, count: of(c.key).length, testId: `board-tab-${c.key}` }))} />
+        <Seg
+          label="Column"
+          value={tab}
+          onChange={setTab}
+          className="min-w-0 [&>button]:min-w-0 [&>button]:px-1.5 [&>button]:whitespace-normal"
+          items={COLUMNS.map((c) => ({
+            value: c.key,
+            label: c.tab,
+            count: of(c.key).length,
+            testId: `board-tab-${c.key}`,
+          }))}
+        />
       </div>
       {/* qa-simple-decide-22: two wider columns from 901 px, three from 1600 px; qa-simple-decide-13:
           with two, Decided questions sits straight under Needs input (no gap beside Recommended);
@@ -431,13 +685,24 @@ function Board({ questions, actions, linked }: { questions: Question[]; actions:
       <div className="grid grid-cols-1 items-start gap-4 min-[901px]:grid-cols-2 min-[901px]:max-[1599px]:grid-rows-[auto_1fr] min-[1600px]:grid-cols-3">
         {COLUMNS.map((c) => (
           // The wrapper hides a column on a phone (.simple-card sets its own display).
-          <div key={c.key} className={`min-w-0 ${TWO_COLUMN_PLACE[c.key]} ${tab === c.key ? "" : "max-[600px]:hidden"}`} data-column={c.key}>
-            <section aria-label={c.title} data-testid={`board-${c.key}`} className="simple-card simple-narrow min-w-0">
+          <div
+            key={c.key}
+            className={`min-w-0 ${TWO_COLUMN_PLACE[c.key]} ${tab === c.key ? '' : 'max-[600px]:hidden'}`}
+            data-column={c.key}
+          >
+            <section
+              aria-label={c.title}
+              data-testid={`board-${c.key}`}
+              className="simple-card simple-narrow min-w-0"
+            >
               {/* qa-simple-decide-33: on a phone the tab above already names the column and its count. */}
               <header className="flex items-center gap-3 max-[600px]:hidden">
-                <h2 className="simple-h2 min-w-0 flex-1">{c.title}</h2>{" "}
+                <h2 className="simple-h2 min-w-0 flex-1">{c.title}</h2>{' '}
                 {/* qa4-simple-decide-38: done items need nothing from you: a neutral count. */}
-                <span data-testid={`board-${c.key}-count`} className={`simple-count tnum ${c.key === "decided" ? "simple-count-quiet" : ""}`}>
+                <span
+                  data-testid={`board-${c.key}-count`}
+                  className={`simple-count tnum ${c.key === 'decided' ? 'simple-count-quiet' : ''}`}
+                >
                   {of(c.key).length}
                 </span>
               </header>
@@ -446,7 +711,17 @@ function Board({ questions, actions, linked }: { questions: Question[]; actions:
               ) : (
                 <ul>
                   {/* qa4-simple-decide-6: someone else's question says for whom here too, as on the List. */}
-                  {of(c.key).map((x) => <QuestionRow key={x.id} q={x} mode={c.key} actions={actions} forOthers linked={x.id === linked} listCode={repeated.has(x.code.toUpperCase())} />)}
+                  {of(c.key).map((x) => (
+                    <QuestionRow
+                      key={x.id}
+                      q={x}
+                      mode={c.key}
+                      actions={actions}
+                      forOthers
+                      linked={x.id === linked}
+                      listCode={repeated.has(x.code.toUpperCase())}
+                    />
+                  ))}
                 </ul>
               )}
             </section>
@@ -458,17 +733,41 @@ function Board({ questions, actions, linked }: { questions: Question[]; actions:
 }
 
 /** A filter: its label over the mock-up's box (a native select, the chevron drawn over it). */
-function Filter({ label, value, options, onChange, all }: { label: string; value: string; options: Schemas["SimpleFilterOption"][]; onChange: (v: string) => void; all: string }) {
+function Filter({
+  label,
+  value,
+  options,
+  onChange,
+  all,
+}: {
+  label: string;
+  value: string;
+  options: Schemas['SimpleFilterOption'][];
+  onChange: (v: string) => void;
+  all: string;
+}) {
   return (
     <label className="flex flex-col gap-1 max-[600px]:min-w-[160px] max-[600px]:flex-1">
       <span className="simple-meta">{label}</span>
       <span className="relative flex">
         {/* qa-simple-decide-11: a dated meeting name keeps the filters' row: the box is capped, the list shows it whole, the box's title too. */}
-        <select className="simple-select max-[600px]:w-full max-[600px]:min-w-0 min-[601px]:max-w-[220px] text-ellipsis" title={options.find((o) => o.id === value)?.title ?? all} value={value} onChange={(e) => onChange(e.target.value)}>
+        <select
+          className="simple-select max-[600px]:w-full max-[600px]:min-w-0 min-[601px]:max-w-[220px] text-ellipsis"
+          title={options.find((o) => o.id === value)?.title ?? all}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        >
           <option value="">{all}</option>
-          {options.map((o) => <option key={o.id} value={o.id}>{o.title}</option>)}
+          {options.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.title}
+            </option>
+          ))}
         </select>
-        <span aria-hidden className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-text">
+        <span
+          aria-hidden
+          className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-text"
+        >
           <Icon name="chevron-down" size={18} stroke={1.7} />
         </span>
       </span>
@@ -476,7 +775,17 @@ function Filter({ label, value, options, onChange, all }: { label: string; value
   );
 }
 
-function MeetingGroup({ g, filtered, rowNumbers, reload }: { g: Group; filtered: boolean; rowNumbers: Set<number>; reload: () => Promise<unknown> }) {
+function MeetingGroup({
+  g,
+  filtered,
+  rowNumbers,
+  reload,
+}: {
+  g: Group;
+  filtered: boolean;
+  rowNumbers: Set<number>;
+  reload: () => Promise<unknown>;
+}) {
   const zone = useCompanyZone();
   const m = g.meeting;
   const minutes = g.minutes;
@@ -484,29 +793,59 @@ function MeetingGroup({ g, filtered, rowNumbers, reload }: { g: Group; filtered:
     <section className="simple-card" aria-label={m.title} data-testid="meeting-group">
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="simple-h2 min-w-0 flex-1">
-          <Link href={`/simple/meetings/${m.id}`} className={LINK}>{m.title}</Link>
+          <Link href={`/simple/meetings/${m.id}`} className={LINK}>
+            {m.title}
+          </Link>
         </h2>
         {/* qa-simple-decide-11: two reviews of one PRD told apart by their day and "live". */}
         {/* qa4-simple-decide-21: the PRD's name only when the title does not already say it, with or
             without the kind word its document's title may carry ("Usage alerts PRD", qa4-simple-prd-28). */}
         <span className="simple-meta" data-testid="meeting-group-when">
           {/* walkc-meeting r2 (5j): the meeting's day and time ("Fri Oct 30, 2:49 PM"); the zone is in the lead. */}
-          {[momentWords(m.started_at, zone), m.status === "live" ? "live" : null, m.title.includes(m.prd.title.replace(/\s+PRD$/, "")) ? null : m.prd.title].filter(Boolean).join(" · ")}
+          {[
+            momentWords(m.started_at, zone),
+            m.status === 'live' ? 'live' : null,
+            m.title.includes(m.prd.title.replace(/\s+PRD$/, '')) ? null : m.prd.title,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
         </span>
       </div>
       {minutes?.summary && <p>{minutes.summary}</p>}
       {filtered && (
         <p className="simple-meta" data-testid="meeting-group-filtered">
           {/* qa-simple-decide-12 */}
-          Filtered: {g.decisions.length} {g.decisions.length === 1 ? "decision of this meeting matches" : "decisions of this meeting match"}.
+          Filtered: {g.decisions.length}{' '}
+          {g.decisions.length === 1
+            ? 'decision of this meeting matches'
+            : 'decisions of this meeting match'}
+          .
         </p>
       )}
-      <p className="simple-meta">Attendees: {m.attendees.map((a) => a.name).join(", ")}</p>
+      <p className="simple-meta">Attendees: {m.attendees.map((a) => a.name).join(', ')}</p>
       {/* dod-delivery: how the sent minutes went out (email, Slack), with Retry when one failed. */}
       {g.delivery && (g.delivery.email || g.delivery.slack) && (
         <p className="simple-meta flex flex-col gap-0.5" data-testid="meeting-group-delivery">
-          {g.delivery.email && <DeliveryLine meetingId={m.id} what="email" words={emailWords(g.delivery)} canRetry={g.can_retry_delivery} reload={reload} testId="delivery-email" />}
-          {g.delivery.slack && <DeliveryLine meetingId={m.id} what="slack" words={slackWords(g.delivery)} canRetry={g.can_retry_delivery} reload={reload} testId="delivery-slack" />}
+          {g.delivery.email && (
+            <DeliveryLine
+              meetingId={m.id}
+              what="email"
+              words={emailWords(g.delivery)}
+              canRetry={g.can_retry_delivery}
+              reload={reload}
+              testId="delivery-email"
+            />
+          )}
+          {g.delivery.slack && (
+            <DeliveryLine
+              meetingId={m.id}
+              what="slack"
+              words={slackWords(g.delivery)}
+              canRetry={g.can_retry_delivery}
+              reload={reload}
+              testId="delivery-slack"
+            />
+          )}
         </p>
       )}
       {minutes && minutes.open_questions.length > 0 && (
@@ -519,7 +858,12 @@ function MeetingGroup({ g, filtered, rowNumbers, reload }: { g: Group; filtered:
               const n = /^D-(\d+):/.exec(x)?.[1];
               const anchor = n && !rowNumbers.has(Number(n)) ? `d-${n}` : undefined;
               return (
-                <li key={x} id={anchor} className={anchor ? "target:bg-[var(--simple-edited)]" : undefined} data-user-content>
+                <li
+                  key={x}
+                  id={anchor}
+                  className={anchor ? 'target:bg-[var(--simple-edited)]' : undefined}
+                  data-user-content
+                >
                   {x}
                 </li>
               );
@@ -531,26 +875,51 @@ function MeetingGroup({ g, filtered, rowNumbers, reload }: { g: Group; filtered:
         <div>
           <h3 className="text-[18px] leading-[26px] font-[650]">Action items</h3>
           <ul className="list-disc pl-5">
-            {minutes.action_items.map((a, i) => <li key={i}><span data-user-content>{a.title}</span> · {a.owner_name ?? "no owner"}{a.due_date ? ` · by ${calendarDay(a.due_date, { weekday: "short" })} ${calendarDay(a.due_date)}` : ""}</li>)}
+            {minutes.action_items.map((a, i) => (
+              <li key={i}>
+                <span data-user-content>{a.title}</span> · {a.owner_name ?? 'no owner'}
+                {a.due_date
+                  ? ` · by ${calendarDay(a.due_date, { weekday: 'short' })} ${calendarDay(a.due_date)}`
+                  : ''}
+              </li>
+            ))}
           </ul>
         </div>
       )}
       {minutes && minutes.waits.length > 0 && (
         <div>
           <h3 className="text-[18px] leading-[26px] font-[650]">What waits on whom</h3>
-          <ul className="list-disc pl-5">{minutes.waits.map((w, i) => <li key={i}>{w.what}{w.on.length ? ` · on ${w.on.map((p) => p.name).join(", ")}` : ""}</li>)}</ul>
+          <ul className="list-disc pl-5">
+            {minutes.waits.map((w, i) => (
+              <li key={i}>
+                {w.what}
+                {w.on.length ? ` · on ${w.on.map((p) => p.name).join(', ')}` : ''}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
       {/* qa4-simple-decide-32: the notes and comments the meeting's minutes list. */}
-      {(["note", "comment"] as const).map((kind) => {
+      {(['note', 'comment'] as const).map((kind) => {
         const notes = (g.notes ?? []).filter((n) => n.kind === kind);
-        return notes.length > 0 && (
-          <div key={kind}>
-            <h3 className="text-[18px] leading-[26px] font-[650]">{kind === "note" ? "Notes" : "Comments"}</h3>
-            <ul className="list-disc pl-5 [overflow-wrap:anywhere]" data-testid={`meeting-group-${kind}s`}>
-              {notes.map((n) => <li key={n.id}><span data-user-content>{n.text}</span> · {n.by_name}</li>)}
-            </ul>
-          </div>
+        return (
+          notes.length > 0 && (
+            <div key={kind}>
+              <h3 className="text-[18px] leading-[26px] font-[650]">
+                {kind === 'note' ? 'Notes' : 'Comments'}
+              </h3>
+              <ul
+                className="list-disc pl-5 [overflow-wrap:anywhere]"
+                data-testid={`meeting-group-${kind}s`}
+              >
+                {notes.map((n) => (
+                  <li key={n.id}>
+                    <span data-user-content>{n.text}</span> · {n.by_name}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )
         );
       })}
       <h3 className="text-[18px] leading-[26px] font-[650]">Decisions</h3>
@@ -561,16 +930,37 @@ function MeetingGroup({ g, filtered, rowNumbers, reload }: { g: Group; filtered:
 
 /** ec1 b: an open row names who decides ("Avery Stone decides · <when>"), as its sheet does; "waiting for a decider" only when no one is named. */
 function rowMeta(r: Row, when: string, edited: string | null): string {
-  if (r.status === "proposed") return [r.approver ? `${r.approver.name} decides` : "No approver", when, r.approver ? null : STATUS_WORDS.proposed, edited].filter(Boolean).join(" · ");
-  return [r.chosen, r.approver?.name ?? "No approver", when, r.status === "decided" ? null : STATUS_WORDS[r.status] ?? "open", edited].filter(Boolean).join(" · ");
+  if (r.status === 'proposed')
+    return [
+      r.approver ? `${r.approver.name} decides` : 'No approver',
+      when,
+      r.approver ? null : STATUS_WORDS.proposed,
+      edited,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+  return [
+    r.chosen,
+    r.approver?.name ?? 'No approver',
+    when,
+    r.status === 'decided' ? null : (STATUS_WORDS[r.status] ?? 'open'),
+    edited,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 /** qa-simple-decide-19: a decision's state in plain words. */
-const STATUS_WORDS: Record<string, string> = { proposed: "waiting for a decider", superseded: "replaced", rejected: "declined", withdrawn: "withdrawn" };
+const STATUS_WORDS: Record<string, string> = {
+  proposed: 'waiting for a decider',
+  superseded: 'replaced',
+  rejected: 'declined',
+  withdrawn: 'withdrawn',
+};
 
 /** "Tue Oct 20": a run stop's day. */
 function stopDay(day: string) {
-  return calendarDay(day, { weekday: "short", month: "short", day: "numeric" }).replace(",", "");
+  return calendarDay(day, { weekday: 'short', month: 'short', day: 'numeric' }).replace(',', '');
 }
 
 /** build-rundecide RD1 a: the runs' stops, after the meetings, one block per run. */
@@ -582,12 +972,16 @@ function RunsGroup({ runs }: { runs: RunGroup[] }) {
         <span className="simple-meta">Stops people approved while Oracle drafted a plan</span>
       </header>
       {runs.map((r) => (
-        <div key={r.run_id} className="mt-4 border-t border-line pt-4 first-of-type:border-t-0" data-testid="decisions-run">
+        <div
+          key={r.run_id}
+          className="mt-4 border-t border-line pt-4 first-of-type:border-t-0"
+          data-testid="decisions-run"
+        >
           <h3 className="text-[18px] leading-[26px] font-[650]">
-            {r.name}{" "}
+            {r.name}{' '}
             <span className="simple-meta font-normal">
-              · {r.prd ? `${r.prd.title} · ` : ""}
-              {r.stops.length} {r.stops.length === 1 ? "decision" : "decisions"}
+              · {r.prd ? `${r.prd.title} · ` : ''}
+              {r.stops.length} {r.stops.length === 1 ? 'decision' : 'decisions'}
             </span>
           </h3>
           <ul className="mt-2">
@@ -602,13 +996,16 @@ function RunsGroup({ runs }: { runs: RunGroup[] }) {
 }
 
 /** One stop of a run: "Engineering check: approved after a change", its note, who (role) and day; a stop sent back first opens to its steps. */
-function StopRow({ run, s }: { run: RunGroup; s: RunGroup["stops"][number] }) {
+function StopRow({ run, s }: { run: RunGroup; s: RunGroup['stops'][number] }) {
   const [shown, setShown] = useState(false);
   const trail = s.trail ?? [];
-  const sentBack = trail.filter((t) => t.what === "Sent back").length;
+  const sentBack = trail.filter((t) => t.what === 'Sent back').length;
   const who = s.who ? (s.role ? `${s.who} (${s.role})` : s.who) : null;
   return (
-    <li className="flex !items-start gap-[14px] border-t border-line py-[14px] first:border-t-0 first:pt-0 last:pb-0" data-testid="run-stop-row">
+    <li
+      className="flex !items-start gap-[14px] border-t border-line py-[14px] first:border-t-0 first:pt-0 last:pb-0"
+      data-testid="run-stop-row"
+    >
       <span aria-hidden className="simple-ico simple-ico-done">
         <Icon name="check" size={20} stroke={1.7} />
       </span>
@@ -618,10 +1015,19 @@ function StopRow({ run, s }: { run: RunGroup; s: RunGroup["stops"][number] }) {
             {s.stop}: {s.outcome.toLowerCase()}
           </b>
         </span>
-        <span className="simple-meta">{[s.note, who, s.day ? stopDay(s.day) : null].filter(Boolean).join(" · ")}</span>
+        <span className="simple-meta">
+          {[s.note, who, s.day ? stopDay(s.day) : null].filter(Boolean).join(' · ')}
+        </span>
         {trail.length > 1 && !shown && (
-          <button type="button" className="simple-more !mt-1 !text-left" onClick={() => setShown(true)} aria-expanded={false}>
-            {sentBack === 1 ? "Sent back once" : `Sent back ${sentBack} times`}, then {s.outcome.toLowerCase().startsWith("approved") ? "approved" : s.outcome.toLowerCase()}. Show what happened
+          <button
+            type="button"
+            className="simple-more !mt-1 !text-left"
+            onClick={() => setShown(true)}
+            aria-expanded={false}
+          >
+            {sentBack === 1 ? 'Sent back once' : `Sent back ${sentBack} times`}, then{' '}
+            {s.outcome.toLowerCase().startsWith('approved') ? 'approved' : s.outcome.toLowerCase()}.
+            Show what happened
           </button>
         )}
         {trail.length > 1 && shown && (
@@ -629,8 +1035,8 @@ function StopRow({ run, s }: { run: RunGroup; s: RunGroup["stops"][number] }) {
             {trail.map((t, i) => (
               <li key={i} className="simple-small">
                 <b className="font-[650]">{t.what}</b>
-                {t.who ? ` by ${t.who}` : ""}
-                {t.day ? ` · ${stopDay(t.day)}` : ""}
+                {t.who ? ` by ${t.who}` : ''}
+                {t.day ? ` · ${stopDay(t.day)}` : ''}
                 {t.note && <span className="block text-text2">“{t.note}”</span>}
               </li>
             ))}
@@ -640,7 +1046,12 @@ function StopRow({ run, s }: { run: RunGroup; s: RunGroup["stops"][number] }) {
                   Open {run.prd.title}
                 </Link>
               )}
-              <button type="button" className="simple-more !mt-0" onClick={() => setShown(false)} aria-expanded>
+              <button
+                type="button"
+                className="simple-more !mt-0"
+                onClick={() => setShown(false)}
+                aria-expanded
+              >
                 Hide what happened
               </button>
             </li>
@@ -660,15 +1071,16 @@ function Rows({ rows }: { rows: Row[] }) {
   return (
     <ul>
       {rows.map((r) => {
-        const done = r.status === "decided";
+        const done = r.status === 'decided';
         // qa-simple-decide-19: a question decided in a meeting shows as one decided outside it:
         // its code, its title, then the answer, as the API sends them (never read out of the title).
         // QA: a code another decision here shares reads as the decision's own number (RepeatedCodes).
-        const code = r.code && !repeated.has(r.code.toUpperCase()) ? r.code.toUpperCase() : `D-${r.number}`;
+        const code =
+          r.code && !repeated.has(r.code.toUpperCase()) ? r.code.toUpperCase() : `D-${r.number}`;
         const { title } = r;
         // ec1 b: an open decision's title opens its sheet; one withdrawn here just now stays, struck through, with Undo.
-        const opens = !!sheet && r.status === "proposed" && !!r.can;
-        const gone = r.status === "withdrawn" ? sheet?.withdrawn[r.id] : undefined;
+        const opens = !!sheet && r.status === 'proposed' && !!r.can;
+        const gone = r.status === 'withdrawn' ? sheet?.withdrawn[r.id] : undefined;
         const edited = editedWords(r.edited_at, r.edited_by, me?.user_id ?? undefined, zone);
         return (
           <DecidedItem
@@ -678,35 +1090,60 @@ function Rows({ rows }: { rows: Row[] }) {
             flow={r.flow}
             className="!items-start !gap-[14px] border-t border-line py-[14px] first:border-t-0 first:pt-0 last:pb-0 target:bg-[var(--simple-edited)]"
           >
-            <span aria-hidden className={`simple-ico ${done ? "simple-ico-done" : ""}`}>
-              <Icon name={done ? "check" : gone ? "x" : "flag"} size={20} stroke={1.7} />
+            <span aria-hidden className={`simple-ico ${done ? 'simple-ico-done' : ''}`}>
+              <Icon name={done ? 'check' : gone ? 'x' : 'flag'} size={20} stroke={1.7} />
             </span>
             <span className="simple-rb flex-1">
               <span className="break-words">
-                <span className="simple-code" title={r.code && code !== r.code.toUpperCase() ? [r.prd_title, r.code.toUpperCase()].filter(Boolean).join(" ") : undefined} data-testid="decision-code">
+                <span
+                  className="simple-code"
+                  title={
+                    r.code && code !== r.code.toUpperCase()
+                      ? [r.prd_title, r.code.toUpperCase()].filter(Boolean).join(' ')
+                      : undefined
+                  }
+                  data-testid="decision-code"
+                >
                   {code}
-                </span>{" "}
+                </span>{' '}
                 {gone ? (
-                  <s className="font-[650] text-text2" data-testid="decision-withdrawn" data-user-content>
+                  <s
+                    className="font-[650] text-text2"
+                    data-testid="decision-withdrawn"
+                    data-user-content
+                  >
                     {title}
                   </s>
                 ) : opens ? (
-                  <button type="button" data-testid="decision-open" className="text-left font-[650] underline decoration-1 underline-offset-4 hover:text-accent-ink" onClick={() => sheet!.open({ kind: "decision", row: r })} data-user-content>
+                  <button
+                    type="button"
+                    data-testid="decision-open"
+                    className="text-left font-[650] underline decoration-1 underline-offset-4 hover:text-accent-ink"
+                    onClick={() => sheet!.open({ kind: 'decision', row: r })}
+                    data-user-content
+                  >
                     {title}
                   </button>
                 ) : (
-                  <b className="font-[650]" data-user-content>{title}</b>
+                  <b className="font-[650]" data-user-content>
+                    {title}
+                  </b>
                 )}
               </span>
               <span className="simple-meta">
                 {gone
-                  ? "Withdrawn by you just now · kept in the history"
+                  ? 'Withdrawn by you just now · kept in the history'
                   : rowMeta(r, momentWords(r.decided_at ?? r.created_at, zone), edited)}
               </span>
             </span>
             {gone && (
               <span className="simple-actions min-[601px]:w-[232px]">
-                <button type="button" className="simple-button" disabled={gone.undoing} onClick={() => sheet!.undoWithdraw(r.id)}>
+                <button
+                  type="button"
+                  className="simple-button"
+                  disabled={gone.undoing}
+                  onClick={() => sheet!.undoWithdraw(r.id)}
+                >
                   Undo
                 </button>
               </span>

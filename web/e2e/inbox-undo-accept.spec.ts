@@ -1,6 +1,6 @@
-import { expect, test, type Locator, type Page } from "./test";
+import { expect, test, type Locator, type Page } from './test';
 
-import { login } from "./helpers";
+import { login } from './helpers';
 
 /*
  * D14 follow-up: Undo after Accept, for the same 10 s and the same people (approvers) as
@@ -17,29 +17,35 @@ import { login } from "./helpers";
  */
 
 async function suggestions(page: Page) {
-  await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "suggestions"));
+  await page.addInitScript(() => localStorage.setItem('po-mock-scenario', 'suggestions'));
   await login(page);
 }
 
-const tabs = (page: Page) => page.getByTestId("inbox-state-tabs");
-const tab = (page: Page, name: string) => tabs(page).getByRole("tab", { name: new RegExp(`^${name}`) });
-const tabCount = async (page: Page, name: string) => Number((await tab(page, name).innerText()).replace(/\D+/g, "") || "0");
+const tabs = (page: Page) => page.getByTestId('inbox-state-tabs');
+const tab = (page: Page, name: string) =>
+  tabs(page).getByRole('tab', { name: new RegExp(`^${name}`) });
+const tabCount = async (page: Page, name: string) =>
+  Number((await tab(page, name).innerText()).replace(/\D+/g, '') || '0');
 const badge = (page: Page) => page.getByTestId(/^(nav|tab)-inbox-badge$/).filter({ visible: true });
-const row = (page: Page, text: string, state = "new") =>
-  page.getByTestId(`inbox-tab-${state}`).getByTestId("inbox-feedback").locator("tr[data-row]").filter({ hasText: text });
-const notice = (page: Page) => page.getByTestId("inbox-acted");
+const row = (page: Page, text: string, state = 'new') =>
+  page
+    .getByTestId(`inbox-tab-${state}`)
+    .getByTestId('inbox-feedback')
+    .locator('tr[data-row]')
+    .filter({ hasText: text });
+const notice = (page: Page) => page.getByTestId('inbox-acted');
 // A row draws Open alone until the signed-in person's capabilities are read, then its own
 // actions: wait for the actions rather than reading them once.
-const buttons = (r: Locator) => r.locator("td").last().locator("button, a");
+const buttons = (r: Locator) => r.locator('td').last().locator('button, a');
 
-const METRIC = "Add a metric that shows the outbound check works";
-const QUANTIFY = "Can we quantify the demand from the sales calls?";
-const QUESTION = "Can an invited teammate join as a viewer instead?";
-const REMARK = "The scope reads well as it is.";
+const METRIC = 'Add a metric that shows the outbound check works';
+const QUANTIFY = 'Can we quantify the demand from the sales calls?';
+const QUESTION = 'Can an invited teammate join as a viewer instead?';
+const REMARK = 'The scope reads well as it is.';
 
 async function inbox(page: Page) {
-  await page.goto("/inbox");
-  await expect(tab(page, "New")).toHaveAttribute("aria-selected", "true");
+  await page.goto('/inbox');
+  await expect(tab(page, 'New')).toHaveAttribute('aria-selected', 'true');
   await expect(row(page, METRIC)).toHaveCount(1);
 }
 
@@ -50,50 +56,59 @@ for (const [width, height] of [
   test.describe(`${width} px`, () => {
     test.use({ viewport: { width, height } });
 
-    test("Undo after Accept puts the staged change back in New, with Accept again", async ({ page }) => {
+    test('Undo after Accept puts the staged change back in New, with Accept again', async ({
+      page,
+    }) => {
       await suggestions(page);
       await inbox(page);
       const before = Number(await badge(page).innerText());
-      const newBefore = await tabCount(page, "New");
-      const stagedBefore = await tabCount(page, "Staged");
+      const newBefore = await tabCount(page, 'New');
+      const stagedBefore = await tabCount(page, 'Staged');
 
-      await row(page, METRIC).getByRole("button", { name: "Accept", exact: true }).click();
-      await expect(notice(page)).toContainText("Staged for draft 6");
+      await row(page, METRIC).getByRole('button', { name: 'Accept', exact: true }).click();
+      await expect(notice(page)).toContainText('Staged for draft 6');
       await expect(row(page, METRIC)).toHaveCount(0);
-      await expect(tab(page, "Staged")).toHaveText(`Staged${stagedBefore + 1}`);
+      await expect(tab(page, 'Staged')).toHaveText(`Staged${stagedBefore + 1}`);
       await expect(badge(page)).toHaveText(String(before - 1));
 
-      await notice(page).getByRole("button", { name: "Undo" }).click();
+      await notice(page).getByRole('button', { name: 'Undo' }).click();
       await expect(notice(page)).toHaveCount(0);
       await expect(row(page, METRIC)).toHaveCount(1);
-      await expect(buttons(row(page, METRIC))).toHaveText(["Accept", "Decline", "Open"]);
-      await expect(tab(page, "New")).toHaveText(`New${newBefore}`);
-      await expect(tab(page, "Staged")).toHaveText(`Staged${stagedBefore}`);
+      await expect(buttons(row(page, METRIC))).toHaveText(['Accept', 'Decline', 'Open']);
+      await expect(tab(page, 'New')).toHaveText(`New${newBefore}`);
+      await expect(tab(page, 'Staged')).toHaveText(`Staged${stagedBefore}`);
       await expect(badge(page)).toHaveText(String(before));
     });
 
-    test("Undo after Close and after Merge re-opens the item; Send answer has no Undo", async ({ page }) => {
+    test('Undo after Close and after Merge re-opens the item; Send answer has no Undo', async ({
+      page,
+    }) => {
       await suggestions(page);
       await inbox(page);
-      const doneBefore = await tabCount(page, "Done");
+      const doneBefore = await tabCount(page, 'Done');
 
-      await row(page, REMARK).getByRole("button", { name: "Close", exact: true }).click();
-      await expect(notice(page)).toContainText("Nothing to change");
-      await expect(tab(page, "Done")).toHaveText(`Done${doneBefore + 1}`);
-      await notice(page).getByRole("button", { name: "Undo" }).click();
+      await row(page, REMARK).getByRole('button', { name: 'Close', exact: true }).click();
+      await expect(notice(page)).toContainText('Nothing to change');
+      await expect(tab(page, 'Done')).toHaveText(`Done${doneBefore + 1}`);
+      await notice(page).getByRole('button', { name: 'Undo' }).click();
       await expect(row(page, REMARK)).toHaveCount(1);
-      await expect(buttons(row(page, REMARK))).toHaveText(["Close", "Decline", "Stage for agents", "Open"]);
-      await expect(tab(page, "Done")).toHaveText(`Done${doneBefore}`);
+      await expect(buttons(row(page, REMARK))).toHaveText([
+        'Close',
+        'Decline',
+        'Stage for agents',
+        'Open',
+      ]);
+      await expect(tab(page, 'Done')).toHaveText(`Done${doneBefore}`);
 
-      await row(page, QUANTIFY).getByRole("button", { name: "Merge" }).click();
-      await expect(notice(page)).toContainText("Merged");
-      await notice(page).getByRole("button", { name: "Undo" }).click();
+      await row(page, QUANTIFY).getByRole('button', { name: 'Merge' }).click();
+      await expect(notice(page)).toContainText('Merged');
+      await notice(page).getByRole('button', { name: 'Undo' }).click();
       await expect(row(page, QUANTIFY)).toHaveCount(1);
-      await expect(buttons(row(page, QUANTIFY))).toHaveText(["Merge", "Open"]);
+      await expect(buttons(row(page, QUANTIFY))).toHaveText(['Merge', 'Open']);
 
-      await row(page, QUESTION).getByRole("button", { name: "Send answer" }).click();
-      await expect(notice(page)).toContainText("Answer sent");
-      await expect(notice(page).getByRole("button", { name: "Undo" })).toHaveCount(0);
+      await row(page, QUESTION).getByRole('button', { name: 'Send answer' }).click();
+      await expect(notice(page)).toContainText('Answer sent');
+      await expect(notice(page).getByRole('button', { name: 'Undo' })).toHaveCount(0);
       await expect(row(page, QUESTION)).toHaveCount(0);
     });
   });

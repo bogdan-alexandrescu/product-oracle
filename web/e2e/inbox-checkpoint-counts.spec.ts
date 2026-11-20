@@ -1,8 +1,8 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { ROADMAP_REVIEW_RUN } from "../lib/api/mock/runs";
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login, seedRoadmapReview, signOut } from "./helpers";
+import { ROADMAP_REVIEW_RUN } from '../lib/api/mock/runs';
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login, seedRoadmapReview, signOut } from './helpers';
 
 /**
  * D9 Inbox checkpoint counts: the Roadmap items checkpoint row says how many items need me and
@@ -17,15 +17,23 @@ const CP = ROADMAP_REVIEW_RUN.run.checkpoints[0].id;
 
 /** The seeded checkpoint's row and the rows under it. */
 const parent = (page: Page) => page.locator(`tr[data-key="${CP}"]`).filter({ visible: true });
-const child = (page: Page, item: string) => page.locator(`tr[data-key="${CP}-${item}"]`).filter({ visible: true });
-const childTitles = (page: Page) => page.locator(`tr[data-child-of="${CP}"]`).filter({ visible: true }).getByTestId("child-title");
+const child = (page: Page, item: string) =>
+  page.locator(`tr[data-key="${CP}-${item}"]`).filter({ visible: true });
+const childTitles = (page: Page) =>
+  page.locator(`tr[data-child-of="${CP}"]`).filter({ visible: true }).getByTestId('child-title');
 
 async function openInbox(page: Page) {
   await login(page);
   // Each mock call saves the whole database when it finishes, so a call Home made before the
   // seed can land over it under load: seed again until it is still there a moment later.
   const kept = () =>
-    page.evaluate((id) => JSON.parse(localStorage.getItem("po-mock-db-v2")!).runs.runs.some((r: { id: string }) => r.id === id), RUN);
+    page.evaluate(
+      (id) =>
+        JSON.parse(localStorage.getItem('po-mock-db-v2')!).runs.runs.some(
+          (r: { id: string }) => r.id === id,
+        ),
+      RUN,
+    );
   for (let i = 0; i < 5; i++) {
     await seedRoadmapReview(page);
     let still = true;
@@ -40,51 +48,55 @@ async function openInbox(page: Page) {
 // Card counts: protects = the row says what needs a decision and how much, with the time left,
 // and Review items opens the decision; fails_when = no counts, no blocking chip, no time left or
 // the wrong target; no_claim = the review screen itself (D1).
-test("the checkpoint row counts what needs me, with the time left and Review items", async ({ page }) => {
+test('the checkpoint row counts what needs me, with the time left and Review items', async ({
+  page,
+}) => {
   await openInbox(page);
-  await page.goto("/inbox");
+  await page.goto('/inbox');
   const row = parent(page);
-  await expect(row.getByTestId("checkpoint-label")).toHaveText("Roadmap items · 10 need you");
-  await expect(row.getByTestId("checkpoint-blocking")).toHaveText("3 blocking");
-  await expect(row.getByTestId("need-left")).toHaveText("19 h left");
-  await expect(row).toContainText("from Usage alerts PRD v1");
+  await expect(row.getByTestId('checkpoint-label')).toHaveText('Roadmap items · 10 need you');
+  await expect(row.getByTestId('checkpoint-blocking')).toHaveText('3 blocking');
+  await expect(row.getByTestId('need-left')).toHaveText('19 h left');
+  await expect(row).toContainText('from Usage alerts PRD v1');
   // Three items under it, blocking first, in position order.
-  await expect(childTitles(page)).toHaveText([
-    "Slack alerts",
-    "Budget caps",
-    "Usage export",
-  ]);
+  await expect(childTitles(page)).toHaveText(['Slack alerts', 'Budget caps', 'Usage export']);
   // D1: Review items opens the Roadmap items review screen.
-  await row.getByRole("link", { name: "Review items" }).click();
+  await row.getByRole('link', { name: 'Review items' }).click();
   await expect(page).toHaveURL(new RegExp(`/runs/${RUN}/review/${CP}$`));
-  await expect(page.getByRole("heading", { level: 1, name: "Roadmap items" })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Roadmap items' })).toBeVisible();
 });
 
 // Card safe-fix: protects = a one-click fix stages (decides nothing), reads done with Undo, the
 // counts update in place, Undo restores both and the badge never counts child rows;
 // fails_when = the checkpoint leaves the Inbox, the counts stay, Undo leaves the action or the
 // badge moves; no_claim = applying the fix (D7).
-test("Move to Later stages the fix, the counts update, Undo restores both", async ({ page }) => {
+test('Move to Later stages the fix, the counts update, Undo restores both', async ({ page }) => {
   await openInbox(page);
-  await page.goto("/inbox");
-  const badge = page.getByTestId("nav-inbox-badge");
-  await expect(parent(page).getByTestId("checkpoint-label")).toHaveText("Roadmap items · 10 need you");
+  await page.goto('/inbox');
+  const badge = page.getByTestId('nav-inbox-badge');
+  await expect(parent(page).getByTestId('checkpoint-label')).toHaveText(
+    'Roadmap items · 10 need you',
+  );
   const before = await badge.textContent();
-  const caps = child(page, "budget-caps");
-  await expect(caps).toContainText("Depends on a later item");
-  await caps.getByRole("button", { name: "Move to Later for Budget caps" }).click();
-  await expect(caps.getByTestId("child-done")).toHaveText("Moved to Later");
-  await expect(caps.getByRole("button", { name: /^Undo/ })).toBeVisible();
-  await expect(parent(page).getByTestId("checkpoint-label")).toHaveText("Roadmap items · 9 need you");
-  await expect(parent(page).getByTestId("checkpoint-blocking")).toHaveText("2 blocking");
+  const caps = child(page, 'budget-caps');
+  await expect(caps).toContainText('Depends on a later item');
+  await caps.getByRole('button', { name: 'Move to Later for Budget caps' }).click();
+  await expect(caps.getByTestId('child-done')).toHaveText('Moved to Later');
+  await expect(caps.getByRole('button', { name: /^Undo/ })).toBeVisible();
+  await expect(parent(page).getByTestId('checkpoint-label')).toHaveText(
+    'Roadmap items · 9 need you',
+  );
+  await expect(parent(page).getByTestId('checkpoint-blocking')).toHaveText('2 blocking');
   // Staged, not decided: the checkpoint still waits, and the badge counts it once.
-  await expect(parent(page).getByRole("link", { name: "Review items" })).toBeVisible();
+  await expect(parent(page).getByRole('link', { name: 'Review items' })).toBeVisible();
   await expect(badge).toHaveText(before!);
 
-  await caps.getByRole("button", { name: /^Undo/ }).click();
-  await expect(caps.getByRole("button", { name: "Move to Later for Budget caps" })).toBeVisible();
-  await expect(parent(page).getByTestId("checkpoint-label")).toHaveText("Roadmap items · 10 need you");
-  await expect(parent(page).getByTestId("checkpoint-blocking")).toHaveText("3 blocking");
+  await caps.getByRole('button', { name: /^Undo/ }).click();
+  await expect(caps.getByRole('button', { name: 'Move to Later for Budget caps' })).toBeVisible();
+  await expect(parent(page).getByTestId('checkpoint-label')).toHaveText(
+    'Roadmap items · 10 need you',
+  );
+  await expect(parent(page).getByTestId('checkpoint-blocking')).toHaveText('3 blocking');
   await expect(badge).toHaveText(before!);
 });
 
@@ -92,36 +104,43 @@ test("Move to Later stages the fix, the counts update, Undo restores both", asyn
 // row I just fixed stays, done with Undo, while the next item needing me takes a row, and after a
 // reload only items needing me show; fails_when = the fixed item still fills a row after the
 // reload, or the next item needing me stays hidden under "+k more"; no_claim = the review (D1).
-test("a fixed item gives its row to the next item that needs me", async ({ page }) => {
+test('a fixed item gives its row to the next item that needs me', async ({ page }) => {
   await openInbox(page);
-  await page.goto("/inbox");
-  await child(page, "budget-caps").getByRole("button", { name: "Move to Later for Budget caps" }).click();
-  await expect(child(page, "budget-caps").getByTestId("child-done")).toHaveText("Moved to Later");
-  await expect(childTitles(page)).toHaveText(["Slack alerts", "Budget caps", "Usage export", "Anomaly detection"]);
-  await expect(child(page, "more").getByTestId("child-more")).toHaveText("+6 more · 1 handled");
+  await page.goto('/inbox');
+  await child(page, 'budget-caps')
+    .getByRole('button', { name: 'Move to Later for Budget caps' })
+    .click();
+  await expect(child(page, 'budget-caps').getByTestId('child-done')).toHaveText('Moved to Later');
+  await expect(childTitles(page)).toHaveText([
+    'Slack alerts',
+    'Budget caps',
+    'Usage export',
+    'Anomaly detection',
+  ]);
+  await expect(child(page, 'more').getByTestId('child-more')).toHaveText('+6 more · 1 handled');
   // Next visit: seen on the first, the checkpoint is under Open.
   await page.reload();
-  await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Seen/ }).click();
-  await expect(childTitles(page)).toHaveText(["Slack alerts", "Usage export", "Anomaly detection"]);
-  await expect(child(page, "budget-caps")).toHaveCount(0);
+  await page.getByTestId('inbox-state-tabs').getByRole('tab', { name: /^Seen/ }).click();
+  await expect(childTitles(page)).toHaveText(['Slack alerts', 'Usage export', 'Anomaly detection']);
+  await expect(child(page, 'budget-caps')).toHaveCount(0);
 });
 
 // Card open-only: protects = a reason that needs typing offers only Open, and Open lands on the
 // item; "+k more" links to the review; fails_when = Link section is offered in the Inbox, or a
 // link goes elsewhere; no_claim = selecting the item on the review screen (D1).
-test("a child with no safe fix shows only Open; +7 more links to the review", async ({ page }) => {
+test('a child with no safe fix shows only Open; +7 more links to the review', async ({ page }) => {
   await openInbox(page);
-  await page.goto("/inbox");
-  const usage = child(page, "usage-export");
-  await expect(usage).toContainText("No PRD section");
-  await expect(usage.getByRole("button")).toHaveCount(0);
-  const more = child(page, "more").getByTestId("child-more");
-  await expect(more).toHaveText("+7 more · 0 handled");
+  await page.goto('/inbox');
+  const usage = child(page, 'usage-export');
+  await expect(usage).toContainText('No PRD section');
+  await expect(usage.getByRole('button')).toHaveCount(0);
+  const more = child(page, 'more').getByTestId('child-more');
+  await expect(more).toHaveText('+7 more · 0 handled');
   // D1: the review screen, with the item selected on arrival (?item=).
-  await expect(more).toHaveAttribute("href", `/runs/${RUN}/review/${CP}`);
-  await usage.getByRole("link", { name: "Open Usage export" }).click();
+  await expect(more).toHaveAttribute('href', `/runs/${RUN}/review/${CP}`);
+  await usage.getByRole('link', { name: 'Open Usage export' }).click();
   await expect(page).toHaveURL(new RegExp(`/runs/${RUN}/review/${CP}\\?item=usage-export$`));
-  await expect(page.getByTestId("roadmap-item-inspector")).toContainText("Usage export");
+  await expect(page.getByTestId('roadmap-item-inspector')).toContainText('Usage export');
 });
 
 // Card suggestion: protects = a commenter's suggestion on a shown item reads "Suggested: …" with
@@ -132,51 +151,64 @@ test("a commenter's suggestion shows as Suggested with Stage", async ({ page }) 
   // The commenter suggests Remove date on Slack alerts from the review screen (D1, #542: the
   // run page's Review items; it has no per-item buttons).
   await signOut(page);
-  await login(page, "commenter@example.com");
+  await login(page, 'commenter@example.com');
   await page.goto(`/runs/${RUN}`);
-  await page.getByTestId("items-review-line").getByRole("link", { name: "Review items" }).click();
+  await page.getByTestId('items-review-line').getByRole('link', { name: 'Review items' }).click();
   const reasons = page.locator('[data-testid="roadmap-item-row"][data-key="slack-alerts"]');
-  await reasons.getByRole("button", { name: "Remove date", exact: true }).click();
-  await expect(reasons.getByTestId("suggested-by")).toHaveText(/Suggested by you/);
+  await reasons.getByRole('button', { name: 'Remove date', exact: true }).click();
+  await expect(reasons.getByTestId('suggested-by')).toHaveText(/Suggested by you/);
   await signOut(page);
   await login(page);
-  await page.goto("/inbox");
-  const slack = child(page, "slack-alerts");
-  await expect(slack.getByTestId("child-suggested")).toHaveText("Suggested: Remove date");
-  await slack.getByRole("button", { name: "Stage Remove date on Slack alerts" }).click();
-  await expect(slack.getByTestId("child-done")).toHaveText("Date removed");
-  await expect(parent(page).getByTestId("checkpoint-blocking")).toHaveText("2 blocking");
+  await page.goto('/inbox');
+  const slack = child(page, 'slack-alerts');
+  await expect(slack.getByTestId('child-suggested')).toHaveText('Suggested: Remove date');
+  await slack.getByRole('button', { name: 'Stage Remove date on Slack alerts' }).click();
+  await expect(slack.getByTestId('child-done')).toHaveText('Date removed');
+  await expect(parent(page).getByTestId('checkpoint-blocking')).toHaveText('2 blocking');
 });
 
 // Card home-and-held: protects = Home shows the parent row with its counts and no child rows; a
 // console approval held while blocking reasons are open says so on the row; fails_when = Home
 // draws child rows or no counts, or the suffix is missing; no_claim = D3's Confirm action.
-test("Home shows the counts only; a held console approval says so", async ({ page }) => {
+test('Home shows the counts only; a held console approval says so', async ({ page }) => {
   // D3's seeded roadmap-items-console-held scenario: the roadmap review run approved in
   // SwarmCloud's console while blocking reasons are open.
-  await page.addInitScript((key) => localStorage.setItem(key, "roadmap-items-console-held"), MOCK_SCENARIO_KEY);
+  await page.addInitScript(
+    (key) => localStorage.setItem(key, 'roadmap-items-console-held'),
+    MOCK_SCENARIO_KEY,
+  );
   await login(page); // signing in lands on Home
   const row = parent(page);
-  await expect(row.getByTestId("checkpoint-label")).toHaveText("Roadmap items · 10 need you · console approval held");
-  await expect(row.getByTestId("checkpoint-blocking")).toHaveText("3 blocking");
+  await expect(row.getByTestId('checkpoint-label')).toHaveText(
+    'Roadmap items · 10 need you · console approval held',
+  );
+  await expect(row.getByTestId('checkpoint-blocking')).toHaveText('3 blocking');
   await expect(page.locator(`tr[data-child-of="${CP}"]`)).toHaveCount(0);
-  await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-inbox").click();
+  await page.getByRole('navigation', { name: 'Oracle' }).getByTestId('nav-inbox').click();
   await expect(page).toHaveURL(/\/inbox$/);
-  await expect(parent(page).getByTestId("checkpoint-label")).toHaveText("Roadmap items · 10 need you · console approval held");
+  await expect(parent(page).getByTestId('checkpoint-label')).toHaveText(
+    'Roadmap items · 10 need you · console approval held',
+  );
 });
 
 // Card phone: protects = at 390 px the counts show, the child rows are cards under the parent
 // with the fix full width, and nothing scrolls sideways; fails_when = horizontal scroll or a
 // narrow fix button; no_claim = other widths.
-test("on a phone the child rows are cards with the fix full width", async ({ page }) => {
+test('on a phone the child rows are cards with the fix full width', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openInbox(page);
-  await page.goto("/inbox");
-  await expect(parent(page).getByTestId("checkpoint-label")).toHaveText("Roadmap items · 10 need you");
-  const fix = child(page, "budget-caps").getByRole("button", { name: "Move to Later for Budget caps" });
+  await page.goto('/inbox');
+  await expect(parent(page).getByTestId('checkpoint-label')).toHaveText(
+    'Roadmap items · 10 need you',
+  );
+  const fix = child(page, 'budget-caps').getByRole('button', {
+    name: 'Move to Later for Budget caps',
+  });
   await expect(fix).toBeVisible();
-  const row = await child(page, "budget-caps").boundingBox();
+  const row = await child(page, 'budget-caps').boundingBox();
   const button = await fix.boundingBox();
   expect(button!.width).toBeGreaterThan(row!.width * 0.8);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
 });

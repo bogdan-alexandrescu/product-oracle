@@ -1,7 +1,7 @@
-import { MOCK_SCENARIO_KEY, ONE_PAGER_PLAN_LOOSE_SCENARIO } from "../lib/api/mock/server";
-import { WALK_PROBLEM } from "../lib/api/mock/simple-one-pager";
-import { login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { MOCK_SCENARIO_KEY, ONE_PAGER_PLAN_LOOSE_SCENARIO } from '../lib/api/mock/server';
+import { WALK_PROBLEM } from '../lib/api/mock/simple-one-pager';
+import { login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /*
  * Visual QA of the one-pager (the mock's invented PRD "guided-setup"), driven through the UI.
@@ -37,150 +37,184 @@ import { expect, test, type Page } from "./test";
  * way; fails_when = the item is on no part of the page, of the When slide or of the phone's timeline.
  */
 
-const URL = "/simple/one-pagers/guided-setup";
-const PRD_URL = "/simple/prds/guided-setup";
+const URL = '/simple/one-pagers/guided-setup';
+const PRD_URL = '/simple/prds/guided-setup';
 
 async function scenario(page: Page, s: string) {
-  await page.context().addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, s] as const);
+  await page
+    .context()
+    .addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, s] as const);
 }
 
-test("vqa one-pager 1: a drawn flow stays on its bet when a bet is added above it", async ({ page }) => {
-  await scenario(page, "one-pager-bet-added");
+test('vqa one-pager 1: a drawn flow stays on its bet when a bet is added above it', async ({
+  page,
+}) => {
+  await scenario(page, 'one-pager-bet-added');
   await login(page);
   await page.goto(URL);
-  const bets = page.getByRole("region", { name: "What we will build" });
-  await expect(bets.locator('[data-line="bets-1"]')).toContainText("Workspace templates for common teams");
-  const checklist = page.getByRole("group", { name: "User flow of “A setup checklist that shows" });
-  await expect(checklist).toContainText("Finish setup from the checklist");
-  await expect(page.getByRole("button", { name: "Draw the flow for “A setup checklist" })).toHaveCount(0);
+  const bets = page.getByRole('region', { name: 'What we will build' });
+  await expect(bets.locator('[data-line="bets-1"]')).toContainText(
+    'Workspace templates for common teams',
+  );
+  const checklist = page.getByRole('group', { name: 'User flow of “A setup checklist that shows' });
+  await expect(checklist).toContainText('Finish setup from the checklist');
+  await expect(
+    page.getByRole('button', { name: 'Draw the flow for “A setup checklist' }),
+  ).toHaveCount(0);
   // The new bet has no flow of its own: it offers to draw one, never the checklist's.
-  await expect(page.getByRole("group", { name: "User flow of “Workspace templates for common" })).toHaveCount(0);
-  await expect(bets.locator('[data-line="bets-1"]')).not.toContainText("Finish setup from the checklist");
-  await expect(page.getByRole("button", { name: "Draw the flow for “Workspace templates for common" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Draw the flow for “Invite suggestions from the admin's" })).toBeVisible();
+  await expect(
+    page.getByRole('group', { name: 'User flow of “Workspace templates for common' }),
+  ).toHaveCount(0);
+  await expect(bets.locator('[data-line="bets-1"]')).not.toContainText(
+    'Finish setup from the checklist',
+  );
+  await expect(
+    page.getByRole('button', { name: 'Draw the flow for “Workspace templates for common' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: "Draw the flow for “Invite suggestions from the admin's" }),
+  ).toBeVisible();
 });
 
-test("vqa one-pager 3: every milestone row of the Timeline strip reads its name", async ({ page }) => {
-  await scenario(page, "one-pager-milestone-names");
+test('vqa one-pager 3: every milestone row of the Timeline strip reads its name', async ({
+  page,
+}) => {
+  await scenario(page, 'one-pager-milestone-names');
   await login(page);
   await page.goto(URL);
-  const labels = page.getByLabel("Timeline strip").getByTestId("plan-strip-label");
+  const labels = page.getByLabel('Timeline strip').getByTestId('plan-strip-label');
   // roadmap-milestone-codes (train BM): each row reads the roadmap's code (M3, M4), never the
   // PRD's written one, with the name the PRD's items give it.
   await expect(labels).toHaveText([
-    "M3 · Measured and mapped · 1 roadmap item",
-    "M4 · Ship to beta · 2 roadmap items",
+    'M3 · Measured and mapped · 1 roadmap item',
+    'M4 · Ship to beta · 2 roadmap items',
   ]);
 });
 
-test("vqa-b: the plan's When card lists the PRD's item with no plan milestone under No milestone", async ({ page }) => {
+test("vqa-b: the plan's When card lists the PRD's item with no plan milestone under No milestone", async ({
+  page,
+}) => {
   // Owner, Nov 10 ('Add rows to the plan card'): the plan-led page shows every roadmap item of the PRD.
   await scenario(page, ONE_PAGER_PLAN_LOOSE_SCENARIO);
   await login(page);
   await page.goto(PRD_URL);
-  const card = page.getByRole("region", { name: "Timeline" });
-  await expect(card.getByRole("heading", { name: "When", exact: true })).toBeVisible();
-  const group = card.getByTestId("timeline-no-milestone");
-  await expect(group.getByRole("heading", { name: "No milestone" })).toBeVisible();
+  const card = page.getByRole('region', { name: 'Timeline' });
+  await expect(card.getByRole('heading', { name: 'When', exact: true })).toBeVisible();
+  const group = card.getByTestId('timeline-no-milestone');
+  await expect(group.getByRole('heading', { name: 'No milestone' })).toBeVisible();
   // The group is the card's last part, after the milestones.
-  await expect(card.locator(":scope > *").last()).toHaveAttribute("data-testid", "timeline-no-milestone");
-  const rows = group.getByTestId("timeline-no-milestone-item");
+  await expect(card.locator(':scope > *').last()).toHaveAttribute(
+    'data-testid',
+    'timeline-no-milestone',
+  );
+  const rows = group.getByTestId('timeline-no-milestone-item');
   await expect(rows).toHaveCount(1);
-  await expect(rows.getByRole("button", { name: "Calendar invite sync" })).toBeVisible();
+  await expect(rows.getByRole('button', { name: 'Calendar invite sync' })).toBeVisible();
   // Its name opens the feature's panel, as every feature does.
-  await rows.getByRole("button", { name: "Calendar invite sync" }).click();
-  const panel = page.getByRole("complementary", { name: "Calendar invite sync" });
+  await rows.getByRole('button', { name: 'Calendar invite sync' }).click();
+  const panel = page.getByRole('complementary', { name: 'Calendar invite sync' });
   await expect(panel).toBeVisible();
-  await expect(panel).not.toContainText("not on a roadmap you can see");
+  await expect(panel).not.toContainText('not on a roadmap you can see');
 });
 
-test("vqa-b: Present's When slide lists the PRD's item with no plan milestone under No milestone", async ({ page }) => {
+test("vqa-b: Present's When slide lists the PRD's item with no plan milestone under No milestone", async ({
+  page,
+}) => {
   await scenario(page, ONE_PAGER_PLAN_LOOSE_SCENARIO);
   await login(page);
   await page.goto(PRD_URL);
-  await page.getByRole("button", { name: "Present" }).click();
-  await expect(page.getByTestId("slides")).toBeVisible();
+  await page.getByRole('button', { name: 'Present' }).click();
+  await expect(page.getByTestId('slides')).toBeVisible();
   // The When card is the last slide.
-  await page.keyboard.press("End");
-  const group = page.getByTestId("slides").getByTestId("timeline-no-milestone");
-  await expect(group.getByRole("heading", { name: "No milestone" })).toBeVisible();
-  const rows = group.getByTestId("timeline-no-milestone-item");
+  await page.keyboard.press('End');
+  const group = page.getByTestId('slides').getByTestId('timeline-no-milestone');
+  await expect(group.getByRole('heading', { name: 'No milestone' })).toBeVisible();
+  const rows = group.getByTestId('timeline-no-milestone-item');
   await expect(rows).toHaveCount(1);
-  await expect(rows.getByRole("button", { name: "Calendar invite sync" })).toBeVisible();
+  await expect(rows.getByRole('button', { name: 'Calendar invite sync' })).toBeVisible();
   // Its name opens the feature's panel over the slides, as on the page.
-  await rows.getByRole("button", { name: "Calendar invite sync" }).click();
-  const panel = page.getByRole("complementary", { name: "Calendar invite sync" });
+  await rows.getByRole('button', { name: 'Calendar invite sync' }).click();
+  const panel = page.getByRole('complementary', { name: 'Calendar invite sync' });
   await expect(panel).toBeVisible();
-  await expect(panel.getByRole("dialog", { name: "Calendar invite sync" })).toBeVisible();
-  await expect(panel).not.toContainText("not on a roadmap you can see");
-  await expect(page.getByTestId("one-pager")).toHaveAttribute("data-presenting", "true");
-  await expect(page.getByTestId("slides")).toBeVisible();
+  await expect(panel.getByRole('dialog', { name: 'Calendar invite sync' })).toBeVisible();
+  await expect(panel).not.toContainText('not on a roadmap you can see');
+  await expect(page.getByTestId('one-pager')).toHaveAttribute('data-presenting', 'true');
+  await expect(page.getByTestId('slides')).toBeVisible();
 });
 
-test.describe("vqa-b on a phone", () => {
+test.describe('vqa-b on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
 
-  test("the phone's timeline lists the PRD's item with no plan milestone under No milestone", async ({ page }) => {
+  test("the phone's timeline lists the PRD's item with no plan milestone under No milestone", async ({
+    page,
+  }) => {
     await scenario(page, ONE_PAGER_PLAN_LOOSE_SCENARIO);
     await login(page);
     await page.goto(PRD_URL);
-    const timeline = page.getByTestId("timeline-vertical");
+    const timeline = page.getByTestId('timeline-vertical');
     await expect(timeline).toBeVisible();
-    const group = timeline.getByTestId("timeline-no-milestone");
-    await expect(group.getByRole("heading", { name: "No milestone" })).toBeVisible();
+    const group = timeline.getByTestId('timeline-no-milestone');
+    await expect(group.getByRole('heading', { name: 'No milestone' })).toBeVisible();
     // The group closes the timeline, after the milestones.
-    await expect(timeline.locator(":scope > *").last()).toHaveAttribute("data-testid", "timeline-no-milestone");
-    const rows = group.getByTestId("timeline-no-milestone-item");
+    await expect(timeline.locator(':scope > *').last()).toHaveAttribute(
+      'data-testid',
+      'timeline-no-milestone',
+    );
+    const rows = group.getByTestId('timeline-no-milestone-item');
     await expect(rows).toHaveCount(1);
-    await rows.getByRole("button", { name: "Calendar invite sync" }).click();
+    await rows.getByRole('button', { name: 'Calendar invite sync' }).click();
     // On a phone the loaded panel is a bottom sheet (a dialog), not the side panel shown while it loads.
-    const sheet = page.getByTestId("item-panel").getByRole("dialog", { name: "Calendar invite sync" });
+    const sheet = page
+      .getByTestId('item-panel')
+      .getByRole('dialog', { name: 'Calendar invite sync' });
     await expect(sheet).toBeVisible();
-    await expect(sheet).toHaveAttribute("data-sheet", "bottom");
-    await expect(sheet.getByRole("heading", { name: "Calendar invite sync" })).toBeInViewport();
-    await expect(page.getByTestId("item-panel")).not.toContainText("not on a roadmap you can see");
+    await expect(sheet).toHaveAttribute('data-sheet', 'bottom');
+    await expect(sheet.getByRole('heading', { name: 'Calendar invite sync' })).toBeInViewport();
+    await expect(page.getByTestId('item-panel')).not.toContainText('not on a roadmap you can see');
   });
 });
 
-test.describe("production QA", () => {
+test.describe('production QA', () => {
   test.use({ viewport: { width: 1366, height: 900 } });
 
-  test("vqa-a: each Needs a look card shows once", async ({ page }) => {
-    await scenario(page, "one-pager-vqa");
+  test('vqa-a: each Needs a look card shows once', async ({ page }) => {
+    await scenario(page, 'one-pager-vqa');
     await login(page);
     await page.goto(PRD_URL);
-    const looks = page.getByRole("region", { name: "Needs a look" }).getByTestId("needs-look-line");
-    await expect(looks.filter({ hasText: "Numbers disagree in “Not this quarter”" })).toHaveCount(1);
+    const looks = page.getByRole('region', { name: 'Needs a look' }).getByTestId('needs-look-line');
+    await expect(looks.filter({ hasText: 'Numbers disagree in “Not this quarter”' })).toHaveCount(
+      1,
+    );
     const texts = await looks.allTextContents();
     expect(new Set(texts).size).toBe(texts.length);
   });
 
-  test("vqa-c: Who has it names the people, never a confidence label", async ({ page }) => {
-    await scenario(page, "one-pager-vqa");
+  test('vqa-c: Who has it names the people, never a confidence label', async ({ page }) => {
+    await scenario(page, 'one-pager-vqa');
     await login(page);
     await page.goto(PRD_URL);
-    const who = page.getByTestId("problem-who");
-    await expect(who).toHaveText("Who has it: Studio leads");
+    const who = page.getByTestId('problem-who');
+    await expect(who).toHaveText('Who has it: Studio leads');
     await expect(who).not.toContainText(/confidence/i);
   });
 
-  test("vqa-d: a long Problem line is edited whole and keeps no cut text", async ({ page }) => {
-    await scenario(page, "simple-walk");
+  test('vqa-d: a long Problem line is edited whole and keeps no cut text', async ({ page }) => {
+    await scenario(page, 'simple-walk');
     await login(page);
     await page.goto(PRD_URL);
-    const problem = page.getByRole("region", { name: "Problem and who has it" });
-    const line = problem.getByTestId("one-pager-line-text");
+    const problem = page.getByRole('region', { name: 'Problem and who has it' });
+    const line = problem.getByTestId('one-pager-line-text');
     await expect(line).toHaveText(/hides the invite step\.$/);
-    await problem.getByRole("button", { name: "Edit “New workspace admins stall during" }).click();
-    const box = problem.getByLabel("New wording for");
+    await problem.getByRole('button', { name: 'Edit “New workspace admins stall during' }).click();
+    const box = problem.getByLabel('New wording for');
     await expect(box).toHaveValue(WALK_PROBLEM);
-    const edited = WALK_PROBLEM.replace("hides the invite step", "hides the invite button");
+    const edited = WALK_PROBLEM.replace('hides the invite step', 'hides the invite button');
     expect(edited.length).toBeGreaterThan(300);
     await box.fill(edited);
-    await problem.getByRole("button", { name: "Save" }).click();
-    await expect(page.locator('[data-line="problem-1"]')).toHaveAttribute("data-state", "edited");
+    await problem.getByRole('button', { name: 'Save' }).click();
+    await expect(page.locator('[data-line="problem-1"]')).toHaveAttribute('data-state', 'edited');
     await expect(line).toHaveText(edited);
-    await expect(line).not.toContainText("…");
-    await expect(problem.getByRole("button", { name: /^Show all of/ })).toHaveCount(0);
+    await expect(line).not.toContainText('…');
+    await expect(problem.getByRole('button', { name: /^Show all of/ })).toHaveCount(0);
   });
 });

@@ -1,14 +1,20 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { Icon, ICONS } from "@/components/simple/FlowViews";
-import { askSay, askThread, itemTalkPage, type ChatCard as ChatCardData, type ChatThread } from "@/lib/api/simple-chat";
-import { useMe } from "@/lib/me";
-import { errorMessage } from "@/lib/use-query";
+import { Icon, ICONS } from '@/components/simple/FlowViews';
+import {
+  askSay,
+  askThread,
+  itemTalkPage,
+  type ChatCard as ChatCardData,
+  type ChatThread,
+} from '@/lib/api/simple-chat';
+import { useMe } from '@/lib/me';
+import { errorMessage } from '@/lib/use-query';
 
-import { ItemTalkContext } from "./ChatCard";
-import { ChatComposer, ChatMessages, usePendingPoll } from "./ChatThread";
+import { ItemTalkContext } from './ChatCard';
+import { ChatComposer, ChatMessages, usePendingPoll } from './ChatThread';
 
 /**
  * roadmap-talk, drawn to the owner's pick C ("Wider card, talk beside the details",
@@ -66,10 +72,12 @@ export function ItemTalk({
     const el = scroller.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [count]);
-  const changes = can("create_simple_change");
+  const changes = can('create_simple_change');
   const talkCtx = useMemo(() => ({ known: known ?? new Set<string>() }), [known]);
   // qa4-simple-roadmap-40: an empty talk offers a few example asks; a click sends one.
-  const starters = changes ? ["What is it for?", "When is it?", "Move it two weeks later"] : ["What is it for?", "When is it?"];
+  const starters = changes
+    ? ['What is it for?', 'When is it?', 'Move it two weeks later']
+    : ['What is it for?', 'When is it?'];
   const [asking, setAsking] = useState(false);
   const ask = async (text: string) => {
     setAsking(true);
@@ -85,18 +93,29 @@ export function ItemTalk({
   // fix4 qa-simple-roadmap-3: the item by its title, no code.
   const short = about;
   return (
-    <section aria-label={`Talk about ${about}`} data-testid="item-talk" className="flex min-h-0 min-w-0 flex-1 flex-col">
+    <section
+      aria-label={`Talk about ${about}`}
+      data-testid="item-talk"
+      className="flex min-h-0 min-w-0 flex-1 flex-col"
+    >
       {!phone && (
         // fix4 qa-simple-roadmap-40: an opaque header with a divider under it; nothing of the lines shows through.
         <div className="relative z-[1] flex-none border-b border-line bg-surface px-4 pt-3.5 pb-2.5">
-          <h3 data-testid="item-talk-title" className="flex min-w-0 items-center gap-2 text-[12px] leading-4 font-semibold tracking-[.06em] text-text2 uppercase before:h-px before:min-w-4 before:flex-1 before:bg-line after:h-px after:min-w-4 after:flex-1 after:bg-line">
+          <h3
+            data-testid="item-talk-title"
+            className="flex min-w-0 items-center gap-2 text-[12px] leading-4 font-semibold tracking-[.06em] text-text2 uppercase before:h-px before:min-w-4 before:flex-1 before:bg-line after:h-px after:min-w-4 after:flex-1 after:bg-line"
+          >
             <span className="min-w-0 truncate" title={about}>
               Talk about {about}
             </span>
           </h3>
         </div>
       )}
-      <div ref={scroller} data-testid="item-talk-thread" className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+      <div
+        ref={scroller}
+        data-testid="item-talk-thread"
+        className="min-h-0 flex-1 overflow-y-auto px-4 py-3"
+      >
         {error && (
           <p role="alert" className="mb-2 text-[14px] text-crit">
             {error}
@@ -119,7 +138,12 @@ export function ItemTalk({
           </div>
         )}
         <ItemTalkContext.Provider value={talkCtx}>
-          <ChatMessages messages={thread?.messages ?? []} onCardChanged={() => void load()} onThread={setThread} ask />
+          <ChatMessages
+            messages={thread?.messages ?? []}
+            onCardChanged={() => void load()}
+            onThread={setThread}
+            ask
+          />
         </ItemTalkContext.Provider>
       </div>
       {/* Pick C's message box: the box and Send on one row (the chat's composer, laid out here).
@@ -128,9 +152,12 @@ export function ItemTalk({
         <ChatComposer
           send={async (text) => setThread(await askSay(text, page))}
           placeholder={changes ? `Ask about ${short}, or ask for a change…` : `Ask about ${short}…`}
-          hint={changes ? undefined : "You can ask questions; changes need a commenter or above."}
+          hint={changes ? undefined : 'You can ask questions; changes need a commenter or above.'}
         />
-        <p className="flex items-center gap-1.5 text-[14px] leading-5 text-text2" data-testid="chat-note">
+        <p
+          className="flex items-center gap-1.5 text-[14px] leading-5 text-text2"
+          data-testid="chat-note"
+        >
           <Icon d={ICONS.lock} size={14} width={1.7} />
           Just you and Oracle · kept with this item
         </p>

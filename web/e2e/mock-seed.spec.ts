@@ -1,7 +1,7 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from '@playwright/test';
 
-import { ROADMAP_REVIEW_RUN } from "../lib/api/mock/runs";
-import { login, seedRoadmapReview } from "./helpers";
+import { ROADMAP_REVIEW_RUN } from '../lib/api/mock/runs';
+import { login, seedRoadmapReview } from './helpers';
 
 /*
  * The e2e seeds (helpers.ts) write the mock's data in the page. The app's own calls each read
@@ -10,7 +10,11 @@ import { login, seedRoadmapReview } from "./helpers";
  * the app's calls, so it is never written over.
  */
 
-type Held = { __poMockFetch?: (r: Request) => Promise<Response>; __release?: () => void; __held?: Promise<number> };
+type Held = {
+  __poMockFetch?: (r: Request) => Promise<Response>;
+  __release?: () => void;
+  __held?: Promise<number>;
+};
 
 // Card seed-turn: protects = a seed written while the app's own write is in flight is kept,
 // so openSeeded seeds once; fails_when = the in-flight write saves over the seed (the run
@@ -27,7 +31,7 @@ test("a seed written while the app's own write is in flight is kept", async ({ p
       {
         start(c) {
           w.__release = () => {
-            c.enqueue(new TextEncoder().encode("{}"));
+            c.enqueue(new TextEncoder().encode('{}'));
             c.close();
           };
         },
@@ -35,11 +39,11 @@ test("a seed written while the app's own write is in flight is kept", async ({ p
       },
       { highWaterMark: 0 },
     );
-    const req = new Request(new URL("/v1/me/preferences", location.origin), {
-      method: "PATCH",
+    const req = new Request(new URL('/v1/me/preferences', location.origin), {
+      method: 'PATCH',
       body,
-      headers: { "content-type": "application/json" },
-      duplex: "half",
+      headers: { 'content-type': 'application/json' },
+      duplex: 'half',
     } as RequestInit);
     w.__held = w.__poMockFetch!(req).then((r) => r.status);
     await read;
@@ -51,6 +55,8 @@ test("a seed written while the app's own write is in flight is kept", async ({ p
   expect(await page.evaluate(() => (globalThis as unknown as Held).__held)).toBe(200);
 
   await page.goto(`/runs/${ROADMAP_REVIEW_RUN.run.id}`);
-  await expect(page.getByRole("heading", { level: 1, name: "Roadmap from an approved PRD" })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Roadmap from an approved PRD' }),
+  ).toBeVisible();
   await expect(page.getByText("This run doesn't exist or was deleted.")).toHaveCount(0);
 });

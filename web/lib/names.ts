@@ -5,7 +5,10 @@
  */
 export function displayName(email: string, name?: string | null): string {
   if (name?.trim()) return name.trim();
-  const words = email.split("@")[0].split(/[._+-]+/).filter(Boolean);
+  const words = email
+    .split('@')[0]
+    .split(/[._+-]+/)
+    .filter(Boolean);
   if (words.length === 0) return email;
-  return words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  return words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }

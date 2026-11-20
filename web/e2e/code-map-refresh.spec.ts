@@ -1,5 +1,5 @@
-import { login, signOut } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { login, signOut } from './helpers';
+import { expect, test, type Page } from './test';
 
 /**
  * Code map refresh as a company setting (owner, 2026-10-26), on the mock layer: Settings ›
@@ -28,37 +28,47 @@ async function switchTo(page: Page, email?: string) {
 }
 
 for (const phone of [false, true]) {
-  for (const scheme of ["light", "dark"] as const) {
-    test.describe(`${phone ? "phone" : "desktop"} · ${scheme}`, () => {
-      test.use({ viewport: phone ? { width: 390, height: 844 } : { width: 1366, height: 820 }, colorScheme: scheme });
+  for (const scheme of ['light', 'dark'] as const) {
+    test.describe(`${phone ? 'phone' : 'desktop'} · ${scheme}`, () => {
+      test.use({
+        viewport: phone ? { width: 390, height: 844 } : { width: 1366, height: 820 },
+        colorScheme: scheme,
+      });
 
-      test("an owner chooses how often stale code maps refresh", async ({ page }) => {
+      test('an owner chooses how often stale code maps refresh', async ({ page }) => {
         await login(page);
-        await page.goto("/settings/sources");
-        const select = page.getByLabel("Refresh stale code maps");
+        await page.goto('/settings/sources');
+        const select = page.getByLabel('Refresh stale code maps');
         await expect(select).toBeVisible();
-        await expect(select).toHaveValue("daily");
+        await expect(select).toHaveValue('daily');
         // Pass F F-36: the cost sits behind the (i) beside the label.
-        await page.getByRole("button", { name: "About what a refresh costs" }).click();
-        await expect(page.getByRole("tooltip")).toContainText("Each refresh costs like Map the code.");
-        await page.keyboard.press("Escape");
-        for (const label of ["Hourly", "Every 6 hours", "Weekly", "Only on demand"]) {
+        await page.getByRole('button', { name: 'About what a refresh costs' }).click();
+        await expect(page.getByRole('tooltip')).toContainText(
+          'Each refresh costs like Map the code.',
+        );
+        await page.keyboard.press('Escape');
+        for (const label of ['Hourly', 'Every 6 hours', 'Weekly', 'Only on demand']) {
           await select.selectOption({ label });
-          await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
+          await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toBeVisible();
           await expect(select).toHaveValue(
-            { Hourly: "hourly", "Every 6 hours": "every_6_hours", Weekly: "weekly", "Only on demand": "on_demand" }[label]!,
+            {
+              Hourly: 'hourly',
+              'Every 6 hours': 'every_6_hours',
+              Weekly: 'weekly',
+              'Only on demand': 'on_demand',
+            }[label]!,
           );
         }
         await page.reload();
-        await expect(page.getByLabel("Refresh stale code maps")).toHaveValue("on_demand");
+        await expect(page.getByLabel('Refresh stale code maps')).toHaveValue('on_demand');
       });
 
-      test("an approver is not offered the setting", async ({ page }) => {
+      test('an approver is not offered the setting', async ({ page }) => {
         await login(page);
-        await switchTo(page, "approver@example.com");
-        await page.goto("/settings/sources");
-        await expect(page.getByRole("heading", { level: 1, name: "Sources" })).toBeVisible();
-        await expect(page.getByLabel("Refresh stale code maps")).toHaveCount(0);
+        await switchTo(page, 'approver@example.com');
+        await page.goto('/settings/sources');
+        await expect(page.getByRole('heading', { level: 1, name: 'Sources' })).toBeVisible();
+        await expect(page.getByLabel('Refresh stale code maps')).toHaveCount(0);
       });
     });
   }

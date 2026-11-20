@@ -1,142 +1,153 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { login } from "./helpers";
+import { login } from './helpers';
 
 // #338: link items to goals and to each other, and manage their evidence, from the drawer.
 
 async function openItem(page: Page, key: string, title: string, email?: string) {
   await login(page, email);
-  await page.goto("/ground-truth");
-  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
-  await page.getByTestId(`feature-${key}`).getByRole("button", { name: title }).click();
-  return page.getByRole("dialog", { name: title });
+  await page.goto('/ground-truth');
+  await expect(page.getByRole('heading', { level: 1, name: 'Ground Truth' })).toBeVisible();
+  await page.getByTestId(`feature-${key}`).getByRole('button', { name: title }).click();
+  return page.getByRole('dialog', { name: title });
 }
 
-test("Ground Truth: link a feature to a goal, change its contribution, unlock it and remove it; the matrix follows", async ({
+test('Ground Truth: link a feature to a goal, change its contribution, unlock it and remove it; the matrix follows', async ({
   page,
 }) => {
-  const d = await openItem(page, "F-06", "Setup error report");
-  const row = page.getByTestId("feature-F-06");
-  await expect(row.getByTestId("flag")).toHaveText(["Serves no goal"]);
+  const d = await openItem(page, 'F-06', 'Setup error report');
+  const row = page.getByTestId('feature-F-06');
+  await expect(row.getByTestId('flag')).toHaveText(['Serves no goal']);
 
-  await d.getByRole("button", { name: "Link to goal" }).click();
-  const form = d.getByRole("form", { name: "Link to goal" });
-  await form.getByLabel("Goal").selectOption({ label: "Activation" });
-  await form.getByLabel("Contribution").selectOption("2");
-  await form.getByRole("button", { name: "Link" }).click();
-  await expect(d.getByRole("status")).toContainText("Linked to “Activation”");
-  await expect(d.getByRole("list", { name: "Supports" })).toContainText("Activation");
+  await d.getByRole('button', { name: 'Link to goal' }).click();
+  const form = d.getByRole('form', { name: 'Link to goal' });
+  await form.getByLabel('Goal').selectOption({ label: 'Activation' });
+  await form.getByLabel('Contribution').selectOption('2');
+  await form.getByRole('button', { name: 'Link' }).click();
+  await expect(d.getByRole('status')).toContainText('Linked to “Activation”');
+  await expect(d.getByRole('list', { name: 'Supports' })).toContainText('Activation');
   // The feature × goal matrix shows the new link, and the flag goes.
-  await expect(row.getByRole("img", { name: "Contribution 2 of 3" })).toBeVisible();
-  await expect(row.getByTestId("flag")).toHaveCount(0);
+  await expect(row.getByRole('img', { name: 'Contribution 2 of 3' })).toBeVisible();
+  await expect(row.getByTestId('flag')).toHaveCount(0);
 
-  await d.getByLabel("Contribution to Activation").selectOption("3");
-  await expect(d.getByRole("status")).toContainText("Contribution set to 3");
-  await expect(row.getByRole("img", { name: "Contribution 3 of 3" })).toBeVisible();
+  await d.getByLabel('Contribution to Activation').selectOption('3');
+  await expect(d.getByRole('status')).toContainText('Contribution set to 3');
+  await expect(row.getByRole('img', { name: 'Contribution 3 of 3' })).toBeVisible();
 
   // A person's link is locked against agents; Unlock frees it.
-  await d.getByRole("button", { name: "Unlock link to Activation" }).click();
-  await expect(d.getByRole("status")).toContainText("Unlocked");
-  await expect(d.getByRole("button", { name: "Unlock link to Activation" })).toHaveCount(0);
+  await d.getByRole('button', { name: 'Unlock link to Activation' }).click();
+  await expect(d.getByRole('status')).toContainText('Unlocked');
+  await expect(d.getByRole('button', { name: 'Unlock link to Activation' })).toHaveCount(0);
 
-  await d.getByRole("button", { name: "Remove link to Activation" }).click();
-  const ask = d.getByRole("form", { name: "Remove link" });
-  await ask.getByRole("button", { name: "Back" }).click();
-  await expect(d.getByRole("list", { name: "Supports" })).toContainText("Activation");
-  await d.getByRole("button", { name: "Remove link to Activation" }).click();
-  await d.getByRole("form", { name: "Remove link" }).getByRole("button", { name: "Remove" }).click();
-  await expect(d.getByRole("status")).toContainText("Removed the link");
-  await expect(d.getByRole("list", { name: "Supports" })).toHaveCount(0);
-  await expect(row.getByTestId("flag")).toHaveText(["Serves no goal"]);
+  await d.getByRole('button', { name: 'Remove link to Activation' }).click();
+  const ask = d.getByRole('form', { name: 'Remove link' });
+  await ask.getByRole('button', { name: 'Back' }).click();
+  await expect(d.getByRole('list', { name: 'Supports' })).toContainText('Activation');
+  await d.getByRole('button', { name: 'Remove link to Activation' }).click();
+  await d
+    .getByRole('form', { name: 'Remove link' })
+    .getByRole('button', { name: 'Remove' })
+    .click();
+  await expect(d.getByRole('status')).toContainText('Removed the link');
+  await expect(d.getByRole('list', { name: 'Supports' })).toHaveCount(0);
+  await expect(row.getByTestId('flag')).toHaveText(['Serves no goal']);
 });
 
-test("Ground Truth: add depends-on, blocks and part-of links, and confirm a proposed link", async ({ page }) => {
-  const d = await openItem(page, "F-12", "Referral link");
+test('Ground Truth: add depends-on, blocks and part-of links, and confirm a proposed link', async ({
+  page,
+}) => {
+  const d = await openItem(page, 'F-12', 'Referral link');
   // An agent proposed that Referral link depends on Team invites.
-  const deps = d.getByRole("list", { name: "Depends on" });
-  await expect(deps).toContainText("Team invites");
-  await expect(deps).toContainText("Proposed");
-  await deps.getByRole("button", { name: "Confirm link to Team invites" }).click();
-  await expect(d.getByRole("status")).toContainText("Confirmed the link");
-  await expect(deps).not.toContainText("Proposed");
+  const deps = d.getByRole('list', { name: 'Depends on' });
+  await expect(deps).toContainText('Team invites');
+  await expect(deps).toContainText('Proposed');
+  await deps.getByRole('button', { name: 'Confirm link to Team invites' }).click();
+  await expect(d.getByRole('status')).toContainText('Confirmed the link');
+  await expect(deps).not.toContainText('Proposed');
 
   for (const [relation, entry, list] of [
-    ["Depends on", "Sample data import", "Depends on"],
-    ["Blocks", "Setup error report", "Blocks"],
-    ["Part of", "Admin console", "Part of"],
+    ['Depends on', 'Sample data import', 'Depends on'],
+    ['Blocks', 'Setup error report', 'Blocks'],
+    ['Part of', 'Admin console', 'Part of'],
   ] as const) {
-    await d.getByRole("button", { name: "Add dependency" }).click();
-    const form = d.getByRole("form", { name: "Add dependency" });
-    await form.getByLabel("Relation").selectOption({ label: relation });
-    await form.getByLabel("Entry").selectOption({ label: entry });
-    await form.getByRole("button", { name: "Add", exact: true }).click();
-    await expect(d.getByRole("status")).toContainText(`“${entry}”`);
-    await expect(d.getByRole("list", { name: list })).toContainText(entry);
+    await d.getByRole('button', { name: 'Add dependency' }).click();
+    const form = d.getByRole('form', { name: 'Add dependency' });
+    await form.getByLabel('Relation').selectOption({ label: relation });
+    await form.getByLabel('Entry').selectOption({ label: entry });
+    await form.getByRole('button', { name: 'Add', exact: true }).click();
+    await expect(d.getByRole('status')).toContainText(`“${entry}”`);
+    await expect(d.getByRole('list', { name: list })).toContainText(entry);
   }
   // The same link twice is refused, with the API's reason.
-  await d.getByRole("button", { name: "Add dependency" }).click();
-  const again = d.getByRole("form", { name: "Add dependency" });
-  await again.getByLabel("Relation").selectOption({ label: "Blocks" });
-  await again.getByLabel("Entry").selectOption({ label: "Setup error report" });
-  await again.getByRole("button", { name: "Add", exact: true }).click();
-  await expect(d.getByText("This link already exists")).toBeVisible();
+  await d.getByRole('button', { name: 'Add dependency' }).click();
+  const again = d.getByRole('form', { name: 'Add dependency' });
+  await again.getByLabel('Relation').selectOption({ label: 'Blocks' });
+  await again.getByLabel('Entry').selectOption({ label: 'Setup error report' });
+  await again.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(d.getByText('This link already exists')).toBeVisible();
 });
 
-test("Ground Truth: cite a source item as evidence, then remove evidence with a reason", async ({ page }) => {
-  const d = await openItem(page, "F-06", "Setup error report");
-  const evidence = d.getByRole("list", { name: "Evidence" });
-  await expect(evidence.getByTestId("evidence-row")).toHaveCount(1);
-  await d.getByRole("button", { name: "Cite a source item" }).click();
-  const form = d.getByRole("form", { name: "Cite a source item" });
-  await form.getByLabel("Search your sources").fill("pricing");
-  await form.getByRole("button", { name: "Search" }).click();
-  const hits = form.getByRole("list", { name: "Source items" });
-  await expect(hits).toContainText("Pricing strategy");
-  await hits.getByRole("button", { name: "Cite Pricing strategy" }).click();
-  await expect(d.getByRole("status")).toContainText("Cited “Pricing strategy”");
-  await expect(evidence.getByTestId("evidence-row")).toHaveCount(2);
-  await expect(evidence).toContainText("Pricing strategy");
+test('Ground Truth: cite a source item as evidence, then remove evidence with a reason', async ({
+  page,
+}) => {
+  const d = await openItem(page, 'F-06', 'Setup error report');
+  const evidence = d.getByRole('list', { name: 'Evidence' });
+  await expect(evidence.getByTestId('evidence-row')).toHaveCount(1);
+  await d.getByRole('button', { name: 'Cite a source item' }).click();
+  const form = d.getByRole('form', { name: 'Cite a source item' });
+  await form.getByLabel('Search your sources').fill('pricing');
+  await form.getByRole('button', { name: 'Search' }).click();
+  const hits = form.getByRole('list', { name: 'Source items' });
+  await expect(hits).toContainText('Pricing strategy');
+  await hits.getByRole('button', { name: 'Cite Pricing strategy' }).click();
+  await expect(d.getByRole('status')).toContainText('Cited “Pricing strategy”');
+  await expect(evidence.getByTestId('evidence-row')).toHaveCount(2);
+  await expect(evidence).toContainText('Pricing strategy');
 
-  await evidence.getByRole("button", { name: "Remove Pricing strategy" }).click();
-  const ask = d.getByRole("form", { name: "Remove evidence" });
+  await evidence.getByRole('button', { name: 'Remove Pricing strategy' }).click();
+  const ask = d.getByRole('form', { name: 'Remove evidence' });
   // A reason is required.
-  await ask.getByRole("button", { name: "Remove" }).click();
-  await expect(ask.getByText("Say why it is removed.")).toBeVisible();
-  await ask.getByLabel("Reason").fill("Cited on the wrong feature.");
-  await ask.getByRole("button", { name: "Remove" }).click();
-  await expect(d.getByRole("status")).toContainText("Removed “Pricing strategy”");
-  await expect(evidence.getByTestId("evidence-row")).toHaveCount(1);
-  await expect(evidence).not.toContainText("Pricing strategy");
+  await ask.getByRole('button', { name: 'Remove' }).click();
+  await expect(ask.getByText('Say why it is removed.')).toBeVisible();
+  await ask.getByLabel('Reason').fill('Cited on the wrong feature.');
+  await ask.getByRole('button', { name: 'Remove' }).click();
+  await expect(d.getByRole('status')).toContainText('Removed “Pricing strategy”');
+  await expect(evidence.getByTestId('evidence-row')).toHaveCount(1);
+  await expect(evidence).not.toContainText('Pricing strategy');
 });
 
-test("Ground Truth: a viewer sees no link or evidence controls, and a View only label", async ({ page }) => {
-  const d = await openItem(page, "F-01", "Setup checklist", "viewer@example.com");
-  await expect(d.getByText("View only", { exact: true })).toBeVisible();
-  for (const name of ["Link to goal", "Add dependency", "Cite a source item"]) {
-    await expect(d.getByRole("button", { name })).toHaveCount(0);
+test('Ground Truth: a viewer sees no link or evidence controls, and a View only label', async ({
+  page,
+}) => {
+  const d = await openItem(page, 'F-01', 'Setup checklist', 'viewer@example.com');
+  await expect(d.getByText('View only', { exact: true })).toBeVisible();
+  for (const name of ['Link to goal', 'Add dependency', 'Cite a source item']) {
+    await expect(d.getByRole('button', { name })).toHaveCount(0);
   }
-  await expect(d.getByRole("button", { name: /^Remove link/ })).toHaveCount(0);
-  await expect(d.getByRole("button", { name: /^Remove / })).toHaveCount(0);
+  await expect(d.getByRole('button', { name: /^Remove link/ })).toHaveCount(0);
+  await expect(d.getByRole('button', { name: /^Remove / })).toHaveCount(0);
   await expect(d.getByLabel(/^Contribution to/)).toHaveCount(0);
 });
 
-test("Ground Truth: a commenter sees no link or cite controls, but can still add an evidence link", async ({ page }) => {
-  const d = await openItem(page, "F-01", "Setup checklist", "commenter@example.com");
-  for (const name of ["Link to goal", "Add dependency", "Cite a source item"]) {
-    await expect(d.getByRole("button", { name })).toHaveCount(0);
+test('Ground Truth: a commenter sees no link or cite controls, but can still add an evidence link', async ({
+  page,
+}) => {
+  const d = await openItem(page, 'F-01', 'Setup checklist', 'commenter@example.com');
+  for (const name of ['Link to goal', 'Add dependency', 'Cite a source item']) {
+    await expect(d.getByRole('button', { name })).toHaveCount(0);
   }
-  await expect(d.getByRole("button", { name: "Add evidence link" })).toBeVisible();
-  await expect(d.getByText("View only", { exact: true })).toHaveCount(0);
+  await expect(d.getByRole('button', { name: 'Add evidence link' })).toBeVisible();
+  await expect(d.getByText('View only', { exact: true })).toHaveCount(0);
 });
 
-test("Ground Truth: on a phone the Link to goal form fits", async ({ page }) => {
+test('Ground Truth: on a phone the Link to goal form fits', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  const d = await openItem(page, "F-06", "Setup error report");
-  await d.getByRole("button", { name: "Link to goal" }).click();
-  const form = d.getByRole("form", { name: "Link to goal" });
-  await form.getByLabel("Goal").selectOption({ label: "Growth" });
+  const d = await openItem(page, 'F-06', 'Setup error report');
+  await d.getByRole('button', { name: 'Link to goal' }).click();
+  const form = d.getByRole('form', { name: 'Link to goal' });
+  await form.getByLabel('Goal').selectOption({ label: 'Growth' });
   const width = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(width).toBeLessThanOrEqual(390);
-  await form.getByRole("button", { name: "Link" }).click();
-  await expect(d.getByRole("list", { name: "Supports" })).toContainText("Growth");
+  await form.getByRole('button', { name: 'Link' }).click();
+  await expect(d.getByRole('list', { name: 'Supports' })).toContainText('Growth');
 });

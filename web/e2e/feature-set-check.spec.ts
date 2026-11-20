@@ -1,7 +1,7 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
 
 /**
  * C6 Feature set and PRD scope: the run page's feature-set line summarises the check of
@@ -24,89 +24,109 @@ import { login } from "./helpers";
 
 // The run the "feature-set" mock scenario seeds (web/lib/api/mock/runs.ts), waiting at the
 // feature set with one blocking problem and two flags.
-const RUN = "7a11c0de-0000-4000-8000-0000000000f5";
-const LINE = "Feature set: 6 features, 14 requirements, 2 left out · 1 problem";
-const PROBLEM = "bulk-address-edit depends on shared-address-book-export, which is excluded";
+const RUN = '7a11c0de-0000-4000-8000-0000000000f5';
+const LINE = 'Feature set: 6 features, 14 requirements, 2 left out · 1 problem';
+const PROBLEM = 'bulk-address-edit depends on shared-address-book-export, which is excluded';
 // The approve gate names features by their titles, never their keys.
-const GATE_PROBLEM = "Bulk address edit depends on Shared address book export, which is excluded";
-const REASON = "1 blocking problem left: fix or waive them, or send back to the agents.";
+const GATE_PROBLEM = 'Bulk address edit depends on Shared address book export, which is excluded';
+const REASON = '1 blocking problem left: fix or waive them, or send back to the agents.';
 
 async function seeded(page: Page) {
-  await page.addInitScript((key) => localStorage.setItem(key, "feature-set"), MOCK_SCENARIO_KEY);
+  await page.addInitScript((key) => localStorage.setItem(key, 'feature-set'), MOCK_SCENARIO_KEY);
   await login(page);
 }
 
-test("the feature-set line shows the check, and a blocking problem disables Approve while Request changes works", async ({ page }) => {
+test('the feature-set line shows the check, and a blocking problem disables Approve while Request changes works', async ({
+  page,
+}) => {
   await seeded(page);
-  await page.getByTestId("nav-runs").click();
-  await page.locator('[data-testid="run-row"][data-document="bulk-import"]').getByRole("link").click();
-  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth to PRD" })).toBeVisible();
+  await page.getByTestId('nav-runs').click();
+  await page
+    .locator('[data-testid="run-row"][data-document="bulk-import"]')
+    .getByRole('link')
+    .click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Ground Truth to PRD' })).toBeVisible();
 
-  const segment = page.getByTestId("segment-feature_set");
-  const check = segment.getByTestId("feature-set-check");
-  const toggle = check.getByRole("button", { name: LINE });
-  await expect(toggle).toHaveAttribute("aria-expanded", "false");
-  await expect(check.getByTestId("feature-set-problems")).toHaveCount(0);
+  const segment = page.getByTestId('segment-feature_set');
+  const check = segment.getByTestId('feature-set-check');
+  const toggle = check.getByRole('button', { name: LINE });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(check.getByTestId('feature-set-problems')).toHaveCount(0);
 
   await toggle.click();
-  await expect(toggle).toHaveAttribute("aria-expanded", "true");
-  const problems = check.getByTestId("feature-set-problems").getByRole("listitem");
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  const problems = check.getByTestId('feature-set-problems').getByRole('listitem');
   await expect(problems).toHaveCount(1);
   await expect(problems.first()).toHaveText(PROBLEM);
   // The advisory flags, per feature.
-  const flags = check.getByTestId("feature-set-flags").getByRole("listitem");
+  const flags = check.getByTestId('feature-set-flags').getByRole('listitem');
   await expect(flags).toHaveCount(2);
-  await expect(flags.filter({ hasText: "bulk-address-edit" })).toContainText("serves no goal, low confidence");
-  await expect(flags.filter({ hasText: "bulk-import" })).toContainText("new feature");
+  await expect(flags.filter({ hasText: 'bulk-address-edit' })).toContainText(
+    'serves no goal, low confidence',
+  );
+  await expect(flags.filter({ hasText: 'bulk-import' })).toContainText('new feature');
 
   // The checkpoint: Approve and continue is disabled with the approve gate's reason.
-  const cp = page.getByTestId("checkpoint-feature_set");
-  await expect(cp.getByTestId("approve-gate").getByText(REASON)).toBeVisible();
-  const approve = cp.getByRole("button", { name: "Approve and continue" });
+  const cp = page.getByTestId('checkpoint-feature_set');
+  await expect(cp.getByTestId('approve-gate').getByText(REASON)).toBeVisible();
+  const approve = cp.getByRole('button', { name: 'Approve and continue' });
   await expect(approve).toBeDisabled();
-  await expect(approve).toHaveAttribute("title", REASON);
+  await expect(approve).toHaveAttribute('title', REASON);
 
   // Request changes still works: the segment runs again with the note.
-  await cp.getByLabel("Note for the agents").fill("Keep bulk edit off the excluded address book");
-  await cp.getByRole("button", { name: "Request changes" }).click();
-  await expect(segment).toContainText("attempt 2");
-  await expect(page.getByTestId("checkpoint-feature_set").filter({ hasText: "Waiting" })).toHaveCount(0);
-  await expect(page.getByTestId("run-status").filter({ visible: true })).toHaveText("Running");
+  await cp.getByLabel('Note for the agents').fill('Keep bulk edit off the excluded address book');
+  await cp.getByRole('button', { name: 'Request changes' }).click();
+  await expect(segment).toContainText('attempt 2');
+  await expect(
+    page.getByTestId('checkpoint-feature_set').filter({ hasText: 'Waiting' }),
+  ).toHaveCount(0);
+  await expect(page.getByTestId('run-status').filter({ visible: true })).toHaveText('Running');
 });
 
-test("the feature set's blocking problem is waived under the decision, and Approve and continue is enabled", async ({ page }) => {
+test("the feature set's blocking problem is waived under the decision, and Approve and continue is enabled", async ({
+  page,
+}) => {
   await seeded(page);
-  await page.getByTestId("nav-runs").click();
-  await page.locator('[data-testid="run-row"][data-document="bulk-import"]').getByRole("link").click();
-  const cp = page.getByTestId("checkpoint-feature_set");
-  const approve = cp.getByRole("button", { name: "Approve and continue" });
+  await page.getByTestId('nav-runs').click();
+  await page
+    .locator('[data-testid="run-row"][data-document="bulk-import"]')
+    .getByRole('link')
+    .click();
+  const cp = page.getByTestId('checkpoint-feature_set');
+  const approve = cp.getByRole('button', { name: 'Approve and continue' });
   await expect(approve).toBeDisabled();
-  const gate = cp.getByTestId("approve-gate");
-  await expect(gate.getByTestId("gate-reason")).toHaveCount(1);
-  const row = gate.getByTestId("gate-reason").filter({ hasText: "Bulk address edit" });
+  const gate = cp.getByTestId('approve-gate');
+  await expect(gate.getByTestId('gate-reason')).toHaveCount(1);
+  const row = gate.getByTestId('gate-reason').filter({ hasText: 'Bulk address edit' });
   await expect(row).toContainText(GATE_PROBLEM);
-  await row.getByRole("button", { name: "Waive…" }).click();
-  await row.getByLabel(`Reason to waive: ${GATE_PROBLEM}`).fill("The export ships in the same release");
-  await row.getByRole("button", { name: "Waive", exact: true }).click();
-  await expect(cp.getByTestId("approve-gate")).toHaveCount(0);
+  await row.getByRole('button', { name: 'Waive…' }).click();
+  await row
+    .getByLabel(`Reason to waive: ${GATE_PROBLEM}`)
+    .fill('The export ships in the same release');
+  await row.getByRole('button', { name: 'Waive', exact: true }).click();
+  await expect(cp.getByTestId('approve-gate')).toHaveCount(0);
   await expect(approve).toBeEnabled();
   await approve.click();
-  await expect(page.getByTestId("checkpoint-feature_set").filter({ hasText: "Waiting" })).toHaveCount(0);
+  await expect(
+    page.getByTestId('checkpoint-feature_set').filter({ hasText: 'Waiting' }),
+  ).toHaveCount(0);
 });
 
-test("at 390 px the problem text wraps: nothing truncated, no sideways scroll", async ({ page }) => {
+test('at 390 px the problem text wraps: nothing truncated, no sideways scroll', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await seeded(page);
   await page.goto(`/runs/${RUN}`);
-  const check = page.getByTestId("segment-feature_set").getByTestId("feature-set-check");
-  await check.getByRole("button", { name: LINE }).click();
-  const problem = check.getByTestId("feature-set-problems").getByRole("listitem").first();
+  const check = page.getByTestId('segment-feature_set').getByTestId('feature-set-check');
+  await check.getByRole('button', { name: LINE }).click();
+  const problem = check.getByTestId('feature-set-problems').getByRole('listitem').first();
   await expect(problem).toHaveText(PROBLEM);
   const shape = await problem.evaluate((el) => {
     const style = getComputedStyle(el);
     return {
-      ellipsis: style.textOverflow === "ellipsis",
-      nowrap: style.whiteSpace === "nowrap",
+      ellipsis: style.textOverflow === 'ellipsis',
+      nowrap: style.whiteSpace === 'nowrap',
       clipped: el.scrollWidth > el.clientWidth,
       lines: el.getBoundingClientRect().height / parseFloat(style.lineHeight),
     };
@@ -115,6 +135,8 @@ test("at 390 px the problem text wraps: nothing truncated, no sideways scroll", 
   expect(shape.nowrap).toBe(false);
   expect(shape.clipped).toBe(false);
   expect(shape.lines).toBeGreaterThan(1.5);
-  const sideways = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  const sideways = await page.evaluate(
+    () => document.documentElement.scrollWidth - window.innerWidth,
+  );
   expect(sideways).toBeLessThanOrEqual(0);
 });

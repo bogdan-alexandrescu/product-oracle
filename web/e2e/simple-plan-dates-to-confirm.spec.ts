@@ -1,7 +1,7 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { THEME_KEY } from "../lib/theme";
-import { login } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { THEME_KEY } from '../lib/theme';
+import { login } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /*
  * The plan-model lane: Oracle's dates for an item whose PRD feature is built over two
@@ -24,79 +24,92 @@ import { expect, test, type Locator, type Page } from "./test";
 
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 const DESKTOP = { viewport: { width: 1366, height: 820 } };
-const ITEM = "plan-f-05";
-const TITLE = "Team invites";
+const ITEM = 'plan-f-05';
+const TITLE = 'Team invites';
 /** QA Nov 12 #1: the item as the roadmap names it, its code before its name. */
 const NAME = `F-05 ${TITLE}`;
 // The span of F-05's slices: F-05a's start (M1) to F-05b's end (M2).
-const SPAN = { start: "2026-11-09", end: "2026-12-11", words: "Nov 9 – Dec 11" };
-const SUGGESTS = "Oracle suggests ";
+const SPAN = { start: '2026-11-09', end: '2026-12-11', words: 'Nov 9 – Dec 11' };
+const SUGGESTS = 'Oracle suggests ';
 
-const bar = (page: Page, key: string): Locator => page.locator(`g[data-testid="bar"][data-item="${key}"]`);
+const bar = (page: Page, key: string): Locator =>
+  page.locator(`g[data-testid="bar"][data-item="${key}"]`);
 
-async function setUp(page: Page, scheme: "light" | "dark") {
+async function setUp(page: Page, scheme: 'light' | 'dark') {
   await page.context().addInitScript(
     ([key, value, themeKey, theme]) => {
       localStorage.setItem(key, value);
       localStorage.setItem(themeKey, theme);
     },
-    [MOCK_SCENARIO_KEY, "simple-plan", THEME_KEY, scheme] as const,
+    [MOCK_SCENARIO_KEY, 'simple-plan', THEME_KEY, scheme] as const,
   );
   await page.emulateMedia({ colorScheme: scheme });
 }
 
 for (const [where, use] of [
-  ["desktop", DESKTOP],
-  ["phone", PHONE],
+  ['desktop', DESKTOP],
+  ['phone', PHONE],
 ] as const) {
-  for (const scheme of ["light", "dark"] as const) {
+  for (const scheme of ['light', 'dark'] as const) {
     test.describe(`${where}, ${scheme}`, () => {
       test.use({ ...use, colorScheme: scheme });
 
-      test(`an owner accepts a two-milestone item's dates from the tray (${where}, ${scheme})`, async ({ page }) => {
+      test(`an owner accepts a two-milestone item's dates from the tray (${where}, ${scheme})`, async ({
+        page,
+      }) => {
         await setUp(page, scheme);
         await login(page);
-        await page.goto("/simple/roadmap");
-        await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+        await page.goto('/simple/roadmap');
+        await expect(page.getByTestId('simple-roadmap')).toBeVisible();
         // The item's bar is read on the Gantt, which draws a bar's kind and dates and floats its
         // card: a phone's Timeline is a list by quarter, a desktop's is for reading (build-roadmap).
-        await page.getByTestId("format-gantt").click();
-        await expect(bar(page, ITEM)).toHaveAttribute("data-kind", "estimated");
+        await page.getByTestId('format-gantt').click();
+        await expect(bar(page, ITEM)).toHaveAttribute('data-kind', 'estimated');
 
-        await page.getByTestId("needs-decision").click();
-        const tray = page.getByTestId("decision-tray");
+        await page.getByTestId('needs-decision').click();
+        const tray = page.getByTestId('decision-tray');
         await expect(tray).toBeVisible();
-        const row = tray.getByTestId("tray-date").filter({ hasText: `${TITLE}:` });
+        const row = tray.getByTestId('tray-date').filter({ hasText: `${TITLE}:` });
         await expect(row).toHaveCount(1);
-        const words = row.locator("span").first();
+        const words = row.locator('span').first();
         // One suggestion for the item: the span of its two slices, not its first slice's dates,
         // after its own estimate, as an item with no dates of its own reads (QA Nov 12 #6).
-        await expect(words).toHaveText(new RegExp(`^${NAME}: No dates yet · estimated [^·]+ · ${SUGGESTS}${SPAN.words}$`));
+        await expect(words).toHaveText(
+          new RegExp(`^${NAME}: No dates yet · estimated [^·]+ · ${SUGGESTS}${SPAN.words}$`),
+        );
         const text = (await words.textContent())!;
         const shown = text.slice(text.indexOf(SUGGESTS) + SUGGESTS.length).trim();
 
-        await row.getByRole("button", { name: "Accept" }).click();
-        await expect(page.getByText("Dates accepted in your working draft")).toBeVisible();
+        await row.getByRole('button', { name: 'Accept' }).click();
+        await expect(page.getByText('Dates accepted in your working draft')).toBeVisible();
         // Every open slice was accepted with it: no row is left for the item.
-        await expect(tray.getByTestId("tray-date").filter({ hasText: `${TITLE}:` })).toHaveCount(0);
-        await tray.getByRole("button", { name: "Close" }).click();
+        await expect(tray.getByTestId('tray-date').filter({ hasText: `${TITLE}:` })).toHaveCount(0);
+        await tray.getByRole('button', { name: 'Close' }).click();
         await expect(tray).toHaveCount(0);
 
         // The saved dates are the ones the row showed.
-        await expect(bar(page, ITEM)).toHaveAttribute("data-kind", "dated");
-        await expect(bar(page, ITEM)).toHaveAttribute("data-start", SPAN.start);
-        await expect(bar(page, ITEM)).toHaveAttribute("data-end", SPAN.end);
+        await expect(bar(page, ITEM)).toHaveAttribute('data-kind', 'dated');
+        await expect(bar(page, ITEM)).toHaveAttribute('data-start', SPAN.start);
+        await expect(bar(page, ITEM)).toHaveAttribute('data-end', SPAN.end);
         // The bar says where its dates came from.
-        await expect(bar(page, ITEM)).toHaveAttribute("aria-label", new RegExp(`^${NAME}: ${shown.replace(" – ", " to ")}, Dates accepted from Oracle,`));
+        await expect(bar(page, ITEM)).toHaveAttribute(
+          'aria-label',
+          new RegExp(`^${NAME}: ${shown.replace(' – ', ' to ')}, Dates accepted from Oracle,`),
+        );
         await bar(page, ITEM).click();
-        const card = page.getByTestId("floating-card");
-        await expect(card.getByRole("heading", { name: TITLE })).toBeVisible();
+        const card = page.getByTestId('floating-card');
+        await expect(card.getByRole('heading', { name: TITLE })).toBeVisible();
         // The one feature panel's Dates row: the span, where it came from, and its "About these dates" (i) (QA Nov 12 #10).
-        await expect(card.getByTestId("card-dates")).toContainText(`${shown} · Dates accepted from Oracle`);
-        await expect(card.getByTestId("card-dates-kind")).toHaveText("Dates accepted from Oracle");
-        await expect(card.getByTestId("card-dates-why")).toHaveAccessibleName("About these dates");
+        await expect(card.getByTestId('card-dates')).toContainText(
+          `${shown} · Dates accepted from Oracle`,
+        );
+        await expect(card.getByTestId('card-dates-kind')).toHaveText('Dates accepted from Oracle');
+        await expect(card.getByTestId('card-dates-why')).toHaveAccessibleName('About these dates');
 
-        if (where === "phone") expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391);
+        if (where === 'phone')
+          expect(
+            await page.evaluate(() => document.documentElement.scrollWidth),
+          ).toBeLessThanOrEqual(391);
       });
     });
   }

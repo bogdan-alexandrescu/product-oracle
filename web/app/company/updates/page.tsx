@@ -1,21 +1,27 @@
-"use client";
+'use client';
 
-import { Link } from "@/lib/nav";
-import { useMemo, useState } from "react";
+import { Link } from '@/lib/nav';
+import { useMemo, useState } from 'react';
 
-import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
-import { Button, Chip, DataTable, InfoTip, LinkButton, Panel, type Column } from "@/components/ds";
-import { ErrorNote, Loading } from "@/components/ui";
-import { api, unwrap } from "@/lib/api/client";
-import { formatDate } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { useQuery } from "@/lib/use-query";
+import { DocStatusChip } from '@/app/documents/_components/DocStatusChip';
+import { Button, Chip, DataTable, InfoTip, LinkButton, Panel, type Column } from '@/components/ds';
+import { ErrorNote, Loading } from '@/components/ui';
+import { api, unwrap } from '@/lib/api/client';
+import { formatDate } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { useQuery } from '@/lib/use-query';
 
-import { CompanyEmpty } from "../_empty";
-import { CompanyHeader } from "../_nav";
-import { NewUpdateDialog } from "./_components/NewUpdateDialog";
-import { VisibilityDialog } from "./_components/VisibilityDialog";
-import { byNewestPeriod, formatPeriod, templateOf, VISIBILITY_LABEL, type Update } from "./_components/lib";
+import { CompanyEmpty } from '../_empty';
+import { CompanyHeader } from '../_nav';
+import { NewUpdateDialog } from './_components/NewUpdateDialog';
+import { VisibilityDialog } from './_components/VisibilityDialog';
+import {
+  byNewestPeriod,
+  formatPeriod,
+  templateOf,
+  VISIBILITY_LABEL,
+  type Update,
+} from './_components/lib';
 
 /**
  * Company › Updates (H8; owner 2026-10-21, "Update view" and "New pages"): the board and
@@ -27,7 +33,7 @@ export default function UpdatesPage() {
   const { can, capsReady, capsError } = useMe();
   if (!capsReady && !capsError) return <Loading />;
   // #370: the Updates tab's own read (company/_tabs.ts), for any item.
-  if (!can("start_draft", true)) {
+  if (!can('start_draft', true)) {
     return (
       <>
         <CompanyHeader />
@@ -50,49 +56,64 @@ function Updates() {
   const { can } = useMe();
   // #370: New update starts an update_draft run, which only the run's handler role may; a
   // row's ⋯ changes who sees the update.
-  const mayCreate = can("create_run");
-  const mayShare = can("set_document_visibility");
-  const q = useQuery("documents|update", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "update" } } })));
+  const mayCreate = can('create_run');
+  const mayShare = can('set_document_visibility');
+  const q = useQuery('documents|update', () =>
+    unwrap(api.GET('/v1/documents', { params: { query: { kind: 'update' } } })),
+  );
   const rows = useMemo(() => [...(q.data ?? [])].sort(byNewestPeriod), [q.data]);
   const [creating, setCreating] = useState(false);
   const [changing, setChanging] = useState<Update | null>(null);
 
   const columns: Column<Update>[] = [
     {
-      key: "title",
-      header: "Title",
-      phone: "title",
+      key: 'title',
+      header: 'Title',
+      phone: 'title',
       cell: (u) => (
         // qa-company-15: the title is a link and looks like one.
-        <Link href={`/documents/${u.slug}`} className="truncate font-medium text-accent-ink hover:underline" data-testid="update-title" title={u.title}>
+        <Link
+          href={`/documents/${u.slug}`}
+          className="truncate font-medium text-accent-ink hover:underline"
+          data-testid="update-title"
+          title={u.title}
+        >
           {u.title}
         </Link>
       ),
     },
     {
-      key: "template",
-      header: "Template",
-      width: "136px",
-      phone: "meta",
-      cell: (u) => <span className="text-sm text-text2">{templateOf(u.template)?.name ?? "—"}</span>,
+      key: 'template',
+      header: 'Template',
+      width: '136px',
+      phone: 'meta',
+      cell: (u) => (
+        <span className="text-sm text-text2">{templateOf(u.template)?.name ?? '—'}</span>
+      ),
     },
     {
-      key: "period",
-      header: "Period",
-      width: "200px",
-      phone: "meta",
+      key: 'period',
+      header: 'Period',
+      width: '200px',
+      phone: 'meta',
       cell: (u) => (
         <span className="tnum text-sm" data-testid="update-period">
           {formatPeriod(u.period)}
         </span>
       ),
     },
-    { key: "state", header: "State", width: "112px", phone: "meta", cell: (u) => <DocStatusChip status={u.status} dot /> },
     {
-      key: "visibility",
-      header: "Visibility",
-      width: "200px",
-      phone: "meta",
+      key: 'state',
+      header: 'State',
+      width: '112px',
+      phone: 'meta',
+      cell: (u) => <DocStatusChip status={u.status} dot />,
+    },
+    {
+      key: 'visibility',
+      header: 'Visibility',
+      width: '200px',
+      phone: 'meta',
       cell: (u) => (
         <span data-testid="update-visibility" className="inline-flex">
           {/* qa-company-41, -37: who sees it is not a state (never the blue of "In review") and not a button: a flat grey chip. */}
@@ -101,32 +122,38 @@ function Updates() {
       ),
     },
     {
-      key: "updated",
-      header: "Updated",
-      width: "120px",
-      phone: "hide",
+      key: 'updated',
+      header: 'Updated',
+      width: '120px',
+      phone: 'hide',
       cell: (u) => <span className="tnum text-sm">{formatDate(u.updated_at)}</span>,
     },
     ...(mayShare
       ? [
           {
-            key: "actions",
+            key: 'actions',
             header: <span className="sr-only">Actions</span>,
-            width: "176px",
-            phone: "action" as const,
+            width: '176px',
+            phone: 'action' as const,
             // qa-company-16: one action, so a labelled button, not a ⋯ menu holding it.
             cell: (u: Update) => {
-              const opening = u.visibility === "approvers";
+              const opening = u.visibility === 'approvers';
               return (
                 <div className="flex justify-end">
                   <Button
                     data-testid="update-share"
-                    aria-label={opening ? `Share ${u.title} with the whole company` : `Limit ${u.title} to owners and approvers`}
-                    title={opening ? "Share with the whole company" : "Limit to owners and approvers"}
+                    aria-label={
+                      opening
+                        ? `Share ${u.title} with the whole company`
+                        : `Limit ${u.title} to owners and approvers`
+                    }
+                    title={
+                      opening ? 'Share with the whole company' : 'Limit to owners and approvers'
+                    }
                     onClick={() => setChanging(u)}
                   >
                     {/* qa-company-37: the button says whom it shares with. */}
-                    {opening ? "Share with company…" : "Limit…"}
+                    {opening ? 'Share with company…' : 'Limit…'}
                   </Button>
                 </div>
               );
@@ -153,9 +180,11 @@ function Updates() {
         count={q.data ? rows.length : undefined}
         tools={
           <InfoTip label="updates" align="end">
-            The product part of the board update and the monthly investor update. Oracle drafts them from goals, tracks, launches and outcomes:
-            metrics first, only dates a verified schedule basis supports, and the asks left for an owner. An owner decides what is said and
-            approves; owners and approvers see them unless an owner shares one with the whole company.
+            The product part of the board update and the monthly investor update. Oracle drafts them
+            from goals, tracks, launches and outcomes: metrics first, only dates a verified schedule
+            basis supports, and the asks left for an owner. An owner decides what is said and
+            approves; owners and approvers see them unless an owner shares one with the whole
+            company.
           </InfoTip>
         }
       >
@@ -168,7 +197,12 @@ function Updates() {
             action={
               mayCreate ? (
                 // Review r2 of PR 1286: on a phone it reads as the header's ("+ Update"), named in full.
-                <Button icon="plus" aria-label="New update" title="New update" onClick={() => setCreating(true)}>
+                <Button
+                  icon="plus"
+                  aria-label="New update"
+                  title="New update"
+                  onClick={() => setCreating(true)}
+                >
                   <span className="max-[600px]:hidden">New update</span>
                   <span className="hidden max-[600px]:inline">Update</span>
                 </Button>
@@ -183,18 +217,26 @@ function Updates() {
             rows={q.data ? rows : undefined}
             loading={q.loading}
             rowKey={(u) => u.slug}
-            rowProps={(u) => ({ "data-testid": "update-row", "data-slug": u.slug })}
+            rowProps={(u) => ({ 'data-testid': 'update-row', 'data-slug': u.slug })}
           />
         )}
       </Panel>
-      {creating && mayCreate && <NewUpdateDialog updates={rows} onClose={() => setCreating(false)} />}
+      {creating && mayCreate && (
+        <NewUpdateDialog updates={rows} onClose={() => setCreating(false)} />
+      )}
       {changing && mayShare && (
         <VisibilityDialog
           update={changing}
           onClose={() => setChanging(null)}
           onChanged={(out) => {
             setChanging(null);
-            q.setData((list) => (list ?? []).map((u) => (u.slug === out.slug ? { ...u, visibility: out.visibility, updated_at: out.updated_at } : u)));
+            q.setData((list) =>
+              (list ?? []).map((u) =>
+                u.slug === out.slug
+                  ? { ...u, visibility: out.visibility, updated_at: out.updated_at }
+                  : u,
+              ),
+            );
           }}
         />
       )}

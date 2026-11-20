@@ -1,11 +1,12 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useId, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type RefObject } from 'react';
 
-import { Button } from "./Button";
-import { useScrollInside } from "@/lib/fit-viewport";
+import { Button } from './Button';
+import { useScrollInside } from '@/lib/fit-viewport';
 
-const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
  * Makes everything outside `root` inert (each sibling of `root` and of its ancestors up to
@@ -30,7 +31,11 @@ function inertOutside(root: HTMLElement): () => void {
  * Shift+Tab stay inside `ref`, Escape calls `onClose`; on close, focus goes back to what
  * had it when the dialog opened.
  */
-export function useFocusTrap(ref: RefObject<HTMLElement | null>, open: boolean, onClose: () => void) {
+export function useFocusTrap(
+  ref: RefObject<HTMLElement | null>,
+  open: boolean,
+  onClose: () => void,
+) {
   const close = useRef(onClose);
   useEffect(() => {
     close.current = onClose;
@@ -40,15 +45,15 @@ export function useFocusTrap(ref: RefObject<HTMLElement | null>, open: boolean, 
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     // Its ancestors, the scrim among them (a click on it closes the dialog), stay live.
     const restore = ref.current ? inertOutside(ref.current) : () => {};
-    (ref.current?.querySelector<HTMLElement>("[data-autofocus]") ?? ref.current)?.focus();
+    (ref.current?.querySelector<HTMLElement>('[data-autofocus]') ?? ref.current)?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
+      if (e.key === 'Escape') {
         e.preventDefault();
         close.current();
         return;
       }
       const root = ref.current;
-      if (e.key !== "Tab" || !root) return;
+      if (e.key !== 'Tab' || !root) return;
       const items = [...root.querySelectorAll<HTMLElement>(FOCUSABLE)];
       if (items.length === 0) {
         e.preventDefault();
@@ -66,9 +71,9 @@ export function useFocusTrap(ref: RefObject<HTMLElement | null>, open: boolean, 
         first.focus();
       }
     };
-    document.addEventListener("keydown", onKey);
+    document.addEventListener('keydown', onKey);
     return () => {
-      document.removeEventListener("keydown", onKey);
+      document.removeEventListener('keydown', onKey);
       // Live again first: an inert opener cannot take the focus back.
       restore();
       if (opener?.isConnected) opener.focus();
@@ -130,7 +135,9 @@ export function ConfirmHost() {
     setPending(null);
     asked?.resolve(yes);
   }, []);
-  return pending ? <ConfirmDialog key={pending.action + pending.message} ask={pending} onAnswer={answer} /> : null;
+  return pending ? (
+    <ConfirmDialog key={pending.action + pending.message} ask={pending} onAnswer={answer} />
+  ) : null;
 }
 
 function ConfirmDialog({ ask, onAnswer }: { ask: ConfirmAsk; onAnswer: (yes: boolean) => void }) {
@@ -185,11 +192,15 @@ function ConfirmDialog({ ask, onAnswer }: { ask: ConfirmAsk; onAnswer: (yes: boo
           ) : null}
         </div>
         <div className="flex flex-none justify-end gap-2 border-t border-line px-5 py-3 max-[600px]:px-4">
-          <Button variant="ghost" data-autofocus={ask.destructive ? true : undefined} onClick={() => onAnswer(false)}>
-            {ask.cancel ?? "Back"}
+          <Button
+            variant="ghost"
+            data-autofocus={ask.destructive ? true : undefined}
+            onClick={() => onAnswer(false)}
+          >
+            {ask.cancel ?? 'Back'}
           </Button>
           <Button
-            variant={ask.destructive ? "danger" : "primary"}
+            variant={ask.destructive ? 'danger' : 'primary'}
             data-autofocus={ask.destructive ? undefined : true}
             onClick={() => onAnswer(true)}
           >

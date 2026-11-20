@@ -5,14 +5,15 @@
  * credential, only the interview's own cookie (credentials "include"). In mock mode both go
  * to the in-browser mock, as the typed client does.
  */
-import { ApiError, MOCK_MODE } from "./client";
-import { mockFetch } from "./mock/server";
-import { forgetReads } from "./shared-reads";
+import { ApiError, MOCK_MODE } from './client';
+import { mockFetch } from './mock/server';
+import { forgetReads } from './shared-reads';
 
-export type InterviewStatus = "draft" | "invited" | "in_progress" | "finished" | "expired" | "revoked";
+export type InterviewStatus =
+  'draft' | 'invited' | 'in_progress' | 'finished' | 'expired' | 'revoked';
 export type JobState = {
   id: string;
-  status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
   error: string | null;
   /** When it failed, so a stored error reads as then (#604 re-review). */
   finished_at?: string | null;
@@ -20,8 +21,8 @@ export type JobState = {
 export type GuideItem = { id: string; prompt: string; purpose: string | null };
 export type InterviewMessage = {
   id: string;
-  role: "oracle" | "interviewee";
-  kind: "intro" | "question" | "ack" | "follow_up" | "answer" | "skip" | "closing";
+  role: 'oracle' | 'interviewee';
+  kind: 'intro' | 'question' | 'ack' | 'follow_up' | 'answer' | 'skip' | 'closing';
   body: string;
   guide_item: string | null;
   /** Team interviews: the intake question it is about. */
@@ -38,7 +39,7 @@ export type InterviewSubject = { intake_id: string } | { theme_id: string } | { 
 
 export type InterviewOut = {
   id: string;
-  kind: "customer" | "team";
+  kind: 'customer' | 'team';
   status: InterviewStatus;
   title: string;
   intake_id: string | null;
@@ -67,11 +68,20 @@ export type InterviewOut = {
 
 export type InterviewSummary = Pick<
   InterviewOut,
-  "id" | "kind" | "status" | "title" | "interviewee_name" | "interviewee_company" | "created_by" | "created_by_name" | "created_at" | "finished_at"
+  | 'id'
+  | 'kind'
+  | 'status'
+  | 'title'
+  | 'interviewee_name'
+  | 'interviewee_company'
+  | 'created_by'
+  | 'created_by_name'
+  | 'created_at'
+  | 'finished_at'
 > & { request_count: number };
 
 export type InterviewCreate = {
-  kind: "customer";
+  kind: 'customer';
   interviewee_name: string;
   interviewee_company?: string | null;
   subject: InterviewSubject;
@@ -86,58 +96,71 @@ export type InterviewPatch = {
 /** The private link, shown once: when it was made and when it expires. */
 export type InterviewLink = { url: string; expires_at: string; created_at: string };
 
-export type PublicMessage = { role: "oracle" | "customer"; body: string; at: string };
+export type PublicMessage = { role: 'oracle' | 'customer'; body: string; at: string };
 export type PublicProgress = { asked: number; total: number };
 export type PublicInterview = {
   company: string;
   interviewee_name: string;
   intro: string;
-  status: "invited" | "in_progress" | "finished";
+  status: 'invited' | 'in_progress' | 'finished';
   messages: PublicMessage[];
   progress: PublicProgress;
 };
 export type PublicTurn = { messages: PublicMessage[]; progress: PublicProgress; done: boolean };
 
 export const INTERVIEW_STATUS_LABEL: Record<InterviewStatus, string> = {
-  draft: "Draft",
-  invited: "Invited",
-  in_progress: "In progress",
-  finished: "Finished",
-  expired: "Expired",
-  revoked: "Withdrawn",
+  draft: 'Draft',
+  invited: 'Invited',
+  in_progress: 'In progress',
+  finished: 'Finished',
+  expired: 'Expired',
+  revoked: 'Withdrawn',
 };
 
 /** The status chip's tone (ds Chip kinds). */
-export const INTERVIEW_STATUS_KIND: Record<InterviewStatus, "na" | "now" | "warn" | "pass"> = {
-  draft: "na",
-  invited: "now",
-  in_progress: "warn",
-  finished: "pass",
-  expired: "na",
-  revoked: "na",
+export const INTERVIEW_STATUS_KIND: Record<InterviewStatus, 'na' | 'now' | 'warn' | 'pass'> = {
+  draft: 'na',
+  invited: 'now',
+  in_progress: 'warn',
+  finished: 'pass',
+  expired: 'na',
+  revoked: 'na',
 };
 
 /** Limits the API enforces (oracle.interviews.schemas). */
-export const LIMITS = { name: 120, company: 120, topic: 300, intro: 300, prompt: 300, questions: 8, message: 2000 } as const;
+export const LIMITS = {
+  name: 120,
+  company: 120,
+  topic: 300,
+  intro: 300,
+  prompt: 300,
+  questions: 8,
+  message: 2000,
+} as const;
 
 // A write skips the API client, so it drops the shared reads itself (lib/api/shared-reads), before and after.
 const send = (req: Request) => {
-  if (req.method === "GET") return MOCK_MODE ? mockFetch(req) : fetch(req);
+  if (req.method === 'GET') return MOCK_MODE ? mockFetch(req) : fetch(req);
   forgetReads();
   return (MOCK_MODE ? mockFetch(req) : fetch(req)).finally(forgetReads);
 };
 
-function request(method: string, path: string, body?: unknown, credentials?: RequestCredentials): Request {
+function request(
+  method: string,
+  path: string,
+  body?: unknown,
+  credentials?: RequestCredentials,
+): Request {
   return new Request(new URL(path, window.location.origin), {
     method,
     credentials,
-    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 }
 
 async function readJson(res: Response): Promise<unknown> {
-  const text = await res.text().catch(() => "");
+  const text = await res.text().catch(() => '');
   try {
     return text ? JSON.parse(text) : null;
   } catch {
@@ -150,27 +173,40 @@ export async function interviewsCall<T>(method: string, path: string, body?: unk
   const res = await send(request(method, path, body));
   const data = await readJson(res);
   if (res.ok) return data as T;
-  const detail = data && typeof data === "object" && "detail" in data ? (data as { detail: unknown }).detail : null;
+  const detail =
+    data && typeof data === 'object' && 'detail' in data
+      ? (data as { detail: unknown }).detail
+      : null;
   const message =
     res.status === 401
-      ? "Your session has expired. Sign in again."
-      : typeof detail === "string"
+      ? 'Your session has expired. Sign in again.'
+      : typeof detail === 'string'
         ? detail
-        : "Something went wrong. Try again.";
+        : 'Something went wrong. Try again.';
   throw new ApiError(res.status, message);
 }
 
 /** What a public call answered: its status and body, never thrown (the page shows refusals). */
-export type PublicResult<T> = { status: number; data: T | null; reason: string | null; detail: string | null };
+export type PublicResult<T> = {
+  status: number;
+  data: T | null;
+  reason: string | null;
+  detail: string | null;
+};
 
 /** The customer page's call to /v1/public/interviews/{token}...; a network failure reads as status 0. */
-export async function publicCall<T>(method: "GET" | "POST", token: string, action = "", body?: unknown): Promise<PublicResult<T>> {
-  const path = `/v1/public/interviews/${encodeURIComponent(token)}${action ? `/${action}` : ""}`;
+export async function publicCall<T>(
+  method: 'GET' | 'POST',
+  token: string,
+  action = '',
+  body?: unknown,
+): Promise<PublicResult<T>> {
+  const path = `/v1/public/interviews/${encodeURIComponent(token)}${action ? `/${action}` : ''}`;
   try {
-    const res = await send(request(method, path, body, "include"));
+    const res = await send(request(method, path, body, 'include'));
     const data = (await readJson(res)) as Record<string, unknown> | null;
-    const reason = data && typeof data.reason === "string" ? data.reason : null;
-    const detail = data && typeof data.detail === "string" ? data.detail : null;
+    const reason = data && typeof data.reason === 'string' ? data.reason : null;
+    const detail = data && typeof data.detail === 'string' ? data.detail : null;
     return { status: res.status, data: res.ok ? (data as T) : null, reason, detail };
   } catch {
     return { status: 0, data: null, reason: null, detail: null };

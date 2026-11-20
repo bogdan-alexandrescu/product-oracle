@@ -1,6 +1,6 @@
-import { MOCK_MEETINGS_KEY } from "../lib/api/mock/simple-meetings";
-import { login } from "./helpers";
-import { expect, test, type BrowserContext, type Page } from "./test";
+import { MOCK_MEETINGS_KEY } from '../lib/api/mock/simple-meetings';
+import { login } from './helpers';
+import { expect, test, type BrowserContext, type Page } from './test';
 
 /**
  * dod-delivery: how a meeting's minutes went out by email and to Slack, in plain words, and
@@ -21,50 +21,55 @@ import { expect, test, type BrowserContext, type Page } from "./test";
  */
 
 async function flags(context: BrowserContext, value: string) {
-  await context.addInitScript(([key, v]) => localStorage.setItem(key, v), [MOCK_MEETINGS_KEY, value] as const);
+  await context.addInitScript(([key, v]) => localStorage.setItem(key, v), [
+    MOCK_MEETINGS_KEY,
+    value,
+  ] as const);
 }
 
-const group = (page: Page) => page.getByRole("region", { name: "Review: Usage alerts" });
+const group = (page: Page) => page.getByRole('region', { name: 'Review: Usage alerts' });
 
 for (const phone of [false, true]) {
-  test.describe(`minutes delivery (${phone ? "phone" : "desktop"})`, () => {
+  test.describe(`minutes delivery (${phone ? 'phone' : 'desktop'})`, () => {
     test.beforeEach(async ({ context, page }) => {
-      await flags(context, "delivery-failed");
-      await page.setViewportSize(phone ? { width: 390, height: 844 } : { width: 1440, height: 900 });
+      await flags(context, 'delivery-failed');
+      await page.setViewportSize(
+        phone ? { width: 390, height: 844 } : { width: 1440, height: 900 },
+      );
     });
 
-    test("what failed is said, and Retry sends it", async ({ page }) => {
+    test('what failed is said, and Retry sends it', async ({ page }) => {
       await login(page);
-      await page.goto("/simple/decisions");
+      await page.goto('/simple/decisions');
       const g = group(page);
-      const email = g.getByTestId("delivery-email");
-      const slack = g.getByTestId("delivery-slack");
+      const email = g.getByTestId('delivery-email');
+      const slack = g.getByTestId('delivery-slack');
       await expect(email).toHaveText(/^Emailed 2 of 3 attendees; \S+'s didn't go through · Retry$/);
       await expect(slack).toHaveText("Couldn't post to Slack · Retry");
       await expect(g).not.toContainText(/failed|retrying|queued/);
-      await email.getByRole("button", { name: "Retry" }).click();
-      await expect(email).toHaveText("Emailed all 3 attendees");
+      await email.getByRole('button', { name: 'Retry' }).click();
+      await expect(email).toHaveText('Emailed all 3 attendees');
       await expect(slack).toHaveText("Couldn't post to Slack · Retry");
       // The meeting's own Delivery says the same, and its Retry posts to Slack.
-      await g.getByRole("link", { name: "Review: Usage alerts" }).click();
-      const sent = page.getByRole("status", { name: "Sent" });
-      await expect(sent.getByTestId("delivery-email")).toHaveText("Emailed all 3 attendees");
-      const post = sent.getByTestId("delivery-slack");
+      await g.getByRole('link', { name: 'Review: Usage alerts' }).click();
+      const sent = page.getByRole('status', { name: 'Sent' });
+      await expect(sent.getByTestId('delivery-email')).toHaveText('Emailed all 3 attendees');
+      const post = sent.getByTestId('delivery-slack');
       await expect(post).toHaveText("Couldn't post to Slack · Retry");
-      const retry = post.getByRole("button", { name: "Retry" });
+      const retry = post.getByRole('button', { name: 'Retry' });
       if (phone) expect((await retry.boundingBox())!.height).toBeGreaterThanOrEqual(43);
       await retry.click();
-      await expect(post).toHaveText("Posted to #product-reviews");
+      await expect(post).toHaveText('Posted to #product-reviews');
     });
 
-    test("someone else reads who may retry", async ({ page }) => {
-      await login(page, "approver@example.com");
-      await page.goto("/simple/decisions");
+    test('someone else reads who may retry', async ({ page }) => {
+      await login(page, 'approver@example.com');
+      await page.goto('/simple/decisions');
       const g = group(page);
-      await expect(g.getByTestId("delivery-email")).toHaveText(
+      await expect(g.getByTestId('delivery-email')).toHaveText(
         /^Emailed 2 of 3 attendees; \S+'s didn't go through · whoever ended the meeting or an owner can retry$/,
       );
-      await expect(g.getByRole("button", { name: "Retry" })).toHaveCount(0);
+      await expect(g.getByRole('button', { name: 'Retry' })).toHaveCount(0);
     });
   });
 }
@@ -77,13 +82,16 @@ for (const phone of [false, true]) {
  * count (api/tests/test_simple_meeting_delivery.py).
  */
 for (const phone of [false, true]) {
-  test(`an old failed email reads as failed (${phone ? "phone" : "desktop"})`, async ({ context, page }) => {
-    await flags(context, "delivery-legacy-failed");
+  test(`an old failed email reads as failed (${phone ? 'phone' : 'desktop'})`, async ({
+    context,
+    page,
+  }) => {
+    await flags(context, 'delivery-legacy-failed');
     await page.setViewportSize(phone ? { width: 390, height: 844 } : { width: 1440, height: 900 });
     await login(page);
-    await page.goto("/simple/decisions");
+    await page.goto('/simple/decisions');
     const g = group(page);
-    await expect(g.getByTestId("delivery-email")).toHaveText("Couldn't email the attendees");
-    await expect(g.getByRole("button", { name: "Retry" })).toHaveCount(0);
+    await expect(g.getByTestId('delivery-email')).toHaveText("Couldn't email the attendees");
+    await expect(g.getByRole('button', { name: 'Retry' })).toHaveCount(0);
   });
 }

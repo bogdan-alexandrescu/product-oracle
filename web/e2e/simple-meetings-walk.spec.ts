@@ -1,6 +1,6 @@
-import { MOCK_MEETINGS_KEY } from "../lib/api/mock/simple-meetings";
-import { joinMeeting, login, signOut } from "./helpers";
-import { expect, test, type BrowserContext, type Page } from "./test";
+import { MOCK_MEETINGS_KEY } from '../lib/api/mock/simple-meetings';
+import { joinMeeting, login, signOut } from './helpers';
+import { expect, test, type BrowserContext, type Page } from './test';
 
 /**
  * Simple S8 (#723), the production walk's three meeting findings, driven through the UI on
@@ -56,7 +56,7 @@ import { expect, test, type BrowserContext, type Page } from "./test";
 
 async function switchTo(page: Page, email: string) {
   // From a fresh page: the full-screen meeting covers the rail's account menu.
-  await page.goto("/simple");
+  await page.goto('/simple');
   const size = page.viewportSize()!;
   await page.setViewportSize({ width: 1366, height: 820 });
   await signOut(page);
@@ -65,252 +65,348 @@ async function switchTo(page: Page, email: string) {
 }
 
 async function flags(context: BrowserContext, value: string) {
-  await context.addInitScript(([key, v]) => localStorage.setItem(key, v), [MOCK_MEETINGS_KEY, value] as const);
+  await context.addInitScript(([key, v]) => localStorage.setItem(key, v), [
+    MOCK_MEETINGS_KEY,
+    value,
+  ] as const);
 }
 
-const minutesRegion = (page: Page) => page.getByRole("region", { name: "Minutes" });
-const delivery = (page: Page) => page.getByRole("region", { name: "Delivery" });
+const minutesRegion = (page: Page) => page.getByRole('region', { name: 'Minutes' });
+const delivery = (page: Page) => page.getByRole('region', { name: 'Delivery' });
 
 async function endOne(page: Page) {
   await login(page);
-  await page.goto("/simple/meetings");
-  await page.getByRole("button", { name: "Start review" }).first().click();
-  const sheet = page.getByRole("dialog", { name: "Start a review" });
-  await sheet.getByLabel("PRD").selectOption({ label: "Guided setup" });
-  await sheet.getByRole("button", { name: "Start", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
-  await page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "2 Roadmap" }).click();
-  await page.getByRole("button", { name: "Move Setup checklist to Next" }).click();
-  await expect(page.getByRole("region", { name: "Decisions in this meeting" })).toContainText("Moved Setup checklist");
-  await page.getByRole("button", { name: "End meeting" }).click();
-  await page.getByRole("alertdialog").getByRole("button", { name: "End meeting" }).click();
-  await expect(page.getByTestId("end-screen")).toBeVisible();
+  await page.goto('/simple/meetings');
+  await page.getByRole('button', { name: 'Start review' }).first().click();
+  const sheet = page.getByRole('dialog', { name: 'Start a review' });
+  await sheet.getByLabel('PRD').selectOption({ label: 'Guided setup' });
+  await sheet.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Review: Guided setup' })).toBeVisible();
+  await page
+    .getByRole('navigation', { name: 'Steps' })
+    .getByRole('button', { name: '2 Roadmap' })
+    .click();
+  await page.getByRole('button', { name: 'Move Setup checklist to Next' }).click();
+  await expect(page.getByRole('region', { name: 'Decisions in this meeting' })).toContainText(
+    'Moved Setup checklist',
+  );
+  await page.getByRole('button', { name: 'End meeting' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'End meeting' }).click();
+  await expect(page.getByTestId('end-screen')).toBeVisible();
 }
 
 for (const phone of [false, true]) {
-  for (const scheme of ["light", "dark"] as const) {
-    test.describe(`${phone ? "phone" : "desktop"} · ${scheme}`, () => {
-      test.use({ viewport: phone ? { width: 390, height: 844 } : { width: 1366, height: 820 }, colorScheme: scheme });
+  for (const scheme of ['light', 'dark'] as const) {
+    test.describe(`${phone ? 'phone' : 'desktop'} · ${scheme}`, () => {
+      test.use({
+        viewport: phone ? { width: 390, height: 844 } : { width: 1366, height: 820 },
+        colorScheme: scheme,
+      });
 
-      test("a failed minutes job: the failed state, Send on the edited minutes, Draft again", async ({ page, context }) => {
-        await flags(context, "minutes-failed");
+      test('a failed minutes job: the failed state, Send on the edited minutes, Draft again', async ({
+        page,
+        context,
+      }) => {
+        await flags(context, 'minutes-failed');
         await endOne(page);
         const minutes = minutesRegion(page);
-        await expect(minutes.getByTestId("minutes-failed")).toContainText("Oracle could not draft the minutes");
-        await expect(minutes.getByText("Drafting…")).toHaveCount(0);
-        await expect(minutes.getByRole("button", { name: "Draft again" })).toBeVisible();
-        await minutes.getByLabel("Summary").fill("We moved the setup checklist to Next.");
-        await expect(delivery(page).getByRole("button", { name: "Send" })).toBeEnabled();
+        await expect(minutes.getByTestId('minutes-failed')).toContainText(
+          'Oracle could not draft the minutes',
+        );
+        await expect(minutes.getByText('Drafting…')).toHaveCount(0);
+        await expect(minutes.getByRole('button', { name: 'Draft again' })).toBeVisible();
+        await minutes.getByLabel('Summary').fill('We moved the setup checklist to Next.');
+        await expect(delivery(page).getByRole('button', { name: 'Send' })).toBeEnabled();
         const url = page.url();
         // A commenter reads the minutes: no Draft again, nothing to send.
-        await switchTo(page, "commenter@example.com");
+        await switchTo(page, 'commenter@example.com');
         await page.goto(url);
-        await expect(page.getByTestId("end-screen")).toBeVisible();
-        await expect(page.getByRole("button", { name: "Draft again" })).toHaveCount(0);
-        await expect(delivery(page)).toContainText("The minutes are not sent yet.");
+        await expect(page.getByTestId('end-screen')).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Draft again' })).toHaveCount(0);
+        await expect(delivery(page)).toContainText('The minutes are not sent yet.');
         // The owner drafts again: Oracle's minutes land in the fields; Send sends them.
-        await switchTo(page, "admin@example.com");
+        await switchTo(page, 'admin@example.com');
         await page.goto(url);
-        await minutesRegion(page).getByRole("button", { name: "Draft again" }).click();
-        await expect(minutesRegion(page).getByTestId("minutes-failed")).toHaveCount(0);
-        await expect(minutesRegion(page).getByLabel("Summary")).toHaveValue("Oracle's minutes of Review: Guided setup: 1 decisions taken.");
-        await minutesRegion(page).getByLabel("Summary").fill("Edited after Oracle drafted again.");
-        await delivery(page).getByRole("button", { name: "Send" }).click();
-        await expect(delivery(page).getByRole("status", { name: "Sent" })).toBeVisible();
-        await expect(page.getByTestId("minutes-summary")).toHaveText("Edited after Oracle drafted again.");
+        await minutesRegion(page).getByRole('button', { name: 'Draft again' }).click();
+        await expect(minutesRegion(page).getByTestId('minutes-failed')).toHaveCount(0);
+        await expect(minutesRegion(page).getByLabel('Summary')).toHaveValue(
+          "Oracle's minutes of Review: Guided setup: 1 decisions taken.",
+        );
+        await minutesRegion(page).getByLabel('Summary').fill('Edited after Oracle drafted again.');
+        await delivery(page).getByRole('button', { name: 'Send' }).click();
+        await expect(delivery(page).getByRole('status', { name: 'Sent' })).toBeVisible();
+        await expect(page.getByTestId('minutes-summary')).toHaveText(
+          'Edited after Oracle drafted again.',
+        );
       });
 
-      test("a failed minutes job: Send works on what a person wrote, without Draft again", async ({ page, context }) => {
-        await flags(context, "minutes-failed");
+      test('a failed minutes job: Send works on what a person wrote, without Draft again', async ({
+        page,
+        context,
+      }) => {
+        await flags(context, 'minutes-failed');
         await endOne(page);
-        await minutesRegion(page).getByLabel("Summary").fill("Written by hand while Oracle failed.");
-        await minutesRegion(page).getByLabel("Open questions").fill("Who writes the checklist copy?");
-        await minutesRegion(page).getByRole("button", { name: "Add action item" }).click();
-        await minutesRegion(page).getByLabel("Action item 1", { exact: true }).fill("Draft the checklist copy");
-        await delivery(page).getByRole("button", { name: "Send" }).click();
-        await expect(delivery(page).getByRole("status", { name: "Sent" })).toBeVisible();
-        await expect(page.getByTestId("minutes-summary")).toHaveText("Written by hand while Oracle failed.");
-        await expect(minutesRegion(page)).toContainText("Who writes the checklist copy?");
-        await expect(minutesRegion(page)).toContainText("Draft the checklist copy");
+        await minutesRegion(page)
+          .getByLabel('Summary')
+          .fill('Written by hand while Oracle failed.');
+        await minutesRegion(page)
+          .getByLabel('Open questions')
+          .fill('Who writes the checklist copy?');
+        await minutesRegion(page).getByRole('button', { name: 'Add action item' }).click();
+        await minutesRegion(page)
+          .getByLabel('Action item 1', { exact: true })
+          .fill('Draft the checklist copy');
+        await delivery(page).getByRole('button', { name: 'Send' }).click();
+        await expect(delivery(page).getByRole('status', { name: 'Sent' })).toBeVisible();
+        await expect(page.getByTestId('minutes-summary')).toHaveText(
+          'Written by hand while Oracle failed.',
+        );
+        await expect(minutesRegion(page)).toContainText('Who writes the checklist copy?');
+        await expect(minutesRegion(page)).toContainText('Draft the checklist copy');
       });
 
-      test("a slow minutes job: still drafting, Send what is written", async ({ page, context }) => {
-        await flags(context, "minutes-slow");
+      test('a slow minutes job: still drafting, Send what is written', async ({
+        page,
+        context,
+      }) => {
+        await flags(context, 'minutes-slow');
         await endOne(page);
-        await expect(minutesRegion(page).getByTestId("minutes-slow")).toContainText("still drafting");
-        await expect(minutesRegion(page).getByRole("button", { name: "Draft again" })).toHaveCount(0);
-        await delivery(page).getByRole("button", { name: "Send" }).click();
-        await expect(delivery(page).getByRole("status", { name: "Sent" })).toBeVisible();
+        await expect(minutesRegion(page).getByTestId('minutes-slow')).toContainText(
+          'still drafting',
+        );
+        await expect(minutesRegion(page).getByRole('button', { name: 'Draft again' })).toHaveCount(
+          0,
+        );
+        await delivery(page).getByRole('button', { name: 'Send' }).click();
+        await expect(delivery(page).getByRole('status', { name: 'Sent' })).toBeVisible();
         // qa-simple-decide-32: the summary does not repeat the title and count.
         // qa-simple-decide-6: a short prose summary, not the decision titles again.
-        await expect(page.getByTestId("minutes-summary")).toContainText("1 decision taken.");
-        await expect(page.getByTestId("minutes-summary")).not.toContainText("Setup checklist");
+        await expect(page.getByTestId('minutes-summary')).toContainText('1 decision taken.');
+        await expect(page.getByTestId('minutes-summary')).not.toContainText('Setup checklist');
       });
 
-      test("Upcoming lists what Home shows; the rail counts what the page lists; Home's Start opens the sheet", async ({ page }) => {
+      test("Upcoming lists what Home shows; the rail counts what the page lists; Home's Start opens the sheet", async ({
+        page,
+      }) => {
         await login(page);
-        await page.goto("/simple/meetings");
-        const upcoming = page.getByRole("region", { name: "Upcoming" });
-        const rows = upcoming.getByTestId("meetings-upcoming-row");
+        await page.goto('/simple/meetings');
+        const upcoming = page.getByRole('region', { name: 'Upcoming' });
+        const rows = upcoming.getByTestId('meetings-upcoming-row');
         await expect(rows.first()).toBeVisible();
-        await expect(upcoming).not.toContainText("No review is scheduled");
-        const firstTitle = (await rows.first().locator("strong").innerText()).trim();
-        const waiting = await upcoming.getByRole("button", { name: "Start review" }).count();
+        await expect(upcoming).not.toContainText('No review is scheduled');
+        const firstTitle = (await rows.first().locator('strong').innerText()).trim();
+        const waiting = await upcoming.getByRole('button', { name: 'Start review' }).count();
         expect(waiting).toBeGreaterThan(0);
         // home-waiting-one-list: an upcoming review waits on nobody, so the rail counts none of them.
         if (!phone) {
-          await expect(page.getByTestId("simple-nav-decisions-count")).toBeVisible();
-          await expect(page.getByTestId("simple-nav-meetings-count")).toHaveCount(0);
+          await expect(page.getByTestId('simple-nav-decisions-count')).toBeVisible();
+          await expect(page.getByTestId('simple-nav-meetings-count')).toHaveCount(0);
         }
         // Home's next review is Upcoming's first row; its Start meeting opens the sheet on it.
-        await page.goto("/simple");
-        await expect(page.getByTestId("home-meeting-next")).toContainText(firstTitle);
+        await page.goto('/simple');
+        await expect(page.getByTestId('home-meeting-next')).toContainText(firstTitle);
         // fix4 (qa-simple-home-27): days before the meeting, Home's start says it starts now.
-        await page.getByTestId("home-meeting-next").getByRole("link", { name: "Start now" }).click();
-        const sheet = page.getByRole("dialog", { name: "Start a review" });
-        await expect(sheet.getByTestId("start-occurrence")).toContainText(firstTitle);
+        await page
+          .getByTestId('home-meeting-next')
+          .getByRole('link', { name: 'Start now' })
+          .click();
+        const sheet = page.getByRole('dialog', { name: 'Start a review' });
+        await expect(sheet.getByTestId('start-occurrence')).toContainText(firstTitle);
         const ritual = firstTitle;
-        await sheet.getByLabel("PRD").selectOption({ label: "Guided setup" });
-        await sheet.getByRole("button", { name: "Start", exact: true }).click();
-        await expect(page.getByRole("heading", { name: `${ritual}: Guided setup` })).toBeVisible();
-        await page.goto("/simple/meetings");
-        const live = page.getByRole("region", { name: "Live" });
+        await sheet.getByLabel('PRD').selectOption({ label: 'Guided setup' });
+        await sheet.getByRole('button', { name: 'Start', exact: true }).click();
+        await expect(page.getByRole('heading', { name: `${ritual}: Guided setup` })).toBeVisible();
+        await page.goto('/simple/meetings');
+        const live = page.getByRole('region', { name: 'Live' });
         await expect(live).toContainText(`${ritual}: Guided setup`);
         // qa-simple-decide-34: a live review is listed under Live only.
-        await expect(upcoming.getByRole("link", { name: "Open" })).toHaveCount(0);
-        const after = await upcoming.getByRole("button", { name: "Start review" }).count();
+        await expect(upcoming.getByRole('link', { name: 'Open' })).toHaveCount(0);
+        const after = await upcoming.getByRole('button', { name: 'Start review' }).count();
         expect(after).toBe(waiting - 1);
         // The rail counts the one meeting live now, and says so.
         if (!phone) {
-          const badge = page.getByTestId("simple-nav-meetings-count");
-          await expect(badge).toHaveText("1");
-          await expect(badge).toHaveAttribute("aria-label", "1 meeting live now");
-          await expect(badge).toHaveAttribute("title", "1 meeting live now");
+          const badge = page.getByTestId('simple-nav-meetings-count');
+          await expect(badge).toHaveText('1');
+          await expect(badge).toHaveAttribute('aria-label', '1 meeting live now');
+          await expect(badge).toHaveAttribute('title', '1 meeting live now');
         }
         // A viewer reads the same list, and Home's next is its first row.
-        await switchTo(page, "viewer@example.com");
-        await page.goto("/simple/meetings");
+        await switchTo(page, 'viewer@example.com');
+        await page.goto('/simple/meetings');
         // qa-simple-decide-34: the live review is under Live, not Upcoming; Home's next opens it.
-        await expect(page.getByRole("region", { name: "Live" })).toContainText(`${ritual}: Guided setup`);
-        await page.goto("/simple");
-        await expect(page.getByTestId("home-meeting-next")).toContainText(ritual);
-        await expect(page.getByTestId("home-meeting-next").getByRole("link", { name: "Open meeting" })).toBeVisible();
+        await expect(page.getByRole('region', { name: 'Live' })).toContainText(
+          `${ritual}: Guided setup`,
+        );
+        await page.goto('/simple');
+        await expect(page.getByTestId('home-meeting-next')).toContainText(ritual);
+        await expect(
+          page.getByTestId('home-meeting-next').getByRole('link', { name: 'Open meeting' }),
+        ).toBeVisible();
       });
 
-      test("Approve and Undo in a meeting: the one-pager reads its new version, no stale draft bar", async ({ page }) => {
+      test('Approve and Undo in a meeting: the one-pager reads its new version, no stale draft bar', async ({
+        page,
+      }) => {
         await login(page);
-        await page.goto("/simple/prds/guided-setup");
-        await page.getByRole("button", { name: "Start a review meeting" }).click();
-        const sheet = page.getByRole("dialog", { name: "Start a review" });
-        await sheet.getByRole("button", { name: "Start", exact: true }).click();
-        await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
+        await page.goto('/simple/prds/guided-setup');
+        await page.getByRole('button', { name: 'Start a review meeting' }).click();
+        const sheet = page.getByRole('dialog', { name: 'Start a review' });
+        await sheet.getByRole('button', { name: 'Start', exact: true }).click();
+        await expect(page.getByRole('heading', { name: 'Review: Guided setup' })).toBeVisible();
         // walkc-meeting-r2 review: the PRD's invited reviewer joins, so Approve publishes.
-        await joinMeeting(page, "approver@example.com");
-        await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
-        const onePager = page.getByTestId("meeting-screen").getByTestId("one-pager");
-        await expect(onePager).toContainText("Version 3");
-        await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
-        await page.getByLabel("New wording for").fill("A setup checklist with the next two steps");
-        await page.getByRole("button", { name: "Save" }).click();
-        const bar = page.getByRole("status", { name: "Working draft" });
-        await expect(bar).toContainText("1 change");
-        await page.getByRole("note").filter({ hasText: "You changed “A setup checklist" }).filter({ visible: true }).getByRole("button", { name: "Undo" }).click();
+        await joinMeeting(page, 'approver@example.com');
+        await expect(page.getByRole('heading', { name: 'Review: Guided setup' })).toBeVisible();
+        const onePager = page.getByTestId('meeting-screen').getByTestId('one-pager');
+        await expect(onePager).toContainText('Version 3');
+        await page.getByRole('button', { name: 'Edit “A setup checklist that shows' }).click();
+        await page.getByLabel('New wording for').fill('A setup checklist with the next two steps');
+        await page.getByRole('button', { name: 'Save' }).click();
+        const bar = page.getByRole('status', { name: 'Working draft' });
+        await expect(bar).toContainText('1 change');
+        await page
+          .getByRole('note')
+          .filter({ hasText: 'You changed “A setup checklist' })
+          .filter({ visible: true })
+          .getByRole('button', { name: 'Undo' })
+          .click();
         await expect(bar).toHaveCount(0);
-        await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
-        await page.getByLabel("New wording for").fill("A checklist that names the next step");
-        await page.getByRole("button", { name: "Save" }).click();
-        await expect(bar).toContainText("1 change");
-        await page.getByRole("button", { name: /^Approve and publish one-pager edits/ }).click();
-        await page.getByRole("alertdialog").getByRole("button", { name: "Approve and publish" }).click();
-        await expect(page.getByRole("region", { name: "Decisions in this meeting" })).toContainText("Approved Guided setup (published)");
-        await expect(onePager).toContainText("Version 4");
-        await expect(onePager).not.toContainText("Version 3");
-        await expect(page.getByRole("status", { name: "Working draft" })).toHaveCount(0);
-        await expect(onePager).toContainText("A checklist that names the next step");
+        await page.getByRole('button', { name: 'Edit “A setup checklist that shows' }).click();
+        await page.getByLabel('New wording for').fill('A checklist that names the next step');
+        await page.getByRole('button', { name: 'Save' }).click();
+        await expect(bar).toContainText('1 change');
+        await page.getByRole('button', { name: /^Approve and publish one-pager edits/ }).click();
+        await page
+          .getByRole('alertdialog')
+          .getByRole('button', { name: 'Approve and publish' })
+          .click();
+        await expect(page.getByRole('region', { name: 'Decisions in this meeting' })).toContainText(
+          'Approved Guided setup (published)',
+        );
+        await expect(onePager).toContainText('Version 4');
+        await expect(onePager).not.toContainText('Version 3');
+        await expect(page.getByRole('status', { name: 'Working draft' })).toHaveCount(0);
+        await expect(onePager).toContainText('A checklist that names the next step');
       });
 
-      test("A second screen on the meeting reads the new version after Approve, without a reload", async ({ page, context }) => {
+      test('A second screen on the meeting reads the new version after Approve, without a reload', async ({
+        page,
+        context,
+      }) => {
         await login(page);
-        await page.goto("/simple/prds/guided-setup");
-        await page.getByRole("button", { name: "Start a review meeting" }).click();
-        await page.getByRole("dialog", { name: "Start a review" }).getByRole("button", { name: "Start", exact: true }).click();
-        await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
+        await page.goto('/simple/prds/guided-setup');
+        await page.getByRole('button', { name: 'Start a review meeting' }).click();
+        await page
+          .getByRole('dialog', { name: 'Start a review' })
+          .getByRole('button', { name: 'Start', exact: true })
+          .click();
+        await expect(page.getByRole('heading', { name: 'Review: Guided setup' })).toBeVisible();
         // walkc-meeting-r2 review: the PRD's invited reviewer joins, so Approve publishes.
-        await joinMeeting(page, "approver@example.com");
-        await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
-        await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
-        await page.getByLabel("New wording for").fill("A checklist that names the next step");
-        await page.getByRole("button", { name: "Save" }).click();
-        await expect(page.getByRole("status", { name: "Working draft" })).toContainText("1 change");
+        await joinMeeting(page, 'approver@example.com');
+        await expect(page.getByRole('heading', { name: 'Review: Guided setup' })).toBeVisible();
+        await page.getByRole('button', { name: 'Edit “A setup checklist that shows' }).click();
+        await page.getByLabel('New wording for').fill('A checklist that names the next step');
+        await page.getByRole('button', { name: 'Save' }).click();
+        await expect(page.getByRole('status', { name: 'Working draft' })).toContainText('1 change');
         const other = await context.newPage();
         await other.goto(page.url());
-        const otherPager = other.getByTestId("meeting-screen").getByTestId("one-pager");
-        await expect(otherPager).toContainText("Version 3");
-        await expect(other.getByRole("status", { name: "Working draft" })).toContainText("1 change");
+        const otherPager = other.getByTestId('meeting-screen').getByTestId('one-pager');
+        await expect(otherPager).toContainText('Version 3');
+        await expect(other.getByRole('status', { name: 'Working draft' })).toContainText(
+          '1 change',
+        );
         await page.bringToFront();
-        await page.getByRole("button", { name: /^Approve and publish one-pager edits/ }).click();
-        await page.getByRole("alertdialog").getByRole("button", { name: "Approve and publish" }).click();
-        await expect(page.getByRole("region", { name: "Decisions in this meeting" })).toContainText("Approved Guided setup (published)");
+        await page.getByRole('button', { name: /^Approve and publish one-pager edits/ }).click();
+        await page
+          .getByRole('alertdialog')
+          .getByRole('button', { name: 'Approve and publish' })
+          .click();
+        await expect(page.getByRole('region', { name: 'Decisions in this meeting' })).toContainText(
+          'Approved Guided setup (published)',
+        );
         await other.bringToFront();
         await other.clock.runFor(6_000);
-        await expect(otherPager).toContainText("Version 4");
-        await expect(other.getByRole("status", { name: "Working draft" })).toHaveCount(0);
-        await expect(otherPager).toContainText("A checklist that names the next step");
-        await expect(other.getByRole("region", { name: "Decisions in this meeting" })).toContainText("Approved Guided setup (published)");
+        await expect(otherPager).toContainText('Version 4');
+        await expect(other.getByRole('status', { name: 'Working draft' })).toHaveCount(0);
+        await expect(otherPager).toContainText('A checklist that names the next step');
+        await expect(
+          other.getByRole('region', { name: 'Decisions in this meeting' }),
+        ).toContainText('Approved Guided setup (published)');
       });
 
-      test("A viewer reads Upcoming and Home's next review with no Start; Home says if its pre-read is ready", async ({ page }) => {
-        await login(page, "viewer@example.com");
-        await page.goto("/simple/meetings");
-        const upcoming = page.getByRole("region", { name: "Upcoming" });
-        await expect(upcoming.getByTestId("meetings-upcoming-row").first()).toBeVisible();
-        await expect(upcoming.getByRole("button", { name: "Start review" })).toHaveCount(0);
-        await page.goto("/simple");
-        const next = page.getByTestId("home-meeting-next");
+      test("A viewer reads Upcoming and Home's next review with no Start; Home says if its pre-read is ready", async ({
+        page,
+      }) => {
+        await login(page, 'viewer@example.com');
+        await page.goto('/simple/meetings');
+        const upcoming = page.getByRole('region', { name: 'Upcoming' });
+        await expect(upcoming.getByTestId('meetings-upcoming-row').first()).toBeVisible();
+        await expect(upcoming.getByRole('button', { name: 'Start review' })).toHaveCount(0);
+        await page.goto('/simple');
+        const next = page.getByTestId('home-meeting-next');
         await expect(next).toBeVisible();
-        await expect(next.getByRole("link", { name: "Start review" })).toHaveCount(0);
+        await expect(next.getByRole('link', { name: 'Start review' })).toHaveCount(0);
         await expect(next.getByText(/Pre-read not ready yet|Open pre-read/)).toBeVisible();
       });
 
-      test("A stale Start of an Upcoming review opens no next week's meeting", async ({ page, context }) => {
+      test("A stale Start of an Upcoming review opens no next week's meeting", async ({
+        page,
+        context,
+      }) => {
         await login(page);
-        await page.goto("/simple/meetings");
-        const upcoming = page.getByRole("region", { name: "Upcoming" });
-        const row = upcoming.getByTestId("meetings-upcoming-row").filter({ hasText: "Weekly goals check-in" });
-        await expect(row.getByRole("button", { name: "Start review" })).toBeVisible();
+        await page.goto('/simple/meetings');
+        const upcoming = page.getByRole('region', { name: 'Upcoming' });
+        const row = upcoming
+          .getByTestId('meetings-upcoming-row')
+          .filter({ hasText: 'Weekly goals check-in' });
+        await expect(row.getByRole('button', { name: 'Start review' })).toBeVisible();
         // Another tab starts that review first; this page still shows its Start.
         const other = await context.newPage();
-        await other.goto("/simple/meetings");
-        await other.getByRole("region", { name: "Upcoming" }).getByTestId("meetings-upcoming-row").filter({ hasText: "Weekly goals check-in" }).getByRole("button", { name: "Start review" }).click();
-        const otherSheet = other.getByRole("dialog", { name: "Start a review" });
-        await otherSheet.getByLabel("PRD").selectOption({ label: "Guided setup" });
-        await otherSheet.getByRole("button", { name: "Start", exact: true }).click();
-        await expect(other.getByRole("heading", { name: "Weekly goals check-in: Guided setup" })).toBeVisible();
+        await other.goto('/simple/meetings');
+        await other
+          .getByRole('region', { name: 'Upcoming' })
+          .getByTestId('meetings-upcoming-row')
+          .filter({ hasText: 'Weekly goals check-in' })
+          .getByRole('button', { name: 'Start review' })
+          .click();
+        const otherSheet = other.getByRole('dialog', { name: 'Start a review' });
+        await otherSheet.getByLabel('PRD').selectOption({ label: 'Guided setup' });
+        await otherSheet.getByRole('button', { name: 'Start', exact: true }).click();
+        await expect(
+          other.getByRole('heading', { name: 'Weekly goals check-in: Guided setup' }),
+        ).toBeVisible();
         await page.bringToFront();
-        await row.getByRole("button", { name: "Start review" }).click();
-        const sheet = page.getByRole("dialog", { name: "Start a review" });
-        await sheet.getByLabel("PRD").selectOption({ label: "Guided setup" });
-        await sheet.getByRole("button", { name: "Start", exact: true }).click();
-        await expect(sheet).toContainText("This scheduled review has its meeting already");
-        await page.goto("/simple/meetings");
-        await expect(page.getByRole("region", { name: "Live" }).getByRole("link", { name: "Join" })).toHaveCount(1);
+        await row.getByRole('button', { name: 'Start review' }).click();
+        const sheet = page.getByRole('dialog', { name: 'Start a review' });
+        await sheet.getByLabel('PRD').selectOption({ label: 'Guided setup' });
+        await sheet.getByRole('button', { name: 'Start', exact: true }).click();
+        await expect(sheet).toContainText('This scheduled review has its meeting already');
+        await page.goto('/simple/meetings');
+        await expect(
+          page.getByRole('region', { name: 'Live' }).getByRole('link', { name: 'Join' }),
+        ).toHaveCount(1);
       });
 
       if (!phone) {
-        test("Moving between Simple's pages does not read the meetings list again for the rail", async ({ page }) => {
+        test("Moving between Simple's pages does not read the meetings list again for the rail", async ({
+          page,
+        }) => {
           await login(page);
-          await page.goto("/simple/roadmap");
-          await expect(page.getByTestId("simple-nav-decisions-count")).toBeVisible();
-          await page.evaluate(() => ((globalThis as { __poMockCalls?: string[] }).__poMockCalls = []));
-          await page.getByTestId("simple-nav-decisions").filter({ visible: true }).click();
+          await page.goto('/simple/roadmap');
+          await expect(page.getByTestId('simple-nav-decisions-count')).toBeVisible();
+          await page.evaluate(
+            () => ((globalThis as { __poMockCalls?: string[] }).__poMockCalls = []),
+          );
+          await page.getByTestId('simple-nav-decisions').filter({ visible: true }).click();
           await expect(page).toHaveURL(/\/simple\/decisions/);
-          await page.getByTestId("simple-nav-one-pagers").filter({ visible: true }).click();
+          await page.getByTestId('simple-nav-one-pagers').filter({ visible: true }).click();
           await expect(page).toHaveURL(/\/simple\/one-pagers/);
-          await page.getByTestId("simple-nav-roadmap").filter({ visible: true }).click();
+          await page.getByTestId('simple-nav-roadmap').filter({ visible: true }).click();
           await expect(page).toHaveURL(/\/simple\/roadmap/);
-          await expect(page.getByTestId("simple-nav-decisions-count")).toBeVisible();
-          const calls = await page.evaluate(() => (globalThis as { __poMockCalls?: string[] }).__poMockCalls ?? []);
-          expect(calls.filter((c) => c === "GET /v1/simple/meetings")).toEqual([]);
+          await expect(page.getByTestId('simple-nav-decisions-count')).toBeVisible();
+          const calls = await page.evaluate(
+            () => (globalThis as { __poMockCalls?: string[] }).__poMockCalls ?? [],
+          );
+          expect(calls.filter((c) => c === 'GET /v1/simple/meetings')).toEqual([]);
         });
       }
     });

@@ -1,8 +1,8 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { MOCK_SCENARIO_KEY, MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from "../lib/api/mock/server";
-import { ADMIN } from "./helpers";
-import { onlyTheRoadmapRefresh, trashEvery } from "./trash-helpers";
+import { MOCK_SCENARIO_KEY, MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from '../lib/api/mock/server';
+import { ADMIN } from './helpers';
+import { onlyTheRoadmapRefresh, trashEvery } from './trash-helpers';
 
 /*
  * home-honest-loading: Simple's Home says what waits only once it knows, keeps its header
@@ -28,14 +28,14 @@ import { onlyTheRoadmapRefresh, trashEvery } from "./trash-helpers";
  */
 
 async function signIn(page: Page) {
-  await page.goto("/login");
-  await page.getByLabel("Email").fill(ADMIN.email);
-  await page.getByLabel("Password").fill(ADMIN.password);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.goto('/login');
+  await page.getByLabel('Email').fill(ADMIN.email);
+  await page.getByLabel('Password').fill(ADMIN.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).not.toHaveURL(/\/login/);
 }
 
-const simple = (page: Page) => page.getByTestId("simple-page");
+const simple = (page: Page) => page.getByTestId('simple-page');
 
 /** Every greeting line and every left edge of New PRD the page painted, frame by frame. */
 async function watchHeader(page: Page) {
@@ -44,7 +44,9 @@ async function watchHeader(page: Page) {
     w.__said = [];
     w.__prdX = [];
     const look = () => {
-      const said = document.querySelector('[data-testid="simple-page"] [data-testid="home-sentence"]')?.textContent ?? null;
+      const said =
+        document.querySelector('[data-testid="simple-page"] [data-testid="home-sentence"]')
+          ?.textContent ?? null;
       if (said !== null && w.__said.at(-1) !== said) w.__said.push(said);
       const prd = document.querySelector('[data-testid="simple-page"] [data-testid="np-new-prd"]');
       if (prd) {
@@ -62,107 +64,126 @@ async function honestHeader(page: Page) {
   // The waiting decisions answer late, after every other read.
   await page.evaluate(
     ([slowKey, msKey]) => {
-      localStorage.setItem(slowKey, "/v1/simple/decisions/waiting");
-      localStorage.setItem(msKey, "2500");
+      localStorage.setItem(slowKey, '/v1/simple/decisions/waiting');
+      localStorage.setItem(msKey, '2500');
     },
     [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY] as const,
   );
   await watchHeader(page);
-  await page.goto("/simple");
-  const sentence = simple(page).getByTestId("home-sentence");
-  await expect(sentence).not.toHaveText("Checking what waits on you…", { timeout: 15_000 });
-  await expect(simple(page).getByRole("button", { name: "Walk me through it" })).toBeVisible();
-  const final = (await sentence.textContent()) ?? "";
+  await page.goto('/simple');
+  const sentence = simple(page).getByTestId('home-sentence');
+  await expect(sentence).not.toHaveText('Checking what waits on you…', { timeout: 15_000 });
+  await expect(simple(page).getByRole('button', { name: 'Walk me through it' })).toBeVisible();
+  const final = (await sentence.textContent()) ?? '';
   expect(final).toMatch(/wait on you|waits on you/);
-  expect(final).not.toContain("Nothing waits");
+  expect(final).not.toContain('Nothing waits');
   const said = await page.evaluate(() => (window as unknown as { __said: string[] }).__said);
   // The neutral line, then the one true line: never "Nothing waits", never a claim taken back.
-  expect(said).toEqual(["Checking what waits on you…", final]);
+  expect(said).toEqual(['Checking what waits on you…', final]);
   const xs = await page.evaluate(() => (window as unknown as { __prdX: number[] }).__prdX);
   expect(xs.length).toBe(1);
   // A click aimed at New PRD lands on New PRD.
-  await simple(page).getByTestId("np-new-prd").click();
-  await expect(page.getByRole("dialog")).toBeVisible();
+  await simple(page).getByTestId('np-new-prd').click();
+  await expect(page.getByRole('dialog')).toBeVisible();
 }
 
-test("Home says nothing about what waits until it knows, and New PRD never moves", async ({ page }) => {
+test('Home says nothing about what waits until it knows, and New PRD never moves', async ({
+  page,
+}) => {
   await honestHeader(page);
 });
 
 /** A new company (nothing waits, no review due): Home finds there is no walk, and New PRD stays put. */
 async function nothingToWalk(page: Page) {
-  await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "empty"] as const);
+  await page
+    .context()
+    .addInitScript(([key, value]) => localStorage.setItem(key, value), [
+      MOCK_SCENARIO_KEY,
+      'empty',
+    ] as const);
   await signIn(page);
   await page.evaluate(
     ([slowKey, msKey]) => {
-      localStorage.setItem(slowKey, "/v1/simple/decisions/waiting");
-      localStorage.setItem(msKey, "2500");
+      localStorage.setItem(slowKey, '/v1/simple/decisions/waiting');
+      localStorage.setItem(msKey, '2500');
     },
     [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY] as const,
   );
   await watchHeader(page);
-  await page.goto("/simple");
-  const sentence = simple(page).getByTestId("home-sentence");
-  await expect(sentence).toHaveText("Nothing waits on you today.", { timeout: 15_000 });
-  await expect(simple(page).getByRole("button", { name: "Walk me through it" })).toHaveCount(0);
+  await page.goto('/simple');
+  const sentence = simple(page).getByTestId('home-sentence');
+  await expect(sentence).toHaveText('Nothing waits on you today.', { timeout: 15_000 });
+  await expect(simple(page).getByRole('button', { name: 'Walk me through it' })).toHaveCount(0);
   const xs = await page.evaluate(() => (window as unknown as { __prdX: number[] }).__prdX);
   expect(xs.length).toBe(1);
-  await simple(page).getByTestId("np-new-prd").click();
-  await expect(page.getByRole("dialog")).toBeVisible();
+  await simple(page).getByTestId('np-new-prd').click();
+  await expect(page.getByRole('dialog')).toBeVisible();
 }
 
-test("with nothing to walk, New PRD stays where it was first painted", async ({ page }) => {
+test('with nothing to walk, New PRD stays where it was first painted', async ({ page }) => {
   await nothingToWalk(page);
 });
 
-test.describe("on a phone", () => {
+test.describe('on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 } });
-  test("Home says nothing about what waits until it knows, and New PRD never moves", async ({ page }) => {
+  test('Home says nothing about what waits until it knows, and New PRD never moves', async ({
+    page,
+  }) => {
     await honestHeader(page);
   });
-  test("with every roadmap and PRD in Trash, Home's sections load and the roadmap review says so", async ({ page }) => {
+  test("with every roadmap and PRD in Trash, Home's sections load and the roadmap review says so", async ({
+    page,
+  }) => {
     await everythingInTrash(page);
   });
-  test("with nothing to walk, New PRD stays where it was first painted", async ({ page }) => {
+  test('with nothing to walk, New PRD stays where it was first painted', async ({ page }) => {
     await nothingToWalk(page);
   });
 });
 
-test("with every roadmap and PRD in Trash, Home's sections load and the roadmap review says so", async ({ page }) => {
+test("with every roadmap and PRD in Trash, Home's sections load and the roadmap review says so", async ({
+  page,
+}) => {
   await everythingInTrash(page);
 });
 
 async function everythingInTrash(page: Page) {
   await signIn(page);
   await onlyTheRoadmapRefresh(page);
-  await page.goto("/plan/documents");
-  await expect(page.getByTestId("roadmaps-table")).toBeVisible();
-  expect(await trashEvery(page, page.getByTestId("roadmap-row"))).toBe(0);
-  await expect(page.getByTestId("roadmap-row")).toHaveCount(0);
-  await page.goto("/documents");
-  await expect(page.getByTestId("documents-table")).toBeVisible();
-  await trashEvery(page, page.getByTestId("document-row"));
+  await page.goto('/plan/documents');
+  await expect(page.getByTestId('roadmaps-table')).toBeVisible();
+  expect(await trashEvery(page, page.getByTestId('roadmap-row'))).toBe(0);
+  await expect(page.getByTestId('roadmap-row')).toHaveCount(0);
+  await page.goto('/documents');
+  await expect(page.getByTestId('documents-table')).toBeVisible();
+  await trashEvery(page, page.getByTestId('document-row'));
 
-  await page.goto("/simple");
+  await page.goto('/simple');
   const home = simple(page);
-  await expect(home.getByTestId("home-sentence")).not.toHaveText("Checking what waits on you…", { timeout: 15_000 });
+  await expect(home.getByTestId('home-sentence')).not.toHaveText('Checking what waits on you…', {
+    timeout: 15_000,
+  });
   // Every section read (an empty "Decisions waiting for you" is not drawn; the PRDs' questions wait in their own cards).
-  await expect(home.getByTestId("home-since")).toBeVisible();
-  await expect(home.getByText("Oracle could not load this part")).toHaveCount(0);
-  const meeting = home.getByTestId("home-meeting-next");
-  await expect(meeting).toContainText("Monthly roadmap refresh");
-  const line = meeting.getByTestId("home-meeting-trash");
-  await expect(line).toHaveText("Reviews a roadmap in Trash · Ritual settings");
-  await line.getByRole("link", { name: "Ritual settings" }).click();
+  await expect(home.getByTestId('home-since')).toBeVisible();
+  await expect(home.getByText('Oracle could not load this part')).toHaveCount(0);
+  const meeting = home.getByTestId('home-meeting-next');
+  await expect(meeting).toContainText('Monthly roadmap refresh');
+  const line = meeting.getByTestId('home-meeting-trash');
+  await expect(line).toHaveText('Reviews a roadmap in Trash · Ritual settings');
+  await line.getByRole('link', { name: 'Ritual settings' }).click();
   await expect(page).toHaveURL(/\/company\/rituals\?ritual=/);
   // The ritual's settings open (beside the table, or in a sheet on a phone).
-  await expect(page.getByRole("heading", { name: "Monthly roadmap refresh" }).filter({ visible: true })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Monthly roadmap refresh' }).filter({ visible: true }),
+  ).toBeVisible();
   if ((page.viewportSize()?.width ?? 0) > 600) {
     // Opened on a wider window, the ritual sits beside the table: narrowing the window to a
     // phone's width does not pop its sheet open.
-    await expect(page.getByTestId("ritual-sheet")).toHaveCount(0);
+    await expect(page.getByTestId('ritual-sheet')).toHaveCount(0);
     await page.setViewportSize({ width: 390, height: 844 });
-    await expect(page.getByTestId("ritual-row").first()).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Monthly roadmap refresh" }).filter({ visible: true })).toHaveCount(0);
+    await expect(page.getByTestId('ritual-row').first()).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Monthly roadmap refresh' }).filter({ visible: true }),
+    ).toHaveCount(0);
   }
 }

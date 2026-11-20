@@ -1,7 +1,7 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { THEME_KEY } from "../lib/theme";
-import { login } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { THEME_KEY } from '../lib/theme';
+import { login } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /*
  * roadmap-milestones, BGD's pick D "Gantt with milestone diamonds and per-slice bars" (fidelity
@@ -21,7 +21,7 @@ import { expect, test, type Locator, type Page } from "./test";
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 const DESKTOP = { viewport: { width: 1366, height: 820 } };
 
-async function open(page: Page, scheme: "light" | "dark", scenario = "simple-plan") {
+async function open(page: Page, scheme: 'light' | 'dark', scenario = 'simple-plan') {
   await page.context().addInitScript(
     ([key, value, themeKey, theme]) => {
       localStorage.setItem(key, value);
@@ -31,30 +31,45 @@ async function open(page: Page, scheme: "light" | "dark", scenario = "simple-pla
   );
   await page.emulateMedia({ colorScheme: scheme });
   await login(page);
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-chart")).toBeVisible();
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-chart')).toBeVisible();
 }
 
-const row = (page: Page, title: string): Locator => page.getByTestId("chart-label").filter({ has: page.getByTestId("label-title").getByText(title, { exact: true }) });
-const slice = (page: Page, code: string): Locator => page.locator(`g[data-testid="slice-bar"][data-code="${code}"]`);
+const row = (page: Page, title: string): Locator =>
+  page
+    .getByTestId('chart-label')
+    .filter({ has: page.getByTestId('label-title').getByText(title, { exact: true }) });
+const slice = (page: Page, code: string): Locator =>
+  page.locator(`g[data-testid="slice-bar"][data-code="${code}"]`);
 
 /** Every label on the time axis (milestone ends, key dates, track milestones, the Today pill): no two may touch. */
 async function expectApart(page: Page) {
   const boxes = await page
-    .locator('[data-testid="milestone-end-label"], [data-testid="key-date-label"], [data-testid="track-milestone"] text, [data-testid="today-mark"] rect')
-    .evaluateAll((els) => els.map((e) => ({ words: e.textContent || "Today", r: e.getBoundingClientRect().toJSON() as DOMRect })));
-  expect(boxes.length, "the axis has labels").toBeGreaterThan(1);
+    .locator(
+      '[data-testid="milestone-end-label"], [data-testid="key-date-label"], [data-testid="track-milestone"] text, [data-testid="today-mark"] rect',
+    )
+    .evaluateAll((els) =>
+      els.map((e) => ({
+        words: e.textContent || 'Today',
+        r: e.getBoundingClientRect().toJSON() as DOMRect,
+      })),
+    );
+  expect(boxes.length, 'the axis has labels').toBeGreaterThan(1);
   for (let a = 0; a < boxes.length; a++)
     for (let b = a + 1; b < boxes.length; b++) {
       const [p, q] = [boxes[a].r, boxes[b].r];
-      const touch = p.left < q.right - 0.5 && q.left < p.right - 0.5 && p.top < q.bottom - 0.5 && q.top < p.bottom - 0.5;
+      const touch =
+        p.left < q.right - 0.5 &&
+        q.left < p.right - 0.5 &&
+        p.top < q.bottom - 0.5 &&
+        q.top < p.bottom - 0.5;
       expect(touch, `"${boxes[a].words}" and "${boxes[b].words}" overlap`).toBe(false);
     }
 }
 
 for (const phone of [false, true]) {
-  for (const scheme of ["light", "dark"] as const) {
-    const where = `${phone ? "phone" : "desktop"}, ${scheme}`;
+  for (const scheme of ['light', 'dark'] as const) {
+    const where = `${phone ? 'phone' : 'desktop'}, ${scheme}`;
     test.describe(where, () => {
       test.use({ ...(phone ? PHONE : DESKTOP), colorScheme: scheme });
 
@@ -73,57 +88,83 @@ for (const phone of [false, true]) {
        * in its colour, two axis labels overlap, or the pending item is not marked; no_claim =
        * pixel colours, the card (the card lane's specs).
        */
-      test(`the Gantt: codes, slice codes, milestone ends, labels apart (${where})`, async ({ page }) => {
+      test(`the Gantt: codes, slice codes, milestone ends, labels apart (${where})`, async ({
+        page,
+      }) => {
         await open(page, scheme);
-        await page.getByTestId("format-gantt").click();
-        await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
+        await page.getByTestId('format-gantt').click();
+        await expect(page.getByTestId('simple-chart')).toHaveAttribute('data-format', 'gantt');
         // tb-mk: the Gantt opens grouped by track; this card reads the goal rows (their metric),
         // so a person picks Group by Goal.
-        await expect(page.getByTestId("group-track")).toHaveAttribute("aria-pressed", "true");
-        await page.getByTestId("group-goal").click();
-        await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
+        await expect(page.getByTestId('group-track')).toHaveAttribute('aria-pressed', 'true');
+        await page.getByTestId('group-goal').click();
+        await expect(page.getByTestId('group-goal')).toHaveAttribute('aria-pressed', 'true');
 
         // fix4 qa-simple-roadmap-3: a slice reads by name, never by code ("F-05a"); QA Nov 12 #1: a
         // row reads its code before its name ("F-05 Team invites"), in one title, no separate code chip.
-        const invites = row(page, "F-05 Team invites");
-        await expect(invites.getByTestId("label-code")).toHaveCount(0);
-        await expect(invites.getByTestId("label-title")).toHaveAttribute("title", "F-05 Team invites");
+        const invites = row(page, 'F-05 Team invites');
+        await expect(invites.getByTestId('label-code')).toHaveCount(0);
+        await expect(invites.getByTestId('label-title')).toHaveAttribute(
+          'title',
+          'F-05 Team invites',
+        );
 
-        await slice(page, "F-05a").scrollIntoViewIfNeeded();
+        await slice(page, 'F-05a').scrollIntoViewIfNeeded();
         // A slice's name is cut with "…" to its bar (a phone's two-week bar reads "Tea…"), whole
         // in its tooltip.
-        for (const code of ["F-05a", "F-05b"]) {
+        for (const code of ['F-05a', 'F-05b']) {
           // qa4-simple-roadmap-25: or its part alone ("Part 1 of 2") where the whole name fits nowhere.
-          await expect(slice(page, code).getByTestId("slice-label")).toHaveText(/^(Tea|Part [12] of 2$)/);
-          await expect(slice(page, code).locator("title")).toHaveText(/^Team invites, part [12] of 2 · /);
+          await expect(slice(page, code).getByTestId('slice-label')).toHaveText(
+            /^(Tea|Part [12] of 2$)/,
+          );
+          await expect(slice(page, code).locator('title')).toHaveText(
+            /^Team invites, part [12] of 2 · /,
+          );
         }
-        await expect(slice(page, "F-08").getByTestId("slice-label")).toHaveCount(0);
-        await expect(page.getByTestId("slice-connector")).toHaveCount(0);
+        await expect(slice(page, 'F-08').getByTestId('slice-label')).toHaveCount(0);
+        await expect(page.getByTestId('slice-connector')).toHaveCount(0);
 
-        const m1 = page.getByTestId("milestone-end").filter({ has: page.getByTestId("milestone-end-label").getByText(/^M1 ends/) });
-        await expect(m1.getByTestId("milestone-end-label")).toHaveText(phone ? "M1 ends" : /^M1 ends (Nov 27|27 Nov)$/);
-        await expect(m1.getByTestId("milestone-end-line")).toHaveAttribute("stroke-dasharray", /\d/);
-        await expect(m1.getByTestId("milestone-end-line")).toHaveAttribute("stroke", /--simple-m1-edge/);
-        await expect(m1.locator("rect")).toHaveAttribute("fill", /--simple-m1-edge/);
+        const m1 = page
+          .getByTestId('milestone-end')
+          .filter({ has: page.getByTestId('milestone-end-label').getByText(/^M1 ends/) });
+        await expect(m1.getByTestId('milestone-end-label')).toHaveText(
+          phone ? 'M1 ends' : /^M1 ends (Nov 27|27 Nov)$/,
+        );
+        await expect(m1.getByTestId('milestone-end-line')).toHaveAttribute(
+          'stroke-dasharray',
+          /\d/,
+        );
+        await expect(m1.getByTestId('milestone-end-line')).toHaveAttribute(
+          'stroke',
+          /--simple-m1-edge/,
+        );
+        await expect(m1.locator('rect')).toHaveAttribute('fill', /--simple-m1-edge/);
         await expectApart(page);
 
-        const activation = page.getByTestId("chart-group").filter({ hasText: "Faster activation" });
-        await expect(activation.getByTestId("group-metric")).toHaveText("Days to the first alert");
-        await expect(activation.getByTestId("lane-count")).toHaveCount(0);
-        await expect(activation.getByRole("button")).toHaveCount(0);
+        const activation = page.getByTestId('chart-group').filter({ hasText: 'Faster activation' });
+        await expect(activation.getByTestId('group-metric')).toHaveText('Days to the first alert');
+        await expect(activation.getByTestId('lane-count')).toHaveCount(0);
+        await expect(activation.getByRole('button')).toHaveCount(0);
 
-        await expect(page.getByTestId("no-work")).toHaveAttribute("fill", "var(--na-bg)");
-        await expect(row(page, "Team invite nudges").getByTestId("pending-tag")).toHaveText("Pending decision");
-        await expect(page.locator('g[data-testid="bar"][data-item="setup-ideas"]')).toHaveAttribute("data-pulled", "true");
+        await expect(page.getByTestId('no-work')).toHaveAttribute('fill', 'var(--na-bg)');
+        await expect(row(page, 'Team invite nudges').getByTestId('pending-tag')).toHaveText(
+          'Pending decision',
+        );
+        await expect(page.locator('g[data-testid="bar"][data-item="setup-ideas"]')).toHaveAttribute(
+          'data-pulled',
+          'true',
+        );
         // qa4-simple-roadmap-34: a phone's Gantt has its Today pill too.
-        await expect(page.getByTestId("today-mark")).toContainText("Today");
+        await expect(page.getByTestId('today-mark')).toContainText('Today');
 
-        const legend = page.getByTestId("legend");
-        await expect(legend).toContainText("One bar per part of a feature");
-        await expect(legend).toContainText("Milestone ends (dashed line)");
-        await expect(legend).toContainText("Holidays year-end break");
-        await expect(legend).toContainText("Pulled in, pending");
-        await expect(legend.getByTestId("legend-item").filter({ hasText: /^Today$/ })).toHaveCount(1);
+        const legend = page.getByTestId('legend');
+        await expect(legend).toContainText('One bar per part of a feature');
+        await expect(legend).toContainText('Milestone ends (dashed line)');
+        await expect(legend).toContainText('Holidays year-end break');
+        await expect(legend).toContainText('Pulled in, pending');
+        await expect(legend.getByTestId('legend-item').filter({ hasText: /^Today$/ })).toHaveCount(
+          1,
+        );
       });
 
       /**
@@ -136,17 +177,29 @@ for (const phone of [false, true]) {
        * no_claim = which row each label takes.
        */
       test(`the axis's labels never overlap, in every dated view (${where})`, async ({ page }) => {
-        await open(page, scheme, "default");
-        for (const f of ["gantt", "timeline", "waterfall"] as const) {
+        await open(page, scheme, 'default');
+        for (const f of ['gantt', 'timeline', 'waterfall'] as const) {
           await page.getByTestId(`format-${f}`).click();
-          await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", f);
-          if (f === "timeline") {
-            await expect(page.getByTestId("zoom-timeline")).toBeVisible();
-            await expect(page.locator('[data-testid="key-date-marker"], [data-testid="milestone-end"], [data-testid="track-milestone"]')).toHaveCount(0);
+          await expect(page.getByTestId('simple-chart')).toHaveAttribute('data-format', f);
+          if (f === 'timeline') {
+            await expect(page.getByTestId('zoom-timeline')).toBeVisible();
+            await expect(
+              page.locator(
+                '[data-testid="key-date-marker"], [data-testid="milestone-end"], [data-testid="track-milestone"]',
+              ),
+            ).toHaveCount(0);
             continue;
           }
-          await expect(page.locator('[data-testid="key-date-marker"][data-name="Customer conference"] [data-testid="key-date-label"]')).toHaveText("Customer conference");
-          await expect(page.locator('[data-testid="key-date-marker"][data-name="Board meeting"] [data-testid="key-date-label"]')).toHaveText("Board meeting");
+          await expect(
+            page.locator(
+              '[data-testid="key-date-marker"][data-name="Customer conference"] [data-testid="key-date-label"]',
+            ),
+          ).toHaveText('Customer conference');
+          await expect(
+            page.locator(
+              '[data-testid="key-date-marker"][data-name="Board meeting"] [data-testid="key-date-label"]',
+            ),
+          ).toHaveText('Board meeting');
           await expectApart(page);
         }
       });
@@ -161,18 +214,22 @@ for (const phone of [false, true]) {
          * chart, the hint names no milestone, or the last filter sits under the tab bar;
          * no_claim = the scroll offset.
          */
-        test(`a phone opens on the chart, its scale and the swipe hint (${where})`, async ({ page }) => {
+        test(`a phone opens on the chart, its scale and the swipe hint (${where})`, async ({
+          page,
+        }) => {
           await open(page, scheme);
-          await page.getByTestId("format-gantt").click();
-          expect((await page.getByRole("heading", { name: "Roadmap", level: 1 }).boundingBox())!.width).toBeLessThanOrEqual(1);
-          await expect(page.getByTestId("swipe-hint")).toHaveText(/^Swipe sideways for M\d \S/);
+          await page.getByTestId('format-gantt').click();
+          expect(
+            (await page.getByRole('heading', { name: 'Roadmap', level: 1 }).boundingBox())!.width,
+          ).toBeLessThanOrEqual(1);
+          await expect(page.getByTestId('swipe-hint')).toHaveText(/^Swipe sideways for M\d \S/);
           const y = async (l: Locator) => (await l.boundingBox())!.y;
           const [sw, scale, chart, actions, filters] = [
-            await y(page.getByTestId("format-switch")),
-            await y(page.getByTestId("phone-scale")),
-            await y(page.getByTestId("simple-chart")),
-            await y(page.getByTestId("roadmap-actions")),
-            await y(page.getByTestId("filters")),
+            await y(page.getByTestId('format-switch')),
+            await y(page.getByTestId('phone-scale')),
+            await y(page.getByTestId('simple-chart')),
+            await y(page.getByTestId('roadmap-actions')),
+            await y(page.getByTestId('filters')),
           ];
           expect(sw).toBeLessThan(scale);
           expect(scale).toBeLessThan(chart);
@@ -180,8 +237,8 @@ for (const phone of [false, true]) {
           expect(actions).toBeLessThan(chart);
           // QA2 qa-simple-roadmap-36: the filters sit above the chart they control.
           expect(filters).toBeLessThan(chart);
-          await page.getByTestId("group-milestone").click();
-          await expect(page.getByTestId("group-milestone")).toHaveAttribute("aria-pressed", "true");
+          await page.getByTestId('group-milestone').click();
+          await expect(page.getByTestId('group-milestone')).toHaveAttribute('aria-pressed', 'true');
         });
       } else {
         /**
@@ -191,17 +248,24 @@ for (const phone of [false, true]) {
          * the grouping's order differs, or a select stays as wide as its longest choice;
          * no_claim = the Roadmap filter (simple-roadmap-filter specs).
          */
-        test(`the filter row: labelled groups, selects as wide as their choice (${where})`, async ({ page }) => {
+        test(`the filter row: labelled groups, selects as wide as their choice (${where})`, async ({
+          page,
+        }) => {
           await open(page, scheme);
-          await page.getByTestId("format-gantt").click();
-          const filters = page.getByTestId("filters");
-          await expect(filters).toContainText("Group by");
-          await expect(filters).toContainText("Scale");
-          await expect(filters.getByRole("group", { name: "Group by" }).getByRole("button")).toHaveText(["Track", "Goal", "PRD", "Milestone"]);
-          const prd = (await filters.locator("label", { hasText: /^PRD/ }).locator("select").boundingBox())!;
+          await page.getByTestId('format-gantt').click();
+          const filters = page.getByTestId('filters');
+          await expect(filters).toContainText('Group by');
+          await expect(filters).toContainText('Scale');
+          await expect(
+            filters.getByRole('group', { name: 'Group by' }).getByRole('button'),
+          ).toHaveText(['Track', 'Goal', 'PRD', 'Milestone']);
+          const prd = (await filters
+            .locator('label', { hasText: /^PRD/ })
+            .locator('select')
+            .boundingBox())!;
           expect(prd.width).toBeLessThan(90);
-          await page.getByTestId("format-timeline").click();
-          await expect(filters).not.toContainText("Scale");
+          await page.getByTestId('format-timeline').click();
+          await expect(filters).not.toContainText('Scale');
         });
       }
     });

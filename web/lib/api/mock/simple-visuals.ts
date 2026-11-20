@@ -1,8 +1,8 @@
-import type { Schemas } from "@/lib/api/client";
-import { cleanFlow } from "@/lib/raw-tokens";
+import type { Schemas } from '@/lib/api/client';
+import { cleanFlow } from '@/lib/raw-tokens';
 
-import { stableUuid } from "./ids";
-import { reply } from "./typed";
+import { stableUuid } from './ids';
+import { reply } from './typed';
 
 /**
  * Simple S10 (#723, D26): proposals' visuals (oracle.simple.visuals), with INVENTED
@@ -19,15 +19,15 @@ import { reply } from "./typed";
  * drawn visual; owners (who change the subject directly) ask for a drawing and revise.
  */
 
-type Flow = Schemas["SimpleFlow"];
-type Step = Schemas["SimpleFlowStep"];
+type Flow = Schemas['SimpleFlow'];
+type Step = Schemas['SimpleFlowStep'];
 
 interface MockVisual {
   kind: string;
   id: string;
   brief: string;
   versions: Flow[];
-  comments: Schemas["SimpleVisualCommentOut"][];
+  comments: Schemas['SimpleVisualCommentOut'][];
   made_by: (string | null)[];
   /** Oracle is drawing it (the simple_visual job is queued or running). */
   pending?: boolean;
@@ -46,12 +46,15 @@ export interface VisualsDb {
 }
 
 /** Tests set this localStorage key to how long (ms) a requested drawing's job runs. */
-export const MOCK_VISUAL_JOB_MS_KEY = "po-mock-visual-job-ms";
+export const MOCK_VISUAL_JOB_MS_KEY = 'po-mock-visual-job-ms';
 
 /** Tests set this localStorage key to a one-pager bet's line id ("bets-2"): its first drawing fails, Retry draws it. */
-export const MOCK_VISUAL_FAIL_KEY = "po-mock-visual-fail";
+export const MOCK_VISUAL_FAIL_KEY = 'po-mock-visual-fail';
 
-const jobMs = (): number => (typeof localStorage === "undefined" ? 0 : Number(localStorage.getItem(MOCK_VISUAL_JOB_MS_KEY) ?? 0) || 0);
+const jobMs = (): number =>
+  typeof localStorage === 'undefined'
+    ? 0
+    : Number(localStorage.getItem(MOCK_VISUAL_JOB_MS_KEY) ?? 0) || 0;
 
 interface Ctx {
   id: string;
@@ -67,10 +70,11 @@ interface Ctx {
 
 /** Subjects drawn with their proposal, never asked for by id (the API's UNASKABLE_KINDS);
  * a one-pager line is asked for with its PRD (document_id). */
-const UNASKABLE = ["suggestion", "chat_card"];
+const UNASKABLE = ['suggestion', 'chat_card'];
 const RANK: Record<string, number> = { viewer: 0, commenter: 1, approver: 2, owner: 3 };
-const at = "2026-10-26T15:00:00Z";
-const esc = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const at = '2026-10-26T15:00:00Z';
+const esc = (s: string): string =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 /** Each bet subject's words, as the one-pager last named them (the API's bet_line finds them). */
 const BET_WORDS = new Map<string, string>();
@@ -79,23 +83,30 @@ const BET_WORDS = new Map<string, string>();
  * flow when its words change (the API's line_subject, a uuid5 of the PRD and the line id). */
 export const betSubject = (lineId: string, text?: string): string => {
   const id = stableUuid(`simple-visual/bet/${lineId}`);
-  if (text !== undefined) BET_WORDS.set(id, text.split(/\s+/).filter(Boolean).join(" "));
+  if (text !== undefined) BET_WORDS.set(id, text.split(/\s+/).filter(Boolean).join(' '));
   return id;
 };
 
 /** A bet's subject by its words, as the API's words_subject (0092_bet_flow_line_key). */
 const wordsSubject = (prefix: string, text: string): string => {
-  const said = text.split(/\s+/).filter(Boolean).join(" ");
+  const said = text.split(/\s+/).filter(Boolean).join(' ');
   const id = stableUuid(`simple-visual/bet-words/${prefix}/${said.toLowerCase()}`);
   BET_WORDS.set(id, said);
   return id;
 };
 
 // As visuals._THIN, visuals.LIKE: words that say nothing about which bet a text is; how alike to be the same bet.
-const THIN = new Set("a an and or of to for on in with from that this its our by at is are be".split(" "));
+const THIN = new Set(
+  'a an and or of to for on in with from that this its our by at is are be'.split(' '),
+);
 const LIKE = 0.4;
 const gist = (t: string): Set<string> =>
-  new Set((t.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter((w) => w.length > 1).map((w) => w.replace(/s+$/, "")).filter((w) => !THIN.has(w)));
+  new Set(
+    (t.toLowerCase().match(/[a-z0-9]+/g) ?? [])
+      .filter((w) => w.length > 1)
+      .map((w) => w.replace(/s+$/, ''))
+      .filter((w) => !THIN.has(w)),
+  );
 
 /** As visuals.likeness: the words two bets share over all their words, 0 to 1. */
 export function likeness(a: string, b: string): number {
@@ -108,15 +119,36 @@ export function likeness(a: string, b: string): number {
 
 /** As visuals.pair_alike: each new (by index) with the old it reads most like, at least LIKE, each once;
  * on a tie an old in `kept` (a flow a person redrew or commented on) first, then the same place. */
-function pairAlike(old: string[][], now: string[][], kept: Set<number> = new Set()): Map<number, number> {
+function pairAlike(
+  old: string[][],
+  now: string[][],
+  kept: Set<number> = new Set(),
+): Map<number, number> {
   const pairs: [number, number, number, number, number, number][] = [];
-  old.forEach((was, i) => now.forEach((n, j) => pairs.push([Math.max(0, ...was.flatMap((a) => n.map((b) => likeness(a, b)))), kept.has(i) ? 1 : 0, i === j ? 1 : 0, -Math.abs(i - j), i, j])));
-  pairs.sort((p, q) => { for (let k = 0; k < 6; k++) if (p[k] !== q[k]) return q[k] - p[k]; return 0; });
+  old.forEach((was, i) =>
+    now.forEach((n, j) =>
+      pairs.push([
+        Math.max(0, ...was.flatMap((a) => n.map((b) => likeness(a, b)))),
+        kept.has(i) ? 1 : 0,
+        i === j ? 1 : 0,
+        -Math.abs(i - j),
+        i,
+        j,
+      ]),
+    ),
+  );
+  pairs.sort((p, q) => {
+    for (let k = 0; k < 6; k++) if (p[k] !== q[k]) return q[k] - p[k];
+    return 0;
+  });
   const out = new Map<number, number>();
   const used = new Set<number>();
   for (const [score, , , , i, j] of pairs) {
     if (score < LIKE) break;
-    if (!out.has(j) && !used.has(i)) { out.set(j, i); used.add(i); }
+    if (!out.has(j) && !used.has(i)) {
+      out.set(j, i);
+      used.add(i);
+    }
   }
   return out;
 }
@@ -126,23 +158,38 @@ function pairAlike(old: string[][], now: string[][], kept: Set<number> = new Set
  * bet added above never shifts the flows; a bet with no flow whose key holds another bet's is
  * drawn on a subject built from its key (visuals.own_subject), so it keeps it when reworded, and it
  * shows that one before a flow left at its key. */
-export function flowsOfBets(db: VisualsDb | undefined, prefix: string, bets: { key: string; text: string }[]): { subject: string; flow: Flow | null }[] {
+export function flowsOfBets(
+  db: VisualsDb | undefined,
+  prefix: string,
+  bets: { key: string; text: string }[],
+): { subject: string; flow: Flow | null }[] {
   const keyed = bets.map((b) => betSubject(b.key));
-  const has = (s: string) => !!flowFor(db, "one_pager_line", s);
+  const has = (s: string) => !!flowFor(db, 'one_pager_line', s);
   const own = bets.map((b) => betSubject(`${b.key}/own`));
   const drawn = keyed.map((s) => (has(s) ? [db!.visuals[`one_pager_line:${s}`].brief] : []));
-  const touched = (s: string) => { const v = db?.visuals[`one_pager_line:${s}`]; return !!v && (v.comments.length > 0 || v.made_by.some(Boolean)); };
+  const touched = (s: string) => {
+    const v = db?.visuals[`one_pager_line:${s}`];
+    return !!v && (v.comments.length > 0 || v.made_by.some(Boolean));
+  };
   const kept = new Set(keyed.flatMap((s, i) => (has(s) && touched(s) ? [i] : [])));
   const on = new Map<number, string>();
-  for (const [j, i] of pairAlike(drawn, bets.map((b) => [b.text]), kept)) on.set(j, keyed[i]);
+  for (const [j, i] of pairAlike(
+    drawn,
+    bets.map((b) => [b.text]),
+    kept,
+  ))
+    on.set(j, keyed[i]);
   const taken = new Set(on.values());
-  keyed.forEach((s, i) => { if (has(s) && !on.has(i) && !taken.has(s) && !has(own[i])) on.set(i, s); });
+  keyed.forEach((s, i) => {
+    if (has(s) && !on.has(i) && !taken.has(s) && !has(own[i])) on.set(i, s);
+  });
   return bets.map((b, j) => {
     const words = wordsSubject(prefix, b.text);
     // A flow still keyed by a bet's words is read by a bet with those words and none.
-    const subject = on.get(j) ?? (has(own[j]) ? own[j] : has(words) ? words : has(keyed[j]) ? own[j] : keyed[j]);
-    BET_WORDS.set(subject, b.text.split(/\s+/).filter(Boolean).join(" "));
-    return { subject, flow: flowFor(db, "one_pager_line", subject) };
+    const subject =
+      on.get(j) ?? (has(own[j]) ? own[j] : has(words) ? words : has(keyed[j]) ? own[j] : keyed[j]);
+    BET_WORDS.set(subject, b.text.split(/\s+/).filter(Boolean).join(' '));
+    return { subject, flow: flowFor(db, 'one_pager_line', subject) };
   });
 }
 
@@ -151,25 +198,50 @@ function drawSvg(title: string, steps: Step[]): string {
   const boxes = steps
     .map((s, i) => {
       const x = 20 + i * (w + 30);
-      const stroke = s.change === "new" ? 'stroke="#111" stroke-width="3"' : s.change === "changed" ? 'stroke="#333" stroke-dasharray="6 4"' : 'stroke="#777"';
+      const stroke =
+        s.change === 'new'
+          ? 'stroke="#111" stroke-width="3"'
+          : s.change === 'changed'
+            ? 'stroke="#333" stroke-dasharray="6 4"'
+            : 'stroke="#777"';
       const shape =
-        s.kind === "decision"
+        s.kind === 'decision'
           ? `<polygon id="${s.id}" points="${x + w / 2},64 ${x + w},100 ${x + w / 2},136 ${x},100" fill="#f4f4f4" ${stroke}/>`
           : `<rect id="${s.id}" x="${x}" y="70" width="${w}" height="60" rx="8" fill="#fafafa" ${stroke}/>`;
-      const tag = s.change !== "same" ? `<text x="${x + 4}" y="62" font-size="10" font-weight="bold">${s.change === "new" ? "NEW" : "CHANGED"}</text>` : "";
+      const tag =
+        s.change !== 'same'
+          ? `<text x="${x + 4}" y="62" font-size="10" font-weight="bold">${s.change === 'new' ? 'NEW' : 'CHANGED'}</text>`
+          : '';
       return `${shape}${tag}<text x="${x + w / 2}" y="104" font-size="12" text-anchor="middle">${i + 1}. ${esc(s.label.slice(0, 24))}</text>`;
     })
-    .join("");
+    .join('');
   const width = 40 + steps.length * (w + 30);
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} 170" width="${width}" height="170" font-family="sans-serif"><text x="20" y="28" font-size="15" font-weight="bold">${esc(title)}</text>${boxes}</svg>`;
 }
 
 function drawWireframe(title: string, regions: string[]): string {
-  const blocks = regions.map((r, i) => `<div data-annotation="r${i + 1}" style="border:1px solid #999;padding:12px;margin:8px 0;background:#eee">${esc(r)}</div>`).join("");
+  const blocks = regions
+    .map(
+      (r, i) =>
+        `<div data-annotation="r${i + 1}" style="border:1px solid #999;padding:12px;margin:8px 0;background:#eee">${esc(r)}</div>`,
+    )
+    .join('');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${esc(title)}</title><style>html{filter:grayscale(100%)}body{font-family:sans-serif;margin:0;padding:16px}</style></head><body><main><h1>${esc(title)}</h1>${blocks}</main></body></html>`;
 }
 
-function flowOf(kind: string, id: string, n: number, versions: number, d: { title: string; goal: string; steps: Step[]; screen: { title: string; regions: string[] }; notes: Schemas["SimpleFlowNote"][] }): Flow {
+function flowOf(
+  kind: string,
+  id: string,
+  n: number,
+  versions: number,
+  d: {
+    title: string;
+    goal: string;
+    steps: Step[];
+    screen: { title: string; regions: string[] };
+    notes: Schemas['SimpleFlowNote'][];
+  },
+): Flow {
   return {
     title: d.title,
     steps: d.steps.map((s) => s.label),
@@ -188,35 +260,65 @@ function flowOf(kind: string, id: string, n: number, versions: number, d: { titl
   };
 }
 
-const step = (id: string, label: string, feature: string | null, change: Step["change"], kind: Step["kind"] = "step", actor: string | null = null, yes: string | null = null, no: string | null = null): Step => ({
+const step = (
+  id: string,
+  label: string,
+  feature: string | null,
+  change: Step['change'],
+  kind: Step['kind'] = 'step',
+  actor: string | null = null,
+  yes: string | null = null,
+  no: string | null = null,
+): Step => ({
   id,
   label,
   feature,
   change,
   kind,
   section_key: null,
-  actor: actor ?? (kind === "decision" ? "App" : "User"),
+  actor: actor ?? (kind === 'decision' ? 'App' : 'User'),
   yes,
   no,
 });
 
 /** Oracle's invented first drawing of a proposal from its words. */
 function draft(kind: string, id: string, brief: string): Flow {
-  const what = brief.replace(/^[^:]*:\s*/, "").trim() || "The new flow";
+  const what = brief.replace(/^[^:]*:\s*/, '').trim() || 'The new flow';
   return flowOf(kind, id, 1, 1, {
     title: what.length > 60 ? `${what.slice(0, 57)}…` : what,
-    goal: "Teammate invited in week one",
+    goal: 'Teammate invited in week one',
     steps: [
-      step("s1", "Open the home page", "Progress meter", "same"),
-      step("s2", "See the next step", what.slice(0, 40), "new", "step", "App"),
-      step("s3", "Is the user signed in?", null, "new", "decision", "App", "The next step opens.", "The sign-in page opens."),
-      step("s4", "Finish the step", "Setup checklist", "changed"),
-      step("s5", "Approve the finished setup", null, "new", "step", "Admin"),
+      step('s1', 'Open the home page', 'Progress meter', 'same'),
+      step('s2', 'See the next step', what.slice(0, 40), 'new', 'step', 'App'),
+      step(
+        's3',
+        'Is the user signed in?',
+        null,
+        'new',
+        'decision',
+        'App',
+        'The next step opens.',
+        'The sign-in page opens.',
+      ),
+      step('s4', 'Finish the step', 'Setup checklist', 'changed'),
+      step('s5', 'Approve the finished setup', null, 'new', 'step', 'Admin'),
     ],
-    screen: { title: "Home", regions: ["Header", "Next step card", "Progress meter"] },
+    screen: { title: 'Home', regions: ['Header', 'Next step card', 'Progress meter'] },
     notes: [
-      { n: 1, target: "s2", note: "The new step the proposal adds", section_key: "build", requirement: "R1" },
-      { n: 2, target: "r2", note: "Where the next step shows on the home page", section_key: "build", requirement: null },
+      {
+        n: 1,
+        target: 's2',
+        note: 'The new step the proposal adds',
+        section_key: 'build',
+        requirement: 'R1',
+      },
+      {
+        n: 2,
+        target: 'r2',
+        note: 'Where the next step shows on the home page',
+        section_key: 'build',
+        requirement: null,
+      },
     ],
   });
 }
@@ -225,56 +327,145 @@ export function seedVisuals(): VisualsDb {
   // The walk: Oracle's first drawing of Alert history export fails; Retry draws it.
   const db: VisualsDb = {
     visuals: {},
-    failOnce: [`feature:${stableUuid("simple-item/alert-export")}`],
-    names: { [`feature:${stableUuid("simple-item/alert-digest")}`]: "F-79 Weekly alert digest", [`feature:${stableUuid("simple-item/alert-export")}`]: "Alert history export" },
+    failOnce: [`feature:${stableUuid('simple-item/alert-export')}`],
+    names: {
+      [`feature:${stableUuid('simple-item/alert-digest')}`]: 'F-79 Weekly alert digest',
+      [`feature:${stableUuid('simple-item/alert-export')}`]: 'Alert history export',
+    },
   };
-  const failBet = typeof localStorage === "undefined" ? null : localStorage.getItem(MOCK_VISUAL_FAIL_KEY);
+  const failBet =
+    typeof localStorage === 'undefined' ? null : localStorage.getItem(MOCK_VISUAL_FAIL_KEY);
   if (failBet) db.failOnce!.push(`one_pager_line:${betSubject(failBet)}`);
-  const bet = betSubject("bets-1", "A setup checklist that shows the next step");
+  const bet = betSubject('bets-1', 'A setup checklist that shows the next step');
   // raw-tokens-everywhere: the drawing as Oracle stored it carries the writer's "[c:id]" tokens;
   // flowFor and every route serve it without them, as the API does.
-  add(db, "one_pager_line", bet, "A setup checklist that shows the next step", flowOf("one_pager_line", bet, 1, 1, {
-    title: "Finish setup from the checklist",
-    goal: "Setup finished in a day",
-    steps: [step("s1", "Sign in as a new admin", null, "same"), step("s2", "See the setup checklist [c:gametric]", "Setup checklist", "new"), step("s3", "Invite now or later? [c:convdef]", null, "new", "decision", "User", "The invite form opens. [c:convdef]", "The checklist moves on and asks again tomorrow."), step("s4", "Invite a teammate", "Invite suggestions", "changed"), step("s5", "See the progress meter fill", "Progress meter", "new")],
-    screen: { title: "Home with the checklist", regions: ["Header", "Setup checklist: 4 steps", "Invite suggestions", "Progress meter"] },
-    notes: [
-      { n: 1, target: "s2", note: "The checklist shows the next step", section_key: "build", requirement: "R1" },
-      { n: 2, target: "s3", note: "Admins may skip inviting for now", section_key: "build", requirement: "R2" },
-      { n: 3, target: "r2", note: "The checklist region", section_key: "build", requirement: "R1" },
-    ],
-  }));
+  add(
+    db,
+    'one_pager_line',
+    bet,
+    'A setup checklist that shows the next step',
+    flowOf('one_pager_line', bet, 1, 1, {
+      title: 'Finish setup from the checklist',
+      goal: 'Setup finished in a day',
+      steps: [
+        step('s1', 'Sign in as a new admin', null, 'same'),
+        step('s2', 'See the setup checklist [c:gametric]', 'Setup checklist', 'new'),
+        step(
+          's3',
+          'Invite now or later? [c:convdef]',
+          null,
+          'new',
+          'decision',
+          'User',
+          'The invite form opens. [c:convdef]',
+          'The checklist moves on and asks again tomorrow.',
+        ),
+        step('s4', 'Invite a teammate', 'Invite suggestions', 'changed'),
+        step('s5', 'See the progress meter fill', 'Progress meter', 'new'),
+      ],
+      screen: {
+        title: 'Home with the checklist',
+        regions: ['Header', 'Setup checklist: 4 steps', 'Invite suggestions', 'Progress meter'],
+      },
+      notes: [
+        {
+          n: 1,
+          target: 's2',
+          note: 'The checklist shows the next step',
+          section_key: 'build',
+          requirement: 'R1',
+        },
+        {
+          n: 2,
+          target: 's3',
+          note: 'Admins may skip inviting for now',
+          section_key: 'build',
+          requirement: 'R2',
+        },
+        {
+          n: 3,
+          target: 'r2',
+          note: 'The checklist region',
+          section_key: 'build',
+          requirement: 'R1',
+        },
+      ],
+    }),
+  );
   // A bet Oracle queued with the page whose job drew nothing: a visual with no version yet.
-  add(db, "one_pager_line", betSubject("bets-3", "A sample project created on day one"), "A sample project created on day one");
-  const mobile = stableUuid("simple-item/alert-mobile");
-  add(db, "feature", mobile, "Mobile alert push", flowOf("feature", mobile, 1, 1, {
-    title: "Act on a pushed alert",
-    goal: "Fewer missed alerts",
-    // The flows review: a long flow (8 steps) with a word longer than its box.
-    steps: [
-      step("s1", "Get the push", "Mobile alert push", "new"),
-      step("s2", "Open the alert", null, "same"),
-      step("s3", "See what crossed the line", "Alert rules", "changed"),
-      step("s4", "Check the alert-history-timeline", "Alert rules", "same"),
-      step("s5", "Is it still firing?", null, "new", "decision", "App", "The snooze and assign buttons show.", "The alert is marked resolved."),
-      step("s6", "Snooze or assign it", null, "new"),
-      step("s7", "Tell the assignee", null, "new", "step", "App"),
-      step("s8", "Close the alert", null, "same"),
-    ],
-    screen: { title: "Alert on a phone", regions: ["Header: rule and time", "What crossed the line", "Chart of the last day", "Snooze and Assign buttons"] },
-    notes: [{ n: 1, target: "s1", note: "The push names the rule", section_key: "alerts", requirement: "R4" }],
-  })).failure = "Oracle could not draw it"; // The walk-fixes review: its redraw failed, no comment open.
+  add(
+    db,
+    'one_pager_line',
+    betSubject('bets-3', 'A sample project created on day one'),
+    'A sample project created on day one',
+  );
+  const mobile = stableUuid('simple-item/alert-mobile');
+  add(
+    db,
+    'feature',
+    mobile,
+    'Mobile alert push',
+    flowOf('feature', mobile, 1, 1, {
+      title: 'Act on a pushed alert',
+      goal: 'Fewer missed alerts',
+      // The flows review: a long flow (8 steps) with a word longer than its box.
+      steps: [
+        step('s1', 'Get the push', 'Mobile alert push', 'new'),
+        step('s2', 'Open the alert', null, 'same'),
+        step('s3', 'See what crossed the line', 'Alert rules', 'changed'),
+        step('s4', 'Check the alert-history-timeline', 'Alert rules', 'same'),
+        step(
+          's5',
+          'Is it still firing?',
+          null,
+          'new',
+          'decision',
+          'App',
+          'The snooze and assign buttons show.',
+          'The alert is marked resolved.',
+        ),
+        step('s6', 'Snooze or assign it', null, 'new'),
+        step('s7', 'Tell the assignee', null, 'new', 'step', 'App'),
+        step('s8', 'Close the alert', null, 'same'),
+      ],
+      screen: {
+        title: 'Alert on a phone',
+        regions: [
+          'Header: rule and time',
+          'What crossed the line',
+          'Chart of the last day',
+          'Snooze and Assign buttons',
+        ],
+      },
+      notes: [
+        {
+          n: 1,
+          target: 's1',
+          note: 'The push names the rule',
+          section_key: 'alerts',
+          requirement: 'R4',
+        },
+      ],
+    }),
+  ).failure = 'Oracle could not draw it'; // The walk-fixes review: its redraw failed, no comment open.
   return db;
 }
 
 function add(db: VisualsDb, kind: string, id: string, brief: string, first?: Flow): MockVisual {
-  const v: MockVisual = { kind, id, brief, versions: first ? [first] : [], comments: [], made_by: first ? [null] : [] };
+  const v: MockVisual = {
+    kind,
+    id,
+    brief,
+    versions: first ? [first] : [],
+    comments: [],
+    made_by: first ? [null] : [],
+  };
   db.visuals[`${kind}:${id}`] = v;
   return v;
 }
 
 /** A plain bundle (title, steps, screen) as the API serves it: version 1 of 1, no drawing yet. */
-export const plainFlow = (f: Pick<Flow, "title" | "steps" | "screen"> & Partial<Flow>): Flow => ({
+export const plainFlow = (f: Pick<Flow, 'title' | 'steps' | 'screen'> & Partial<Flow>): Flow => ({
   version: 1,
   versions: 1,
   nodes: [],
@@ -301,20 +492,37 @@ export const forgetBundles = (): void => BUNDLES.clear();
  * decided draft item's): Oracle drew it with its subject (request_visual), so its visual holds the
  * bundle as version 1, with numbered notes; the newest drawing as the API's flow_for serves it.
  * Reading writes nothing to the store: the visual is stored once someone comments or revises. */
-export function bundleFlow(db: VisualsDb | undefined, kind: string, id: string, f: Flow | null): Flow | null {
+export function bundleFlow(
+  db: VisualsDb | undefined,
+  kind: string,
+  id: string,
+  f: Flow | null,
+): Flow | null {
   if (!f) return null;
   if (!db) return { ...f, subject_kind: kind, subject_id: id };
   const key = `${kind}:${id}`;
   if (db.visuals[key]) return flowFor(db, kind, id);
-  const steps = f.steps.map((label, i) => step(`s${i + 1}`, label, null, i === 0 ? "same" : "new"));
+  const steps = f.steps.map((label, i) => step(`s${i + 1}`, label, null, i === 0 ? 'same' : 'new'));
   const first = flowOf(kind, id, 1, 1, {
     title: f.title,
     goal: f.goal ?? f.title,
     steps,
     screen: f.screen,
     notes: [
-      { n: 1, target: steps[1]?.id ?? "s1", note: "The new step it adds", section_key: null, requirement: null },
-      { n: 2, target: "r2", note: "Where it shows on the screen", section_key: null, requirement: null },
+      {
+        n: 1,
+        target: steps[1]?.id ?? 's1',
+        note: 'The new step it adds',
+        section_key: null,
+        requirement: null,
+      },
+      {
+        n: 2,
+        target: 'r2',
+        note: 'Where it shows on the screen',
+        section_key: null,
+        requirement: null,
+      },
     ],
   });
   BUNDLES.set(key, { brief: f.title, first });
@@ -324,24 +532,62 @@ export function bundleFlow(db: VisualsDb | undefined, kind: string, id: string, 
 /** A bundle's visual as read (not stored); null when no bundle names it. */
 function bundled(kind: string, id: string): MockVisual | undefined {
   const b = BUNDLES.get(`${kind}:${id}`);
-  return b ? { kind, id, brief: b.brief, versions: [b.first], comments: [], made_by: [null] } : undefined;
+  return b
+    ? { kind, id, brief: b.brief, versions: [b.first], comments: [], made_by: [null] }
+    : undefined;
 }
 
 /** The one-pager's shape of a flow. */
-export function onePagerFlow(f: Flow | null): Schemas["OnePagerFlow"] | null {
-  return f ? { title: f.title, steps: f.steps, screen: f.touches_screen ? f.screen.title : null, subject_kind: f.subject_kind, subject_id: f.subject_id, version: f.version } : null;
+export function onePagerFlow(f: Flow | null): Schemas['OnePagerFlow'] | null {
+  return f
+    ? {
+        title: f.title,
+        steps: f.steps,
+        screen: f.touches_screen ? f.screen.title : null,
+        subject_kind: f.subject_kind,
+        subject_id: f.subject_id,
+        version: f.version,
+      }
+    : null;
 }
 
 /** Oracle drafts the visual WITH the proposal (the API's request_visual hook). */
-export function requestVisual(db: VisualsDb | undefined, kind: string, id: string, brief: string): void {
+export function requestVisual(
+  db: VisualsDb | undefined,
+  kind: string,
+  id: string,
+  brief: string,
+): void {
   if (!db || db.visuals[`${kind}:${id}`]) return;
   add(db, kind, id, brief, draft(kind, id, brief));
 }
 
-function out(v: MockVisual | undefined, kind: string, id: string, ctx: Ctx, documentId?: string | null, name?: string | null): Schemas["SimpleVisualOut"] {
+function out(
+  v: MockVisual | undefined,
+  kind: string,
+  id: string,
+  ctx: Ctx,
+  documentId?: string | null,
+  name?: string | null,
+): Schemas['SimpleVisualOut'] {
   const owner = (RANK[ctx.role] ?? 0) >= RANK.owner;
-  const askable = !UNASKABLE.includes(kind) && (kind !== "one_pager_line" || !!documentId);
-  if (!v) return { subject_kind: kind, subject_id: id, flow: null, versions: [], comments: [], pending: false, failed: false, failure: null, started_at: null, stage: 0, subject_name: null, can_comment: false, can_revise: owner && askable };
+  const askable = !UNASKABLE.includes(kind) && (kind !== 'one_pager_line' || !!documentId);
+  if (!v)
+    return {
+      subject_kind: kind,
+      subject_id: id,
+      flow: null,
+      versions: [],
+      comments: [],
+      pending: false,
+      failed: false,
+      failure: null,
+      started_at: null,
+      stage: 0,
+      subject_name: null,
+      can_comment: false,
+      can_revise: owner && askable,
+    };
   const n = v.versions.length;
   return {
     subject_kind: kind,
@@ -349,7 +595,13 @@ function out(v: MockVisual | undefined, kind: string, id: string, ctx: Ctx, docu
     brief: v.brief,
     flow: n ? cleanFlow({ ...v.versions[n - 1], versions: n }) : null,
     versions: v.versions
-      .map((f, i) => ({ number: f.version, title: f.title, made_at: f.made_at ?? at, made_by_name: v.made_by[i] ? (ctx.names[v.made_by[i]!] ?? "someone") : null, addressed: v.comments.filter((c) => c.addressed_in === f.version).length }))
+      .map((f, i) => ({
+        number: f.version,
+        title: f.title,
+        made_at: f.made_at ?? at,
+        made_by_name: v.made_by[i] ? (ctx.names[v.made_by[i]!] ?? 'someone') : null,
+        addressed: v.comments.filter((c) => c.addressed_in === f.version).length,
+      }))
       .reverse(),
     comments: v.comments,
     pending: !!v.pending,
@@ -367,15 +619,24 @@ function out(v: MockVisual | undefined, kind: string, id: string, ctx: Ctx, docu
 
 /** The subject's name as the API's subject_name: an item by its code and title, else the seeded name. */
 const nameOf = (db: VisualsDb, ctx: Ctx, kind: string, id: string): string | null =>
-  db.names?.[`${kind}:${id}`] ?? (kind === "feature" || kind === "draft_item" ? (ctx.itemName?.(id) ?? null) : null);
+  db.names?.[`${kind}:${id}`] ??
+  (kind === 'feature' || kind === 'draft_item' ? (ctx.itemName?.(id) ?? null) : null);
 
 async function json(status: number, body: unknown): Promise<Response> {
-  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  });
 }
 
 /** `/v1/simple/visuals/{kind}/{subject_id}[/versions/{n}|/comments|/revise|/request]`. */
-export async function routeSimpleVisuals(db: VisualsDb, ctx: Ctx, req: Request, p: string[]): Promise<Response | null> {
-  if (p[1] !== "simple" || p[2] !== "visuals" || p.length < 5) return null;
+export async function routeSimpleVisuals(
+  db: VisualsDb,
+  ctx: Ctx,
+  req: Request,
+  p: string[],
+): Promise<Response | null> {
+  if (p[1] !== 'simple' || p[2] !== 'visuals' || p.length < 5) return null;
   const [kind, id] = [p[3], p[4]];
   const key = `${kind}:${id}`;
   const stored = db.visuals[key];
@@ -384,12 +645,19 @@ export async function routeSimpleVisuals(db: VisualsDb, ctx: Ctx, req: Request, 
   // As visuals.may_read: a chat card's or goal suggestion's visual is read by who reads the card
   // or suggestion, and the owners; a card or suggestion the mock does not hold, by the owners.
   // Nothing drawn or asked for yet reads as an empty visual, as the API's read.
-  if (v && p[5] !== "request" && UNASKABLE.includes(kind) && (RANK[ctx.role] ?? 0) < RANK.owner && !ctx.reads?.(kind, id)) return json(404, { detail: "No such visual" });
+  if (
+    v &&
+    p[5] !== 'request' &&
+    UNASKABLE.includes(kind) &&
+    (RANK[ctx.role] ?? 0) < RANK.owner &&
+    !ctx.reads?.(kind, id)
+  )
+    return json(404, { detail: 'No such visual' });
   /** A comment or Revise writes the visual: a bundle's is stored then. */
   const kept = () => {
     if (!stored && v) db.visuals[key] = v;
   };
-  if (m === "GET" && p.length === 5) {
+  if (m === 'GET' && p.length === 5) {
     if (v?.pending && Date.now() - (v.queued_at ?? 0) >= jobMs()) {
       v.pending = false;
       if (db.failOnce?.includes(key)) {
@@ -403,57 +671,126 @@ export async function routeSimpleVisuals(db: VisualsDb, ctx: Ctx, req: Request, 
         v.failure = null;
       }
     }
-    return reply("/v1/simple/visuals/{kind}/{subject_id}", "get", out(v, kind, id, ctx, new URL(req.url).searchParams.get("document_id"), nameOf(db, ctx, kind, id)));
+    return reply(
+      '/v1/simple/visuals/{kind}/{subject_id}',
+      'get',
+      out(
+        v,
+        kind,
+        id,
+        ctx,
+        new URL(req.url).searchParams.get('document_id'),
+        nameOf(db, ctx, kind, id),
+      ),
+    );
   }
-  if (m === "GET" && p[5] === "versions") {
+  if (m === 'GET' && p[5] === 'versions') {
     const f = v?.versions.find((x) => x.version === Number(p[6]));
-    return f ? reply("/v1/simple/visuals/{kind}/{subject_id}/versions/{number}", "get", cleanFlow({ ...f, versions: v!.versions.length })) : json(404, { detail: "No such version" });
+    return f
+      ? reply(
+          '/v1/simple/visuals/{kind}/{subject_id}/versions/{number}',
+          'get',
+          cleanFlow({ ...f, versions: v!.versions.length }),
+        )
+      : json(404, { detail: 'No such version' });
   }
-  if (m !== "POST") return null;
+  if (m !== 'POST') return null;
   const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
-  if (p[5] === "comments") {
-    if ((RANK[ctx.role] ?? 0) < RANK.commenter) return json(403, { detail: "Commenters and up comment on a visual" });
-    if (!v?.versions.length) return json(409, { detail: "Oracle has not drawn this visual yet" });
-    const body = String(b.body ?? "").trim();
-    if (!body) return json(422, { detail: "Say what should change" });
+  if (p[5] === 'comments') {
+    if ((RANK[ctx.role] ?? 0) < RANK.commenter)
+      return json(403, { detail: 'Commenters and up comment on a visual' });
+    if (!v?.versions.length) return json(409, { detail: 'Oracle has not drawn this visual yet' });
+    const body = String(b.body ?? '').trim();
+    if (!body) return json(422, { detail: 'Say what should change' });
     kept();
-    v.comments.push({ id: stableUuid(`simple-visual-comment/${key}/${v.comments.length}`), version: v.versions.at(-1)!.version, annotation: (b.annotation as number | null) ?? null, body, by_name: ctx.names[ctx.id] ?? "someone", at, addressed_in: null });
-    return reply("/v1/simple/visuals/{kind}/{subject_id}/comments", "post", out(v, kind, id, ctx), 201);
+    v.comments.push({
+      id: stableUuid(`simple-visual-comment/${key}/${v.comments.length}`),
+      version: v.versions.at(-1)!.version,
+      annotation: (b.annotation as number | null) ?? null,
+      body,
+      by_name: ctx.names[ctx.id] ?? 'someone',
+      at,
+      addressed_in: null,
+    });
+    return reply(
+      '/v1/simple/visuals/{kind}/{subject_id}/comments',
+      'post',
+      out(v, kind, id, ctx),
+      201,
+    );
   }
-  if (p[5] === "revise") {
-    if ((RANK[ctx.role] ?? 0) < RANK.owner) return json(403, { detail: "Only who changes this directly revises its visual" });
-    if (!v?.versions.length) return json(409, { detail: "Oracle has not drawn this visual yet" });
+  if (p[5] === 'revise') {
+    if ((RANK[ctx.role] ?? 0) < RANK.owner)
+      return json(403, { detail: 'Only who changes this directly revises its visual' });
+    if (!v?.versions.length) return json(409, { detail: 'Oracle has not drawn this visual yet' });
     const open = v.comments.filter((c) => c.addressed_in === null);
-    const note = String(b.note ?? "").trim();
+    const note = String(b.note ?? '').trim();
     // As the API: a note (Retry after a failed redraw) revises with no open comment.
-    if (!open.length && !note) return json(409, { detail: "Nothing to revise from: comment first" });
+    if (!open.length && !note)
+      return json(409, { detail: 'Nothing to revise from: comment first' });
     kept();
     v.failure = null;
     const cur = v.versions.at(-1)!;
     const n = cur.version + 1;
-    const nodes = [...cur.nodes, ...open.map((c, i) => step(`c${n}-${i + 1}`, c.body.slice(0, 40), null, "new"))];
-    v.versions.push({ ...cur, version: n, title: `${cur.title} (revised)`, nodes, steps: nodes.map((s) => s.label), svg: drawSvg(`${cur.title} (revised)`, nodes) });
+    const nodes = [
+      ...cur.nodes,
+      ...open.map((c, i) => step(`c${n}-${i + 1}`, c.body.slice(0, 40), null, 'new')),
+    ];
+    v.versions.push({
+      ...cur,
+      version: n,
+      title: `${cur.title} (revised)`,
+      nodes,
+      steps: nodes.map((s) => s.label),
+      svg: drawSvg(`${cur.title} (revised)`, nodes),
+    });
     v.made_by.push(ctx.id);
     for (const c of open) c.addressed_in = n;
-    return reply("/v1/simple/visuals/{kind}/{subject_id}/revise", "post", out(v, kind, id, ctx), 202);
+    return reply(
+      '/v1/simple/visuals/{kind}/{subject_id}/revise',
+      'post',
+      out(v, kind, id, ctx),
+      202,
+    );
   }
-  if (p[5] === "request") {
-    if (UNASKABLE.includes(kind)) return json(422, { detail: "Oracle draws this visual with its proposal; it is not asked for" });
-    const prd = kind === "one_pager_line" && b.document_id ? String(b.document_id) : null;
-    if ((RANK[ctx.role] ?? 0) < RANK.owner && !(prd && ctx.edits?.(prd))) return json(403, { detail: "Only who changes this directly asks Oracle for its visual" });
-    if (kind === "one_pager_line") {
+  if (p[5] === 'request') {
+    if (UNASKABLE.includes(kind))
+      return json(422, {
+        detail: 'Oracle draws this visual with its proposal; it is not asked for',
+      });
+    const prd = kind === 'one_pager_line' && b.document_id ? String(b.document_id) : null;
+    if ((RANK[ctx.role] ?? 0) < RANK.owner && !(prd && ctx.edits?.(prd)))
+      return json(403, { detail: 'Only who changes this directly asks Oracle for its visual' });
+    if (kind === 'one_pager_line') {
       const doc = prd;
       if (!doc) return json(422, { detail: "A one-pager line's visual is asked for with its PRD" });
       // Queued once: a visual with no drawing (its job drew nothing) is drawn again. As the
       // API's ask_for: the bet's own words are the brief (qa-simple-prd-21), whatever was sent.
-      const cur = v ?? add(db, kind, id, BET_WORDS.get(id) || String(b.brief ?? "").trim() || "A bet of the one-pager");
+      const cur =
+        v ??
+        add(
+          db,
+          kind,
+          id,
+          BET_WORDS.get(id) || String(b.brief ?? '').trim() || 'A bet of the one-pager',
+        );
       if (!cur.versions.length) [cur.pending, cur.queued_at] = [true, Date.now()];
-      return reply("/v1/simple/visuals/{kind}/{subject_id}/request", "post", out(db.visuals[key], kind, id, ctx, doc, nameOf(db, ctx, kind, id)), 202);
+      return reply(
+        '/v1/simple/visuals/{kind}/{subject_id}/request',
+        'post',
+        out(db.visuals[key], kind, id, ctx, doc, nameOf(db, ctx, kind, id)),
+        202,
+      );
     }
     // The job is queued: the panel reads "drawing" until its next read lands the drawing.
-    const cur = v ?? add(db, kind, id, String(b.brief ?? "") || "The new flow");
+    const cur = v ?? add(db, kind, id, String(b.brief ?? '') || 'The new flow');
     if (!cur.versions.length) [cur.pending, cur.queued_at] = [true, Date.now()];
-    return reply("/v1/simple/visuals/{kind}/{subject_id}/request", "post", out(db.visuals[key], kind, id, ctx, null, nameOf(db, ctx, kind, id)), 202);
+    return reply(
+      '/v1/simple/visuals/{kind}/{subject_id}/request',
+      'post',
+      out(db.visuals[key], kind, id, ctx, null, nameOf(db, ctx, kind, id)),
+      202,
+    );
   }
   return null;
 }

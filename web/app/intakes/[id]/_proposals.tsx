@@ -1,56 +1,73 @@
-"use client";
+'use client';
 
-import { Link } from "@/lib/nav";
-import { useState } from "react";
+import { Link } from '@/lib/nav';
+import { useState } from 'react';
 
-import { Button, Chip, Empty, type ChipKind } from "@/components/ds";
-import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { useMe } from "@/lib/me";
-import { errorMessage } from "@/lib/use-query";
+import { Button, Chip, Empty, type ChipKind } from '@/components/ds';
+import { FIELD_LABEL, InlineError, TEXTAREA } from '@/components/review/parts';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { useMe } from '@/lib/me';
+import { errorMessage } from '@/lib/use-query';
 
-import { dayMonth, when, type Summary } from "./_lib";
+import { dayMonth, when, type Summary } from './_lib';
 
-type Proposal = Schemas["IntakeProposalOut"];
+type Proposal = Schemas['IntakeProposalOut'];
 
-const KIND: Record<Proposal["kind"], string> = { research_run: "Research run", prd_patch: "PRD patch" };
-const STATUS: Record<Proposal["status"], { label: string; kind: ChipKind }> = {
-  proposed: { label: "Proposed", kind: "warn" },
-  accepted: { label: "Accepted", kind: "pass" },
-  dismissed: { label: "Dismissed", kind: "na" },
+const KIND: Record<Proposal['kind'], string> = {
+  research_run: 'Research run',
+  prd_patch: 'PRD patch',
 };
-const DECIDE_REASON = "An approver accepts or dismisses proposals";
+const STATUS: Record<Proposal['status'], { label: string; kind: ChipKind }> = {
+  proposed: { label: 'Proposed', kind: 'warn' },
+  accepted: { label: 'Accepted', kind: 'pass' },
+  dismissed: { label: 'Dismissed', kind: 'na' },
+};
+const DECIDE_REASON = 'An approver accepts or dismisses proposals';
 
-const text = (v: unknown): string | null => (typeof v === "string" && v ? v : null);
+const text = (v: unknown): string | null => (typeof v === 'string' && v ? v : null);
 
 /** What the proposal would change: the PRD text a patch adds, or the run research would start. */
 function ProposalDiff({ p }: { p: Proposal }) {
   const d = p.detail;
-  if (p.kind === "prd_patch") {
-    const where = [text(d.document) && `${d.document}${d.base_version != null ? ` v${d.base_version}` : ""}`, text(d.section_key)].filter(Boolean).join(" › ");
+  if (p.kind === 'prd_patch') {
+    const where = [
+      text(d.document) && `${d.document}${d.base_version != null ? ` v${d.base_version}` : ''}`,
+      text(d.section_key),
+    ]
+      .filter(Boolean)
+      .join(' › ');
     return (
-      <div data-testid="proposal-diff" className="flex min-w-0 flex-col gap-1 rounded-button border border-line bg-surface2 p-2.5 text-sm">
+      <div
+        data-testid="proposal-diff"
+        className="flex min-w-0 flex-col gap-1 rounded-button border border-line bg-surface2 p-2.5 text-sm"
+      >
         {where && <span className="font-mono text-[13px] break-all text-text2">{where}</span>}
         <p className="break-words">
-          <ins className="rounded-sm bg-pass-bg px-0.5 text-pass no-underline">{text(d.text) ?? "—"}</ins>
+          <ins className="rounded-sm bg-pass-bg px-0.5 text-pass no-underline">
+            {text(d.text) ?? '—'}
+          </ins>
         </p>
       </div>
     );
   }
   return (
-    <div data-testid="proposal-diff" className="flex min-w-0 flex-col gap-1 rounded-button border border-line bg-surface2 p-2.5 text-sm">
+    <div
+      data-testid="proposal-diff"
+      className="flex min-w-0 flex-col gap-1 rounded-button border border-line bg-surface2 p-2.5 text-sm"
+    >
       {text(d.question) && <p className="break-words">{text(d.question)}</p>}
-      <span className="text-[13px] text-text2">Depth: {text(d.depth) ?? "quick"}</span>
+      <span className="text-[13px] text-text2">Depth: {text(d.depth) ?? 'quick'}</span>
       {text(d.why) && <p className="text-[13px] break-words text-text2">{text(d.why)}</p>}
     </div>
   );
 }
 
 function Outcome({ p }: { p: Proposal }) {
-  if (p.status === "accepted") {
+  if (p.status === 'accepted') {
     const run = text(p.result.run_id);
     const refused = text(p.result.start_error);
-    if (run && refused) return <p className="text-sm break-words text-warn">Research did not start: {refused}</p>;
+    if (run && refused)
+      return <p className="text-sm break-words text-warn">Research did not start: {refused}</p>;
     if (run)
       return (
         <Link href={`/runs/${run}`} className="text-sm font-semibold text-accent-ink underline">
@@ -59,13 +76,22 @@ function Outcome({ p }: { p: Proposal }) {
       );
     return <p className="text-sm text-text2">Added as feedback on the PRD</p>;
   }
-  if (p.status === "dismissed" && p.decision_note) return <p className="text-sm break-words text-text2">Reason: {p.decision_note}</p>;
+  if (p.status === 'dismissed' && p.decision_note)
+    return <p className="text-sm break-words text-text2">Reason: {p.decision_note}</p>;
   return null;
 }
 
-function ProposalCard({ p, approver, onChanged }: { p: Proposal; approver: boolean; onChanged: () => void }) {
+function ProposalCard({
+  p,
+  approver,
+  onChanged,
+}: {
+  p: Proposal;
+  approver: boolean;
+  onChanged: () => void;
+}) {
   const [dismissing, setDismissing] = useState(false);
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const status = STATUS[p.status];
@@ -84,11 +110,24 @@ function ProposalCard({ p, approver, onChanged }: { p: Proposal; approver: boole
     }
   }
   const path = { params: { path: { proposal_id: p.id } } };
-  const accept = () => act(() => unwrap(api.POST("/v1/intake-proposals/{proposal_id}/accept", path)));
-  const dismiss = () => act(() => unwrap(api.POST("/v1/intake-proposals/{proposal_id}/dismiss", { ...path, body: { reason: reason.trim() || null } })));
+  const accept = () =>
+    act(() => unwrap(api.POST('/v1/intake-proposals/{proposal_id}/accept', path)));
+  const dismiss = () =>
+    act(() =>
+      unwrap(
+        api.POST('/v1/intake-proposals/{proposal_id}/dismiss', {
+          ...path,
+          body: { reason: reason.trim() || null },
+        }),
+      ),
+    );
 
   return (
-    <li id={`proposal-${p.id}`} data-testid="proposal" className="flex min-w-0 scroll-mt-16 flex-col gap-2 rounded-card border border-line bg-surface p-3 text-text">
+    <li
+      id={`proposal-${p.id}`}
+      data-testid="proposal"
+      className="flex min-w-0 scroll-mt-16 flex-col gap-2 rounded-card border border-line bg-surface p-3 text-text"
+    >
       <div className="flex min-w-0 flex-wrap items-start gap-2">
         <p className="min-w-0 flex-1 basis-60 text-[15px] font-semibold break-words">{p.title}</p>
         <span className="flex flex-wrap gap-1.5">
@@ -105,12 +144,18 @@ function ProposalCard({ p, approver, onChanged }: { p: Proposal; approver: boole
       <Outcome p={p} />
       {error && <InlineError>{error}</InlineError>}
       {approver &&
-        p.status === "proposed" &&
+        p.status === 'proposed' &&
         (dismissing ? (
           <div className="flex min-w-0 flex-col gap-2 rounded-button border border-line bg-surface2 p-2.5">
             <label className={FIELD_LABEL}>
               Reason (optional)
-              <textarea rows={2} maxLength={1000} value={reason} onChange={(e) => setReason(e.target.value)} className={TEXTAREA} />
+              <textarea
+                rows={2}
+                maxLength={1000}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                className={TEXTAREA}
+              />
             </label>
             <div className="flex flex-wrap gap-1.5">
               <Button variant="danger" disabled={busy} onClick={dismiss}>
@@ -141,9 +186,15 @@ function ProposalCard({ p, approver, onChanged }: { p: Proposal; approver: boole
  * or dismisses, with an optional reason. Others do not see those controls (a control a role
  * can never use is hidden, owner rule #370); the note says who decides.
  */
-export function ProposalsTab({ summary: s, onChanged }: { summary: Summary; onChanged: () => void }) {
+export function ProposalsTab({
+  summary: s,
+  onChanged,
+}: {
+  summary: Summary;
+  onChanged: () => void;
+}) {
   const { can, capsReady } = useMe();
-  const approver = can("accept_intake_proposal");
+  const approver = can('accept_intake_proposal');
   const proposals = [...s.proposals].sort((a, b) => b.created_at.localeCompare(a.created_at));
   return (
     <div data-testid="intake-proposals" className="flex min-w-0 flex-col gap-3 pt-3">
@@ -157,7 +208,12 @@ export function ProposalsTab({ summary: s, onChanged }: { summary: Summary; onCh
       ) : (
         <ul className="flex min-w-0 flex-col gap-2">
           {proposals.map((p) => (
-            <ProposalCard key={`${p.id}-${p.status}`} p={p} approver={approver} onChanged={onChanged} />
+            <ProposalCard
+              key={`${p.id}-${p.status}`}
+              p={p}
+              approver={approver}
+              onChanged={onChanged}
+            />
           ))}
         </ul>
       )}

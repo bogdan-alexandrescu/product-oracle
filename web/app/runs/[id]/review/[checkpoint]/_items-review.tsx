@@ -1,24 +1,37 @@
-"use client";
+'use client';
 
-import { Link } from "@/lib/nav";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Link } from '@/lib/nav';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
-import { Button, Chip, FilterChips, Icon, LinkButton, InspectorSection, Page, PageHeader, SegmentedControl, Sheet, Split, type Column } from "@/components/ds";
-import { blockingLeftText, DecisionBar, type StagedChip } from "@/components/review/DecisionBar";
-import { ItemInspector } from "@/components/review/ItemInspector";
-import { ItemsTable } from "@/components/review/ItemsTable";
-import { RunBackLink } from "@/components/review/parts";
-import { RawFileSheet } from "@/components/review/RawFileSheet";
-import type { Horizon, ItemRow as TableRow } from "@/components/roadmap/item-row";
-import { ErrorNote, INPUT, Loading } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { datesInWords } from "@/lib/dates";
-import { formatCount } from "@/lib/format";
-import { docLabel } from "@/lib/labels";
-import { useMe } from "@/lib/me";
-import { usePageView } from "@/lib/screen-subject";
-import { errorMessage, useQuery } from "@/lib/use-query";
-import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
+import {
+  Button,
+  Chip,
+  FilterChips,
+  Icon,
+  LinkButton,
+  InspectorSection,
+  Page,
+  PageHeader,
+  SegmentedControl,
+  Sheet,
+  Split,
+  type Column,
+} from '@/components/ds';
+import { blockingLeftText, DecisionBar, type StagedChip } from '@/components/review/DecisionBar';
+import { ItemInspector } from '@/components/review/ItemInspector';
+import { ItemsTable } from '@/components/review/ItemsTable';
+import { RunBackLink } from '@/components/review/parts';
+import { RawFileSheet } from '@/components/review/RawFileSheet';
+import type { Horizon, ItemRow as TableRow } from '@/components/roadmap/item-row';
+import { ErrorNote, INPUT, Loading } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { datesInWords } from '@/lib/dates';
+import { formatCount } from '@/lib/format';
+import { docLabel } from '@/lib/labels';
+import { useMe } from '@/lib/me';
+import { usePageView } from '@/lib/screen-subject';
+import { errorMessage, useQuery } from '@/lib/use-query';
+import { invalidateWaiting, waitingChanged } from '@/lib/waiting';
 
 import {
   AGENT_KINDS,
@@ -46,22 +59,28 @@ import {
   type Mode,
   type Reason,
   type Review,
-} from "./_items-lib";
-import { draftKey, loadDraft } from "./_draft";
-import type { ReviewViewProps } from "./_shell";
+} from './_items-lib';
+import { draftKey, loadDraft } from './_draft';
+import type { ReviewViewProps } from './_shell';
 
-type Filter = "needs" | "all" | "changed";
-const FILTER_WORDS: Record<Filter, string> = { needs: "Needs you", all: "All", changed: "Changed" };
-type Group = "horizon" | "reason";
-type ActionBody = Schemas["ActionIn"];
+type Filter = 'needs' | 'all' | 'changed';
+const FILTER_WORDS: Record<Filter, string> = { needs: 'Needs you', all: 'All', changed: 'Changed' };
+type Group = 'horizon' | 'reason';
+type ActionBody = Schemas['ActionIn'];
 /** What a row or the inspector does to the shared draft (D8). */
 export type Ops = {
-  act: (body: Omit<ActionBody, "answers"> & { answers?: string[] }) => Promise<void>;
+  act: (body: Omit<ActionBody, 'answers'> & { answers?: string[] }) => Promise<void>;
   remove: (id: string) => Promise<void>;
   stage: (id: string) => Promise<void>;
 };
 /** An inline form a row's ⋯ menu or the inspector opens. */
-export type Form = { key: string; kind: "waive" | "split" | "ask"; code?: string; where: "row" | "inspector"; text?: string } | null;
+export type Form = {
+  key: string;
+  kind: 'waive' | 'split' | 'ask';
+  code?: string;
+  where: 'row' | 'inspector';
+  text?: string;
+} | null;
 
 const POLL_MS = 10_000;
 const OUTCOME_MAX = 500;
@@ -70,10 +89,11 @@ const GHOST_POSITION = 1_000_000;
 const HORIZON_INDEX = new Map<string, number>(HORIZONS.map((h, i) => [h, i]));
 
 /** Whether a staged (or my own suggested) edit removes the item's milestone date. */
-const dateRemoved = (it: Item) => it.actions.some((a) => a.kind === "edit" && a.field === "milestone_date" && a.value == null);
+const dateRemoved = (it: Item) =>
+  it.actions.some((a) => a.kind === 'edit' && a.field === 'milestone_date' && a.value == null);
 
 /** "0.7" or "70" as E2's 0-1 confidence; a word stays a word. */
-function confidenceOf(c: string | null | undefined): TableRow["confidence"] {
+function confidenceOf(c: string | null | undefined): TableRow['confidence'] {
   if (!c) return null;
   if (!/^[\d.]+$/.test(c)) return c;
   const n = Number(c);
@@ -85,76 +105,109 @@ type PrdRef = { slug: string; version: number; headings: Map<string, string> };
 
 /** A section key in words when the PRD does not name it: "alerts-slack" is "Alerts slack". */
 const keyWords = (key: string) => {
-  const words = key.replace(/[-_.]+/g, " ").trim();
+  const words = key.replace(/[-_.]+/g, ' ').trim();
   return words.charAt(0).toUpperCase() + words.slice(1);
 };
-const wordSet = (text: string) => [...new Set(text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean))].sort().join(" ");
+const wordSet = (text: string) =>
+  [
+    ...new Set(
+      text
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter(Boolean),
+    ),
+  ]
+    .sort()
+    .join(' ');
 /**
  * A PRD section by its heading ("Slack alerts"), never its key (qa-work-33). When the PRD does
  * not name it: the item's title when the key is the title's words ("alerts-slack" for Slack
  * alerts), else the key in words.
  */
 export const sectionTitle = (key: string, prd: PrdRef | null, itemTitle?: string | null) =>
-  prd?.headings.get(key) ?? (itemTitle && wordSet(itemTitle) === wordSet(key) ? itemTitle : keyWords(key));
+  prd?.headings.get(key) ??
+  (itemTitle && wordSet(itemTitle) === wordSet(key) ? itemTitle : keyWords(key));
 
 /** A file item as E2's table row: the review's states in its row fields (muted, struck, date removed). */
 function toRow(it: Item, prd: PrdRef | null): TableRow {
-  const staged = it.actions.filter((a) => a.state === "staged" && a.kind !== "question");
+  const staged = it.actions.filter((a) => a.state === 'staged' && a.kind !== 'question');
   const m = it.milestone;
   return {
     key: it.key,
     position: it.position != null ? it.position - 1 : GHOST_POSITION,
     title: it.title ?? it.key,
     outcome: it.outcome ?? null,
-    horizon: (it.horizon ?? "") as Horizon,
-    milestone: m ? { name: m.name ?? null, date: m.date ?? null, refused_date: null, refused: null, verified: false, date_removed: dateRemoved(it) } : null,
+    horizon: (it.horizon ?? '') as Horizon,
+    milestone: m
+      ? {
+          name: m.name ?? null,
+          date: m.date ?? null,
+          refused_date: null,
+          refused: null,
+          verified: false,
+          date_removed: dateRemoved(it),
+        }
+      : null,
     confidence: confidenceOf(it.confidence),
     depends_on: it.depends_on,
-    prd: it.prd_section ? { label: sectionTitle(it.prd_section, prd, it.title), href: prd ? `/documents/${prd.slug}/v/${prd.version}#${it.prd_section}` : "#" } : null,
+    prd: it.prd_section
+      ? {
+          label: sectionTitle(it.prd_section, prd, it.title),
+          href: prd ? `/documents/${prd.slug}/v/${prd.version}#${it.prd_section}` : '#',
+        }
+      : null,
     ghost: it.position == null,
-    muted: it.state === "handled",
-    struck: staged.some((a) => a.kind === "drop"),
+    muted: it.state === 'handled',
+    struck: staged.some((a) => a.kind === 'drop'),
   };
 }
 
 function usePhone(): boolean {
   const [phone, setPhone] = useState(false);
   useEffect(() => {
-    const mq = window.matchMedia("(max-width: 600px)");
+    const mq = window.matchMedia('(max-width: 600px)');
     const on = () => setPhone(mq.matches);
     on();
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
   }, []);
   return phone;
 }
 
 /** "Waiting for you · 19 h left" from D8's wait (amber under an hour, red under ten minutes). */
 function waitChip(review: Review, mode: Mode) {
-  const who = mode === "approver" ? "Waiting for you" : "Waiting for an approver";
+  const who = mode === 'approver' ? 'Waiting for you' : 'Waiting for an approver';
   const w = review.wait;
-  if (w.state === "ended") return <Chip kind="na">The run stopped waiting; your decision starts a follow-up run</Chip>;
-  if (w.state !== "open" || w.seconds_left == null)
+  if (w.state === 'ended')
+    return <Chip kind="na">The run stopped waiting; your decision starts a follow-up run</Chip>;
+  if (w.state !== 'open' || w.seconds_left == null)
     return (
       <Chip kind="warn" dot>
         {who}
       </Chip>
     );
   const s = w.seconds_left;
-  const left = s >= 3600 ? `${Math.floor(s / 3600)} h left` : `${Math.max(1, Math.floor(s / 60))} min left`;
+  const left =
+    s >= 3600 ? `${Math.floor(s / 3600)} h left` : `${Math.max(1, Math.floor(s / 60))} min left`;
   return (
-    <Chip kind={s < 600 ? "crit" : s < 3600 ? "warn" : "na"} dot>
+    <Chip kind={s < 600 ? 'crit' : s < 3600 ? 'warn' : 'na'} dot>
       {who} · {left}
     </Chip>
   );
 }
 
 /** The decided state: "Approved with 3 edits", "Sent back · 4 entries", "Approved". */
-function decidedText(cp: Schemas["CheckpointOut"]): string {
+function decidedText(cp: Schemas['CheckpointOut']): string {
   const review = (cp.review ?? {}) as { kind?: string; edits?: number; items?: unknown[] };
-  if (cp.status === "approved") return review.kind === "edits" && review.edits ? `Approved with ${plural(review.edits, "edit")}` : "Approved";
-  if (cp.status === "changes_requested") return Array.isArray(review.items) ? `Sent back · ${plural(review.items.length, "entry", "entries")}` : "Sent back";
-  return "Skipped";
+  if (cp.status === 'approved')
+    return review.kind === 'edits' && review.edits
+      ? `Approved with ${plural(review.edits, 'edit')}`
+      : 'Approved';
+  if (cp.status === 'changes_requested')
+    return Array.isArray(review.items)
+      ? `Sent back · ${plural(review.items.length, 'entry', 'entries')}`
+      : 'Sent back';
+  return 'Skipped';
 }
 
 /**
@@ -171,48 +224,64 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   const review = reviewQ.data ?? null;
   const reload = reviewQ.reload;
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<Filter>("needs");
-  const [group, setGroup] = useState<Group>("horizon");
+  const [filter, setFilter] = useState<Filter>('needs');
+  const [group, setGroup] = useState<Group>('horizon');
   const [selected, setSelected] = useState<string | null>(item);
   const [sheet, setSheet] = useState(!!item);
   const [menu, setMenu] = useState<string | null>(null);
   const [form, setForm] = useState<Form>(null);
-  const [raw, setRaw] = useState<"file" | "agents" | null>(null);
+  const [raw, setRaw] = useState<'file' | 'agents' | null>(null);
   // Enter on a row asks to confirm its first fix here (criterion 16: no single-key decisions).
   const [confirm, setConfirm] = useState<string | null>(null);
   const source = run.source;
   // qa-work-33: the PRD's section headings, so "From the PRD" names a section by its title.
-  const headingsQ = useQuery(source ? `prd-headings|${source.slug}|${source.version}` : "prd-headings|none", () =>
-    source
-      ? unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc: source.slug, n: source.version } } }))
-          .then((v) => new Map(v.sections.map((x) => [x.section_key, x.heading.replace(/^[\d.]+\s+/, "")] as const)))
-          .catch(() => new Map<string, string>())
-      : Promise.resolve(new Map<string, string>()),
+  const headingsQ = useQuery(
+    source ? `prd-headings|${source.slug}|${source.version}` : 'prd-headings|none',
+    () =>
+      source
+        ? unwrap(
+            api.GET('/v1/documents/{doc}/versions/{n}', {
+              params: { path: { doc: source.slug, n: source.version } },
+            }),
+          )
+            .then(
+              (v) =>
+                new Map(
+                  v.sections.map(
+                    (x) => [x.section_key, x.heading.replace(/^[\d.]+\s+/, '')] as const,
+                  ),
+                ),
+            )
+            .catch(() => new Map<string, string>())
+        : Promise.resolve(new Map<string, string>()),
   );
   const headings = headingsQ.data;
   const prdRef = useMemo<PrdRef | null>(
-    () => (source ? { slug: source.slug, version: source.version, headings: headings ?? new Map() } : null),
+    () =>
+      source
+        ? { slug: source.slug, version: source.version, headings: headings ?? new Map() }
+        : null,
     [source, headings],
   );
 
   // D8: the draft is read again every 10 s while the page is visible (a teammate's suggestion).
   useEffect(() => {
     const t = setInterval(() => {
-      if (document.visibilityState === "visible" && cp.status === "pending") void reload();
+      if (document.visibilityState === 'visible' && cp.status === 'pending') void reload();
     }, POLL_MS);
     return () => clearInterval(t);
   }, [reload, cp.status]);
 
   const mode: Mode =
-    cp.status !== "pending" || !review
-      ? "viewer"
+    cp.status !== 'pending' || !review
+      ? 'viewer'
       : // #370 fixes 4: the review's can_stage/can_suggest are the API's item answer (the stop's
         // role); can() adds the route role, without a second check of the signed-in role here.
-        review.can_stage && can("stage_checkpoint_action", review.can_stage)
-        ? "approver"
-        : review.can_suggest && can("create_checkpoint_action", review.can_suggest)
-          ? "commenter"
-          : "viewer";
+        review.can_stage && can('stage_checkpoint_action', review.can_stage)
+        ? 'approver'
+        : review.can_suggest && can('create_checkpoint_action', review.can_suggest)
+          ? 'commenter'
+          : 'viewer';
 
   async function write(call: () => Promise<unknown>) {
     setError(null);
@@ -224,56 +293,115 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
     await reload();
   }
   const ops: Ops = {
-    act: (body) => write(() => unwrap(api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions", { ...path, body: { ...body, answers: body.answers ?? [] } }))),
-    remove: (id) => write(() => unwrap(api.DELETE("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}", { params: { path: { run_id: run.id, checkpoint_id: cp.id, action_id: id } } }))),
-    stage: (id) => write(() => unwrap(api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}/stage", { params: { path: { run_id: run.id, checkpoint_id: cp.id, action_id: id } } }))),
+    act: (body) =>
+      write(() =>
+        unwrap(
+          api.POST('/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions', {
+            ...path,
+            body: { ...body, answers: body.answers ?? [] },
+          }),
+        ),
+      ),
+    remove: (id) =>
+      write(() =>
+        unwrap(
+          api.DELETE('/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}', {
+            params: { path: { run_id: run.id, checkpoint_id: cp.id, action_id: id } },
+          }),
+        ),
+      ),
+    stage: (id) =>
+      write(() =>
+        unwrap(
+          api.POST('/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}/stage', {
+            params: { path: { run_id: run.id, checkpoint_id: cp.id, action_id: id } },
+          }),
+        ),
+      ),
   };
 
   const items = useMemo(() => review?.items ?? [], [review]);
   const removed = review?.diff?.removed ?? [];
-  const changed = (it: Item) => it.diff.length > 0 || removed.includes(it.key) || (!!it.resolution && it.resolution.outcome !== "done");
+  const changed = (it: Item) =>
+    it.diff.length > 0 ||
+    removed.includes(it.key) ||
+    (!!it.resolution && it.resolution.outcome !== 'done');
   const showChanged = (review?.attempt ?? 1) > 1 && !!review?.diff;
   // qa-work-3/4: one count of items, blocking and to confirm for the whole page (and the run page).
   const counts = useMemo(() => reviewCounts({ items }), [items]);
   const rows = useMemo(() => {
-    const list = filter === "needs" ? items.filter((it) => it.reasons.length > 0) : filter === "changed" ? items.filter(changed) : items;
+    const list =
+      filter === 'needs'
+        ? items.filter((it) => it.reasons.length > 0)
+        : filter === 'changed'
+          ? items.filter(changed)
+          : items;
     return [...list].sort((a, b) => (a.position ?? 1e9) - (b.position ?? 1e9));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, filter]);
   // ask-page-context: "This page" reads the items listed and the filters in use.
-  usePageView(review ? { filters: [`Show: ${FILTER_WORDS[filter]}`, `Group: ${group === "horizon" ? "Horizon" : "Reason"}`], lines: itemsPageLines(rows, counts) } : null);
+  usePageView(
+    review
+      ? {
+          filters: [
+            `Show: ${FILTER_WORDS[filter]}`,
+            `Group: ${group === 'horizon' ? 'Horizon' : 'Reason'}`,
+          ],
+          lines: itemsPageLines(rows, counts),
+        }
+      : null,
+  );
 
-  if (reviewQ.error) return <Page className="py-6"><ErrorNote>{reviewQ.error}</ErrorNote></Page>;
+  if (reviewQ.error)
+    return (
+      <Page className="py-6">
+        <ErrorNote>{reviewQ.error}</ErrorNote>
+      </Page>
+    );
   // The rows wait for what the role may do too: drawn before it they are a viewer's, and Enter
   // on a row would pick it instead of asking to confirm its fix (a failed read: a viewer's).
-  if (!review || (!capsReady && !capsError)) return <div className="px-6 py-8"><Loading /></div>;
+  if (!review || (!capsReady && !capsError))
+    return (
+      <div className="px-6 py-8">
+        <Loading />
+      </div>
+    );
 
   // Another PRD's feature is not a row: its reasons name it, as in the inspector.
   const otherTitle = (key: string) => {
-    for (const it of items) for (const r of it.reasons) {
-      const d = r.data as { dependency?: unknown; dependency_title?: unknown };
-      if (d.dependency === key && typeof d.dependency_title === "string") return d.dependency_title;
-    }
+    for (const it of items)
+      for (const r of it.reasons) {
+        const d = r.data as { dependency?: unknown; dependency_title?: unknown };
+        if (d.dependency === key && typeof d.dependency_title === 'string')
+          return d.dependency_title;
+      }
     return key;
   };
   const titleOf = (key: string) => items.find((x) => x.key === key)?.title ?? otherTitle(key);
   const byKey = new Map(items.map((x) => [x.key, x]));
   const tableRows = rows.map((it) => toRow(it, prdRef));
   // Group: by horizon (Now, Next, Later, then items not in the file), or by the first open reason.
-  const reasonOf = (it: Item) => openReasons(it)[0]?.label ?? (it.reasons.length ? "Handled" : "Nothing open");
+  const reasonOf = (it: Item) =>
+    openReasons(it)[0]?.label ?? (it.reasons.length ? 'Handled' : 'Nothing open');
   const reasonOrder = [...new Set(rows.map(reasonOf))];
-  const groupBy = group === "horizon" ? undefined : (r: TableRow) => reasonOf(byKey.get(r.key)!);
-  const groupOrder = group === "horizon" ? (g: string) => HORIZON_INDEX.get(g) ?? 9 : (g: string) => reasonOrder.indexOf(g);
+  const groupBy = group === 'horizon' ? undefined : (r: TableRow) => reasonOf(byKey.get(r.key)!);
+  const groupOrder =
+    group === 'horizon'
+      ? (g: string) => HORIZON_INDEX.get(g) ?? 9
+      : (g: string) => reasonOrder.indexOf(g);
   const groupHead = (g: string, shown: TableRow[]) => {
-    if (group !== "horizon") return <span data-testid="group-head">{`${g} · ${shown.length}`}</span>;
-    const all = items.filter((x) => (x.horizon ?? "") === g);
+    if (group !== 'horizon')
+      return <span data-testid="group-head">{`${g} · ${shown.length}`}</span>;
+    const all = items.filter((x) => (x.horizon ?? '') === g);
     const need = all.filter((x) => x.reasons.length > 0).length;
-    return <span data-testid="group-head">{`${horizonLabel(g || null)} · ${need} of ${all.length} need you`}</span>;
+    return (
+      <span data-testid="group-head">{`${horizonLabel(g || null)} · ${need} of ${all.length} need you`}</span>
+    );
   };
 
   const tally = review.tally;
-  const staged = items.flatMap((it) => it.actions.filter((a) => a.state === "staged"));
-  const questions = staged.filter((a) => a.kind === "question");
+  const staged = items.flatMap((it) => it.actions.filter((a) => a.state === 'staged'));
+  const questions = staged.filter((a) => a.kind === 'question');
   const edits = staged.filter((a) => EDIT_KINDS.includes(a.kind)).length;
   const agentOnly = staged.find((a) => AGENT_KINDS.includes(a.kind));
   const waitingOn = tally.waiting_on.map((w) => `${formatCount(w.count)} waiting on ${w.name}`);
@@ -283,27 +411,41 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
     <>
       {counts.handled} of {counts.needYou} handled
       <span className="block text-sm font-normal text-text2" data-testid="tally-second">
-        {[blockingLeft > 0 ? blockingLeftText(blockingLeft) : null, ...waitingOn].filter(Boolean).join(" · ") || "Nothing blocking"}
+        {[blockingLeft > 0 ? blockingLeftText(blockingLeft) : null, ...waitingOn]
+          .filter(Boolean)
+          .join(' · ') || 'Nothing blocking'}
       </span>
     </>
   );
   const chips: StagedChip[] = staged
-    .filter((a) => a.kind !== "question")
+    .filter((a) => a.kind !== 'question')
     .map((a) => {
       const done = doneText(a, titleOf);
-      return { key: a.id, label: `${titleOf(a.item_key)}: ${done.charAt(0).toLowerCase()}${done.slice(1)}`, onRemove: () => ops.remove(a.id) };
+      return {
+        key: a.id,
+        label: `${titleOf(a.item_key)}: ${done.charAt(0).toLowerCase()}${done.slice(1)}`,
+        onRemove: () => ops.remove(a.id),
+      };
     });
-  const unchanged = items.filter((it) => it.position != null && !staged.some((a) => a.item_key === it.key)).length;
+  const unchanged = items.filter(
+    (it) => it.position != null && !staged.some((a) => a.item_key === it.key),
+  ).length;
   const entries = new Set(staged.map((a) => a.item_key)).size;
   const fileProblems = review.file_problems;
   // The row picked, else the first that needs me (the inspector is never empty), in the table's order.
   const shownRows = [...rows].sort((a, b) => {
     const [ra, rb] = [toRow(a, prdRef), toRow(b, prdRef)];
-    const order = groupOrder(groupBy ? groupBy(ra) : ra.horizon) - groupOrder(groupBy ? groupBy(rb) : rb.horizon);
+    const order =
+      groupOrder(groupBy ? groupBy(ra) : ra.horizon) -
+      groupOrder(groupBy ? groupBy(rb) : rb.horizon);
     return order || ra.position - rb.position;
   });
-  const selectedItem = items.find((x) => x.key === selected) ?? shownRows.find((x) => x.state === "needs_you") ?? shownRows[0] ?? null;
-  const prd = source ? `${docLabel(source)} v${source.version}` : "the PRD";
+  const selectedItem =
+    items.find((x) => x.key === selected) ??
+    shownRows.find((x) => x.state === 'needs_you') ??
+    shownRows[0] ??
+    null;
+  const prd = source ? `${docLabel(source)} v${source.version}` : 'the PRD';
 
   const pick = (it: Item) => {
     setSelected(it.key);
@@ -312,57 +454,107 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   // Enter on a row: its first fix waits for a Confirm (focused); a row with none is picked.
   const activate = (key: string) => {
     const it = byKey.get(key)!;
-    const first = mode !== "viewer" && it.state !== "handled" ? rowFixes(openReasons(it))[0] : undefined;
+    const first =
+      mode !== 'viewer' && it.state !== 'handled' ? rowFixes(openReasons(it))[0] : undefined;
     if (first) {
       setSelected(key);
       setConfirm(key);
     } else pick(it);
   };
   // Suggest yours separately… on a row: its Ask a teammate form, filled in.
-  const askRow = (key: string) => (text: string) => setForm({ key, kind: "ask", where: "row", text });
+  const askRow = (key: string) => (text: string) =>
+    setForm({ key, kind: 'ask', where: 'row', text });
   const leaveConfirm = (key: string) => {
     setConfirm(null);
-    [...document.querySelectorAll<HTMLElement>(`tr[data-testid="roadmap-item-row"][data-key="${CSS.escape(key)}"]`)].find((el) => el.checkVisibility())?.focus();
+    [
+      ...document.querySelectorAll<HTMLElement>(
+        `tr[data-testid="roadmap-item-row"][data-key="${CSS.escape(key)}"]`,
+      ),
+    ]
+      .find((el) => el.checkVisibility())
+      ?.focus();
   };
   const columns: Column<TableRow>[] = [
     {
-      key: "reasons",
-      header: "Needs you because",
+      key: 'reasons',
+      header: 'Needs you because',
       wrap: true,
-      phone: "meta",
-      cell: (r) => <ReasonsCell it={byKey.get(r.key)!} showDiff={filter === "changed"} />,
+      phone: 'meta',
+      cell: (r) => <ReasonsCell it={byKey.get(r.key)!} showDiff={filter === 'changed'} />,
     },
     {
-      key: "call",
-      header: "Your call",
-      width: "236px",
-      align: "right",
+      key: 'call',
+      header: 'Your call',
+      width: '236px',
+      align: 'right',
       wrap: true,
-      phone: "meta",
+      phone: 'meta',
       // On a phone the call spans the row, so its ⋯ sits at the row's right edge on every row.
-      className: "max-[600px]:w-full max-[600px]:basis-full",
+      className: 'max-[600px]:w-full max-[600px]:basis-full',
       cell: (r) => {
         const it = byKey.get(r.key)!;
         return (
           // A row action is not a selection: the click stays in the cell.
-          <div className="flex min-w-0 flex-1 flex-col items-stretch gap-1" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="flex min-w-0 flex-1 flex-col items-stretch gap-1"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* qa-work-18: the buttons right-aligned in their own column, the ⋯ in a fixed last one (an empty slot when there is no menu). */}
-            <span className={`grid min-w-0 items-center gap-1 ${mode !== "viewer" ? "grid-cols-[minmax(0,1fr)_2rem] max-[600px]:grid-cols-[minmax(0,1fr)_2.5rem]" : "grid-cols-1"}`} data-testid="your-call">
-              <span className="flex min-w-0 flex-wrap items-center justify-end gap-1" data-testid="your-call-buttons">
+            <span
+              className={`grid min-w-0 items-center gap-1 ${mode !== 'viewer' ? 'grid-cols-[minmax(0,1fr)_2rem] max-[600px]:grid-cols-[minmax(0,1fr)_2.5rem]' : 'grid-cols-1'}`}
+              data-testid="your-call"
+            >
+              <span
+                className="flex min-w-0 flex-wrap items-center justify-end gap-1"
+                data-testid="your-call-buttons"
+              >
                 {confirm === it.key && rowFixes(openReasons(it))[0] ? (
-                  <ConfirmFix {...rowFixes(openReasons(it))[0]} it={it} mode={mode} ops={ops} onDone={() => leaveConfirm(it.key)} meId={me?.user_id ?? null} titleOf={titleOf} ask={askRow(it.key)} />
+                  <ConfirmFix
+                    {...rowFixes(openReasons(it))[0]}
+                    it={it}
+                    mode={mode}
+                    ops={ops}
+                    onDone={() => leaveConfirm(it.key)}
+                    meId={me?.user_id ?? null}
+                    titleOf={titleOf}
+                    ask={askRow(it.key)}
+                  />
                 ) : (
-                  <YourCall it={it} open={openReasons(it)} staged={it.actions.filter((a) => a.state === "staged" && a.kind !== "question")} mode={mode} ops={ops} titleOf={titleOf} meId={me?.user_id ?? null} ask={askRow(it.key)} />
+                  <YourCall
+                    it={it}
+                    open={openReasons(it)}
+                    staged={it.actions.filter((a) => a.state === 'staged' && a.kind !== 'question')}
+                    mode={mode}
+                    ops={ops}
+                    titleOf={titleOf}
+                    meId={me?.user_id ?? null}
+                    ask={askRow(it.key)}
+                  />
                 )}
               </span>
-              {mode !== "viewer" &&
+              {mode !== 'viewer' &&
                 (it.position != null ? (
-                  <RowMenu it={it} open={openReasons(it)} mode={mode} ops={ops} menuOpen={menu === it.key} setMenu={(o) => setMenu(o ? it.key : null)} setForm={setForm} onSelect={() => pick(it)} />
+                  <RowMenu
+                    it={it}
+                    open={openReasons(it)}
+                    mode={mode}
+                    ops={ops}
+                    menuOpen={menu === it.key}
+                    setMenu={(o) => setMenu(o ? it.key : null)}
+                    setForm={setForm}
+                    onSelect={() => pick(it)}
+                  />
                 ) : (
                   <span aria-hidden />
                 ))}
             </span>
-            <Suggestions it={it} mode={mode} ops={ops} titleOf={titleOf} meId={me?.user_id ?? null} />
+            <Suggestions
+              it={it}
+              mode={mode}
+              ops={ops}
+              titleOf={titleOf}
+              meId={me?.user_id ?? null}
+            />
           </div>
         );
       },
@@ -379,7 +571,7 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
       review={review}
       mode={mode}
       ops={ops}
-      form={form?.key === selectedItem.key && form.where === "inspector" ? form : null}
+      form={form?.key === selectedItem.key && form.where === 'inspector' ? form : null}
       setForm={setForm}
       prd={prdRef}
       meId={me?.user_id ?? null}
@@ -392,31 +584,45 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
         back={<RunBackLink run={run} />}
         title="Roadmap items"
         status={
-          <span data-testid="review-status">{cp.status === "pending" ? waitChip(review, mode) : <Chip kind={cp.status === "approved" ? "pass" : "na"}>{decidedText(cp)}</Chip>}</span>
+          <span data-testid="review-status">
+            {cp.status === 'pending' ? (
+              waitChip(review, mode)
+            ) : (
+              <Chip kind={cp.status === 'approved' ? 'pass' : 'na'}>{decidedText(cp)}</Chip>
+            )}
+          </span>
         }
         action={
           <span className="flex flex-wrap gap-2">
             <LinkButton variant="ghost" icon="chevron-left" href={`/runs/${run.id}`}>
               Back to run
             </LinkButton>
-            <Button icon="doc" onClick={() => setRaw("file")}>
+            <Button icon="doc" onClick={() => setRaw('file')}>
               Raw file
             </Button>
-            {(cp.review as { kind?: string } | null)?.kind === "edits" && <Button onClick={() => setRaw("agents")}>Agents&apos; file</Button>}
+            {(cp.review as { kind?: string } | null)?.kind === 'edits' && (
+              <Button onClick={() => setRaw('agents')}>Agents&apos; file</Button>
+            )}
           </span>
         }
       />
-      <p className="-mt-2 mb-3 flex flex-wrap items-center gap-2 text-sm text-text2" data-testid="review-context">
+      <p
+        className="-mt-2 mb-3 flex flex-wrap items-center gap-2 text-sm text-text2"
+        data-testid="review-context"
+      >
         <span>
-          Draft from{" "}
+          Draft from{' '}
           {source ? (
-            <Link href={`/documents/${source.slug}/v/${source.version}`} className="text-accent-ink hover:underline">
+            <Link
+              href={`/documents/${source.slug}/v/${source.version}`}
+              className="text-accent-ink hover:underline"
+            >
               {prd}
             </Link>
           ) : (
             prd
           )}
-          {review.attempt && review.attempt > 1 ? ` · attempt ${review.attempt}` : ""}
+          {review.attempt && review.attempt > 1 ? ` · attempt ${review.attempt}` : ''}
         </span>
         <span data-testid="review-deciders">
           <Chip kind="line">{decidersText(cp.approver_role)}</Chip>
@@ -429,16 +635,22 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
       )}
       <Split inspector={!phone && fileProblems.length === 0 ? inspector : undefined}>
         {fileProblems.length > 0 ? (
-          <div className="rounded-panel border border-crit/40 bg-crit-bg p-4" role="alert" data-testid="file-problems">
+          <div
+            className="rounded-panel border border-crit/40 bg-crit-bg p-4"
+            role="alert"
+            data-testid="file-problems"
+          >
             <p className="font-semibold text-crit">Oracle can&apos;t read this file as items</p>
             <ul className="mt-1 ml-4 list-disc text-sm break-words">
               {fileProblems.map((p) => (
                 <li key={p.code + p.message}>{p.message}</li>
               ))}
             </ul>
-            <p className="mt-2 text-sm text-text2">Send it back: the agents get the problems and write the file again.</p>
+            <p className="mt-2 text-sm text-text2">
+              Send it back: the agents get the problems and write the file again.
+            </p>
             <div className="mt-2">
-              <Button onClick={() => setRaw("file")}>Raw file</Button>
+              <Button onClick={() => setRaw('file')}>Raw file</Button>
             </div>
           </div>
         ) : (
@@ -452,9 +664,17 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
                 value={filter}
                 onChange={setFilter}
                 items={[
-                  { value: "needs", label: "Needs you", count: counts.needYou },
-                  { value: "all", label: "All", count: counts.total },
-                  ...(showChanged ? [{ value: "changed" as const, label: "Changed", count: items.filter(changed).length }] : []),
+                  { value: 'needs', label: 'Needs you', count: counts.needYou },
+                  { value: 'all', label: 'All', count: counts.total },
+                  ...(showChanged
+                    ? [
+                        {
+                          value: 'changed' as const,
+                          label: 'Changed',
+                          count: items.filter(changed).length,
+                        },
+                      ]
+                    : []),
                 ]}
               />
               <span className="text-sm text-text2" data-testid="review-summary">
@@ -462,7 +682,16 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
               </span>
               <span className="ml-auto flex items-center gap-2 text-sm text-text2">
                 Group
-                <SegmentedControl<Group> label="Group" size="sm" value={group} onChange={setGroup} items={[{ value: "horizon", label: "Horizon" }, { value: "reason", label: "Reason" }]} />
+                <SegmentedControl<Group>
+                  label="Group"
+                  size="sm"
+                  value={group}
+                  onChange={setGroup}
+                  items={[
+                    { value: 'horizon', label: 'Horizon' },
+                    { value: 'reason', label: 'Reason' },
+                  ]}
+                />
               </span>
             </div>
             <ItemsTable
@@ -472,16 +701,31 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
               onSelect={(k) => pick(byKey.get(k)!)}
               onActivate={activate}
               // qa-work-32: no file position (the rows are grouped, so it reads out of order); one horizon chip style.
-              hide={["position", "depends_on", "prd", "state"]}
-              widths={{ horizon: "72px", milestone: "112px" }}
+              hide={['position', 'depends_on', 'prd', 'state']}
+              widths={{ horizon: '72px', milestone: '112px' }}
               plainHorizons
               extraColumns={columns}
-              rowDecorations={(r) => ({ "data-state": byKey.get(r.key)?.state })}
+              rowDecorations={(r) => ({ 'data-state': byKey.get(r.key)?.state })}
               groupBy={groupBy}
               groupOrder={groupOrder}
               groupLabel={groupHead}
-              detail={(r) => (form?.key === r.key && form.where === "row" ? <RowForm key={`${form.kind}:${form.text ?? ""}`} it={byKey.get(r.key)!} form={form} mode={mode} ops={ops} onDone={() => setForm(null)} /> : null)}
-              empty={filter === "needs" ? "Nothing needs you. Approve, or look at All." : "No items here."}
+              detail={(r) =>
+                form?.key === r.key && form.where === 'row' ? (
+                  <RowForm
+                    key={`${form.kind}:${form.text ?? ''}`}
+                    it={byKey.get(r.key)!}
+                    form={form}
+                    mode={mode}
+                    ops={ops}
+                    onDone={() => setForm(null)}
+                  />
+                ) : null
+              }
+              empty={
+                filter === 'needs'
+                  ? 'Nothing needs you. Approve, or look at All.'
+                  : 'No items here.'
+              }
             />
           </>
         )}
@@ -497,15 +741,17 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
           console={cp.console ?? null}
           revision={review.revision}
           savedNote={review.note ?? null}
-          canDecide={mode === "approver" && !!review.can_decide}
+          canDecide={mode === 'approver' && !!review.can_decide}
           canNote={!!review.can_stage}
-          approveBlocked={agentOnly ? `${agentOnly.kind === "split" ? "Split" : "Merge"} needs the agents` : null}
+          approveBlocked={
+            agentOnly ? `${agentOnly.kind === 'split' ? 'Split' : 'Merge'} needs the agents` : null
+          }
           sendBackSummary={
             fileProblems.length
-              ? `${plural(fileProblems.length, "problem")} of the file for the agents`
-              : `${plural(entries, "entry", "entries")} · ${plural(unchanged, "unchanged item")} · ${plural(counts.blocking, "blocking item")} left for the agents`
+              ? `${plural(fileProblems.length, 'problem')} of the file for the agents`
+              : `${plural(entries, 'entry', 'entries')} · ${plural(unchanged, 'unchanged item')} · ${plural(counts.blocking, 'blocking item')} left for the agents`
           }
-          decidedBy={cp.status === "pending" && mode !== "approver" ? "An approver decides" : null}
+          decidedBy={cp.status === 'pending' && mode !== 'approver' ? 'An approver decides' : null}
           onReload={reload}
           onDecided={() => {
             invalidateWaiting();
@@ -514,10 +760,20 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
           }}
         />
       </Split>
-      <Sheet open={phone && sheet && !!inspector} title={selectedItem?.title ?? "Item"} onClose={() => setSheet(false)} testId="sheet-item">
+      <Sheet
+        open={phone && sheet && !!inspector}
+        title={selectedItem?.title ?? 'Item'}
+        onClose={() => setSheet(false)}
+        testId="sheet-item"
+      >
         {inspector}
       </Sheet>
-      <RawFileSheet open={raw} onClose={() => setRaw(null)} runId={run.id} seq={review.file?.seq ?? cp.segment_seq ?? 1} />
+      <RawFileSheet
+        open={raw}
+        onClose={() => setRaw(null)}
+        runId={run.id}
+        seq={review.file?.seq ?? cp.segment_seq ?? 1}
+      />
     </Page>
   );
 }
@@ -531,19 +787,29 @@ function ReasonsCell({ it, showDiff }: { it: Item; showDiff: boolean }) {
       <span className="flex min-w-0 flex-wrap gap-1" data-testid="row-reasons">
         {shown.slice(0, 2).map((r, n) => (
           <span key={`${r.code}:${n}`} data-testid="reason-chip" className="max-w-full">
-            <Chip kind={!open.includes(r) ? "na" : r.severity === "blocking" ? "crit" : "warn"} title={datesInWords(r.text)} wrap>
+            <Chip
+              kind={!open.includes(r) ? 'na' : r.severity === 'blocking' ? 'crit' : 'warn'}
+              title={datesInWords(r.text)}
+              wrap
+            >
               {r.label}
             </Chip>
           </span>
         ))}
         {shown.length > 2 && (
-          <Chip kind="line" title={shown.slice(2).map((r) => r.label).join(", ")}>
+          <Chip
+            kind="line"
+            title={shown
+              .slice(2)
+              .map((r) => r.label)
+              .join(', ')}
+          >
             +{shown.length - 2}
           </Chip>
         )}
         {showDiff && it.resolution && (
           <span data-testid="resolution-chip">
-            <Chip kind={it.resolution.outcome === "done" ? "pass" : "warn"} wrap>
+            <Chip kind={it.resolution.outcome === 'done' ? 'pass' : 'warn'} wrap>
               {resolutionText(it.resolution)}
             </Chip>
           </span>
@@ -554,7 +820,8 @@ function ReasonsCell({ it, showDiff }: { it: Item; showDiff: boolean }) {
         <ul className="text-sm text-text2" data-testid="row-diff">
           {it.diff.map((d) => (
             <li key={d.field} className="break-words">
-              {fieldWords(d.field)}: <s>{showValue(d.field, d.from)}</s> → {showValue(d.field, d.to)}
+              {fieldWords(d.field)}: <s>{showValue(d.field, d.from)}</s> →{' '}
+              {showValue(d.field, d.to)}
             </li>
           ))}
         </ul>
@@ -583,27 +850,43 @@ function YourCall({
   meId: string | null;
   ask: (text: string) => void;
 }) {
-  const asked = it.actions.find((a) => a.kind === "question" && a.question);
+  const asked = it.actions.find((a) => a.kind === 'question' && a.question);
   const askedChip = asked?.question && (
     <span data-testid="asked-chip">
-      <Chip kind={asked.question.status === "answered" ? "pass" : "acc"}>{asked.question.status === "answered" ? "Answered" : `Asked ${asked.question.asked_to?.name ?? "a teammate"}`}</Chip>
+      <Chip kind={asked.question.status === 'answered' ? 'pass' : 'acc'}>
+        {asked.question.status === 'answered'
+          ? 'Answered'
+          : `Asked ${asked.question.asked_to?.name ?? 'a teammate'}`}
+      </Chip>
     </span>
   );
-  if (it.state === "handled" && staged.length) {
+  if (it.state === 'handled' && staged.length) {
     const a = staged[0];
-    const mayUndo = mode === "approver" || (a.created_by?.id != null && a.created_by.id === meId);
+    const mayUndo = mode === 'approver' || (a.created_by?.id != null && a.created_by.id === meId);
     // A joined removal goes whole from the row: it says so (each reason card's Undo takes back one).
-    const joined = a.kind === "edit" && a.field === "depends_on" ? removedBy(a) : [];
+    const joined = a.kind === 'edit' && a.field === 'depends_on' ? removedBy(a) : [];
     return (
       <>
-        <span className="flex flex-wrap items-center gap-1 text-sm font-medium text-pass" data-testid="row-done">
+        <span
+          className="flex flex-wrap items-center gap-1 text-sm font-medium text-pass"
+          data-testid="row-done"
+        >
           {/* detailed-b 4: an icon, not the ✓ glyph that drew as an empty box in Chromium. */}
-          <Icon name="check" size={16} /> {joined.length > 1 ? `${joined.length} dependencies removed` : doneText(a, titleOf)}
+          <Icon name="check" size={16} />{' '}
+          {joined.length > 1 ? `${joined.length} dependencies removed` : doneText(a, titleOf)}
           {mayUndo && (
             <>
               <span aria-hidden>·</span>
-              <Button variant="ghost" className="h-8 px-2 text-sm max-[600px]:h-10" onClick={() => void ops.remove(a.id)}>
-                {joined.length > 2 ? `Undo all ${joined.length}` : joined.length === 2 ? "Undo both" : "Undo"}
+              <Button
+                variant="ghost"
+                className="h-8 px-2 text-sm max-[600px]:h-10"
+                onClick={() => void ops.remove(a.id)}
+              >
+                {joined.length > 2
+                  ? `Undo all ${joined.length}`
+                  : joined.length === 2
+                    ? 'Undo both'
+                    : 'Undo'}
               </Button>
             </>
           )}
@@ -612,12 +895,12 @@ function YourCall({
       </>
     );
   }
-  if (askedChip && it.state === "waiting") return askedChip;
-  if (mode === "viewer" || !open.length) {
+  if (askedChip && it.state === 'waiting') return askedChip;
+  if (mode === 'viewer' || !open.length) {
     if (askedChip) return askedChip;
     if (!it.reasons.length) return <span className="text-sm text-text2">—</span>;
     // detailed-b 4: an icon, not the ✓ glyph that drew as an empty box in Chromium.
-    return it.state === "handled" ? (
+    return it.state === 'handled' ? (
       <span className="flex items-center gap-1 text-sm text-text2">
         <Icon name="check" size={16} /> Handled
       </span>
@@ -629,20 +912,35 @@ function YourCall({
     <>
       {askedChip}
       {rowFixes(open).map(({ reason, fix }, i) => (
-        <FixButton key={fix.label} fix={fix} reason={reason} it={it} mode={mode} ops={ops} primary={i === 0} meId={meId} titleOf={titleOf} ask={ask} />
+        <FixButton
+          key={fix.label}
+          fix={fix}
+          reason={reason}
+          it={it}
+          mode={mode}
+          ops={ops}
+          primary={i === 0}
+          meId={meId}
+          titleOf={titleOf}
+          ask={ask}
+        />
       ))}
     </>
   );
 }
 
 /** The dependencies a depends_on edit removes. */
-const removedBy = (a: Pick<Action, "value">) => ((a.value ?? {}) as { remove?: string[] }).remove ?? [];
+const removedBy = (a: Pick<Action, 'value'>) =>
+  ((a.value ?? {}) as { remove?: string[] }).remove ?? [];
 
 /** The fix's dependency removal on its own item, if it is one. */
 const removalOf = (fix: Fix, it: Item) =>
-  fix.action.kind === "edit" && fix.action.field === "depends_on" && fix.action.item === it.key ? (fix.action.value as { remove?: string[] } | null)?.remove : undefined;
+  fix.action.kind === 'edit' && fix.action.field === 'depends_on' && fix.action.item === it.key
+    ? (fix.action.value as { remove?: string[] } | null)?.remove
+    : undefined;
 
-const mineAction = (a: Action, meId: string | null) => a.created_by?.id != null && a.created_by.id === meId;
+const mineAction = (a: Action, meId: string | null) =>
+  a.created_by?.id != null && a.created_by.id === meId;
 
 /**
  * Another person's dependency edit on the item, when a commenter's Remove dependency would meet
@@ -654,8 +952,10 @@ function othersRemoval(fix: Fix, it: Item, mode: Mode, meId: string | null): Act
 
 /** Another person's dependency edit on the item that a commenter may not change (as the panel's × meets it). */
 function othersDepsEdit(it: Item, mode: Mode, meId: string | null): Action | undefined {
-  if (mode !== "commenter") return undefined;
-  return it.actions.find((a) => a.kind === "edit" && a.field === "depends_on" && !mineAction(a, meId));
+  if (mode !== 'commenter') return undefined;
+  return it.actions.find(
+    (a) => a.kind === 'edit' && a.field === 'depends_on' && !mineAction(a, meId),
+  );
 }
 
 /**
@@ -669,14 +969,25 @@ function applyFix(fix: Fix, reason: Reason, ops: Ops, it: Item, mode: Mode, meId
   let value = fix.action.value ?? null;
   let answers = fix.action.item === reason.item ? [reason.code] : [];
   const removing = removalOf(fix, it);
-  const before = it.actions.find((a) => a.kind === "edit" && a.field === "depends_on" && (mode === "approver" || (a.state === "suggested" && mineAction(a, meId))));
+  const before = it.actions.find(
+    (a) =>
+      a.kind === 'edit' &&
+      a.field === 'depends_on' &&
+      (mode === 'approver' || (a.state === 'suggested' && mineAction(a, meId))),
+  );
   if (removing && before) {
     const was = (before.value ?? {}) as { add?: string[]; remove?: string[] };
     value = { add: was.add ?? [], remove: [...new Set([...(was.remove ?? []), ...removing])] };
     // An edit naming no reason answers every reason of its item: it stays so.
     answers = before.answers.length ? [...new Set([...before.answers, ...answers])] : [];
   }
-  return ops.act({ item_key: fix.action.item, kind: fix.action.kind, field: fix.action.field ?? null, value, answers });
+  return ops.act({
+    item_key: fix.action.item,
+    kind: fix.action.kind,
+    field: fix.action.field ?? null,
+    value,
+    answers,
+  });
 }
 
 /**
@@ -687,25 +998,62 @@ function undoReason(a: Action, r: Reason, it: Item, ops: Ops) {
   const dep = (r.data as { dependency?: unknown } | null)?.dependency;
   const was = (a.value ?? {}) as { add?: string[]; remove?: string[] };
   const remove = (was.remove ?? []).filter((k) => k !== dep);
-  if (a.kind !== "edit" || a.field !== "depends_on" || remove.length === (was.remove ?? []).length || (!remove.length && !was.add?.length)) return ops.remove(a.id);
+  if (
+    a.kind !== 'edit' ||
+    a.field !== 'depends_on' ||
+    remove.length === (was.remove ?? []).length ||
+    (!remove.length && !was.add?.length)
+  )
+    return ops.remove(a.id);
   const value = { add: was.add ?? [], remove };
-  const next = { ...a, value, state: "staged" as const };
-  const kept = [...new Set(it.reasons.filter((x) => x !== r && answersReason(next, x)).map((x) => x.code))];
+  const next = { ...a, value, state: 'staged' as const };
+  const kept = [
+    ...new Set(it.reasons.filter((x) => x !== r && answersReason(next, x)).map((x) => x.code)),
+  ];
   // Naming none would answer every reason, this one too: naming its code, the edit is not its fix.
   // keep_origin: the narrowed edit stays where it came from (a discussion's change stays staged).
-  return ops.act({ item_key: a.item_key, kind: "edit", field: "depends_on", value, answers: kept.length ? kept : [r.code], keep_origin: true });
+  return ops.act({
+    item_key: a.item_key,
+    kind: 'edit',
+    field: 'depends_on',
+    value,
+    answers: kept.length ? kept : [r.code],
+    keep_origin: true,
+  });
 }
 
-type FixProps = { fix: Fix; reason: Reason; it: Item; mode: Mode; ops: Ops; meId: string | null; titleOf: (k: string) => string; ask: (text: string) => void };
+type FixProps = {
+  fix: Fix;
+  reason: Reason;
+  it: Item;
+  mode: Mode;
+  ops: Ops;
+  meId: string | null;
+  titleOf: (k: string) => string;
+  ask: (text: string) => void;
+};
 
-export function FixButton({ fix, reason, it, mode, ops, primary, meId, titleOf, ask }: FixProps & { primary?: boolean }) {
+export function FixButton({
+  fix,
+  reason,
+  it,
+  mode,
+  ops,
+  primary,
+  meId,
+  titleOf,
+  ask,
+}: FixProps & { primary?: boolean }) {
   const theirs = othersRemoval(fix, it, mode, meId);
-  if (theirs) return <TheirRemoval deps={removalOf(fix, it) ?? []} theirs={theirs} titleOf={titleOf} ask={ask} />;
+  if (theirs)
+    return (
+      <TheirRemoval deps={removalOf(fix, it) ?? []} theirs={theirs} titleOf={titleOf} ask={ask} />
+    );
   return (
     <Button
-      variant={primary ? "primary" : "secondary"}
+      variant={primary ? 'primary' : 'secondary'}
       className="h-8 px-2.5 text-sm max-[600px]:h-10"
-      title={mode === "commenter" ? "Suggest: an approver stages it" : undefined}
+      title={mode === 'commenter' ? 'Suggest: an approver stages it' : undefined}
       onClick={() => void applyFix(fix, reason, ops, it, mode, meId)}
     >
       {fix.label}
@@ -717,15 +1065,34 @@ export function FixButton({ fix, reason, it, mode, ops, primary, meId, titleOf, 
  * A commenter's Remove dependency where another person's dependency change already holds the
  * item: whose it is, and theirs sent as a separate suggestion (Ask a teammate, filled in).
  */
-function TheirRemoval({ deps: keys, theirs, titleOf, ask, className = "" }: { deps: string[]; theirs: Action; titleOf: (k: string) => string; ask: (text: string) => void; className?: string }) {
-  const who = theirs.created_by?.name ?? "Someone";
-  const deps = keys.map(titleOf).join(", ");
+function TheirRemoval({
+  deps: keys,
+  theirs,
+  titleOf,
+  ask,
+  className = '',
+}: {
+  deps: string[];
+  theirs: Action;
+  titleOf: (k: string) => string;
+  ask: (text: string) => void;
+  className?: string;
+}) {
+  const who = theirs.created_by?.name ?? 'Someone';
+  const deps = keys.map(titleOf).join(', ');
   return (
-    <span className={`flex flex-wrap items-center justify-end gap-1 text-sm text-text2 ${className}`} data-testid="their-removal">
+    <span
+      className={`flex flex-wrap items-center justify-end gap-1 text-sm text-text2 ${className}`}
+      data-testid="their-removal"
+    >
       <span>
-        {who} {theirs.state === "staged" ? "staged" : "suggested"} this item&apos;s dependency change
+        {who} {theirs.state === 'staged' ? 'staged' : 'suggested'} this item&apos;s dependency
+        change
       </span>
-      <Button className="h-8 px-2.5 text-sm max-[600px]:h-10" onClick={() => ask(`Please also remove the dependency on ${deps}.`)}>
+      <Button
+        className="h-8 px-2.5 text-sm max-[600px]:h-10"
+        onClick={() => ask(`Please also remove the dependency on ${deps}.`)}
+      >
         Suggest yours separately…
       </Button>
     </span>
@@ -736,16 +1103,26 @@ function TheirRemoval({ deps: keys, theirs, titleOf, ask, className = "" }: { de
  * Enter on a row (criterion 16): the row's first fix as "Confirm: {fix}", focused, so Enter
  * again applies it; Cancel or Escape goes back to the row with nothing staged.
  */
-function ConfirmFix({ fix, reason, it, mode, ops, onDone, meId, titleOf, ask }: FixProps & { onDone: () => void }) {
+function ConfirmFix({
+  fix,
+  reason,
+  it,
+  mode,
+  ops,
+  onDone,
+  meId,
+  titleOf,
+  ask,
+}: FixProps & { onDone: () => void }) {
   const ref = useRef<HTMLSpanElement>(null);
   const theirs = othersRemoval(fix, it, mode, meId);
-  useEffect(() => ref.current?.querySelector("button")?.focus(), []);
+  useEffect(() => ref.current?.querySelector('button')?.focus(), []);
   return (
     <span
       ref={ref}
       className="flex flex-wrap items-center justify-end gap-1"
       onKeyDown={(e) => {
-        if (e.key !== "Escape") return;
+        if (e.key !== 'Escape') return;
         e.stopPropagation();
         onDone();
       }}
@@ -753,7 +1130,11 @@ function ConfirmFix({ fix, reason, it, mode, ops, onDone, meId, titleOf, ask }: 
       {theirs ? (
         <TheirRemoval deps={removalOf(fix, it) ?? []} theirs={theirs} titleOf={titleOf} ask={ask} />
       ) : (
-        <Button variant="primary" className="h-8 px-2.5 text-sm max-[600px]:h-10" onClick={() => void applyFix(fix, reason, ops, it, mode, meId).then(onDone)}>
+        <Button
+          variant="primary"
+          className="h-8 px-2.5 text-sm max-[600px]:h-10"
+          onClick={() => void applyFix(fix, reason, ops, it, mode, meId).then(onDone)}
+        >
           Confirm: {fix.label}
         </Button>
       )}
@@ -765,30 +1146,59 @@ function ConfirmFix({ fix, reason, it, mode, ops, onDone, meId, titleOf, ask }: 
 }
 
 /** Commenters' suggestions on the row: Stage and Dismiss for approvers; Undo for their author. */
-function Suggestions({ it, mode, ops, titleOf, meId }: { it: Item; mode: Mode; ops: Ops; titleOf: (k: string) => string; meId: string | null }) {
-  const list = it.actions.filter((a) => a.state === "suggested");
+function Suggestions({
+  it,
+  mode,
+  ops,
+  titleOf,
+  meId,
+}: {
+  it: Item;
+  mode: Mode;
+  ops: Ops;
+  titleOf: (k: string) => string;
+  meId: string | null;
+}) {
+  const list = it.actions.filter((a) => a.state === 'suggested');
   if (!list.length) return null;
   return (
     <>
       {list.map((a) => {
         const mine = a.created_by?.id != null && a.created_by.id === meId;
         return (
-          <p key={a.id} className="flex flex-wrap items-center justify-end gap-2 text-sm text-text2 max-[600px]:justify-start" data-testid="suggested-by">
+          <p
+            key={a.id}
+            className="flex flex-wrap items-center justify-end gap-2 text-sm text-text2 max-[600px]:justify-start"
+            data-testid="suggested-by"
+          >
             <span>
-              Suggested by {mine ? "you" : (a.created_by?.name ?? "someone")}: {describe(a, it, titleOf)}
+              Suggested by {mine ? 'you' : (a.created_by?.name ?? 'someone')}:{' '}
+              {describe(a, it, titleOf)}
             </span>
-            {mode === "approver" && (
+            {mode === 'approver' && (
               <>
-                <Button className="h-8 px-2.5 text-sm" variant="primary" onClick={() => void ops.stage(a.id)}>
+                <Button
+                  className="h-8 px-2.5 text-sm"
+                  variant="primary"
+                  onClick={() => void ops.stage(a.id)}
+                >
                   Stage
                 </Button>
-                <Button className="h-8 px-2.5 text-sm" variant="ghost" onClick={() => void ops.remove(a.id)}>
+                <Button
+                  className="h-8 px-2.5 text-sm"
+                  variant="ghost"
+                  onClick={() => void ops.remove(a.id)}
+                >
                   Dismiss
                 </Button>
               </>
             )}
-            {mode !== "approver" && mine && (
-              <Button className="h-8 px-2.5 text-sm" variant="ghost" onClick={() => void ops.remove(a.id)}>
+            {mode !== 'approver' && mine && (
+              <Button
+                className="h-8 px-2.5 text-sm"
+                variant="ghost"
+                onClick={() => void ops.remove(a.id)}
+              >
                 Undo
               </Button>
             )}
@@ -823,37 +1233,56 @@ function RowMenu({
   useEffect(() => {
     if (!menuOpen) return;
     const away = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setMenu(false);
-    const esc = (e: globalThis.KeyboardEvent) => e.key === "Escape" && setMenu(false);
-    document.addEventListener("mousedown", away);
-    document.addEventListener("keydown", esc);
-    ref.current?.querySelector<HTMLElement>("[role=menuitem]")?.focus();
+    const esc = (e: globalThis.KeyboardEvent) => e.key === 'Escape' && setMenu(false);
+    document.addEventListener('mousedown', away);
+    document.addEventListener('keydown', esc);
+    ref.current?.querySelector<HTMLElement>('[role=menuitem]')?.focus();
     return () => {
-      document.removeEventListener("mousedown", away);
-      document.removeEventListener("keydown", esc);
+      document.removeEventListener('mousedown', away);
+      document.removeEventListener('keydown', esc);
     };
   }, [menuOpen, setMenu]);
   const { can } = useMe();
-  const waive = open.find((r) => mayWaive(r, can("waive_strategy_finding")));
+  const waive = open.find((r) => mayWaive(r, can('waive_strategy_finding')));
   const answers = open.map((r) => r.code);
   const entries: { label: string; run: () => void }[] = [
     ...HORIZONS.filter((h) => h !== it.horizon).map((h) => ({
       label: `Move to ${horizonLabel(h)}`,
-      run: () => void ops.act({ item_key: it.key, kind: "edit", field: "horizon", value: h, answers: [] }),
+      run: () =>
+        void ops.act({ item_key: it.key, kind: 'edit', field: 'horizon', value: h, answers: [] }),
     })),
-    ...(it.depends_on.length ? [{ label: "Remove dependency…", run: onSelect }] : []),
-    { label: "Edit outcome", run: onSelect },
-    { label: "Split…", run: () => setForm({ key: it.key, kind: "split", where: "row" }) },
-    { label: "Ask a teammate…", run: () => setForm({ key: it.key, kind: "ask", where: "row" }) },
-    { label: "Drop", run: () => void ops.act({ item_key: it.key, kind: "drop", answers }) },
-    ...(mode === "approver" && waive ? [{ label: "Waive…", run: () => setForm({ key: it.key, kind: "waive", code: waive.code, where: "row" }) }] : []),
+    ...(it.depends_on.length ? [{ label: 'Remove dependency…', run: onSelect }] : []),
+    { label: 'Edit outcome', run: onSelect },
+    { label: 'Split…', run: () => setForm({ key: it.key, kind: 'split', where: 'row' }) },
+    { label: 'Ask a teammate…', run: () => setForm({ key: it.key, kind: 'ask', where: 'row' }) },
+    { label: 'Drop', run: () => void ops.act({ item_key: it.key, kind: 'drop', answers }) },
+    ...(mode === 'approver' && waive
+      ? [
+          {
+            label: 'Waive…',
+            run: () => setForm({ key: it.key, kind: 'waive', code: waive.code, where: 'row' }),
+          },
+        ]
+      : []),
   ];
   return (
     <div ref={ref} className="relative">
-      <Button variant="ghost" className="h-8 w-8 justify-center px-0 max-[600px]:h-10 max-[600px]:w-10" aria-label={`More actions for ${it.title ?? it.key}`} aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenu(!menuOpen)}>
+      <Button
+        variant="ghost"
+        className="h-8 w-8 justify-center px-0 max-[600px]:h-10 max-[600px]:w-10"
+        aria-label={`More actions for ${it.title ?? it.key}`}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        onClick={() => setMenu(!menuOpen)}
+      >
         ⋯
       </Button>
       {menuOpen && (
-        <div role="menu" aria-label={`Actions for ${it.title ?? it.key}`} className="absolute right-0 z-30 mt-1 flex w-56 flex-col rounded-button border border-line bg-surface py-1 shadow-panel">
+        <div
+          role="menu"
+          aria-label={`Actions for ${it.title ?? it.key}`}
+          className="absolute right-0 z-30 mt-1 flex w-56 flex-col rounded-button border border-line bg-surface py-1 shadow-panel"
+        >
           {entries.map((e) => (
             <button
               key={e.label}
@@ -875,31 +1304,72 @@ function RowMenu({
 }
 
 /** Waive…, Split… and Ask a teammate…: a small form under the row (or in the inspector). */
-export function RowForm({ it, form, mode, ops, onDone }: { it: Item; form: NonNullable<Form>; mode: Mode; ops: Ops; onDone: () => void }) {
-  const [text, setText] = useState(form.text ?? "");
-  const [who, setWho] = useState("");
-  const people = useQuery(form.kind === "ask" ? "people|writers" : "people|none", () =>
-    form.kind === "ask" ? unwrap(api.GET("/v1/people", { params: { query: { limit: 100 } } })) : Promise.resolve([] as Schemas["PersonOut"][]),
+export function RowForm({
+  it,
+  form,
+  mode,
+  ops,
+  onDone,
+}: {
+  it: Item;
+  form: NonNullable<Form>;
+  mode: Mode;
+  ops: Ops;
+  onDone: () => void;
+}) {
+  const [text, setText] = useState(form.text ?? '');
+  const [who, setWho] = useState('');
+  const people = useQuery(form.kind === 'ask' ? 'people|writers' : 'people|none', () =>
+    form.kind === 'ask'
+      ? unwrap(api.GET('/v1/people', { params: { query: { limit: 100 } } }))
+      : Promise.resolve([] as Schemas['PersonOut'][]),
   );
   const submit = async () => {
-    if (form.kind === "waive") await ops.act({ item_key: it.key, kind: "waive", value: { reason: text.trim() }, answers: form.code ? [form.code] : [] });
-    if (form.kind === "split")
+    if (form.kind === 'waive')
       await ops.act({
         item_key: it.key,
-        kind: "split",
-        value: { into: text.split("\n").map((x) => x.trim()).filter(Boolean) },
+        kind: 'waive',
+        value: { reason: text.trim() },
+        answers: form.code ? [form.code] : [],
+      });
+    if (form.kind === 'split')
+      await ops.act({
+        item_key: it.key,
+        kind: 'split',
+        value: {
+          into: text
+            .split('\n')
+            .map((x) => x.trim())
+            .filter(Boolean),
+        },
         answers: [],
       });
-    if (form.kind === "ask") await ops.act({ item_key: it.key, kind: "question", value: { asked_to: who, text: text.trim() }, answers: [] });
+    if (form.kind === 'ask')
+      await ops.act({
+        item_key: it.key,
+        kind: 'question',
+        value: { asked_to: who, text: text.trim() },
+        answers: [],
+      });
     onDone();
   };
-  const ok = form.kind === "ask" ? !!who && !!text.trim() : form.kind === "split" ? text.split("\n").filter((x) => x.trim()).length >= 2 : !!text.trim();
+  const ok =
+    form.kind === 'ask'
+      ? !!who && !!text.trim()
+      : form.kind === 'split'
+        ? text.split('\n').filter((x) => x.trim()).length >= 2
+        : !!text.trim();
   return (
     <div className="flex flex-col gap-2" data-testid={`form-${form.kind}`}>
-      {form.kind === "ask" && (
+      {form.kind === 'ask' && (
         <label className="text-sm">
           <span className="mr-2">Ask</span>
-          <select aria-label="Ask" value={who} onChange={(e) => setWho(e.target.value)} className={`${INPUT} max-w-xs`}>
+          <select
+            aria-label="Ask"
+            value={who}
+            onChange={(e) => setWho(e.target.value)}
+            className={`${INPUT} max-w-xs`}
+          >
             <option value="">Pick a member</option>
             {(people.data ?? [])
               .filter((p) => p.can_write)
@@ -912,8 +1382,16 @@ export function RowForm({ it, form, mode, ops, onDone }: { it: Item; form: NonNu
         </label>
       )}
       <textarea
-        aria-label={form.kind === "waive" ? "Why waive it" : form.kind === "split" ? "Split into" : "Question"}
-        placeholder={form.kind === "waive" ? "Why waive it" : form.kind === "split" ? "One new item per line" : "Your question (500 characters)"}
+        aria-label={
+          form.kind === 'waive' ? 'Why waive it' : form.kind === 'split' ? 'Split into' : 'Question'
+        }
+        placeholder={
+          form.kind === 'waive'
+            ? 'Why waive it'
+            : form.kind === 'split'
+              ? 'One new item per line'
+              : 'Your question (500 characters)'
+        }
         value={text}
         maxLength={500}
         rows={2}
@@ -921,8 +1399,17 @@ export function RowForm({ it, form, mode, ops, onDone }: { it: Item; form: NonNu
         className={INPUT}
       />
       <span className="flex gap-2">
-        <Button variant="solid" disabled={!ok} title={mode === "commenter" && form.kind !== "ask" ? "Suggest: an approver stages it" : undefined} onClick={() => void submit()}>
-          {form.kind === "waive" ? "Waive" : form.kind === "split" ? "Stage split" : "Ask"}
+        <Button
+          variant="solid"
+          disabled={!ok}
+          title={
+            mode === 'commenter' && form.kind !== 'ask'
+              ? 'Suggest: an approver stages it'
+              : undefined
+          }
+          onClick={() => void submit()}
+        >
+          {form.kind === 'waive' ? 'Waive' : form.kind === 'split' ? 'Stage split' : 'Ask'}
         </Button>
         <Button onClick={onDone}>Cancel</Button>
       </span>
@@ -968,17 +1455,29 @@ function ReviewInspector({
   const otherTitles: Record<string, string> = {};
   for (const r of item.reasons) {
     const d = r.data as { dependency?: unknown; dependency_title?: unknown };
-    if (typeof d.dependency === "string" && typeof d.dependency_title === "string") otherTitles[d.dependency] = d.dependency_title;
+    if (typeof d.dependency === 'string' && typeof d.dependency_title === 'string')
+      otherTitles[d.dependency] = d.dependency_title;
   }
-  const titleOf = (key: string) => items.find((x) => x.key === key)?.title ?? otherTitles[key] ?? key;
+  const titleOf = (key: string) =>
+    items.find((x) => x.key === key)?.title ?? otherTitles[key] ?? key;
   const open = openReasons(item);
-  const edit = mode !== "viewer" && item.position != null;
-  const staged = (field: string) => item.actions.find((a) => a.kind === "edit" && a.field === field && (a.state === "staged" || a.created_by?.id === meId));
-  const horizon = (staged("horizon")?.value as string | undefined) ?? item.horizon ?? "now";
-  const outcome = (staged("outcome")?.value as string | undefined) ?? item.outcome ?? "";
-  const removedDeps = ((staged("depends_on")?.value as { remove?: string[] } | undefined)?.remove ?? []) as string[];
+  const edit = mode !== 'viewer' && item.position != null;
+  const staged = (field: string) =>
+    item.actions.find(
+      (a) =>
+        a.kind === 'edit' &&
+        a.field === field &&
+        (a.state === 'staged' || a.created_by?.id === meId),
+    );
+  const horizon = (staged('horizon')?.value as string | undefined) ?? item.horizon ?? 'now';
+  const outcome = (staged('outcome')?.value as string | undefined) ?? item.outcome ?? '';
+  const removedDeps = ((staged('depends_on')?.value as { remove?: string[] } | undefined)?.remove ??
+    []) as string[];
   // An approver's × joins the item's dependency edit, a commenter's suggestion too (as Remove dependency does).
-  const depsEdit = mode === "approver" ? item.actions.find((a) => a.kind === "edit" && a.field === "depends_on") : staged("depends_on");
+  const depsEdit =
+    mode === 'approver'
+      ? item.actions.find((a) => a.kind === 'edit' && a.field === 'depends_on')
+      : staged('depends_on');
   const joinDeps = depsEdit ? removedBy(depsEdit) : [];
   // The joined edit keeps what it adds, as Remove dependency's does.
   const joinAdds = ((depsEdit?.value ?? {}) as { add?: string[] }).add ?? [];
@@ -995,19 +1494,35 @@ function ReviewInspector({
               const isOpen = open.includes(r);
               const by = item.actions.find((a) => answersReason(a, r));
               // A commenter's own suggestion that would answer it, with its own Undo.
-              const mine = !by && mode !== "approver" ? item.actions.find((a) => a.state === "suggested" && a.created_by?.id === meId && answersReason({ ...a, state: "staged" }, r)) : undefined;
+              const mine =
+                !by && mode !== 'approver'
+                  ? item.actions.find(
+                      (a) =>
+                        a.state === 'suggested' &&
+                        a.created_by?.id === meId &&
+                        answersReason({ ...a, state: 'staged' }, r),
+                    )
+                  : undefined;
               return (
-                <li key={`${r.code}:${n}`} className="rounded-button border border-line p-2.5" data-testid="reason-card">
-                  <Chip kind={!isOpen ? "na" : r.severity === "blocking" ? "crit" : "warn"} wrap>
-                    {r.severity === "blocking" ? "Blocking" : "To confirm"} · {r.label}
+                <li
+                  key={`${r.code}:${n}`}
+                  className="rounded-button border border-line p-2.5"
+                  data-testid="reason-card"
+                >
+                  <Chip kind={!isOpen ? 'na' : r.severity === 'blocking' ? 'crit' : 'warn'} wrap>
+                    {r.severity === 'blocking' ? 'Blocking' : 'To confirm'} · {r.label}
                   </Chip>
                   <p className="mt-1.5 text-sm break-words">{datesInWords(r.text)}</p>
                   {!isOpen && by ? (
                     <p className="mt-1.5 flex items-center gap-2 text-sm font-medium text-pass">
                       {/* detailed-b 4: an icon, not the ✓ glyph that drew as an empty box in Chromium. */}
                       <Icon name="check" size={16} /> {doneText(by, titleOf)}
-                      {(mode === "approver" || by.created_by?.id === meId) && (
-                        <Button variant="ghost" className="h-8 px-2 text-sm" onClick={() => void undoReason(by, r, item, ops)}>
+                      {(mode === 'approver' || by.created_by?.id === meId) && (
+                        <Button
+                          variant="ghost"
+                          className="h-8 px-2 text-sm"
+                          onClick={() => void undoReason(by, r, item, ops)}
+                        >
                           Undo
                         </Button>
                       )}
@@ -1015,20 +1530,47 @@ function ReviewInspector({
                   ) : mine ? (
                     <p className="mt-1.5 flex items-center gap-2 text-sm text-text2">
                       Suggested: {doneText(mine, titleOf)}
-                      <Button variant="ghost" className="h-8 px-2 text-sm" onClick={() => void undoReason(mine, r, item, ops)}>
+                      <Button
+                        variant="ghost"
+                        className="h-8 px-2 text-sm"
+                        onClick={() => void undoReason(mine, r, item, ops)}
+                      >
                         Undo
                       </Button>
                     </p>
                   ) : (
-                    mode !== "viewer" && (
+                    mode !== 'viewer' && (
                       <p className="mt-1.5 flex flex-wrap gap-1.5">
                         {r.fixes
-                          .filter((f) => f.action.kind !== "waive")
+                          .filter((f) => f.action.kind !== 'waive')
                           .map((f, i) => (
-                            <FixButton key={f.label} fix={f} reason={r} it={item} mode={mode} ops={ops} primary={i === 0} meId={meId} titleOf={titleOf} ask={(text) => setForm({ key: item.key, kind: "ask", where: "inspector", text })} />
+                            <FixButton
+                              key={f.label}
+                              fix={f}
+                              reason={r}
+                              it={item}
+                              mode={mode}
+                              ops={ops}
+                              primary={i === 0}
+                              meId={meId}
+                              titleOf={titleOf}
+                              ask={(text) =>
+                                setForm({ key: item.key, kind: 'ask', where: 'inspector', text })
+                              }
+                            />
                           ))}
-                        {mode === "approver" && mayWaive(r, can("waive_strategy_finding")) && (
-                          <Button className="h-8 px-2.5 text-sm" onClick={() => setForm({ key: item.key, kind: "waive", code: r.code, where: "inspector" })}>
+                        {mode === 'approver' && mayWaive(r, can('waive_strategy_finding')) && (
+                          <Button
+                            className="h-8 px-2.5 text-sm"
+                            onClick={() =>
+                              setForm({
+                                key: item.key,
+                                kind: 'waive',
+                                code: r.code,
+                                where: 'inspector',
+                              })
+                            }
+                          >
                             Waive…
                           </Button>
                         )}
@@ -1043,7 +1585,14 @@ function ReviewInspector({
       )}
       {form && (
         <InspectorSection>
-          <RowForm key={`${form.kind}:${form.text ?? ""}`} it={item} form={form} mode={mode} ops={ops} onDone={() => setForm(null)} />
+          <RowForm
+            key={`${form.kind}:${form.text ?? ''}`}
+            it={item}
+            form={form}
+            mode={mode}
+            ops={ops}
+            onDone={() => setForm(null)}
+          />
         </InspectorSection>
       )}
     </>
@@ -1054,7 +1603,7 @@ function ReviewInspector({
       row={row}
       total={count}
       rows={rows}
-      eyebrow={item.position == null ? "Not in this file · selected" : undefined}
+      eyebrow={item.position == null ? 'Not in this file · selected' : undefined}
       reasons={reasons}
       horizonControl={
         edit ? (
@@ -1062,7 +1611,15 @@ function ReviewInspector({
             label="Horizon"
             size="sm"
             value={horizon}
-            onChange={(h) => void act({ item_key: item.key, kind: "edit", field: "horizon", value: h, answers: [] })}
+            onChange={(h) =>
+              void act({
+                item_key: item.key,
+                kind: 'edit',
+                field: 'horizon',
+                value: h,
+                answers: [],
+              })
+            }
             items={HORIZONS.map((h) => ({ value: h, label: horizonLabel(h) }))}
           />
         ) : (
@@ -1075,15 +1632,26 @@ function ReviewInspector({
             value={outcome}
             onCancel={() => setEditing(false)}
             onSave={async (v) => {
-              await act({ item_key: item.key, kind: "edit", field: "outcome", value: v, answers: [] });
+              await act({
+                item_key: item.key,
+                kind: 'edit',
+                field: 'outcome',
+                value: v,
+                answers: [],
+              });
               setEditing(false);
             }}
           />
         ) : (
           <p className="flex flex-wrap items-start gap-2 text-[15px] break-words">
-            <span className="min-w-0 flex-1">{outcome || "—"}</span>
+            <span className="min-w-0 flex-1">{outcome || '—'}</span>
             {edit && (
-              <Button variant="ghost" className="h-7 px-2 text-sm" aria-label="Edit outcome" onClick={() => setEditing(true)}>
+              <Button
+                variant="ghost"
+                className="h-7 px-2 text-sm"
+                aria-label="Edit outcome"
+                onClick={() => setEditing(true)}
+              >
                 Edit
               </Button>
             )}
@@ -1092,7 +1660,18 @@ function ReviewInspector({
       }
       milestoneAction={
         edit && item.milestone?.date && !dateRemoved(item) ? (
-          <Button className="h-8 px-2.5 text-sm" onClick={() => void act({ item_key: item.key, kind: "edit", field: "milestone_date", value: null, answers: [] })}>
+          <Button
+            className="h-8 px-2.5 text-sm"
+            onClick={() =>
+              void act({
+                item_key: item.key,
+                kind: 'edit',
+                field: 'milestone_date',
+                value: null,
+                answers: [],
+              })
+            }
+          >
             Remove date
           </Button>
         ) : null
@@ -1103,14 +1682,28 @@ function ReviewInspector({
         edit
           ? (d) =>
               theirDeps && heldDep === d ? (
-                <TheirRemoval deps={[d]} theirs={theirDeps} titleOf={titleOf} ask={(text) => setForm({ key: item.key, kind: "ask", where: "inspector", text })} className="basis-full" />
+                <TheirRemoval
+                  deps={[d]}
+                  theirs={theirDeps}
+                  titleOf={titleOf}
+                  ask={(text) => setForm({ key: item.key, kind: 'ask', where: 'inspector', text })}
+                  className="basis-full"
+                />
               ) : (
                 <Button
                   variant="ghost"
                   className="h-7 w-7 justify-center px-0"
                   aria-label={`Remove dependency ${titleOf(d)}`}
                   onClick={() =>
-                    theirDeps ? setHeldDep(d) : void act({ item_key: item.key, kind: "edit", field: "depends_on", value: { add: joinAdds, remove: [...new Set([...joinDeps, d])] }, answers: [] })
+                    theirDeps
+                      ? setHeldDep(d)
+                      : void act({
+                          item_key: item.key,
+                          kind: 'edit',
+                          field: 'depends_on',
+                          value: { add: joinAdds, remove: [...new Set([...joinDeps, d])] },
+                          answers: [],
+                        })
                   }
                 >
                   ×
@@ -1118,19 +1711,43 @@ function ReviewInspector({
               )
           : undefined
       }
-      priority={item.rank != null ? { rank: item.rank, explanation: `Ranked ${item.rank} in the priority order this run read.` } : undefined}
-      tabs={[{ value: "history", label: "History", content: <History item={item} review={review} titleOf={titleOf} /> }]}
+      priority={
+        item.rank != null
+          ? {
+              rank: item.rank,
+              explanation: `Ranked ${item.rank} in the priority order this run read.`,
+            }
+          : undefined
+      }
+      tabs={[
+        {
+          value: 'history',
+          label: 'History',
+          content: <History item={item} review={review} titleOf={titleOf} />,
+        },
+      ]}
     >
       {edit && (
         <InspectorSection>
           <footer className="flex flex-wrap gap-2">
-            <Button className="h-8 px-2.5 text-sm" onClick={() => setForm({ key: item.key, kind: "ask", where: "inspector" })}>
+            <Button
+              className="h-8 px-2.5 text-sm"
+              onClick={() => setForm({ key: item.key, kind: 'ask', where: 'inspector' })}
+            >
               Ask a teammate…
             </Button>
-            <Button className="h-8 px-2.5 text-sm" onClick={() => setForm({ key: item.key, kind: "split", where: "inspector" })}>
+            <Button
+              className="h-8 px-2.5 text-sm"
+              onClick={() => setForm({ key: item.key, kind: 'split', where: 'inspector' })}
+            >
               Split…
             </Button>
-            <Button className="h-8 px-2.5 text-sm" onClick={() => void act({ item_key: item.key, kind: "drop", answers: open.map((r) => r.code) })}>
+            <Button
+              className="h-8 px-2.5 text-sm"
+              onClick={() =>
+                void act({ item_key: item.key, kind: 'drop', answers: open.map((r) => r.code) })
+              }
+            >
               Drop
             </Button>
           </footer>
@@ -1140,13 +1757,32 @@ function ReviewInspector({
   );
 }
 
-function OutcomeEdit({ value, onSave, onCancel }: { value: string; onSave: (v: string) => Promise<void>; onCancel: () => void }) {
+function OutcomeEdit({
+  value,
+  onSave,
+  onCancel,
+}: {
+  value: string;
+  onSave: (v: string) => Promise<void>;
+  onCancel: () => void;
+}) {
   const [text, setText] = useState(value);
   return (
     <div className="flex flex-col gap-2">
-      <textarea aria-label="Outcome" value={text} maxLength={OUTCOME_MAX} rows={3} onChange={(e) => setText(e.target.value)} className={INPUT} />
+      <textarea
+        aria-label="Outcome"
+        value={text}
+        maxLength={OUTCOME_MAX}
+        rows={3}
+        onChange={(e) => setText(e.target.value)}
+        className={INPUT}
+      />
       <span className="flex gap-2">
-        <Button variant="solid" disabled={!text.trim() || text === value} onClick={() => void onSave(text.trim())}>
+        <Button
+          variant="solid"
+          disabled={!text.trim() || text === value}
+          onClick={() => void onSave(text.trim())}
+        >
           Save
         </Button>
         <Button onClick={onCancel}>Cancel</Button>
@@ -1156,16 +1792,28 @@ function OutcomeEdit({ value, onSave, onCancel }: { value: string; onSave: (v: s
 }
 
 /** This attempt's changes to the item and its answer to the review (D6), and the draft's actions on it (D8). */
-function History({ item, review, titleOf }: { item: Item; review: Review; titleOf: (k: string) => string }) {
+function History({
+  item,
+  review,
+  titleOf,
+}: {
+  item: Item;
+  review: Review;
+  titleOf: (k: string) => string;
+}) {
   const empty = !item.diff.length && !item.resolution && !item.actions.length;
   return (
     <InspectorSection testId="item-history">
       <div className="flex flex-col gap-3 text-sm">
-        {empty && <p className="text-text2">Nothing changed on this item in attempt {review.attempt ?? 1}.</p>}
+        {empty && (
+          <p className="text-text2">
+            Nothing changed on this item in attempt {review.attempt ?? 1}.
+          </p>
+        )}
         {item.resolution && (
           <p>
-            The agents&apos; answer to the review:{" "}
-            <Chip kind={item.resolution.outcome === "done" ? "pass" : "warn"} wrap>
+            The agents&apos; answer to the review:{' '}
+            <Chip kind={item.resolution.outcome === 'done' ? 'pass' : 'warn'} wrap>
               {resolutionText(item.resolution)}
             </Chip>
           </p>
@@ -1174,7 +1822,8 @@ function History({ item, review, titleOf }: { item: Item; review: Review; titleO
           <ul className="flex flex-col gap-1">
             {item.diff.map((d) => (
               <li key={d.field} className="break-words">
-                {fieldWords(d.field)}: <s>{showValue(d.field, d.from)}</s> → {showValue(d.field, d.to)}
+                {fieldWords(d.field)}: <s>{showValue(d.field, d.from)}</s> →{' '}
+                {showValue(d.field, d.to)}
               </li>
             ))}
           </ul>
@@ -1183,8 +1832,13 @@ function History({ item, review, titleOf }: { item: Item; review: Review; titleO
           <ul className="flex flex-col gap-1">
             {item.actions.map((a) => (
               <li key={a.id}>
-                {a.created_by?.name ?? "Someone"} {a.state === "staged" ? "staged" : "suggested"}: {a.kind === "question" ? `asked ${a.question?.asked_to?.name ?? "a teammate"}` : doneText(a, titleOf)}
-                {a.question?.answer?.body && <span className="block text-text2">Answer: {a.question.answer.body}</span>}
+                {a.created_by?.name ?? 'Someone'} {a.state === 'staged' ? 'staged' : 'suggested'}:{' '}
+                {a.kind === 'question'
+                  ? `asked ${a.question?.asked_to?.name ?? 'a teammate'}`
+                  : doneText(a, titleOf)}
+                {a.question?.answer?.body && (
+                  <span className="block text-text2">Answer: {a.question.answer.body}</span>
+                )}
               </li>
             ))}
           </ul>

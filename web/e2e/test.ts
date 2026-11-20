@@ -1,13 +1,13 @@
-import { test as base } from "@playwright/test";
+import { test as base } from '@playwright/test';
 
-import { MOCK_NOW } from "../lib/api/mock/clock";
-import { ownTreeOnly } from "../lib/ownTreeOnly";
+import { MOCK_NOW } from '../lib/api/mock/clock';
+import { ownTreeOnly } from '../lib/ownTreeOnly';
 
-export { expect } from "@playwright/test";
-export type { Browser, BrowserContext, Locator, Page } from "@playwright/test";
+export { expect } from '@playwright/test';
+export type { Browser, BrowserContext, Locator, Page } from '@playwright/test';
 
 // #1570: a spec reads only web/ and docs/contracts; the old-names census reads every tree.
-ownTreeOnly(["e2e/ground-truth-words-source.spec.ts"]);
+ownTreeOnly(['e2e/ground-truth-words-source.spec.ts']);
 
 /**
  * E2E_TEXT_SPACING (a CSS length, "0.4px" or "-0.3px") sets letter-spacing on every page's
@@ -18,12 +18,12 @@ const TEXT_SPACING = process.env.E2E_TEXT_SPACING;
 
 function widenText(spacing: string) {
   const add = () => {
-    const style = document.createElement("style");
+    const style = document.createElement('style');
     style.textContent = `*, *::before, *::after { letter-spacing: ${spacing} !important; }`;
     document.head.appendChild(style);
   };
   if (document.head) add();
-  else document.addEventListener("DOMContentLoaded", add);
+  else document.addEventListener('DOMContentLoaded', add);
 }
 
 /**

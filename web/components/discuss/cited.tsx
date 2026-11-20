@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import { CitationChip } from "@/components/CitationChip";
-import type { CitationOut } from "@/lib/api/client";
-import { formatInZone, useCompanyZone } from "@/lib/dates";
-import { isWebLink } from "@/lib/format";
+import { CitationChip } from '@/components/CitationChip';
+import type { CitationOut } from '@/lib/api/client';
+import { formatInZone, useCompanyZone } from '@/lib/dates';
+import { isWebLink } from '@/lib/format';
 
 /**
  * A discussion citation as an Oracle reply carries it: `[c:n]` (n) from Oracle's context, or
@@ -29,11 +29,11 @@ export type Cite = {
 function chipCitation(c: Cite): CitationOut {
   // A public link, or a web page a research run read (G2 §4, read:web): it opens the page.
   // Only an http(s) address opens (#606 re-review): never javascript:, data: or the like.
-  const link = (c.kind === "public_link" || c.kind === "web") && isWebLink(c.url);
+  const link = (c.kind === 'public_link' || c.kind === 'web') && isWebLink(c.url);
   return {
     id: `c${c.n}`,
     cite_key: `c:${c.n}`,
-    source: link ? "web" : "oracle",
+    source: link ? 'web' : 'oracle',
     ref: link ? c.url! : c.title,
     title: c.title,
     excerpt: c.excerpt ?? null,
@@ -47,9 +47,11 @@ function chipCitation(c: Cite): CitationOut {
 const PARTIAL_MARKER = /\[([cl](:\d{0,4})?)?$/;
 
 /** A live read's words, the chip's and Simple's source line's (ask-phone QA row 10): "<source> · <call> · read <time>". */
-export function liveWords(c: Pick<Cite, "source" | "call" | "read_at">, zone: string): string {
-  const at = c.read_at ? formatInZone(c.read_at, zone, { hour: "numeric", minute: "2-digit" }) : null;
-  return [c.source, c.call, at && `read ${at}`].filter(Boolean).join(" · ");
+export function liveWords(c: Pick<Cite, 'source' | 'call' | 'read_at'>, zone: string): string {
+  const at = c.read_at
+    ? formatInZone(c.read_at, zone, { hour: 'numeric', minute: '2-digit' })
+    : null;
+  return [c.source, c.call, at && `read ${at}`].filter(Boolean).join(' · ');
 }
 
 /**
@@ -59,7 +61,12 @@ export function liveWords(c: Pick<Cite, "source" | "call" | "read_at">, zone: st
 export function LiveChip({ c }: { c: Cite }) {
   const zone = useCompanyZone();
   return (
-    <span className="cite-chip" style={{ cursor: "default" }} data-testid="live-chip" title={c.item_id ? `Read live: ${c.item_id}` : "Read live"}>
+    <span
+      className="cite-chip"
+      style={{ cursor: 'default' }}
+      data-testid="live-chip"
+      title={c.item_id ? `Read live: ${c.item_id}` : 'Read live'}
+    >
       <span className="text-text2">{liveWords(c, zone)}</span>
     </span>
   );
@@ -83,21 +90,29 @@ export function ReplyBody({
   loose?: boolean;
   live?: boolean;
 }) {
-  const parts = (live ? text.replace(PARTIAL_MARKER, "") : text).split(/(\[[cl]:\d{1,4}\])/g);
+  const parts = (live ? text.replace(PARTIAL_MARKER, '') : text).split(/(\[[cl]:\d{1,4}\])/g);
   return (
     <>
       {parts.map((part, i) => {
         const ref = /^\[(l:\d+)\]$/.exec(part)?.[1];
         if (ref) {
           // A live read the reply does not carry is dropped, as the API drops it.
-          const read = citations.find((x) => x.kind === "live" && x.ref === ref);
+          const read = citations.find((x) => x.kind === 'live' && x.ref === ref);
           return read ? <LiveChip key={i} c={read} /> : null;
         }
         const n = /^\[c:(\d+)\]$/.exec(part)?.[1];
         // qa-nov17 ask 3: no space left between a word and its number ("only [c:1]." reads "only 1.").
-        if (!n) return <span key={i}>{/^\[c:\d+\]$/.test(parts[i + 1] ?? "") ? part.replace(/[ \t]+$/, "") : part}</span>;
-        const c = citations.find((x) => x.kind !== "live" && x.n === Number(n));
-        if (c) return <CitationChip key={i} citeKey={`c-${n}`} citation={chipCitation(c)} number={c.n} bare />;
+        if (!n)
+          return (
+            <span key={i}>
+              {/^\[c:\d+\]$/.test(parts[i + 1] ?? '') ? part.replace(/[ \t]+$/, '') : part}
+            </span>
+          );
+        const c = citations.find((x) => x.kind !== 'live' && x.n === Number(n));
+        if (c)
+          return (
+            <CitationChip key={i} citeKey={`c-${n}`} citation={chipCitation(c)} number={c.n} bare />
+          );
         return loose ? (
           <span key={i} className="cite-chip" data-testid={`cite-c-${n}`}>
             <span className="tnum text-text2">{n}</span>

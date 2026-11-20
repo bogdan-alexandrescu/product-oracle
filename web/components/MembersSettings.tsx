@@ -1,16 +1,21 @@
-"use client";
+'use client';
 
-import { Link, useRouter } from "@/lib/nav";
-import { Fragment, useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
+import { Link, useRouter } from '@/lib/nav';
+import { Fragment, useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from 'react';
 
-import { ActedCell, SETTLING, Unavailable, useActed } from "@/components/account/acted";
-import { AccessRequests } from "@/components/members/AccessRequests";
-import { personName, RemoveDialog, RoleDialog } from "@/components/members/ChangePreview";
-import { MemberInspector } from "@/components/members/MemberInspector";
-import { loadRevokeFailures, RevokeBadge, RevokeFailuresSection, type RevokeFailure } from "@/components/members/RevokeFailures";
-import { ADD_DOMAIN_EVENT, SignInRules } from "@/components/members/SignInRules";
-import { FindPerson, matches, NoMatch, PeopleReadOnly } from "@/components/members/PeopleReadOnly";
-import { Field, INPUT, SELECT, TEXTAREA } from "@/app/settings/_components/fields";
+import { ActedCell, SETTLING, Unavailable, useActed } from '@/components/account/acted';
+import { AccessRequests } from '@/components/members/AccessRequests';
+import { personName, RemoveDialog, RoleDialog } from '@/components/members/ChangePreview';
+import { MemberInspector } from '@/components/members/MemberInspector';
+import {
+  loadRevokeFailures,
+  RevokeBadge,
+  RevokeFailuresSection,
+  type RevokeFailure,
+} from '@/components/members/RevokeFailures';
+import { ADD_DOMAIN_EVENT, SignInRules } from '@/components/members/SignInRules';
+import { FindPerson, matches, NoMatch, PeopleReadOnly } from '@/components/members/PeopleReadOnly';
+import { Field, INPUT, SELECT, TEXTAREA } from '@/app/settings/_components/fields';
 import {
   Avatar,
   Button,
@@ -29,37 +34,57 @@ import {
   toast,
   ViewOnly,
   type Column,
-} from "@/components/ds";
-import { LoadError } from "@/components/ui";
-import { api, unwrap, type Invite, type Member } from "@/lib/api/client";
-import { hasRole, membersApi, type HandOver, type Impact } from "@/lib/api/members-types";
-import { formatDate, formatDateTime } from "@/lib/format";
-import { useMe, type Role } from "@/lib/me";
-import { errorMessage, useQuery } from "@/lib/use-query";
+} from '@/components/ds';
+import { LoadError } from '@/components/ui';
+import { api, unwrap, type Invite, type Member } from '@/lib/api/client';
+import { hasRole, membersApi, type HandOver, type Impact } from '@/lib/api/members-types';
+import { formatDate, formatDateTime } from '@/lib/format';
+import { useMe, type Role } from '@/lib/me';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
 const ROLES: { role: Role; label: string; can: string }[] = [
-  { role: "owner", label: "Owner", can: "everything, plus members, invites, API tokens and company settings" },
-  { role: "approver", label: "Approver", can: "sets section verdicts, imports and approves versions, invites viewers and commenters" },
-  { role: "commenter", label: "Commenter", can: "comments, replies and resolves their own threads" },
-  { role: "viewer", label: "Viewer", can: "reads documents, versions, diffs, feedback and exports" },
+  {
+    role: 'owner',
+    label: 'Owner',
+    can: 'everything, plus members, invites, API tokens and company settings',
+  },
+  {
+    role: 'approver',
+    label: 'Approver',
+    can: 'sets section verdicts, imports and approves versions, invites viewers and commenters',
+  },
+  {
+    role: 'commenter',
+    label: 'Commenter',
+    can: 'comments, replies and resolves their own threads',
+  },
+  {
+    role: 'viewer',
+    label: 'Viewer',
+    can: 'reads documents, versions, diffs, feedback and exports',
+  },
 ];
-export const ROLE_LABEL = Object.fromEntries(ROLES.map((r) => [r.role, r.label])) as Record<Role, string>;
+export const ROLE_LABEL = Object.fromEntries(ROLES.map((r) => [r.role, r.label])) as Record<
+  Role,
+  string
+>;
 /** "an Approver", "a Commenter". */
-const aRole = (role: Role) => `${/^[AEIOU]/.test(ROLE_LABEL[role]) ? "an" : "a"} ${ROLE_LABEL[role]}`;
-const INVITE_FORM = "invite-form";
-const PEOPLE = "people";
+const aRole = (role: Role) =>
+  `${/^[AEIOU]/.test(ROLE_LABEL[role]) ? 'an' : 'a'} ${ROLE_LABEL[role]}`;
+const INVITE_FORM = 'invite-form';
+const PEOPLE = 'people';
 /** A3: the engineering lead is a flag any commenter or above carries, not a fifth role. */
 const LEAD_TIP =
-  "Engineering lead: decides both engineering stops (the check after the feature set and the dates after the PRD draft) and verifies dates. Any commenter or above can carry it.";
+  'Engineering lead: decides both engineering stops (the check after the feature set and the dates after the PRD draft) and verifies dates. Any commenter or above can carry it.';
 /** The Roles list's line for the engineering lead, as each role has one (qa-shell-27). */
 const VIEWER_NOT_LEAD = "Viewers can't be the engineering lead";
 /** On a phone the box is 24 px, inside a 44 px tall label (qa-onboarding-31). */
-const CHECKBOX = "size-4 accent-[var(--accent)] disabled:opacity-50 max-[600px]:size-6";
+const CHECKBOX = 'size-4 accent-[var(--accent)] disabled:opacity-50 max-[600px]:size-6';
 /** Room for the longest role ("Commenter") with the select's arrow: never cut mid-word. */
-const ROLE_SELECT = SELECT.replace("min-w-0", "min-w-[8.5rem]");
+const ROLE_SELECT = SELECT.replace('min-w-0', 'min-w-[8.5rem]');
 /** A role that can't be changed here: the same chip everywhere (qa-settings-6). */
 const RoleChip = ({ role }: { role: Role }) => <Chip kind="line">{ROLE_LABEL[role]}</Chip>;
-const NO_EMAIL = "Enter an email to send an invite.";
+const NO_EMAIL = 'Enter an email to send an invite.';
 /** How long "Invite sent to …" stays (pass-f F-54). */
 const SENT_NOTE_MS = 6000;
 /** The API's refusal of an address outside the company domains (pass-f F-50). */
@@ -70,13 +95,15 @@ const MESSAGE_COUNT_FROM = 400;
 /** A name is at most 80 characters (A5). */
 const NAME_MAX = 80;
 
-const RESENT = ["", "resent once", "resent twice"];
+const RESENT = ['', 'resent once', 'resent twice'];
 
 /** An invite row's tooltip: "Invited by Admin on Oct 21, 2026 · resent once". */
 function invitedLine(i: Invite): string {
-  const by = i.invited_by_name ? `Invited by ${i.invited_by_name} on` : "Invited on";
+  const by = i.invited_by_name ? `Invited by ${i.invited_by_name} on` : 'Invited on';
   const n = i.resend_count ?? 0;
-  return [`${by} ${formatDate(i.created_at)}`, n ? (RESENT[n] ?? `resent ${n} times`) : null].filter(Boolean).join(" · ");
+  return [`${by} ${formatDate(i.created_at)}`, n ? (RESENT[n] ?? `resent ${n} times`) : null]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 function RoleSelect({
@@ -86,7 +113,7 @@ function RoleSelect({
   onChange,
   id,
   roles,
-  className = "",
+  className = '',
 }: {
   value: Role;
   label: string;
@@ -98,7 +125,14 @@ function RoleSelect({
   className?: string;
 }) {
   return (
-    <select id={id} aria-label={label} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value as Role)} className={`${ROLE_SELECT} ${className}`}>
+    <select
+      id={id}
+      aria-label={label}
+      value={value}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value as Role)}
+      className={`${ROLE_SELECT} ${className}`}
+    >
       {ROLES.filter((r) => !roles || roles.includes(r.role)).map((r) => (
         <option key={r.role} value={r.role}>
           {r.label}
@@ -110,8 +144,8 @@ function RoleSelect({
 
 const pageTip = (
   <InfoTip label="members" align="start" side="bottom">
-    Everyone who signs in to this company&apos;s Oracle has one role. Removing someone disables them: the row stays so
-    history keeps their name, and an owner can restore them.
+    Everyone who signs in to this company&apos;s Oracle has one role. Removing someone disables
+    them: the row stays so history keeps their name, and an owner can restore them.
   </InfoTip>
 );
 
@@ -125,48 +159,59 @@ function useLeaveGuard(dirty: boolean) {
   useEffect(() => {
     if (!dirty) return;
     const onClick = (e: MouseEvent) => {
-      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-      const a = e.target instanceof Element ? e.target.closest("a[href]") : null;
-      if (!(a instanceof HTMLAnchorElement) || (a.target && a.target !== "_self") || a.hasAttribute("download")) return;
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)
+        return;
+      const a = e.target instanceof Element ? e.target.closest('a[href]') : null;
+      if (
+        !(a instanceof HTMLAnchorElement) ||
+        (a.target && a.target !== '_self') ||
+        a.hasAttribute('download')
+      )
+        return;
       const url = new URL(a.href, window.location.href);
       // A link within this page (Invite someone's #invite-form) keeps the form.
-      if (url.origin !== window.location.origin || (url.pathname === window.location.pathname && url.search === window.location.search)) return;
+      if (
+        url.origin !== window.location.origin ||
+        (url.pathname === window.location.pathname && url.search === window.location.search)
+      )
+        return;
       e.preventDefault();
       e.stopPropagation();
       void confirmInPage({
-        title: "Discard your changes?",
-        message: "The invite you started is not sent. Leaving this page throws it away.",
-        action: "Discard",
-        cancel: "Keep editing",
+        title: 'Discard your changes?',
+        message: 'The invite you started is not sent. Leaving this page throws it away.',
+        action: 'Discard',
+        cancel: 'Keep editing',
         destructive: true,
       }).then((yes) => yes && router.push(`${url.pathname}${url.search}${url.hash}`));
     };
     // Before the app's own link handlers (React's, at its root), so nothing moves first.
-    document.addEventListener("click", onClick, true);
+    document.addEventListener('click', onClick, true);
     // The browser's Back asks too: a copy of this page's history entry takes the Back, and
     // Discard then goes back past the page itself.
     const guarded = { ...(window.history.state ?? {}), poLeaveGuard: true };
-    if (!window.history.state?.poLeaveGuard) window.history.pushState(guarded, "", window.location.href);
+    if (!window.history.state?.poLeaveGuard)
+      window.history.pushState(guarded, '', window.location.href);
     let leaving = false;
     const onPop = () => {
       if (leaving) return;
       void confirmInPage({
-        title: "Discard your changes?",
-        message: "The invite you started is not sent. Leaving this page throws it away.",
-        action: "Discard",
-        cancel: "Keep editing",
+        title: 'Discard your changes?',
+        message: 'The invite you started is not sent. Leaving this page throws it away.',
+        action: 'Discard',
+        cancel: 'Keep editing',
         destructive: true,
       }).then((yes) => {
         if (yes) {
           leaving = true;
           window.history.back();
-        } else window.history.pushState(guarded, "", window.location.href);
+        } else window.history.pushState(guarded, '', window.location.href);
       });
     };
-    window.addEventListener("popstate", onPop);
+    window.addEventListener('popstate', onPop);
     return () => {
-      document.removeEventListener("click", onClick, true);
-      window.removeEventListener("popstate", onPop);
+      document.removeEventListener('click', onClick, true);
+      window.removeEventListener('popstate', onPop);
     };
   }, [dirty, router]);
 }
@@ -186,8 +231,8 @@ function Email({ email }: { email: string }) {
 }
 
 function subscribeHash(onChange: () => void) {
-  window.addEventListener("hashchange", onChange);
-  return () => window.removeEventListener("hashchange", onChange);
+  window.addEventListener('hashchange', onChange);
+  return () => window.removeEventListener('hashchange', onChange);
 }
 
 /** Settings > Members: the people of this company's Oracle, their roles and status, and invites. */
@@ -195,11 +240,12 @@ export function MembersSettings() {
   const { me, loading, can, capsReady, capsError } = useMe();
   // #370: managing members starts with reading them (GET /v1/members); an approver invites
   // (A5) and reads the people list like everyone else.
-  const canManage = can("list_members");
-  const canInvite = can("create_invite") && !!me?.invite_roles?.length;
+  const canManage = can('list_members');
+  const canInvite = can('create_invite') && !!me?.invite_roles?.length;
   const ready = !loading && (capsReady || !!capsError);
 
-  if (ready && (canManage || canInvite)) return <OwnerView selfId={me?.user_id ?? null} manage={canManage} />;
+  if (ready && (canManage || canInvite))
+    return <OwnerView selfId={me?.user_id ?? null} manage={canManage} />;
   return (
     <>
       {/* qa4-settings-36: the same View only chip as every other read-only Settings page. */}
@@ -226,10 +272,12 @@ function RoleNote() {
       {/* pass-f F-50: what the role may do is behind the (i), not a sentence on the page. */}
       <span className="inline-flex items-center gap-1.5">
         <span>
-          Your role is <b>{role ? ROLE_LABEL[role] : "not known"}</b>
+          Your role is <b>{role ? ROLE_LABEL[role] : 'not known'}</b>
         </span>
         <InfoTip label="your role" align="start">
-          {can("create_invite") ? "You can invite viewers and commenters and approve their access requests." : "Owners manage members and sign-in."}
+          {can('create_invite')
+            ? 'You can invite viewers and commenters and approve their access requests.'
+            : 'Owners manage members and sign-in.'}
         </InfoTip>
       </span>
       {engineeringLead && <span>You are an engineering lead.</span>}
@@ -238,22 +286,30 @@ function RoleNote() {
 }
 
 /** The four roles and the engineering lead flag, what each can do in words, and how many active people hold each. */
-function RolesSection({ members, label = "Roles" }: { members?: Member[]; label?: string | null }) {
-  const leads = members?.filter((m) => m.engineering_lead && m.status !== "disabled").length;
+function RolesSection({ members, label = 'Roles' }: { members?: Member[]; label?: string | null }) {
+  const leads = members?.filter((m) => m.engineering_lead && m.status !== 'disabled').length;
   return (
     <>
       <InspectorSection label={label ?? undefined} testId="roles-list">
         {ROLES.map((r) => (
-          <div key={r.role} data-testid={`role-${r.role}`} className="flex items-start gap-2.5 py-1">
+          <div
+            key={r.role}
+            data-testid={`role-${r.role}`}
+            className="flex items-start gap-2.5 py-1"
+          >
             {/* pass-f F-50: what each role can do is behind its (i). */}
             <span className="inline-flex min-w-0 flex-1 items-center gap-1.5">
               <span className="font-semibold">{r.label}</span>
               <InfoTip label={`the ${r.label} role`} align="start">
-                <span data-testid="role-can">{r.can.charAt(0).toUpperCase() + r.can.slice(1)}.</span>
+                <span data-testid="role-can">
+                  {r.can.charAt(0).toUpperCase() + r.can.slice(1)}.
+                </span>
               </InfoTip>
             </span>
             {members && (
-              <span className="tnum flex-none font-semibold">{members.filter((m) => m.role === r.role && m.status !== "disabled").length}</span>
+              <span className="tnum flex-none font-semibold">
+                {members.filter((m) => m.role === r.role && m.status !== 'disabled').length}
+              </span>
             )}
           </div>
         ))}
@@ -277,11 +333,11 @@ function RolesSection({ members, label = "Roles" }: { members?: Member[]; label?
                 <span className="sr-only">Engineering lead: </span>
                 {/* qa4-settings-14: nobody named reads as words, not "People named 0". */}
                 {leads == null ? (
-                  "Any commenter or above can carry it"
+                  'Any commenter or above can carry it'
                 ) : leads === 0 ? (
                   <span data-testid="engineering-lead-none">None yet</span>
                 ) : (
-                  "People named"
+                  'People named'
                 )}
               </span>
               <InfoTip label="the engineering lead" align="start">
@@ -304,7 +360,7 @@ function RolesInspector() {
   );
 }
 
-const removed = (m: Member) => m.status === "disabled";
+const removed = (m: Member) => m.status === 'disabled';
 /** "Oct 18, 2026": the page's one date format (the People table's); the time is in its title. */
 const shortDate = (iso: string) => formatDate(iso);
 /** How long the page waits between looks at an invite email Oracle is still sending. */
@@ -313,16 +369,18 @@ const MAIL_POLLS = 30;
 
 /** "Google sign-in treats this as pat@example.com; ...": a plus address is no Google account of its own. */
 function plusAddressWarning(email: string): string | null {
-  const at = email.trim().lastIndexOf("@");
+  const at = email.trim().lastIndexOf('@');
   const local = email.trim().slice(0, at);
-  if (at < 1 || !local.includes("+")) return null;
-  const base = `${local.slice(0, local.indexOf("+"))}${email.trim().slice(at)}`;
+  if (at < 1 || !local.includes('+')) return null;
+  const base = `${local.slice(0, local.indexOf('+'))}${email.trim().slice(at)}`;
   return `Google sign-in treats this as ${base}; IAP access can't be granted to it.`;
 }
 
 /** "Last tried Oct 22, 9:05 AM PDT · <reason>": one part of an invite's status line. */
 function tried(at?: string | null, reason?: string | null): string {
-  return [at ? `Last tried ${formatDateTime(at)}` : null, reason || null].filter(Boolean).join(" · ");
+  return [at ? `Last tried ${formatDateTime(at)}` : null, reason || null]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 /**
@@ -332,10 +390,11 @@ function tried(at?: string | null, reason?: string | null): string {
 function mailReason(error?: string | null): string | null {
   if (!error) return null;
   const code = Number(/\b([45]\d\d)\b/.exec(error)?.[1]);
-  if (code >= 500 || /unavailable|timed? ?out|timeout/i.test(error)) return "the mail service was down";
-  if (code === 401 || code === 403) return "the mail service refused Oracle";
-  if (code === 429) return "the mail service was busy";
-  if (code >= 400) return "the mail service refused the email";
+  if (code >= 500 || /unavailable|timed? ?out|timeout/i.test(error))
+    return 'the mail service was down';
+  if (code === 401 || code === 403) return 'the mail service refused Oracle';
+  if (code === 429) return 'the mail service was busy';
+  if (code >= 400) return 'the mail service refused the email';
   return "the email didn't go out";
 }
 
@@ -345,17 +404,24 @@ function mailReason(error?: string | null): string | null {
  * Nothing when all went through: the chips say so.
  */
 function InviteDetail({ invite }: { invite: Invite }) {
-  const access = invite.access === "pending" ? tried(invite.access_at, invite.access_error) : "";
+  const access = invite.access === 'pending' ? tried(invite.access_at, invite.access_error) : '';
   const s = invite.email_status;
   const email =
-    s === "failed" ? tried(invite.email_at, mailReason(invite.email_error)) : s === "not_sent" ? "Oracle has no sender set up: send them the sign-in link" : "";
+    s === 'failed'
+      ? tried(invite.email_at, mailReason(invite.email_error))
+      : s === 'not_sent'
+        ? 'Oracle has no sender set up: send them the sign-in link'
+        : '';
   if (!access && !email) return null;
   return (
     <p data-testid="invite-detail" className="basis-full text-[13px] break-words text-text2">
       {access && <span data-testid="invite-access-detail">{access}</span>}
-      {access && email && " · "}
+      {access && email && ' · '}
       {email && (
-        <span data-testid="invite-email-detail" title={s === "failed" ? (invite.email_error ?? undefined) : undefined}>
+        <span
+          data-testid="invite-email-detail"
+          title={s === 'failed' ? (invite.email_error ?? undefined) : undefined}
+        >
           {email}
         </span>
       )}
@@ -367,50 +433,85 @@ function InviteDetail({ invite }: { invite: Invite }) {
  * An invite's Google IAP access: their Google sign-in is ready (qa-onboarding-38: they have
  * not joined until they sign in), or not yet with Retry. Nothing without IAP.
  */
-function AccessState({ invite, retrying, onRetry }: { invite: Invite; retrying: boolean; onRetry: () => void }) {
-  if (invite.access !== "granted" && invite.access !== "pending") return null;
-  const granted = invite.access === "granted";
+function AccessState({
+  invite,
+  retrying,
+  onRetry,
+}: {
+  invite: Invite;
+  retrying: boolean;
+  onRetry: () => void;
+}) {
+  if (invite.access !== 'granted' && invite.access !== 'pending') return null;
+  const granted = invite.access === 'granted';
   return (
     <>
       <Chip
-        kind={granted ? "pass" : "warn"}
+        kind={granted ? 'pass' : 'warn'}
         data-testid="invite-access"
-        title={granted && invite.access_at ? `Google sign-in ready since ${formatDateTime(invite.access_at)}` : undefined}
+        title={
+          granted && invite.access_at
+            ? `Google sign-in ready since ${formatDateTime(invite.access_at)}`
+            : undefined
+        }
       >
-        {granted ? "Google sign-in ready" : "Access not granted yet"}
+        {granted ? 'Google sign-in ready' : 'Access not granted yet'}
       </Chip>
       {!granted && (
-        <Button variant="ghost" aria-label={`Retry access for ${invite.email}`} aria-busy={retrying || undefined} disabled={retrying} onClick={onRetry}>
-          {retrying ? "Retrying…" : "Retry"}
+        <Button
+          variant="ghost"
+          aria-label={`Retry access for ${invite.email}`}
+          aria-busy={retrying || undefined}
+          disabled={retrying}
+          onClick={onRetry}
+        >
+          {retrying ? 'Retrying…' : 'Retry'}
         </Button>
       )}
     </>
   );
 }
 
-const EMAIL_LABEL: Record<Invite["email_status"], string> = {
-  queued: "Sending…",
-  sent: "Sent",
-  failed: "Failed",
-  not_sent: "Not sent",
+const EMAIL_LABEL: Record<Invite['email_status'], string> = {
+  queued: 'Sending…',
+  sent: 'Sent',
+  failed: 'Failed',
+  not_sent: 'Not sent',
 };
 
 /** An invite's email: Sent <date>, Sending…, Not sent (no sender), or Failed; Resend. */
-function EmailState({ invite, resending, onResend }: { invite: Invite; resending: boolean; onResend: () => void }) {
+function EmailState({
+  invite,
+  resending,
+  onResend,
+}: {
+  invite: Invite;
+  resending: boolean;
+  onResend: () => void;
+}) {
   const s = invite.email_status;
   return (
     <>
       <Chip
-        kind={s === "failed" ? "crit" : s === "sent" ? "line" : "na"}
+        kind={s === 'failed' ? 'crit' : s === 'sent' ? 'line' : 'na'}
         data-testid="invite-email"
-        title={(s === "sent" || s === "failed") && invite.email_at ? `${EMAIL_LABEL[s]} ${formatDateTime(invite.email_at)}` : undefined}
+        title={
+          (s === 'sent' || s === 'failed') && invite.email_at
+            ? `${EMAIL_LABEL[s]} ${formatDateTime(invite.email_at)}`
+            : undefined
+        }
       >
         {EMAIL_LABEL[s]}
-        {s === "sent" && invite.email_at ? ` ${shortDate(invite.email_at)}` : ""}
+        {s === 'sent' && invite.email_at ? ` ${shortDate(invite.email_at)}` : ''}
       </Chip>
-      {(s === "failed" || s === "sent") && (
-        <Button variant="ghost" aria-label={`Resend invitation to ${invite.email}`} disabled={resending} onClick={onResend}>
-          {resending ? "Resending…" : "Resend"}
+      {(s === 'failed' || s === 'sent') && (
+        <Button
+          variant="ghost"
+          aria-label={`Resend invitation to ${invite.email}`}
+          disabled={resending}
+          onClick={onResend}
+        >
+          {resending ? 'Resending…' : 'Resend'}
         </Button>
       )}
     </>
@@ -424,11 +525,17 @@ function StatusChip({ m }: { m: Member }) {
       Active
     </Chip>
   ) : (
-    <span data-testid="member-removed" className="flex flex-col items-start gap-0.5" title={m.disabled_at ? `Removed ${formatDateTime(m.disabled_at)}` : undefined}>
+    <span
+      data-testid="member-removed"
+      className="flex flex-col items-start gap-0.5"
+      title={m.disabled_at ? `Removed ${formatDateTime(m.disabled_at)}` : undefined}
+    >
       <Chip kind="na" dot>
         Removed
       </Chip>
-      {m.disabled_at && <span className="tnum text-[12px] leading-4 text-text2">{shortDate(m.disabled_at)}</span>}
+      {m.disabled_at && (
+        <span className="tnum text-[12px] leading-4 text-text2">{shortDate(m.disabled_at)}</span>
+      )}
     </span>
   );
   if (!m.access_pending) return status;
@@ -436,8 +543,13 @@ function StatusChip({ m }: { m: Member }) {
   return (
     <span className="flex flex-col items-start gap-1">
       {status}
-      <Chip kind="warn" wrap data-testid="member-access" title="Google refused the change; Oracle retries it for a day">
-        {m.access_pending === "revoke" ? "Access not removed yet" : "Access not granted yet"}
+      <Chip
+        kind="warn"
+        wrap
+        data-testid="member-access"
+        title="Google refused the change; Oracle retries it for a day"
+      >
+        {m.access_pending === 'revoke' ? 'Access not removed yet' : 'Access not granted yet'}
       </Chip>
     </span>
   );
@@ -451,13 +563,14 @@ function StatusChip({ m }: { m: Member }) {
 function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: boolean }) {
   const { me } = useMe();
   const inviteRoles = me?.invite_roles ?? [];
-  const membersQ = useQuery(manage ? "members" : "members:none", () =>
-    manage ? unwrap(api.GET("/v1/members")) : Promise.resolve(undefined as Member[] | undefined),
+  const membersQ = useQuery(manage ? 'members' : 'members:none', () =>
+    manage ? unwrap(api.GET('/v1/members')) : Promise.resolve(undefined as Member[] | undefined),
   );
-  const invitesQ = useQuery("invites", () => unwrap(api.GET("/v1/invites")));
+  const invitesQ = useQuery('invites', () => unwrap(api.GET('/v1/invites')));
   // pass-f F-48: what Oracle could not revoke from a removed member or an invite (the Inbox's items).
-  const revokeQ = useQuery(manage ? "members:revoke-failures" : "members:revoke-failures:none", () =>
-    manage ? loadRevokeFailures() : Promise.resolve([] as RevokeFailure[]),
+  const revokeQ = useQuery(
+    manage ? 'members:revoke-failures' : 'members:revoke-failures:none',
+    () => (manage ? loadRevokeFailures() : Promise.resolve([] as RevokeFailure[])),
   );
   const revokeFailures = revokeQ.data ?? [];
   const [error, setError] = useState<string | null>(null);
@@ -468,19 +581,21 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
   // A5: the member whose inspector is open (in place of the invite inspector), the People
   // search, and a demotion waiting on its dialog.
   const [inspecting, setInspecting] = useState<string | null>(null);
-  const [find, setFind] = useState("");
+  const [find, setFind] = useState('');
   // pass-f F-49: the Active and Removed tiles keep only those people in the list.
-  const [statusFilter, setStatusFilter] = useState<"active" | "removed" | null>(null);
-  const [demoting, setDemoting] = useState<{ member: Member; role: Role; impact: Impact } | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'active' | 'removed' | null>(null);
+  const [demoting, setDemoting] = useState<{ member: Member; role: Role; impact: Impact } | null>(
+    null,
+  );
   const [demoteError, setDemoteError] = useState<string | null>(null);
   const inviteActs = useActed();
 
   const emailRef = useRef<HTMLInputElement>(null);
-  const [email, setEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<Role>("commenter");
+  const [email, setEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<Role>('commenter');
   const [inviteLead, setInviteLead] = useState(false);
-  const [inviteMessage, setInviteMessage] = useState("");
-  const [inviteName, setInviteName] = useState("");
+  const [inviteMessage, setInviteMessage] = useState('');
+  const [inviteName, setInviteName] = useState('');
   const [pending, setPending] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
@@ -496,7 +611,11 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
   useEffect(() => () => void (leadSavedTimer.current && clearTimeout(leadSavedTimer.current)), []);
   // The Set up checklist's Engineering lead step lands on #engineering-lead: the column is
   // marked and a line says what to pick.
-  const leadStep = useSyncExternalStore(subscribeHash, () => window.location.hash === "#engineering-lead", () => false);
+  const leadStep = useSyncExternalStore(
+    subscribeHash,
+    () => window.location.hash === '#engineering-lead',
+    () => false,
+  );
   const [resent, setResent] = useState<{ id: string; ok: boolean; text: string } | null>(null);
   const resentTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => void (resentTimer.current && clearTimeout(resentTimer.current)), []);
@@ -504,25 +623,30 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
   useLeaveGuard(!!email.trim() || !!inviteName.trim() || !!inviteMessage.trim() || inviteLead);
   // qa-settings-44: below 1100 px the panel sits under the list; a picked member's comes into view.
   useEffect(() => {
-    if (!inspecting || !window.matchMedia("(max-width: 1100px)").matches) return;
-    const at = requestAnimationFrame(() => document.querySelector('[data-testid="member-inspector"]')?.scrollIntoView({ block: "start" }));
+    if (!inspecting || !window.matchMedia('(max-width: 1100px)').matches) return;
+    const at = requestAnimationFrame(() =>
+      document
+        .querySelector('[data-testid="member-inspector"]')
+        ?.scrollIntoView({ block: 'start' }),
+    );
     return () => cancelAnimationFrame(at);
   }, [inspecting]);
 
   // B5: the goal owner picker's "Invite them first" opens here with ?invite=1: the invite
   // form ready (its role starts at Commenter).
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("invite") !== "1") return;
+    if (new URLSearchParams(window.location.search).get('invite') !== '1') return;
     const at = requestAnimationFrame(() => {
-      emailRef.current?.scrollIntoView({ block: "center" });
+      emailRef.current?.scrollIntoView({ block: 'center' });
       emailRef.current?.focus({ preventScroll: true });
     });
     return () => cancelAnimationFrame(at);
   }, []);
 
   const members = membersQ.data;
-  const activeOwners = members?.filter((m) => m.role === "owner" && !removed(m)).length ?? 0;
-  const replace = (updated: Member) => membersQ.setData((prev) => prev?.map((x) => (x.id === updated.id ? updated : x)));
+  const activeOwners = members?.filter((m) => m.role === 'owner' && !removed(m)).length ?? 0;
+  const replace = (updated: Member) =>
+    membersQ.setData((prev) => prev?.map((x) => (x.id === updated.id ? updated : x)));
 
   async function changeRole(m: Member, next: Role, hand_over: HandOver[] = []) {
     setSaving(m.id);
@@ -538,12 +662,18 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
           return;
         }
       }
-      const updated = await membersApi.patch(m.id, hand_over.length ? { role: next, hand_over } : { role: next });
+      const updated = await membersApi.patch(
+        m.id,
+        hand_over.length ? { role: next, hand_over } : { role: next },
+      );
       replace(updated);
       setDemoting(null);
       // qa-nov17: the change says so, with Undo (as Inbox's access approval does).
       if (updated.role !== m.role) {
-        toast({ message: `${personName(m)} is now ${aRole(updated.role)}`, action: { label: "Undo", onClick: () => void undoRole(m) } });
+        toast({
+          message: `${personName(m)} is now ${aRole(updated.role)}`,
+          action: { label: 'Undo', onClick: () => void undoRole(m) },
+        });
       }
     } catch (e) {
       if (demoting) setDemoteError(errorMessage(e));
@@ -569,7 +699,14 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
     // The box shows the tick at once; a refusal puts it back and says why.
     replace({ ...m, engineering_lead });
     try {
-      replace(await unwrap(api.PATCH("/v1/members/{user_id}", { params: { path: { user_id: m.id } }, body: { engineering_lead } })));
+      replace(
+        await unwrap(
+          api.PATCH('/v1/members/{user_id}', {
+            params: { path: { user_id: m.id } },
+            body: { engineering_lead },
+          }),
+        ),
+      );
       setLeadSaved(personName(m));
       if (leadSavedTimer.current) clearTimeout(leadSavedTimer.current);
       leadSavedTimer.current = setTimeout(() => setLeadSaved(null), 4000);
@@ -585,7 +722,11 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
     setSaving(m.id);
     setError(null);
     try {
-      replace(await unwrap(api.POST("/v1/members/{user_id}/restore", { params: { path: { user_id: m.id } } })));
+      replace(
+        await unwrap(
+          api.POST('/v1/members/{user_id}/restore', { params: { path: { user_id: m.id } } }),
+        ),
+      );
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -602,7 +743,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
       // Removing someone also revokes the open invite for their email.
       invitesQ.setData((prev) => prev?.filter((i) => i.email !== updated.email));
       setConfirming(null);
-      memberActs.mark({ key: m.id, outcome: "Removed", undo: () => void restore(updated) });
+      memberActs.mark({ key: m.id, outcome: 'Removed', undo: () => void restore(updated) });
     } catch (e) {
       setConfirmError(errorMessage(e));
     } finally {
@@ -613,16 +754,24 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
   async function revokeInvite(invite: Invite) {
     setError(null);
     try {
-      await unwrap(api.DELETE("/v1/invites/{invite_id}", { params: { path: { invite_id: invite.id } } }));
+      await unwrap(
+        api.DELETE('/v1/invites/{invite_id}', { params: { path: { invite_id: invite.id } } }),
+      );
       // The row stays with its outcome for a moment, then leaves the list.
       inviteActs.mark(
         {
           key: invite.id,
-          outcome: "Revoked",
+          outcome: 'Revoked',
           undo: async () => {
             const again = await unwrap(
-              api.POST("/v1/invites", {
-                body: { email: invite.email, name: invite.name ?? null, role: invite.role, engineering_lead: invite.engineering_lead, message: invite.message ?? null },
+              api.POST('/v1/invites', {
+                body: {
+                  email: invite.email,
+                  name: invite.name ?? null,
+                  role: invite.role,
+                  engineering_lead: invite.engineering_lead,
+                  message: invite.message ?? null,
+                },
               }),
             ).catch((e) => {
               setError(errorMessage(e));
@@ -645,13 +794,20 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
     setTimeout(() => setCopied((c) => (c === key ? null : c)), 1500);
   }
 
-  const replaceInvite = (updated: Invite) => invitesQ.setData((prev) => prev?.map((i) => (i.id === updated.id ? updated : i)));
+  const replaceInvite = (updated: Invite) =>
+    invitesQ.setData((prev) => prev?.map((i) => (i.id === updated.id ? updated : i)));
 
   async function retryAccess(invite: Invite) {
     setBusy(`access:${invite.id}`);
     setError(null);
     try {
-      replaceInvite(await unwrap(api.POST("/v1/invites/{invite_id}/access", { params: { path: { invite_id: invite.id } } })));
+      replaceInvite(
+        await unwrap(
+          api.POST('/v1/invites/{invite_id}/access', {
+            params: { path: { invite_id: invite.id } },
+          }),
+        ),
+      );
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -663,18 +819,21 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
   function resentNote(id: string, ok: boolean, text: string) {
     setResent({ id, ok, text });
     if (resentTimer.current) clearTimeout(resentTimer.current);
-    if (ok) resentTimer.current = setTimeout(() => setResent((r) => (r?.id === id ? null : r)), 8000);
+    if (ok)
+      resentTimer.current = setTimeout(() => setResent((r) => (r?.id === id ? null : r)), 8000);
   }
 
   async function resend(invite: Invite) {
     setBusy(`email:${invite.id}`);
     setError(null);
     try {
-      const updated = await unwrap(api.POST("/v1/invites/{invite_id}/email", { params: { path: { invite_id: invite.id } } }));
+      const updated = await unwrap(
+        api.POST('/v1/invites/{invite_id}/email', { params: { path: { invite_id: invite.id } } }),
+      );
       polls.current = 0;
       setMailStalled(false);
       replaceInvite(updated);
-      resentNote(invite.id, true, "Resent just now");
+      resentNote(invite.id, true, 'Resent just now');
     } catch (e) {
       resentNote(invite.id, false, errorMessage(e));
     } finally {
@@ -686,7 +845,9 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
     setBusy(`resend:${invite.id}`);
     setError(null);
     try {
-      const updated = await unwrap(api.POST("/v1/invites/{invite_id}/resend", { params: { path: { invite_id: invite.id } } }));
+      const updated = await unwrap(
+        api.POST('/v1/invites/{invite_id}/resend', { params: { path: { invite_id: invite.id } } }),
+      );
       replaceInvite(updated);
       resentNote(invite.id, true, `Resent just now · expires ${formatDate(updated.expires_at)}`);
     } catch (e) {
@@ -708,12 +869,12 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
     setInviteError(null);
     try {
       const created = await unwrap(
-        api.POST("/v1/invites", {
+        api.POST('/v1/invites', {
           body: {
             email: email.trim(),
             name: inviteName.trim() || null,
             role: inviteRole,
-            engineering_lead: inviteLead && inviteRole !== "viewer",
+            engineering_lead: inviteLead && inviteRole !== 'viewer',
             message: inviteMessage.trim() || null,
           },
         }),
@@ -722,10 +883,10 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
       polls.current = 0;
       setMailStalled(false);
       setMade(created);
-      setEmail("");
-      setInviteName("");
+      setEmail('');
+      setInviteName('');
       setInviteLead(false);
-      setInviteMessage("");
+      setInviteMessage('');
     } catch (err) {
       // qa-onboarding-8: only the refusal shows, not the last invite's "Invite sent".
       setMade(null);
@@ -737,7 +898,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
 
   const roleCell = (m: Member) => {
     if (removed(m)) return <RoleChip role={m.role} />;
-    const lastOwner = m.role === "owner" && activeOwners <= 1;
+    const lastOwner = m.role === 'owner' && activeOwners <= 1;
     if (m.id === selfId) {
       // qa-shell-28: on a phone your own card shows your role and status only, on one line.
       return (
@@ -750,15 +911,29 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
           </span>
           <span className="contents max-[600px]:hidden">
             {lastOwner ? (
-              <Unavailable reason="You are the only owner. Make someone else owner first." testId="role-unavailable">
+              <Unavailable
+                reason="You are the only owner. Make someone else owner first."
+                testId="role-unavailable"
+              >
                 {(props) => (
-                  <button type="button" {...props} aria-label={`Role for ${m.email}`} className="inline-flex rounded-full text-left">
+                  <button
+                    type="button"
+                    {...props}
+                    aria-label={`Role for ${m.email}`}
+                    className="inline-flex rounded-full text-left"
+                  >
                     <RoleChip role={m.role} />
                   </button>
                 )}
               </Unavailable>
             ) : (
-              <RoleSelect value={m.role} label={`Role for ${m.email}`} disabled={saving === m.id} onChange={(role) => changeRole(m, role)} className="self-start" />
+              <RoleSelect
+                value={m.role}
+                label={`Role for ${m.email}`}
+                disabled={saving === m.id}
+                onChange={(role) => changeRole(m, role)}
+                className="self-start"
+              />
             )}
           </span>
           {/* Your own lead box too: on a phone the Eng lead column hides. */}
@@ -787,16 +962,16 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
   const phoneLead = (m: Member) => (
     <label
       className="hidden min-h-11 items-center gap-2 text-sm max-[600px]:inline-flex"
-      title={m.role === "viewer" ? VIEWER_NOT_LEAD : undefined}
+      title={m.role === 'viewer' ? VIEWER_NOT_LEAD : undefined}
     >
       {leadBox(m)}
-      {m.role === "viewer" ? "Engineering lead: not for viewers" : "Engineering lead"}
+      {m.role === 'viewer' ? 'Engineering lead: not for viewers' : 'Engineering lead'}
     </label>
   );
 
   /** A3: the member's engineering lead box; a viewer's is disabled and says why (title, and words beside it). */
   const leadBox = (m: Member) => {
-    const viewer = m.role === "viewer";
+    const viewer = m.role === 'viewer';
     return (
       <input
         type="checkbox"
@@ -811,10 +986,15 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
   };
 
   const actionCell = (m: Member) => {
-    if (memberActs.acted?.key === m.id) return <ActedCell acted={memberActs.acted} onUndo={memberActs.undo} />;
+    if (memberActs.acted?.key === m.id)
+      return <ActedCell acted={memberActs.acted} onUndo={memberActs.undo} />;
     if (removed(m)) {
       return (
-        <Button aria-label={`Restore ${m.email}`} disabled={saving === m.id} onClick={() => restore(m)}>
+        <Button
+          aria-label={`Restore ${m.email}`}
+          disabled={saving === m.id}
+          onClick={() => restore(m)}
+        >
           Restore
         </Button>
       );
@@ -836,13 +1016,13 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
 
   const columns: Column<Member>[] = [
     {
-      key: "email",
-      header: "Member",
+      key: 'email',
+      header: 'Member',
       wrap: true,
       cell: (m) => (
         <span className="flex min-w-0 items-start gap-2.5">
           <span className="flex-none">
-            <Avatar name={personName(m)} size={28} tone={m.id === selfId ? "me" : "default"} />
+            <Avatar name={personName(m)} size={28} tone={m.id === selfId ? 'me' : 'default'} />
           </span>
           <span className="flex min-w-0 flex-1 flex-col items-start gap-1">
             {/* A5: the name in bold (the one name rule, as everyone's People list), the email under it;
@@ -853,7 +1033,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
               type="button"
               data-testid="member-open"
               onClick={() => setInspecting(m.id)}
-              className={`flex max-w-full min-w-0 flex-col text-left leading-tight break-words hover:underline max-[600px]:min-h-11 max-[600px]:justify-center ${removed(m) ? "text-text2" : ""}`}
+              className={`flex max-w-full min-w-0 flex-col text-left leading-tight break-words hover:underline max-[600px]:min-h-11 max-[600px]:justify-center ${removed(m) ? 'text-text2' : ''}`}
             >
               <span data-testid="member-name" className="font-semibold">
                 {personName(m)}
@@ -861,11 +1041,15 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
               {personName(m) !== m.email && (
                 // Not `truncate`: on a phone the table undoes that class and wraps anywhere.
                 // pass-f F-52: the whole address, breaking only after its @.
-                <span data-testid="member-email" title={m.email} className="block max-w-full text-[13px] font-normal break-words text-text2">
+                <span
+                  data-testid="member-email"
+                  title={m.email}
+                  className="block max-w-full text-[13px] font-normal break-words text-text2"
+                >
                   {/* At its @ only: "admin@" then "example.com", never a lone ".com". */}
-                  {m.email.slice(0, m.email.indexOf("@") + 1)}
+                  {m.email.slice(0, m.email.indexOf('@') + 1)}
                   <wbr />
-                  {m.email.slice(m.email.indexOf("@") + 1)}
+                  {m.email.slice(m.email.indexOf('@') + 1)}
                 </span>
               )}
             </button>
@@ -888,22 +1072,26 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
         </span>
       ),
     },
-    { key: "role", header: "Role", width: "160px", wrap: true, cell: roleCell },
+    { key: 'role', header: 'Role', width: '160px', wrap: true, cell: roleCell },
     {
-      key: "lead",
+      key: 'lead',
       // The anchor of A1's Engineering lead step (Set up on Home).
       header: (
-        <span id="engineering-lead" data-highlight={leadStep || undefined} className={`inline-block whitespace-normal ${leadStep ? "rounded bg-accent-soft px-1.5 py-0.5 text-accent-ink" : ""}`}>
+        <span
+          id="engineering-lead"
+          data-highlight={leadStep || undefined}
+          className={`inline-block whitespace-normal ${leadStep ? 'rounded bg-accent-soft px-1.5 py-0.5 text-accent-ink' : ''}`}
+        >
           Engineering lead
         </span>
       ),
-      width: "112px",
+      width: '112px',
       hideOnPhone: true,
       wrap: true,
       cell: (m) =>
         removed(m) ? (
-          <span className="text-text2">{m.engineering_lead ? "Yes" : "—"}</span>
-        ) : m.role === "viewer" ? (
+          <span className="text-text2">{m.engineering_lead ? 'Yes' : '—'}</span>
+        ) : m.role === 'viewer' ? (
           <span className="flex flex-col items-start gap-0.5" title={VIEWER_NOT_LEAD}>
             {leadBox(m)}
             <span className="text-[12px] leading-4 text-text2">Not for viewers</span>
@@ -913,9 +1101,9 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
         ),
     },
     {
-      key: "status",
-      header: "Status",
-      width: "120px",
+      key: 'status',
+      header: 'Status',
+      width: '120px',
       wrap: true,
       cell: (m) => (
         <span className="flex flex-col items-start gap-1">
@@ -925,11 +1113,11 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
       ),
     },
     {
-      key: "signin",
-      header: "Last sign-in",
-      width: "116px",
+      key: 'signin',
+      header: 'Last sign-in',
+      width: '116px',
       // Beside an open panel the table keeps its room for names; the panel shows the date.
-      narrow: "laptop",
+      narrow: 'laptop',
       // On a phone the cell says it in words: "Signed in Oct 20, 2026", or "Never signed in".
       cell: (m) =>
         m.last_sign_in_at ? (
@@ -938,17 +1126,21 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
             <span title={formatDateTime(m.last_sign_in_at)}>{formatDate(m.last_sign_in_at)}</span>
           </span>
         ) : (
-          <span data-testid="never-signed-in" className="text-text2" title="No sign-in recorded yet">
+          <span
+            data-testid="never-signed-in"
+            className="text-text2"
+            title="No sign-in recorded yet"
+          >
             Never<span className="hidden max-[600px]:inline"> signed in</span>
           </span>
         ),
     },
     {
-      key: "tokens",
-      header: "Tokens",
-      width: "64px",
-      align: "right",
-      phoneLabel: "Tokens ",
+      key: 'tokens',
+      header: 'Tokens',
+      width: '64px',
+      align: 'right',
+      phoneLabel: 'Tokens ',
       cell: (m) => (
         <Link
           href={`/settings/api-tokens?member=${m.id}`}
@@ -961,20 +1153,25 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
       ),
     },
     {
-      key: "action",
+      key: 'action',
       header: <span className="sr-only">Actions</span>,
-      width: "120px",
-      align: "right",
-      phone: "action",
+      width: '120px',
+      align: 'right',
+      phone: 'action',
       wrap: true,
       // qa-shell-28: on a phone your own card shows your role and status only, not a Remove you can't use.
-      cell: (m) => (m.id === selfId && !removed(m) ? <span className="contents max-[600px]:hidden">{actionCell(m)}</span> : actionCell(m)),
+      cell: (m) =>
+        m.id === selfId && !removed(m) ? (
+          <span className="contents max-[600px]:hidden">{actionCell(m)}</span>
+        ) : (
+          actionCell(m)
+        ),
     },
   ];
 
   const invites = invitesQ.data;
   // Oracle sends invite emails in the background: look again until none is still sending.
-  const sending = invites?.some((i) => i.email_status === "queued") ?? false;
+  const sending = invites?.some((i) => i.email_status === 'queued') ?? false;
   const reloadInvites = invitesQ.reload;
   useEffect(() => {
     if (!sending || polls.current >= MAIL_POLLS) return;
@@ -991,23 +1188,32 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
     n == null ? (
       <Numeral value="—" />
     ) : (
-      <button type="button" aria-label={`${label} (${n})`} onClick={onClick} className="rounded hover:underline focus-visible:outline-2">
+      <button
+        type="button"
+        aria-label={`${label} (${n})`}
+        onClick={onClick}
+        className="rounded hover:underline focus-visible:outline-2"
+      >
         <Numeral value={n} />
       </button>
     );
-  const showPeople = (status: "active" | "removed") => {
+  const showPeople = (status: 'active' | 'removed') => {
     setStatusFilter(status);
-    setFind("");
+    setFind('');
     if (inspected) setInspecting(null);
-    requestAnimationFrame(() => document.querySelector(`[data-testid="${PEOPLE}"]`)?.scrollIntoView({ block: "start" }));
+    requestAnimationFrame(() =>
+      document.querySelector(`[data-testid="${PEOPLE}"]`)?.scrollIntoView({ block: 'start' }),
+    );
   };
   const showSection = (testId: string) =>
-    requestAnimationFrame(() => document.querySelector(`[data-testid="${testId}"]`)?.scrollIntoView({ block: "center" }));
+    requestAnimationFrame(() =>
+      document.querySelector(`[data-testid="${testId}"]`)?.scrollIntoView({ block: 'center' }),
+    );
   // The invite just made, as the list has it now (gone once revoked).
   const latest = made ? invites?.find((i) => i.id === made.id) : undefined;
   // pass-f F-54: "Invite sent" goes after a few seconds, or once another action starts; a link
   // still to send stays until the next invite.
-  const sentNote = latest?.email_status === "sent";
+  const sentNote = latest?.email_status === 'sent';
   useEffect(() => {
     if (!sentNote) return;
     const t = setTimeout(() => setMade(null), SENT_NOTE_MS);
@@ -1015,12 +1221,17 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
   }, [sentNote]);
   const sentNoteHidden = sentNote && !!(confirming || demoting);
   const outcome = latest && !sentNoteHidden && (
-    <InviteOutcome invite={latest} stalled={mailStalled} copied={copied === `made:${latest.id}`} onCopy={() => copyLink(latest, `made:${latest.id}`)} />
+    <InviteOutcome
+      invite={latest}
+      stalled={mailStalled}
+      copied={copied === `made:${latest.id}`}
+      onCopy={() => copyLink(latest, `made:${latest.id}`)}
+    />
   );
 
   // qa-settings-4: GET /v1/invites lists the expired with the open (each needs an action); the page keeps them apart.
-  const openInvites = invites?.filter((i) => i.status !== "expired");
-  const expiredInvites = invites?.filter((i) => i.status === "expired");
+  const openInvites = invites?.filter((i) => i.status !== 'expired');
+  const expiredInvites = invites?.filter((i) => i.status === 'expired');
   const inviteRow = (i: Invite) => (
     <li
       key={i.id}
@@ -1030,10 +1241,14 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
       className="flex min-h-11 flex-col gap-1.5 border-t border-line py-2 first:border-t-0"
     >
       {/* The full email on its own line, wrapping at its @ or a dot, never cut; chips and actions under it. */}
-      <span data-testid="invite-who" className="min-w-0 font-medium break-words" title={invitedLine(i)}>
+      <span
+        data-testid="invite-who"
+        className="min-w-0 font-medium break-words"
+        title={invitedLine(i)}
+      >
         {i.name ? (
           <>
-            {i.name}{" "}
+            {i.name}{' '}
             <span className="font-normal text-text2">
               <Email email={i.email} />
             </span>
@@ -1050,7 +1265,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
             <Chip kind="acc">{ROLE_LABEL[i.role]}</Chip>
             {i.engineering_lead && <Chip kind="acc">Engineering lead</Chip>}
             <RevokeBadge failures={revokeFailures} email={i.email} />
-            {i.status === "expired" ? (
+            {i.status === 'expired' ? (
               <Chip kind="warn" data-testid="invite-expiry">
                 Expired {formatDate(i.expires_at)}
               </Chip>
@@ -1061,15 +1276,23 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
             )}
             {/* #370: Retry and Resend are an owner's; an approver sees neither. An expired
                 invite's only state is Expired: its access and email no longer matter. */}
-            {manage && i.status !== "expired" && (
-              <AccessState invite={i} retrying={busy === `access:${i.id}`} onRetry={() => retryAccess(i)} />
+            {manage && i.status !== 'expired' && (
+              <AccessState
+                invite={i}
+                retrying={busy === `access:${i.id}`}
+                onRetry={() => retryAccess(i)}
+              />
             )}
-            {manage && i.status !== "expired" && (
-              <EmailState invite={i} resending={busy === `email:${i.id}`} onResend={() => resend(i)} />
+            {manage && i.status !== 'expired' && (
+              <EmailState
+                invite={i}
+                resending={busy === `email:${i.id}`}
+                onResend={() => resend(i)}
+              />
             )}
           </span>
           <span className="flex flex-wrap items-center gap-1.5">
-            {i.status === "expired" ? (
+            {i.status === 'expired' ? (
               // A5: 14 more days from now; an expired link no longer signs anyone in, so no Copy link.
               <Button
                 variant="ghost"
@@ -1077,29 +1300,42 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
                 disabled={busy === `resend:${i.id}`}
                 onClick={() => renew(i)}
               >
-                {busy === `resend:${i.id}` ? "Resending…" : "Resend"}
+                {busy === `resend:${i.id}` ? 'Resending…' : 'Resend'}
               </Button>
             ) : (
-              <Button variant="ghost" icon="link" aria-label={`Copy link for ${i.email}`} onClick={() => copyLink(i)}>
-                {copied === i.id ? "Copied" : "Copy link"}
+              <Button
+                variant="ghost"
+                icon="link"
+                aria-label={`Copy link for ${i.email}`}
+                onClick={() => copyLink(i)}
+              >
+                {copied === i.id ? 'Copied' : 'Copy link'}
               </Button>
             )}
-            <Button variant="ghost" aria-label={`Revoke invite for ${i.email}`} onClick={() => revokeInvite(i)}>
+            <Button
+              variant="ghost"
+              aria-label={`Revoke invite for ${i.email}`}
+              onClick={() => revokeInvite(i)}
+            >
               Revoke
             </Button>
           </span>
           {i.message && (
             // Plain text, on one line: the full note is its title.
-            <span data-testid="invite-note" title={i.message} className="truncate text-[13px] text-text2">
+            <span
+              data-testid="invite-note"
+              title={i.message}
+              className="truncate text-[13px] text-text2"
+            >
               Note: {i.message}
             </span>
           )}
-          {manage && i.status !== "expired" && <InviteDetail invite={i} />}
+          {manage && i.status !== 'expired' && <InviteDetail invite={i} />}
           {resent?.id === i.id && (
             <p
-              role={resent.ok ? "status" : "alert"}
+              role={resent.ok ? 'status' : 'alert'}
               data-testid="invite-resent"
-              className={`text-[13px] font-medium break-words ${resent.ok ? "text-pass" : "text-crit"}`}
+              className={`text-[13px] font-medium break-words ${resent.ok ? 'text-pass' : 'text-crit'}`}
             >
               {resent.text}
             </p>
@@ -1118,9 +1354,10 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
         <>
           <Chip hero>Google sign-in</Chip>
           <InfoTip label="invites" hero align="start" side="bottom">
-            Oracle lets their Google account through and emails them the sign-in link; their first Google sign-in lands
-            with the role you pick. Copy link copies the sign-in link, to send it yourself. Without an invite, a Google
-            sign-in from an allowed domain gets the company&apos;s default role.
+            Oracle lets their Google account through and emails them the sign-in link; their first
+            Google sign-in lands with the role you pick. Copy link copies the sign-in link, to send
+            it yourself. Without an invite, a Google sign-in from an allowed domain gets the
+            company&apos;s default role.
           </InfoTip>
         </>
       }
@@ -1132,37 +1369,55 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
                 ? []
                 : [
                     {
-                      label: "Active",
-                      figure: statLink(members?.filter((m) => !removed(m)).length, "Show active members", () => showPeople("active")),
-                      testId: "stat-active",
+                      label: 'Active',
+                      figure: statLink(
+                        members?.filter((m) => !removed(m)).length,
+                        'Show active members',
+                        () => showPeople('active'),
+                      ),
+                      testId: 'stat-active',
                     },
                     {
-                      label: "Removed",
-                      figure: statLink(members?.filter(removed).length, "Show removed members", () => showPeople("removed")),
-                      testId: "stat-removed",
+                      label: 'Removed',
+                      figure: statLink(
+                        members?.filter(removed).length,
+                        'Show removed members',
+                        () => showPeople('removed'),
+                      ),
+                      testId: 'stat-removed',
                     },
                   ]),
             ]
           : []),
         // qa-settings-4: an expired invite is counted, and listed, apart from the open ones.
         {
-          label: "Open invites",
-          figure: statLink(openInvites?.length, "Show open invites", () => showSection("open-invites")),
-          testId: "stat-open-invites",
+          label: 'Open invites',
+          figure: statLink(openInvites?.length, 'Show open invites', () =>
+            showSection('open-invites'),
+          ),
+          testId: 'stat-open-invites',
         },
         ...(expiredInvites?.length
           ? [
               {
-                label: "Expired",
-                figure: statLink(expiredInvites.length, "Show expired invites", () => showSection("expired-invites")),
-                testId: "stat-expired-invites",
+                label: 'Expired',
+                figure: statLink(expiredInvites.length, 'Show expired invites', () =>
+                  showSection('expired-invites'),
+                ),
+                testId: 'stat-expired-invites',
               },
             ]
           : []),
       ]}
     >
       <InspectorSection>
-        <form id={INVITE_FORM} onSubmit={invite} aria-label="Invite" noValidate className="flex flex-col gap-3">
+        <form
+          id={INVITE_FORM}
+          onSubmit={invite}
+          aria-label="Invite"
+          noValidate
+          className="flex flex-col gap-3"
+        >
           <Field label="Email">
             <input
               ref={emailRef}
@@ -1176,23 +1431,37 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
               placeholder="name@company.com"
               aria-invalid={inviteError ? true : undefined}
               title={!email.trim() ? NO_EMAIL : undefined}
-              aria-describedby={inviteError ? "invite-error" : undefined}
+              aria-describedby={inviteError ? 'invite-error' : undefined}
               className={INPUT}
             />
           </Field>
           {plusAddressWarning(email) && (
-            <p data-testid="plus-address-warning" role="note" className="-mt-1.5 text-[13px] font-medium text-warn">
+            <p
+              data-testid="plus-address-warning"
+              role="note"
+              className="-mt-1.5 text-[13px] font-medium text-warn"
+            >
               {plusAddressWarning(email)}
             </p>
           )}
           {inviteError && (
-            <p id="invite-error" role="alert" className="-mt-1.5 flex flex-wrap items-center gap-x-2 text-[13px] font-medium text-crit">
+            <p
+              id="invite-error"
+              role="alert"
+              className="-mt-1.5 flex flex-wrap items-center gap-x-2 text-[13px] font-medium text-crit"
+            >
               <span className="min-w-0 break-words">{inviteError}</span>
               {/* pass-f F-50: the refusal's own fix, where the owner adds sign-in domains. */}
-              {manage && OUTSIDE_DOMAINS.test(inviteError) && email.includes("@") && (
+              {manage && OUTSIDE_DOMAINS.test(inviteError) && email.includes('@') && (
                 <Button
                   variant="ghost"
-                  onClick={() => window.dispatchEvent(new CustomEvent(ADD_DOMAIN_EVENT, { detail: email.trim().split("@").pop()?.toLowerCase() }))}
+                  onClick={() =>
+                    window.dispatchEvent(
+                      new CustomEvent(ADD_DOMAIN_EVENT, {
+                        detail: email.trim().split('@').pop()?.toLowerCase(),
+                      }),
+                    )
+                  }
                 >
                   Add domain
                 </Button>
@@ -1216,23 +1485,26 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
               roles={inviteRoles}
               onChange={(r) => {
                 setInviteRole(r);
-                if (r === "viewer") setInviteLead(false);
+                if (r === 'viewer') setInviteLead(false);
               }}
             />
           </Field>
           {manage && (
             <div className="flex flex-col gap-0.5">
-              <label className="inline-flex min-h-11 items-center gap-2 text-[15px]" title={inviteRole === "viewer" ? VIEWER_NOT_LEAD : undefined}>
+              <label
+                className="inline-flex min-h-11 items-center gap-2 text-[15px]"
+                title={inviteRole === 'viewer' ? VIEWER_NOT_LEAD : undefined}
+              >
                 <input
                   type="checkbox"
-                  checked={inviteLead && inviteRole !== "viewer"}
-                  disabled={inviteRole === "viewer"}
+                  checked={inviteLead && inviteRole !== 'viewer'}
+                  disabled={inviteRole === 'viewer'}
                   onChange={(e) => setInviteLead(e.target.checked)}
                   className={CHECKBOX}
                 />
                 Engineering lead
               </label>
-              {inviteRole === "viewer" && (
+              {inviteRole === 'viewer' && (
                 <p data-testid="invite-lead-reason" className="-mt-2 text-[13px] text-text2">
                   {VIEWER_NOT_LEAD}. Pick Commenter or above to name them.
                 </p>
@@ -1250,23 +1522,40 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
             />
           </Field>
           {inviteMessage.length >= MESSAGE_COUNT_FROM && (
-            <p data-testid="invite-message-count" aria-live="polite" className="tnum -mt-1.5 text-right text-[13px] text-text2">
+            <p
+              data-testid="invite-message-count"
+              aria-live="polite"
+              className="tnum -mt-1.5 text-right text-[13px] text-text2"
+            >
               {inviteMessage.length}/{MESSAGE_MAX}
             </p>
           )}
           <div>
             {/* The page's one way to invite: a filled primary button, never greyed out without a reason. */}
             {/* pass-f F-1: off while the people or invites failed to load; the notice says why. */}
-            <Button type="submit" variant="primary" icon="plus" disabled={pending || !!membersQ.error || !!invitesQ.error}>
-              {pending ? "Inviting…" : "Send invite"}
+            <Button
+              type="submit"
+              variant="primary"
+              icon="plus"
+              disabled={pending || !!membersQ.error || !!invitesQ.error}
+            >
+              {pending ? 'Inviting…' : 'Send invite'}
             </Button>
           </div>
           {outcome}
         </form>
       </InspectorSection>
       <InspectorSection label="Open invites" testId="open-invites">
-        {invitesQ.error && <LoadError what="the invites" error={invitesQ.error} onRetry={() => void invitesQ.reload()} />}
-        {!invites && !invitesQ.error && <span className="block h-3 w-2/3 animate-pulse rounded bg-surface2" />}
+        {invitesQ.error && (
+          <LoadError
+            what="the invites"
+            error={invitesQ.error}
+            onRetry={() => void invitesQ.reload()}
+          />
+        )}
+        {!invites && !invitesQ.error && (
+          <span className="block h-3 w-2/3 animate-pulse rounded bg-surface2" />
+        )}
         {openInvites?.length === 0 && <p className="text-[15px] text-text2">No open invites</p>}
         {!!openInvites?.length && (
           <ul aria-label="Open invites" className={`-my-1 flex flex-col ${SETTLING}`}>
@@ -1281,7 +1570,9 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
           </ul>
         </InspectorSection>
       )}
-      {manage && <RevokeFailuresSection failures={revokeFailures} onChanged={() => void revokeQ.reload()} />}
+      {manage && (
+        <RevokeFailuresSection failures={revokeFailures} onChanged={() => void revokeQ.reload()} />
+      )}
       <RolesSection members={manage ? members : undefined} />
     </Inspector>
   );
@@ -1295,7 +1586,12 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
         status={
           <>
             {manage && active != null && (
-              <button type="button" aria-label={`Show active members (${active})`} onClick={() => showPeople("active")} className="rounded-full">
+              <button
+                type="button"
+                aria-label={`Show active members (${active})`}
+                onClick={() => showPeople('active')}
+                className="rounded-full"
+              >
                 <Chip kind="acc">{active} active</Chip>
               </button>
             )}
@@ -1329,73 +1625,94 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
             <span className="inline-flex flex-wrap items-center gap-1.5">
               Pick an engineering lead
               <InfoTip label="the engineering lead" align="start">
-                Tick Engineering lead for the person who speaks for engineering and checks feasibility. Any commenter or above can be it.
+                Tick Engineering lead for the person who speaks for engineering and checks
+                feasibility. Any commenter or above can be it.
               </InfoTip>
             </span>
           </Notice>
         )}
-        {manage && <Panel
-          testId={PEOPLE}
-          title="People"
-          count={members?.length}
-          tools={
-            <span className="inline-flex flex-wrap items-center gap-2">
-              {leadSaved && (
-                <span role="status" data-testid="lead-saved" className="text-sm font-semibold text-pass">
-                  Saved
-                </span>
-              )}
-              {statusFilter && (
-                <span data-testid="people-filter" className="inline-flex items-center gap-1">
-                  <Chip kind="line">{statusFilter === "active" ? "Active only" : "Removed only"}</Chip>
-                  <Button variant="ghost" onClick={() => setStatusFilter(null)}>
-                    Show all
-                  </Button>
-                </span>
-              )}
-              <FindPerson value={find} onChange={setFind} />
-              {/* Under 1100 px the invite form sits below this table: a way down to it. While a
+        {manage && (
+          <Panel
+            testId={PEOPLE}
+            title="People"
+            count={members?.length}
+            tools={
+              <span className="inline-flex flex-wrap items-center gap-2">
+                {leadSaved && (
+                  <span
+                    role="status"
+                    data-testid="lead-saved"
+                    className="text-sm font-semibold text-pass"
+                  >
+                    Saved
+                  </span>
+                )}
+                {statusFilter && (
+                  <span data-testid="people-filter" className="inline-flex items-center gap-1">
+                    <Chip kind="line">
+                      {statusFilter === 'active' ? 'Active only' : 'Removed only'}
+                    </Chip>
+                    <Button variant="ghost" onClick={() => setStatusFilter(null)}>
+                      Show all
+                    </Button>
+                  </span>
+                )}
+                <FindPerson value={find} onChange={setFind} />
+                {/* Under 1100 px the invite form sits below this table: a way down to it. While a
                   member's panel is open (it stands in the form's place) it shows at every width and
                   closes the panel first (qa4-settings-11). */}
-              <a
-                href={`#${INVITE_FORM}`}
-                data-testid="invite-someone"
-                onClick={(e) => {
-                  e.preventDefault();
-                  if (inspected) setInspecting(null);
-                  requestAnimationFrame(() => {
-                    emailRef.current?.scrollIntoView({ block: "center" });
-                    emailRef.current?.focus({ preventScroll: true });
-                  });
-                }}
-                className={`min-h-11 items-center text-sm font-semibold text-accent-ink hover:underline ${inspected ? "inline-flex" : "hidden max-[1100px]:inline-flex"}`}
-              >
-                Invite someone
-              </a>
-            </span>
-          }
-        >
-          {membersQ.error ? (
-            // Visual QA X-1: the shared failed-load notice, its Try again reads the list again.
-            <div className="px-4 pt-4">
-              <LoadError what="the members" error={membersQ.error} onRetry={() => void membersQ.reload()} />
-            </div>
-          ) : (
-            <div className={SETTLING}>
-              <DataTable
-                label="Members"
-                columns={columns}
-                rows={members?.filter(
-                  (m) => matches(find, m.name, m.email) && (!statusFilter || (statusFilter === "removed") === removed(m)),
-                )}
-                loading={!members}
-                rowKey={(m) => m.id}
-                rowProps={(m) => ({ "data-testid": "member-row", "data-status": m.status, ...memberActs.rowAttrs(m.id) })}
-                empty={find.trim() ? <NoMatch find={find} onClear={() => setFind("")} /> : "No members"}
-              />
-            </div>
-          )}
-        </Panel>}
+                <a
+                  href={`#${INVITE_FORM}`}
+                  data-testid="invite-someone"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (inspected) setInspecting(null);
+                    requestAnimationFrame(() => {
+                      emailRef.current?.scrollIntoView({ block: 'center' });
+                      emailRef.current?.focus({ preventScroll: true });
+                    });
+                  }}
+                  className={`min-h-11 items-center text-sm font-semibold text-accent-ink hover:underline ${inspected ? 'inline-flex' : 'hidden max-[1100px]:inline-flex'}`}
+                >
+                  Invite someone
+                </a>
+              </span>
+            }
+          >
+            {membersQ.error ? (
+              // Visual QA X-1: the shared failed-load notice, its Try again reads the list again.
+              <div className="px-4 pt-4">
+                <LoadError
+                  what="the members"
+                  error={membersQ.error}
+                  onRetry={() => void membersQ.reload()}
+                />
+              </div>
+            ) : (
+              <div className={SETTLING}>
+                <DataTable
+                  label="Members"
+                  columns={columns}
+                  rows={members?.filter(
+                    (m) =>
+                      matches(find, m.name, m.email) &&
+                      (!statusFilter || (statusFilter === 'removed') === removed(m)),
+                  )}
+                  loading={!members}
+                  rowKey={(m) => m.id}
+                  rowProps={(m) => ({
+                    'data-testid': 'member-row',
+                    'data-status': m.status,
+                    ...memberActs.rowAttrs(m.id),
+                  })}
+                  empty={
+                    find.trim() ? <NoMatch find={find} onClear={() => setFind('')} /> : 'No members'
+                  }
+                />
+              </div>
+            )}
+          </Panel>
+        )}
         {manage && <SignInRules />}
       </Split>
       <RemoveDialog
@@ -1421,20 +1738,26 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
 }
 
 /** What happened to the invite just made: emailed, being emailed, or the link to send. */
-function InviteOutcome({ invite, stalled, copied, onCopy }: { invite: Invite; stalled: boolean; copied: boolean; onCopy: () => void }) {
-  if (invite.email_status === "sent") {
+function InviteOutcome({
+  invite,
+  stalled,
+  copied,
+  onCopy,
+}: {
+  invite: Invite;
+  stalled: boolean;
+  copied: boolean;
+  onCopy: () => void;
+}) {
+  if (invite.email_status === 'sent') {
     return (
       <Notice tone="pass" testId="invite-outcome">
         Invite sent to {invite.email}
       </Notice>
     );
   }
-  if (invite.email_status === "queued" && !stalled) {
-    return (
-      <Notice testId="invite-outcome">
-        Sending the invite to {invite.email}…
-      </Notice>
-    );
+  if (invite.email_status === 'queued' && !stalled) {
+    return <Notice testId="invite-outcome">Sending the invite to {invite.email}…</Notice>;
   }
   return (
     <Notice
@@ -1442,13 +1765,13 @@ function InviteOutcome({ invite, stalled, copied, onCopy }: { invite: Invite; st
       testId="invite-outcome"
       action={
         <Button icon="link" onClick={onCopy}>
-          {copied ? "Copied" : "Copy sign-in link"}
+          {copied ? 'Copied' : 'Copy sign-in link'}
         </Button>
       }
     >
-      {invite.email_status === "queued"
+      {invite.email_status === 'queued'
         ? `Oracle hasn't emailed ${invite.email} yet. Send them this link yourself:`
-        : "Oracle didn't email this invite. Send them this link:"}{" "}
+        : "Oracle didn't email this invite. Send them this link:"}{' '}
       <code data-testid="invite-link" className="break-all font-mono text-[13px]">
         {invite.sign_in_url}
       </code>

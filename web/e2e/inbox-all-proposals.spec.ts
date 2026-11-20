@@ -1,6 +1,6 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { ADMIN, login, signOut } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { ADMIN, login, signOut } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /**
  * inbox-meeting-proposals owner: the Inbox lists every Simple proposal waiting on me, not only a
@@ -23,14 +23,14 @@ import { expect, test, type Locator, type Page } from "./test";
 const WHEN = /on [A-Z][a-z]{2} \d{1,2}(, \d{4})?, \d{1,2}:\d{2} [AP]M/;
 
 async function tap(l: Locator) {
-  await l.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await l.evaluate((el) => el.scrollIntoView({ block: 'center' }));
   await l.click();
 }
 
 async function switchTo(page: Page, email: string) {
   const size = page.viewportSize()!;
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/home");
+  await page.goto('/home');
   await signOut(page);
   await login(page, email);
   await page.setViewportSize(size);
@@ -38,52 +38,61 @@ async function switchTo(page: Page, email: string) {
 
 /** The commenter asks Oracle to rename the Welcome video and proposes it. */
 async function askRename(page: Page, phone: boolean) {
-  await login(page, "commenter@example.com");
-  await page.goto("/simple");
-  await tap(page.getByTestId(phone ? "phone-ask" : "simple-ask").filter({ visible: true }).first());
-  const ask = page.getByTestId("ask-chat").filter({ visible: true });
+  await login(page, 'commenter@example.com');
+  await page.goto('/simple');
+  await tap(
+    page
+      .getByTestId(phone ? 'phone-ask' : 'simple-ask')
+      .filter({ visible: true })
+      .first(),
+  );
+  const ask = page.getByTestId('ask-chat').filter({ visible: true });
   await expect(ask).toBeVisible();
-  await ask.getByLabel("Message Oracle").fill("rename Welcome video to Welcome tour");
-  await tap(ask.getByRole("button", { name: "Send" }));
-  const card = ask.getByTestId("chat-card").filter({ hasText: "Rename Welcome video" });
-  await tap(card.getByRole("button", { name: "Propose" }));
-  await expect(card.getByTestId("chat-card-outcome")).toContainText("Proposed to");
+  await ask.getByLabel('Message Oracle').fill('rename Welcome video to Welcome tour');
+  await tap(ask.getByRole('button', { name: 'Send' }));
+  const card = ask.getByTestId('chat-card').filter({ hasText: 'Rename Welcome video' });
+  await tap(card.getByRole('button', { name: 'Propose' }));
+  await expect(card.getByTestId('chat-card-outcome')).toContainText('Proposed to');
   // The Ask panel stays open from page to page: close it, as a person would.
-  if (phone) await page.keyboard.press("Escape");
-  else await tap(page.getByTestId("simple-ask"));
+  if (phone) await page.keyboard.press('Escape');
+  else await tap(page.getByTestId('simple-ask'));
   await expect(ask).toBeHidden();
 }
 
 /** The owner reviews Usage alerts and cuts the Welcome video, on another roadmap. */
 async function cutInMeeting(page: Page) {
-  await page.goto("/simple/meetings");
-  await tap(page.getByRole("button", { name: /^Start review/ }).first());
-  const sheet = page.getByRole("dialog", { name: "Start a review" });
-  await sheet.getByLabel("PRD").selectOption({ label: "Usage alerts PRD" });
-  await sheet.getByRole("checkbox", { name: "Theo Brandt" }).check();
-  await tap(sheet.getByRole("button", { name: "Start", exact: true }));
-  await expect(page.getByRole("heading", { name: "Review: Usage alerts PRD" })).toBeVisible();
-  await tap(page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "2 Roadmap" }));
-  const slice = page.getByRole("region", { name: "Roadmap slice" });
-  await tap(slice.getByRole("button", { name: "Cut Welcome video" }));
-  await page.getByRole("alertdialog").getByRole("button", { name: "Cut" }).click();
-  await expect(slice.getByTestId("roadmap-said")).toHaveText("Welcome video is on another roadmap: sent to its owner to decide.");
+  await page.goto('/simple/meetings');
+  await tap(page.getByRole('button', { name: /^Start review/ }).first());
+  const sheet = page.getByRole('dialog', { name: 'Start a review' });
+  await sheet.getByLabel('PRD').selectOption({ label: 'Usage alerts PRD' });
+  await sheet.getByRole('checkbox', { name: 'Theo Brandt' }).check();
+  await tap(sheet.getByRole('button', { name: 'Start', exact: true }));
+  await expect(page.getByRole('heading', { name: 'Review: Usage alerts PRD' })).toBeVisible();
+  await tap(
+    page.getByRole('navigation', { name: 'Steps' }).getByRole('button', { name: '2 Roadmap' }),
+  );
+  const slice = page.getByRole('region', { name: 'Roadmap slice' });
+  await tap(slice.getByRole('button', { name: 'Cut Welcome video' }));
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Cut' }).click();
+  await expect(slice.getByTestId('roadmap-said')).toHaveText(
+    'Welcome video is on another roadmap: sent to its owner to decide.',
+  );
 }
 
 /** Simple's rail (More on a phone) to the Inbox, by a click; returns the count it showed. */
 async function openInboxFromRail(page: Page, phone: boolean): Promise<number> {
-  await page.goto("/simple");
+  await page.goto('/simple');
   let link: Locator;
   let count: Locator;
   if (phone) {
-    await tap(page.getByTestId("simple-tab-more"));
-    const sheet = page.getByRole("dialog", { name: "More" });
-    link = sheet.getByRole("link", { name: "Inbox", exact: true });
-    count = sheet.getByTestId("simple-more-inbox-count");
+    await tap(page.getByTestId('simple-tab-more'));
+    const sheet = page.getByRole('dialog', { name: 'More' });
+    link = sheet.getByRole('link', { name: 'Inbox', exact: true });
+    count = sheet.getByTestId('simple-more-inbox-count');
   } else {
-    const rail = page.getByTestId("simple-nav");
-    link = rail.getByRole("link", { name: "Inbox", exact: true });
-    count = rail.getByTestId("simple-nav-inbox-count");
+    const rail = page.getByTestId('simple-nav');
+    link = rail.getByRole('link', { name: 'Inbox', exact: true });
+    count = rail.getByTestId('simple-nav-inbox-count');
   }
   await expect(count).toBeVisible();
   await expect(link).toHaveAccessibleDescription(/waiting on you/);
@@ -95,64 +104,87 @@ async function openInboxFromRail(page: Page, phone: boolean): Promise<number> {
 
 async function waiting(page: Page): Promise<number> {
   // simple-home-qa-nov12 #18: Simple's Inbox says its count once, as Needs you's.
-  const chip = page.getByTestId("inbox-needs").getByTestId("panel-count").first();
+  const chip = page.getByTestId('inbox-needs').getByTestId('panel-count').first();
   await expect(chip).toHaveText(/^\d+$/);
   return Number((await chip.textContent())!.trim());
 }
 
-const askRow = (page: Page) => page.getByRole("row").filter({ hasText: "asked through Ask Oracle by" }).filter({ hasText: "Welcome video" });
-const meetingRow = (page: Page) => page.getByRole("row").filter({ hasText: "asked for by the meeting" }).filter({ hasText: "Welcome video" });
+const askRow = (page: Page) =>
+  page
+    .getByRole('row')
+    .filter({ hasText: 'asked through Ask Oracle by' })
+    .filter({ hasText: 'Welcome video' });
+const meetingRow = (page: Page) =>
+  page
+    .getByRole('row')
+    .filter({ hasText: 'asked for by the meeting' })
+    .filter({ hasText: 'Welcome video' });
 
 test.beforeEach(async ({ context }) => {
-  await context.addInitScript((key) => localStorage.setItem(key, "meeting-agenda-owner"), MOCK_SCENARIO_KEY);
+  await context.addInitScript(
+    (key) => localStorage.setItem(key, 'meeting-agenda-owner'),
+    MOCK_SCENARIO_KEY,
+  );
 });
 
 for (const phone of [false, true]) {
-  const where = phone ? "phone" : "desktop";
+  const where = phone ? 'phone' : 'desktop';
   test.describe(where, () => {
     test.use({ viewport: phone ? { width: 390, height: 844 } : { width: 1440, height: 900 } });
 
     // card: inbox-all-proposals-both, inbox-all-proposals-accept
-    test(`an Ask Oracle proposal and a meeting's both wait in the Inbox, reached from Simple's rail; Accept applies one (${where})`, async ({ page }) => {
+    test(`an Ask Oracle proposal and a meeting's both wait in the Inbox, reached from Simple's rail; Accept applies one (${where})`, async ({
+      page,
+    }) => {
       test.setTimeout(120_000);
       await askRename(page, phone);
       await switchTo(page, ADMIN.email);
       await cutInMeeting(page);
 
-      await switchTo(page, "approver@example.com");
+      await switchTo(page, 'approver@example.com');
       const badge = await openInboxFromRail(page, phone);
       const ask = askRow(page);
       const meeting = meetingRow(page);
       await expect(ask).toHaveCount(1);
       await expect(meeting).toHaveCount(1);
-      await expect(ask).toContainText(/Renamed Welcome video to “Welcome tour” · asked through Ask Oracle by [A-Z][a-z]+ [A-Z][a-z]+/);
+      await expect(ask).toContainText(
+        /Renamed Welcome video to “Welcome tour” · asked through Ask Oracle by [A-Z][a-z]+ [A-Z][a-z]+/,
+      );
       await expect(ask).toContainText(WHEN);
-      await expect(meeting).toContainText(/Cut Welcome video · asked for by the meeting Review: Usage alerts PRD/);
+      await expect(meeting).toContainText(
+        /Cut Welcome video · asked for by the meeting Review: Usage alerts PRD/,
+      );
       await expect(meeting).toContainText(WHEN);
       for (const row of [ask, meeting]) {
-        await expect(row.getByRole("button", { name: "Accept" })).toBeVisible();
-        await expect(row.getByRole("button", { name: "Decline" })).toBeVisible();
+        await expect(row.getByRole('button', { name: 'Accept' })).toBeVisible();
+        await expect(row.getByRole('button', { name: 'Decline' })).toBeVisible();
       }
       // The rail's count is the page's "N waiting".
       const before = await waiting(page);
       expect(badge).toBe(before);
 
-      await tap(ask.getByRole("button", { name: "Accept" }));
-      await expect(page.getByText("Accepted: it is in your working draft")).toBeVisible();
+      await tap(ask.getByRole('button', { name: 'Accept' }));
+      await expect(page.getByText('Accepted: it is in your working draft')).toBeVisible();
       await expect(askRow(page)).toHaveCount(0);
       // The meeting's cut still waits, the item now by its new name.
-      await expect(page.getByRole("row").filter({ hasText: "asked for by the meeting" }).filter({ hasText: "Welcome tour" })).toHaveCount(1);
+      await expect(
+        page
+          .getByRole('row')
+          .filter({ hasText: 'asked for by the meeting' })
+          .filter({ hasText: 'Welcome tour' }),
+      ).toHaveCount(1);
       await expect.poll(() => waiting(page).catch(() => 0)).toBe(before - 1);
 
       // Accept applied it: the item reads by its new name on its roadmap.
-      await page.goto("/simple/roadmap");
-      const roadmap = page.getByTestId("simple-roadmap");
+      await page.goto('/simple/roadmap');
+      const roadmap = page.getByTestId('simple-roadmap');
       await expect(roadmap).toBeVisible();
-      const filters = page.getByRole("button", { name: "Filters", exact: true });
+      const filters = page.getByRole('button', { name: 'Filters', exact: true });
       if (await filters.isVisible()) await tap(filters);
-      await page.getByTestId("filter-roadmap").selectOption({ label: "Onboarding roadmap" });
-      if (await page.getByRole("dialog", { name: "Filters" }).isVisible()) await page.keyboard.press("Escape");
-      await expect(roadmap.getByRole("button", { name: /^Welcome tour/ }).first()).toBeVisible();
+      await page.getByTestId('filter-roadmap').selectOption({ label: 'Onboarding roadmap' });
+      if (await page.getByRole('dialog', { name: 'Filters' }).isVisible())
+        await page.keyboard.press('Escape');
+      await expect(roadmap.getByRole('button', { name: /^Welcome tour/ }).first()).toBeVisible();
     });
   });
 }

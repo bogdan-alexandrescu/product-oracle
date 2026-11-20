@@ -1,6 +1,6 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { ADMIN, login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { ADMIN, login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /*
  * one-roadmap-many-prds (train review): the Goal map reads the ONE company roadmap (Product
@@ -15,11 +15,16 @@ import { expect, test, type Page } from "./test";
 const DESKTOP = { viewport: { width: 1440, height: 900 } };
 
 async function open(page: Page) {
-  await page.context().addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, "fit-date-company-roadmap"] as const);
+  await page
+    .context()
+    .addInitScript(([k, v]) => localStorage.setItem(k, v), [
+      MOCK_SCENARIO_KEY,
+      'fit-date-company-roadmap',
+    ] as const);
   await login(page, ADMIN.email);
 }
 
-test.describe("desktop", () => {
+test.describe('desktop', () => {
   test.use(DESKTOP);
 
   test("the Goal map shows only the company roadmap's milestones", async ({ page }) => {
@@ -27,12 +32,14 @@ test.describe("desktop", () => {
     // fails_when=the older roadmap's milestones show; no_claim=the API's roadmap pick
     // (test_simple_goal_map_api).
     await open(page);
-    await page.goto("/simple/home");
-    await page.getByTestId("simple-nav-goals").first().click();
-    const map = page.getByTestId("gm-page");
+    await page.goto('/simple/home');
+    await page.getByTestId('simple-nav-goals').first().click();
+    const map = page.getByTestId('gm-page');
     await expect(map).toBeVisible();
-    await expect(page.getByTestId("gm-strip-milestone").filter({ hasText: "25 sign-ups per rep" })).toHaveCount(1);
-    await expect(map).not.toContainText("15 sign-ups per rep");
-    await expect(map).not.toContainText("$8k revenue per day");
+    await expect(
+      page.getByTestId('gm-strip-milestone').filter({ hasText: '25 sign-ups per rep' }),
+    ).toHaveCount(1);
+    await expect(map).not.toContainText('15 sign-ups per rep');
+    await expect(map).not.toContainText('$8k revenue per day');
   });
 });

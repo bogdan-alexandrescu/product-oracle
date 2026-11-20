@@ -1,6 +1,6 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login, openRoadmapItem } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login, openRoadmapItem } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /**
  * The owner's production walk (2026-10-27): flows show up when drawn, the Ask thread belongs
@@ -41,148 +41,204 @@ import { expect, test, type Locator, type Page } from "./test";
 const DESKTOP = { width: 1366, height: 820 };
 const PHONE = { width: 390, height: 844 };
 
-
 /** Clicks `l` once it is scrolled to the middle (on a phone the tab bar covers the bottom of the screen). */
 async function tap(l: Locator) {
-  await l.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await l.evaluate((el) => el.scrollIntoView({ block: 'center' }));
   await l.click();
 }
 
 /** Opens Ask Oracle (the rail's button; the header's Ask on a phone): the visible panel. */
 async function openAsk(page: Page, phone: boolean) {
-  await expect(page.getByTestId("simple-home").or(page.locator("main")).first()).toBeVisible();
-  if (await page.getByTestId("hop-panel").filter({ visible: true }).getByTestId("ask-chat").isVisible()) return page.getByTestId("hop-panel").filter({ visible: true });
-  await tap(page.getByTestId(phone ? "phone-ask" : "simple-ask").filter({ visible: true }).first());
-  const panel = page.getByTestId("hop-panel").filter({ visible: true });
-  await expect(panel.getByTestId("ask-chat")).toBeVisible();
+  await expect(page.getByTestId('simple-home').or(page.locator('main')).first()).toBeVisible();
+  if (
+    await page
+      .getByTestId('hop-panel')
+      .filter({ visible: true })
+      .getByTestId('ask-chat')
+      .isVisible()
+  )
+    return page.getByTestId('hop-panel').filter({ visible: true });
+  await tap(
+    page
+      .getByTestId(phone ? 'phone-ask' : 'simple-ask')
+      .filter({ visible: true })
+      .first(),
+  );
+  const panel = page.getByTestId('hop-panel').filter({ visible: true });
+  await expect(panel.getByTestId('ask-chat')).toBeVisible();
   return panel;
 }
 
 for (const phone of [false, true]) {
-  for (const scheme of ["light", "dark"] as const) {
-    const where = `${phone ? "phone" : "desktop"}, ${scheme}`;
+  for (const scheme of ['light', 'dark'] as const) {
+    const where = `${phone ? 'phone' : 'desktop'}, ${scheme}`;
     test.describe(where, () => {
-      test.use({ viewport: phone ? PHONE : DESKTOP, colorScheme: scheme, hasTouch: phone, isMobile: phone });
-
-      test(`a roadmap item's flow shows up when drawn, without a reload (${where})`, async ({ page }) => {
-        await login(page);
-        await page.goto("/simple/roadmap");
-        await openRoadmapItem(page, "alert-digest");
-        const card = page.getByTestId("floating-card");
-        await expect(card.getByTestId("card-flow")).toContainText("No flow yet");
-        await tap(card.getByRole("button", { name: "Ask Oracle to draw it" }));
-        await expect(card.getByTestId("flow-drawn")).toContainText("Version 1");
-        await expect(card.getByTestId("card-flow")).not.toContainText("No flow yet");
-        await tap(card.getByRole("button", { name: "Open the flow", exact: true }));
-        await expect(page.getByTestId("flow-detail").getByTestId("flow-svg")).toBeVisible();
+      test.use({
+        viewport: phone ? PHONE : DESKTOP,
+        colorScheme: scheme,
+        hasTouch: phone,
+        isMobile: phone,
       });
 
-      test(`a one-pager bet's thumbnail shows its drawn flow without a reload (${where})`, async ({ page }) => {
+      test(`a roadmap item's flow shows up when drawn, without a reload (${where})`, async ({
+        page,
+      }) => {
         await login(page);
-        await page.goto("/simple/prds/guided-setup");
-        const wide = page.getByRole("group", { name: "User flow of “Invite suggestions from the admin's" });
+        await page.goto('/simple/roadmap');
+        await openRoadmapItem(page, 'alert-digest');
+        const card = page.getByTestId('floating-card');
+        await expect(card.getByTestId('card-flow')).toContainText('No flow yet');
+        await tap(card.getByRole('button', { name: 'Ask Oracle to draw it' }));
+        await expect(card.getByTestId('flow-drawn')).toContainText('Version 1');
+        await expect(card.getByTestId('card-flow')).not.toContainText('No flow yet');
+        await tap(card.getByRole('button', { name: 'Open the flow', exact: true }));
+        await expect(page.getByTestId('flow-detail').getByTestId('flow-svg')).toBeVisible();
+      });
+
+      test(`a one-pager bet's thumbnail shows its drawn flow without a reload (${where})`, async ({
+        page,
+      }) => {
+        await login(page);
+        await page.goto('/simple/prds/guided-setup');
+        const wide = page.getByRole('group', {
+          name: "User flow of “Invite suggestions from the admin's",
+        });
         // 2026-10-30: no "No flow yet" row; the bet's line ends with a small "Draw the flow".
         await expect(wide).toHaveCount(0);
-        await tap(page.getByRole("button", { name: "Draw the flow for “Invite suggestions from the admin's" }));
-        await expect(wide.getByTestId("flow-drawn")).toContainText("Version 1");
-        await expect(wide.getByRole("button", { name: "Flow for “Invite suggestions from the admin's" })).toBeVisible();
-        await expect(wide).not.toContainText("No flow yet");
+        await tap(
+          page.getByRole('button', {
+            name: "Draw the flow for “Invite suggestions from the admin's",
+          }),
+        );
+        await expect(wide.getByTestId('flow-drawn')).toContainText('Version 1');
+        await expect(
+          wide.getByRole('button', { name: "Flow for “Invite suggestions from the admin's" }),
+        ).toBeVisible();
+        await expect(wide).not.toContainText('No flow yet');
       });
 
       test(`a drawing that fails says so and Retry draws it (${where})`, async ({ page }) => {
         await login(page);
-        await page.goto("/simple/roadmap");
-        await openRoadmapItem(page, "alert-export");
-        const card = page.getByTestId("floating-card");
-        await tap(card.getByRole("button", { name: "Ask Oracle to draw it" }));
-        await expect(card.getByTestId("flow-empty")).toContainText("Oracle could not draw this flow");
-        await expect(card.getByTestId("flow-empty")).not.toContainText("Oracle is drawing");
-        await tap(card.getByRole("button", { name: "Retry" }));
-        await expect(card.getByTestId("flow-drawn")).toContainText("Version 1");
-        await tap(card.getByRole("button", { name: "Open the flow", exact: true }));
-        await expect(page.getByTestId("flow-detail").getByTestId("flow-svg")).toBeVisible();
+        await page.goto('/simple/roadmap');
+        await openRoadmapItem(page, 'alert-export');
+        const card = page.getByTestId('floating-card');
+        await tap(card.getByRole('button', { name: 'Ask Oracle to draw it' }));
+        await expect(card.getByTestId('flow-empty')).toContainText(
+          'Oracle could not draw this flow',
+        );
+        await expect(card.getByTestId('flow-empty')).not.toContainText('Oracle is drawing');
+        await tap(card.getByRole('button', { name: 'Retry' }));
+        await expect(card.getByTestId('flow-drawn')).toContainText('Version 1');
+        await tap(card.getByRole('button', { name: 'Open the flow', exact: true }));
+        await expect(page.getByTestId('flow-detail').getByTestId('flow-svg')).toBeVisible();
       });
 
-      test(`a failed redraw with no open comment still offers Retry (${where})`, async ({ page }) => {
+      test(`a failed redraw with no open comment still offers Retry (${where})`, async ({
+        page,
+      }) => {
         await login(page);
-        await page.goto("/simple/roadmap");
-        await openRoadmapItem(page, "alert-mobile");
-        const card = page.getByTestId("floating-card");
+        await page.goto('/simple/roadmap');
+        await openRoadmapItem(page, 'alert-mobile');
+        const card = page.getByTestId('floating-card');
         // The flow pick's row says so under the drawing, with Retry.
-        const failed = card.getByTestId("flow-row").getByTestId("flow-failed");
-        await expect(failed).toContainText("Oracle could not draw the next version.");
-        await tap(failed.getByRole("button", { name: "Retry" }));
-        await expect(card.getByTestId("flow-drawn")).toContainText("Version 2");
-        await expect(card.getByTestId("flow-failed")).toHaveCount(0);
+        const failed = card.getByTestId('flow-row').getByTestId('flow-failed');
+        await expect(failed).toContainText('Oracle could not draw the next version.');
+        await tap(failed.getByRole('button', { name: 'Retry' }));
+        await expect(card.getByTestId('flow-drawn')).toContainText('Version 2');
+        await expect(card.getByTestId('flow-failed')).toHaveCount(0);
         // The viewer's comments: version 2 of 2, no comments.
-        await tap(card.getByRole("button", { name: "Open the flow", exact: true }));
-        await tap(page.getByTestId("flow-detail").getByRole("button", { name: "Full screen" }));
-        const full = page.getByTestId("flow-fullscreen");
-        await tap(full.getByRole("button", { name: "Comment" }));
-        await expect(full.getByTestId("flow-version")).toHaveText("Version 2 of 2");
-        await expect(full.getByText("No comments yet.")).toBeVisible();
+        await tap(card.getByRole('button', { name: 'Open the flow', exact: true }));
+        await tap(page.getByTestId('flow-detail').getByRole('button', { name: 'Full screen' }));
+        const full = page.getByTestId('flow-fullscreen');
+        await tap(full.getByRole('button', { name: 'Comment' }));
+        await expect(full.getByTestId('flow-version')).toHaveText('Version 2 of 2');
+        await expect(full.getByText('No comments yet.')).toBeVisible();
       });
 
       // Train AD: the roadmap's own lane wins: the card names an item by its title alone, no code
       // (fix4 qa-simple-roadmap-3), so its Why line reads the PRD section's words without "F-79".
-      test(`the item card names the PRD's section by its words, not its key or code (${where})`, async ({ page }) => {
-        await login(page, "viewer@example.com");
-        await page.goto("/simple/roadmap");
-        await openRoadmapItem(page, "alert-digest");
-        const reasons = page.getByTestId("floating-card").getByTestId("card-reasons");
-        await expect(reasons).toContainText("From Usage alerts: Weekly digest of fired alerts.");
-        await expect(reasons).not.toContainText("F-79");
-        await expect(reasons).not.toContainText("section f-79");
+      test(`the item card names the PRD's section by its words, not its key or code (${where})`, async ({
+        page,
+      }) => {
+        await login(page, 'viewer@example.com');
+        await page.goto('/simple/roadmap');
+        await openRoadmapItem(page, 'alert-digest');
+        const reasons = page.getByTestId('floating-card').getByTestId('card-reasons');
+        await expect(reasons).toContainText('From Usage alerts: Weekly digest of fired alerts.');
+        await expect(reasons).not.toContainText('F-79');
+        await expect(reasons).not.toContainText('section f-79');
       });
 
-      for (const email of ["admin@example.com", "commenter@example.com", "viewer@example.com"]) {
-        test(`${email.split("@")[0]}: the Ask chat is about its page, named by the page (ask-fresh: a clean chat each time) (${where})`, async ({ context, page }) => {
-          await context.addInitScript((key) => localStorage.setItem(key, "simple-chat"), MOCK_SCENARIO_KEY);
+      for (const email of ['admin@example.com', 'commenter@example.com', 'viewer@example.com']) {
+        test(`${email.split('@')[0]}: the Ask chat is about its page, named by the page (ask-fresh: a clean chat each time) (${where})`, async ({
+          context,
+          page,
+        }) => {
+          await context.addInitScript(
+            (key) => localStorage.setItem(key, 'simple-chat'),
+            MOCK_SCENARIO_KEY,
+          );
           await login(page, email);
-          await page.goto("/simple/roadmap");
+          await page.goto('/simple/roadmap');
           let panel = await openAsk(page, phone);
-          await expect(panel.getByTestId("ask-about")).toHaveText("New chat about Roadmap");
-          await expect(panel.getByText("/simple/roadmap")).toHaveCount(0);
-          await panel.getByRole("textbox", { name: "Message Oracle" }).fill("who owns Weekly alert digest?");
-          await tap(panel.getByRole("button", { name: "Send" }));
-          const thread = panel.getByTestId("ask-chat-thread");
-          await expect(thread.getByTestId("chat-message").filter({ hasText: "who owns Weekly alert digest?" })).toHaveCount(1);
+          await expect(panel.getByTestId('ask-about')).toHaveText('New chat about Roadmap');
+          await expect(panel.getByText('/simple/roadmap')).toHaveCount(0);
+          await panel
+            .getByRole('textbox', { name: 'Message Oracle' })
+            .fill('who owns Weekly alert digest?');
+          await tap(panel.getByRole('button', { name: 'Send' }));
+          const thread = panel.getByTestId('ask-chat-thread');
+          await expect(
+            thread.getByTestId('chat-message').filter({ hasText: 'who owns Weekly alert digest?' }),
+          ).toHaveCount(1);
 
-          await page.goto("/simple/priorities");
+          await page.goto('/simple/priorities');
           panel = await openAsk(page, phone);
-          await expect(panel.getByTestId("ask-about")).toHaveText("New chat about Priorities");
-          await expect(panel.getByText("who owns Weekly alert digest?")).toHaveCount(0);
+          await expect(panel.getByTestId('ask-about')).toHaveText('New chat about Priorities');
+          await expect(panel.getByText('who owns Weekly alert digest?')).toHaveCount(0);
 
-          await page.goto("/simple");
+          await page.goto('/simple');
           panel = await openAsk(page, phone);
-          await expect(panel.getByTestId("ask-about")).toHaveText("New chat about Home");
-          await expect(panel.getByRole("textbox", { name: "Message Oracle" })).toHaveAttribute("placeholder", /^Ask about Home/);
-          await expect(panel.getByText("who owns Weekly alert digest?")).toHaveCount(0);
+          await expect(panel.getByTestId('ask-about')).toHaveText('New chat about Home');
+          await expect(panel.getByRole('textbox', { name: 'Message Oracle' })).toHaveAttribute(
+            'placeholder',
+            /^Ask about Home/,
+          );
+          await expect(panel.getByText('who owns Weekly alert digest?')).toHaveCount(0);
 
-          await page.goto("/simple/roadmap");
+          await page.goto('/simple/roadmap');
           panel = await openAsk(page, phone);
           // ask-fresh: back on the Roadmap the panel starts clean; the earlier chat is in Recent chats.
-          await expect(panel.getByTestId("ask-chat-thread").getByTestId("chat-message")).toHaveCount(0);
-          await tap(panel.getByRole("button", { name: "Recent chats" }));
-          await expect(panel.getByTestId("ask-recent-row").first()).toContainText("Roadmap · Today");
+          await expect(
+            panel.getByTestId('ask-chat-thread').getByTestId('chat-message'),
+          ).toHaveCount(0);
+          await tap(panel.getByRole('button', { name: 'Recent chats' }));
+          await expect(panel.getByTestId('ask-recent-row').first()).toContainText(
+            'Roadmap · Today',
+          );
         });
       }
 
       test(`Home's next review lists the ritual's real attendees (${where})`, async ({ page }) => {
         await login(page);
-        await page.goto("/simple");
-        const next = page.getByTestId("home-meeting-next");
+        await page.goto('/simple');
+        const next = page.getByTestId('home-meeting-next');
         await expect(next).toBeVisible();
-        await expect(next).not.toContainText("Theo Brandt");
-        await page.goto("/simple/meetings");
+        await expect(next).not.toContainText('Theo Brandt');
+        await page.goto('/simple/meetings');
         // The soonest scheduled review, the one Home shows.
-        await tap(page.getByRole("region", { name: "Upcoming" }).getByRole("button", { name: "Start review" }).first());
-        const sheet = page.getByRole("dialog", { name: "Start a review" });
-        await sheet.getByRole("checkbox", { name: "Theo Brandt" }).check();
-        await sheet.getByRole("button", { name: "Start", exact: true }).click();
-        await expect(page.getByLabel("Attendees")).toContainText("Theo Brandt");
-        await page.goto("/simple");
-        await expect(page.getByTestId("home-meeting-next")).toContainText("Theo Brandt");
+        await tap(
+          page
+            .getByRole('region', { name: 'Upcoming' })
+            .getByRole('button', { name: 'Start review' })
+            .first(),
+        );
+        const sheet = page.getByRole('dialog', { name: 'Start a review' });
+        await sheet.getByRole('checkbox', { name: 'Theo Brandt' }).check();
+        await sheet.getByRole('button', { name: 'Start', exact: true }).click();
+        await expect(page.getByLabel('Attendees')).toContainText('Theo Brandt');
+        await page.goto('/simple');
+        await expect(page.getByTestId('home-meeting-next')).toContainText('Theo Brandt');
       });
     });
   }

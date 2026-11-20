@@ -1,7 +1,7 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { THEME_KEY } from "../lib/theme";
-import { ADMIN, login } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { THEME_KEY } from '../lib/theme';
+import { ADMIN, login } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /*
  * QA pass 2, simple-plan (/simple/priorities): the Ranked list, Value / effort, Goal buckets and
@@ -13,8 +13,11 @@ import { expect, test, type Locator, type Page } from "./test";
 
 const PHONE = { width: 390, height: 844 };
 
-async function setUp(page: Page, opts: { scheme?: "light" | "dark"; scenario?: string; email?: string; phone?: boolean } = {}) {
-  const { scheme = "light", scenario = null, email = ADMIN.email, phone = false } = opts;
+async function setUp(
+  page: Page,
+  opts: { scheme?: 'light' | 'dark'; scenario?: string; email?: string; phone?: boolean } = {},
+) {
+  const { scheme = 'light', scenario = null, email = ADMIN.email, phone = false } = opts;
   await page.setViewportSize(phone ? PHONE : { width: 1440, height: 900 });
   await page.context().addInitScript(
     ([key, value, themeKey, theme]) => {
@@ -27,59 +30,69 @@ async function setUp(page: Page, opts: { scheme?: "light" | "dark"; scenario?: s
   await login(page, email);
 }
 
-async function open(page: Page, query = ""): Promise<void> {
+async function open(page: Page, query = ''): Promise<void> {
   await page.goto(`/simple/priorities${query}`);
-  await expect(page.getByTestId("simple-priorities")).toBeVisible();
+  await expect(page.getByTestId('simple-priorities')).toBeVisible();
 }
 
-const row = (page: Page, code: string): Locator => page.locator(`[data-testid="prio-row"][data-code="${code}"]`);
-const toast = (page: Page, text: string | RegExp): Locator => page.getByRole("status").filter({ hasText: text });
+const row = (page: Page, code: string): Locator =>
+  page.locator(`[data-testid="prio-row"][data-code="${code}"]`);
+const toast = (page: Page, text: string | RegExp): Locator =>
+  page.getByRole('status').filter({ hasText: text });
 
 async function dragRow(page: Page, name: string, to: number): Promise<void> {
-  const handle = page.getByRole("button", { name: `Drag ${name} to reorder` });
-  await handle.evaluate((e) => e.scrollIntoView({ block: "center" }));
+  const handle = page.getByRole('button', { name: `Drag ${name} to reorder` });
+  await handle.evaluate((e) => e.scrollIntoView({ block: 'center' }));
   const from = (await handle.boundingBox())!;
-  const target = (await page.getByTestId("prio-row").nth(to).boundingBox())!;
+  const target = (await page.getByTestId('prio-row').nth(to).boundingBox())!;
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
   await page.mouse.move(from.x + from.width / 2, target.y + target.height / 2 + 2, { steps: 10 });
   await page.mouse.up();
 }
 
-const overlap = (a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }) =>
-  Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+const overlap = (
+  a: { x: number; y: number; width: number; height: number },
+  b: { x: number; y: number; width: number; height: number },
+) =>
+  Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) *
+  Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
 
-test.describe("QA pass 2: simple-plan, the Ranked list", () => {
+test.describe('QA pass 2: simple-plan, the Ranked list', () => {
   /*
    * qa-simple-plan-1, -2, -3, -28: a move names the feature by its title and code, never its
    * slug; a move a dependency keeps from landing says where it lands and why, or is refused when
    * it would change nothing; Move stays enabled and an empty reason asks for one.
    */
-  test("a move says where the item lands, by name; a move that changes nothing is refused", async ({ page }) => {
+  test('a move says where the item lands, by name; a move that changes nothing is refused', async ({
+    page,
+  }) => {
     await setUp(page);
     await open(page);
-    await dragRow(page, "Sample data import", 0);
-    const dialog = page.getByRole("dialog", { name: "Why move Sample data import" });
-    await expect(dialog.getByRole("heading")).toHaveText("Move Sample data import to rank 2");
-    await expect(dialog).toContainText("It needs Setup checklist (#1), so it can go no higher than #2.");
-    await expect(dialog).not.toContainText("setup-import");
-    await expect(dialog).not.toContainText("override");
-    const move = dialog.getByRole("button", { name: "Move", exact: true });
+    await dragRow(page, 'Sample data import', 0);
+    const dialog = page.getByRole('dialog', { name: 'Why move Sample data import' });
+    await expect(dialog.getByRole('heading')).toHaveText('Move Sample data import to rank 2');
+    await expect(dialog).toContainText(
+      'It needs Setup checklist (#1), so it can go no higher than #2.',
+    );
+    await expect(dialog).not.toContainText('setup-import');
+    await expect(dialog).not.toContainText('override');
+    const move = dialog.getByRole('button', { name: 'Move', exact: true });
     await expect(move).toBeEnabled();
     await move.click();
-    await expect(dialog.getByRole("alert")).toHaveText("Say why in one line.");
-    await dialog.getByLabel("Reason").fill("Sales demos need it");
+    await expect(dialog.getByRole('alert')).toHaveText('Say why in one line.');
+    await dialog.getByLabel('Reason').fill('Sales demos need it');
     await move.click();
-    await expect(toast(page, "Moved Sample data import to rank 2")).toBeVisible();
-    await expect(row(page, "setup-import").getByTestId("prio-rank")).toHaveText("2");
+    await expect(toast(page, 'Moved Sample data import to rank 2')).toBeVisible();
+    await expect(row(page, 'setup-import').getByTestId('prio-rank')).toHaveText('2');
 
-    await dragRow(page, "Alert routing by team", 5);
-    const refused = page.getByRole("dialog", { name: "Why move Alert routing by team" });
+    await dragRow(page, 'Alert routing by team', 5);
+    const refused = page.getByRole('dialog', { name: 'Why move Alert routing by team' });
     await expect(refused).toContainText("Can't go above Alert history export, which it needs.");
-    await expect(refused.getByRole("button", { name: "Move", exact: true })).toHaveCount(0);
-    await refused.getByRole("button", { name: "Close" }).click();
-    await expect(row(page, "alert-sso").getByTestId("prio-override")).toHaveCount(0);
-    await expect(row(page, "alert-sso").getByTestId("moved")).toHaveCount(0);
+    await expect(refused.getByRole('button', { name: 'Move', exact: true })).toHaveCount(0);
+    await refused.getByRole('button', { name: 'Close' }).click();
+    await expect(row(page, 'alert-sso').getByTestId('prio-override')).toHaveCount(0);
+    await expect(row(page, 'alert-sso').getByTestId('moved')).toHaveCount(0);
   });
 
   /*
@@ -88,101 +101,117 @@ test.describe("QA pass 2: simple-plan, the Ranked list", () => {
    * Ranked list's only; the miss words read in sentence case; picking a date is one control.
    */
   for (const v of [
-    { name: "desktop, light", phone: false, scheme: "light" as const },
-    { name: "phone, dark", phone: true, scheme: "dark" as const },
+    { name: 'desktop, light', phone: false, scheme: 'light' as const },
+    { name: 'phone, dark', phone: true, scheme: 'dark' as const },
   ])
-    test(`the rows' numbers are labelled and the line reads plainly (${v.name})`, async ({ page }) => {
-      await setUp(page, { scheme: v.scheme, phone: v.phone, email: "viewer@example.com" });
+    test(`the rows' numbers are labelled and the line reads plainly (${v.name})`, async ({
+      page,
+    }) => {
+      await setUp(page, { scheme: v.scheme, phone: v.phone, email: 'viewer@example.com' });
       await open(page);
-      const digest = row(page, "alert-digest");
-      const numbers = digest.getByTestId("prio-numbers");
+      const digest = row(page, 'alert-digest');
+      const numbers = digest.getByTestId('prio-numbers');
       // build-plan QP2 "Numbers, no bar": value · confidence · weeks · score, each number kept whole.
       await expect(numbers).toHaveText(/^·value 5·confidence [\d.]+·2 weeks·score 1\.25$/);
-      expect(await numbers.locator(":scope > span > span").evaluateAll((els) => els.every((e) => getComputedStyle(e).whiteSpace === "nowrap"))).toBe(true);
+      expect(
+        await numbers
+          .locator(':scope > span > span')
+          .evaluateAll((els) => els.every((e) => getComputedStyle(e).whiteSpace === 'nowrap')),
+      ).toBe(true);
       const box = (await numbers.boundingBox())!;
       expect(box.height).toBeLessThan(30);
       // prio-company (the owner, Nov 4): no made-up code chip on a row, above or below the line.
-      await expect(page.getByTestId("prio-code")).toHaveCount(0);
+      await expect(page.getByTestId('prio-code')).toHaveCount(0);
       // build-plan QP1: no row carries a Misses pill.
-      await expect(page.getByLabel("Ranked list").getByTestId("prio-misses")).toHaveCount(0);
-      await expect(page.locator("#prio-about-text")).toContainText("depends on");
-      await page.getByRole("tab", { name: "Goal buckets" }).click();
-      await expect(page.locator("#prio-about-text")).not.toContainText("depends on");
-      await page.getByRole("tab", { name: "Value / effort" }).click();
-      await expect(page.locator("#prio-about-text")).not.toContainText("depends on");
+      await expect(page.getByLabel('Ranked list').getByTestId('prio-misses')).toHaveCount(0);
+      await expect(page.locator('#prio-about-text')).toContainText('depends on');
+      await page.getByRole('tab', { name: 'Goal buckets' }).click();
+      await expect(page.locator('#prio-about-text')).not.toContainText('depends on');
+      await page.getByRole('tab', { name: 'Value / effort' }).click();
+      await expect(page.locator('#prio-about-text')).not.toContainText('depends on');
     });
 
-  test("picking a date is one control, and the caption reads the day", async ({ page }) => {
+  test('picking a date is one control, and the caption reads the day', async ({ page }) => {
     await setUp(page);
     await open(page);
-    await page.getByLabel("Line", { exact: true }).selectOption({ label: "Pick a date…" });
-    await expect(page.locator("#prio-line")).toBeHidden();
-    await page.getByLabel("The line's date").fill("2026-11-20");
+    await page.getByLabel('Line', { exact: true }).selectOption({ label: 'Pick a date…' });
+    await expect(page.locator('#prio-line')).toBeHidden();
+    await page.getByLabel("The line's date").fill('2026-11-20');
     // QA pass 3 (qa-simple-plan-1): applied only with Apply, and named like the other lines.
-    await page.getByRole("button", { name: "Apply" }).click();
-    await expect(page.locator("#prio-line")).toBeVisible();
+    await page.getByRole('button', { name: 'Apply' }).click();
+    await expect(page.locator('#prio-line')).toBeVisible();
     await expect(page.getByLabel("The line's date")).toHaveCount(0);
-    await expect(page.locator("#prio-line")).toContainText("Date: Nov 20, 2026");
-    await expect(page.getByTestId("line-caption")).toContainText(/miss Nov 20, 2026/);
-    await expect(page.getByTestId("line-caption")).not.toContainText("miss By");
-    await expect(page.getByLabel("Ranked list").getByTestId("prio-misses")).toHaveCount(0);
+    await expect(page.locator('#prio-line')).toContainText('Date: Nov 20, 2026');
+    await expect(page.getByTestId('line-caption')).toContainText(/miss Nov 20, 2026/);
+    await expect(page.getByTestId('line-caption')).not.toContainText('miss By');
+    await expect(page.getByLabel('Ranked list').getByTestId('prio-misses')).toHaveCount(0);
   });
 
   /* qa-simple-plan-10, -24: the draft shows no slug; one Merge toggles, one Merge confirms. */
-  test("a draft shows no slug and merges with one Merge", async ({ page }) => {
+  test('a draft shows no slug and merges with one Merge', async ({ page }) => {
     await setUp(page);
     await open(page);
-    const draft = page.getByTestId("prio-draft").first();
-    await expect(draft).toContainText("Team invite nudges");
-    await expect(draft).not.toContainText("setup-ideas");
-    const toggle = draft.getByRole("button", { name: "Merge into…" });
-    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    const draft = page.getByTestId('prio-draft').first();
+    await expect(draft).toContainText('Team invite nudges');
+    await expect(draft).not.toContainText('setup-ideas');
+    const toggle = draft.getByRole('button', { name: 'Merge into…' });
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
     await toggle.click();
-    await expect(toggle).toHaveAttribute("aria-expanded", "true");
-    await expect(draft.getByRole("button", { name: "Merge", exact: true })).toHaveCount(1);
-    await expect(draft.getByLabel("Merge into", { exact: true })).not.toContainText("setup-checklist");
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(draft.getByRole('button', { name: 'Merge', exact: true })).toHaveCount(1);
+    await expect(draft.getByLabel('Merge into', { exact: true })).not.toContainText(
+      'setup-checklist',
+    );
   });
   /*
    * qa-simple-plan-4, -11: with a dated plan the plan's dates decide what makes the line; the
    * Ranked list (and Value / effort's side list) shows what makes it first, the line once, then
    * what misses it, and says so; the side list's codes are chips with the name on hover.
    */
-  test("with a dated plan the line is drawn once, every row above it making it", async ({ page }) => {
-    await setUp(page, { scheme: "dark", scenario: "simple-plan" });
+  test('with a dated plan the line is drawn once, every row above it making it', async ({
+    page,
+  }) => {
+    await setUp(page, { scheme: 'dark', scenario: 'simple-plan' });
     await open(page);
-    const rows = page.getByTestId("prio-row");
+    const rows = page.getByTestId('prio-row');
     await expect(rows.first()).toBeVisible();
     // build-plan QP1: two headed parts, Makes and Misses, in place of the divider.
-    await expect(page.getByTestId("prio-part-head")).toHaveCount(2);
-    await expect(page.getByTestId("line-divider")).toHaveCount(0);
-    const above = await rows.evaluateAll((els) => els.map((e) => e.getAttribute("data-above")));
-    const first = above.indexOf("false");
+    await expect(page.getByTestId('prio-part-head')).toHaveCount(2);
+    await expect(page.getByTestId('line-divider')).toHaveCount(0);
+    const above = await rows.evaluateAll((els) => els.map((e) => e.getAttribute('data-above')));
+    const first = above.indexOf('false');
     expect(first).toBeGreaterThan(0);
-    expect(above.slice(0, first).every((a) => a === "true")).toBe(true);
-    expect(above.slice(first).every((a) => a === "false")).toBe(true);
-    await expect(page.locator("#prio-about-text")).toContainText("what makes it is listed first");
-    await page.getByRole("tab", { name: "Value / effort" }).click();
-    await expect(page.locator("#prio-about-text")).not.toContainText("listed first");
-    await expect(page.getByTestId("line-divider")).toHaveCount(1);
-    const side = await page.getByTestId("side-row").evaluateAll((els) => els.map((e) => e.getAttribute("data-above")));
+    expect(above.slice(0, first).every((a) => a === 'true')).toBe(true);
+    expect(above.slice(first).every((a) => a === 'false')).toBe(true);
+    await expect(page.locator('#prio-about-text')).toContainText('what makes it is listed first');
+    await page.getByRole('tab', { name: 'Value / effort' }).click();
+    await expect(page.locator('#prio-about-text')).not.toContainText('listed first');
+    await expect(page.getByTestId('line-divider')).toHaveCount(1);
+    const side = await page
+      .getByTestId('side-row')
+      .evaluateAll((els) => els.map((e) => e.getAttribute('data-above')));
     expect(side).toEqual(above);
-    const code = page.getByTestId("side-code").first();
+    const code = page.getByTestId('side-code').first();
     // The chip's tip names its feature, code with name (qa-nov17 G4).
-    expect(await code.getAttribute("title")).toBe(`${(await code.textContent())!.trim()} ${await page.getByTestId("side-row").first().getByTestId("prio-title").getAttribute("title")}`);
+    expect(await code.getAttribute('title')).toBe(
+      `${(await code.textContent())!.trim()} ${await page.getByTestId('side-row').first().getByTestId('prio-title').getAttribute('title')}`,
+    );
     expect(await code.evaluate((e) => getComputedStyle(e).fontFamily)).not.toMatch(/mono/i);
   });
 });
 
-test.describe("QA pass 2: simple-plan, Value / effort", () => {
+test.describe('QA pass 2: simple-plan, Value / effort', () => {
   /* qa-simple-plan-2, -12, -14, -18: names not slugs, marks off the median lines, a re-estimate badge. */
   test("a re-estimate says 'now #n (effort …)' and marks sit in a quadrant", async ({ page }) => {
     await setUp(page);
-    await open(page, "?tab=value-effort");
+    await open(page, '?tab=value-effort');
     const am = page.locator('[data-testid="vxe-point"][data-code="alert-mobile"]');
-    await expect(am).toHaveAttribute("aria-label", /^#\d+ Mobile alert push: goal value/);
-    await expect(page.getByRole("list", { name: "Legend" })).not.toContainText("PRD");
+    await expect(am).toHaveAttribute('aria-label', /^#\d+ Mobile alert push: goal value/);
+    await expect(page.getByRole('list', { name: 'Legend' })).not.toContainText('PRD');
     // QA pass 3 (qa-simple-plan-13): marks sit at their real effort, even on a median line; the legend says how they count.
-    await expect(page.locator("#prio-about-text")).toContainText("A mark on a middle line counts on the side its rank puts it.");
+    await expect(page.locator('#prio-about-text')).toContainText(
+      'A mark on a middle line counts on the side its rank puts it.',
+    );
     const box = (await am.boundingBox())!;
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.down();
@@ -190,93 +219,128 @@ test.describe("QA pass 2: simple-plan, Value / effort", () => {
     await page.mouse.up();
     await expect(toast(page, /^Re-estimated Mobile alert push: effort/)).toBeVisible();
     const side = page.locator('[data-testid="side-row"][data-code="alert-mobile"]');
-    await expect(side.getByTestId("moved")).toHaveText(/^now #\d+ \(effort [\d.]+ weeks?\)$/);
-    await expect(side.getByTestId("prio-title")).toHaveText("Mobile alert push");
-    const title = side.getByTestId("prio-title");
+    await expect(side.getByTestId('moved')).toHaveText(/^now #\d+ \(effort [\d.]+ weeks?\)$/);
+    await expect(side.getByTestId('prio-title')).toHaveText('Mobile alert push');
+    const title = side.getByTestId('prio-title');
     expect(await title.evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);
   });
 
   /* qa-simple-plan-13: on a phone, no two marks overlap and the median words keep off the quadrant names. */
-  test("on a phone the marks and labels do not collide", async ({ page }) => {
-    await setUp(page, { phone: true, scheme: "dark" });
-    await open(page, "?tab=value-effort");
+  test('on a phone the marks and labels do not collide', async ({ page }) => {
+    await setUp(page, { phone: true, scheme: 'dark' });
+    await open(page, '?tab=value-effort');
     await page.waitForTimeout(300);
-    const marks = await Promise.all((await page.getByTestId("vxe-point").all()).map(async (m) => (await m.boundingBox())!));
+    const marks = await Promise.all(
+      (await page.getByTestId('vxe-point').all()).map(async (m) => (await m.boundingBox())!),
+    );
     // The 36 px boxes may touch at their corners; the shapes inside them may not overlap.
-    const shrink = (b: { x: number; y: number; width: number; height: number }) => ({ x: b.x + 4, y: b.y + 4, width: b.width - 8, height: b.height - 8 });
-    for (let i = 0; i < marks.length; i++) for (let j = i + 1; j < marks.length; j++) expect(overlap(shrink(marks[i]), shrink(marks[j]))).toBe(0);
-    const labels = await Promise.all((await page.getByTestId("vxe-quadrant").all()).map(async (m) => (await m.boundingBox())!));
+    const shrink = (b: { x: number; y: number; width: number; height: number }) => ({
+      x: b.x + 4,
+      y: b.y + 4,
+      width: b.width - 8,
+      height: b.height - 8,
+    });
+    for (let i = 0; i < marks.length; i++)
+      for (let j = i + 1; j < marks.length; j++)
+        expect(overlap(shrink(marks[i]), shrink(marks[j]))).toBe(0);
+    const labels = await Promise.all(
+      (await page.getByTestId('vxe-quadrant').all()).map(async (m) => (await m.boundingBox())!),
+    );
     for (const l of labels) for (const m of marks) expect(overlap(l, shrink(m))).toBe(0);
-    const middle = (await page.getByTestId("vxe-middle-effort").boundingBox())!;
+    const middle = (await page.getByTestId('vxe-middle-effort').boundingBox())!;
     for (const l of labels) expect(overlap(l, middle)).toBe(0);
   });
 });
 
-test.describe("QA pass 2: simple-plan, Goal buckets", () => {
+test.describe('QA pass 2: simple-plan, Goal buckets', () => {
   /* qa-simple-plan-6, -7, -15, -16: a labelled share bar, names in the cards, shares total 100%, no empty No goal card. */
-  for (const scheme of ["light", "dark"] as const)
+  for (const scheme of ['light', 'dark'] as const)
     test(`the buckets without a plan read plainly (${scheme})`, async ({ page }) => {
       await setUp(page, { scheme });
-      await open(page, "?tab=buckets");
-      const bar = page.getByTestId("bucket-bar");
-      await expect(bar).not.toHaveAttribute("aria-hidden", "true");
-      await expect(bar).toContainText("Share of engineer-weeks by goal");
+      await open(page, '?tab=buckets');
+      const bar = page.getByTestId('bucket-bar');
+      await expect(bar).not.toHaveAttribute('aria-hidden', 'true');
+      await expect(bar).toContainText('Share of engineer-weeks by goal');
       // QA pass 3 (qa-simple-plan-40): the weeks and share show once, in the cards; the bar names the goals.
-      await expect(bar.getByTestId("bucket-segment").first()).not.toContainText(/wk/);
-      const shares = await page.getByTestId("bucket-share").allTextContents();
-      expect(shares.reduce((n, s) => n + Number(s.replace("%", "")), 0)).toBe(100);
+      await expect(bar.getByTestId('bucket-segment').first()).not.toContainText(/wk/);
+      const shares = await page.getByTestId('bucket-share').allTextContents();
+      expect(shares.reduce((n, s) => n + Number(s.replace('%', '')), 0)).toBe(100);
       const activation = page.locator('[data-testid="goal-bucket"][data-key="faster-activation"]');
       // qa4-simple-plan-12: each code a chip beside its name (Weekly alert digest's F-79); Sample data import has none.
       const retention = page.locator('[data-testid="goal-bucket"][data-key="grow-retention"]');
-      await expect(retention.getByTestId("bucket-features").locator("li").filter({ hasText: "Weekly alert digest" }).getByTestId("prio-code")).toHaveText("F-79");
-      await expect(activation.getByTestId("bucket-features").locator("li").filter({ hasText: "Sample data import" }).getByTestId("prio-code")).toHaveCount(0);
+      await expect(
+        retention
+          .getByTestId('bucket-features')
+          .locator('li')
+          .filter({ hasText: 'Weekly alert digest' })
+          .getByTestId('prio-code'),
+      ).toHaveText('F-79');
+      await expect(
+        activation
+          .getByTestId('bucket-features')
+          .locator('li')
+          .filter({ hasText: 'Sample data import' })
+          .getByTestId('prio-code'),
+      ).toHaveCount(0);
       // PR1 (QA Nov 12): a feature with no Ground Truth code shows no made-up initials, it is flagged.
-      await expect(activation.getByTestId("bucket-features").locator("li").filter({ hasText: "Setup checklist" }).getByTestId("prio-code").filter({ hasText: /^SC$/ })).toHaveCount(0);
+      await expect(
+        activation
+          .getByTestId('bucket-features')
+          .locator('li')
+          .filter({ hasText: 'Setup checklist' })
+          .getByTestId('prio-code')
+          .filter({ hasText: /^SC$/ }),
+      ).toHaveCount(0);
       // A card with weeks this quarter names its features; only a goal with none says "Nothing this quarter"
       // (the Goal map's goals since P-1: their features are all in Next).
-      for (const card of await page.getByTestId("goal-bucket").all())
-        if ((await card.getByTestId("bucket-share").textContent())?.trim() !== "0%") await expect(card).not.toContainText("Nothing this quarter");
-        else await expect(card.getByTestId("plan-feature")).toHaveCount(0);
+      for (const card of await page.getByTestId('goal-bucket').all())
+        if ((await card.getByTestId('bucket-share').textContent())?.trim() !== '0%')
+          await expect(card).not.toContainText('Nothing this quarter');
+        else await expect(card.getByTestId('plan-feature')).toHaveCount(0);
     });
 
   /* qa-simple-plan-8, -20, -27, -29: the drawer dims the page, its card body takes the width, pills on one line, no glyph, one control style. */
-  test("the suggestions drawer: a backdrop, full-width text, one-line pills", async ({ page }) => {
+  test('the suggestions drawer: a backdrop, full-width text, one-line pills', async ({ page }) => {
     await setUp(page);
-    await open(page, "?tab=buckets");
-    await page.getByRole("button", { name: "Suggestions for Grow retention" }).click();
-    const drawer = page.getByTestId("goal-panel");
-    await expect(page.getByTestId("goal-panel-backdrop")).toBeVisible();
+    await open(page, '?tab=buckets');
+    await page.getByRole('button', { name: 'Suggestions for Grow retention' }).click();
+    const drawer = page.getByTestId('goal-panel');
+    await expect(page.getByTestId('goal-panel-backdrop')).toBeVisible();
     // PR9 (Nov 13): the row has no chat link.
-    await expect(drawer.getByTestId("suggest-from-chat")).toHaveCount(0);
-    await drawer.getByRole("tab", { name: /Oracle/ }).click();
-    const card = drawer.getByTestId("goal-suggestion").first();
-    await expect(card.getByTestId("flow-thumb")).toHaveCount(0);
-    await expect(card.getByTestId("flow-none")).toHaveCount(0);
-    const outcome = (await card.getByTestId("suggestion-outcome").boundingBox())!;
-    const accept = (await card.getByRole("button", { name: "Accept" }).boundingBox())!;
+    await expect(drawer.getByTestId('suggest-from-chat')).toHaveCount(0);
+    await drawer.getByRole('tab', { name: /Oracle/ }).click();
+    const card = drawer.getByTestId('goal-suggestion').first();
+    await expect(card.getByTestId('flow-thumb')).toHaveCount(0);
+    await expect(card.getByTestId('flow-none')).toHaveCount(0);
+    const outcome = (await card.getByTestId('suggestion-outcome').boundingBox())!;
+    const accept = (await card.getByRole('button', { name: 'Accept' }).boundingBox())!;
     expect(accept.y).toBeGreaterThan(outcome.y + outcome.height - 1);
     expect(outcome.width).toBeGreaterThan(300);
-    for (const pill of await card.getByTestId("confidence").all()) expect(await pill.evaluate((e) => getComputedStyle(e).whiteSpace)).toBe("nowrap");
-    await page.getByTestId("goal-panel-backdrop").click({ position: { x: 20, y: 400 } });
+    for (const pill of await card.getByTestId('confidence').all())
+      expect(await pill.evaluate((e) => getComputedStyle(e).whiteSpace)).toBe('nowrap');
+    await page.getByTestId('goal-panel-backdrop').click({ position: { x: 20, y: 400 } });
     await expect(drawer).toHaveCount(0);
   });
 
   /* qa-simple-plan-26: on a phone, a toast keeps clear of the open sheet's controls. */
-  test("on a phone a toast sits above the sheet, not over its buttons", async ({ page }) => {
-    await setUp(page, { phone: true, scheme: "dark", email: "commenter@example.com" });
-    await open(page, "?tab=buckets");
-    await page.getByRole("button", { name: "Suggestions for Grow retention" }).click();
-    const sheet = page.getByRole("dialog", { name: "Suggestions · Grow retention" });
-    await sheet.getByLabel("Feature name").fill("Quiet hours");
-    await sheet.getByLabel("What it does, and for whom").fill("Admins mute alerts at night");
-    await sheet.getByRole("button", { name: "Send suggestion" }).click();
-    const t = page.getByRole("status").filter({ hasText: "Sent" });
+  test('on a phone a toast sits above the sheet, not over its buttons', async ({ page }) => {
+    await setUp(page, { phone: true, scheme: 'dark', email: 'commenter@example.com' });
+    await open(page, '?tab=buckets');
+    await page.getByRole('button', { name: 'Suggestions for Grow retention' }).click();
+    const sheet = page.getByRole('dialog', { name: 'Suggestions · Grow retention' });
+    await sheet.getByLabel('Feature name').fill('Quiet hours');
+    await sheet.getByLabel('What it does, and for whom').fill('Admins mute alerts at night');
+    await sheet.getByRole('button', { name: 'Send suggestion' }).click();
+    const t = page.getByRole('status').filter({ hasText: 'Sent' });
     await expect(t).toBeVisible();
     const tb = (await t.boundingBox())!;
     // Every button the sheet shows once the toast is up, read at once: the sheet redraws after
     // Send, so a list of locators taken first can name a button that is gone by its turn.
-    const buttons = await sheet.getByRole("button").evaluateAll((els) =>
-      els.map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0).map((r) => ({ x: r.x, y: r.y, width: r.width, height: r.height })),
+    const buttons = await sheet.getByRole('button').evaluateAll((els) =>
+      els
+        .map((e) => e.getBoundingClientRect())
+        .filter((r) => r.width > 0 && r.height > 0)
+        .map((r) => ({ x: r.x, y: r.y, width: r.width, height: r.height })),
     );
     expect(buttons.length).toBeGreaterThan(0);
     for (const bb of buttons) expect(overlap(tb, bb)).toBe(0);
@@ -286,28 +350,40 @@ test.describe("QA pass 2: simple-plan, Goal buckets", () => {
    * qa-simple-plan-5, -17, -18, -19: with a dated plan the tabs agree, the span is the plan's, numbers drop ".0", plain words.
    * qa-simple-plan-20 (one entry point per goal) waits for the owner: each goal card keeps B's two buttons.
    */
-  test("with a dated plan: the plan's span, plain numbers and words, the tabs agree", async ({ page }) => {
-    await setUp(page, { scheme: "dark", scenario: "simple-plan" });
-    await open(page, "?tab=buckets");
-    const head = page.getByTestId("buckets-head");
-    await expect(page.getByTestId("buckets-summary-full")).toContainText(/^This plan, Nov 2 – Feb 12: \d+ engineer-weeks over three milestones/);
+  test("with a dated plan: the plan's span, plain numbers and words, the tabs agree", async ({
+    page,
+  }) => {
+    await setUp(page, { scheme: 'dark', scenario: 'simple-plan' });
+    await open(page, '?tab=buckets');
+    const head = page.getByTestId('buckets-head');
+    await expect(page.getByTestId('buckets-summary-full')).toContainText(
+      /^This plan, Nov 2 – Feb 12: \d+ engineer-weeks over three milestones/,
+    );
     await expect(head).not.toContainText(/\d\.0\b/);
-    await expect(page.getByTestId("buckets-footnote")).not.toContainText("PRD");
+    await expect(page.getByTestId('buckets-footnote')).not.toContainText('PRD');
     // mk-goalbuckets (train AL's picked frame): Goal buckets' line names the plan's quarter; its summary gives the dates.
-    await expect(page.getByTestId("prio-subtitle")).toHaveText("Q4 2026");
+    await expect(page.getByTestId('prio-subtitle')).toHaveText('Q4 2026');
     // Demo 9: the intro is behind the (i).
-    await expect(page.locator("#prio-about-text")).toHaveText("Where the engineer-weeks go, goal by goal.");
-    await expect(page.getByTestId("plan-goal-count").first()).toContainText("in the plan");
-    for (const card of await page.locator('[data-testid="plan-goal"][data-goal]:not([data-goal=""])').all()) {
-      await expect(card.getByTestId("goal-suggest-feature")).toHaveCount(1);
-      await expect(card.getByTestId("goal-ask-oracle")).toHaveCount(1);
+    await expect(page.locator('#prio-about-text')).toHaveText(
+      'Where the engineer-weeks go, goal by goal.',
+    );
+    await expect(page.getByTestId('plan-goal-count').first()).toContainText('in the plan');
+    for (const card of await page
+      .locator('[data-testid="plan-goal"][data-goal]:not([data-goal=""])')
+      .all()) {
+      await expect(card.getByTestId('goal-suggest-feature')).toHaveCount(1);
+      await expect(card.getByTestId('goal-ask-oracle')).toHaveCount(1);
     }
-    const revenue = page.locator('[data-testid="plan-goal"]').filter({ has: page.getByRole("heading", { name: "Revenue" }) });
-    const code = (await revenue.getByTestId("plan-feature").first().getAttribute("data-code"))!;
-    await page.getByRole("tab", { name: "Ranked list" }).click();
-    await expect(page.getByTestId("prio-subtitle")).toContainText("Nov 2 – Feb 12");
-    const r = page.getByTestId("prio-row").filter({ has: page.getByTestId("prio-own-key").getByText(code, { exact: true }) });
-    await expect(r.getByTestId("prio-goal")).toHaveText("Revenue");
-    await expect(page.getByTestId("prio-part-head").first()).not.toContainText("(Now)");
+    const revenue = page
+      .locator('[data-testid="plan-goal"]')
+      .filter({ has: page.getByRole('heading', { name: 'Revenue' }) });
+    const code = (await revenue.getByTestId('plan-feature').first().getAttribute('data-code'))!;
+    await page.getByRole('tab', { name: 'Ranked list' }).click();
+    await expect(page.getByTestId('prio-subtitle')).toContainText('Nov 2 – Feb 12');
+    const r = page
+      .getByTestId('prio-row')
+      .filter({ has: page.getByTestId('prio-own-key').getByText(code, { exact: true }) });
+    await expect(r.getByTestId('prio-goal')).toHaveText('Revenue');
+    await expect(page.getByTestId('prio-part-head').first()).not.toContainText('(Now)');
   });
 });

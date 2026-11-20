@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { login } from "./helpers";
+import { login } from './helpers';
 
 /**
  * QA pass 4, shell lane: Home, at desktop and phone width, on the mock's default company.
@@ -12,42 +12,53 @@ import { login } from "./helpers";
  * no_claim = the API's inbox counts (the in-browser mock stands in).
  */
 
-const lines = (page: Page) => page.getByTestId("home-needs-table").locator("tr[data-row]");
+const lines = (page: Page) => page.getByTestId('home-needs-table').locator('tr[data-row]');
 
 for (const [name, viewport] of [
-  ["desktop", { width: 1440, height: 900 }],
-  ["phone", { width: 390, height: 844 }],
+  ['desktop', { width: 1440, height: 900 }],
+  ['phone', { width: 390, height: 844 }],
 ] as const) {
   test.describe(name, () => {
     test.use({ viewport });
 
-    test("qa-shell-22: the selected PRD names its open feedback and its sections not reviewed apart", async ({ page }) => {
+    test('qa-shell-22: the selected PRD names its open feedback and its sections not reviewed apart', async ({
+      page,
+    }) => {
       await login(page);
-      const checkout = page.getByTestId("home-in-flight-table").getByTestId("flight-row").filter({ hasText: "Annual billing PRD" });
+      const checkout = page
+        .getByTestId('home-in-flight-table')
+        .getByTestId('flight-row')
+        .filter({ hasText: 'Annual billing PRD' });
       // A phone shows the inspector after a tap (qa-company-32).
-      if (name === "phone") await checkout.click();
-      const inspector = page.getByTestId("home-inspector");
-      await expect(inspector.getByRole("heading", { name: "Annual billing PRD" })).toBeVisible();
-      await expect(inspector.getByTestId("stat-open").locator("dt")).toHaveText("Your open feedback");
-      const legend = inspector.getByTestId("inspector-sections");
-      await expect(legend).toContainText("Not reviewed");
+      if (name === 'phone') await checkout.click();
+      const inspector = page.getByTestId('home-inspector');
+      await expect(inspector.getByRole('heading', { name: 'Annual billing PRD' })).toBeVisible();
+      await expect(inspector.getByTestId('stat-open').locator('dt')).toHaveText(
+        'Your open feedback',
+      );
+      const legend = inspector.getByTestId('inspector-sections');
+      await expect(legend).toContainText('Not reviewed');
       await expect(legend).not.toContainText(/\bOpen\b/);
     });
 
-    test("qa-shell-23: Oracle asks has the bordered Open of every row; More comes before its link", async ({ page }) => {
+    test('qa-shell-23: Oracle asks has the bordered Open of every row; More comes before its link', async ({
+      page,
+    }) => {
       await login(page);
-      const asks = lines(page).filter({ hasText: "Oracle asks" });
-      await expect(asks.getByRole("button", { name: "Answer" })).toBeVisible();
-      const askOpen = asks.getByRole("link", { name: /^Open\b/ }).first();
-      const runOpen = lines(page).filter({ hasText: "$14.20 / $9.00" }).getByRole("link", { name: "Open", exact: true });
+      const asks = lines(page).filter({ hasText: 'Oracle asks' });
+      await expect(asks.getByRole('button', { name: 'Answer' })).toBeVisible();
+      const askOpen = asks.getByRole('link', { name: /^Open\b/ }).first();
+      const runOpen = lines(page)
+        .filter({ hasText: '$14.20 / $9.00' })
+        .getByRole('link', { name: 'Open', exact: true });
       await expect(askOpen).toBeVisible();
       await expect(runOpen).toBeVisible();
-      expect(await askOpen.getAttribute("class")).toBe(await runOpen.getAttribute("class"));
+      expect(await askOpen.getAttribute('class')).toBe(await runOpen.getAttribute('class'));
 
       // Home's own lane draws the rest as a footer under the table, its icon before the link (qa-company-12).
-      const more = page.getByTestId("home-needs-footer");
-      const label = (await more.locator("svg").first().boundingBox())!;
-      const link = (await more.getByTestId("home-needs-more").boundingBox())!;
+      const more = page.getByTestId('home-needs-footer');
+      const label = (await more.locator('svg').first().boundingBox())!;
+      const link = (await more.getByTestId('home-needs-more').boundingBox())!;
       // One line, the icon first, as on a desktop.
       expect(label.x + label.width).toBeLessThanOrEqual(link.x);
       // On one line as Home's own spec reads it (qa3-company-home): the icon beside the link's text.

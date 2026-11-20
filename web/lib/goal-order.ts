@@ -17,9 +17,9 @@ export type OrderedGoal = {
 };
 
 /** A goal's stored position: a whole number of 1 or more, else null. */
-export function goalPosition(g: Pick<OrderedGoal, "position" | "attrs">): number | null {
+export function goalPosition(g: Pick<OrderedGoal, 'position' | 'attrs'>): number | null {
   const v = g.position ?? g.attrs?.position;
-  return typeof v === "number" && Number.isInteger(v) && v >= 1 ? v : null;
+  return typeof v === 'number' && Number.isInteger(v) && v >= 1 ? v : null;
 }
 
 /** The one goal order, for Array.prototype.sort. */
@@ -31,9 +31,13 @@ export function byGoalOrder(a: OrderedGoal, b: OrderedGoal): number {
     if (pb === null) return -1;
     return pa - pb;
   }
-  const made = (a.created_at ?? "￿").localeCompare(b.created_at ?? "￿");
+  const made = (a.created_at ?? '￿').localeCompare(b.created_at ?? '￿');
   if (made) return made;
-  return byCode(a.title.toLowerCase(), b.title.toLowerCase()) || byCode(a.title, b.title) || byCode(a.id ?? "", b.id ?? "");
+  return (
+    byCode(a.title.toLowerCase(), b.title.toLowerCase()) ||
+    byCode(a.title, b.title) ||
+    byCode(a.id ?? '', b.id ?? '')
+  );
 }
 
 /** Plain code-point order, as Python compares strings (the API's tie-breaks). */

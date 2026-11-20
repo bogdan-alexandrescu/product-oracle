@@ -1,4 +1,4 @@
-import { AutonomySettings } from "./AutonomySettings";
+import { AutonomySettings } from './AutonomySettings';
 
 export default function AutonomyPage() {
   return <AutonomySettings />;

@@ -1,4 +1,4 @@
-"use client";
+'use client';
 /* build-milestones-on-roadmap (the owner's picks: 'Click the time axis', 'Card, line per goal',
  * 'Edit asks the PRD'): a roadmap's milestones per goal on Simple Roadmap's Timeline, Gantt and
  * Now / Next / Later. Pointing at the time axis shows a hollow diamond and "+ Milestone on <day>";
@@ -7,22 +7,51 @@
  * goal's rows; a drag on the diamond moves it, a click opens it to edit or remove; every change has
  * Undo. A PRD's own milestones are hollow and dashed: a change to one asks the PRD's owner. */
 
-import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react';
 
-import { Button, InfoTip } from "@/components/ds";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { addDays, calendarDay } from "@/lib/dates";
-import { joinedNames, joinedWords } from "@/lib/milestone-code";
+import { Button, InfoTip } from '@/components/ds';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { addDays, calendarDay } from '@/lib/dates';
+import { joinedNames, joinedWords } from '@/lib/milestone-code';
 
-import { closedItem, decide as decideChange, estimateOnly, shortDay, type Item, type KeyDate, type Roadmap } from "./_lib";
-import { doneLine, isMeasured, kindName, MK_KINDS, MK_STATUS, MkIcon, MkStatusMark, type MkKind, type MkStatus } from "./_mk";
-import { msEdge, msFill, msInk } from "./_timeline";
+import {
+  closedItem,
+  decide as decideChange,
+  estimateOnly,
+  shortDay,
+  type Item,
+  type KeyDate,
+  type Roadmap,
+} from './_lib';
+import {
+  doneLine,
+  isMeasured,
+  kindName,
+  MK_KINDS,
+  MK_STATUS,
+  MkIcon,
+  MkStatusMark,
+  type MkKind,
+  type MkStatus,
+} from './_mk';
+import { msEdge, msFill, msInk } from './_timeline';
 
-export type GoalMilestone = Schemas["SimpleGoalMilestone"];
+export type GoalMilestone = Schemas['SimpleGoalMilestone'];
 
 /** roadmap-milestone-codes (the owner, Nov 9): a milestone's one code across the roadmap (M1, M2 ... by
  * date; the API's roadmap_code), the code every page shows; its own per-goal code outside a roadmap read. */
-export const msCode = (m: { code: string; roadmap_code?: string | null }) => m.roadmap_code ?? m.code;
+export const msCode = (m: { code: string; roadmap_code?: string | null }) =>
+  m.roadmap_code ?? m.code;
 /** The milestone band's height under the date axis (two rows of labels; one on a phone). */
 export const msBand = (phone = false): number => (phone ? 30 : 54);
 /** The band's height on this chart: none while no milestone is dated. */
@@ -32,17 +61,35 @@ export function useMsBand(phone = false): number {
 }
 const BAND_ROW = 24;
 /** QA Nov 14 #4: `closed`, a cut or merged item (no milestone flags); `guess`, dates that are only an estimate. */
-export type MsRow = { id: string; title: string; lane: string; y: number; h: number; start: string; end: string; closed?: boolean; guess?: boolean };
+export type MsRow = {
+  id: string;
+  title: string;
+  lane: string;
+  y: number;
+  h: number;
+  start: string;
+  end: string;
+  closed?: boolean;
+  guess?: boolean;
+};
 export type MsLane = { key: string; title: string; y0: number; y1: number };
 
 const day = (d: string) => shortDay(d);
 /** QA Nov 14 #4: an item that ends after a milestone's day is late, unless it is cut or its dates are only an estimate. */
-const endsAfter = (i: Item | undefined, date: string): boolean => !!i && !closedItem(i) && !estimateOnly(i) && i.end.date > date;
-const fullDay = (d: string) => calendarDay(d, { month: "short", day: "numeric", year: "numeric" });
-const words = (m: { code: string; roadmap_code?: string | null; name: string }) => `${msCode(m)} ${m.name}`;
+const endsAfter = (i: Item | undefined, date: string): boolean =>
+  !!i && !closedItem(i) && !estimateOnly(i) && i.end.date > date;
+const fullDay = (d: string) => calendarDay(d, { month: 'short', day: 'numeric', year: 'numeric' });
+const words = (m: { code: string; roadmap_code?: string | null; name: string }) =>
+  `${msCode(m)} ${m.name}`;
 
 /** The rules a milestone counts by, offered on the card (its own one kept when it differs). */
-const RULES = ["Holds 7 days in a row", "Holds 14 days in a row", "Holds 4 weeks in a row", "Holds 7 days in a row on one live team", "Holds 14 days in a row on all teams"];
+const RULES = [
+  'Holds 7 days in a row',
+  'Holds 14 days in a row',
+  'Holds 4 weeks in a row',
+  'Holds 7 days in a row on one live team',
+  'Holds 14 days in a row on all teams',
+];
 /** How far (px) past its corner a same-day count may move to keep clear: farther, it reads as another day's. */
 const BADGE_NEAR = 24;
 
@@ -62,11 +109,16 @@ type KindFields = {
   to_track_id: string | null;
 };
 const kindFields = (m: GoalMilestone): KindFields => ({
-  kind: m.kind ?? "delivery",
+  kind: m.kind ?? 'delivery',
   status_set: m.status_set ?? null,
   // A person's reason for At risk or Missed; never the words Oracle reads out ("Set by ...") for another status.
-  status_reason: m.status_reason && (m.status_set === "at_risk" || m.status_set === "missed") && m.status_reason !== `Set by ${m.status_set_by_name || "a person"}` ? m.status_reason : null,
-  done_when_line: m.done_when_line ?? "",
+  status_reason:
+    m.status_reason &&
+    (m.status_set === 'at_risk' || m.status_set === 'missed') &&
+    m.status_reason !== `Set by ${m.status_set_by_name || 'a person'}`
+      ? m.status_reason
+      : null,
+  done_when_line: m.done_when_line ?? '',
   measure: m.measure ?? null,
   baseline: m.baseline ?? null,
   target: m.target ?? null,
@@ -76,30 +128,54 @@ const kindFields = (m: GoalMilestone): KindFields => ({
   from_track_id: m.from_track_id ?? null,
   to_track_id: m.to_track_id ?? null,
 });
-const NO_KIND: Omit<KindFields, "kind"> = { status_set: null, status_reason: null, done_when_line: "", measure: null, baseline: null, target: null, current: null, sub_goal_of_id: null, home_track_id: null, from_track_id: null, to_track_id: null };
+const NO_KIND: Omit<KindFields, 'kind'> = {
+  status_set: null,
+  status_reason: null,
+  done_when_line: '',
+  measure: null,
+  baseline: null,
+  target: null,
+  current: null,
+  sub_goal_of_id: null,
+  home_track_id: null,
+  from_track_id: null,
+  to_track_id: null,
+};
 
 /** What a save sends of the kind fields: those the kind shows; a field only another kind shows is
  * cleared, and a reason only goes with a person's At risk or Missed. */
 const forKind = (k: KindFields): KindFields => {
   const measured = isMeasured(k.kind);
-  const why = k.status_set === "at_risk" || k.status_set === "missed";
+  const why = k.status_set === 'at_risk' || k.status_set === 'missed';
   return {
     ...k,
     status_reason: why ? k.status_reason : null,
-    done_when_line: measured ? "" : k.done_when_line,
+    done_when_line: measured ? '' : k.done_when_line,
     measure: measured ? k.measure : null,
     baseline: measured ? k.baseline : null,
     target: measured ? k.target : null,
     current: measured ? k.current : null,
-    sub_goal_of_id: k.kind === "sub_goal" ? k.sub_goal_of_id : null,
-    home_track_id: k.kind === "handoff" ? null : k.home_track_id,
-    from_track_id: k.kind === "handoff" ? k.from_track_id : null,
-    to_track_id: k.kind === "handoff" ? k.to_track_id : null,
+    sub_goal_of_id: k.kind === 'sub_goal' ? k.sub_goal_of_id : null,
+    home_track_id: k.kind === 'handoff' ? null : k.home_track_id,
+    from_track_id: k.kind === 'handoff' ? k.from_track_id : null,
+    to_track_id: k.kind === 'handoff' ? k.to_track_id : null,
   };
 };
 
 /** `only` "name" (home-milestone-rename): the card renames it alone, as a goal's own milestone's does. */
-type Draft = { id: string | null; code: string; name: string; date: string; goal_id: string | null; item_ids: string[]; counts_when: string; second: boolean; prd: boolean; k: KindFields | null; only?: "name" };
+type Draft = {
+  id: string | null;
+  code: string;
+  name: string;
+  date: string;
+  goal_id: string | null;
+  item_ids: string[];
+  counts_when: string;
+  second: boolean;
+  prd: boolean;
+  k: KindFields | null;
+  only?: 'name';
+};
 type Toast = { words: string; undo: (() => Promise<unknown>) | null };
 
 export interface MsCtl {
@@ -143,11 +219,13 @@ export interface MsCtl {
   asking: string | null;
   setAsking: (id: string | null) => void;
   /** The PRD owner approves or declines a change the roadmap asked of the PRD. */
-  decide: (m: GoalMilestone, how: "accept" | "decline") => Promise<void>;
+  decide: (m: GoalMilestone, how: 'accept' | 'decline') => Promise<void>;
 }
 
 const Ctx = createContext<MsCtl | null>(null);
-export const MsProvider = ({ value, children }: { value: MsCtl; children: ReactNode }) => <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+export const MsProvider = ({ value, children }: { value: MsCtl; children: ReactNode }) => (
+  <Ctx.Provider value={value}>{children}</Ctx.Provider>
+);
 export const useMsCtl = () => useContext(Ctx);
 
 /** home-milestone-rename: a milestone's rename in place (the card, its name alone), by its id; null where the
@@ -161,11 +239,19 @@ export const renameOf = (ms: MsCtl | null) => (id: string) => {
  * (one_pager.roadmap_codes_of): the one of that code holding the row's items, else the PRD's own of that code,
  * else the only one of it. A row with no code is no roadmap milestone (the PRD's written one). Goal milestones
  * only, as Home's rows. */
-export function stripMilestone(ms: MsCtl | null, row: { milestone: boolean; code?: string | null; item_ids?: string[] }, prdId: string): string | undefined {
+export function stripMilestone(
+  ms: MsCtl | null,
+  row: { milestone: boolean; code?: string | null; item_ids?: string[] },
+  prdId: string,
+): string | undefined {
   if (!ms || !row.milestone || !row.code) return undefined;
   const ids = new Set(row.item_ids ?? []);
   const coded = ms.list.filter((m) => !m.goal_target && msCode(m) === row.code);
-  return (coded.find((m) => m.item_ids.some((i) => ids.has(i))) ?? coded.find((m) => m.prd?.id === prdId) ?? (coded.length === 1 ? coded[0] : undefined))?.id;
+  return (
+    coded.find((m) => m.item_ids.some((i) => ids.has(i))) ??
+    coded.find((m) => m.prd?.id === prdId) ??
+    (coded.length === 1 ? coded[0] : undefined)
+  )?.id;
 }
 
 /** The milestones' state and their changes for one read of the roadmap (`reload` reads it again). */
@@ -179,7 +265,7 @@ export function useMilestones({
 }: {
   data: Roadmap | undefined;
   /** The roadmap read without its PRD, goal and track filters: a filter never changes a milestone's joined name or its "Also:". */
-  names?: Pick<Roadmap, "goal_milestones" | "milestones"> | null;
+  names?: Pick<Roadmap, 'goal_milestones' | 'milestones'> | null;
   phone: boolean;
   canChange: boolean;
   reload: () => Promise<unknown>;
@@ -194,25 +280,73 @@ export function useMilestones({
   if (!data) return null;
   const list = data.goal_milestones ?? [];
   const num = (m: GoalMilestone) => Number(msCode(m).slice(1)) || 0;
-  const band = [...new Map(list.filter((m) => m.date).map((m) => [msCode(m), m] as const)).values()].sort((a, b) => num(a) - num(b));
+  const band = [
+    ...new Map(list.filter((m) => m.date).map((m) => [msCode(m), m] as const)).values(),
+  ].sort((a, b) => num(a) - num(b));
   const items = new Map(data.items.map((i) => [i.id, i]));
-  const goals = [...new Map(data.items.flatMap((i) => (i.goal ? [[i.goal.id, { id: i.goal.id, title: i.goal.title }] as const] : []))).values()];
-  const goalTitle = (id: string | null) => goals.find((g) => g.id === id)?.title ?? "No goal";
+  const goals = [
+    ...new Map(
+      data.items.flatMap((i) =>
+        i.goal ? [[i.goal.id, { id: i.goal.id, title: i.goal.title }] as const] : [],
+      ),
+    ).values(),
+  ];
+  const goalTitle = (id: string | null) => goals.find((g) => g.id === id)?.title ?? 'No goal';
   // roadmap-milestone-codes: a new one takes the code after those dated on or before its day (the tracks' too).
-  const coded = [...list.map((m) => ({ date: m.date, code: msCode(m) })), ...data.milestones.flatMap((m) => (m.roadmap_code ? [{ date: m.date, code: m.roadmap_code }] : []))];
-  const nextCode = (date: string, extra = 0) => `M${new Set(coded.filter((m) => m.date && m.date <= date).map((m) => m.code)).size + 1 + extra}`;
-  const roadmapOf = (goal: string | null) => data.roadmap?.id ?? data.items.find((i) => i.goal?.id === goal)?.roadmap.id ?? data.items[0]?.roadmap.id;
+  const coded = [
+    ...list.map((m) => ({ date: m.date, code: msCode(m) })),
+    ...data.milestones.flatMap((m) =>
+      m.roadmap_code ? [{ date: m.date, code: m.roadmap_code }] : [],
+    ),
+  ];
+  const nextCode = (date: string, extra = 0) =>
+    `M${new Set(coded.filter((m) => m.date && m.date <= date).map((m) => m.code)).size + 1 + extra}`;
+  const roadmapOf = (goal: string | null) =>
+    data.roadmap?.id ??
+    data.items.find((i) => i.goal?.id === goal)?.roadmap.id ??
+    data.items[0]?.roadmap.id;
   // A milestone is added only where the reader's change applies (POST answers 403 elsewhere).
-  const applies = new Set((data.key_date_roadmaps ?? []).filter((r) => r.applies).map((r) => r.roadmap.id));
-  const canAddTo = (goal: string | null) => applies.has(roadmapOf(goal) ?? "");
-  const lateOf = (ids: string[], date: string) => ids.filter((id) => endsAfter(items.get(id), date)).length;
-  const fresh = (date: string, goal: string | null, second = false): Draft => ({ id: null, code: nextCode(date, second ? 1 : 0), name: "", date, goal_id: goal, item_ids: [], counts_when: RULES[0], second, prd: false, k: null });
+  const applies = new Set(
+    (data.key_date_roadmaps ?? []).filter((r) => r.applies).map((r) => r.roadmap.id),
+  );
+  const canAddTo = (goal: string | null) => applies.has(roadmapOf(goal) ?? '');
+  const lateOf = (ids: string[], date: string) =>
+    ids.filter((id) => endsAfter(items.get(id), date)).length;
+  const fresh = (date: string, goal: string | null, second = false): Draft => ({
+    id: null,
+    code: nextCode(date, second ? 1 : 0),
+    name: '',
+    date,
+    goal_id: goal,
+    item_ids: [],
+    counts_when: RULES[0],
+    second,
+    prd: false,
+    k: null,
+  });
   const done = async (t: Toast) => {
     await reload();
     setToast(t);
   };
-  const draftOf = (m: GoalMilestone): Draft => ({ id: m.id, code: msCode(m), name: m.name, date: m.pending?.date ?? m.date ?? data.today, goal_id: m.goal_id ?? null, item_ids: m.item_ids, counts_when: m.counts_when, second: false, prd: !!m.prd, k: kindFields(m) });
-  const patch = (id: string, body: Schemas["SimpleGoalMilestonePatch"]) => unwrap(api.PATCH("/v1/simple/roadmap/milestones/{milestone_id}", { params: { path: { milestone_id: id } }, body }));
+  const draftOf = (m: GoalMilestone): Draft => ({
+    id: m.id,
+    code: msCode(m),
+    name: m.name,
+    date: m.pending?.date ?? m.date ?? data.today,
+    goal_id: m.goal_id ?? null,
+    item_ids: m.item_ids,
+    counts_when: m.counts_when,
+    second: false,
+    prd: !!m.prd,
+    k: kindFields(m),
+  });
+  const patch = (id: string, body: Schemas['SimpleGoalMilestonePatch']) =>
+    unwrap(
+      api.PATCH('/v1/simple/roadmap/milestones/{milestone_id}', {
+        params: { path: { milestone_id: id } },
+        body,
+      }),
+    );
   return {
     asking,
     setAsking,
@@ -223,10 +357,19 @@ export function useMilestones({
       try {
         await decideChange(id, how);
       } catch {
-        setToast({ words: `Oracle could not ${how === "accept" ? "approve" : "decline"} the change to ${words(m)}`, undo: null });
+        setToast({
+          words: `Oracle could not ${how === 'accept' ? 'approve' : 'decline'} the change to ${words(m)}`,
+          undo: null,
+        });
         return;
       }
-      await done({ words: how === "accept" ? `Approved: ${words(m)} moves to ${day(m.pending!.date ?? m.date!)} in the PRD` : `Declined: ${words(m)} stays on ${day(m.date!)}`, undo: null });
+      await done({
+        words:
+          how === 'accept'
+            ? `Approved: ${words(m)} moves to ${day(m.pending!.date ?? m.date!)} in the PRD`
+            : `Declined: ${words(m)} stays on ${day(m.date!)}`,
+        undo: null,
+      });
     },
     list,
     band,
@@ -249,7 +392,11 @@ export function useMilestones({
     },
     begin: (date, goal) => {
       setToast(null);
-      setDraft((d) => (d && !d.id ? { ...d, date, code: nextCode(date) } : fresh(date, goal ?? lastLane.current ?? goals[0]?.id ?? null)));
+      setDraft((d) =>
+        d && !d.id
+          ? { ...d, date, code: nextCode(date) }
+          : fresh(date, goal ?? lastLane.current ?? goals[0]?.id ?? null),
+      );
     },
     openItem: (itemId) => {
       setDraft(null);
@@ -261,13 +408,18 @@ export function useMilestones({
     },
     rename: (m) => {
       setToast(null);
-      setDraft({ ...draftOf(m), only: "name" });
+      setDraft({ ...draftOf(m), only: 'name' });
     },
     pick: (itemId) => {
       if (!draft || draft.prd) return false;
       const m = draft.id ? list.find((x) => x.id === draft.id) : null;
       if (m && !m.can_change && !m.can_propose) return false;
-      setDraft({ ...draft, item_ids: draft.item_ids.includes(itemId) ? draft.item_ids.filter((x) => x !== itemId) : [...draft.item_ids, itemId] });
+      setDraft({
+        ...draft,
+        item_ids: draft.item_ids.includes(itemId)
+          ? draft.item_ids.filter((x) => x !== itemId)
+          : [...draft.item_ids, itemId],
+      });
       return true;
     },
     save: async (again) => {
@@ -278,68 +430,198 @@ export function useMilestones({
         // milestone-rename: a new name alone goes straight in for the PRD's owner, else it asks them.
         const name = d.name.trim() && d.name.trim() !== m.name ? d.name.trim() : null;
         const moved = d.date !== (m.pending?.date ?? m.date) || d.counts_when !== m.counts_when;
-        const got = await patch(d.id!, name && !moved ? { name } : { ...(name ? { name } : {}), date: d.date, counts_when: d.counts_when === m.counts_when ? null : d.counts_when });
+        const got = await patch(
+          d.id!,
+          name && !moved
+            ? { name }
+            : {
+                ...(name ? { name } : {}),
+                date: d.date,
+                counts_when: d.counts_when === m.counts_when ? null : d.counts_when,
+              },
+        );
         setDraft(null);
-        if (name && !got.pending) await done({ words: `${words({ ...m, name })} saved`, undo: () => patch(m.id, { name: m.name }) });
-        else await done({ words: name && !moved ? `Asked ${m.prd_owner ?? "the PRD's owner"} to rename ${words(m)}` : `Asked ${m.prd_owner ?? "the PRD's owner"} to move ${words(m)} to ${day(d.date)} in the PRD`, undo: name && !moved ? null : () => patch(m.id, { date: m.date }) });
+        if (name && !got.pending)
+          await done({
+            words: `${words({ ...m, name })} saved`,
+            undo: () => patch(m.id, { name: m.name }),
+          });
+        else
+          await done({
+            words:
+              name && !moved
+                ? `Asked ${m.prd_owner ?? "the PRD's owner"} to rename ${words(m)}`
+                : `Asked ${m.prd_owner ?? "the PRD's owner"} to move ${words(m)} to ${day(d.date)} in the PRD`,
+            undo: name && !moved ? null : () => patch(m.id, { date: m.date }),
+          });
         return;
       }
       if (d.id) {
         const was = list.find((x) => x.id === d.id)!;
         // milestone-rename: a goal's own milestone takes a name alone (the goal keeps its title);
         // home-milestone-rename: so does one renamed from Home.
-        if (was.goal_target || d.only === "name") {
+        if (was.goal_target || d.only === 'name') {
           await patch(d.id, { name: d.name.trim() || was.name });
           setDraft(null);
-          await done({ words: `${words({ code: d.code, name: d.name.trim() || was.name })} saved`, undo: () => patch(was.id, { name: was.name }) });
+          await done({
+            words: `${words({ code: d.code, name: d.name.trim() || was.name })} saved`,
+            undo: () => patch(was.id, { name: was.name }),
+          });
           return;
         }
-        await patch(d.id, { name: d.name, date: d.date, goal_id: d.goal_id, item_ids: d.item_ids, counts_when: d.counts_when, ...(d.k ? forKind(d.k) : {}) });
+        await patch(d.id, {
+          name: d.name,
+          date: d.date,
+          goal_id: d.goal_id,
+          item_ids: d.item_ids,
+          counts_when: d.counts_when,
+          ...(d.k ? forKind(d.k) : {}),
+        });
         setDraft(null);
-        await done({ words: `${words({ code: d.code, name: d.name })} saved`, undo: () => patch(was.id, { name: was.name, date: was.date, goal_id: was.goal_id, item_ids: was.item_ids, counts_when: was.counts_when, ...kindFields(was) }) });
+        await done({
+          words: `${words({ code: d.code, name: d.name })} saved`,
+          undo: () =>
+            patch(was.id, {
+              name: was.name,
+              date: was.date,
+              goal_id: was.goal_id,
+              item_ids: was.item_ids,
+              counts_when: was.counts_when,
+              ...kindFields(was),
+            }),
+        });
         return;
       }
-      const made = await unwrap(api.POST("/v1/simple/roadmap/milestones", { body: { roadmap_id: roadmapOf(d.goal_id)!, name: d.name.trim() || "New milestone", date: d.date, goal_id: d.goal_id, item_ids: d.item_ids, counts_when: d.counts_when, ...(d.k ? forKind(d.k) : { kind: "delivery" as const, ...NO_KIND }) } }));
+      const made = await unwrap(
+        api.POST('/v1/simple/roadmap/milestones', {
+          body: {
+            roadmap_id: roadmapOf(d.goal_id)!,
+            name: d.name.trim() || 'New milestone',
+            date: d.date,
+            goal_id: d.goal_id,
+            item_ids: d.item_ids,
+            counts_when: d.counts_when,
+            ...(d.k ? forKind(d.k) : { kind: 'delivery' as const, ...NO_KIND }),
+          },
+        }),
+      );
       const late = lateOf(d.item_ids, d.date);
-      setDraft(again ? { ...fresh(addDays(d.date, 28), d.goal_id, true), k: d.k ? { ...d.k, ...NO_KIND, home_track_id: d.k.home_track_id } : null } : null);
+      setDraft(
+        again
+          ? {
+              ...fresh(addDays(d.date, 28), d.goal_id, true),
+              k: d.k ? { ...d.k, ...NO_KIND, home_track_id: d.k.home_track_id } : null,
+            }
+          : null,
+      );
       await done({
         // roadmap-milestone-codes: the code its saved day gives it (the card's day may have changed since it opened).
-        words: late ? `${words({ ...made, roadmap_code: nextCode(d.date) })} added · ${late} ${late === 1 ? "item it waits on ends" : "items it waits on end"} after it` : `${words({ ...made, roadmap_code: nextCode(d.date) })} added to ${goalTitle(made.goal_id ?? null)}`,
-        undo: () => unwrap(api.DELETE("/v1/simple/roadmap/milestones/{milestone_id}", { params: { path: { milestone_id: made.id } } })),
+        words: late
+          ? `${words({ ...made, roadmap_code: nextCode(d.date) })} added · ${late} ${late === 1 ? 'item it waits on ends' : 'items it waits on end'} after it`
+          : `${words({ ...made, roadmap_code: nextCode(d.date) })} added to ${goalTitle(made.goal_id ?? null)}`,
+        undo: () =>
+          unwrap(
+            api.DELETE('/v1/simple/roadmap/milestones/{milestone_id}', {
+              params: { path: { milestone_id: made.id } },
+            }),
+          ),
       });
     },
     remove: async () => {
       if (!draft?.id) return;
       const m = list.find((x) => x.id === draft.id)!;
-      await unwrap(api.DELETE("/v1/simple/roadmap/milestones/{milestone_id}", { params: { path: { milestone_id: m.id } } }));
+      await unwrap(
+        api.DELETE('/v1/simple/roadmap/milestones/{milestone_id}', {
+          params: { path: { milestone_id: m.id } },
+        }),
+      );
       setDraft(null);
-      await done({ words: `${words(m)} removed`, undo: () => unwrap(api.POST("/v1/simple/roadmap/milestones/{milestone_id}/restore", { params: { path: { milestone_id: m.id } } })) });
+      await done({
+        words: `${words(m)} removed`,
+        undo: () =>
+          unwrap(
+            api.POST('/v1/simple/roadmap/milestones/{milestone_id}/restore', {
+              params: { path: { milestone_id: m.id } },
+            }),
+          ),
+      });
     },
     propose: async (remove) => {
       const m = draft?.id ? list.find((x) => x.id === draft.id) : null;
       if (!draft || !m) return;
-      if (m.goal_target || draft.only === "name") {
-        await unwrap(api.POST("/v1/simple/changes", { body: { op: "edit_goal_milestone", target: { milestone_id: m.id }, before: { milestone: { name: m.name } }, after: { milestone: { name: draft.name.trim() || m.name } } } }));
+      if (m.goal_target || draft.only === 'name') {
+        await unwrap(
+          api.POST('/v1/simple/changes', {
+            body: {
+              op: 'edit_goal_milestone',
+              target: { milestone_id: m.id },
+              before: { milestone: { name: m.name } },
+              after: { milestone: { name: draft.name.trim() || m.name } },
+            },
+          }),
+        );
         setDraft(null);
-        await done({ words: `Proposed a change to ${words(m)} · it waits in Needs a decision`, undo: null });
+        await done({
+          words: `Proposed a change to ${words(m)} · it waits in Needs a decision`,
+          undo: null,
+        });
         return;
       }
-      const before = { name: m.name, date: m.date ?? null, goal_id: m.goal_id ?? null, item_ids: m.item_ids, counts_when: m.counts_when, ...kindFields(m) };
-      const after = remove ? null : { name: draft.name.trim() || m.name, date: draft.date, goal_id: draft.goal_id, item_ids: draft.item_ids, counts_when: draft.counts_when, ...(draft.k ? forKind(draft.k) : {}) };
-      await unwrap(api.POST("/v1/simple/changes", { body: { op: "edit_goal_milestone", target: { milestone_id: m.id }, before: { milestone: before }, after: { milestone: after } } }));
+      const before = {
+        name: m.name,
+        date: m.date ?? null,
+        goal_id: m.goal_id ?? null,
+        item_ids: m.item_ids,
+        counts_when: m.counts_when,
+        ...kindFields(m),
+      };
+      const after = remove
+        ? null
+        : {
+            name: draft.name.trim() || m.name,
+            date: draft.date,
+            goal_id: draft.goal_id,
+            item_ids: draft.item_ids,
+            counts_when: draft.counts_when,
+            ...(draft.k ? forKind(draft.k) : {}),
+          };
+      await unwrap(
+        api.POST('/v1/simple/changes', {
+          body: {
+            op: 'edit_goal_milestone',
+            target: { milestone_id: m.id },
+            before: { milestone: before },
+            after: { milestone: after },
+          },
+        }),
+      );
       setDraft(null);
-      await done({ words: `${remove ? `Proposed removing ${words(m)}` : `Proposed a change to ${words(m)}`} · it waits in Needs a decision`, undo: null });
+      await done({
+        words: `${remove ? `Proposed removing ${words(m)}` : `Proposed a change to ${words(m)}`} · it waits in Needs a decision`,
+        undo: null,
+      });
     },
     move: async (m, date) => {
       if (!m.date || date === m.date) return;
       try {
         await patch(m.id, { date });
       } catch (e) {
-        setToast({ words: e instanceof Error ? e.message : "Oracle could not move it", undo: null });
+        setToast({
+          words: e instanceof Error ? e.message : 'Oracle could not move it',
+          undo: null,
+        });
         return;
       }
-      if (m.prd) await done({ words: `Asked ${m.prd_owner ?? "the PRD's owner"} to move ${words(m)} to ${day(date)} in the PRD`, undo: () => patch(m.id, { date: m.date }) });
-      else await done({ words: `${words(m)} moved to ${day(date)}`, undo: () => patch(m.id, { date: m.date }) });
+      if (m.prd)
+        await done({
+          words: `Asked ${m.prd_owner ?? "the PRD's owner"} to move ${words(m)} to ${day(date)} in the PRD`,
+          undo: () => patch(m.id, { date: m.date }),
+        });
+      else
+        await done({
+          words: `${words(m)} moved to ${day(date)}`,
+          undo: () => patch(m.id, { date: m.date }),
+        });
     },
     undo: async () => {
       const u = toast?.undo;
@@ -354,7 +636,35 @@ export function useMilestones({
 }
 
 /** One milestone's mark: a diamond on the time axis. */
-function Diamond({ x, y, code, size = 12, hollow = false, dashed = false, title, testid = "ms-diamond", color, kind, day: on, onPointerDown, onClick }: { x: number; y: number; code: string; size?: number; hollow?: boolean; dashed?: boolean; title: string; testid?: string; color?: string; kind?: MkKind | null; day?: string; onPointerDown?: (e: ReactPointerEvent) => void; onClick?: () => void }) {
+function Diamond({
+  x,
+  y,
+  code,
+  size = 12,
+  hollow = false,
+  dashed = false,
+  title,
+  testid = 'ms-diamond',
+  color,
+  kind,
+  day: on,
+  onPointerDown,
+  onClick,
+}: {
+  x: number;
+  y: number;
+  code: string;
+  size?: number;
+  hollow?: boolean;
+  dashed?: boolean;
+  title: string;
+  testid?: string;
+  color?: string;
+  kind?: MkKind | null;
+  day?: string;
+  onPointerDown?: (e: ReactPointerEvent) => void;
+  onClick?: () => void;
+}) {
   const edge = color ?? msEdge(code);
   const hit = onClick || onPointerDown;
   return (
@@ -364,13 +674,27 @@ function Diamond({ x, y, code, size = 12, hollow = false, dashed = false, title,
       data-day={on}
       title={title}
       aria-label={hit ? title : undefined}
-      role={hit ? "button" : undefined}
-      className={`absolute z-[25] ${hit ? "cursor-grab touch-none" : ""}`}
-      style={{ left: x - size / 2 - (hit ? 4 : 0), top: y - size / 2 - (hit ? 4 : 0), width: size + (hit ? 8 : 0), height: size + (hit ? 8 : 0), padding: hit ? 4 : 0, pointerEvents: hit ? undefined : "none" }}
+      role={hit ? 'button' : undefined}
+      className={`absolute z-[25] ${hit ? 'cursor-grab touch-none' : ''}`}
+      style={{
+        left: x - size / 2 - (hit ? 4 : 0),
+        top: y - size / 2 - (hit ? 4 : 0),
+        width: size + (hit ? 8 : 0),
+        height: size + (hit ? 8 : 0),
+        padding: hit ? 4 : 0,
+        pointerEvents: hit ? undefined : 'none',
+      }}
       onPointerDown={onPointerDown}
       onClick={onClick}
     >
-      <i aria-hidden className="block h-full w-full rotate-45 rounded-[2px]" style={{ background: hollow ? "var(--surface)" : edge, border: `1.5px ${dashed ? "dashed" : "solid"} ${edge}` }} />
+      <i
+        aria-hidden
+        className="block h-full w-full rotate-45 rounded-[2px]"
+        style={{
+          background: hollow ? 'var(--surface)' : edge,
+          border: `1.5px ${dashed ? 'dashed' : 'solid'} ${edge}`,
+        }}
+      />
     </span>
   );
 }
@@ -378,19 +702,37 @@ function Diamond({ x, y, code, size = 12, hollow = false, dashed = false, title,
 /** A label's width at text-xs semibold, near enough to keep labels apart. */
 const textW = (t: string) => Math.ceil(t.length * 7.6) + 24;
 
-function Chip({ children, style, className = "", mx, testid, title, onClick, keepIn }: { children: ReactNode; style?: CSSProperties; className?: string; mx?: number; testid?: string; title?: string; onClick?: () => void; keepIn?: { l0: number } }) {
+function Chip({
+  children,
+  style,
+  className = '',
+  mx,
+  testid,
+  title,
+  onClick,
+  keepIn,
+}: {
+  children: ReactNode;
+  style?: CSSProperties;
+  className?: string;
+  mx?: number;
+  testid?: string;
+  title?: string;
+  onClick?: () => void;
+  keepIn?: { l0: number };
+}) {
   return (
     <span
       data-testid={testid}
       title={title}
-      data-ms-label={mx != null ? "" : undefined}
-      data-ms-keep-in={keepIn ? "" : undefined}
+      data-ms-label={mx != null ? '' : undefined}
+      data-ms-keep-in={keepIn ? '' : undefined}
       data-l0={keepIn?.l0}
       data-mx={mx}
       data-t0={mx != null ? style?.top : undefined}
       onClick={onClick}
-      className={`absolute z-[14] overflow-hidden text-ellipsis rounded-full px-2 text-xs leading-5 font-semibold whitespace-nowrap ${onClick ? "cursor-pointer" : ""} ${className}`}
-      style={{ ...style, pointerEvents: onClick ? undefined : "none" }}
+      className={`absolute z-[14] overflow-hidden text-ellipsis rounded-full px-2 text-xs leading-5 font-semibold whitespace-nowrap ${onClick ? 'cursor-pointer' : ''} ${className}`}
+      style={{ ...style, pointerEvents: onClick ? undefined : 'none' }}
     >
       {children}
     </span>
@@ -398,7 +740,7 @@ function Chip({ children, style, className = "", mx, testid, title, onClick, kee
 }
 
 export interface MsLayerProps {
-  view: "timeline" | "gantt";
+  view: 'timeline' | 'gantt';
   x: (d: string) => number;
   /** Where the rows start (the axis' foot) and the axis' mark line. */
   top: number;
@@ -444,26 +786,31 @@ export function MsLayer(props: MsLayerProps) {
   // The same-day and "+N" lists close on Escape (focus back on their button) and on a click outside them.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+      if (e.key !== 'Escape') return;
       const at = document.activeElement as HTMLElement | null;
-      const pop = at?.closest<HTMLElement>("[data-ms-pop]");
-      const hovered = !!ref.current?.querySelector("[data-ms-more]:hover");
+      const pop = at?.closest<HTMLElement>('[data-ms-pop]');
+      const hovered = !!ref.current?.querySelector('[data-ms-more]:hover');
       if (!dayList && !bandMore && !pop && !hovered) return;
       setDayList(null);
       setBandMore(null);
       setShut(true);
-      (pop?.querySelector<HTMLElement>("[data-ms-pop-button]") ?? (pop ? ref.current?.querySelector<HTMLElement>('[data-ms-pop-button][aria-expanded="true"]') : null))?.focus();
+      (
+        pop?.querySelector<HTMLElement>('[data-ms-pop-button]') ??
+        (pop
+          ? ref.current?.querySelector<HTMLElement>('[data-ms-pop-button][aria-expanded="true"]')
+          : null)
+      )?.focus();
     };
     const onDown = (e: PointerEvent) => {
-      if ((e.target as Element | null)?.closest?.("[data-ms-pop]")) return;
+      if ((e.target as Element | null)?.closest?.('[data-ms-pop]')) return;
       setDayList(null);
       setBandMore(null);
     };
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("pointerdown", onDown);
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onDown);
     return () => {
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onDown);
     };
   }, [dayList, bandMore]);
   // A label keeps all its words inside the chart's visible part: it sits right of its diamond when it
@@ -473,10 +820,14 @@ export function MsLayer(props: MsLayerProps) {
   useLayoutEffect(() => {
     const layer = ref.current;
     let sc = layer?.parentElement ?? null;
-    while (sc && !(sc.scrollWidth > sc.clientWidth + 2 && /auto|scroll/.test(getComputedStyle(sc).overflowX))) sc = sc.parentElement;
+    while (
+      sc &&
+      !(sc.scrollWidth > sc.clientWidth + 2 && /auto|scroll/.test(getComputedStyle(sc).overflowX))
+    )
+      sc = sc.parentElement;
     if (!layer || !sc) return;
     const box = sc;
-    const inset = props.view === "timeline" ? (props.left ?? 0) : 0;
+    const inset = props.view === 'timeline' ? (props.left ?? 0) : 0;
     const fit = () => {
       const b = box.getBoundingClientRect();
       const right = b.right - 6;
@@ -485,18 +836,22 @@ export function MsLayer(props: MsLayerProps) {
       // roadmap-decide: one line per header row, never stepping down over the item rows' bars and
       // dates: each sits right of its diamond (or left of it near the right edge), and one that would
       // run into the next label is cut short there (its words in its tooltip).
-      const labels = [...layer.querySelectorAll<HTMLElement>("[data-ms-label]")].sort((a, b) => (Number(a.dataset.t0) || 0) - (Number(b.dataset.t0) || 0) || Number(a.dataset.mx) - Number(b.dataset.mx));
+      const labels = [...layer.querySelectorAll<HTMLElement>('[data-ms-label]')].sort(
+        (a, b) =>
+          (Number(a.dataset.t0) || 0) - (Number(b.dataset.t0) || 0) ||
+          Number(a.dataset.mx) - Number(b.dataset.mx),
+      );
       const shown = labels.filter((el) => {
         const mx = lx + Number(el.dataset.mx);
         const gone = mx < leftEdge - 6 || mx > right + 6;
-        el.style.visibility = gone ? "hidden" : "";
+        el.style.visibility = gone ? 'hidden' : '';
         return !gone;
       });
       // Each label's own width, read once for all (one layout for the 500-row chart, not one a label).
       for (const el of shown) {
-        el.style.whiteSpace = "nowrap";
-        el.style.width = "";
-        el.style.maxWidth = "";
+        el.style.whiteSpace = 'nowrap';
+        el.style.width = '';
+        el.style.maxWidth = '';
         el.style.top = `${Number(el.dataset.t0) || 0}px`;
       }
       const widths = shown.map((el) => el.scrollWidth + 2);
@@ -506,11 +861,14 @@ export function MsLayer(props: MsLayerProps) {
         const prev = shown[n - 1];
         if (!prev || (Number(prev.dataset.t0) || 0) !== t0) end = -Infinity;
         const next = shown[n + 1];
-        const nextT = next && (Number(next.dataset.t0) || 0) === t0 ? lx + Number(next.dataset.mx) + 6 : Infinity;
+        const nextT =
+          next && (Number(next.dataset.t0) || 0) === t0
+            ? lx + Number(next.dataset.mx) + 6
+            : Infinity;
         const w = widths[n];
         const mx = lx + Number(el.dataset.mx);
         // A change asked of a PRD keeps all its words; the labels after it make room.
-        const lead = el.dataset.testid === "ms-asked";
+        const lead = el.dataset.testid === 'ms-asked';
         let l = Math.max(mx + 6, leftEdge, end + 4);
         let cw = w;
         const room = Math.min(lead ? Infinity : nextT - 4, right) - l;
@@ -526,20 +884,20 @@ export function MsLayer(props: MsLayerProps) {
         if (l + cw > right) {
           // No room left in the row: it waits behind the ones before it (its diamond keeps its name).
           if (!lead && l + 40 > right) {
-            el.style.visibility = "hidden";
+            el.style.visibility = 'hidden';
             return;
           }
           l = Math.max(leftEdge, right - cw);
         }
         el.style.maxWidth = `${cw}px`;
-        el.style.width = cw < w ? `${cw}px` : "";
+        el.style.width = cw < w ? `${cw}px` : '';
         el.style.left = `${l - lx}px`;
         end = l + cw;
       });
     };
     fit();
-    box.addEventListener("scroll", fit);
-    return () => box.removeEventListener("scroll", fit);
+    box.addEventListener('scroll', fit);
+    return () => box.removeEventListener('scroll', fit);
   });
   // QA Nov 12 #7: a late chip ("Ends after M2 ...") and the Gantt's "+ Milestone" hint stay whole
   // inside the part of the chart in view (the Gantt scrolls sideways): a late chip that is partly in
@@ -547,12 +905,12 @@ export function MsLayer(props: MsLayerProps) {
   // clear of the axis's names (keepOff), else it hides. One wholly out of view stays by its line.
   useLayoutEffect(() => {
     const layer = ref.current;
-    const els = layer ? [...layer.querySelectorAll<HTMLElement>("[data-ms-keep-in]")] : [];
+    const els = layer ? [...layer.querySelectorAll<HTMLElement>('[data-ms-keep-in]')] : [];
     if (!layer || !els.length) return;
     let sc = layer.parentElement;
     while (sc && !/auto|scroll/.test(getComputedStyle(sc).overflowX)) sc = sc.parentElement;
     const box = sc;
-    const inset = props.view === "timeline" ? (props.left ?? 0) : 0;
+    const inset = props.view === 'timeline' ? (props.left ?? 0) : 0;
     const keep = () => {
       const lx = layer.getBoundingClientRect().left;
       const b = box ? box.getBoundingClientRect() : layer.getBoundingClientRect();
@@ -563,21 +921,31 @@ export function MsLayer(props: MsLayerProps) {
       els.forEach((el, n) => {
         const at = Number(el.dataset.l0);
         const w = widths[n];
-        if (el.dataset.testid === "ms-add-hint") {
+        if (el.dataset.testid === 'ms-add-hint') {
           // qa-nov17 #3/#6: it keeps off the band's chips and counts, the diamonds, the Today pill and
           // the header's names it would sit on, as well as the axis's names (keepOff).
           const hb = el.getBoundingClientRect();
-          const chart = layer.closest("[data-testid=simple-chart]") ?? layer;
-          const near0 = [...chart.querySelectorAll<Element>("[data-keep-clear], [data-testid=ms-label], [data-testid=ms-prd-label], [data-testid=ms-band-more], [data-testid=ms-same-day], [data-testid=ms-diamond], [data-testid=ms-prd-diamond]")]
+          const chart = layer.closest('[data-testid=simple-chart]') ?? layer;
+          const near0 = [
+            ...chart.querySelectorAll<Element>(
+              '[data-keep-clear], [data-testid=ms-label], [data-testid=ms-prd-label], [data-testid=ms-band-more], [data-testid=ms-same-day], [data-testid=ms-diamond], [data-testid=ms-prd-diamond]',
+            ),
+          ]
             .filter((o) => o !== el && !el.contains(o))
             .map((o) => o.getBoundingClientRect())
             .filter((r) => r.width > 0 && r.top < hb.bottom + 2 && r.bottom > hb.top - 2)
             .map((r): [number, number] => [r.left - lx, r.right - lx]);
           const spans = [...(props.keepOff ?? []), ...near0];
-          const free = (l: number) => l >= lo && l + w <= hi && spans.every(([a, c]) => l >= c + 6 || l + w <= a - 6);
-          const near = [Math.min(Math.max(at, lo), hi - w), ...spans.flatMap(([a, c]) => [c + 8, a - 6 - w])].filter(free);
-          const l = near.length ? near.reduce((p, q) => (Math.abs(q - at) < Math.abs(p - at) ? q : p)) : null;
-          el.style.visibility = l == null ? "hidden" : "";
+          const free = (l: number) =>
+            l >= lo && l + w <= hi && spans.every(([a, c]) => l >= c + 6 || l + w <= a - 6);
+          const near = [
+            Math.min(Math.max(at, lo), hi - w),
+            ...spans.flatMap(([a, c]) => [c + 8, a - 6 - w]),
+          ].filter(free);
+          const l = near.length
+            ? near.reduce((p, q) => (Math.abs(q - at) < Math.abs(p - at) ? q : p))
+            : null;
+          el.style.visibility = l == null ? 'hidden' : '';
           el.style.left = `${l ?? at}px`;
           return;
         }
@@ -586,8 +954,8 @@ export function MsLayer(props: MsLayerProps) {
       });
     };
     keep();
-    box?.addEventListener("scroll", keep);
-    return () => box?.removeEventListener("scroll", keep);
+    box?.addEventListener('scroll', keep);
+    return () => box?.removeEventListener('scroll', keep);
   });
   // A same-day count sits on its diamond's top-right corner, else its top-left one, else the
   // nearest place along the axis clear of the other counts, the diamonds and the header's words
@@ -597,9 +965,9 @@ export function MsLayer(props: MsLayerProps) {
   // Timeline's names column: a diamond scrolled under it hides its count too.
   useLayoutEffect(() => {
     const layer = ref.current;
-    const badges = layer ? [...layer.querySelectorAll<HTMLElement>("[data-ms-badge]")] : [];
+    const badges = layer ? [...layer.querySelectorAll<HTMLElement>('[data-ms-badge]')] : [];
     if (!layer || !badges.length) return;
-    const chart = layer.closest("[data-testid=simple-chart]") ?? layer.parentElement ?? layer;
+    const chart = layer.closest('[data-testid=simple-chart]') ?? layer.parentElement ?? layer;
     let sc = layer.parentElement;
     while (sc && !/auto|scroll/.test(getComputedStyle(sc).overflowX)) sc = sc.parentElement;
     type Box = { l: number; t: number; r: number; b: number };
@@ -612,8 +980,14 @@ export function MsLayer(props: MsLayerProps) {
       const lx = layer.getBoundingClientRect().left;
       // qa-nov17 #3: the header's names (a key date's, a track milestone's, a milestone's end) and
       // the band's chips too, so a count is never drawn on "Board meeting".
-      const keep = [...chart.querySelectorAll("[data-keep-clear], [data-testid=key-date-label], [data-testid=track-milestone-label], [data-testid=milestone-end-label], [data-testid=ms-label], [data-testid=ms-prd-label], [data-testid=ms-band-more], [data-testid=ms-diamond], [data-testid=ms-prd-diamond]")].map(boxOf).filter((o) => o.r > o.l && o.b > o.t);
-      const names = chart.querySelector("[data-testid=timeline-names-head]");
+      const keep = [
+        ...chart.querySelectorAll(
+          '[data-keep-clear], [data-testid=key-date-label], [data-testid=track-milestone-label], [data-testid=milestone-end-label], [data-testid=ms-label], [data-testid=ms-prd-label], [data-testid=ms-band-more], [data-testid=ms-diamond], [data-testid=ms-prd-diamond]',
+        ),
+      ]
+        .map(boxOf)
+        .filter((o) => o.r > o.l && o.b > o.t);
+      const names = chart.querySelector('[data-testid=timeline-names-head]');
       const floor = names ? boxOf(names).r : -Infinity;
       const taken: Box[] = [];
       // Every count back on its corner, then all their boxes read at once (one layout, not one a count).
@@ -621,7 +995,7 @@ export function MsLayer(props: MsLayerProps) {
       for (const el of sorted) {
         el.style.left = `${Number(el.dataset.mx) + 3}px`;
         el.style.top = `${el.dataset.top}px`;
-        el.style.visibility = "";
+        el.style.visibility = '';
       }
       const boxes = sorted.map(boxOf);
       for (const [n, el] of sorted.entries()) {
@@ -629,7 +1003,7 @@ export function MsLayer(props: MsLayerProps) {
         const w = at.r - at.l;
         const mx = lx + Number(el.dataset.mx);
         if (mx + 3 < floor) {
-          el.style.visibility = "hidden";
+          el.style.visibility = 'hidden';
           continue;
         }
         const h = at.b - at.t;
@@ -662,17 +1036,18 @@ export function MsLayer(props: MsLayerProps) {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(place);
     };
-    sc?.addEventListener("scroll", later);
+    sc?.addEventListener('scroll', later);
     return () => {
       cancelAnimationFrame(frame);
-      sc?.removeEventListener("scroll", later);
+      sc?.removeEventListener('scroll', later);
     };
   });
   if (!ms) return null;
   const { x, axisY, height, rows, lanes, phone, left = 0 } = props;
   const X = (d: string) => left + x(d);
   // tb-mk: the bands are tracks now; a milestone whose goal has no band of its own sits on the first one.
-  const laneOf = (g: string | null | undefined) => lanes.find((l) => l.key === (g ?? "none")) ?? lanes.find((l) => l.key !== "below") ?? lanes[0];
+  const laneOf = (g: string | null | undefined) =>
+    lanes.find((l) => l.key === (g ?? 'none')) ?? lanes.find((l) => l.key !== 'below') ?? lanes[0];
   const rowOf = (id: string) => rows.find((r) => r.id === id);
   const out: ReactNode[] = [];
   const own = ms.list.filter((m) => !m.prd && m.date);
@@ -700,7 +1075,9 @@ export function MsLayer(props: MsLayerProps) {
     return { left: l, top: y0 + 5, maxWidth: w };
   };
   const askWords = (m: GoalMilestone, asked: string, live: boolean) =>
-    live ? `Moving ${words(m)} to ${day(asked)}` : `Asked the PRD: move ${words(m)} to ${day(asked)} · waits for ${m.prd_owner ?? "its owner"}`;
+    live
+      ? `Moving ${words(m)} to ${day(asked)}`
+      : `Asked the PRD: move ${words(m)} to ${day(asked)} · waits for ${m.prd_owner ?? 'its owner'}`;
   type Label = { key: string; date: string; m: GoalMilestone; text: string };
   const labels: Label[] = [
     ...shown.map((m) => ({ key: m.id, date: m.date!, m, text: `${words(m)} · ${day(m.date!)}` })),
@@ -709,12 +1086,13 @@ export function MsLayer(props: MsLayerProps) {
   for (const m of prd) {
     const live = ms.moving?.id === m.id ? ms.moving.date : null;
     const asked = live ?? m.pending?.date ?? null;
-    if (asked && asked !== m.date) labels.push({ key: `ask-${m.id}`, date: asked, m, text: askWords(m, asked, !!live) });
+    if (asked && asked !== m.date)
+      labels.push({ key: `ask-${m.id}`, date: asked, m, text: askWords(m, asked, !!live) });
   }
   const at = new Map<string, { left: number; top: number; maxWidth: number }>();
   for (const { key, date, m, text } of labels.sort((a, b) => a.date.localeCompare(b.date))) {
     const lane = laneOf(m.goal_id);
-    at.set(key, labelAt(lane?.key ?? "", X(date), lane?.y0 ?? axisY + 6, text));
+    at.set(key, labelAt(lane?.key ?? '', X(date), lane?.y0 ?? axisY + 6, text));
   }
   // A drag on a diamond moves it; a click (no move) opens it.
   const grab = (m: GoalMilestone) => (e: ReactPointerEvent) => {
@@ -722,22 +1100,22 @@ export function MsLayer(props: MsLayerProps) {
     if (!m.can_change || m.goal_target) {
       e.stopPropagation();
       const up = () => {
-        window.removeEventListener("pointerup", up);
-        window.removeEventListener("pointercancel", cancel);
+        window.removeEventListener('pointerup', up);
+        window.removeEventListener('pointercancel', cancel);
         ms.edit(m);
       };
       // A cancelled press (a scroll took it) opens nothing and leaves no listener behind.
       const cancel = () => {
-        window.removeEventListener("pointerup", up);
-        window.removeEventListener("pointercancel", cancel);
+        window.removeEventListener('pointerup', up);
+        window.removeEventListener('pointercancel', cancel);
       };
-      window.addEventListener("pointerup", up);
-      window.addEventListener("pointercancel", cancel);
+      window.addEventListener('pointerup', up);
+      window.addEventListener('pointercancel', cancel);
       return;
     }
     e.preventDefault();
     e.stopPropagation();
-    const layer = e.currentTarget.closest<HTMLElement>("[data-testid=ms-layer]")!;
+    const layer = e.currentTarget.closest<HTMLElement>('[data-testid=ms-layer]')!;
     const drag = { x0: e.clientX, moved: false };
     const from = m.pending?.date ?? m.date!;
     const onMove = (ev: PointerEvent) => {
@@ -747,9 +1125,9 @@ export function MsLayer(props: MsLayerProps) {
       ms.setMoving({ id: m.id, date: dayAt(x, px, from) });
     };
     const onUp = (ev: PointerEvent) => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onCancel);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
       if (!drag.moved) {
         ms.setMoving(null);
         ms.edit(m);
@@ -760,17 +1138,18 @@ export function MsLayer(props: MsLayerProps) {
       void ms.move(m, to).finally(() => ms.setMoving(null));
     };
     const onCancel = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onCancel);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
       ms.setMoving(null);
     };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onCancel);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
   };
   // The joined milestone's longer name, as the band and its "+N" list give it.
-  const joinedWordsOf = (m: GoalMilestone) => (ms.joined.get(msCode(m)) ? `${msCode(m)} ${ms.joined.get(msCode(m))!.name}` : words(m));
+  const joinedWordsOf = (m: GoalMilestone) =>
+    ms.joined.get(msCode(m)) ? `${msCode(m)} ${ms.joined.get(msCode(m))!.name}` : words(m);
   for (const m of shown) {
     const date = m.date!;
     const mx = X(date);
@@ -796,7 +1175,10 @@ export function MsLayer(props: MsLayerProps) {
             aria-expanded={dayList === date}
             data-ms-pop
             data-ms-pop-button
-            title={`${many} milestones on ${day(date)}: ${shown.filter((o) => o.date === date).map(joinedWordsOf).join(", ")}`}
+            title={`${many} milestones on ${day(date)}: ${shown
+              .filter((o) => o.date === date)
+              .map(joinedWordsOf)
+              .join(', ')}`}
             onClick={() => setDayList((d) => (d === date ? null : date))}
             // A 12 px count, its tap area 24 px on a phone (an invisible pad round it).
             className="absolute z-[25] h-3 min-w-3 cursor-pointer before:absolute before:inset-0 before:content-[''] max-[600px]:before:-inset-1.5 rounded-full bg-text px-1 text-center text-[10px] leading-3 font-bold text-surface focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
@@ -809,7 +1191,14 @@ export function MsLayer(props: MsLayerProps) {
       // A click on the count lists the day's milestones, each opening its card.
       if (many > 1 && dayList === date)
         out.push(
-          <ul key={`cl-${m.id}`} data-testid="ms-same-day-list" data-ms-pop aria-label={`Milestones on ${day(date)}`} className="absolute z-40 min-w-48 rounded-lg border border-line bg-surface py-1 shadow-lg" style={{ left: mx + 3, top: axisY - 8 }}>
+          <ul
+            key={`cl-${m.id}`}
+            data-testid="ms-same-day-list"
+            data-ms-pop
+            aria-label={`Milestones on ${day(date)}`}
+            className="absolute z-40 min-w-48 rounded-lg border border-line bg-surface py-1 shadow-lg"
+            style={{ left: mx + 3, top: axisY - 8 }}
+          >
             {shown
               .filter((o) => o.date === date)
               .map((o) => (
@@ -829,10 +1218,36 @@ export function MsLayer(props: MsLayerProps) {
               ))}
           </ul>,
         );
-      out.push(<Diamond key={`d-${m.id}`} x={mx} y={axisY} code={msCode(m)} title={`${words(m)}, ${fullDay(date)}`} kind={m.kind ?? "delivery"} day={date} onPointerDown={grab(m)} />);
+      out.push(
+        <Diamond
+          key={`d-${m.id}`}
+          x={mx}
+          y={axisY}
+          code={msCode(m)}
+          title={`${words(m)}, ${fullDay(date)}`}
+          kind={m.kind ?? 'delivery'}
+          day={date}
+          onPointerDown={grab(m)}
+        />,
+      );
     }
     // A line through every group, its words in the band under the date axis.
-    if (!off) out.push(<div key={`v-${m.id}`} data-testid="ms-line" data-day={date} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: axisY + 6, height: height - axisY - 6, borderLeft: `1.5px solid ${msEdge(msCode(m))}` }} />);
+    if (!off)
+      out.push(
+        <div
+          key={`v-${m.id}`}
+          data-testid="ms-line"
+          data-day={date}
+          aria-hidden
+          className="pointer-events-none absolute z-[12]"
+          style={{
+            left: mx - 0.75,
+            top: axisY + 6,
+            height: height - axisY - 6,
+            borderLeft: `1.5px solid ${msEdge(msCode(m))}`,
+          }}
+        />,
+      );
     // Each item it waits on tied to it by a dotted line; one that ends after it is late (red).
     for (const id of m.item_ids) {
       const r = rowOf(id);
@@ -842,9 +1257,34 @@ export function MsLayer(props: MsLayerProps) {
       const ex = X(r.end);
       const cy = r.y + r.h / 2;
       const late = r.end > date && !r.guess;
-      const tie = r.guess ? "var(--text2)" : msEdge(msCode(m));
-      if (!late && ex < mx) out.push(<div key={`g-${m.id}-${id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: ex + 2, top: cy - 1, width: mx - ex - 2, borderTop: `2px dotted ${tie}` }} />);
-      out.push(<i key={`gd-${m.id}-${id}`} aria-hidden data-testid={r.guess ? "ms-tie-guess" : undefined} className="pointer-events-none absolute z-[13] h-2 w-2 rounded-full" style={{ left: (late ? mx : Math.min(ex, mx)) - 4, top: cy - 4, background: late ? "var(--crit)" : tie }} />);
+      const tie = r.guess ? 'var(--text2)' : msEdge(msCode(m));
+      if (!late && ex < mx)
+        out.push(
+          <div
+            key={`g-${m.id}-${id}`}
+            aria-hidden
+            className="pointer-events-none absolute z-[12]"
+            style={{
+              left: ex + 2,
+              top: cy - 1,
+              width: mx - ex - 2,
+              borderTop: `2px dotted ${tie}`,
+            }}
+          />,
+        );
+      out.push(
+        <i
+          key={`gd-${m.id}-${id}`}
+          aria-hidden
+          data-testid={r.guess ? 'ms-tie-guess' : undefined}
+          className="pointer-events-none absolute z-[13] h-2 w-2 rounded-full"
+          style={{
+            left: (late ? mx : Math.min(ex, mx)) - 4,
+            top: cy - 4,
+            background: late ? 'var(--crit)' : tie,
+          }}
+        />,
+      );
       if (late) {
         const t = `Ends after ${words(m)}`;
         const w = Math.min(textW(t), phone ? 220 : 360);
@@ -852,7 +1292,13 @@ export function MsLayer(props: MsLayerProps) {
         // as the chart scrolls (data-ms-keep-in, the layout effect above).
         const l0 = Math.max(left + 4, Math.min(mx - 10 - w, props.width - w - 4));
         out.push(
-          <Chip key={`late-${m.id}-${id}`} testid="ms-late" keepIn={{ l0 }} className="border border-crit bg-crit-bg text-crit" style={{ left: l0, top: cy - 10, maxWidth: w }}>
+          <Chip
+            key={`late-${m.id}-${id}`}
+            testid="ms-late"
+            keepIn={{ l0 }}
+            className="border border-crit bg-crit-bg text-crit"
+            style={{ left: l0, top: cy - 10, maxWidth: w }}
+          >
             {t}
           </Chip>,
         );
@@ -868,27 +1314,98 @@ export function MsLayer(props: MsLayerProps) {
     const live = ms.moving?.id === m.id ? ms.moving.date : null;
     const asked = live ?? m.pending?.date ?? null;
     const to = asked && asked !== date ? X(asked) : null;
-    out.push(<div key={`pv-${m.id}`} data-testid="ms-line" data-day={date} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: axisY + 6, height: height - axisY - 6, borderLeft: `1.5px solid ${msEdge(msCode(m))}`, opacity: to != null ? 0.4 : 1 }} />);
-    out.push(<Diamond key={`p-${m.id}`} x={mx} y={axisY} code={msCode(m)} title={`${words(m)} (from the PRD ${m.prd!.title})`} testid="ms-prd-diamond" kind={m.kind ?? "delivery"} day={date} onPointerDown={grab(m)} />);
+    out.push(
+      <div
+        key={`pv-${m.id}`}
+        data-testid="ms-line"
+        data-day={date}
+        aria-hidden
+        className="pointer-events-none absolute z-[12]"
+        style={{
+          left: mx - 0.75,
+          top: axisY + 6,
+          height: height - axisY - 6,
+          borderLeft: `1.5px solid ${msEdge(msCode(m))}`,
+          opacity: to != null ? 0.4 : 1,
+        }}
+      />,
+    );
+    out.push(
+      <Diamond
+        key={`p-${m.id}`}
+        x={mx}
+        y={axisY}
+        code={msCode(m)}
+        title={`${words(m)} (from the PRD ${m.prd!.title})`}
+        testid="ms-prd-diamond"
+        kind={m.kind ?? 'delivery'}
+        day={date}
+        onPointerDown={grab(m)}
+      />,
+    );
     // The asked day's chip sits in the first band; its dashed line runs through every band.
     const y0 = lane?.y0 ?? axisY + 6;
     if (to != null) {
-      out.push(<Diamond key={`pp-${m.id}`} x={to} y={axisY} code={msCode(m)} hollow dashed color="var(--warn)" title={`Asked: ${fullDay(asked!)}`} testid="ms-proposed" />);
-      out.push(<div key={`ppv-${m.id}`} aria-hidden className="pointer-events-none absolute z-[12]" data-testid="ms-asked-line" style={{ left: to - 0.75, top: axisY + 6, height: height - axisY - 6, borderLeft: "1.5px dashed var(--warn)" }} />);
+      out.push(
+        <Diamond
+          key={`pp-${m.id}`}
+          x={to}
+          y={axisY}
+          code={msCode(m)}
+          hollow
+          dashed
+          color="var(--warn)"
+          title={`Asked: ${fullDay(asked!)}`}
+          testid="ms-proposed"
+        />,
+      );
+      out.push(
+        <div
+          key={`ppv-${m.id}`}
+          aria-hidden
+          className="pointer-events-none absolute z-[12]"
+          data-testid="ms-asked-line"
+          style={{
+            left: to - 0.75,
+            top: axisY + 6,
+            height: height - axisY - 6,
+            borderLeft: '1.5px dashed var(--warn)',
+          }}
+        />,
+      );
       // roadmap-decide: the PRD's owner gets the ask as an action: the chip opens Approve / Decline in place.
       const mine = !live && !!m.pending?.can_decide;
       out.push(
-        <Chip key={`ppc-${m.id}`} testid="ms-asked" mx={to} title={askWords(m, asked!, !!live)} className="border border-warn bg-warn-bg text-warn" onClick={mine ? () => ms.setAsking(ms.asking === m.id ? null : m.id) : undefined} style={{ left: to + 6, top: y0 + 5, ...at.get(`ask-${m.id}`) }}>
+        <Chip
+          key={`ppc-${m.id}`}
+          testid="ms-asked"
+          mx={to}
+          title={askWords(m, asked!, !!live)}
+          className="border border-warn bg-warn-bg text-warn"
+          onClick={mine ? () => ms.setAsking(ms.asking === m.id ? null : m.id) : undefined}
+          style={{ left: to + 6, top: y0 + 5, ...at.get(`ask-${m.id}`) }}
+        >
           {askWords(m, asked!, !!live)}
         </Chip>,
       );
       if (mine && ms.asking === m.id)
         out.push(
-          <span key={`ppd-${m.id}`} role="group" aria-label={`Decide the change to ${words(m)}`} data-testid="ms-asked-decide" className="absolute z-[17] flex gap-1.5 rounded-lg border border-line bg-surface p-1.5 shadow-tip" style={{ left: at.get(`ask-${m.id}`)?.left ?? to + 6, top: y0 + 30 }}>
-            <Button variant="solid" className="!h-7 !px-2 !text-xs" onClick={() => void ms.decide(m, "accept")}>
+          <span
+            key={`ppd-${m.id}`}
+            role="group"
+            aria-label={`Decide the change to ${words(m)}`}
+            data-testid="ms-asked-decide"
+            className="absolute z-[17] flex gap-1.5 rounded-lg border border-line bg-surface p-1.5 shadow-tip"
+            style={{ left: at.get(`ask-${m.id}`)?.left ?? to + 6, top: y0 + 30 }}
+          >
+            <Button
+              variant="solid"
+              className="!h-7 !px-2 !text-xs"
+              onClick={() => void ms.decide(m, 'accept')}
+            >
               Approve
             </Button>
-            <Button className="!h-7 !px-2 !text-xs" onClick={() => void ms.decide(m, "decline")}>
+            <Button className="!h-7 !px-2 !text-xs" onClick={() => void ms.decide(m, 'decline')}>
               Decline
             </Button>
           </span>,
@@ -899,11 +1416,21 @@ export function MsLayer(props: MsLayerProps) {
   // Moving one of the roadmap's own: a tip says what changes as it goes.
   const mv = ms.moving && own.find((m) => m.id === ms.moving!.id);
   if (mv && ms.moving!.date !== mv.date) {
-    const late = mv.item_ids.filter((id) => { const r = rowOf(id); return !!r && !r.closed && !r.guess && r.end > ms.moving!.date; }).length;
+    const late = mv.item_ids.filter((id) => {
+      const r = rowOf(id);
+      return !!r && !r.closed && !r.guess && r.end > ms.moving!.date;
+    }).length;
     out.push(
-      <span key="mv" data-testid="ms-move-tip" className="absolute z-[16] rounded bg-tip px-2 py-0.5 text-xs whitespace-nowrap text-tip-text" style={{ left: X(ms.moving!.date) + 16, top: axisY + 8 }}>
+      <span
+        key="mv"
+        data-testid="ms-move-tip"
+        className="absolute z-[16] rounded bg-tip px-2 py-0.5 text-xs whitespace-nowrap text-tip-text"
+        style={{ left: X(ms.moving!.date) + 16, top: axisY + 8 }}
+      >
         {words(mv)} {day(mv.date!)} → {day(ms.moving!.date)}
-        {late ? ` · ${late} ${late === 1 ? "item still ends" : "items still end"} after it` : " · nothing it waits on ends after it"}
+        {late
+          ? ` · ${late} ${late === 1 ? 'item still ends' : 'items still end'} after it`
+          : ' · nothing it waits on ends after it'}
       </span>,
     );
   }
@@ -913,20 +1440,33 @@ export function MsLayer(props: MsLayerProps) {
   if (ms.canAdd) {
     // The hint steps right past any name it would cover.
     let hintL: number | null = X(addDays(ms.today, 97));
-    for (const [a, b] of [...(props.keepOff ?? [])].sort((p, q) => p[0] - q[0])) if (hintL < b + 6 && hintL + 92 > a - 6) hintL = b + 8;
+    for (const [a, b] of [...(props.keepOff ?? [])].sort((p, q) => p[0] - q[0]))
+      if (hintL < b + 6 && hintL + 92 > a - 6) hintL = b + 8;
     // On the Timeline it stays in sight, right of the names column: the free place nearest its
     // day, past a name or before it; with none, no hint.
     if (props.span) {
       const [lo, hi] = props.span;
       const want = X(addDays(ms.today, 97));
       const spans = props.keepOff ?? [];
-      const free = (l: number) => l >= lo + 6 && l + 92 <= hi - 6 && spans.every(([a, b]) => l >= b + 6 || l + 92 <= a - 6);
-      const near = [Math.min(Math.max(want, lo + 6), hi - 98), ...spans.flatMap(([a, b]) => [b + 8, a - 100])].filter(free);
-      hintL = near.length ? near.reduce((p, q) => (Math.abs(q - want) < Math.abs(p - want) ? q : p)) : null;
+      const free = (l: number) =>
+        l >= lo + 6 && l + 92 <= hi - 6 && spans.every(([a, b]) => l >= b + 6 || l + 92 <= a - 6);
+      const near = [
+        Math.min(Math.max(want, lo + 6), hi - 98),
+        ...spans.flatMap(([a, b]) => [b + 8, a - 100]),
+      ].filter(free);
+      hintL = near.length
+        ? near.reduce((p, q) => (Math.abs(q - want) < Math.abs(p - want) ? q : p))
+        : null;
     }
     if (hintL != null && !ms.hover && !d && !phone)
       out.push(
-        <Chip key="hint" testid="ms-add-hint" keepIn={props.span ? undefined : { l0: hintL }} className="z-[26] border border-dashed border-line-strong bg-surface text-text2" style={{ left: hintL, top: axisY - 10 }}>
+        <Chip
+          key="hint"
+          testid="ms-add-hint"
+          keepIn={props.span ? undefined : { l0: hintL }}
+          className="z-[26] border border-dashed border-line-strong bg-surface text-text2"
+          style={{ left: hintL, top: axisY - 10 }}
+        >
           + Milestone
         </Chip>,
       );
@@ -938,7 +1478,7 @@ export function MsLayer(props: MsLayerProps) {
         className="absolute z-[24] cursor-crosshair"
         style={{ left, top: axisY - 14, width: props.width - left, height: 26 }}
         onPointerMove={(e) => {
-          if (e.pointerType === "touch") return;
+          if (e.pointerType === 'touch') return;
           const px = e.clientX - e.currentTarget.getBoundingClientRect().left;
           ms.setHover(dayAt(x, px, ms.today));
         }}
@@ -956,10 +1496,39 @@ export function MsLayer(props: MsLayerProps) {
     // No "+ Milestone" hint while a milestone is dragged along the axis (ms3-a-mid).
     if (ms.hover && !ms.moving && !(d && !d.id)) {
       const hx = X(ms.hover);
-      out.push(<Diamond key="ghost" x={hx} y={axisY} code="M1" hollow dashed color="var(--accent-ink)" title="New milestone here" testid="ms-ghost" />);
-      out.push(<div key="ghost-l" aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: hx - 0.5, top: axisY + 6, height: height - axisY - 6, borderLeft: "1px dashed var(--accent-ink)" }} />);
       out.push(
-        <Chip key="ghost-c" testid="ms-ghost-words" className="pointer-events-none z-[26] bg-accent-ink text-on-accent" style={{ left: hx + 10, top: axisY - 10 }}>
+        <Diamond
+          key="ghost"
+          x={hx}
+          y={axisY}
+          code="M1"
+          hollow
+          dashed
+          color="var(--accent-ink)"
+          title="New milestone here"
+          testid="ms-ghost"
+        />,
+      );
+      out.push(
+        <div
+          key="ghost-l"
+          aria-hidden
+          className="pointer-events-none absolute z-[12]"
+          style={{
+            left: hx - 0.5,
+            top: axisY + 6,
+            height: height - axisY - 6,
+            borderLeft: '1px dashed var(--accent-ink)',
+          }}
+        />,
+      );
+      out.push(
+        <Chip
+          key="ghost-c"
+          testid="ms-ghost-words"
+          className="pointer-events-none z-[26] bg-accent-ink text-on-accent"
+          style={{ left: hx + 10, top: axisY - 10 }}
+        >
           + Milestone on {fullDay(ms.hover)}
         </Chip>,
       );
@@ -968,12 +1537,54 @@ export function MsLayer(props: MsLayerProps) {
   // The day chosen (a dashed diamond and line in its goal); the bars it waits on are outlined.
   if (d && !d.prd) {
     const nx = X(d.date);
-    if (!d.id) out.push(<Diamond key="new" x={nx} y={axisY} code={d.code} hollow dashed title="New milestone" testid="ms-new" />);
+    if (!d.id)
+      out.push(
+        <Diamond
+          key="new"
+          x={nx}
+          y={axisY}
+          code={d.code}
+          hollow
+          dashed
+          title="New milestone"
+          testid="ms-new"
+        />,
+      );
     // Its dashed line runs through every band, as a saved one's does.
-    if (!d.id) out.push(<div key="new-l" data-testid="ms-new-line" aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: nx - 0.5, top: axisY + 6, height: height - axisY - 6, borderLeft: "1.5px dashed var(--accent-ink)" }} />);
+    if (!d.id)
+      out.push(
+        <div
+          key="new-l"
+          data-testid="ms-new-line"
+          aria-hidden
+          className="pointer-events-none absolute z-[12]"
+          style={{
+            left: nx - 0.5,
+            top: axisY + 6,
+            height: height - axisY - 6,
+            borderLeft: '1.5px dashed var(--accent-ink)',
+          }}
+        />,
+      );
     for (const id of d.item_ids) {
       const r = rowOf(id);
-      if (r) out.push(<div key={`pk-${id}`} data-testid="ms-picked" aria-hidden className="pointer-events-none absolute z-[11]" style={{ left: X(r.start) - 3, top: r.y + 3, width: Math.max(30, X(r.end) - X(r.start) + 6), height: r.h - 6, outline: "2px solid var(--accent)", borderRadius: 8 }} />);
+      if (r)
+        out.push(
+          <div
+            key={`pk-${id}`}
+            data-testid="ms-picked"
+            aria-hidden
+            className="pointer-events-none absolute z-[11]"
+            style={{
+              left: X(r.start) - 3,
+              top: r.y + 3,
+              width: Math.max(30, X(r.end) - X(r.start) + 6),
+              height: r.h - 6,
+              outline: '2px solid var(--accent)',
+              borderRadius: 8,
+            }}
+          />,
+        );
     }
   }
 
@@ -981,7 +1592,7 @@ export function MsLayer(props: MsLayerProps) {
   const band = ms.band.length ? msBand(phone) : 0;
   if (band && props.bandTop != null) {
     const rows = phone ? 1 : 2;
-    const goalOf = (m: GoalMilestone) => lanes.find((l) => l.key === (m.goal_id ?? "none"));
+    const goalOf = (m: GoalMilestone) => lanes.find((l) => l.key === (m.goal_id ?? 'none'));
     // Each milestone once, by its code (two records of one milestone share it).
     const list = ms.band;
     type Placed = { m: GoalMilestone; left: number; w: number; row: number; more: GoalMilestone[] };
@@ -991,15 +1602,26 @@ export function MsLayer(props: MsLayerProps) {
     for (const m of list) {
       const mx = X(m.date!);
       // tb-mk: room for the kind's icon before the words and the status mark after them.
-      const w = Math.min(textW(ms.joined.get(msCode(m)) ? `${msCode(m)} ${ms.joined.get(msCode(m))!.name}` : words(m)) + 30, phone ? 150 : 230);
+      const w = Math.min(
+        textW(
+          ms.joined.get(msCode(m)) ? `${msCode(m)} ${ms.joined.get(msCode(m))!.name}` : words(m),
+        ) + 30,
+        phone ? 150 : 230,
+      );
       let l = mx + 6;
       if (l + MIN > props.width - 4) l = mx - 6 - Math.min(w, MIN + 40);
       // tb-mk: an empty row first, else the row whose last label began farthest left: it keeps the
       // most of its words (at 6 months close labels cut each other to "M…" when all took row one).
       const fits = (p: Placed | null) => !p || p.left + MIN + (p.more.length ? 30 : 0) <= l - 4;
-      const row = last.reduce((b, p, n) => (!fits(p) ? b : b < 0 || (last[b] && (!p || p.left < last[b]!.left)) ? n : b), -1);
+      const row = last.reduce(
+        (b, p, n) => (!fits(p) ? b : b < 0 || (last[b] && (!p || p.left < last[b]!.left)) ? n : b),
+        -1,
+      );
       if (row < 0) {
-        const host = last.reduce((a, b) => (b && (!a || b.left > a.left) ? b : a), null as Placed | null)!;
+        const host = last.reduce(
+          (a, b) => (b && (!a || b.left > a.left) ? b : a),
+          null as Placed | null,
+        )!;
         host.more.push(m);
         continue;
       }
@@ -1040,12 +1662,24 @@ export function MsLayer(props: MsLayerProps) {
         line.splice(n, 1);
       }
     }
-    out.push(<div key="band" data-testid="ms-band" aria-hidden className="pointer-events-none absolute z-[11] border-b border-line bg-surface2/60" style={{ left, top: props.bandTop, width: props.width - left, height: band }} />);
+    out.push(
+      <div
+        key="band"
+        data-testid="ms-band"
+        aria-hidden
+        className="pointer-events-none absolute z-[11] border-b border-line bg-surface2/60"
+        style={{ left, top: props.bandTop, width: props.width - left, height: band }}
+      />,
+    );
     // The joined milestone's longer name (the owner's "Join whenever names match").
     const bandWords = joinedWordsOf;
     const tipFor = (m: GoalMilestone) => {
       // A goal's own target date builds toward that goal, features on the page or not.
-      const g = ms.goals.find((o) => o.id === m.goal_id)?.title ?? goalOf(m)?.title ?? (m.goal_target ? m.name : null) ?? "No goal";
+      const g =
+        ms.goals.find((o) => o.id === m.goal_id)?.title ??
+        goalOf(m)?.title ??
+        (m.goal_target ? m.name : null) ??
+        'No goal';
       return {
         head: `${bandWords(m)} · ${fullDay(m.date!)}`,
         also: ms.joined.get(msCode(m))?.also ?? [],
@@ -1058,26 +1692,61 @@ export function MsLayer(props: MsLayerProps) {
       const top = props.bandTop + (phone ? 5 : 4 + p.row * BAND_ROW);
       const show = () => setBandTip({ id: m.id, left: p.left, top: top + 24 });
       // A PRD's milestone asked to move (or being dragged) fades where it is, as its diamond does.
-      const asked = m.prd ? ((ms.moving?.id === m.id ? ms.moving.date : null) ?? m.pending?.date ?? null) : null;
+      const asked = m.prd
+        ? ((ms.moving?.id === m.id ? ms.moving.date : null) ?? m.pending?.date ?? null)
+        : null;
       out.push(
-        <span key={`rb-${m.id}`} data-testid={m.prd ? "ms-prd-label" : "ms-label"} data-day={m.date} data-prd={m.prd ? "" : undefined} role="button" tabIndex={0} aria-label={`${tipFor(m).head}. ${tipFor(m).goal}`} onPointerEnter={show} onFocus={show} onPointerLeave={() => setBandTip(null)} onBlur={() => setBandTip(null)} onClick={() => ms.edit(m)} className="absolute z-[14] flex cursor-pointer items-center gap-1 overflow-hidden rounded-full px-1.5 text-xs leading-5 font-semibold whitespace-nowrap" style={{ left: p.left, top, maxWidth: Math.max(p.w, 40), background: msFill(msCode(m)), color: msInk(msCode(m)), border: `1px solid ${msEdge(msCode(m))}`, opacity: asked && asked !== m.date ? 0.5 : 1 }}>
+        <span
+          key={`rb-${m.id}`}
+          data-testid={m.prd ? 'ms-prd-label' : 'ms-label'}
+          data-day={m.date}
+          data-prd={m.prd ? '' : undefined}
+          role="button"
+          tabIndex={0}
+          aria-label={`${tipFor(m).head}. ${tipFor(m).goal}`}
+          onPointerEnter={show}
+          onFocus={show}
+          onPointerLeave={() => setBandTip(null)}
+          onBlur={() => setBandTip(null)}
+          onClick={() => ms.edit(m)}
+          className="absolute z-[14] flex cursor-pointer items-center gap-1 overflow-hidden rounded-full px-1.5 text-xs leading-5 font-semibold whitespace-nowrap"
+          style={{
+            left: p.left,
+            top,
+            maxWidth: Math.max(p.w, 40),
+            background: msFill(msCode(m)),
+            color: msInk(msCode(m)),
+            border: `1px solid ${msEdge(msCode(m))}`,
+            opacity: asked && asked !== m.date ? 0.5 : 1,
+          }}
+        >
           <MkIcon kind={m.kind} size={11} color={msEdge(msCode(m))} />
           <span className="min-w-0 overflow-hidden text-ellipsis">{bandWords(m)}</span>
           <span data-testid="ms-status" data-status={m.status} className="flex-none">
-            <MkStatusMark status={m.status ?? "on_track"} size={11} />
+            <MkStatusMark status={m.status ?? 'on_track'} size={11} />
           </span>
         </span>,
       );
       // The milestones folded into "+N": its list on hover, focus or a click, each opening its card.
       if (p.more.length)
         out.push(
-          <div key={`rbm-${m.id}`} data-ms-pop data-ms-more onPointerLeave={() => setShut(false)} onBlur={(e) => !e.currentTarget.contains(e.relatedTarget as Node | null) && setShut(false)} className="group absolute z-[15]" style={{ left: p.left + Math.max(p.w, 40) + 3, top }}>
+          <div
+            key={`rbm-${m.id}`}
+            data-ms-pop
+            data-ms-more
+            onPointerLeave={() => setShut(false)}
+            onBlur={(e) =>
+              !e.currentTarget.contains(e.relatedTarget as Node | null) && setShut(false)
+            }
+            className="group absolute z-[15]"
+            style={{ left: p.left + Math.max(p.w, 40) + 3, top }}
+          >
             <button
               type="button"
               data-testid="ms-band-more"
               data-ms-pop-button
-              data-days={p.more.map((o) => o.date).join(",")}
-              aria-label={`${p.more.length} more ${p.more.length === 1 ? "milestone" : "milestones"}: ${p.more.map((o) => `${bandWords(o)} · ${fullDay(o.date!)}`).join(", ")}`}
+              data-days={p.more.map((o) => o.date).join(',')}
+              aria-label={`${p.more.length} more ${p.more.length === 1 ? 'milestone' : 'milestones'}: ${p.more.map((o) => `${bandWords(o)} · ${fullDay(o.date!)}`).join(', ')}`}
               aria-expanded={bandMore === m.id}
               onClick={() => {
                 setShut(false);
@@ -1087,14 +1756,20 @@ export function MsLayer(props: MsLayerProps) {
             >
               +{p.more.length}
             </button>
-            <div className={`absolute top-full left-0 z-40 pt-1 ${bandMore === m.id ? "block" : shut ? "hidden" : "hidden group-focus-within:block group-hover:block"}`}>
-              <ul data-testid="ms-band-list" aria-label="More milestones here" className="min-w-48 rounded-lg border border-line bg-surface py-1 shadow-lg">
+            <div
+              className={`absolute top-full left-0 z-40 pt-1 ${bandMore === m.id ? 'block' : shut ? 'hidden' : 'hidden group-focus-within:block group-hover:block'}`}
+            >
+              <ul
+                data-testid="ms-band-list"
+                aria-label="More milestones here"
+                className="min-w-48 rounded-lg border border-line bg-surface py-1 shadow-lg"
+              >
                 {p.more.map((o) => (
                   <li key={o.id}>
                     <button
                       type="button"
                       data-testid="ms-band-entry"
-                      data-prd={o.prd ? "" : undefined}
+                      data-prd={o.prd ? '' : undefined}
                       onClick={() => {
                         setBandMore(null);
                         ms.edit(o);
@@ -1114,18 +1789,29 @@ export function MsLayer(props: MsLayerProps) {
     if (bandTip && tm) {
       const t = tipFor(tm);
       out.push(
-        <span key="band-tip" data-testid="ms-band-tip" role="tooltip" className="pointer-events-none absolute z-40 flex max-w-80 flex-col rounded bg-tip px-2 py-1 text-xs text-tip-text" style={{ left: Math.min(bandTip.left, props.width - 300), top: bandTip.top }}>
+        <span
+          key="band-tip"
+          data-testid="ms-band-tip"
+          role="tooltip"
+          className="pointer-events-none absolute z-40 flex max-w-80 flex-col rounded bg-tip px-2 py-1 text-xs text-tip-text"
+          style={{ left: Math.min(bandTip.left, props.width - 300), top: bandTip.top }}
+        >
           <b>{t.head}</b>
-          {t.also.length > 0 && <span data-testid="ms-band-also">Also: {t.also.join(", ")}</span>}
+          {t.also.length > 0 && <span data-testid="ms-band-also">Also: {t.also.join(', ')}</span>}
           <span data-testid="ms-tip-kind">
             {kindName(tm.kind)}
-            {tm.kind === "handoff" && tm.from_track_name && tm.to_track_name ? ` · ${tm.from_track_name} → ${tm.to_track_name}` : ""} · {MK_STATUS[tm.status ?? "on_track"]}
+            {tm.kind === 'handoff' && tm.from_track_name && tm.to_track_name
+              ? ` · ${tm.from_track_name} → ${tm.to_track_name}`
+              : ''}{' '}
+            · {MK_STATUS[tm.status ?? 'on_track']}
           </span>
           {tm.status_reason && <span data-testid="ms-tip-reason">{tm.status_reason}</span>}
           {doneLine(tm) && <span data-testid="ms-tip-done">{doneLine(tm)}</span>}
           {t.prd && <span>{t.prd}</span>}
           <span>{t.goal}</span>
-          <span>Served by {tm.item_ids.length} {tm.item_ids.length === 1 ? "item" : "items"}</span>
+          <span>
+            Served by {tm.item_ids.length} {tm.item_ids.length === 1 ? 'item' : 'items'}
+          </span>
         </span>,
       );
     }
@@ -1139,7 +1825,7 @@ export function MsLayer(props: MsLayerProps) {
       onPointerMoveCapture={(e) => {
         const y = e.clientY - (ref.current?.getBoundingClientRect().top ?? 0);
         const lane = lanes.find((l) => y >= l.y0 && y < l.y1);
-        if (lane) ms.overLane(lane.key === "none" ? null : lane.key);
+        if (lane) ms.overLane(lane.key === 'none' ? null : lane.key);
       }}
     >
       {out}
@@ -1147,12 +1833,29 @@ export function MsLayer(props: MsLayerProps) {
   );
 }
 
-function Field({ label, children, testid, tip }: { label: string; children: ReactNode; testid?: string; tip?: ReactNode }) {
-  const box = <span className="relative flex min-h-9 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-2.5 text-sm font-normal text-text">{children}</span>;
+function Field({
+  label,
+  children,
+  testid,
+  tip,
+}: {
+  label: string;
+  children: ReactNode;
+  testid?: string;
+  tip?: ReactNode;
+}) {
+  const box = (
+    <span className="relative flex min-h-9 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-2.5 text-sm font-normal text-text">
+      {children}
+    </span>
+  );
   // A field with an (i): the (i) beside its name, outside the <label> (a button in a label would take its click).
   if (tip)
     return (
-      <div className="flex min-w-0 flex-col gap-1 text-xs font-semibold text-text2" data-testid={testid}>
+      <div
+        className="flex min-w-0 flex-col gap-1 text-xs font-semibold text-text2"
+        data-testid={testid}
+      >
         <span className="flex h-4 items-center gap-1">
           <span>{label}</span>
           {tip}
@@ -1168,14 +1871,20 @@ function Field({ label, children, testid, tip }: { label: string; children: Reac
   );
 }
 
-const bare = "min-w-0 flex-1 appearance-none bg-transparent text-sm text-text outline-none";
+const bare = 'min-w-0 flex-1 appearance-none bg-transparent text-sm text-text outline-none';
 
 /** The date field: the day in words, a date picker under it. */
 function DateField({ value, onChange }: { value: string; onChange: (d: string) => void }) {
   return (
     <Field label="Date" testid="ms-date">
       <span>{fullDay(value)}</span>
-      <input aria-label="Date" type="date" value={value} onChange={(e) => e.target.value && onChange(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" />
+      <input
+        aria-label="Date"
+        type="date"
+        value={value}
+        onChange={(e) => e.target.value && onChange(e.target.value)}
+        className="absolute inset-0 cursor-pointer opacity-0"
+      />
     </Field>
   );
 }
@@ -1184,7 +1893,12 @@ function RuleField({ value, onChange }: { value: string; onChange: (v: string) =
   const rules = value && !RULES.includes(value) ? [value, ...RULES] : RULES;
   return (
     <Field label="It counts when">
-      <select aria-label="It counts when" value={value} onChange={(e) => onChange(e.target.value)} className={bare}>
+      <select
+        aria-label="It counts when"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={bare}
+      >
         {rules.map((r) => (
           <option key={r}>{r}</option>
         ))}
@@ -1195,14 +1909,32 @@ function RuleField({ value, onChange }: { value: string; onChange: (v: string) =
 
 /** milestone-rights: the reasons, as tooltips (the card adds no sentences). */
 /** milestone-rename: a milestone's name with its roadmap-wide code fixed before it (read only for a viewer). */
-function NameField({ code, value, reads, onChange, tip }: { code: string; value: string; reads: boolean; onChange: (v: string) => void; tip?: string }) {
+function NameField({
+  code,
+  value,
+  reads,
+  onChange,
+  tip,
+}: {
+  code: string;
+  value: string;
+  reads: boolean;
+  onChange: (v: string) => void;
+  tip?: string;
+}) {
   return (
     <fieldset disabled={reads} title={reads ? WHO_CHANGES : undefined} className="contents">
       <Field label="Name">
         <span className="font-semibold" style={{ color: msInk(code) }}>
           {code}
         </span>
-        <input aria-label="Name" value={value} onChange={(e) => onChange(e.target.value)} placeholder="What is true by then" className={bare} />
+        <input
+          aria-label="Name"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="What is true by then"
+          className={bare}
+        />
         {tip && (
           <InfoTip label="Name" align="end" testId="ms-name-tip">
             {tip}
@@ -1218,16 +1950,38 @@ function Asked({ m }: { m: GoalMilestone }) {
   if (!m.pending) return null;
   return (
     <span data-testid="ms-proposed-state" className="-mt-1 text-xs font-semibold text-warn">
-      Proposed{m.pending.name ? `: ${m.pending.name}` : ""} · waits for {m.pending.asked_of ?? "the owner"}
+      Proposed{m.pending.name ? `: ${m.pending.name}` : ''} · waits for{' '}
+      {m.pending.asked_of ?? 'the owner'}
     </span>
   );
 }
 
-const WHO_CHANGES = "Only an owner or the roadmap's decider (with none, its owner) changes its milestones";
+const WHO_CHANGES =
+  "Only an owner or the roadmap's decider (with none, its owner) changes its milestones";
 const PROPOSE_WHY = "Goes to the roadmap's decider, who accepts or declines it in Needs a decision";
 
-const Btn = ({ children, onClick, primary = false, className = "", testid, title }: { children: ReactNode; onClick: () => void; primary?: boolean; className?: string; testid?: string; title?: string }) => (
-  <button type="button" data-testid={testid} title={title} onClick={onClick} className={`rounded-lg px-3 text-sm leading-8 font-semibold ${primary ? "bg-accent text-on-accent" : "border border-line-strong"} ${className}`}>
+const Btn = ({
+  children,
+  onClick,
+  primary = false,
+  className = '',
+  testid,
+  title,
+}: {
+  children: ReactNode;
+  onClick: () => void;
+  primary?: boolean;
+  className?: string;
+  testid?: string;
+  title?: string;
+}) => (
+  <button
+    type="button"
+    data-testid={testid}
+    title={title}
+    onClick={onClick}
+    className={`rounded-lg px-3 text-sm leading-8 font-semibold ${primary ? 'bg-accent text-on-accent' : 'border border-line-strong'} ${className}`}
+  >
     {children}
   </button>
 );
@@ -1250,8 +2004,8 @@ function KindList({ onPick }: { onPick: (kind: MkKind) => void }) {
       onKeyDown={(e) => {
         const step = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 2, ArrowUp: -2 }[e.key];
         if (step != null) go(at + step);
-        else if (e.key === "Home") go(0);
-        else if (e.key === "End") go(MK_KINDS.length - 1);
+        else if (e.key === 'Home') go(0);
+        else if (e.key === 'End') go(MK_KINDS.length - 1);
         else return;
         e.preventDefault();
       }}
@@ -1293,19 +2047,25 @@ export function MsCard() {
   useEffect(() => {
     if (!open || !close) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
       const at = e.target as Element | null;
       const over = at?.closest?.('[role="dialog"], [role="alertdialog"]');
-      if (over && !["ms-card", "ms-prd-card", "ms-kind-picker"].includes(over.getAttribute("data-testid") ?? "")) return;
-      if (at?.closest?.("[data-ms-pop]")) return;
+      if (
+        over &&
+        !['ms-card', 'ms-prd-card', 'ms-kind-picker'].includes(
+          over.getAttribute('data-testid') ?? '',
+        )
+      )
+        return;
+      if (at?.closest?.('[data-ms-pop]')) return;
       close(null);
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, [open, close]);
   if (!ms?.draft) return null;
   const d = ms.draft;
-  const on = d.id ?? "new";
+  const on = d.id ?? 'new';
   const set = (p: Partial<typeof d>) => {
     setFailed(null);
     ms.setDraft({ ...d, ...p });
@@ -1315,7 +2075,12 @@ export function MsCard() {
     setBusy(true);
     setFailed(null);
     void f()
-      .catch((e: unknown) => setFailed({ on, words: e instanceof Error && e.message ? e.message : "Oracle could not save it" }))
+      .catch((e: unknown) =>
+        setFailed({
+          on,
+          words: e instanceof Error && e.message ? e.message : 'Oracle could not save it',
+        }),
+      )
       .finally(() => setBusy(false));
   };
   const error = failed?.on === on && (
@@ -1324,21 +2089,34 @@ export function MsCard() {
     </p>
   );
   const phone = ms.phone;
-  const cls = phone ? "fixed right-0 bottom-0 left-0 z-[60] max-h-[70vh] overflow-y-auto rounded-t-2xl border-t border-line" : "fixed top-4 right-6 z-[60] w-[360px] rounded-xl border border-line";
-  const goalTitle = ms.goals.find((g) => g.id === d.goal_id)?.title ?? "No goal";
+  const cls = phone
+    ? 'fixed right-0 bottom-0 left-0 z-[60] max-h-[70vh] overflow-y-auto rounded-t-2xl border-t border-line'
+    : 'fixed top-4 right-6 z-[60] w-[360px] rounded-xl border border-line';
+  const goalTitle = ms.goals.find((g) => g.id === d.goal_id)?.title ?? 'No goal';
   // Join whenever names match (the owner, Nov 9): the joined milestone's other names, each once.
   const joined = d.id ? ms.joined.get(d.code) : undefined;
-  const others = joined ? [`${d.code} ${joined.name}`, ...joined.also].filter((n) => n.toLowerCase() !== `${d.code} ${d.name.trim()}`.toLowerCase()) : [];
+  const others = joined
+    ? [`${d.code} ${joined.name}`, ...joined.also].filter(
+        (n) => n.toLowerCase() !== `${d.code} ${d.name.trim()}`.toLowerCase(),
+      )
+    : [];
   const also = others.length > 0 && (
     <span data-testid="ms-card-also" className="-mt-1.5 text-xs text-text2">
-      Also: {others.join(", ")}
+      Also: {others.join(', ')}
     </span>
   );
   if (d.prd) {
     const m = ms.list.find((x) => x.id === d.id)!;
     return (
-      <div data-testid="ms-prd-card" role="dialog" aria-label={words(m)} className={`${cls} flex flex-col gap-2.5 bg-surface p-4 shadow-xl`}>
-        {phone && <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />}
+      <div
+        data-testid="ms-prd-card"
+        role="dialog"
+        aria-label={words(m)}
+        className={`${cls} flex flex-col gap-2.5 bg-surface p-4 shadow-xl`}
+      >
+        {phone && (
+          <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />
+        )}
         <div className="flex items-center justify-between">
           <h2 className="text-[15px] font-semibold">
             <span style={{ color: msInk(msCode(m)) }}>{msCode(m)}</span> {m.name}
@@ -1347,23 +2125,38 @@ export function MsCard() {
         </div>
         {also}
         <p className="text-sm text-text2">
-          From the PRD{" "}
-          <a href={`/simple/one-pagers/${m.prd!.slug}`} className="font-semibold text-accent-ink underline">
+          From the PRD{' '}
+          <a
+            href={`/simple/one-pagers/${m.prd!.slug}`}
+            className="font-semibold text-accent-ink underline"
+          >
             {m.prd!.title}
           </a>
           {m.prd_owner && <> · owned by {m.prd_owner}</>}
         </p>
-        <NameField code={msCode(m)} value={d.name} reads={!m.can_change} onChange={(name) => set({ name })} />
+        <NameField
+          code={msCode(m)}
+          value={d.name}
+          reads={!m.can_change}
+          onChange={(name) => set({ name })}
+        />
         <Asked m={m} />
         <DateField value={d.date} onChange={(date) => set({ date })} />
         <RuleField value={d.counts_when} onChange={(counts_when) => set({ counts_when })} />
-        <p className="text-xs text-text2">A change here goes to {m.prd_owner ?? "the PRD's owner"} as a change to the PRD. It shows dashed until they say yes.</p>
+        <p className="text-xs text-text2">
+          A change here goes to {m.prd_owner ?? "the PRD's owner"} as a change to the PRD. It shows
+          dashed until they say yes.
+        </p>
         {error}
         <div className="flex gap-2">
           <Btn primary onClick={() => run(ms.save.bind(null, false))}>
             Ask to change it
           </Btn>
-          <button type="button" className="px-1 text-sm leading-8 text-text2" onClick={() => ms.setDraft(null)}>
+          <button
+            type="button"
+            className="px-1 text-sm leading-8 text-text2"
+            onClick={() => ms.setDraft(null)}
+          >
             Cancel
           </button>
         </div>
@@ -1372,36 +2165,69 @@ export function MsCard() {
   }
   const own = d.id ? ms.list.find((x) => x.id === d.id) : undefined;
   // milestone-rights: who changes it saves; who may only propose proposes; anyone else reads.
-  const rights = !own || own.can_change ? "change" : own.can_propose ? "propose" : "read";
-  const reads = rights === "read";
-  const head = !d.id ? (d.second ? "Next milestone" : "New milestone") : reads ? `${d.code} ${d.name}` : `Edit ${d.code}`;
+  const rights = !own || own.can_change ? 'change' : own.can_propose ? 'propose' : 'read';
+  const reads = rights === 'read';
+  const head = !d.id
+    ? d.second
+      ? 'Next milestone'
+      : 'New milestone'
+    : reads
+      ? `${d.code} ${d.name}`
+      : `Edit ${d.code}`;
   const late = (id: string) => endsAfter(ms.items.get(id), d.date);
   // milestone-rename: a goal's own milestone: its name, in place (its date and measure are the goal's);
   // home-milestone-rename: any milestone renamed from Home, the same card.
-  if (own?.goal_target || (own && d.only === "name"))
+  if (own?.goal_target || (own && d.only === 'name'))
     return (
-      <div data-testid="ms-card" data-rights={rights} role="dialog" aria-label={head} className={`${cls} flex flex-col gap-2.5 bg-surface p-4 shadow-xl`}>
-        {phone && <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />}
+      <div
+        data-testid="ms-card"
+        data-rights={rights}
+        role="dialog"
+        aria-label={head}
+        className={`${cls} flex flex-col gap-2.5 bg-surface p-4 shadow-xl`}
+      >
+        {phone && (
+          <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />
+        )}
         <div className="flex items-center justify-between">
           <h2 className="text-[15px] font-semibold">{head}</h2>
           <span className="text-xs text-text2">{`${goalTitle} · ${day(d.date)}`}</span>
         </div>
-        <NameField code={d.code} value={d.name} reads={reads} onChange={(name) => set({ name })} tip={own.goal_target ? "The goal keeps its own name; its date and measure change on the goal." : undefined} />
+        <NameField
+          code={d.code}
+          value={d.name}
+          reads={reads}
+          onChange={(name) => set({ name })}
+          tip={
+            own.goal_target
+              ? 'The goal keeps its own name; its date and measure change on the goal.'
+              : undefined
+          }
+        />
         <Asked m={own} />
         {error}
         <div className="flex flex-wrap items-center gap-2 pt-1">
-          {rights === "change" && (
+          {rights === 'change' && (
             <Btn primary testid="ms-save" onClick={() => run(() => ms.save(false))}>
               Save
             </Btn>
           )}
-          {rights === "propose" && (
-            <Btn primary testid="ms-propose" title={PROPOSE_WHY} onClick={() => run(() => ms.propose(false))}>
+          {rights === 'propose' && (
+            <Btn
+              primary
+              testid="ms-propose"
+              title={PROPOSE_WHY}
+              onClick={() => run(() => ms.propose(false))}
+            >
               Propose
             </Btn>
           )}
-          <button type="button" className="px-1 text-sm leading-8 text-text2" onClick={() => ms.setDraft(null)}>
-            {reads ? "Close" : "Cancel"}
+          <button
+            type="button"
+            className="px-1 text-sm leading-8 text-text2"
+            onClick={() => ms.setDraft(null)}
+          >
+            {reads ? 'Close' : 'Cancel'}
           </button>
         </div>
       </div>
@@ -1409,8 +2235,15 @@ export function MsCard() {
   // tb-mk: "+ Milestone" asks for the kind first.
   if (!d.id && !d.k)
     return (
-      <div data-testid="ms-kind-picker" role="dialog" aria-label={head} className={`${cls} flex flex-col gap-2.5 bg-surface p-4 shadow-xl`}>
-        {phone && <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />}
+      <div
+        data-testid="ms-kind-picker"
+        role="dialog"
+        aria-label={head}
+        className={`${cls} flex flex-col gap-2.5 bg-surface p-4 shadow-xl`}
+      >
+        {phone && (
+          <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />
+        )}
         <div className="flex items-center justify-between">
           <h2 className="text-[15px] font-semibold">{head}</h2>
           <span className="text-xs text-text2">{fullDay(d.date)}</span>
@@ -1428,26 +2261,58 @@ export function MsCard() {
             </span>
           </InfoTip>
         </span>
-        <KindList onPick={(kind) => set({ k: { kind, ...NO_KIND, from_track_id: kind === "handoff" ? (ms.tracks[0]?.id ?? null) : null, to_track_id: kind === "handoff" ? (ms.tracks[1]?.id ?? null) : null } })} />
+        <KindList
+          onPick={(kind) =>
+            set({
+              k: {
+                kind,
+                ...NO_KIND,
+                from_track_id: kind === 'handoff' ? (ms.tracks[0]?.id ?? null) : null,
+                to_track_id: kind === 'handoff' ? (ms.tracks[1]?.id ?? null) : null,
+              },
+            })
+          }
+        />
         <div className="flex gap-2 pt-1">
-          <button type="button" className="px-1 text-sm leading-8 text-text2" onClick={() => ms.setDraft(null)}>
+          <button
+            type="button"
+            className="px-1 text-sm leading-8 text-text2"
+            onClick={() => ms.setDraft(null)}
+          >
             Cancel
           </button>
         </div>
       </div>
     );
   const k = d.k;
-  const setK = (p: Partial<KindFields>) => set({ k: { ...(k ?? { kind: "delivery", ...NO_KIND }), ...p } });
-  const num = (v: string) => (v.trim() === "" || Number.isNaN(Number(v)) ? null : Number(v));
-  const text = (label: string, value: string | number | null | undefined, on: (v: string) => void, ph = "") => (
+  const setK = (p: Partial<KindFields>) =>
+    set({ k: { ...(k ?? { kind: 'delivery', ...NO_KIND }), ...p } });
+  const num = (v: string) => (v.trim() === '' || Number.isNaN(Number(v)) ? null : Number(v));
+  const text = (
+    label: string,
+    value: string | number | null | undefined,
+    on: (v: string) => void,
+    ph = '',
+  ) => (
     <Field label={label}>
       {/* QA Nov 12 #3: a percent width, so a narrow column (Start, Target) holds the box whole. */}
-      <input aria-label={label} value={value ?? ""} placeholder={ph} onChange={(e) => on(e.target.value)} className={`${bare} w-full min-w-0`} />
+      <input
+        aria-label={label}
+        value={value ?? ''}
+        placeholder={ph}
+        onChange={(e) => on(e.target.value)}
+        className={`${bare} w-full min-w-0`}
+      />
     </Field>
   );
   const trackSel = (label: string, value: string | null, on: (t: string | null) => void) => (
     <Field label={label}>
-      <select aria-label={label} value={value ?? ""} onChange={(e) => on(e.target.value || null)} className={bare}>
+      <select
+        aria-label={label}
+        value={value ?? ''}
+        onChange={(e) => on(e.target.value || null)}
+        className={bare}
+      >
         <option value="">No track</option>
         {ms.tracks.map((t) => (
           <option key={t.id} value={t.id}>
@@ -1458,12 +2323,20 @@ export function MsCard() {
     </Field>
   );
   // A measured goal's milestones a sub-goal may sit under (a goal's own target is not one).
-  const parents = ms.list.filter((m) => m.kind === "goal" && !m.goal_target && m.id !== d.id);
+  const parents = ms.list.filter((m) => m.kind === 'goal' && !m.goal_target && m.id !== d.id);
   const subs = own ? ms.list.filter((m) => m.sub_goal_of_id === own.id) : [];
-  const status = k?.status_set ?? own?.status ?? "on_track";
+  const status = k?.status_set ?? own?.status ?? 'on_track';
   return (
-    <div data-testid="ms-card" data-rights={rights} role="dialog" aria-label={head} className={`${cls} flex flex-col gap-2.5 bg-surface p-4 shadow-xl`}>
-      {phone && <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />}
+    <div
+      data-testid="ms-card"
+      data-rights={rights}
+      role="dialog"
+      aria-label={head}
+      className={`${cls} flex flex-col gap-2.5 bg-surface p-4 shadow-xl`}
+    >
+      {phone && (
+        <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />
+      )}
       <div className="flex items-center justify-between">
         <h2 className="text-[15px] font-semibold">{head}</h2>
         <span className="text-xs text-text2">{`${goalTitle} · ${day(d.date)}`}</span>
@@ -1474,14 +2347,26 @@ export function MsCard() {
           <span className="font-semibold" style={{ color: msInk(d.code) }}>
             {d.code}
           </span>
-          <input aria-label="Name" autoFocus={!phone && !reads} value={d.name} onChange={(e) => set({ name: e.target.value })} placeholder="What is true by then" className={bare} />
+          <input
+            aria-label="Name"
+            autoFocus={!phone && !reads}
+            value={d.name}
+            onChange={(e) => set({ name: e.target.value })}
+            placeholder="What is true by then"
+            className={bare}
+          />
         </Field>
         {own && <Asked m={own} />}
         {k && (
           <div className="grid grid-cols-2 gap-2">
             <Field label="Kind" testid="ms-kind">
               <MkIcon kind={k.kind} size={13} color="var(--accent-ink)" />
-              <select aria-label="Kind" value={k.kind} onChange={(e) => setK({ kind: e.target.value as MkKind })} className={bare}>
+              <select
+                aria-label="Kind"
+                value={k.kind}
+                onChange={(e) => setK({ kind: e.target.value as MkKind })}
+                className={bare}
+              >
                 {MK_KINDS.map((o) => (
                   <option key={o.kind} value={o.kind}>
                     {o.name}
@@ -1496,14 +2381,24 @@ export function MsCard() {
               testid="ms-status-field"
               tip={
                 !k.status_set && own?.status_reason ? (
-                  <InfoTip label="Oracle's reason" align="start" side="bottom" testId="ms-status-why">
+                  <InfoTip
+                    label="Oracle's reason"
+                    align="start"
+                    side="bottom"
+                    testId="ms-status-why"
+                  >
                     {own.status_reason}
                   </InfoTip>
                 ) : null
               }
             >
               <MkStatusMark status={status} size={12} />
-              <select aria-label="Status" value={k.status_set ?? ""} onChange={(e) => setK({ status_set: (e.target.value || null) as MkStatus | null })} className={bare}>
+              <select
+                aria-label="Status"
+                value={k.status_set ?? ''}
+                onChange={(e) => setK({ status_set: (e.target.value || null) as MkStatus | null })}
+                className={bare}
+              >
                 <option value="">Oracle decides</option>
                 {(Object.keys(MK_STATUS) as MkStatus[]).map((o) => (
                   <option key={o} value={o}>
@@ -1514,30 +2409,48 @@ export function MsCard() {
             </Field>
           </div>
         )}
-        {k?.status_set && (k.status_set === "at_risk" || k.status_set === "missed") && text("Why", k.status_reason, (v) => setK({ status_reason: v || null }))}
-        {k?.kind === "handoff" && (
+        {k?.status_set &&
+          (k.status_set === 'at_risk' || k.status_set === 'missed') &&
+          text('Why', k.status_reason, (v) => setK({ status_reason: v || null }))}
+        {k?.kind === 'handoff' && (
           <div className="grid grid-cols-2 gap-2">
-            {trackSel("From track", k.from_track_id, (from_track_id) => setK({ from_track_id }))}
-            {trackSel("To track", k.to_track_id, (to_track_id) => setK({ to_track_id }))}
+            {trackSel('From track', k.from_track_id, (from_track_id) => setK({ from_track_id }))}
+            {trackSel('To track', k.to_track_id, (to_track_id) => setK({ to_track_id }))}
           </div>
         )}
         {/* tb-mk (the pick): Date and Track on one row (a hand-off's tracks are its From and To above). */}
         <div className="grid grid-cols-2 gap-2" data-testid="ms-date-row">
           <DateField value={d.date} onChange={(date) => set({ date })} />
-          {k?.kind !== "handoff" && trackSel("Track", k?.home_track_id ?? null, (home_track_id) => setK({ home_track_id }))}
+          {k?.kind !== 'handoff' &&
+            trackSel('Track', k?.home_track_id ?? null, (home_track_id) => setK({ home_track_id }))}
         </div>
         {k && isMeasured(k.kind) && (
           <div className="grid grid-cols-[minmax(0,1fr)_72px_72px] gap-2" data-testid="ms-measure">
-            {text("Measure", k.measure, (v) => setK({ measure: v || null }), "What is counted")}
-            {text("Start", k.baseline, (v) => setK({ baseline: num(v) }))}
-            {text("Target", k.target, (v) => setK({ target: num(v) }))}
+            {text('Measure', k.measure, (v) => setK({ measure: v || null }), 'What is counted')}
+            {text('Start', k.baseline, (v) => setK({ baseline: num(v) }))}
+            {text('Target', k.target, (v) => setK({ target: num(v) }))}
           </div>
         )}
-        {k && !isMeasured(k.kind) && text("Done when", k.done_when_line, (v) => setK({ done_when_line: v }), "What is true then")}
+        {k &&
+          !isMeasured(k.kind) &&
+          text(
+            'Done when',
+            k.done_when_line,
+            (v) => setK({ done_when_line: v }),
+            'What is true then',
+          )}
         {/* tb-mk (the pick): Builds toward and, for a sub-goal, Sub-goal of beside it. */}
-        <div className={k?.kind === "sub_goal" ? "grid grid-cols-2 gap-2" : ""} data-testid="ms-toward-row">
+        <div
+          className={k?.kind === 'sub_goal' ? 'grid grid-cols-2 gap-2' : ''}
+          data-testid="ms-toward-row"
+        >
           <Field label="Builds toward">
-            <select aria-label="Builds toward" value={d.goal_id ?? ""} onChange={(e) => set({ goal_id: e.target.value || null })} className={bare}>
+            <select
+              aria-label="Builds toward"
+              value={d.goal_id ?? ''}
+              onChange={(e) => set({ goal_id: e.target.value || null })}
+              className={bare}
+            >
               {ms.goals.map((g) => (
                 <option key={g.id} value={g.id}>
                   {g.title}
@@ -1545,9 +2458,14 @@ export function MsCard() {
               ))}
             </select>
           </Field>
-          {k?.kind === "sub_goal" && (
+          {k?.kind === 'sub_goal' && (
             <Field label="Sub-goal of">
-              <select aria-label="Sub-goal of" value={k.sub_goal_of_id ?? ""} onChange={(e) => setK({ sub_goal_of_id: e.target.value || null })} className={bare}>
+              <select
+                aria-label="Sub-goal of"
+                value={k.sub_goal_of_id ?? ''}
+                onChange={(e) => setK({ sub_goal_of_id: e.target.value || null })}
+                className={bare}
+              >
                 <option value="">None</option>
                 {parents.map((g) => (
                   <option key={g.id} value={g.id}>
@@ -1558,12 +2476,16 @@ export function MsCard() {
             </Field>
           )}
         </div>
-        {k?.kind === "goal" && subs.length > 0 && (
+        {k?.kind === 'goal' && subs.length > 0 && (
           <div className="flex flex-col gap-1" data-testid="ms-subs">
             <span className="text-xs font-semibold text-text2">Sub-goals</span>
             <div className="flex flex-wrap gap-1.5">
               {subs.map((sm) => (
-                <span key={sm.id} title={sm.date ? fullDay(sm.date) : undefined} className="inline-flex items-center gap-1 rounded-full border border-line-strong bg-surface2 px-2 text-xs leading-6">
+                <span
+                  key={sm.id}
+                  title={sm.date ? fullDay(sm.date) : undefined}
+                  className="inline-flex items-center gap-1 rounded-full border border-line-strong bg-surface2 px-2 text-xs leading-6"
+                >
                   <MkIcon kind="sub_goal" size={10} color={msEdge(msCode(sm))} /> {words(sm)}
                 </span>
               ))}
@@ -1575,7 +2497,7 @@ export function MsCard() {
         <span className="flex items-center gap-1 text-xs font-semibold text-text2">
           Work that serves it
           {/* tb-mk (owner Nov 10): the hint is visible text, the owner's picked copy (data-owner-copy). */}
-          {!reads && " "}
+          {!reads && ' '}
           {!reads && (
             <span className="font-normal" data-owner-copy data-testid="ms-waits-hint">
               · tap bars on the chart to add
@@ -1586,17 +2508,35 @@ export function MsCard() {
           {d.item_ids.map((id) => {
             const it = ms.items.get(id);
             return (
-              <span key={id} data-testid="ms-waits-chip" className="inline-flex items-center gap-1 rounded-full border border-line-strong bg-surface2 px-2 text-xs leading-6">
+              <span
+                key={id}
+                data-testid="ms-waits-chip"
+                className="inline-flex items-center gap-1 rounded-full border border-line-strong bg-surface2 px-2 text-xs leading-6"
+              >
                 {it ? (
-                  <button type="button" data-testid="ms-waits-open" className="underline-offset-2 hover:underline" onClick={() => ms.openItem(id)}>
+                  <button
+                    type="button"
+                    data-testid="ms-waits-open"
+                    className="underline-offset-2 hover:underline"
+                    onClick={() => ms.openItem(id)}
+                  >
                     {it.title}
                   </button>
                 ) : (
-                  "An item"
+                  'An item'
                 )}
-                {it && late(id) && <span className="font-semibold text-crit">· ends {day(it.end.date)}, after it</span>}
+                {it && late(id) && (
+                  <span className="font-semibold text-crit">
+                    · ends {day(it.end.date)}, after it
+                  </span>
+                )}
                 {!reads && (
-                  <button type="button" aria-label={`Take ${it?.title ?? "it"} off`} className="text-text2" onClick={() => set({ item_ids: d.item_ids.filter((x) => x !== id) })}>
+                  <button
+                    type="button"
+                    aria-label={`Take ${it?.title ?? 'it'} off`}
+                    className="text-text2"
+                    onClick={() => set({ item_ids: d.item_ids.filter((x) => x !== id) })}
+                  >
                     ×
                   </button>
                 )}
@@ -1613,13 +2553,18 @@ export function MsCard() {
       )}
       {error}
       <div className="flex flex-wrap items-center gap-2 pt-1">
-        {rights === "change" && (
+        {rights === 'change' && (
           <Btn primary testid="ms-save" onClick={() => run(() => ms.save(false))}>
-            {d.id ? "Save" : "Add"}
+            {d.id ? 'Save' : 'Add'}
           </Btn>
         )}
-        {rights === "propose" && (
-          <Btn primary testid="ms-propose" title={PROPOSE_WHY} onClick={() => run(() => ms.propose(false))}>
+        {rights === 'propose' && (
+          <Btn
+            primary
+            testid="ms-propose"
+            title={PROPOSE_WHY}
+            onClick={() => run(() => ms.propose(false))}
+          >
             Propose
           </Btn>
         )}
@@ -1628,18 +2573,23 @@ export function MsCard() {
             Add and place another
           </Btn>
         )}
-        {d.id && rights === "change" && (
+        {d.id && rights === 'change' && (
           <Btn className="text-crit" testid="ms-remove" onClick={() => run(ms.remove)}>
             Remove
           </Btn>
         )}
-        {rights === "propose" && (
-          <Btn className="text-crit" testid="ms-propose-remove" title={PROPOSE_WHY} onClick={() => run(() => ms.propose(true))}>
+        {rights === 'propose' && (
+          <Btn
+            className="text-crit"
+            testid="ms-propose-remove"
+            title={PROPOSE_WHY}
+            onClick={() => run(() => ms.propose(true))}
+          >
             Propose removing it
           </Btn>
         )}
         <button type="button" className="px-1 text-sm text-text2" onClick={() => ms.setDraft(null)}>
-          {reads ? "Close" : "Cancel"}
+          {reads ? 'Close' : 'Cancel'}
         </button>
       </div>
     </div>
@@ -1651,7 +2601,11 @@ export function MsToast() {
   const ms = useMsCtl();
   if (!ms?.toast) return null;
   return (
-    <div data-testid="ms-toast" role="status" className={`fixed z-[70] flex items-center gap-3 rounded-lg bg-tip px-4 py-3 text-sm text-tip-text shadow-xl ${ms.phone ? "top-3 right-3 left-3" : "top-4 right-6"}`}>
+    <div
+      data-testid="ms-toast"
+      role="status"
+      className={`fixed z-[70] flex items-center gap-3 rounded-lg bg-tip px-4 py-3 text-sm text-tip-text shadow-xl ${ms.phone ? 'top-3 right-3 left-3' : 'top-4 right-6'}`}
+    >
       <span>{ms.toast.words}</span>
       {ms.toast.undo && (
         <button type="button" className="font-semibold underline" onClick={() => void ms.undo()}>
@@ -1672,8 +2626,16 @@ export function MsKey() {
   const undated = ms.list.filter((m) => m.prd && !m.date).length;
   return (
     <div data-testid="ms3-key-row" className="flex flex-wrap items-center gap-2">
-      <span data-testid="ms3-key" className="flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 text-xs leading-6 whitespace-nowrap text-text2">
-        <i aria-hidden className="inline-block h-2.5 w-2.5 rotate-45 border-[1.5px] border-dashed" style={{ borderColor: msEdge("M1") }} /> Hollow, dashed: from the PRD {prds.map((p) => p.title).join(", ")} · a change asks its owner
+      <span
+        data-testid="ms3-key"
+        className="flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 text-xs leading-6 whitespace-nowrap text-text2"
+      >
+        <i
+          aria-hidden
+          className="inline-block h-2.5 w-2.5 rotate-45 border-[1.5px] border-dashed"
+          style={{ borderColor: msEdge('M1') }}
+        />{' '}
+        Hollow, dashed: from the PRD {prds.map((p) => p.title).join(', ')} · a change asks its owner
         {undated > 0 && ` · ${undated} with no date yet`}
       </span>
     </div>
@@ -1681,19 +2643,35 @@ export function MsKey() {
 }
 
 /** Now / Next / Later: the milestones in each horizon, as a row above its cards. */
-export function MsBoardRow({ horizon, windows, milestones = [], keyDates = [] }: { horizon: string; windows: Roadmap["windows"]; milestones?: Roadmap["milestones"]; keyDates?: KeyDate[] }) {
+export function MsBoardRow({
+  horizon,
+  windows,
+  milestones = [],
+  keyDates = [],
+}: {
+  horizon: string;
+  windows: Roadmap['windows'];
+  milestones?: Roadmap['milestones'];
+  keyDates?: KeyDate[];
+}) {
   const ms = useMsCtl();
   if (!ms) return null;
-  const h = (d: string) => (d <= windows.now.end ? "now" : d <= windows.next.end ? "next" : "later");
-  const here = ms.list.filter((m) => m.date && h(m.date) === horizon).sort((a, b) => a.date!.localeCompare(b.date!));
+  const h = (d: string) =>
+    d <= windows.now.end ? 'now' : d <= windows.next.end ? 'next' : 'later';
+  const here = ms.list
+    .filter((m) => m.date && h(m.date) === horizon)
+    .sort((a, b) => a.date!.localeCompare(b.date!));
   // QA Nov 14 #3: the roadmap's track milestones ("M1 Beta"), as the Timeline's header names them,
   // each once (one the goal milestones above already show on its day is not repeated).
   const joined = joinedNames(ms.list, milestones);
   const shown = new Set(here.map((m) => `${msCode(m)}|${m.date}`));
   const tracks = milestones
-    .filter((m) => m.date && !(m.start_date && m.end_date) && m.status !== "dropped" && h(m.date) === horizon)
+    .filter(
+      (m) =>
+        m.date && !(m.start_date && m.end_date) && m.status !== 'dropped' && h(m.date) === horizon,
+    )
     .map((m) => ({ m, words: joinedWords(m, joined) }))
-    .filter(({ m, words: w }) => !shown.has(`${w.split(" ")[0]}|${m.date}`));
+    .filter(({ m, words: w }) => !shown.has(`${w.split(' ')[0]}|${m.date}`));
   // QA Nov 14 #2: the key dates in this column's window, as the charts draw them.
   const keys = keyDates.filter((k) => h(k.date) === horizon);
   const dated = [
@@ -1702,7 +2680,12 @@ export function MsBoardRow({ horizon, windows, milestones = [], keyDates = [] }:
       day: m.date!,
       m: null,
       el: (
-        <span key={`t-${m.id}`} data-testid="ms-board-track" title={`${w} · ${fullDay(m.date!)}`} className="inline-flex items-center gap-1.5 rounded-full border border-warn bg-warn-bg px-2 text-xs leading-6 font-semibold text-warn">
+        <span
+          key={`t-${m.id}`}
+          data-testid="ms-board-track"
+          title={`${w} · ${fullDay(m.date!)}`}
+          className="inline-flex items-center gap-1.5 rounded-full border border-warn bg-warn-bg px-2 text-xs leading-6 font-semibold text-warn"
+        >
           <i aria-hidden className="inline-block h-2 w-2 rotate-45 bg-warn" />
           {w} · {day(m.date!)}
         </span>
@@ -1712,32 +2695,59 @@ export function MsBoardRow({ horizon, windows, milestones = [], keyDates = [] }:
       day: k.date,
       m: null,
       el: (
-        <span key={`k-${k.id}`} data-testid="ms-board-key" data-name={k.name} title={`${k.name} · ${fullDay(k.date)}${k.note ? ` · ${k.note}` : ""} (${k.roadmap.title})`} className={`inline-flex items-center gap-1.5 rounded-full border border-accent-ink px-2 text-xs leading-6 font-semibold text-accent-ink ${k.in_draft ? "border-dashed" : ""}`}>
+        <span
+          key={`k-${k.id}`}
+          data-testid="ms-board-key"
+          data-name={k.name}
+          title={`${k.name} · ${fullDay(k.date)}${k.note ? ` · ${k.note}` : ''} (${k.roadmap.title})`}
+          className={`inline-flex items-center gap-1.5 rounded-full border border-accent-ink px-2 text-xs leading-6 font-semibold text-accent-ink ${k.in_draft ? 'border-dashed' : ''}`}
+        >
           <i aria-hidden className="inline-block h-2 w-2 rotate-45 bg-accent-ink" />
           {k.name} · {day(k.date)}
         </span>
       ),
     })),
   ].sort((a, b) => a.day.localeCompare(b.day));
-  const w = windows[horizon as "now" | "next" | "later"];
+  const w = windows[horizon as 'now' | 'next' | 'later'];
   return (
     <div data-testid="ms-board-row" className="flex flex-wrap gap-1.5 px-1 pb-2">
-      {dated.map(({ m, el }) => (!m ? el : (
+      {dated.map(({ m, el }) =>
+        !m ? (
+          el
+        ) : (
+          <button
+            type="button"
+            key={m.id}
+            data-testid="ms-board-chip"
+            onClick={() => ms.edit(m)}
+            className="inline-flex items-center gap-1.5 rounded-full border px-2 text-xs leading-6 font-semibold"
+            style={{
+              background: m.prd ? 'var(--surface)' : msFill(msCode(m)),
+              color: msInk(msCode(m)),
+              borderColor: msEdge(msCode(m)),
+              borderStyle: m.prd ? 'dashed' : 'solid',
+            }}
+          >
+            <i
+              aria-hidden
+              className="inline-block h-2 w-2 rotate-45"
+              style={{
+                background: m.prd ? 'var(--surface)' : msEdge(msCode(m)),
+                border: m.prd ? `1px dashed ${msEdge(msCode(m))}` : undefined,
+              }}
+            />
+            {m.prd ? 'PRD · ' : ''}
+            {words(m)} · {day(m.date!)}
+          </button>
+        ),
+      )}
+      {ms.canAdd && (
         <button
           type="button"
-          key={m.id}
-          data-testid="ms-board-chip"
-          onClick={() => ms.edit(m)}
-          className="inline-flex items-center gap-1.5 rounded-full border px-2 text-xs leading-6 font-semibold"
-          style={{ background: m.prd ? "var(--surface)" : msFill(msCode(m)), color: msInk(msCode(m)), borderColor: msEdge(msCode(m)), borderStyle: m.prd ? "dashed" : "solid" }}
+          data-testid="ms-board-add"
+          onClick={() => ms.begin(w.end < ms.today ? ms.today : w.end, null)}
+          className="inline-flex items-center rounded-full border border-dashed border-line-strong px-2 text-xs leading-6 text-text2"
         >
-          <i aria-hidden className="inline-block h-2 w-2 rotate-45" style={{ background: m.prd ? "var(--surface)" : msEdge(msCode(m)), border: m.prd ? `1px dashed ${msEdge(msCode(m))}` : undefined }} />
-          {m.prd ? "PRD · " : ""}
-          {words(m)} · {day(m.date!)}
-        </button>
-      )))}
-      {ms.canAdd && (
-        <button type="button" data-testid="ms-board-add" onClick={() => ms.begin(w.end < ms.today ? ms.today : w.end, null)} className="inline-flex items-center rounded-full border border-dashed border-line-strong px-2 text-xs leading-6 text-text2">
           + Milestone
         </button>
       )}

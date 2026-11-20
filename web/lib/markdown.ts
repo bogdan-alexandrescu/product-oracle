@@ -10,24 +10,24 @@
  * concatenation of its text and code leaves, in order. Citations add no text.
  */
 
-import { hasRawTokens, stripRawTokens } from "@/lib/raw-tokens";
+import { hasRawTokens, stripRawTokens } from '@/lib/raw-tokens';
 
 export type Inline =
-  | { t: "text"; v: string }
-  | { t: "code"; v: string }
-  | { t: "strong"; c: Inline[] }
-  | { t: "em"; c: Inline[] }
-  | { t: "link"; href: string; c: Inline[] }
-  | { t: "img"; src: string; alt: string }
-  | { t: "cite"; key: string };
+  | { t: 'text'; v: string }
+  | { t: 'code'; v: string }
+  | { t: 'strong'; c: Inline[] }
+  | { t: 'em'; c: Inline[] }
+  | { t: 'link'; href: string; c: Inline[] }
+  | { t: 'img'; src: string; alt: string }
+  | { t: 'cite'; key: string };
 
 export type Block =
-  | { t: "p"; c: Inline[] }
-  | { t: "h"; level: number; c: Inline[] }
-  | { t: "ul" | "ol"; items: Inline[][] }
-  | { t: "quote"; c: Inline[] }
-  | { t: "pre"; v: string }
-  | { t: "table"; head: Inline[][]; rows: Inline[][][] };
+  | { t: 'p'; c: Inline[] }
+  | { t: 'h'; level: number; c: Inline[] }
+  | { t: 'ul' | 'ol'; items: Inline[][] }
+  | { t: 'quote'; c: Inline[] }
+  | { t: 'pre'; v: string }
+  | { t: 'table'; head: Inline[][]; rows: Inline[][][] };
 
 // Citation ids are those the API accepts ([A-Za-z0-9_.:-]), one or more split by commas; an image is matched before a
 // link, so its alt text never shows as link text. Alt and link text, a destination and
@@ -42,11 +42,11 @@ const INLINE =
  * a backslash or control character (a browser reads `/\evil.com/p.png` as evil.com), another
  * origin, or a path that leaves the prefix once resolved (`/uploads/../v1/me`, `%2e%2e`).
  */
-export const STORED_IMAGES = "/uploads/";
+export const STORED_IMAGES = '/uploads/';
 
 export function storedImageSrc(src: string): string | null {
   if (!src.startsWith(STORED_IMAGES) || /[\\\u0000-\x20\u007f-\u009f]/.test(src)) return null;
-  const origin = typeof window !== "undefined" ? window.location.origin : "http://oracle.invalid";
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'http://oracle.invalid';
   let url: URL;
   try {
     url = new URL(src, origin);
@@ -64,11 +64,11 @@ export function storedImageSrc(src: string): string | null {
  * destination starting with two of / and \ (//host, /\host) is another site: plain text.
  */
 export function isSafeHref(href: string): boolean {
-  const head = href.replace(/[\u0000-\u0020\u007f-\u009f]/g, "");
+  const head = href.replace(/[\u0000-\u0020\u007f-\u009f]/g, '');
   // A browser reads a backslash as "/": two slashes or backslashes in front open another host.
   if (/^[/\\]{2}/.test(head)) return false;
   const m = /^([a-z][a-z0-9+.-]*):/i.exec(head);
-  return !m || ["http", "https", "mailto"].includes(m[1].toLowerCase());
+  return !m || ['http', 'https', 'mailto'].includes(m[1].toLowerCase());
 }
 
 export function parseInline(src: string): Inline[] {
@@ -78,19 +78,20 @@ export function parseInline(src: string): Inline[] {
     if (hasRawTokens(v)) v = stripRawTokens(v);
     if (!v) return;
     const prev = out[out.length - 1];
-    if (prev?.t === "text") prev.v += v;
-    else out.push({ t: "text", v });
+    if (prev?.t === 'text') prev.v += v;
+    else out.push({ t: 'text', v });
   };
   for (const m of src.matchAll(new RegExp(INLINE))) {
     pushText(src.slice(last, m.index));
     last = m.index + m[0].length;
-    if (m[1] !== undefined) for (const key of m[1].split(",")) out.push({ t: "cite", key: key.trim() });
-    else if (m[3] !== undefined) out.push({ t: "img", alt: m[2], src: m[3] });
-    else if (m[4] !== undefined) out.push({ t: "code", v: m[4] });
-    else if (m[5] !== undefined) out.push({ t: "strong", c: parseInline(m[5]) });
-    else if (m[6] !== undefined) out.push({ t: "link", href: m[7], c: parseInline(m[6]) });
-    else if (m[8] !== undefined) out.push({ t: "em", c: parseInline(m[8]) });
-    else if (m[9] !== undefined) out.push({ t: "em", c: parseInline(m[9]) });
+    if (m[1] !== undefined)
+      for (const key of m[1].split(',')) out.push({ t: 'cite', key: key.trim() });
+    else if (m[3] !== undefined) out.push({ t: 'img', alt: m[2], src: m[3] });
+    else if (m[4] !== undefined) out.push({ t: 'code', v: m[4] });
+    else if (m[5] !== undefined) out.push({ t: 'strong', c: parseInline(m[5]) });
+    else if (m[6] !== undefined) out.push({ t: 'link', href: m[7], c: parseInline(m[6]) });
+    else if (m[8] !== undefined) out.push({ t: 'em', c: parseInline(m[8]) });
+    else if (m[9] !== undefined) out.push({ t: 'em', c: parseInline(m[9]) });
   }
   pushText(src.slice(last));
   return out;
@@ -108,20 +109,20 @@ const NOTES_FENCE = /^```[ \t]*notes[ \t]*$/;
 const TABLE_SEP = /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
 
 function rawCells(row: string): string[] {
-  return row.trim().replace(/^\|/, "").replace(/\|$/, "").split("|");
+  return row.trim().replace(/^\|/, '').replace(/\|$/, '').split('|');
 }
 
 /** A row's cells, as many as the header has (GFM: extra cells are dropped, missing ones empty). */
 function cells(row: string, width?: number): Inline[][] {
   const raw = rawCells(row);
   const n = width ?? raw.length;
-  return Array.from({ length: n }, (_, i) => parseInline((raw[i] ?? "").trim()));
+  return Array.from({ length: n }, (_, i) => parseInline((raw[i] ?? '').trim()));
 }
 
 /** A table starts at `line` when the next line is a delimiter row with as many cells (GFM). */
 function startsTable(line: string, next?: string): boolean {
   return (
-    line.trim().startsWith("|") &&
+    line.trim().startsWith('|') &&
     next !== undefined &&
     TABLE_SEP.test(next) &&
     rawCells(line).length === rawCells(next).length
@@ -130,17 +131,17 @@ function startsTable(line: string, next?: string): boolean {
 
 function startsBlock(line: string, next?: string): boolean {
   return (
-    line.startsWith("```") ||
+    line.startsWith('```') ||
     HEADING.test(line) ||
     UL_START.test(line) ||
     OL_START.test(line) ||
-    line.startsWith(">") ||
+    line.startsWith('>') ||
     startsTable(line, next)
   );
 }
 
 export function parseBlocks(md: string): Block[] {
-  const lines = md.replace(/\r\n?/g, "\n").split("\n");
+  const lines = md.replace(/\r\n?/g, '\n').split('\n');
   const blocks: Block[] = [];
   let i = 0;
   while (i < lines.length) {
@@ -149,18 +150,18 @@ export function parseBlocks(md: string): Block[] {
       i++;
       continue;
     }
-    if (line.startsWith("```")) {
+    if (line.startsWith('```')) {
       const body: string[] = [];
       i++;
-      while (i < lines.length && !lines[i].startsWith("```")) body.push(lines[i++]);
+      while (i < lines.length && !lines[i].startsWith('```')) body.push(lines[i++]);
       i++;
       // Presenter notes (O1f) belong to Present mode, not to the document.
-      if (!NOTES_FENCE.test(line)) blocks.push({ t: "pre", v: body.join("\n") });
+      if (!NOTES_FENCE.test(line)) blocks.push({ t: 'pre', v: body.join('\n') });
       continue;
     }
     const h = HEADING.exec(line);
     if (h) {
-      blocks.push({ t: "h", level: h[1].length, c: parseInline(h[2]) });
+      blocks.push({ t: 'h', level: h[1].length, c: parseInline(h[2]) });
       i++;
       continue;
     }
@@ -168,30 +169,33 @@ export function parseBlocks(md: string): Block[] {
       const head = cells(line);
       const rows: Inline[][][] = [];
       i += 2;
-      while (i < lines.length && lines[i].trim().startsWith("|")) rows.push(cells(lines[i++], head.length));
-      blocks.push({ t: "table", head, rows });
+      while (i < lines.length && lines[i].trim().startsWith('|'))
+        rows.push(cells(lines[i++], head.length));
+      blocks.push({ t: 'table', head, rows });
       continue;
     }
     // Four or more spaces of indentation: not a list (an indented code block in CommonMark,
     // shown here as paragraph text).
-    const list = /^ {4}/.test(line) ? null : UL.test(line) ? "ul" : OL.test(line) ? "ol" : null;
+    const list = /^ {4}/.test(line) ? null : UL.test(line) ? 'ul' : OL.test(line) ? 'ol' : null;
     if (list) {
-      const re = list === "ul" ? UL : OL;
+      const re = list === 'ul' ? UL : OL;
       const items: string[] = [];
       while (i < lines.length && lines[i].trim()) {
         const m = re.exec(lines[i]);
         if (m) items.push(m[1]);
-        else if (/^\s+/.test(lines[i]) && items.length) items[items.length - 1] += " " + lines[i].trim();
+        else if (/^\s+/.test(lines[i]) && items.length)
+          items[items.length - 1] += ' ' + lines[i].trim();
         else break;
         i++;
       }
       blocks.push({ t: list, items: items.map(parseInline) });
       continue;
     }
-    if (line.startsWith(">")) {
+    if (line.startsWith('>')) {
       const body: string[] = [];
-      while (i < lines.length && lines[i].startsWith(">")) body.push(lines[i++].replace(/^>\s?/, ""));
-      blocks.push({ t: "quote", c: parseInline(body.join(" ")) });
+      while (i < lines.length && lines[i].startsWith('>'))
+        body.push(lines[i++].replace(/^>\s?/, ''));
+      blocks.push({ t: 'quote', c: parseInline(body.join(' ')) });
       continue;
     }
     const para: string[] = [line.trim()];
@@ -199,15 +203,21 @@ export function parseBlocks(md: string): Block[] {
     while (i < lines.length && lines[i].trim() && !startsBlock(lines[i], lines[i + 1])) {
       para.push(lines[i++].trim());
     }
-    blocks.push({ t: "p", c: parseInline(para.join(" ")) });
+    blocks.push({ t: 'p', c: parseInline(para.join(' ')) });
   }
   return blocks;
 }
 
 function inlineText(nodes: Inline[]): string {
   return nodes
-    .map((n) => (n.t === "text" || n.t === "code" ? n.v : n.t === "cite" || n.t === "img" ? "" : inlineText(n.c)))
-    .join("");
+    .map((n) =>
+      n.t === 'text' || n.t === 'code'
+        ? n.v
+        : n.t === 'cite' || n.t === 'img'
+          ? ''
+          : inlineText(n.c),
+    )
+    .join('');
 }
 
 /** The anchorable text of a body: exactly the characters the renderer emits, in order. */
@@ -215,20 +225,20 @@ export function blocksText(blocks: Block[]): string {
   return blocks
     .map((b) => {
       switch (b.t) {
-        case "p":
-        case "h":
-        case "quote":
+        case 'p':
+        case 'h':
+        case 'quote':
           return inlineText(b.c);
-        case "ul":
-        case "ol":
-          return b.items.map(inlineText).join("");
-        case "pre":
+        case 'ul':
+        case 'ol':
+          return b.items.map(inlineText).join('');
+        case 'pre':
           return b.v;
-        case "table":
-          return [b.head, ...b.rows].flat().map(inlineText).join("");
+        case 'table':
+          return [b.head, ...b.rows].flat().map(inlineText).join('');
       }
     })
-    .join("");
+    .join('');
 }
 
 /** Readable plain text (blocks separated by blank lines), e.g. for diffs and exports. */
@@ -238,18 +248,18 @@ export function plainText(md: string): string {
   return parseBlocks(stripRawTokens(md))
     .map((b) => {
       switch (b.t) {
-        case "p":
-        case "h":
-        case "quote":
+        case 'p':
+        case 'h':
+        case 'quote':
           return inlineText(b.c);
-        case "ul":
-        case "ol":
-          return b.items.map((it) => "• " + inlineText(it)).join("\n");
-        case "pre":
+        case 'ul':
+        case 'ol':
+          return b.items.map((it) => '• ' + inlineText(it)).join('\n');
+        case 'pre':
           return b.v;
-        case "table":
-          return [b.head, ...b.rows].map((r) => r.map(inlineText).join(" | ")).join("\n");
+        case 'table':
+          return [b.head, ...b.rows].map((r) => r.map(inlineText).join(' | ')).join('\n');
       }
     })
-    .join("\n\n");
+    .join('\n\n');
 }

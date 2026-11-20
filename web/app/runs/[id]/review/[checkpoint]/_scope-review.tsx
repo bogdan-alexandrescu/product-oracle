@@ -1,57 +1,95 @@
-"use client";
+'use client';
 
-import { useRouter } from "@/lib/nav";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter } from '@/lib/nav';
+import { useEffect, useMemo, useState } from 'react';
 
-import { Button, Chip, FilterChips, Icon, Page, PageHeader, Ring, SegmentedControl, Sheet, Split } from "@/components/ds";
-import { AgentQuestions } from "@/components/review/AgentQuestions";
-import { blockingLeftText, DecisionBar, type StagedChip } from "@/components/review/DecisionBar";
-import { RunBackLink } from "@/components/review/parts";
-import { ErrorNote, INPUT, Loading } from "@/components/ui";
-import { api, unwrap } from "@/lib/api/client";
+import {
+  Button,
+  Chip,
+  FilterChips,
+  Icon,
+  Page,
+  PageHeader,
+  Ring,
+  SegmentedControl,
+  Sheet,
+  Split,
+} from '@/components/ds';
+import { AgentQuestions } from '@/components/review/AgentQuestions';
+import { blockingLeftText, DecisionBar, type StagedChip } from '@/components/review/DecisionBar';
+import { RunBackLink } from '@/components/review/parts';
+import { ErrorNote, INPUT, Loading } from '@/components/ui';
+import { api, unwrap } from '@/lib/api/client';
 // detailed-b 3: the row's own code and name (aliased: "named" here is the scope's own, below).
-import { named as namedCode, namedText } from "@/lib/codes";
-import { useMe } from "@/lib/me";
-import { errorMessage, useQuery } from "@/lib/use-query";
-import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
+import { named as namedCode, namedText } from '@/lib/codes';
+import { useMe } from '@/lib/me';
+import { errorMessage, useQuery } from '@/lib/use-query';
+import { invalidateWaiting, waitingChanged } from '@/lib/waiting';
 
-import { draftKey, loadDraft } from "./_draft";
-import type { ReviewViewProps } from "./_shell";
-import { FixButtons, LeaveOutPicker, RequirementRow, ScopeInspector } from "./_scope-inspector";
-import { runDocName } from "../../../_lib";
+import { draftKey, loadDraft } from './_draft';
+import type { ReviewViewProps } from './_shell';
+import { FixButtons, LeaveOutPicker, RequirementRow, ScopeInspector } from './_scope-inspector';
+import { runDocName } from '../../../_lib';
 
-import { actionsOn, changeText, depOf, refOf, decisionText, describeAction, fixesFor, goalName, goalsOf, named, pct, reasonText, type Feature, type Mode, type Ops, type Reason, type Review, type Scope, type Ui } from "./_scope-lib";
+import {
+  actionsOn,
+  changeText,
+  depOf,
+  refOf,
+  decisionText,
+  describeAction,
+  fixesFor,
+  goalName,
+  goalsOf,
+  named,
+  pct,
+  reasonText,
+  type Feature,
+  type Mode,
+  type Ops,
+  type Reason,
+  type Review,
+  type Scope,
+  type Ui,
+} from './_scope-lib';
 
-type Filter = "needs" | "all" | "out" | "changed";
-type Group = "goal" | "reason";
+type Filter = 'needs' | 'all' | 'out' | 'changed';
+type Group = 'goal' | 'reason';
 
 const REASON_CHIP: Record<string, string> = {
-  depends_on_excluded: "Depends on a left-out feature",
-  dependency_cycle: "Dependency cycle",
-  unknown_goal: "Unknown goal",
-  unknown_dependency: "Unknown dependency",
-  unknown_blocker: "Unknown blocker",
-  unknown_feature: "Unknown feature",
-  unknown_requirement: "Unknown requirement",
-  serves_no_goal: "No confirmed goal",
-  low_confidence: "Low confidence",
-  linked_blocker: "Linked open blocker",
-  new_feature: "New, not in the Ground Truth",
-  duplicate_of_existing: "Duplicate",
+  depends_on_excluded: 'Depends on a left-out feature',
+  dependency_cycle: 'Dependency cycle',
+  unknown_goal: 'Unknown goal',
+  unknown_dependency: 'Unknown dependency',
+  unknown_blocker: 'Unknown blocker',
+  unknown_feature: 'Unknown feature',
+  unknown_requirement: 'Unknown requirement',
+  serves_no_goal: 'No confirmed goal',
+  low_confidence: 'Low confidence',
+  linked_blocker: 'Linked open blocker',
+  new_feature: 'New, not in the Ground Truth',
+  duplicate_of_existing: 'Duplicate',
 };
-const FILE_PROBLEMS = ["unreadable_yaml", "missing_file", "wrong_version", "wrong_document", "no_features"];
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const FILE_PROBLEMS = [
+  'unreadable_yaml',
+  'missing_file',
+  'wrong_version',
+  'wrong_document',
+  'no_features',
+];
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 // qa-work-16: Confidence and Requirements are written out, so their columns fit the words.
-const COLS = "grid-cols-[28px_28px_minmax(130px,1.5fr)_minmax(90px,1fr)_76px_92px_minmax(120px,1fr)_minmax(170px,1.6fr)]";
+const COLS =
+  'grid-cols-[28px_28px_minmax(130px,1.5fr)_minmax(90px,1fr)_76px_92px_minmax(120px,1fr)_minmax(170px,1.6fr)]';
 
 function usePhone(): boolean {
   const [phone, setPhone] = useState(false);
   useEffect(() => {
-    const mq = window.matchMedia("(max-width: 600px)");
+    const mq = window.matchMedia('(max-width: 600px)');
     const on = () => setPhone(mq.matches);
     on();
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
   }, []);
   return phone;
 }
@@ -62,10 +100,16 @@ function changedChips(f: Feature, scope: Scope): string[] {
   if (!prev) return [];
   if (!(f.key in prev)) return [`New in attempt ${scope.attempt}`];
   const out: string[] = [];
-  if (prev[f.key] !== f.decision) out.push(prev[f.key] !== "include" && f.decision === "include" ? "Was left out" : "Decision changed");
-  const kept = f.requirements.filter((q) => q.decision === "keep").map((q) => q.key).sort();
+  if (prev[f.key] !== f.decision)
+    out.push(
+      prev[f.key] !== 'include' && f.decision === 'include' ? 'Was left out' : 'Decision changed',
+    );
+  const kept = f.requirements
+    .filter((q) => q.decision === 'keep')
+    .map((q) => q.key)
+    .sort();
   const before = [...(scope.previous_requirements?.[f.key] ?? [])].sort();
-  if (JSON.stringify(kept) !== JSON.stringify(before)) out.push("Requirements changed");
+  if (JSON.stringify(kept) !== JSON.stringify(before)) out.push('Requirements changed');
   return out;
 }
 
@@ -74,12 +118,14 @@ const openReasons = (f: Feature): Reason[] => f.reasons.filter((r) => !r.answere
 /** A reason's chip on a row; a left-out dependency is named (qa-work-12: the fix's button stays short). */
 /** The problem a waiver waives, as a person names it: "Bulk edit depends on Address sharing". */
 function waivedText(r: Reason, f: Feature, scope: Scope): string {
-  const dep = r.code === "depends_on_excluded" ? depOf(r, f, scope) : undefined;
-  return dep ? `${f.title} depends on ${dep.title}` : `${f.title} · ${reasonChip(r, f, scope).toLowerCase()}`;
+  const dep = r.code === 'depends_on_excluded' ? depOf(r, f, scope) : undefined;
+  return dep
+    ? `${f.title} depends on ${dep.title}`
+    : `${f.title} · ${reasonChip(r, f, scope).toLowerCase()}`;
 }
 
 function reasonChip(r: Reason, f: Feature, scope: Scope): string {
-  if (r.code === "depends_on_excluded") {
+  if (r.code === 'depends_on_excluded') {
     const dep = depOf(r, f, scope);
     if (dep) return `Depends on ${dep.title}, left out`;
   }
@@ -97,8 +143,12 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   const { can } = useMe();
   const phone = usePhone();
   const scopeQ = useQuery(`scope-review|${run.id}|${cp.id}`, async () => {
-    const latest = await unwrap(api.GET("/v1/runs/{run_id}/scope", { params: { path: { run_id: run.id } } }));
-    return unwrap(api.GET("/v1/prd-scopes/{scope_id}", { params: { path: { scope_id: latest.id } } }));
+    const latest = await unwrap(
+      api.GET('/v1/runs/{run_id}/scope', { params: { path: { run_id: run.id } } }),
+    );
+    return unwrap(
+      api.GET('/v1/prd-scopes/{scope_id}', { params: { path: { scope_id: latest.id } } }),
+    );
   });
   const path = { params: { path: { run_id: run.id, checkpoint_id: cp.id } } };
   const reviewQ = useQuery(draftKey(run.id, cp.id), () => loadDraft(run.id, cp.id));
@@ -106,12 +156,16 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   const scope = useMemo(() => (scopeQ.data ? named(scopeQ.data) : null), [scopeQ.data]);
   const review = reviewQ.data ?? null;
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<Filter>("needs");
-  const [group, setGroup] = useState<Group>("goal");
+  const [filter, setFilter] = useState<Filter>('needs');
+  const [group, setGroup] = useState<Group>('goal');
   const [selected, setSelected] = useState<string | null>(item);
   const [sheet, setSheet] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [leaveOut, setLeaveOut] = useState<{ key: string; where: "row" | "inspector"; preset?: string } | null>(null);
+  const [leaveOut, setLeaveOut] = useState<{
+    key: string;
+    where: 'row' | 'inspector';
+    preset?: string;
+  } | null>(null);
   const [waiving, setWaiving] = useState<{ key: string; code: string } | null>(null);
   const [goalsFor, setGoalsFor] = useState<string | null>(null);
   const [rawOpen, setRawOpen] = useState(false);
@@ -119,16 +173,16 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   // The rows that needed me before a change stay under Needs you, with their ✓.
   const [seen, setSeen] = useState<Set<string>>(new Set());
 
-  const pending = cp.status === "pending" && scope?.status === "proposed";
+  const pending = cp.status === 'pending' && scope?.status === 'proposed';
   const mode: Mode = !pending
-    ? "viewer"
+    ? 'viewer'
     : // #370 fixes 4: scope.can_edit and review.can_suggest are the API's item answers (the
       // stop's role, a commenter); no second check of the signed-in role here.
-      scope?.can_edit && can("patch_scope_item", scope.can_edit)
-      ? "approver"
-      : review?.can_suggest && can("create_checkpoint_action", review.can_suggest)
-        ? "commenter"
-        : "viewer";
+      scope?.can_edit && can('patch_scope_item', scope.can_edit)
+      ? 'approver'
+      : review?.can_suggest && can('create_checkpoint_action', review.can_suggest)
+        ? 'commenter'
+        : 'viewer';
 
   async function reload() {
     await Promise.all([scopeQ.reload(), reviewQ.reload()]);
@@ -147,46 +201,93 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
       throw e;
     }
   }
-  const scopeId = scope?.id ?? "";
+  const scopeId = scope?.id ?? '';
   const ops: Ops = {
     patch: (row, body) =>
       write(() =>
-        unwrap(api.PATCH("/v1/prd-scopes/{scope_id}/items/{item_id}", { params: { path: { scope_id: scopeId, item_id: row.id } }, body: { ...body, revert: body.revert ?? false, lock_version: row.lock_version } })),
+        unwrap(
+          api.PATCH('/v1/prd-scopes/{scope_id}/items/{item_id}', {
+            params: { path: { scope_id: scopeId, item_id: row.id } },
+            body: { ...body, revert: body.revert ?? false, lock_version: row.lock_version },
+          }),
+        ),
       ).then(() => undefined),
-    act: (body) => write(() => unwrap(api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions", { ...path, body: { ...body, answers: body.answers ?? [] } }))).then(() => undefined),
+    act: (body) =>
+      write(() =>
+        unwrap(
+          api.POST('/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions', {
+            ...path,
+            body: { ...body, answers: body.answers ?? [] },
+          }),
+        ),
+      ).then(() => undefined),
     removeAction: (id) =>
-      write(() => unwrap(api.DELETE("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}", { params: { path: { run_id: run.id, checkpoint_id: cp.id, action_id: id } } }))).then(
-        () => undefined,
-      ),
+      write(() =>
+        unwrap(
+          api.DELETE('/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}', {
+            params: { path: { run_id: run.id, checkpoint_id: cp.id, action_id: id } },
+          }),
+        ),
+      ).then(() => undefined),
     stage: (id) =>
-      write(() => unwrap(api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}/stage", { params: { path: { run_id: run.id, checkpoint_id: cp.id, action_id: id } } }))).then(
-        () => undefined,
-      ),
+      write(() =>
+        unwrap(
+          api.POST('/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}/stage', {
+            params: { path: { run_id: run.id, checkpoint_id: cp.id, action_id: id } },
+          }),
+        ),
+      ).then(() => undefined),
     add: async (parentId, text, acceptance) => {
       const parent = scope?.features.find((f) => f.id === parentId);
-      await write(() => unwrap(api.POST("/v1/prd-scopes/{scope_id}/items", { params: { path: { scope_id: scopeId } }, body: { parent_id: parentId, text, acceptance } })));
+      await write(() =>
+        unwrap(
+          api.POST('/v1/prd-scopes/{scope_id}/items', {
+            params: { path: { scope_id: scopeId } },
+            body: { parent_id: parentId, text, acceptance },
+          }),
+        ),
+      );
       if (parent) setExpanded((s) => new Set(s).add(parent.key));
     },
-    removeItem: (id) => write(() => unwrap(api.DELETE("/v1/prd-scopes/{scope_id}/items/{item_id}", { params: { path: { scope_id: scopeId, item_id: id } } }))).then(() => undefined),
+    removeItem: (id) =>
+      write(() =>
+        unwrap(
+          api.DELETE('/v1/prd-scopes/{scope_id}/items/{item_id}', {
+            params: { path: { scope_id: scopeId, item_id: id } },
+          }),
+        ),
+      ).then(() => undefined),
     enhance: async (itemId) => {
-      let job = await unwrap(api.POST("/v1/prd-scopes/{scope_id}/items/{item_id}/enhance", { params: { path: { scope_id: scopeId, item_id: itemId } }, body: {} }));
+      let job = await unwrap(
+        api.POST('/v1/prd-scopes/{scope_id}/items/{item_id}/enhance', {
+          params: { path: { scope_id: scopeId, item_id: itemId } },
+          body: {},
+        }),
+      );
       // Poll the job (as RefineSection does) until it ends.
-      for (let i = 0; i < 120 && (job.status === "queued" || job.status === "running"); i++) {
+      for (let i = 0; i < 120 && (job.status === 'queued' || job.status === 'running'); i++) {
         await new Promise((r) => setTimeout(r, i === 0 ? 400 : 1500));
-        job = await unwrap(api.GET("/v1/llm-jobs/{job_id}", { params: { path: { job_id: job.id } } }));
+        job = await unwrap(
+          api.GET('/v1/llm-jobs/{job_id}', { params: { path: { job_id: job.id } } }),
+        );
       }
       return job;
     },
     acceptEnhance: (itemId, jobId, body) =>
       write(() =>
-        unwrap(api.POST("/v1/prd-scopes/{scope_id}/items/{item_id}/enhance/{job_id}/accept", { params: { path: { scope_id: scopeId, item_id: itemId, job_id: jobId } }, body })),
+        unwrap(
+          api.POST('/v1/prd-scopes/{scope_id}/items/{item_id}/enhance/{job_id}/accept', {
+            params: { path: { scope_id: scopeId, item_id: itemId, job_id: jobId } },
+            body,
+          }),
+        ),
       ).then(() => undefined),
   };
   const pick = (f: Feature) => {
     setSelected(f.key);
     if (phone) setSheet(true);
   };
-  const makeUi = (where: "row" | "inspector"): Ui => ({
+  const makeUi = (where: 'row' | 'inspector'): Ui => ({
     leaveOut: (f, preset) => setLeaveOut({ key: f.key, where, preset }),
     pickGoal: (f) => {
       pick(f);
@@ -201,28 +302,38 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   const rows = useMemo(() => {
     if (!scope) return [];
     const list = [...scope.features].sort((a, b) => a.position - b.position);
-    if (filter === "needs") return list.filter((f) => f.needs_you || seen.has(f.key));
-    if (filter === "out") return list.filter((f) => f.decision !== "include");
-    if (filter === "changed") return list.filter((f) => changedChips(f, scope).length > 0);
+    if (filter === 'needs') return list.filter((f) => f.needs_you || seen.has(f.key));
+    if (filter === 'out') return list.filter((f) => f.decision !== 'include');
+    if (filter === 'changed') return list.filter((f) => changedChips(f, scope).length > 0);
     return list;
   }, [scope, filter, seen]);
 
-  if (scopeQ.error) return <Page className="py-6"><ErrorNote>{scopeQ.error}</ErrorNote></Page>;
-  if (!scope) return <div className="px-6 py-8"><Loading /></div>;
+  if (scopeQ.error)
+    return (
+      <Page className="py-6">
+        <ErrorNote>{scopeQ.error}</ErrorNote>
+      </Page>
+    );
+  if (!scope)
+    return (
+      <div className="px-6 py-8">
+        <Loading />
+      </div>
+    );
 
   const title = (key: string) => scope.features.find((f) => f.key === key)?.title ?? key;
   const goalTitle = (key: string) => goalName(scope, key);
   const groups: { label: string; rows: Feature[] }[] = [];
   for (const f of rows) {
     const label =
-      group === "goal"
+      group === 'goal'
         ? f.goals.length
           ? goalTitle(f.goals[0].key)
-          : "No goal"
+          : 'No goal'
         : (() => {
             // qa-work-13: a row a person handled stays under its reason's heading, its ✓ on the row.
             const r = openReasons(f)[0] ?? f.reasons[0];
-            return r ? (REASON_CHIP[r.code] ?? r.label) : "Nothing to check";
+            return r ? (REASON_CHIP[r.code] ?? r.label) : 'Nothing to check';
           })();
     const g = groups.find((x) => x.label === label);
     if (g) g.rows.push(f);
@@ -236,48 +347,86 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   const chips: StagedChip[] = [];
   for (const f of scope.features) {
     if (f.edited) {
-      const what = f.decision !== (f.history.original as { decision?: string }).decision ? { exclude: "left out", defer: "deferred", include: "included" }[f.decision] : changeText(f).toLowerCase();
-      chips.push({ key: f.id, label: `${f.title}: ${what}`, onRemove: () => ops.patch(f, { revert: true }) });
+      const what =
+        f.decision !== (f.history.original as { decision?: string }).decision
+          ? { exclude: 'left out', defer: 'deferred', include: 'included' }[f.decision]
+          : changeText(f).toLowerCase();
+      chips.push({
+        key: f.id,
+        label: `${f.title}: ${what}`,
+        onRemove: () => ops.patch(f, { revert: true }),
+      });
     }
     for (const q of f.requirements) {
-      if (q.added) chips.push({ key: q.id, label: `+ Requirement on ${f.title}`, onRemove: () => ops.removeItem(q.id) });
-      else if (q.edited) chips.push({ key: q.id, label: `${q.title.slice(0, 32)}: ${q.decision === "cut" ? "cut" : "edited"}`, onRemove: () => ops.patch(q, { revert: true }) });
+      if (q.added)
+        chips.push({
+          key: q.id,
+          label: `+ Requirement on ${f.title}`,
+          onRemove: () => ops.removeItem(q.id),
+        });
+      else if (q.edited)
+        chips.push({
+          key: q.id,
+          label: `${q.title.slice(0, 32)}: ${q.decision === 'cut' ? 'cut' : 'edited'}`,
+          onRemove: () => ops.patch(q, { revert: true }),
+        });
     }
   }
   const accepted = new Set<string>();
   for (const it of review?.items ?? []) {
     for (const a of it.actions) {
-      if (a.state !== "staged" || (a.kind !== "accept" && a.kind !== "waive")) continue;
-      if (a.kind === "accept") accepted.add(a.id);
+      if (a.state !== 'staged' || (a.kind !== 'accept' && a.kind !== 'waive')) continue;
+      if (a.kind === 'accept') accepted.add(a.id);
       // Each call by the reason it answers ("Bulk edit: included · low confidence"); a waiver
       // names the problem it waives ("Waive: Bulk edit depends on Address sharing").
       const f = scope.features.find((x) => x.key === it.key);
       const why = a.answers.map((name) => {
-        const r = f?.reasons.find((x) => refOf(x) === name) ?? f?.reasons.find((x) => x.code === name);
-        if (r && f) return a.kind === "waive" ? waivedText(r, f, scope) : reasonChip(r, f, scope).toLowerCase();
-        const code = name.split("~")[0];
-        return a.kind === "waive" ? `${title(it.key)} · ${(REASON_CHIP[code] ?? code).toLowerCase()}` : (REASON_CHIP[code] ?? code).toLowerCase();
+        const r =
+          f?.reasons.find((x) => refOf(x) === name) ?? f?.reasons.find((x) => x.code === name);
+        if (r && f)
+          return a.kind === 'waive'
+            ? waivedText(r, f, scope)
+            : reasonChip(r, f, scope).toLowerCase();
+        const code = name.split('~')[0];
+        return a.kind === 'waive'
+          ? `${title(it.key)} · ${(REASON_CHIP[code] ?? code).toLowerCase()}`
+          : (REASON_CHIP[code] ?? code).toLowerCase();
       });
-      const label = a.kind === "waive" ? `Waive: ${why.length ? why.join("; ") : title(it.key)}` : [`${title(it.key)}: included`, ...why].join(" · ");
+      const label =
+        a.kind === 'waive'
+          ? `Waive: ${why.length ? why.join('; ') : title(it.key)}`
+          : [`${title(it.key)}: included`, ...why].join(' · ');
       chips.push({ key: a.id, label, onRemove: () => ops.removeAction(a.id) });
     }
   }
   const s = scope.summary;
   // Features with a blocking reason open, as the bar's gate line counts them (s.blocking counts reasons).
-  const blocking = scope.features.filter((f) => openReasons(f).some((r) => r.severity === "blocking")).length;
-  const tallyLine = `${s.handled} of ${s.features} handled · ${blockingLeftText(blocking)} · ${plural(s.suggestions_open, "suggestion")} waiting`;
+  const blocking = scope.features.filter((f) =>
+    openReasons(f).some((r) => r.severity === 'blocking'),
+  ).length;
+  const tallyLine = `${s.handled} of ${s.features} handled · ${blockingLeftText(blocking)} · ${plural(s.suggestions_open, 'suggestion')} waiting`;
   // qa-work-14: a feature a person brought back into the set that now needs a decision says why
   // (the Needs you count rose and the handled count fell because of it).
   const broughtBack = scope.features.filter((f) => {
     const was = (f.history.original as { decision?: string }).decision;
-    return f.edited && f.decision === "include" && was !== undefined && was !== "include" && openReasons(f).length > 0;
+    return (
+      f.edited &&
+      f.decision === 'include' &&
+      was !== undefined &&
+      was !== 'include' &&
+      openReasons(f).length > 0
+    );
   });
   const tally = broughtBack.length ? (
     <>
       {tallyLine}
       {broughtBack.map((f) => (
         <span key={f.key} className="block font-normal text-text2" data-testid="tally-brought-back">
-          {f.title} is included now and needs you: {openReasons(f).map((r) => reasonChip(r, f, scope).toLowerCase()).join(", ")}.
+          {f.title} is included now and needs you:{' '}
+          {openReasons(f)
+            .map((r) => reasonChip(r, f, scope).toLowerCase())
+            .join(', ')}
+          .
         </span>
       ))}
     </>
@@ -289,15 +438,23 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   const goes = chips.filter((c) => !accepted.has(c.key));
   const answered = chips.filter((c) => accepted.has(c.key));
   const sendBackSummary = [
-    goes.length ? `The agents get ${plural(goes.length, "change")}: ${goes.map((c) => c.label).join("; ")}.` : "No row changes go to the agents.",
-    answered.length ? ` Not sent: ${answered.map((c) => c.label).join("; ")}; the agents' next attempt is checked again, so you decide it there.` : "",
-  ].join("");
+    goes.length
+      ? `The agents get ${plural(goes.length, 'change')}: ${goes.map((c) => c.label).join('; ')}.`
+      : 'No row changes go to the agents.',
+    answered.length
+      ? ` Not sent: ${answered.map((c) => c.label).join('; ')}; the agents' next attempt is checked again, so you decide it there.`
+      : '',
+  ].join('');
   const fileProblems = (scope.check.problems ?? []).filter((p) => FILE_PROBLEMS.includes(p.code));
-  const selectedFeature = scope.features.find((f) => f.key === selected) ?? scope.features.find((f) => f.needs_you) ?? scope.features[0] ?? null;
+  const selectedFeature =
+    scope.features.find((f) => f.key === selected) ??
+    scope.features.find((f) => f.needs_you) ??
+    scope.features[0] ??
+    null;
   // rirs-2/24: the PRD by its name ("Bulk import PRD"), never its slug.
-  const prdTitle = runDocName(run) ?? "this PRD";
+  const prdTitle = runDocName(run) ?? 'this PRD';
   // rirs-13: only an approver is asked; the others see what needs a decision.
-  const needsWord = mode === "approver" ? "Needs you" : "Needs a decision";
+  const needsWord = mode === 'approver' ? 'Needs you' : 'Needs a decision';
 
   const inspector = selectedFeature && (
     <ScopeInspector
@@ -306,12 +463,16 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
       review={review}
       mode={mode}
       ops={ops}
-      ui={makeUi("inspector")}
+      ui={makeUi('inspector')}
       waiving={waiving?.key === selectedFeature.key ? waiving.code : null}
       onWaiveDone={() => setWaiving(null)}
       goalsOpen={goalsFor === selectedFeature.key}
       onGoalsDone={() => setGoalsFor(null)}
-      leavingOut={leaveOut?.key === selectedFeature.key && leaveOut.where === "inspector" ? (leaveOut.preset ?? null) : undefined}
+      leavingOut={
+        leaveOut?.key === selectedFeature.key && leaveOut.where === 'inspector'
+          ? (leaveOut.preset ?? null)
+          : undefined
+      }
       onLeaveOutDone={() => setLeaveOut(null)}
     />
   );
@@ -326,12 +487,18 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
             <span className="min-w-0 text-sm break-words text-text2" data-testid="scope-for">
               For {prdTitle} · attempt {scope.attempt}
             </span>
-            {cp.status === "pending" ? (
+            {cp.status === 'pending' ? (
               <Chip kind="warn" dot>
-                {mode === "approver" ? "Waiting for you" : "Waiting for an approver"}
+                {mode === 'approver' ? 'Waiting for you' : 'Waiting for an approver'}
               </Chip>
             ) : (
-              <Chip kind={cp.status === "approved" ? "pass" : "na"}>{cp.status === "approved" ? "Approved" : cp.status === "changes_requested" ? "Sent back" : "Skipped"}</Chip>
+              <Chip kind={cp.status === 'approved' ? 'pass' : 'na'}>
+                {cp.status === 'approved'
+                  ? 'Approved'
+                  : cp.status === 'changes_requested'
+                    ? 'Sent back'
+                    : 'Skipped'}
+              </Chip>
             )}
           </>
         }
@@ -348,7 +515,14 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
       )}
       <AgentQuestions runId={run.id} cpId={cp.id} features={scope.features} />
       {fileProblems.length > 0 ? (
-        <FileProblems runId={run.id} cpId={cp.id} problems={fileProblems} canDecide={mode === "approver"} onRaw={() => setRawOpen(true)} onDecided={() => router.push(`/runs/${run.id}`)} />
+        <FileProblems
+          runId={run.id}
+          cpId={cp.id}
+          problems={fileProblems}
+          canDecide={mode === 'approver'}
+          onRaw={() => setRawOpen(true)}
+          onDecided={() => router.push(`/runs/${run.id}`)}
+        />
       ) : (
         <Split inspector={!phone ? inspector : undefined}>
           <div className="flex min-w-0 flex-wrap items-center gap-3">
@@ -357,15 +531,37 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
               value={filter}
               onChange={setFilter}
               items={[
-                { value: "needs", label: needsWord, count: s.needs_you },
-                { value: "all", label: "All", count: s.features },
-                { value: "out", label: "Left out", count: scope.features.filter((f) => f.decision !== "include").length },
-                ...(scope.attempt > 1 && scope.previous ? [{ value: "changed" as const, label: "Changed", count: scope.features.filter((f) => changedChips(f, scope).length > 0).length }] : []),
+                { value: 'needs', label: needsWord, count: s.needs_you },
+                { value: 'all', label: 'All', count: s.features },
+                {
+                  value: 'out',
+                  label: 'Left out',
+                  count: scope.features.filter((f) => f.decision !== 'include').length,
+                },
+                ...(scope.attempt > 1 && scope.previous
+                  ? [
+                      {
+                        value: 'changed' as const,
+                        label: 'Changed',
+                        count: scope.features.filter((f) => changedChips(f, scope).length > 0)
+                          .length,
+                      },
+                    ]
+                  : []),
               ]}
             />
             <span className="ml-auto flex items-center gap-2 text-sm text-text2">
               Group by
-              <SegmentedControl<Group> label="Group by" size="sm" value={group} onChange={setGroup} items={[{ value: "goal", label: "Goal" }, { value: "reason", label: "Reason" }]} />
+              <SegmentedControl<Group>
+                label="Group by"
+                size="sm"
+                value={group}
+                onChange={setGroup}
+                items={[
+                  { value: 'goal', label: 'Goal' },
+                  { value: 'reason', label: 'Reason' },
+                ]}
+              />
             </span>
           </div>
           {/* qa4-work-46: on a phone each group's heading has room above it, as the desktop's band does. */}
@@ -375,7 +571,10 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
             className="min-w-0 rounded-panel border border-line bg-surface max-[600px]:flex max-[600px]:flex-col max-[600px]:gap-5 max-[600px]:border-0 max-[600px]:bg-transparent"
             data-testid="scope-table"
           >
-            <div role="row" className={`grid ${COLS} items-center gap-x-2 border-b border-line px-2 py-2 text-[13px] font-semibold text-text2 max-[600px]:hidden`}>
+            <div
+              role="row"
+              className={`grid ${COLS} items-center gap-x-2 border-b border-line px-2 py-2 text-[13px] font-semibold text-text2 max-[600px]:hidden`}
+            >
               <span role="columnheader" aria-label="Requirements" />
               <span role="columnheader">#</span>
               <span role="columnheader">Feature</span>
@@ -385,20 +584,30 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
               <span role="columnheader">Requirements</span>
               <span role="columnheader">{needsWord} because</span>
               {/* qa4-work-45: a commenter suggests, a viewer reads the decision; only an approver makes the call. */}
-              <span role="columnheader">{mode === "approver" ? "Your call" : mode === "commenter" ? "Suggest" : "Decision"}</span>
+              <span role="columnheader">
+                {mode === 'approver' ? 'Your call' : mode === 'commenter' ? 'Suggest' : 'Decision'}
+              </span>
             </div>
             {rows.length === 0 && (
               <p className="px-4 py-6 text-sm text-text2" data-testid="scope-empty">
-                {filter === "needs"
-                  ? mode === "approver"
-                    ? "Nothing needs you: every feature is fine as the agents proposed it."
-                    : "Nothing needs a decision: every feature is fine as the agents proposed it."
-                  : "No features here."}
+                {filter === 'needs'
+                  ? mode === 'approver'
+                    ? 'Nothing needs you: every feature is fine as the agents proposed it.'
+                    : 'Nothing needs a decision: every feature is fine as the agents proposed it.'
+                  : 'No features here.'}
               </p>
             )}
             {groups.map((g) => (
-              <div key={g.label} role="rowgroup" aria-label={g.label} className="max-[600px]:flex max-[600px]:flex-col max-[600px]:gap-2">
-                <div role="row" className="border-b border-line bg-surface2 px-3 py-1.5 text-sm font-semibold max-[600px]:rounded-button max-[600px]:border-0 max-[600px]:bg-transparent max-[600px]:px-1">
+              <div
+                key={g.label}
+                role="rowgroup"
+                aria-label={g.label}
+                className="max-[600px]:flex max-[600px]:flex-col max-[600px]:gap-2"
+              >
+                <div
+                  role="row"
+                  className="border-b border-line bg-surface2 px-3 py-1.5 text-sm font-semibold max-[600px]:rounded-button max-[600px]:border-0 max-[600px]:bg-transparent max-[600px]:px-1"
+                >
                   <span role="cell">
                     {g.label} <span className="tnum text-text2">{g.rows.length}</span>
                   </span>
@@ -412,12 +621,16 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
                     review={review}
                     mode={mode}
                     ops={ops}
-                    ui={makeUi("row")}
+                    ui={makeUi('row')}
                     selected={selectedFeature?.key === f.key}
                     expanded={expanded.has(f.key)}
-                    changed={filter === "changed" ? changedChips(f, scope) : []}
+                    changed={filter === 'changed' ? changedChips(f, scope) : []}
                     goalTitle={goalTitle}
-                    leavingOut={leaveOut?.key === f.key && leaveOut.where === "row" ? (leaveOut.preset ?? null) : undefined}
+                    leavingOut={
+                      leaveOut?.key === f.key && leaveOut.where === 'row'
+                        ? (leaveOut.preset ?? null)
+                        : undefined
+                    }
                     onLeaveOutDone={() => setLeaveOut(null)}
                     onToggle={() =>
                       setExpanded((x) => {
@@ -447,11 +660,11 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
               console={cp.console ?? null}
               revision={review.revision}
               savedNote={review.note ?? null}
-              canDecide={mode === "approver" && !!review.can_decide}
+              canDecide={mode === 'approver' && !!review.can_decide}
               // Approving with calls still open leaves them as the agents proposed: said before it goes.
               approveAsk={
                 s.needs_you > 0
-                  ? `${plural(s.needs_you, "feature")} still ${s.needs_you === 1 ? "needs" : "need"} you. Approving leaves ${s.needs_you === 1 ? "it" : "them"} as the agents proposed.`
+                  ? `${plural(s.needs_you, 'feature')} still ${s.needs_you === 1 ? 'needs' : 'need'} you. Approving leaves ${s.needs_you === 1 ? 'it' : 'them'} as the agents proposed.`
                   : null
               }
               canNote={!!review.can_stage}
@@ -468,13 +681,22 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
       )}
       <Sheet
         open={phone && sheet && !!inspector}
-        title={selectedFeature ? namedText(namedCode(selectedFeature.title, selectedFeature.key)) : "Feature"}
+        title={
+          selectedFeature
+            ? namedText(namedCode(selectedFeature.title, selectedFeature.key))
+            : 'Feature'
+        }
         onClose={() => setSheet(false)}
         testId="sheet-feature"
       >
         {inspector}
       </Sheet>
-      <RawFile open={rawOpen} onClose={() => setRawOpen(false)} runId={run.id} seq={cp.segment_seq ?? scope.segment_seq} />
+      <RawFile
+        open={rawOpen}
+        onClose={() => setRawOpen(false)}
+        runId={run.id}
+        seq={cp.segment_seq ?? scope.segment_seq}
+      />
     </Page>
   );
 }
@@ -513,8 +735,8 @@ function FeatureRow({
   onSelect: () => void;
 }) {
   const open = openReasons(f);
-  const kept = f.requirements.filter((q) => q.decision === "keep").length;
-  const suggestions = actionsOn(review, f.key).filter((a) => a.state === "suggested");
+  const kept = f.requirements.filter((q) => q.decision === 'keep').length;
+  const suggestions = actionsOn(review, f.key).filter((a) => a.state === 'suggested');
   const titleOf = (k: string) => scope.features.find((x) => x.key === k)?.title ?? k;
   // detailed-b 3: the row's code with its name, never the key alone.
   const rowTitle = namedText(namedCode(f.title, f.key));
@@ -524,9 +746,11 @@ function FeatureRow({
       aria-selected={selected}
       data-testid="scope-row"
       data-key={f.key}
-      className={`border-b border-line last:border-b-0 max-[600px]:rounded-button max-[600px]:border max-[600px]:bg-surface ${selected ? "bg-accent-soft/50 shadow-[inset_4px_0_0_var(--accent)]" : ""}`}
+      className={`border-b border-line last:border-b-0 max-[600px]:rounded-button max-[600px]:border max-[600px]:bg-surface ${selected ? 'bg-accent-soft/50 shadow-[inset_4px_0_0_var(--accent)]' : ''}`}
     >
-      <div className={`grid ${COLS} items-center gap-x-2 px-2 py-2 max-[600px]:flex max-[600px]:flex-wrap max-[600px]:gap-2 max-[600px]:px-3`}>
+      <div
+        className={`grid ${COLS} items-center gap-x-2 px-2 py-2 max-[600px]:flex max-[600px]:flex-wrap max-[600px]:gap-2 max-[600px]:px-3`}
+      >
         {/* rirs-41: on a phone the card's title line has a Details control instead of a lone chevron. */}
         <span role="cell" className="max-[600px]:hidden">
           <button
@@ -537,15 +761,25 @@ function FeatureRow({
             className="grid size-7 place-items-center rounded text-text hover:bg-surface2"
             data-testid="row-chevron"
           >
-            <span aria-hidden className={`inline-block transition-transform ${expanded ? "rotate-90" : ""}`}>
+            <span
+              aria-hidden
+              className={`inline-block transition-transform ${expanded ? 'rotate-90' : ''}`}
+            >
               ›
             </span>
           </button>
         </span>
-        <span role="cell" className="tnum text-sm text-text max-[600px]:hidden" data-testid="row-number">
+        <span
+          role="cell"
+          className="tnum text-sm text-text max-[600px]:hidden"
+          data-testid="row-number"
+        >
           {number}
         </span>
-        <span role="cell" className="flex min-w-0 flex-wrap items-center gap-1.5 max-[600px]:basis-full">
+        <span
+          role="cell"
+          className="flex min-w-0 flex-wrap items-center gap-1.5 max-[600px]:basis-full"
+        >
           <button
             type="button"
             onClick={onSelect}
@@ -555,15 +789,20 @@ function FeatureRow({
           >
             {rowTitle}
           </button>
-          {f.flags.includes("new_feature") && <Chip kind="acc">New</Chip>}
-          {f.decision !== "include" && <Chip kind="na">{decisionText(f.decision)}</Chip>}
+          {f.flags.includes('new_feature') && <Chip kind="acc">New</Chip>}
+          {f.decision !== 'include' && <Chip kind="na">{decisionText(f.decision)}</Chip>}
           {changed.map((c) => (
             <Chip key={c} kind="acc" data-testid="changed-chip">
               {c}
             </Chip>
           ))}
           <span className="hidden flex-none max-[600px]:block">
-            <Button className="h-10 px-3 text-sm" aria-label={`Details of ${f.title}`} onClick={onSelect} data-testid="row-details">
+            <Button
+              className="h-10 px-3 text-sm"
+              aria-label={`Details of ${f.title}`}
+              onClick={onSelect}
+              data-testid="row-details"
+            >
               Details
               <span aria-hidden>›</span>
             </Button>
@@ -573,11 +812,18 @@ function FeatureRow({
           {goalsOf(f).length ? (
             goalsOf(f).map((g) => (
               // walk-eng-check 5: the goal's whole name, wrapping, never cut mid-name.
-              <Chip key={g.key} kind="line" title={goalTitle(g.key)} className="min-w-0" wrap data-testid="goal-chip">
+              <Chip
+                key={g.key}
+                kind="line"
+                title={goalTitle(g.key)}
+                className="min-w-0"
+                wrap
+                data-testid="goal-chip"
+              >
                 {goalTitle(g.key)}
               </Chip>
             ))
-          ) : open.some((r) => r.code === "serves_no_goal") ? (
+          ) : open.some((r) => r.code === 'serves_no_goal') ? (
             // qa-work-15: the reason's chip already says it (No confirmed goal); one chip, not two.
             <span className="text-sm text-text2" aria-label="No goal">
               —
@@ -590,13 +836,25 @@ function FeatureRow({
           <Ring value={pct(f.confidence)} size={32} stroke={4} />
         </span>
         {/* qa4-work-43: the count says what it counts, never a bare "2/2". */}
-        <span role="cell" className="tnum text-sm max-[600px]:hidden" title={`${kept} of ${f.requirements.length} requirements kept`} data-testid="row-requirements">
+        <span
+          role="cell"
+          className="tnum text-sm max-[600px]:hidden"
+          title={`${kept} of ${f.requirements.length} requirements kept`}
+          data-testid="row-requirements"
+        >
           {/* walk-eng-check 5: a row left out with no requirements: leaving it out is the call. */}
-          {f.decision !== "include" && f.requirements.length === 0 ? "Left out" : `${kept} of ${f.requirements.length} kept`}
+          {f.decision !== 'include' && f.requirements.length === 0
+            ? 'Left out'
+            : `${kept} of ${f.requirements.length} kept`}
         </span>
         <span role="cell" className="flex min-w-0 flex-wrap gap-1" data-testid="row-reasons">
           {open.map((r) => (
-            <Chip key={r.code} kind={r.severity === "blocking" ? "crit" : "warn"} title={reasonText(r, scope)} wrap>
+            <Chip
+              key={r.code}
+              kind={r.severity === 'blocking' ? 'crit' : 'warn'}
+              title={reasonText(r, scope)}
+              wrap
+            >
               {reasonChip(r, f, scope)}
             </Chip>
           ))}
@@ -606,19 +864,31 @@ function FeatureRow({
         </span>
       </div>
       {suggestions.map((a) => (
-        <p key={a.id} className="px-3 pb-2 pl-16 text-sm text-text2 max-[600px]:pl-3" data-testid="suggested-by">
-          Suggested by {a.created_by?.name ?? "someone"}: {describeAction(a, titleOf)}
+        <p
+          key={a.id}
+          className="px-3 pb-2 pl-16 text-sm text-text2 max-[600px]:pl-3"
+          data-testid="suggested-by"
+        >
+          Suggested by {a.created_by?.name ?? 'someone'}: {describeAction(a, titleOf)}
         </p>
       ))}
       {leavingOut !== undefined && (
         <div className="px-3 pb-2 pl-16 max-[600px]:pl-3">
           <LeaveOutPicker
             preset={leavingOut ?? undefined}
-            suggest={mode === "commenter"}
+            suggest={mode === 'commenter'}
             onCancel={onLeaveOutDone}
             onPick={async (reason) => {
-              if (mode === "approver") await ops.patch(f, { decision: "exclude", decision_reason: reason });
-              else await ops.act({ item_key: f.key, kind: "edit", field: "decision", value: { decision: "exclude", reason }, answers: [] });
+              if (mode === 'approver')
+                await ops.patch(f, { decision: 'exclude', decision_reason: reason });
+              else
+                await ops.act({
+                  item_key: f.key,
+                  kind: 'edit',
+                  field: 'decision',
+                  value: { decision: 'exclude', reason },
+                  answers: [],
+                });
               onLeaveOutDone();
             }}
           />
@@ -636,16 +906,37 @@ function FeatureRow({
 }
 
 /** The row's call: what a person decided (✓ … with Undo), else the first open reason's fixes. */
-function YourCall({ f, scope, review, mode, ops, ui }: { f: Feature; scope: Scope; review: Review | null; mode: Mode; ops: Ops; ui: Ui }) {
-  const approver = mode === "approver";
+function YourCall({
+  f,
+  scope,
+  review,
+  mode,
+  ops,
+  ui,
+}: {
+  f: Feature;
+  scope: Scope;
+  review: Review | null;
+  mode: Mode;
+  ops: Ops;
+  ui: Ui;
+}) {
+  const approver = mode === 'approver';
   const undo = (run: () => Promise<void>) =>
     approver && (
-      <Button variant="ghost" className="h-8 px-2 text-sm max-[600px]:h-10" onClick={() => void run()}>
+      <Button
+        variant="ghost"
+        className="h-8 px-2 text-sm max-[600px]:h-10"
+        onClick={() => void run()}
+      >
         Undo
       </Button>
     );
   const done = (text: string, run: (() => Promise<void>) | null) => (
-    <span className="flex flex-wrap items-center gap-1 text-sm font-medium text-pass" data-testid="row-done">
+    <span
+      className="flex flex-wrap items-center gap-1 text-sm font-medium text-pass"
+      data-testid="row-done"
+    >
       {/* detailed-b 4: an icon, not the ✓ glyph that drew as an empty box in Chromium. */}
       <Icon name="check" size={16} /> {text}
       {run && undo(run)}
@@ -653,18 +944,27 @@ function YourCall({ f, scope, review, mode, ops, ui }: { f: Feature; scope: Scop
   );
   if (f.edited) return done(changeText(f), () => ops.patch(f, { revert: true }));
   const open = openReasons(f);
-  if (open.length) return <FixButtons fixes={fixesFor(open[0], f, scope, mode, ops, ui)} inColumn />;
+  if (open.length)
+    return <FixButtons fixes={fixesFor(open[0], f, scope, mode, ops, ui)} inColumn />;
   // A call per reason: the row's Undo takes back all of them, one after another, so the last
   // reload reads them all gone.
-  const answers = actionsOn(review, f.key).filter((a) => a.state === "staged" && (a.kind === "accept" || a.kind === "waive"));
+  const answers = actionsOn(review, f.key).filter(
+    (a) => a.state === 'staged' && (a.kind === 'accept' || a.kind === 'waive'),
+  );
   if (answers.length)
-    return done(answers.every((a) => a.kind === "waive") ? "Waived" : "Included", () =>
-      answers.reduce<Promise<void>>((prev, a) => prev.then(() => ops.removeAction(a.id)), Promise.resolve()),
+    return done(answers.every((a) => a.kind === 'waive') ? 'Waived' : 'Included', () =>
+      answers.reduce<Promise<void>>(
+        (prev, a) => prev.then(() => ops.removeAction(a.id)),
+        Promise.resolve(),
+      ),
     );
   // Fixed elsewhere (a dependency included again): Undo puts that row back.
   const fixedBy = scope.features.filter((d) => f.depends_on.includes(d.key) && d.edited);
-  if (fixedBy.length) return done("Fixed", () => Promise.all(fixedBy.map((d) => ops.patch(d, { revert: true }))).then(() => undefined));
-  if (f.reasons.length) return done("Handled", null);
+  if (fixedBy.length)
+    return done('Fixed', () =>
+      Promise.all(fixedBy.map((d) => ops.patch(d, { revert: true }))).then(() => undefined),
+    );
+  if (f.reasons.length) return done('Handled', null);
   return <span className="text-sm text-text2">—</span>;
 }
 
@@ -683,17 +983,30 @@ function FileProblems({
   onRaw: () => void;
   onDecided: () => void;
 }) {
-  const [note, setNote] = useState("The feature set file could not be read: write it again.");
+  const [note, setNote] = useState('The feature set file could not be read: write it again.');
   const [error, setError] = useState<string | null>(null);
   return (
-    <div className="rounded-panel border border-crit/40 bg-crit-bg p-4" role="alert" data-testid="file-problems">
+    <div
+      className="rounded-panel border border-crit/40 bg-crit-bg p-4"
+      role="alert"
+      data-testid="file-problems"
+    >
       <p className="font-semibold text-crit">This feature set cannot be reviewed row by row</p>
       <ul className="mt-1 ml-4 list-disc text-sm">
         {problems.map((p) => (
           <li key={p.code + p.message}>{p.message}</li>
         ))}
       </ul>
-      {canDecide && <textarea aria-label="Note to the agents" value={note} rows={2} maxLength={2000} onChange={(e) => setNote(e.target.value)} className={`${INPUT} mt-2`} />}
+      {canDecide && (
+        <textarea
+          aria-label="Note to the agents"
+          value={note}
+          rows={2}
+          maxLength={2000}
+          onChange={(e) => setNote(e.target.value)}
+          className={`${INPUT} mt-2`}
+        />
+      )}
       {error && <p className="text-sm text-crit">{error}</p>}
       <div className="mt-2 flex gap-2">
         {canDecide && (
@@ -701,10 +1014,12 @@ function FileProblems({
             variant="solid"
             disabled={!note.trim()}
             onClick={() =>
-              void unwrap(api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/decide", { params: { path: { run_id: runId, checkpoint_id: cpId } }, body: { decision: "changes_requested", note } })).then(
-                onDecided,
-                (e) => setError(errorMessage(e)),
-              )
+              void unwrap(
+                api.POST('/v1/runs/{run_id}/checkpoints/{checkpoint_id}/decide', {
+                  params: { path: { run_id: runId, checkpoint_id: cpId } },
+                  body: { decision: 'changes_requested', note },
+                }),
+              ).then(onDecided, (e) => setError(errorMessage(e)))
             }
           >
             Send back
@@ -717,16 +1032,35 @@ function FileProblems({
 }
 
 /** feature_set.yaml and design.md as the agents wrote them (the run page's raw-file view). */
-function RawFile({ open, onClose, runId, seq }: { open: boolean; onClose: () => void; runId: string; seq: number }) {
-  const [name, setName] = useState<"feature_set.yaml" | "design.md">("feature_set.yaml");
+function RawFile({
+  open,
+  onClose,
+  runId,
+  seq,
+}: {
+  open: boolean;
+  onClose: () => void;
+  runId: string;
+  seq: number;
+}) {
+  const [name, setName] = useState<'feature_set.yaml' | 'design.md'>('feature_set.yaml');
   const [loaded, setLoaded] = useState<{ name: string; text: string } | null>(null);
-  const content = loaded?.name === name ? loaded.text : "Loading…";
+  const content = loaded?.name === name ? loaded.text : 'Loading…';
   useEffect(() => {
     if (!open) return;
     let live = true;
-    api.GET("/v1/runs/{run_id}/segments/{seq}/artifacts/{name}", { params: { path: { run_id: runId, seq, name } }, parseAs: "text" }).then(({ data, response }) => {
-      if (live) setLoaded({ name, text: response.ok ? (data as string) : `Could not load ${name}. Try again.` });
-    });
+    api
+      .GET('/v1/runs/{run_id}/segments/{seq}/artifacts/{name}', {
+        params: { path: { run_id: runId, seq, name } },
+        parseAs: 'text',
+      })
+      .then(({ data, response }) => {
+        if (live)
+          setLoaded({
+            name,
+            text: response.ok ? (data as string) : `Could not load ${name}. Try again.`,
+          });
+      });
     return () => {
       live = false;
     };
@@ -740,15 +1074,17 @@ function RawFile({ open, onClose, runId, seq }: { open: boolean; onClose: () => 
           value={name}
           onChange={setName}
           items={[
-            { value: "feature_set.yaml", label: "feature_set.yaml" },
-            { value: "design.md", label: "design.md" },
+            { value: 'feature_set.yaml', label: 'feature_set.yaml' },
+            { value: 'design.md', label: 'design.md' },
           ]}
         />
-        <pre className="max-h-[70vh] overflow-auto rounded-button bg-surface2 p-3 font-mono text-[13px] whitespace-pre-wrap break-words" data-testid="raw-file-content">
+        <pre
+          className="max-h-[70vh] overflow-auto rounded-button bg-surface2 p-3 font-mono text-[13px] whitespace-pre-wrap break-words"
+          data-testid="raw-file-content"
+        >
           {content}
         </pre>
       </div>
     </Sheet>
   );
 }
-

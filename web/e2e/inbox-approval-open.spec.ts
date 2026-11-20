@@ -1,6 +1,6 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login, signOut } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login, signOut } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /**
  * B-QA fix 2, card inbox-approval-open-lands: protects = the Inbox's Open on a roadmap version
@@ -14,61 +14,77 @@ import { expect, test, type Locator, type Page } from "./test";
  */
 
 async function tap(l: Locator) {
-  await l.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await l.evaluate((el) => el.scrollIntoView({ block: 'center' }));
   await l.click();
 }
 
 async function switchTo(page: Page, email: string) {
   const size = page.viewportSize()!;
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/home");
+  await page.goto('/home');
   await signOut(page);
   await login(page, email);
   await page.setViewportSize(size);
 }
 
 test.beforeEach(async ({ context }) => {
-  await context.addInitScript((key) => localStorage.setItem(key, "inbox-reviewer"), MOCK_SCENARIO_KEY);
+  await context.addInitScript(
+    (key) => localStorage.setItem(key, 'inbox-reviewer'),
+    MOCK_SCENARIO_KEY,
+  );
 });
 
 for (const width of [1440, 390]) {
-  test(`Open on a roadmap waiting on me lands on its draft with Approve in sight (${width})`, async ({ page }) => {
+  test(`Open on a roadmap waiting on me lands on its draft with Approve in sight (${width})`, async ({
+    page,
+  }) => {
     test.setTimeout(120_000);
     await page.setViewportSize({ width: 1440, height: 900 });
     await login(page);
     // The owner changes the Alerts roadmap and approves it.
-    await page.goto("/simple/roadmap");
-    await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-    await page.getByTestId("filter-roadmap").selectOption({ label: "Alerts roadmap" });
-    const bar = page.locator('[data-testid="timeline-row"][data-item="alert-export"] [data-testid="timeline-bar"]').first();
+    await page.goto('/simple/roadmap');
+    await expect(page.getByTestId('simple-roadmap')).toBeVisible();
+    await page.getByTestId('filter-roadmap').selectOption({ label: 'Alerts roadmap' });
+    const bar = page
+      .locator(
+        '[data-testid="timeline-row"][data-item="alert-export"] [data-testid="timeline-bar"]',
+      )
+      .first();
     await expect(bar).toBeVisible();
     await bar.focus();
-    await page.keyboard.press("ArrowRight");
-    await expect(page.getByTestId("draft-count")).toHaveText("1");
+    await page.keyboard.press('ArrowRight');
+    await expect(page.getByTestId('draft-count')).toHaveText('1');
     // roadmap-decide: the owner decides a roadmap that names no decider: Approve and publish sends it to its required reviewers.
-    await page.getByTestId("draft-banner").getByRole("button", { name: "Approve and publish" }).click();
-    await expect(page.getByRole("status").filter({ hasText: "Approved: Alerts roadmap waits for 1 more reviewer" })).toBeVisible();
+    await page
+      .getByTestId('draft-banner')
+      .getByRole('button', { name: 'Approve and publish' })
+      .click();
+    await expect(
+      page
+        .getByRole('status')
+        .filter({ hasText: 'Approved: Alerts roadmap waits for 1 more reviewer' }),
+    ).toBeVisible();
 
     // The required reviewer opens it from their Inbox.
     await page.setViewportSize({ width, height: width < 640 ? 844 : 900 });
-    await switchTo(page, "approver@example.com");
-    await page.goto("/inbox");
-    const row = page.getByRole("row").filter({ has: page.getByTestId("simple-approval-context") });
+    await switchTo(page, 'approver@example.com');
+    await page.goto('/inbox');
+    const row = page.getByRole('row').filter({ has: page.getByTestId('simple-approval-context') });
     await expect(row).toHaveCount(1);
-    await tap(row.getByRole("link", { name: /^Open Alerts roadmap version \d+ to approve it$/ }));
+    await tap(row.getByRole('link', { name: /^Open Alerts roadmap version \d+ to approve it$/ }));
 
     // The link names the draft by the parameter the roadmap reads, and nothing it does not read.
     await expect(page).toHaveURL(/\/simple\/roadmap\?roadmap=[^&]+&draft=[^&]+$/);
-    expect(page.url()).not.toContain("approve=");
-    const approval = page.getByTestId("draft-approval");
+    expect(page.url()).not.toContain('approve=');
+    const approval = page.getByTestId('draft-approval');
     await expect(approval).toContainText(/Alerts roadmap version \d+ is waiting for your approval/);
-    const approve = approval.getByRole("button", { name: "Approve" });
+    const approve = approval.getByRole('button', { name: 'Approve' });
     await expect(approve).toBeVisible();
     await expect(approve).toBeInViewport();
     // The roadmap read ?draft=: that draft's line in the banner has the focus.
     await expect(approval).toBeFocused();
     // Approve there: the version no longer waits on me, so its line goes.
     await approve.click();
-    await expect(page.getByTestId("draft-approval")).toHaveCount(0);
+    await expect(page.getByTestId('draft-approval')).toHaveCount(0);
   });
 }

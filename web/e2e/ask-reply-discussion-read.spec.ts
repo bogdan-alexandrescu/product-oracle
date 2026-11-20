@@ -1,5 +1,5 @@
-import { login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /*
  * ask-reply-discussion-read (lib/stream openStream): when Oracle's reply in Ask is done, the shared reads of its
@@ -12,26 +12,37 @@ import { expect, test, type Page } from "./test";
  */
 
 /** The calls the in-browser mock API has served since this page loaded. */
-const calls = (page: Page) => page.evaluate(() => [...((globalThis as { __poMockCalls?: string[] }).__poMockCalls ?? [])]);
+const calls = (page: Page) =>
+  page.evaluate(() => [...((globalThis as { __poMockCalls?: string[] }).__poMockCalls ?? [])]);
 
-test("a reply done in Ask has the chat read its discussion again and show the reply", async ({ page }) => {
+test('a reply done in Ask has the chat read its discussion again and show the reply', async ({
+  page,
+}) => {
   await login(page);
-  await page.goto("/simple");
-  await page.getByTestId("simple-ask").filter({ visible: true }).first().click();
-  const panel = page.getByTestId("hop-panel").filter({ visible: true });
-  await panel.getByRole("textbox", { name: "Message Oracle" }).fill("what is Weekly alert digest about?");
-  await panel.getByRole("button", { name: "Send" }).click();
+  await page.goto('/simple');
+  await page.getByTestId('simple-ask').filter({ visible: true }).first().click();
+  const panel = page.getByTestId('hop-panel').filter({ visible: true });
+  await panel
+    .getByRole('textbox', { name: 'Message Oracle' })
+    .fill('what is Weekly alert digest about?');
+  await panel.getByRole('button', { name: 'Send' }).click();
 
   // The reply's stream, and the discussion it is in.
-  await expect.poll(async () => (await calls(page)).findIndex((c) => c.endsWith("/stream")), { timeout: 15_000 }).toBeGreaterThan(-1);
+  await expect
+    .poll(async () => (await calls(page)).findIndex((c) => c.endsWith('/stream')), {
+      timeout: 15_000,
+    })
+    .toBeGreaterThan(-1);
   const all = await calls(page);
-  const streamed = all.findIndex((c) => c.endsWith("/stream"));
-  const discussion = /^GET (\/v1\/discussions\/[^/]+)\/messages\/[^/]+\/stream$/.exec(all[streamed])![1];
+  const streamed = all.findIndex((c) => c.endsWith('/stream'));
+  const discussion = /^GET (\/v1\/discussions\/[^/]+)\/messages\/[^/]+\/stream$/.exec(
+    all[streamed],
+  )![1];
   const messages = `GET ${discussion}/messages?limit=200`;
   expect(all.slice(0, streamed)).toContain(messages);
 
-  const reply = panel.getByTestId("ask-chat-thread").getByTestId("ask-answer").last();
-  await expect(reply).toHaveAttribute("data-status", "complete");
-  await expect(reply).toContainText("Weekly alert digest");
+  const reply = panel.getByTestId('ask-chat-thread').getByTestId('ask-answer').last();
+  await expect(reply).toHaveAttribute('data-status', 'complete');
+  await expect(reply).toContainText('Weekly alert digest');
   expect((await calls(page)).slice(streamed + 1)).toContain(messages);
 });

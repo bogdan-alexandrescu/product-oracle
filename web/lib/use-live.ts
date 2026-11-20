@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from 'react';
 
-import { errorMessage } from "@/lib/use-query";
+import { errorMessage } from '@/lib/use-query';
 
 export type Live<T> = {
   /** The latest answer (kept while a newer call is pending, so nothing flickers). */
@@ -16,7 +16,12 @@ export type Live<T> = {
  * Calls `run(input)` `ms` after `input` stops changing (inputs are compared as JSON)
  * and keeps the latest answer. Used for live validation and previews while editing.
  */
-export function useLive<I, T>(input: I, run: (input: I) => Promise<T>, ms = 300, enabled = true): Live<T> {
+export function useLive<I, T>(
+  input: I,
+  run: (input: I) => Promise<T>,
+  ms = 300,
+  enabled = true,
+): Live<T> {
   const key = JSON.stringify(input);
   const [state, setState] = useState<{ key: string | null; data?: T; error: string | null }>({
     key: null,

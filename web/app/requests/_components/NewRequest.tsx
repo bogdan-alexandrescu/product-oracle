@@ -1,25 +1,25 @@
-"use client";
+'use client';
 
-import { usePathname, useRouter, useSearchParams } from "@/lib/nav";
-import { useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from '@/lib/nav';
+import { useRef, useState } from 'react';
 
-import { Button, Dialog, SegmentedControl } from "@/components/ds";
-import { ErrorNote, INPUT, LoadError } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { useMe } from "@/lib/me";
-import { formatAge } from "@/lib/format";
-import { displayName } from "@/lib/names";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import { Button, Dialog, SegmentedControl } from '@/components/ds';
+import { ErrorNote, INPUT, LoadError } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { useMe } from '@/lib/me';
+import { formatAge } from '@/lib/format';
+import { displayName } from '@/lib/names';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-import { CHANNEL_LABEL, STATE } from "./RequestList";
+import { CHANNEL_LABEL, STATE } from './RequestList';
 
-type Request = Schemas["RequestOut"];
-type Found = Schemas["CandidateOut"];
-type Kind = Schemas["RequestCreate"]["requester_kind"];
+type Request = Schemas['RequestOut'];
+type Found = Schemas['CandidateOut'];
+type Kind = Schemas['RequestCreate']['requester_kind'];
 const KINDS: { value: Kind; label: string }[] = [
-  { value: "customer", label: "Customer" },
-  { value: "team", label: "Team" },
-  { value: "unknown", label: "Unknown" },
+  { value: 'customer', label: 'Customer' },
+  { value: 'team', label: 'Team' },
+  { value: 'unknown', label: 'Unknown' },
 ];
 
 /**
@@ -29,7 +29,7 @@ const KINDS: { value: Kind; label: string }[] = [
  */
 export function NewRequestButton({
   onFiled,
-  variant = "primary",
+  variant = 'primary',
   className,
   fromAddress = false,
 }: {
@@ -37,20 +37,20 @@ export function NewRequestButton({
   /** Opens at once when the address asks for a new request (?compose=request). */
   fromAddress?: boolean;
   /** The header's is the page's primary action; the empty state's is secondary. */
-  variant?: "primary" | "secondary";
+  variant?: 'primary' | 'secondary';
   className?: string;
 }) {
   const { can } = useMe();
   const router = useRouter();
   const pathname = usePathname();
-  const asked = useSearchParams().get("compose") === "request";
+  const asked = useSearchParams().get('compose') === 'request';
   const [open, setOpen] = useState(() => fromAddress && asked);
   const close = () => {
     setOpen(false);
     if (fromAddress && asked) router.replace(pathname);
   };
   // create_request's handler wants an owner only to name someone else as the requester.
-  if (!can("create_request", true)) return null;
+  if (!can('create_request', true)) return null;
   return (
     <>
       <Button variant={variant} icon="plus" className={className} onClick={() => setOpen(true)}>
@@ -74,7 +74,9 @@ export function NewRequestButton({
 }
 
 /** The channels a request is filed in here, in the queue's words; Interview requests come only from interviews. */
-const CHANNELS = (Object.keys(CHANNEL_LABEL) as Request["channel"][]).filter((c) => c !== "interview");
+const CHANNELS = (Object.keys(CHANNEL_LABEL) as Request['channel'][]).filter(
+  (c) => c !== 'interview',
+);
 
 /**
  * Files a request, as New, through POST /v1/requests: a title, what it is and why, its goals
@@ -84,13 +86,19 @@ const CHANNELS = (Object.keys(CHANNEL_LABEL) as Request["channel"][]).filter((c)
  * in another channel whoever asked). The ds Dialog: typed words ask before they are thrown away.
  */
 /** Two titles that read the same: case, spaces and end punctuation aside (qa-work-37). */
-const titleWords = (t: string) => t.replace(/[\s]+/g, " ").trim().replace(/[.!?]+$/, "").trim();
-const sameTitle = (a: string, b: string) => titleWords(a).toLowerCase() === titleWords(b).toLowerCase();
+const titleWords = (t: string) =>
+  t
+    .replace(/[\s]+/g, ' ')
+    .trim()
+    .replace(/[.!?]+$/, '')
+    .trim();
+const sameTitle = (a: string, b: string) =>
+  titleWords(a).toLowerCase() === titleWords(b).toLowerCase();
 
 /** "just now", "5m ago". */
 function filedAgo(at: string): string {
   const age = formatAge(at);
-  return !age || age === "now" || age.startsWith("in ") ? "just now" : `${age} ago`;
+  return !age || age === 'now' || age.startsWith('in ') ? 'just now' : `${age} ago`;
 }
 
 /**
@@ -117,45 +125,55 @@ export function NewRequestDialog({
   const { me, can } = useMe();
   const titleRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
-  const goals = useQuery("new-request-goals", () =>
-    unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })),
+  const goals = useQuery('new-request-goals', () =>
+    unwrap(api.GET('/v1/baseline/entities', { params: { query: { type: 'goal' } } })),
   );
   // A rejected (or archived) goal has left the baseline: it is no goal to file a request under.
-  const offered = (goals.data ?? []).filter((g) => g.status !== "rejected");
-  const myName = me?.email ? displayName(me.email, me.name) : "";
-  const owner = can("create_request");
-  const [title, setTitle] = useState(from?.title ?? "");
+  const offered = (goals.data ?? []).filter((g) => g.status !== 'rejected');
+  const myName = me?.email ? displayName(me.email, me.name) : '';
+  const owner = can('create_request');
+  const [title, setTitle] = useState(from?.title ?? '');
   // A found item's own words, or its excerpt, say what they asked.
-  const [body, setBody] = useState(from?.body ?? from?.source.excerpt ?? "");
+  const [body, setBody] = useState(from?.body ?? from?.source.excerpt ?? '');
   const [startBody] = useState(body);
   const [goalIds, setGoalIds] = useState<string[]>([]);
-  const [requester, setRequester] = useState(from ? (from.requester_name ?? "") : myName);
-  const [channel, setChannel] = useState<Request["channel"]>(from?.channel ?? "in_app");
+  const [requester, setRequester] = useState(from ? (from.requester_name ?? '') : myName);
+  const [channel, setChannel] = useState<Request['channel']>(from?.channel ?? 'in_app');
   const [startChannel] = useState(channel);
-  const [kind, setKind] = useState<Kind>("unknown");
+  const [kind, setKind] = useState<Kind>('unknown');
   // In the app the requester is the signed-in member unless an owner names someone; another
   // channel's requester is whoever asked there.
-  const named = owner || channel !== "in_app";
+  const named = owner || channel !== 'in_app';
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** rirs-34: a missing title or body is said under its field, which takes focus. */
-  const [missing, setMissing] = useState<"title" | "body" | null>(null);
+  const [missing, setMissing] = useState<'title' | 'body' | null>(null);
   // qa-onboarding-1: typed words ask "Discard your changes?" before Escape, the X or Cancel throws them away.
   const [renamed, setRenamed] = useState(false);
   const dirty = from
-    ? title !== from.title || body !== startBody || channel !== startChannel || goalIds.length > 0 || kind !== "unknown" || renamed
-    : !!title.trim() || !!body.trim() || goalIds.length > 0 || channel !== "in_app" || renamed || kind !== "unknown";
+    ? title !== from.title ||
+      body !== startBody ||
+      channel !== startChannel ||
+      goalIds.length > 0 ||
+      kind !== 'unknown' ||
+      renamed
+    : !!title.trim() ||
+      !!body.trim() ||
+      goalIds.length > 0 ||
+      channel !== 'in_app' ||
+      renamed ||
+      kind !== 'unknown';
   /** The request already filed under this title, once asked; the title it was found for. */
   const [twin, setTwin] = useState<{ request: Request; title: string } | null>(null);
 
   async function submit() {
     if (!title.trim()) {
-      setMissing("title");
+      setMissing('title');
       titleRef.current?.focus();
       return;
     }
     if (!body.trim()) {
-      setMissing("body");
+      setMissing('body');
       bodyRef.current?.focus();
       return;
     }
@@ -165,8 +183,10 @@ export function NewRequestDialog({
     try {
       // Asked once per title: File anyway files it.
       if (!twin || !sameTitle(twin.title, title)) {
-        const found = await unwrap(api.GET("/v1/requests", { params: { query: { q: titleWords(title), limit: 50 } } }));
-        const same = found.items.find((r) => r.state !== "merged" && sameTitle(r.title, title));
+        const found = await unwrap(
+          api.GET('/v1/requests', { params: { query: { q: titleWords(title), limit: 50 } } }),
+        );
+        const same = found.items.find((r) => r.state !== 'merged' && sameTitle(r.title, title));
         if (same) {
           setTwin({ request: same, title });
           return;
@@ -174,7 +194,7 @@ export function NewRequestDialog({
       }
       const request = from
         ? await unwrap(
-            api.POST("/v1/request-candidates/{candidate_id}/file", {
+            api.POST('/v1/request-candidates/{candidate_id}/file', {
               params: { path: { candidate_id: from.id } },
               body: {
                 title: title.trim(),
@@ -187,7 +207,7 @@ export function NewRequestDialog({
             }),
           )
         : await unwrap(
-            api.POST("/v1/requests", {
+            api.POST('/v1/requests', {
               body: {
                 title: title.trim(),
                 body: body.trim(),
@@ -206,7 +226,8 @@ export function NewRequestDialog({
     }
   }
 
-  const toggle = (id: string, on: boolean) => setGoalIds((ids) => (on ? [...ids, id] : ids.filter((x) => x !== id)));
+  const toggle = (id: string, on: boolean) =>
+    setGoalIds((ids) => (on ? [...ids, id] : ids.filter((x) => x !== id)));
   const fieldNote = (id: string, text: string) => (
     <span id={id} data-testid={id} className="text-sm font-medium text-crit">
       {text}
@@ -225,7 +246,7 @@ export function NewRequestDialog({
       onSubmit={() => void submit()}
       actions={
         <Button variant="primary" type="submit" disabled={busy}>
-          {twin && sameTitle(twin.title, title) ? "File anyway" : "File request"}
+          {twin && sameTitle(twin.title, title) ? 'File anyway' : 'File request'}
         </Button>
       }
     >
@@ -239,15 +260,15 @@ export function NewRequestDialog({
               className={`${INPUT} aria-invalid:border-crit`}
               value={title}
               maxLength={200}
-              aria-invalid={missing === "title" || undefined}
-              aria-describedby={missing === "title" ? "new-request-title-note" : undefined}
+              aria-invalid={missing === 'title' || undefined}
+              aria-describedby={missing === 'title' ? 'new-request-title-note' : undefined}
               onChange={(e) => {
                 setTitle(e.target.value);
-                if (missing === "title") setMissing(null);
+                if (missing === 'title') setMissing(null);
               }}
             />
           </label>
-          {missing === "title" && fieldNote("new-request-title-note", "Give the request a title")}
+          {missing === 'title' && fieldNote('new-request-title-note', 'Give the request a title')}
         </div>
         <div className="flex flex-col gap-1">
           <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
@@ -258,33 +279,44 @@ export function NewRequestDialog({
               rows={4}
               value={body}
               maxLength={4000}
-              aria-invalid={missing === "body" || undefined}
-              aria-describedby={missing === "body" ? "new-request-body-note" : undefined}
+              aria-invalid={missing === 'body' || undefined}
+              aria-describedby={missing === 'body' ? 'new-request-body-note' : undefined}
               onChange={(e) => {
                 setBody(e.target.value);
-                if (missing === "body") setMissing(null);
+                if (missing === 'body') setMissing(null);
               }}
             />
           </label>
-          {missing === "body" && fieldNote("new-request-body-note", "Say what it is and why")}
+          {missing === 'body' && fieldNote('new-request-body-note', 'Say what it is and why')}
         </div>
         <fieldset className="flex flex-col gap-1">
           <legend className="text-sm font-semibold text-text2">Goal (optional)</legend>
           {goals.error ? (
             <LoadError what="the goals" error={goals.error} onRetry={() => void goals.reload()} />
           ) : offered.length === 0 ? (
-            <p className="text-sm text-text2">{goals.loading ? "Loading goals…" : "No goals yet"}</p>
+            <p className="text-sm text-text2">
+              {goals.loading ? 'Loading goals…' : 'No goals yet'}
+            </p>
           ) : (
             offered.map((g) => {
-              const ready = g.status === "confirmed";
+              const ready = g.status === 'confirmed';
               return (
                 <label
                   key={g.id}
                   data-testid="new-request-goal"
-                  className={`flex min-h-8 items-center gap-2 text-[15px] ${ready ? "" : "text-text2"}`}
-                  title={ready ? undefined : "Confirm this goal in Company first: a request links confirmed goals only"}
+                  className={`flex min-h-8 items-center gap-2 text-[15px] ${ready ? '' : 'text-text2'}`}
+                  title={
+                    ready
+                      ? undefined
+                      : 'Confirm this goal in Company first: a request links confirmed goals only'
+                  }
                 >
-                  <input type="checkbox" disabled={!ready} checked={goalIds.includes(g.id)} onChange={(e) => toggle(g.id, e.target.checked)} />
+                  <input
+                    type="checkbox"
+                    disabled={!ready}
+                    checked={goalIds.includes(g.id)}
+                    onChange={(e) => toggle(g.id, e.target.checked)}
+                  />
                   {g.title}
                   {!ready && <span className="text-sm">(not confirmed yet)</span>}
                 </label>
@@ -310,7 +342,11 @@ export function NewRequestDialog({
           </label>
           <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
             Channel
-            <select className={INPUT} value={channel} onChange={(e) => setChannel(e.target.value as Request["channel"])}>
+            <select
+              className={INPUT}
+              value={channel}
+              onChange={(e) => setChannel(e.target.value as Request['channel'])}
+            >
               {CHANNELS.map((c) => (
                 <option key={c} value={c}>
                   {CHANNEL_LABEL[c]}
@@ -321,30 +357,52 @@ export function NewRequestDialog({
         </div>
         <div className="flex flex-col gap-1">
           <span className="text-sm font-semibold text-text2">Customer or team</span>
-          <SegmentedControl label="Customer or team" size="sm" items={KINDS} value={kind} onChange={setKind} />
+          <SegmentedControl
+            label="Customer or team"
+            size="sm"
+            items={KINDS}
+            value={kind}
+            onChange={setKind}
+          />
         </div>
         {from && (
-          <div data-testid="filing-from" className="flex flex-col gap-2 rounded-lg border border-line bg-surface2 p-3">
+          <div
+            data-testid="filing-from"
+            className="flex flex-col gap-2 rounded-lg border border-line bg-surface2 p-3"
+          >
             <p data-testid="filing-shares" className="text-sm font-semibold">
-              Found in {from.source.title ?? "your sources"}. Filing shares this item: everyone who can see Requests reads its title, link and this
-              excerpt.
+              Found in {from.source.title ?? 'your sources'}. Filing shares this item: everyone who
+              can see Requests reads its title, link and this excerpt.
             </p>
             {from.source.excerpt && (
-              <blockquote data-testid="filing-excerpt" className="border-l-2 border-line-strong pl-3 text-sm break-words text-text2">
+              <blockquote
+                data-testid="filing-excerpt"
+                className="border-l-2 border-line-strong pl-3 text-sm break-words text-text2"
+              >
                 {from.source.excerpt}
               </blockquote>
             )}
           </div>
         )}
         {twin && sameTitle(twin.title, title) && (
-          <div role="alert" data-testid="new-request-duplicate" className="flex flex-col gap-2 rounded-panel border border-warn bg-warn-bg px-3 py-2.5 text-sm text-text">
+          <div
+            role="alert"
+            data-testid="new-request-duplicate"
+            className="flex flex-col gap-2 rounded-panel border border-warn bg-warn-bg px-3 py-2.5 text-sm text-text"
+          >
             <span>
               <span className="font-semibold">This looks like a request already filed: </span>
-              &ldquo;{twin.request.title}&rdquo; ({STATE[twin.request.state].label}, filed {filedAgo(twin.request.created_at)}
-              {twin.request.requester_name ? ` by ${twin.request.requester_name}` : ""}). Open it to add to it or merge into it, or file this one anyway.
+              &ldquo;{twin.request.title}&rdquo; ({STATE[twin.request.state].label}, filed{' '}
+              {filedAgo(twin.request.created_at)}
+              {twin.request.requester_name ? ` by ${twin.request.requester_name}` : ''}). Open it to
+              add to it or merge into it, or file this one anyway.
             </span>
             <span>
-              <Button variant="secondary" className="max-[600px]:h-11" onClick={() => onOpenExisting(twin.request.id)}>
+              <Button
+                variant="secondary"
+                className="max-[600px]:h-11"
+                onClick={() => onOpenExisting(twin.request.id)}
+              >
                 Open it
               </Button>
             </span>

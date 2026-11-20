@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
 import {
   Avatar,
@@ -38,16 +38,24 @@ import {
   Wordmark,
   type ButtonVariant,
   type Column,
-} from "@/components/ds";
+} from '@/components/ds';
 
-import { CHIP_KINDS, FEATURES, ICONS, type SampleFeature } from "./_samples";
+import { CHIP_KINDS, FEATURES, ICONS, type SampleFeature } from './_samples';
 
-const VARIANTS: ButtonVariant[] = ["primary", "secondary", "solid", "ghost", "danger", "hero"];
+const VARIANTS: ButtonVariant[] = ['primary', 'secondary', 'solid', 'ghost', 'danger', 'hero'];
 
 /** A labelled cell in a panel: the state's name above the sample. */
-function State({ name, children, wide = false }: { name: string; children: ReactNode; wide?: boolean }) {
+function State({
+  name,
+  children,
+  wide = false,
+}: {
+  name: string;
+  children: ReactNode;
+  wide?: boolean;
+}) {
   return (
-    <div className={`flex min-w-0 flex-col gap-2 ${wide ? "basis-full" : ""}`}>
+    <div className={`flex min-w-0 flex-col gap-2 ${wide ? 'basis-full' : ''}`}>
       <Label>{name}</Label>
       <div className="flex min-w-0 flex-wrap items-center gap-2.5">{children}</div>
     </div>
@@ -56,14 +64,24 @@ function State({ name, children, wide = false }: { name: string; children: React
 
 /** A dark strip for samples drawn on the Inspector head. */
 function HeroStrip({ children }: { children: ReactNode }) {
-  return <div className="flex flex-wrap items-center gap-2.5 rounded-button bg-hero px-3 py-2.5 text-hero-text">{children}</div>;
+  return (
+    <div className="flex flex-wrap items-center gap-2.5 rounded-button bg-hero px-3 py-2.5 text-hero-text">
+      {children}
+    </div>
+  );
 }
 
 /** The three grounds the mark is drawn on (brand/README.md): fixed colours, not the theme's. */
 const BRAND_GROUNDS = [
-  { name: "Light", bg: "#f3f6f9", ink: "#0b3a7a", accent: "#0369a1", sky: false },
-  { name: "Dark", bg: "#06101e", ink: "#bcd6ee", accent: "#7cc8f8", sky: false },
-  { name: "Navy", bg: "linear-gradient(#0b3a7a, #06101e)", ink: "#ffffff", accent: "#7dd3fc", sky: true },
+  { name: 'Light', bg: '#f3f6f9', ink: '#0b3a7a', accent: '#0369a1', sky: false },
+  { name: 'Dark', bg: '#06101e', ink: '#bcd6ee', accent: '#7cc8f8', sky: false },
+  {
+    name: 'Navy',
+    bg: 'linear-gradient(#0b3a7a, #06101e)',
+    ink: '#ffffff',
+    accent: '#7dd3fc',
+    sky: true,
+  },
 ] as const;
 
 /** The Compass mark, its compact cut, the tab icon and the wordmark on each ground. */
@@ -79,13 +97,13 @@ function BrandGrounds({ tid }: { tid: string }) {
         >
           <span className="text-[13px] font-semibold">{g.name}</span>
           <div className="flex items-end gap-5">
-            <Mark size={44} tone={g.sky ? "sky" : "current"} label="Full mark, 44 px" />
-            <Mark size={22} tone={g.sky ? "sky" : "current"} label="Compact mark, 22 px" />
-            <Mark size={16} tone={g.sky ? "sky" : "current"} label="Compact mark, 16 px" />
+            <Mark size={44} tone={g.sky ? 'sky' : 'current'} label="Full mark, 44 px" />
+            <Mark size={22} tone={g.sky ? 'sky' : 'current'} label="Compact mark, 22 px" />
+            <Mark size={16} tone={g.sky ? 'sky' : 'current'} label="Compact mark, 16 px" />
             <FaviconMark />
           </div>
           <div className="flex items-center gap-3">
-            <Mark size={40} tone={g.sky ? "sky" : "current"} />
+            <Mark size={40} tone={g.sky ? 'sky' : 'current'} />
             <Wordmark className="text-xl" accent={g.accent} />
           </div>
         </div>
@@ -94,7 +112,7 @@ function BrandGrounds({ tid }: { tid: string }) {
   );
 }
 
-function Body({ children, className = "" }: { children: ReactNode; className?: string }) {
+function Body({ children, className = '' }: { children: ReactNode; className?: string }) {
   return <div className={`flex flex-wrap gap-x-6 gap-y-4 p-4 ${className}`}>{children}</div>;
 }
 
@@ -102,14 +120,22 @@ function Body({ children, className = "" }: { children: ReactNode; className?: s
  * A scroll box as tall as the table's header plus its first `rows` rows, measured, so it
  * never cuts a row in half (row heights differ on a phone, where rows stack).
  */
-function WholeRows({ rows, testId, children }: { rows: number; testId: string; children: ReactNode }) {
+function WholeRows({
+  rows,
+  testId,
+  children,
+}: {
+  rows: number;
+  testId: string;
+  children: ReactNode;
+}) {
   const box = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState<number>();
   useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
     const measure = () => {
-      const last = el.querySelectorAll("tr[data-row]")[rows - 1];
+      const last = el.querySelectorAll('tr[data-row]')[rows - 1];
       if (!last) return setHeight(undefined);
       const top = el.getBoundingClientRect().top - el.scrollTop;
       setHeight(Math.ceil(last.getBoundingClientRect().bottom - top));
@@ -127,41 +153,68 @@ function WholeRows({ rows, testId, children }: { rows: number; testId: string; c
 }
 
 const columns: Column<SampleFeature>[] = [
-  { key: "title", header: "Feature", cell: (f) => <span className="font-medium">{f.title}</span> },
-  { key: "goal", header: "Goal", width: "64px", cell: (f) => <GoalTag id={f.goal} proposed={f.proposed} /> },
+  { key: 'title', header: 'Feature', cell: (f) => <span className="font-medium">{f.title}</span> },
   {
-    key: "status",
-    header: "Status",
-    width: "120px",
+    key: 'goal',
+    header: 'Goal',
+    width: '64px',
+    cell: (f) => <GoalTag id={f.goal} proposed={f.proposed} />,
+  },
+  {
+    key: 'status',
+    header: 'Status',
+    width: '120px',
     cell: (f) => (
       <Chip kind={f.status.kind} dot>
         {f.status.label}
       </Chip>
     ),
   },
-  { key: "journey", header: "Journey", width: "120px", hideOnPhone: true, cell: (f) => <JourneyTrack current={f.journey} variant="dots" /> },
-  { key: "conf", header: "Conf.", width: "64px", align: "center", cell: (f) => <Ring value={f.confidence} size={28} stroke={4} /> },
-  { key: "cost", header: "Cost", width: "84px", align: "right", hideOnPhone: true, cell: (f) => <CostFigure usd={f.cost} /> },
+  {
+    key: 'journey',
+    header: 'Journey',
+    width: '120px',
+    hideOnPhone: true,
+    cell: (f) => <JourneyTrack current={f.journey} variant="dots" />,
+  },
+  {
+    key: 'conf',
+    header: 'Conf.',
+    width: '64px',
+    align: 'center',
+    cell: (f) => <Ring value={f.confidence} size={28} stroke={4} />,
+  },
+  {
+    key: 'cost',
+    header: 'Cost',
+    width: '84px',
+    align: 'right',
+    hideOnPhone: true,
+    cell: (f) => <CostFigure usd={f.cost} />,
+  },
 ];
 
 /**
  * Every part of components/ds in each state. `tid` prefixes the test ids, so the
  * dark copy ("Both") never clashes with the first.
  */
-export function Gallery({ tid = "design" }: { tid?: string }) {
+export function Gallery({ tid = 'design' }: { tid?: string }) {
   const id = (s: string) => `${tid}-${s}`;
   const [selected, setSelected] = useState<string | null>(FEATURES[0]!.id);
   const [opened, setOpened] = useState<string | null>(null);
-  const [seg, setSeg] = useState<"brief" | "full" | "diff">("brief");
+  const [seg, setSeg] = useState<'brief' | 'full' | 'diff'>('brief');
   const sel = FEATURES.find((f) => f.id === selected) ?? FEATURES[0]!;
 
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,340px),1fr))] gap-4" data-testid={id("gallery")}>
-      <Panel title="Brand" className="col-span-full" testId={id("brand")}>
-        <BrandGrounds tid={id("brand")} />
+    <div
+      className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,340px),1fr))] gap-4"
+      data-testid={id('gallery')}
+    >
+      <Panel title="Brand" className="col-span-full" testId={id('brand')}>
+        <BrandGrounds tid={id('brand')} />
       </Panel>
 
-      <Panel title="Page header" className="col-span-full" testId={id("page-header")}>
+      <Panel title="Page header" className="col-span-full" testId={id('page-header')}>
         <div className="px-4">
           <PageHeader
             title="Check-in"
@@ -188,16 +241,16 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
         count={FEATURES.length}
         className="col-span-full"
         tools={
-          <Chip kind={opened ? "pass" : "na"} data-testid={id("table-opened")}>
-            {opened ? `Opened ${FEATURES.find((f) => f.id === opened)?.title}` : "Enter opens"}
+          <Chip kind={opened ? 'pass' : 'na'} data-testid={id('table-opened')}>
+            {opened ? `Opened ${FEATURES.find((f) => f.id === opened)?.title}` : 'Enter opens'}
           </Chip>
         }
-        testId={id("table-panel")}
+        testId={id('table-panel')}
       >
-        <WholeRows rows={5} testId={id("table-scroll")}>
+        <WholeRows rows={5} testId={id('table-scroll')}>
           <DataTable
             label="Sample features"
-            testId={id("table")}
+            testId={id('table')}
             columns={columns}
             rows={FEATURES}
             rowKey={(f) => f.id}
@@ -208,25 +261,37 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
         </WholeRows>
       </Panel>
 
-      <Panel title="Grouped rows" className="col-span-full" testId={id("table-grouped")}>
+      <Panel title="Grouped rows" className="col-span-full" testId={id('table-grouped')}>
         <DataTable
           label="Sample roadmap"
-          columns={columns.filter((c) => c.key !== "cost")}
+          columns={columns.filter((c) => c.key !== 'cost')}
           rows={FEATURES.slice(0, 6)}
           rowKey={(f) => f.id}
           group={(f) => f.horizon}
         />
       </Panel>
 
-      <Panel title="Empty table" testId={id("table-empty")}>
-        <DataTable label="Empty sample" columns={columns.slice(0, 3)} rows={[]} rowKey={(f) => f.id} empty="No features" />
+      <Panel title="Empty table" testId={id('table-empty')}>
+        <DataTable
+          label="Empty sample"
+          columns={columns.slice(0, 3)}
+          rows={[]}
+          rowKey={(f) => f.id}
+          empty="No features"
+        />
       </Panel>
 
-      <Panel title="Loading table" testId={id("table-loading")}>
-        <DataTable label="Loading sample" columns={columns.slice(0, 3)} rows={undefined} rowKey={(f) => f.id} loading />
+      <Panel title="Loading table" testId={id('table-loading')}>
+        <DataTable
+          label="Loading sample"
+          columns={columns.slice(0, 3)}
+          rows={undefined}
+          rowKey={(f) => f.id}
+          loading
+        />
       </Panel>
 
-      <div className="min-w-0" data-testid={id("inspector")}>
+      <div className="min-w-0" data-testid={id('inspector')}>
         <Inspector
           eyebrow="Feature · selected"
           title={sel.title}
@@ -246,9 +311,9 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
             </Button>
           }
           stats={[
-            { label: "Confidence", figure: <Ring value={sel.confidence} size={44} /> },
-            { label: "Evidence", value: 14 },
-            { label: "Blockers", value: 2, tone: "crit" },
+            { label: 'Confidence', figure: <Ring value={sel.confidence} size={44} /> },
+            { label: 'Evidence', value: 14 },
+            { label: 'Blockers', value: 2, tone: 'crit' },
           ]}
         >
           <InspectorSection label="Goal" tools={<GoalTag id={sel.goal} proposed={sel.proposed} />}>
@@ -268,7 +333,7 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
         </Inspector>
       </div>
 
-      <Panel title="Chips" testId={id("chips")}>
+      <Panel title="Chips" testId={id('chips')}>
         <Body>
           <State name="Kinds">
             {CHIP_KINDS.map((c) => (
@@ -296,7 +361,7 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
         </Body>
       </Panel>
 
-      <Panel title="Goal tags" testId={id("goal-tags")}>
+      <Panel title="Goal tags" testId={id('goal-tags')}>
         <Body>
           <State name="Normal">
             <GoalTag id="G1" />
@@ -309,7 +374,7 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
         </Body>
       </Panel>
 
-      <Panel title="Rings" testId={id("rings")}>
+      <Panel title="Rings" testId={id('rings')}>
         <Body>
           <State name="0 · 34 · 66 · 100 · none">
             {[0, 34, 66, 100, null].map((v) => (
@@ -329,7 +394,7 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
         </Body>
       </Panel>
 
-      <Panel title="Charts" testId={id("charts")}>
+      <Panel title="Charts" testId={id('charts')}>
         <Body>
           <State name="Sparkline · target">
             <Sparkline values={[84, 85, 85, 86, 88, 87]} target={92} />
@@ -348,7 +413,7 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
         </Body>
       </Panel>
 
-      <Panel title="Journey" className="col-span-full" testId={id("journey")}>
+      <Panel title="Journey" className="col-span-full" testId={id('journey')}>
         <Body className="flex-col">
           <State name="Pill · 1 · 5 · 9" wide>
             <div className="flex w-full min-w-0 flex-col gap-2">
@@ -371,7 +436,7 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
         </Body>
       </Panel>
 
-      <Panel title="Segmented" testId={id("segmented")}>
+      <Panel title="Segmented" testId={id('segmented')}>
         <Body>
           <State name="Buttons">
             <SegmentedControl
@@ -379,9 +444,9 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
               value={seg}
               onChange={setSeg}
               items={[
-                { value: "brief", label: "Brief" },
-                { value: "full", label: "Full", count: 8 },
-                { value: "diff", label: "Diff", disabled: true },
+                { value: 'brief', label: 'Brief' },
+                { value: 'full', label: 'Full', count: 8 },
+                { value: 'diff', label: 'Diff', disabled: true },
               ]}
             />
           </State>
@@ -391,9 +456,9 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
               size="sm"
               value="v2"
               items={[
-                { value: "v1", label: "v1" },
-                { value: "v2", label: "v2" },
-                { value: "v3", label: "v3" },
+                { value: 'v1', label: 'v1' },
+                { value: 'v2', label: 'v2' },
+                { value: 'v3', label: 'v3' },
               ]}
             />
           </State>
@@ -402,19 +467,31 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
               label="Sample routes"
               value="members"
               items={[
-                { value: "members", label: "Members", href: "/design#members" },
-                { value: "sources", label: "Sources", href: "/design#sources", count: 4 },
+                { value: 'members', label: 'Members', href: '/design#members' },
+                { value: 'sources', label: 'Sources', href: '/design#sources', count: 4 },
               ]}
             />
           </State>
         </Body>
       </Panel>
 
-      <Panel title="Scroll strip" testId={id("scroll-strip")}>
+      <Panel title="Scroll strip" testId={id('scroll-strip')}>
         <Body className="flex-col">
           <ScrollStrip className="w-full rounded-lg border border-line" stripClassName="gap-1 p-1">
-            {["Summary", "Goal trace", "Problem", "Users and jobs", "Scope", "Proposed flow", "Risks", "Metrics"].map((t) => (
-              <span key={t} className="flex h-8 flex-none items-center rounded-lg px-2.5 text-sm font-medium whitespace-nowrap">
+            {[
+              'Summary',
+              'Goal trace',
+              'Problem',
+              'Users and jobs',
+              'Scope',
+              'Proposed flow',
+              'Risks',
+              'Metrics',
+            ].map((t) => (
+              <span
+                key={t}
+                className="flex h-8 flex-none items-center rounded-lg px-2.5 text-sm font-medium whitespace-nowrap"
+              >
                 {t}
               </span>
             ))}
@@ -422,35 +499,40 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
         </Body>
       </Panel>
 
-      <Panel title="Status marks" testId={id("status-marks")}>
+      <Panel title="Status marks" testId={id('status-marks')}>
         <Body>
-          {(["approved", "changes_requested", "rejected", "none", "lapsed", "locked"] as const).map((m) => (
-            <State key={m} name={MARK_LABEL[m]}>
-              <StatusMark state={m} size={20} />
-            </State>
-          ))}
+          {(['approved', 'changes_requested', 'rejected', 'none', 'lapsed', 'locked'] as const).map(
+            (m) => (
+              <State key={m} name={MARK_LABEL[m]}>
+                <StatusMark state={m} size={20} />
+              </State>
+            ),
+          )}
         </Body>
       </Panel>
 
-      <Panel title="Filter chips" testId={id("filter-chips")}>
+      <Panel title="Filter chips" testId={id('filter-chips')}>
         <Body>
           <FilterChips
             label="Show sections"
             value="review"
             onChange={() => {}}
             items={[
-              { value: "all", label: "All", count: 104 },
-              { value: "review", label: "To review", count: 91 },
-              { value: "feedback", label: "Feedback", count: 9 },
+              { value: 'all', label: 'All', count: 104 },
+              { value: 'review', label: 'To review', count: 91 },
+              { value: 'feedback', label: 'Feedback', count: 9 },
             ]}
           />
         </Body>
       </Panel>
 
-      <Panel title="Info tip" testId={id("infotips")}>
+      <Panel title="Info tip" testId={id('infotips')}>
         <Body>
           <State name="Closed">
-            <span className="inline-flex items-center gap-1.5 font-semibold" data-testid={id("infotip")}>
+            <span
+              className="inline-flex items-center gap-1.5 font-semibold"
+              data-testid={id('infotip')}
+            >
               Confidence
               <InfoTip label="confidence" side="bottom" align="start">
                 How sure the Oracle is, from 0 to 100, given the evidence it traced.
@@ -479,28 +561,28 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
         </Body>
       </Panel>
 
-      <div className="col-span-full min-w-0" data-testid={id("kpis")}>
+      <div className="col-span-full min-w-0" data-testid={id('kpis')}>
         <KpiStrip
           label="Sample counts"
           items={[
-            { label: "Goals", value: 3, of: 4 },
-            { label: "Evidence", value: 86 },
+            { label: 'Goals', value: 3, of: 4 },
+            { label: 'Evidence', value: 86 },
             {
-              label: "Conflicts",
+              label: 'Conflicts',
               value: 2,
-              tone: "crit",
+              tone: 'crit',
               extra: (
                 <InfoTip label="conflicts" side="bottom" align="start">
                   Two sources disagree.
                 </InfoTip>
               ),
             },
-            { label: "Flagged", value: 1, tone: "warn" },
+            { label: 'Flagged', value: 1, tone: 'warn' },
           ]}
         />
       </div>
 
-      <Panel title="Avatars" testId={id("avatars")}>
+      <Panel title="Avatars" testId={id('avatars')}>
         <Body>
           <State name="Default">
             <Avatar name="Rosa Lind" />
@@ -516,7 +598,7 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
         </Body>
       </Panel>
 
-      <Panel title="Cost" testId={id("cost")}>
+      <Panel title="Cost" testId={id('cost')}>
         <Body>
           <State name="Small">
             <CostFigure usd={18.4} />
@@ -540,7 +622,7 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
         </Body>
       </Panel>
 
-      <Panel title="Buttons" className="col-span-full" testId={id("buttons")}>
+      <Panel title="Buttons" className="col-span-full" testId={id('buttons')}>
         <Body className="flex-col">
           {VARIANTS.map((v) => {
             const row = (
@@ -559,14 +641,14 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
             );
             return (
               <State key={v} name={v[0]!.toUpperCase() + v.slice(1)} wide>
-                {v === "hero" ? <HeroStrip>{row}</HeroStrip> : row}
+                {v === 'hero' ? <HeroStrip>{row}</HeroStrip> : row}
               </State>
             );
           })}
         </Body>
       </Panel>
 
-      <Panel title="Numerals" testId={id("numerals")}>
+      <Panel title="Numerals" testId={id('numerals')}>
         <Body>
           <State name="Sizes">
             <Numeral value={7} size="sm" />
@@ -584,7 +666,7 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
         </Body>
       </Panel>
 
-      <Panel title="To go" testId={id("to-go")}>
+      <Panel title="To go" testId={id('to-go')}>
         <Body className="flex-col">
           <State name="Points">
             <ToGo amount={5} unit="%" />
@@ -610,7 +692,7 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
             <Button icon="search">Find</Button>
           </>
         }
-        testId={id("panels")}
+        testId={id('panels')}
       >
         <Body className="flex-col">
           <State name="No head" wide>
@@ -626,7 +708,7 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
         </Body>
       </Panel>
 
-      <Panel title="Notices" testId={id("notices")}>
+      <Panel title="Notices" testId={id('notices')}>
         <Body className="flex-col">
           <Notice>Saved r4</Notice>
           <Notice tone="pass">Published v3</Notice>
@@ -634,10 +716,13 @@ export function Gallery({ tid = "design" }: { tid?: string }) {
         </Body>
       </Panel>
 
-      <Panel title="Icons" count={ICONS.length} className="col-span-full" testId={id("icons")}>
+      <Panel title="Icons" count={ICONS.length} className="col-span-full" testId={id('icons')}>
         <ul className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-1 p-3">
           {ICONS.map((n) => (
-            <li key={n} className="flex min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-text2">
+            <li
+              key={n}
+              className="flex min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-text2"
+            >
               <span className="text-text">
                 <Icon name={n} />
               </span>

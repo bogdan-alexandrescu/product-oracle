@@ -5,9 +5,9 @@
  * tails or finishes the reply, so nothing is lost (it sends the text again from the start of
  * what it has, so the reader resets the text on reconnect).
  */
-import { MOCK_MODE } from "@/lib/api/client";
-import { mockFetch } from "@/lib/api/mock/server";
-import { forgetReads, forgetReadsOf } from "@/lib/api/shared-reads";
+import { MOCK_MODE } from '@/lib/api/client';
+import { mockFetch } from '@/lib/api/mock/server';
+import { forgetReads, forgetReadsOf } from '@/lib/api/shared-reads';
 
 export type StreamError = {
   reason: string;
@@ -34,17 +34,17 @@ export function parseEvents(buffer: string): {
   rest: string;
 } {
   const events: { event: string; data: string }[] = [];
-  const blocks = buffer.replace(/\r\n/g, "\n").split("\n\n");
-  const rest = blocks.pop() ?? "";
+  const blocks = buffer.replace(/\r\n/g, '\n').split('\n\n');
+  const rest = blocks.pop() ?? '';
   for (const block of blocks) {
-    let event = "message";
+    let event = 'message';
     const data: string[] = [];
-    for (const line of block.split("\n")) {
-      if (line.startsWith(":")) continue;
-      if (line.startsWith("event:")) event = line.slice(6).trim();
-      else if (line.startsWith("data:")) data.push(line.slice(5).trimStart());
+    for (const line of block.split('\n')) {
+      if (line.startsWith(':')) continue;
+      if (line.startsWith('event:')) event = line.slice(6).trim();
+      else if (line.startsWith('data:')) data.push(line.slice(5).trimStart());
     }
-    if (data.length) events.push({ event, data: data.join("\n") });
+    if (data.length) events.push({ event, data: data.join('\n') });
   }
   return { events, rest };
 }
@@ -52,7 +52,10 @@ export function parseEvents(buffer: string): {
 /** A reply's discussion (`/v1/discussions/<id>` of `…/messages/<id>/stream`), by its path as the shared reads key it,
  * whether the stream URL is relative or absolute. */
 export function discussionPath(url: string): string {
-  return new URL(url, globalThis.location?.href ?? "http://localhost").pathname.replace(/\/messages\/[^/]+\/stream$/, "");
+  return new URL(url, globalThis.location?.href ?? 'http://localhost').pathname.replace(
+    /\/messages\/[^/]+\/stream$/,
+    '',
+  );
 }
 
 export async function openStream(url: string, h: StreamHandlers): Promise<void> {
@@ -63,22 +66,24 @@ export async function openStream(url: string, h: StreamHandlers): Promise<void> 
     try {
       // Same-origin by default, so the session cookie goes with it.
       const init: RequestInit = {
-        headers: { accept: "text/event-stream" },
+        headers: { accept: 'text/event-stream' },
         signal: h.signal,
-        cache: "no-store",
+        cache: 'no-store',
       };
       // Mock mode: the in-browser API answers, as for every other call.
-      const res = MOCK_MODE ? await mockFetch(new Request(new URL(url, window.location.origin), init)) : await fetch(url, init);
+      const res = MOCK_MODE
+        ? await mockFetch(new Request(new URL(url, window.location.origin), init))
+        : await fetch(url, init);
       if (!res.ok || !res.body) {
         h.onError({
-          reason: res.status === 403 || res.status === 404 ? "forbidden" : "failed",
+          reason: res.status === 403 || res.status === 404 ? 'forbidden' : 'failed',
           retry: true,
         });
         return;
       }
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      let buffer = "";
+      let buffer = '';
       for (;;) {
         const { value, done } = await reader.read();
         if (done) break;
@@ -87,19 +92,19 @@ export async function openStream(url: string, h: StreamHandlers): Promise<void> 
         buffer = parsed.rest;
         for (const e of parsed.events) {
           const data = JSON.parse(e.data);
-          if (e.event === "delta") h.onDelta(String(data.text ?? ""));
-          else if (e.event === "citations") h.onCitations?.(data);
+          if (e.event === 'delta') h.onDelta(String(data.text ?? ''));
+          else if (e.event === 'citations') h.onCitations?.(data);
           // The reply proposed changes (the event comes only when it made some): what the rail and the
           // pages count changed, so every read after it fetches.
-          else if (e.event === "changes") {
+          else if (e.event === 'changes') {
             if (Array.isArray(data) && data.length) forgetReads();
             h.onChanges?.(data);
-          } else if (e.event === "done") {
+          } else if (e.event === 'done') {
             ended = true;
             // The reply changed its own discussion only: a read of it after it (SimpleAsk's loadAsk) fetches.
             forgetReadsOf(discussion);
             h.onDone(data);
-          } else if (e.event === "error") {
+          } else if (e.event === 'error') {
             ended = true;
             h.onError(data as StreamError);
           }
@@ -111,5 +116,5 @@ export async function openStream(url: string, h: StreamHandlers): Promise<void> 
       if (attempt > 0) throw err;
     }
   }
-  h.onError({ reason: "interrupted", retry: true });
+  h.onError({ reason: 'interrupted', retry: true });
 }

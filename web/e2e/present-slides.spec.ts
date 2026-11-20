@@ -1,5 +1,5 @@
-import { login } from "./helpers";
-import { expect, test } from "./test";
+import { login } from './helpers';
+import { expect, test } from './test';
 
 /**
  * C-8: the one-pager's Present is a run of full-screen slides, driven through the UI on the
@@ -17,87 +17,99 @@ import { expect, test } from "./test";
  * no_claim = the browser's own full-screen frame.
  */
 
-const URL = "/simple/prds/guided-setup";
+const URL = '/simple/prds/guided-setup';
 
 for (const phone of [false, true]) {
-  for (const scheme of ["light", "dark"] as const) {
-    test.describe(`${phone ? "phone" : "desktop"} · ${scheme}`, () => {
-      test.use({ viewport: phone ? { width: 390, height: 844 } : { width: 1440, height: 900 }, colorScheme: scheme });
+  for (const scheme of ['light', 'dark'] as const) {
+    test.describe(`${phone ? 'phone' : 'desktop'} · ${scheme}`, () => {
+      test.use({
+        viewport: phone ? { width: 390, height: 844 } : { width: 1440, height: 900 },
+        colorScheme: scheme,
+      });
 
-      test("Present pages through one slide a block, the timeline last", async ({ page }) => {
-        await login(page, "viewer@example.com");
+      test('Present pages through one slide a block, the timeline last', async ({ page }) => {
+        await login(page, 'viewer@example.com');
         await page.goto(URL);
-        await expect(page.getByRole("heading", { level: 1, name: "Guided setup" })).toBeVisible();
-        await page.getByRole("button", { name: "Present" }).click();
-        await expect(page.getByTestId("one-pager")).toHaveAttribute("data-presenting", "true");
-        const slide = page.getByTestId("slide");
-        const count = page.getByTestId("slide-count");
-        await expect(slide.getByRole("heading", { level: 2 })).toHaveText("Problem and who has it");
+        await expect(page.getByRole('heading', { level: 1, name: 'Guided setup' })).toBeVisible();
+        await page.getByRole('button', { name: 'Present' }).click();
+        await expect(page.getByTestId('one-pager')).toHaveAttribute('data-presenting', 'true');
+        const slide = page.getByTestId('slide');
+        const count = page.getByTestId('slide-count');
+        await expect(slide.getByRole('heading', { level: 2 })).toHaveText('Problem and who has it');
         await expect(count).toHaveText(/^1 \/ 6$/);
-        await expect(slide).toContainText("New workspace admins stall during setup");
+        await expect(slide).toContainText('New workspace admins stall during setup');
         // The page's own blocks are not under the slide.
-        await expect(page.getByRole("region", { name: "What we will build" })).toHaveCount(0);
-        const size = await slide.locator("li").first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+        await expect(page.getByRole('region', { name: 'What we will build' })).toHaveCount(0);
+        const size = await slide
+          .locator('li')
+          .first()
+          .evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
         expect(size).toBeGreaterThanOrEqual(20);
 
-        await page.keyboard.press("ArrowRight");
-        await expect(slide.getByRole("heading", { level: 2 })).toHaveText("What we will build");
-        await expect(count).toHaveText("2 / 6");
-        await expect(slide).toContainText("A setup checklist that shows the next step");
-        await page.keyboard.press("Space");
-        await expect(slide.getByRole("heading", { level: 2 })).toHaveText("Outcomes and how we measure them");
-        await expect(slide).toContainText("48% → 65%");
+        await page.keyboard.press('ArrowRight');
+        await expect(slide.getByRole('heading', { level: 2 })).toHaveText('What we will build');
+        await expect(count).toHaveText('2 / 6');
+        await expect(slide).toContainText('A setup checklist that shows the next step');
+        await page.keyboard.press('Space');
+        await expect(slide.getByRole('heading', { level: 2 })).toHaveText(
+          'Outcomes and how we measure them',
+        );
+        await expect(slide).toContainText('48% → 65%');
         // Space on a focused button presses it; it does not page the slides.
-        await page.getByRole("button", { name: "Previous slide" }).focus();
-        await page.keyboard.press("Space");
-        await expect(count).toHaveText("2 / 6");
-        await page.keyboard.press("ArrowLeft");
-        await expect(count).toHaveText("1 / 6");
-        await page.getByRole("button", { name: "Next slide" }).click();
-        await page.getByRole("button", { name: "Next slide" }).click();
-        await page.getByRole("button", { name: "Next slide" }).click();
-        await expect(slide.getByRole("heading", { level: 2 })).toHaveText("Not doing");
-        await page.keyboard.press("ArrowRight");
-        await expect(slide.getByRole("heading", { level: 2 })).toHaveText("Risks and open decisions");
-        await page.keyboard.press("ArrowRight");
-        await expect(count).toHaveText("6 / 6");
-        await expect(slide.getByRole("heading", { level: 2 })).toHaveText("Timeline");
+        await page.getByRole('button', { name: 'Previous slide' }).focus();
+        await page.keyboard.press('Space');
+        await expect(count).toHaveText('2 / 6');
+        await page.keyboard.press('ArrowLeft');
+        await expect(count).toHaveText('1 / 6');
+        await page.getByRole('button', { name: 'Next slide' }).click();
+        await page.getByRole('button', { name: 'Next slide' }).click();
+        await page.getByRole('button', { name: 'Next slide' }).click();
+        await expect(slide.getByRole('heading', { level: 2 })).toHaveText('Not doing');
+        await page.keyboard.press('ArrowRight');
+        await expect(slide.getByRole('heading', { level: 2 })).toHaveText(
+          'Risks and open decisions',
+        );
+        await page.keyboard.press('ArrowRight');
+        await expect(count).toHaveText('6 / 6');
+        await expect(slide.getByRole('heading', { level: 2 })).toHaveText('Timeline');
         // The timeline is the slide, in view without scrolling.
-        await expect(slide.getByLabel("Timeline strip")).toBeInViewport();
-        await expect(page.getByRole("button", { name: "Previous slide" })).toBeInViewport();
-        await expect(page.getByRole("button", { name: "Next slide" })).toBeDisabled();
-        await page.keyboard.press("ArrowRight");
-        await expect(count).toHaveText("6 / 6");
+        await expect(slide.getByLabel('Timeline strip')).toBeInViewport();
+        await expect(page.getByRole('button', { name: 'Previous slide' })).toBeInViewport();
+        await expect(page.getByRole('button', { name: 'Next slide' })).toBeDisabled();
+        await page.keyboard.press('ArrowRight');
+        await expect(count).toHaveText('6 / 6');
         // The whole timeline fits the slide: every milestone, the last (M3) too, in view.
-        const rows = slide.getByTestId("plan-strip-row");
-        await expect(rows.filter({ hasText: "M3" })).toHaveCount(1);
-        await expect(rows.filter({ hasText: "M3" })).toBeInViewport({ ratio: 1 });
+        const rows = slide.getByTestId('plan-strip-row');
+        await expect(rows.filter({ hasText: 'M3' })).toHaveCount(1);
+        await expect(rows.filter({ hasText: 'M3' })).toBeInViewport({ ratio: 1 });
         await expect(rows.last()).toBeInViewport({ ratio: 1 });
-        expect(await slide.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
+        expect(await slide.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(
+          1,
+        );
         // Each milestone's items are a count; their names show on asking (and on hover).
-        await expect(slide.getByText("F-01 Setup checklist", { exact: true })).toHaveCount(0);
-        const show = slide.getByRole("button", { name: /^Show the names in / });
-        await expect(show.first()).toHaveAttribute("title", /\S/);
+        await expect(slide.getByText('F-01 Setup checklist', { exact: true })).toHaveCount(0);
+        const show = slide.getByRole('button', { name: /^Show the names in / });
+        await expect(show.first()).toHaveAttribute('title', /\S/);
         while (await show.count()) await show.first().click();
         // A feature named on the timeline slide opens the one feature panel, over the slide.
-        await slide.getByText("F-01 Setup checklist", { exact: true }).first().click();
-        const panel = page.getByTestId("item-panel");
+        await slide.getByText('F-01 Setup checklist', { exact: true }).first().click();
+        const panel = page.getByTestId('item-panel');
         await expect(panel).toBeVisible();
         // On a phone the panel is a display:contents wrapper with no box of its own (its viewport
         // ratio is 0 once loaded): what a person sees is its card and the feature's name on it.
-        await expect(panel.getByTestId("floating-card")).toBeInViewport();
-        await expect(panel.getByRole("heading", { name: "Setup checklist" })).toBeInViewport();
+        await expect(panel.getByTestId('floating-card')).toBeInViewport();
+        await expect(panel.getByRole('heading', { name: 'Setup checklist' })).toBeInViewport();
         // Escape closes the panel and keeps presenting.
-        await page.keyboard.press("Escape");
-        await expect(page.getByTestId("item-panel")).toHaveCount(0);
-        await expect(page.getByTestId("one-pager")).toHaveAttribute("data-presenting", "true");
-        await expect(count).toHaveText("6 / 6");
+        await page.keyboard.press('Escape');
+        await expect(page.getByTestId('item-panel')).toHaveCount(0);
+        await expect(page.getByTestId('one-pager')).toHaveAttribute('data-presenting', 'true');
+        await expect(count).toHaveText('6 / 6');
 
         // Space on a focused Stop presenting presses it.
-        await page.getByRole("button", { name: "Stop presenting" }).focus();
-        await page.keyboard.press("Space");
-        await expect(page.getByTestId("one-pager")).not.toHaveAttribute("data-presenting", "true");
-        await expect(page.getByRole("region", { name: "What we will build" })).toBeVisible();
+        await page.getByRole('button', { name: 'Stop presenting' }).focus();
+        await page.keyboard.press('Space');
+        await expect(page.getByTestId('one-pager')).not.toHaveAttribute('data-presenting', 'true');
+        await expect(page.getByRole('region', { name: 'What we will build' })).toBeVisible();
       });
     });
   }

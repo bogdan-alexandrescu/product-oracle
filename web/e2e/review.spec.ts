@@ -1,252 +1,299 @@
-import { expect, test } from "./test";
+import { expect, test } from './test';
 
-import { ADMIN, feedbackState, hoverCard, login, openSection, openTab, outlineRow, section, selectText } from "./helpers";
+import {
+  ADMIN,
+  feedbackState,
+  hoverCard,
+  login,
+  openSection,
+  openTab,
+  outlineRow,
+  section,
+  selectText,
+} from './helpers';
 
-test("login: rejects a wrong password, then signs in", async ({ page }) => {
-  await page.goto("/documents");
+test('login: rejects a wrong password, then signs in', async ({ page }) => {
+  await page.goto('/documents');
   await expect(page).toHaveURL(/\/login/);
 
-  await page.getByLabel("Email").fill("admin@example.com");
-  await page.getByLabel("Password").fill("wrong");
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("alert").filter({ hasText: "Invalid" })).toHaveText("Invalid email or password.");
+  await page.getByLabel('Email').fill('admin@example.com');
+  await page.getByLabel('Password').fill('wrong');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Invalid' })).toHaveText(
+    'Invalid email or password.',
+  );
 
-  await page.getByLabel("Password").fill(ADMIN.password);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByLabel('Password').fill(ADMIN.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/documents$/);
-  await expect(page.getByRole("heading", { level: 1, name: "PRDs", exact: true })).toBeVisible();
-  await expect(page.getByTestId("signed-in-as")).toHaveText("admin@example.com");
+  await expect(page.getByRole('heading', { level: 1, name: 'PRDs', exact: true })).toBeVisible();
+  await expect(page.getByTestId('signed-in-as')).toHaveText('admin@example.com');
 });
 
-test("login page skips the form when already signed in (e.g. by IAP)", async ({ page }) => {
+test('login page skips the form when already signed in (e.g. by IAP)', async ({ page }) => {
   await login(page);
-  await page.goto("/login?next=/documents/annual-billing");
+  await page.goto('/login?next=/documents/annual-billing');
   await expect(page).toHaveURL(/\/documents\/annual-billing$/);
 });
 
-test("open a version: sections in order with citation chips", async ({ page }) => {
+test('open a version: sections in order with citation chips', async ({ page }) => {
   await login(page);
   // The home list also links "Open PRD in review · Annual billing PRD" (its brief, walk-brief).
-  await page.getByRole("link", { name: "Annual billing PRD", exact: true }).click();
-  await page.getByRole("link", { name: "Version 2" }).click();
+  await page.getByRole('link', { name: 'Annual billing PRD', exact: true }).click();
+  await page.getByRole('link', { name: 'Version 2' }).click();
   await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/2$/);
 
   // A PRD reads as one document: every section shows at once, numbered from its heading level.
   // The opening section, titled with the document's own title, reads as the Introduction (qa-docs-50).
-  const headings = page.locator("section[data-section-key] :is(h1,h2,h3)").filter({ visible: true });
+  const headings = page
+    .locator('section[data-section-key] :is(h1,h2,h3)')
+    .filter({ visible: true });
   await expect(headings).toHaveText([
-    "Introduction",
-    "1 Goal trace",
-    "2 Problem",
-    "3 Users and jobs",
-    "4 Scope",
-    "5 Proposed flow",
-    "5.1 Plan review",
-    "5.2 Billing step",
-    "5.3 Seat count",
-    "6 Risks and open questions",
-    "7 Success metrics",
+    'Introduction',
+    '1 Goal trace',
+    '2 Problem',
+    '3 Users and jobs',
+    '4 Scope',
+    '5 Proposed flow',
+    '5.1 Plan review',
+    '5.2 Billing step',
+    '5.3 Seat count',
+    '6 Risks and open questions',
+    '7 Success metrics',
   ]);
   // The contents rail lists the same sections, in the same order.
-  await page.getByRole("button", { name: "Contents: find a section" }).click();
-  await expect(page.getByTestId("prd-contents").locator(".prd-toc-h")).toHaveText([
-    "Introduction",
-    "Goal trace",
-    "Problem",
-    "Users and jobs",
-    "Scope",
-    "Proposed flow",
-    "Plan review",
-    "Billing step",
-    "Seat count",
-    "Risks and open questions",
-    "Success metrics",
+  await page.getByRole('button', { name: 'Contents: find a section' }).click();
+  await expect(page.getByTestId('prd-contents').locator('.prd-toc-h')).toHaveText([
+    'Introduction',
+    'Goal trace',
+    'Problem',
+    'Users and jobs',
+    'Scope',
+    'Proposed flow',
+    'Plan review',
+    'Billing step',
+    'Seat count',
+    'Risks and open questions',
+    'Success metrics',
   ]);
 
   // Hovering a chip previews source, title and excerpt.
-  const chip = (await openSection(page, "problem")).getByTestId("cite-c1");
+  const chip = (await openSection(page, 'problem')).getByTestId('cite-c1');
   await expect(chip).toHaveText(/Slack/);
-  const card = await hoverCard(page, chip, "#product thread on yearly plans");
-  await expect(card).toContainText("#product thread on yearly plans");
-  await expect(card).toContainText("Most teams who ask for a discount ask for a yearly price");
-  await expect(card.getByRole("link", { name: /Open source/ })).toHaveAttribute("href", /example\.slack\.com/);
+  const card = await hoverCard(page, chip, '#product thread on yearly plans');
+  await expect(card).toContainText('#product thread on yearly plans');
+  await expect(card).toContainText('Most teams who ask for a discount ask for a yearly price');
+  await expect(card.getByRole('link', { name: /Open source/ })).toHaveAttribute(
+    'href',
+    /example\.slack\.com/,
+  );
 });
 
-test("add an anchored comment that survives reload", async ({ page }) => {
+test('add an anchored comment that survives reload', async ({ page }) => {
   await login(page);
-  await page.goto("/documents/annual-billing/v/2");
-  const scope = await openSection(page, "scope");
+  await page.goto('/documents/annual-billing/v/2');
+  const scope = await openSection(page, 'scope');
 
   // Select again until the Comment button shows: under load the view can still be wiring its
   // selection listener (or re-rendering the section) when the first selection lands.
-  const commentButton = page.getByRole("button", { name: /^Comment(\s+c)?$/ });
+  const commentButton = page.getByRole('button', { name: /^Comment(\s+c)?$/ });
   await expect(async () => {
-    await selectText(page, "scope", "the order review page");
+    await selectText(page, 'scope', 'the order review page');
     await expect(commentButton).toBeVisible({ timeout: 1000 });
   }).toPass();
   await commentButton.click();
-  const dialog = page.getByRole("dialog", { name: "New comment" });
-  await expect(dialog).toContainText("the order review page");
-  await dialog.getByLabel("Comment").fill("Is the order review page a separate step or a summary panel?");
-  await dialog.getByLabel("Comment").press("Control+Enter");
+  const dialog = page.getByRole('dialog', { name: 'New comment' });
+  await expect(dialog).toContainText('the order review page');
+  await dialog
+    .getByLabel('Comment')
+    .fill('Is the order review page a separate step or a summary panel?');
+  await dialog.getByLabel('Comment').press('Control+Enter');
   await expect(dialog).toBeHidden();
 
-  const mark = scope.locator("mark.hl-comment");
-  await expect(mark).toHaveText("the order review page");
-  await expect(page.getByTestId("comment").filter({ hasText: "separate step or a summary panel" })).toBeVisible();
+  const mark = scope.locator('mark.hl-comment');
+  await expect(mark).toHaveText('the order review page');
+  await expect(
+    page.getByTestId('comment').filter({ hasText: 'separate step or a summary panel' }),
+  ).toBeVisible();
 
   await page.reload();
-  const markAfter = section(page, "scope").locator("mark.hl-comment");
-  await expect(markAfter).toHaveText("the order review page");
-  const comment = page.getByTestId("feedback-item").filter({ hasText: "separate step or a summary panel" });
-  await expect(comment.getByTestId("feedback-goto")).toHaveText("Go to 4. Scope");
+  const markAfter = section(page, 'scope').locator('mark.hl-comment');
+  await expect(markAfter).toHaveText('the order review page');
+  const comment = page
+    .getByTestId('feedback-item')
+    .filter({ hasText: 'separate step or a summary panel' });
+  await expect(comment.getByTestId('feedback-goto')).toHaveText('Go to 4. Scope');
 
   // The comment is also an open feedback item, raised on v2.
-  await expect(comment.getByTestId("feedback-state-chip")).toHaveText("Open");
-  await expect(comment).toContainText("raised on v2");
+  await expect(comment.getByTestId('feedback-state-chip')).toHaveText('Open');
+  await expect(comment).toContainText('raised on v2');
 });
 
-test("a citation of Oracle's Ground Truth reads 'Oracle Ground Truth', its ref as text, not a link", async ({ page }) => {
+test("a citation of Oracle's Ground Truth reads 'Oracle Ground Truth', its ref as text, not a link", async ({
+  page,
+}) => {
   await login(page);
   // Version 2 of annual-billing cites a Ground Truth goal in its Problem section.
   await page.evaluate(() => {
-    const key = "po-mock-db-v2";
+    const key = 'po-mock-db-v2';
     const db = JSON.parse(localStorage.getItem(key)!);
-    const doc = db.documents.find((d: { slug: string }) => d.slug === "annual-billing");
-    const v = db.versions.find((x: { document_id: string; number: number }) => x.document_id === doc.id && x.number === 2);
+    const doc = db.documents.find((d: { slug: string }) => d.slug === 'annual-billing');
+    const v = db.versions.find(
+      (x: { document_id: string; number: number }) => x.document_id === doc.id && x.number === 2,
+    );
     v.citations.push({
       id: crypto.randomUUID(),
-      cite_key: "o-g1",
-      source: "oracle",
-      ref: "baseline goal g1 (activation), locked",
-      title: "Goal G1: raise first-order completion",
-      excerpt: "Raise first-order completion from 61% to 70% by the end of Q4.",
-      retrieved_at: "2026-10-20T17:02:00Z",
+      cite_key: 'o-g1',
+      source: 'oracle',
+      ref: 'baseline goal g1 (activation), locked',
+      title: 'Goal G1: raise first-order completion',
+      excerpt: 'Raise first-order completion from 61% to 70% by the end of Q4.',
+      retrieved_at: '2026-10-20T17:02:00Z',
     });
-    const problem = v.sections.find((s: { section_key: string }) => s.section_key === "problem");
-    problem.body_md += " Serves G1 [c:o-g1].";
-    problem.citation_keys.push("o-g1");
+    const problem = v.sections.find((s: { section_key: string }) => s.section_key === 'problem');
+    problem.body_md += ' Serves G1 [c:o-g1].';
+    problem.citation_keys.push('o-g1');
     localStorage.setItem(key, JSON.stringify(db));
   });
-  await page.goto("/documents/annual-billing/v/2");
+  await page.goto('/documents/annual-billing/v/2');
 
-  const chip = (await openSection(page, "problem")).getByTestId("cite-o-g1");
+  const chip = (await openSection(page, 'problem')).getByTestId('cite-o-g1');
   await expect(chip).toHaveText(/Oracle Ground Truth/);
-  const card = await hoverCard(page, chip, "Goal G1: raise first-order completion");
-  await expect(card).toContainText("Goal G1: raise first-order completion");
-  await expect(card.getByTestId("cite-ref")).toHaveText("Ground Truth goal g1 (activation), locked");
-  await expect(card.getByRole("link")).toHaveCount(0);
+  const card = await hoverCard(page, chip, 'Goal G1: raise first-order completion');
+  await expect(card).toContainText('Goal G1: raise first-order completion');
+  await expect(card.getByTestId('cite-ref')).toHaveText(
+    'Ground Truth goal g1 (activation), locked',
+  );
+  await expect(card.getByRole('link')).toHaveCount(0);
 
-  await openTab(page, "Sources");
-  const row = page.getByTestId("sources-list").filter({ visible: true }).getByRole("listitem").filter({ hasText: "Oracle Ground Truth" });
-  await expect(row).toContainText("Goal G1: raise first-order completion");
-  await expect(row.getByRole("link")).toHaveCount(0);
+  await openTab(page, 'Sources');
+  const row = page
+    .getByTestId('sources-list')
+    .filter({ visible: true })
+    .getByRole('listitem')
+    .filter({ hasText: 'Oracle Ground Truth' });
+  await expect(row).toContainText('Goal G1: raise first-order completion');
+  await expect(row.getByRole('link')).toHaveCount(0);
 });
 
-test("set a section verdict; approval shows the section as locked", async ({ page }) => {
+test('set a section verdict; approval shows the section as locked', async ({ page }) => {
   await login(page);
-  await page.goto("/documents/annual-billing/v/2");
-  const users = await openSection(page, "users");
-  const bar = users.getByTestId("review-bar");
-  await expect(bar.getByTestId("verdict-state")).toHaveText("Not reviewed");
+  await page.goto('/documents/annual-billing/v/2');
+  const users = await openSection(page, 'users');
+  const bar = users.getByTestId('review-bar');
+  await expect(bar.getByTestId('verdict-state')).toHaveText('Not reviewed');
 
-  await bar.getByRole("button", { name: "Request changes" }).click();
+  await bar.getByRole('button', { name: 'Request changes' }).click();
   await bar.getByLabel(/What should change/).fill("Add the support agent's main job in one line.");
-  await bar.getByTestId("verdict-submit").click();
-  await expect(bar.getByTestId("verdict-state")).toContainText("Changes requested");
-  await expect(bar.getByTestId("verdict-state")).toContainText("support agent's main job");
+  await bar.getByTestId('verdict-submit').click();
+  await expect(bar.getByTestId('verdict-state')).toContainText('Changes requested');
+  await expect(bar.getByTestId('verdict-state')).toContainText("support agent's main job");
 
-  await bar.getByRole("button", { name: "Approve" }).click();
-  await bar.getByTestId("verdict-submit").click();
-  await expect(bar.getByTestId("verdict-state")).toContainText("Approved");
-  await expect(bar.getByTestId("verdict-state")).toContainText("Locked");
+  await bar.getByRole('button', { name: 'Approve' }).click();
+  await bar.getByTestId('verdict-submit').click();
+  await expect(bar.getByTestId('verdict-state')).toContainText('Approved');
+  await expect(bar.getByTestId('verdict-state')).toContainText('Locked');
 
   // The changes-requested item was superseded by the approval: it is Done.
-  await page.getByRole("tab", { name: /^Feedback/ }).click();
-  await feedbackState(page, "Done");
-  await expect(page.getByTestId("feedback-item").filter({ hasText: "support agent's main job" })).toBeVisible();
+  await page.getByRole('tab', { name: /^Feedback/ }).click();
+  await feedbackState(page, 'Done');
+  await expect(
+    page.getByTestId('feedback-item').filter({ hasText: "support agent's main job" }),
+  ).toBeVisible();
 
   await page.reload();
-  await expect(section(page, "users").getByTestId("verdict-state")).toContainText("Locked");
+  await expect(section(page, 'users').getByTestId('verdict-state')).toContainText('Locked');
 });
 
-test("switch versions with the version switcher", async ({ page }) => {
+test('switch versions with the version switcher', async ({ page }) => {
   await login(page);
-  await page.goto("/documents/annual-billing/v/2");
-  await openSection(page, "s-5-3");
+  await page.goto('/documents/annual-billing/v/2');
+  await openSection(page, 's-5-3');
 
-  await page.getByRole("group", { name: "Version" }).getByRole("link", { name: "v1", exact: true }).click();
+  await page
+    .getByRole('group', { name: 'Version' })
+    .getByRole('link', { name: 'v1', exact: true })
+    .click();
   await expect(page).toHaveURL(/\/v\/1$/);
-  await openSection(page, "rollout");
-  await expect(outlineRow(page, "s-5-3")).toHaveCount(0);
-  await expect(page.getByText("You are viewing an earlier version.")).toBeVisible();
+  await openSection(page, 'rollout');
+  await expect(outlineRow(page, 's-5-3')).toHaveCount(0);
+  await expect(page.getByText('You are viewing an earlier version.')).toBeVisible();
   // v1 carries the earlier review: the goal trace was approved.
-  await expect((await openSection(page, "goal-trace")).getByTestId("verdict-state")).toContainText("Locked");
+  await expect((await openSection(page, 'goal-trace')).getByTestId('verdict-state')).toContainText(
+    'Locked',
+  );
 
   // { and } switch versions ([ and ] step sections).
-  await page.keyboard.press("}");
+  await page.keyboard.press('}');
   await expect(page).toHaveURL(/\/v\/2$/);
 });
 
-test("open the diff: section badges and word-level changes", async ({ page }) => {
+test('open the diff: section badges and word-level changes', async ({ page }) => {
   await login(page);
-  await page.goto("/documents/annual-billing/v/2");
-  await page.getByRole("link", { name: "Compare with v1" }).click();
+  await page.goto('/documents/annual-billing/v/2');
+  await page.getByRole('link', { name: 'Compare with v1' }).click();
   await expect(page).toHaveURL(/\/diff\?from=1&to=2$/);
-  await expect(page.getByRole("heading", { name: "Changes from v1 to v2" })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Changes from v1 to v2' })).toBeVisible();
 
   // A section is named by its heading, never its #anchor (qa-docs-28).
   const HEADINGS: Record<string, string> = {
-    "goal-trace": "1. Goal trace",
-    problem: "2. Problem",
-    "s-5-2": "5.2 Billing step",
-    "s-5-3": "5.3 Seat count",
-    risks: "6. Risks and open questions",
-    metrics: "7. Success metrics",
-    rollout: "8. Rollout",
+    'goal-trace': '1. Goal trace',
+    problem: '2. Problem',
+    's-5-2': '5.2 Billing step',
+    's-5-3': '5.3 Seat count',
+    risks: '6. Risks and open questions',
+    metrics: '7. Success metrics',
+    rollout: '8. Rollout',
   };
   const byKey = (k: string) =>
-    page.getByTestId("diff-section").filter({ has: page.getByRole("heading", { name: HEADINGS[k], exact: true }) });
-  await expect(byKey("s-5-3")).toHaveAttribute("data-status", "added");
-  await expect(byKey("rollout")).toHaveAttribute("data-status", "removed");
-  await expect(byKey("problem")).toHaveAttribute("data-status", "changed");
-  await expect(byKey("risks").getByText("Moved")).toBeVisible();
+    page
+      .getByTestId('diff-section')
+      .filter({ has: page.getByRole('heading', { name: HEADINGS[k], exact: true }) });
+  await expect(byKey('s-5-3')).toHaveAttribute('data-status', 'added');
+  await expect(byKey('rollout')).toHaveAttribute('data-status', 'removed');
+  await expect(byKey('problem')).toHaveAttribute('data-status', 'changed');
+  await expect(byKey('risks').getByText('Moved')).toBeVisible();
 
-  const words = byKey("s-5-2").getByTestId("word-diff");
-  await expect(words.locator("ins").first()).toContainText("and the yearly option is preselected");
-  await expect(byKey("metrics").locator("ins").first()).toContainText("Refund rate");
+  const words = byKey('s-5-2').getByTestId('word-diff');
+  await expect(words.locator('ins').first()).toContainText('and the yearly option is preselected');
+  await expect(byKey('metrics').locator('ins').first()).toContainText('Refund rate');
   // A markdown table is drawn as a table, as in the version view, not as pipe text.
-  const table = byKey("metrics").getByTestId("diff-table");
-  await expect(table.getByRole("columnheader")).toHaveText(["Metric", "Baseline", "Target"]);
-  await expect(table.getByRole("row").filter({ hasText: "Refund rate" }).locator("ins").first()).toBeVisible();
-  await expect(byKey("metrics")).not.toContainText("Metric | Baseline");
+  const table = byKey('metrics').getByTestId('diff-table');
+  await expect(table.getByRole('columnheader')).toHaveText(['Metric', 'Baseline', 'Target']);
+  await expect(
+    table.getByRole('row').filter({ hasText: 'Refund rate' }).locator('ins').first(),
+  ).toBeVisible();
+  await expect(byKey('metrics')).not.toContainText('Metric | Baseline');
 
   // Unchanged sections are collapsed until asked for.
-  await expect(byKey("goal-trace")).toHaveCount(0);
-  await page.getByLabel("Show unchanged sections").check();
-  await expect(byKey("goal-trace")).toHaveAttribute("data-status", "unchanged");
+  await expect(byKey('goal-trace')).toHaveCount(0);
+  await page.getByLabel('Show unchanged sections').check();
+  await expect(byKey('goal-trace')).toHaveAttribute('data-status', 'unchanged');
 });
 
-test("publish a version and export it", async ({ page }) => {
+test('publish a version and export it', async ({ page }) => {
   await login(page);
-  await page.goto("/documents/team-invites/v/2");
-  await expect(page.getByRole("status").filter({ hasText: "scope" })).toBeVisible();
+  await page.goto('/documents/team-invites/v/2');
+  await expect(page.getByRole('status').filter({ hasText: 'scope' })).toBeVisible();
 
-  const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Export", exact: true }).click();
-  await page.getByRole("button", { name: "Export PDF" }).click();
-  expect((await download).suggestedFilename()).toBe("team-invites-v2.pdf");
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export', exact: true }).click();
+  await page.getByRole('button', { name: 'Export PDF' }).click();
+  expect((await download).suggestedFilename()).toBe('team-invites-v2.pdf');
 
   // A PRD is published from the Publish screen (T2 publish gate); team-invites is ready.
-  await expect(page.getByRole("button", { name: "Approve version" })).toHaveCount(0);
-  await page.getByTestId("doc-header").getByRole("link", { name: "Publish", exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Approve version' })).toHaveCount(0);
+  await page.getByTestId('doc-header').getByRole('link', { name: 'Publish', exact: true }).click();
   await expect(page).toHaveURL(/\/documents\/team-invites\/publish$/);
-  await page.getByTestId("publish-button").click();
-  await page.getByRole("dialog", { name: "Publish v2?" }).getByRole("button", { name: "Publish", exact: true }).click();
-  await expect(page.getByTestId("published-chip")).toHaveText("Published v2");
+  await page.getByTestId('publish-button').click();
+  await page
+    .getByRole('dialog', { name: 'Publish v2?' })
+    .getByRole('button', { name: 'Publish', exact: true })
+    .click();
+  await expect(page.getByTestId('published-chip')).toHaveText('Published v2');
 
-  await page.goto("/documents/team-invites/v/2");
+  await page.goto('/documents/team-invites/v/2');
   await expect(page.getByText(/✓ Approved/)).toBeVisible();
-  await expect(page.getByTestId("doc-status")).toHaveText("Approved");
+  await expect(page.getByTestId('doc-status')).toHaveText('Approved');
   await expect(page.getByText(/review is closed/)).toBeVisible();
 });

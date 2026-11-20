@@ -1,7 +1,7 @@
-import { AREA_PRDS, OLD_ITEM } from "../lib/api/mock/one-roadmap";
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { AREA_PRDS, OLD_ITEM } from '../lib/api/mock/one-roadmap';
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /*
  * one-roadmap-many-prds (the owner, Nov 4: the company has ONE roadmap, never one per PRD): Simple
@@ -15,14 +15,28 @@ import { expect, test, type Locator, type Page } from "./test";
 const DESKTOP = { viewport: { width: 1440, height: 900 } };
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 
-const SAFETY = ["Report button on every post", "Block list"];
-const SCALE = ["Read replicas in two regions", "Queue backpressure"];
+const SAFETY = ['Report button on every post', 'Block list'];
+const SCALE = ['Read replicas in two regions', 'Queue backpressure'];
 
-const filter = (page: Page, label: string): Locator => page.getByTestId("filters").locator("label", { hasText: new RegExp(`^${label}`) }).locator("select");
-const shown = (page: Page, title: string): Locator => page.getByTestId("simple-roadmap").getByText(title, { exact: true }).filter({ visible: true }).first();
+const filter = (page: Page, label: string): Locator =>
+  page
+    .getByTestId('filters')
+    .locator('label', { hasText: new RegExp(`^${label}`) })
+    .locator('select');
+const shown = (page: Page, title: string): Locator =>
+  page
+    .getByTestId('simple-roadmap')
+    .getByText(title, { exact: true })
+    .filter({ visible: true })
+    .first();
 
 async function open(page: Page) {
-  await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "one-roadmap"] as const);
+  await page
+    .context()
+    .addInitScript(([key, value]) => localStorage.setItem(key, value), [
+      MOCK_SCENARIO_KEY,
+      'one-roadmap',
+    ] as const);
   await login(page);
 }
 
@@ -31,16 +45,21 @@ async function open(page: Page) {
  * under "Company order": the order every PRD filter follows (byPrdOrder), read, never guessed.
  */
 async function companyOrder(page: Page): Promise<string[]> {
-  await page.goto("/simple/one-pagers");
-  const links = page.getByTestId("one-pager-row").getByRole("link");
+  await page.goto('/simple/one-pagers');
+  const links = page.getByTestId('one-pager-row').getByRole('link');
   await expect(links.first()).toBeVisible();
   const area = AREA_PRDS.map(([, title]) => title);
-  const order = (await links.allTextContents()).map((t) => t.trim()).filter((t) => area.includes(t));
+  const order = (await links.allTextContents())
+    .map((t) => t.trim())
+    .filter((t) => area.includes(t));
   expect([...order].sort()).toEqual([...area].sort());
   return order;
 }
 
-for (const [name, device] of [["desktop", DESKTOP], ["phone", PHONE]] as const) {
+for (const [name, device] of [
+  ['desktop', DESKTOP],
+  ['phone', PHONE],
+] as const) {
   test.describe(`one company roadmap (${name})`, () => {
     test.use(device);
 
@@ -52,29 +71,31 @@ for (const [name, device] of [["desktop", DESKTOP], ["phone", PHONE]] as const) 
      * the PRDs out of the company PRD order; no_claim = how a run writes the roadmap (the API's
      * tests).
      */
-    test("Simple Roadmap shows items of two PRDs on one roadmap, with a PRD filter", async ({ page }) => {
+    test('Simple Roadmap shows items of two PRDs on one roadmap, with a PRD filter', async ({
+      page,
+    }) => {
       await open(page);
       const order = await companyOrder(page);
-      await page.goto("/simple/roadmap");
-      await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+      await page.goto('/simple/roadmap');
+      await expect(page.getByTestId('simple-roadmap')).toBeVisible();
       for (const title of [...SAFETY, ...SCALE]) await expect(shown(page, title)).toBeVisible();
       // Trust plan's older roadmap is history: its own item is not on Simple.
       await expect(shown(page, OLD_ITEM)).toHaveCount(0);
 
       // A phone keeps the filters behind its Filters button.
-      if (name === "phone") await page.getByTestId("filters-toggle").click();
-      const prd = filter(page, "PRD");
+      if (name === 'phone') await page.getByTestId('filters-toggle').click();
+      const prd = filter(page, 'PRD');
       // The filter lists the PRDs in the company PRD order.
-      await expect(prd.locator("option")).toHaveText(["All", ...order]);
-      await prd.selectOption({ label: "Scale" });
+      await expect(prd.locator('option')).toHaveText(['All', ...order]);
+      await prd.selectOption({ label: 'Scale' });
       for (const title of SCALE) await expect(shown(page, title)).toBeVisible();
       for (const title of SAFETY) await expect(shown(page, title)).toHaveCount(0);
 
-      await prd.selectOption({ label: "User Safety" });
+      await prd.selectOption({ label: 'User Safety' });
       for (const title of SAFETY) await expect(shown(page, title)).toBeVisible();
       for (const title of SCALE) await expect(shown(page, title)).toHaveCount(0);
 
-      await prd.selectOption({ label: "All" });
+      await prd.selectOption({ label: 'All' });
       for (const title of [...SAFETY, ...SCALE]) await expect(shown(page, title)).toBeVisible();
       await expect(shown(page, OLD_ITEM)).toHaveCount(0);
     });
@@ -84,21 +105,25 @@ for (const [name, device] of [["desktop", DESKTOP], ["phone", PHONE]] as const) 
      * offers no Build roadmap (read-only); fails_when = the line is missing, names no PRD, or the
      * Build roadmap button still shows; no_claim = the carried schedule bases (the API's tests).
      */
-    test("a replaced PRD shows its Replaced by line", async ({ page }) => {
+    test('a replaced PRD shows its Replaced by line', async ({ page }) => {
       await open(page);
-      await page.goto("/documents/trust-plan");
-      const line = page.getByTestId("replaced-by").filter({ visible: true });
-      await expect(line).toHaveText("Replaced by User Safety and Scale. Read-only: its items no longer feed the roadmap.");
-      await expect(page.getByRole("button", { name: /Build roadmap/ })).toHaveCount(0);
-      await line.getByRole("link", { name: "Scale" }).click();
+      await page.goto('/documents/trust-plan');
+      const line = page.getByTestId('replaced-by').filter({ visible: true });
+      await expect(line).toHaveText(
+        'Replaced by User Safety and Scale. Read-only: its items no longer feed the roadmap.',
+      );
+      await expect(page.getByRole('button', { name: /Build roadmap/ })).toHaveCount(0);
+      await line.getByRole('link', { name: 'Scale' }).click();
       await expect(page).toHaveURL(/\/documents\/scale$/);
-      await expect(page.getByRole("heading", { level: 1 }).filter({ visible: true })).toContainText("Scale");
-      await expect(page.getByTestId("replaced-by").filter({ visible: true })).toHaveCount(0);
+      await expect(page.getByRole('heading', { level: 1 }).filter({ visible: true })).toContainText(
+        'Scale',
+      );
+      await expect(page.getByTestId('replaced-by').filter({ visible: true })).toHaveCount(0);
     });
   });
 }
 
-test.describe("a replaced PRD is read-only (desktop)", () => {
+test.describe('a replaced PRD is read-only (desktop)', () => {
   test.use(DESKTOP);
 
   /**
@@ -107,27 +132,37 @@ test.describe("a replaced PRD is read-only (desktop)", () => {
    * by action stays so it can be cleared; fails_when = any of those shows on the replaced PRD, or
    * Replaced by is gone; no_claim = the API's 409 on a write (its tests).
    */
-  test("a replaced PRD offers no edit controls, only Replaced by", async ({ page }) => {
+  test('a replaced PRD offers no edit controls, only Replaced by', async ({ page }) => {
     await open(page);
     // A PRD still feeding the roadmap: its page offers Regenerate.
-    await page.goto("/documents/scale");
-    await page.getByRole("button", { name: "Actions for Scale" }).click();
-    await expect(page.getByText("Regenerate…", { exact: true }).filter({ visible: true })).toBeVisible();
-    await page.keyboard.press("Escape");
+    await page.goto('/documents/scale');
+    await page.getByRole('button', { name: 'Actions for Scale' }).click();
+    await expect(
+      page.getByText('Regenerate…', { exact: true }).filter({ visible: true }),
+    ).toBeVisible();
+    await page.keyboard.press('Escape');
 
-    await page.goto("/documents/trust-plan");
-    await expect(page.getByTestId("replaced-by").filter({ visible: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Replaced by" })).toBeVisible();
-    await page.getByRole("button", { name: "Actions for Trust plan" }).click();
-    await expect(page.getByText("Delete…", { exact: true }).filter({ visible: true })).toBeVisible();
-    await expect(page.getByText("Regenerate…", { exact: true })).toHaveCount(0);
-    await page.keyboard.press("Escape");
+    await page.goto('/documents/trust-plan');
+    await expect(page.getByTestId('replaced-by').filter({ visible: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Replaced by' })).toBeVisible();
+    await page.getByRole('button', { name: 'Actions for Trust plan' }).click();
+    await expect(
+      page.getByText('Delete…', { exact: true }).filter({ visible: true }),
+    ).toBeVisible();
+    await expect(page.getByText('Regenerate…', { exact: true })).toHaveCount(0);
+    await page.keyboard.press('Escape');
 
     // Its open draft: a section's menu keeps reading tools, never an edit.
-    await page.goto("/documents/trust-plan/v/2");
-    await page.getByRole("button", { name: "Actions for Summary" }).filter({ visible: true }).first().click();
-    await expect(page.getByRole("menu", { name: "Actions for Summary" }).filter({ visible: true })).toBeVisible();
-    await expect(page.getByText("Edit the text yourself", { exact: true })).toHaveCount(0);
-    await expect(page.getByText("Ask Oracle to rewrite", { exact: true })).toHaveCount(0);
+    await page.goto('/documents/trust-plan/v/2');
+    await page
+      .getByRole('button', { name: 'Actions for Summary' })
+      .filter({ visible: true })
+      .first()
+      .click();
+    await expect(
+      page.getByRole('menu', { name: 'Actions for Summary' }).filter({ visible: true }),
+    ).toBeVisible();
+    await expect(page.getByText('Edit the text yourself', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Ask Oracle to rewrite', { exact: true })).toHaveCount(0);
   });
 });

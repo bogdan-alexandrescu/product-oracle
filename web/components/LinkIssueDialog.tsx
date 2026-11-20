@@ -1,36 +1,51 @@
-"use client";
+'use client';
 
-import { useEffect, useId, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useId, useState } from 'react';
+import { createPortal } from 'react-dom';
 
-import type { PlanItem } from "@/app/plan/_lib";
-import { Button, confirmInPage, Icon, Notice } from "@/components/ds";
-import { INPUT } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDay } from "@/lib/format";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import type { PlanItem } from '@/app/plan/_lib';
+import { Button, confirmInPage, Icon, Notice } from '@/components/ds';
+import { INPUT } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { formatDay } from '@/lib/format';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-type TrackerIssue = Schemas["TrackerIssueOut"];
+type TrackerIssue = Schemas['TrackerIssueOut'];
 type Linked = { prd: string | null; item_key: string; item_title?: string | null };
 
-const STATE: Record<string, string> = { todo: "Open", in_progress: "In progress", done: "Closed", cancelled: "Not planned" };
+const STATE: Record<string, string> = {
+  todo: 'Open',
+  in_progress: 'In progress',
+  done: 'Closed',
+  cancelled: 'Not planned',
+};
 
 /** "Spend forecast for the month (Usage alerts PRD)": the item a link points at, by the Plan's names when it has them. */
 function linkedName(l: Linked, items: PlanItem[]): { item: string; prd: string } {
   const i = items.find((x) => x.prd?.slug === l.prd && x.key === l.item_key);
-  return { item: i?.title ?? l.item_title ?? l.item_key, prd: i?.prd?.title ?? l.prd ?? "another PRD" };
+  return {
+    item: i?.title ?? l.item_title ?? l.item_key,
+    prd: i?.prd?.title ?? l.prd ?? 'another PRD',
+  };
 }
 
 /** "acme/app#412 · Plan limits · Open · milestone Beta (Nov 30)" */
 function issueLine(i: TrackerIssue): string {
-  const ms = i.milestone ? `milestone ${i.milestone.title}${i.milestone.due ? ` (${formatDay(i.milestone.due)})` : ""}` : "";
-  return [i.external_ref, i.title, STATE[i.state] ?? i.raw_status ?? i.state, ms].filter(Boolean).join(" · ");
+  const ms = i.milestone
+    ? `milestone ${i.milestone.title}${i.milestone.due ? ` (${formatDay(i.milestone.due)})` : ''}`
+    : '';
+  return [i.external_ref, i.title, STATE[i.state] ?? i.raw_status ?? i.state, ms]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 /** The 409's body: the item the issue is linked to now. */
 function conflictOf(error: unknown): Linked | null {
-  const detail = error && typeof error === "object" && "detail" in error ? (error.detail as { linked?: Linked } | null) : null;
-  return detail && typeof detail === "object" && detail.linked ? detail.linked : null;
+  const detail =
+    error && typeof error === 'object' && 'detail' in error
+      ? (error.detail as { linked?: Linked } | null)
+      : null;
+  return detail && typeof detail === 'object' && detail.linked ? detail.linked : null;
 }
 
 /**
@@ -39,7 +54,7 @@ function conflictOf(error: unknown): Linked | null {
  */
 export function LinkIssueDialog({
   item,
-  term: initialTerm = "",
+  term: initialTerm = '',
   items,
   onClose,
   onLinked,
@@ -59,18 +74,20 @@ export function LinkIssueDialog({
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     // Escape closes, unless the Move question took it (its dialog handles it first).
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !e.defaultPrevented && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && !e.defaultPrevented && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
   const q = useQuery(
     `tracker-issues|${term.trim()}`,
-    () => unwrap(api.GET("/v1/tracker/issues", { params: { query: { q: term.trim(), limit: 20 } } })),
+    () =>
+      unwrap(api.GET('/v1/tracker/issues', { params: { query: { q: term.trim(), limit: 20 } } })),
     { keepPrevious: true },
   );
   const results = q.data ?? [];
   const issue = results.find((i) => i.source_item_id === picked) ?? null;
-  const here = (l: Linked | null | undefined) => !!l && l.prd === item.prd?.slug && l.item_key === item.key;
+  const here = (l: Linked | null | undefined) =>
+    !!l && l.prd === item.prd?.slug && l.item_key === item.key;
 
   async function link() {
     if (!issue || !item.prd) return;
@@ -79,16 +96,35 @@ export function LinkIssueDialog({
     try {
       let move = false;
       if (issue.linked && !here(issue.linked)) {
-        if (!(await confirmInPage({ action: "Move", message: `Move it from ${linkedName(issue.linked, items).item}?` }))) return;
+        if (
+          !(await confirmInPage({
+            action: 'Move',
+            message: `Move it from ${linkedName(issue.linked, items).item}?`,
+          }))
+        )
+          return;
         move = true;
       }
       const post = (move: boolean) =>
-        api.POST("/v1/tracker/links", { body: { prd: item.prd!.slug, item_key: item.key, source_item_id: issue.source_item_id, move } });
+        api.POST('/v1/tracker/links', {
+          body: {
+            prd: item.prd!.slug,
+            item_key: item.key,
+            source_item_id: issue.source_item_id,
+            move,
+          },
+        });
       let res = await post(move);
       const other = res.response.status === 409 ? conflictOf(res.error) : null;
       if (other) {
         // Linked elsewhere since the search: ask, then move.
-        if (!(await confirmInPage({ action: "Move", message: `Move it from ${linkedName(other, items).item}?` }))) return;
+        if (
+          !(await confirmInPage({
+            action: 'Move',
+            message: `Move it from ${linkedName(other, items).item}?`,
+          }))
+        )
+          return;
         res = await post(true);
       }
       await unwrap(Promise.resolve(res));
@@ -107,7 +143,7 @@ export function LinkIssueDialog({
       data-backdrop=""
       className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4"
       onClick={(e) => e.stopPropagation()}
-      onKeyDown={(e) => e.key !== "Escape" && e.stopPropagation()}
+      onKeyDown={(e) => e.key !== 'Escape' && e.stopPropagation()}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -121,7 +157,10 @@ export function LinkIssueDialog({
         className="w-full max-w-xl min-w-0 overflow-hidden rounded-inspector border border-line bg-surface text-text shadow-tip outline-none"
       >
         <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-3.5 max-[600px]:px-4">
-          <h2 id={`${id}-title`} className="min-w-0 font-display text-lg font-bold tracking-heading break-words">
+          <h2
+            id={`${id}-title`}
+            className="min-w-0 font-display text-lg font-bold tracking-heading break-words"
+          >
             Link a GitHub issue to {item.title}
           </h2>
           <button
@@ -150,7 +189,10 @@ export function LinkIssueDialog({
             </p>
           )}
           {results.length > 0 && (
-            <ul aria-label="Your GitHub issues" className="flex max-h-80 flex-col overflow-y-auto rounded-button border border-line">
+            <ul
+              aria-label="Your GitHub issues"
+              className="flex max-h-80 flex-col overflow-y-auto rounded-button border border-line"
+            >
               {results.map((i) => {
                 const l = i.linked ? linkedName(i.linked, items) : null;
                 const on = i.source_item_id === picked;
@@ -161,12 +203,14 @@ export function LinkIssueDialog({
                       data-testid="link-issue-result"
                       aria-pressed={on}
                       onClick={() => setPicked(i.source_item_id)}
-                      className={`flex min-h-11 w-full min-w-0 flex-col items-start gap-0.5 px-3 py-2 text-left hover:bg-surface2 ${on ? "bg-accent-soft" : ""}`}
+                      className={`flex min-h-11 w-full min-w-0 flex-col items-start gap-0.5 px-3 py-2 text-left hover:bg-surface2 ${on ? 'bg-accent-soft' : ''}`}
                     >
                       <span className="w-full min-w-0 break-words">{issueLine(i)}</span>
                       {l && (
                         <span data-testid="link-issue-linked" className="text-sm text-text2">
-                          {here(i.linked) ? "Linked to this item" : `Linked to ${l.item} (${l.prd})`}
+                          {here(i.linked)
+                            ? 'Linked to this item'
+                            : `Linked to ${l.item} (${l.prd})`}
                         </span>
                       )}
                     </button>
@@ -185,7 +229,11 @@ export function LinkIssueDialog({
             <Button variant="ghost" onClick={onClose}>
               Cancel
             </Button>
-            <Button variant="primary" onClick={link} disabled={busy || !issue || here(issue.linked)}>
+            <Button
+              variant="primary"
+              onClick={link}
+              disabled={busy || !issue || here(issue.linked)}
+            >
               Link
             </Button>
           </div>

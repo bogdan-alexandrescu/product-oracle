@@ -1,6 +1,6 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login, signOut } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login, signOut } from './helpers';
+import { expect, test, type Page } from './test';
 
 /*
  * trash-features-goals (owner's pick, Nov 4): a roadmap feature and a goal deleted to Trash are
@@ -46,11 +46,16 @@ type Call = { status: number; body: unknown };
 
 async function call(page: Page, method: string, path: string, body?: unknown): Promise<Call> {
   // The mock defines its fetch on the page's first call: wait for it rather than call too soon.
-  await page.waitForFunction(() => typeof (globalThis as { __poMockFetch?: unknown }).__poMockFetch === "function");
+  await page.waitForFunction(
+    () => typeof (globalThis as { __poMockFetch?: unknown }).__poMockFetch === 'function',
+  );
   return page.evaluate(
     async ([method, path, body]) => {
       const w = globalThis as unknown as { __poMockFetch?: (r: Request) => Promise<Response> };
-      const init = body === undefined ? { method } : { method, body: JSON.stringify(body), headers: { "content-type": "application/json" } };
+      const init =
+        body === undefined
+          ? { method }
+          : { method, body: JSON.stringify(body), headers: { 'content-type': 'application/json' } };
       const res = await w.__poMockFetch!(new Request(new URL(path, location.origin), init));
       return { status: res.status, body: await res.json().catch(() => null) };
     },
@@ -62,28 +67,36 @@ type Item = { id: string; key: string; title: string; code: string | null; can_d
 type Goal = { id: string; title: string };
 
 async function items(page: Page): Promise<Item[]> {
-  return ((await call(page, "GET", "/v1/simple/roadmap")).body as { items: Item[] }).items;
+  return ((await call(page, 'GET', '/v1/simple/roadmap')).body as { items: Item[] }).items;
 }
 
 async function goals(page: Page): Promise<Goal[]> {
-  return ((await call(page, "GET", "/v1/simple/goal-buckets")).body as { goals: Goal[] }).goals;
+  return ((await call(page, 'GET', '/v1/simple/goal-buckets')).body as { goals: Goal[] }).goals;
 }
 
 async function links(page: Page): Promise<Record<string, string[]>> {
-  const out = (await call(page, "GET", "/v1/simple/goal-buckets")).body as { features: { id: string; goal_ids: string[] }[] };
+  const out = (await call(page, 'GET', '/v1/simple/goal-buckets')).body as {
+    features: { id: string; goal_ids: string[] }[];
+  };
   return Object.fromEntries(out.features.map((f) => [f.id, f.goal_ids]));
 }
 
 /** Deletes the feature from its Timeline row's context menu (Delete feature), as a person would. */
 async function deleteFeature(page: Page, item: { key: string; title: string }) {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-chart")).toBeVisible();
-  const bar = page.locator(`[data-testid="timeline-row"][data-item="${item.key}"] [data-testid="timeline-bar"]`);
-  await bar.click({ button: "right" });
-  await page.getByTestId("feature-menu").getByRole("menuitem", { name: "Delete feature" }).click();
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-chart')).toBeVisible();
+  const bar = page.locator(
+    `[data-testid="timeline-row"][data-item="${item.key}"] [data-testid="timeline-bar"]`,
+  );
+  await bar.click({ button: 'right' });
+  await page.getByTestId('feature-menu').getByRole('menuitem', { name: 'Delete feature' }).click();
   // docs/ground-truth.md: the toast names the feature with its code ("Moved F-79 Weekly alert digest to Trash.").
-  await expect(page.getByTestId("toasts")).toContainText(new RegExp(`Moved ([A-Z]+-\\d+[a-z]? )?${item.title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} to Trash\\.`));
+  await expect(page.getByTestId('toasts')).toContainText(
+    new RegExp(
+      `Moved ([A-Z]+-\\d+[a-z]? )?${item.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} to Trash\\.`,
+    ),
+  );
   await expect(bar).toHaveCount(0);
 }
 
@@ -92,30 +105,36 @@ const bucket = (page: Page, goal: Goal) => page.locator(`[data-goal-id="${goal.i
 
 /** The goals with a bucket on Priorities › Goal buckets that this person may delete, in order. */
 async function shownGoals(page: Page): Promise<Goal[]> {
-  await page.goto("/simple/priorities?tab=buckets");
-  const shown = page.locator("[data-goal-id]");
+  await page.goto('/simple/priorities?tab=buckets');
+  const shown = page.locator('[data-goal-id]');
   await expect(shown.first()).toBeVisible();
   const all = await goals(page);
-  const ids = await shown.evaluateAll((els) => els.map((e) => e.getAttribute("data-goal-id")));
+  const ids = await shown.evaluateAll((els) => els.map((e) => e.getAttribute('data-goal-id')));
   return ids.map((id) => all.find((g) => g.id === id)).filter((g): g is Goal => !!g);
 }
 
 /** Deletes the goal from its bucket's ⋯ on Priorities (Delete goal), its features moved to `to`. */
 async function deleteGoal(page: Page, goal: Goal, to: Goal) {
-  await page.goto("/simple/priorities?tab=buckets");
-  await bucket(page, goal).getByRole("button", { name: `More for ${goal.title}` }).click();
-  await page.getByRole("menuitem", { name: "Delete goal" }).click();
-  const dialog = page.getByRole("dialog", { name: `Delete ${goal.title}` });
-  const pick = dialog.getByLabel("Goal", { exact: true });
-  const label = (await pick.locator("option").allTextContents()).find((o) => o === to.title || o.endsWith(` ${to.title}`))!;
+  await page.goto('/simple/priorities?tab=buckets');
+  await bucket(page, goal)
+    .getByRole('button', { name: `More for ${goal.title}` })
+    .click();
+  await page.getByRole('menuitem', { name: 'Delete goal' }).click();
+  const dialog = page.getByRole('dialog', { name: `Delete ${goal.title}` });
+  const pick = dialog.getByLabel('Goal', { exact: true });
+  const label = (await pick.locator('option').allTextContents()).find(
+    (o) => o === to.title || o.endsWith(` ${to.title}`),
+  )!;
   await pick.selectOption({ label });
-  await dialog.getByRole("button", { name: "Delete goal" }).click();
+  await dialog.getByRole('button', { name: 'Delete goal' }).click();
   await expect(bucket(page, goal)).toHaveCount(0);
 }
 
-test("a deleted feature and goal are listed in Settings › Trash and restored from there", async ({ page }) => {
+test('a deleted feature and goal are listed in Settings › Trash and restored from there', async ({
+  page,
+}) => {
   // A plan whose Goal buckets are the goals Priorities lists ("simple-plan").
-  await page.addInitScript((key) => localStorage.setItem(key, "simple-plan"), MOCK_SCENARIO_KEY);
+  await page.addInitScript((key) => localStorage.setItem(key, 'simple-plan'), MOCK_SCENARIO_KEY);
   await login(page);
   const feature = (await items(page)).find((i) => i.can_decide && i.code)!;
   const before = await links(page);
@@ -129,23 +148,25 @@ test("a deleted feature and goal are listed in Settings › Trash and restored f
   expect((await items(page)).map((i) => i.id)).not.toContain(feature.id);
   expect((await goals(page)).map((g) => g.id)).not.toContain(goal.id);
 
-  await page.goto("/settings/trash");
-  const entries = page.getByTestId("trash-entry");
+  await page.goto('/settings/trash');
+  const entries = page.getByTestId('trash-entry');
   const featureRow = entries.filter({ hasText: feature.title });
   const goalRow = entries.filter({ hasText: goal.title });
-  await expect(featureRow).toContainText("Feature");
+  await expect(featureRow).toContainText('Feature');
   await expect(featureRow).toContainText(`${feature.code} ${feature.title}`);
-  await expect(featureRow).toContainText("Deleted by");
-  await expect(featureRow).toContainText("30 days left");
-  await expect(goalRow).toContainText("Goal");
-  await expect(goalRow).toContainText("30 days left");
+  await expect(featureRow).toContainText('Deleted by');
+  await expect(featureRow).toContainText('30 days left');
+  await expect(goalRow).toContainText('Goal');
+  await expect(goalRow).toContainText('30 days left');
   await expect(entries.filter({ hasText: /\bfeature\b|\bgoal\b/ })).toHaveCount(0);
 
-  await page.getByRole("button", { name: `Restore ${feature.title}` }).click();
+  await page.getByRole('button', { name: `Restore ${feature.title}` }).click();
   await expect(featureRow).toHaveCount(0);
   // The note names the feature as its row did, code first.
-  await expect(page.getByRole("status").filter({ hasText: "Restored" })).toContainText(`Restored ${feature.code} ${feature.title}`);
-  await page.getByRole("button", { name: `Restore ${goal.title}` }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Restored' })).toContainText(
+    `Restored ${feature.code} ${feature.title}`,
+  );
+  await page.getByRole('button', { name: `Restore ${goal.title}` }).click();
   await expect(goalRow).toHaveCount(0);
 
   expect((await items(page)).map((i) => i.id)).toContain(feature.id);
@@ -154,16 +175,21 @@ test("a deleted feature and goal are listed in Settings › Trash and restored f
   expect(await links(page)).toEqual(before);
 });
 
-test("whoever deleted a feature or a goal sees it in Trash and restores it, with no owner", async ({ page }) => {
+test('whoever deleted a feature or a goal sees it in Trash and restores it, with no owner', async ({
+  page,
+}) => {
   // Dana Decider, an approver, decides the pricing roadmap's features ("simple-deciders").
-  await page.addInitScript((key) => localStorage.setItem(key, "simple-deciders"), MOCK_SCENARIO_KEY);
+  await page.addInitScript(
+    (key) => localStorage.setItem(key, 'simple-deciders'),
+    MOCK_SCENARIO_KEY,
+  );
   // An owner deletes a feature: it is the owners' to restore, so the approver never sees it.
   await login(page);
   const theirs = (await items(page)).find((i) => i.can_decide)!;
   await deleteFeature(page, theirs);
 
   await signOut(page);
-  await login(page, "dana.decider@example.com");
+  await login(page, 'dana.decider@example.com');
   const feature = (await items(page)).find((i) => i.can_decide && i.id !== theirs.id)!;
   const [goal, other] = await goals(page);
   expect(feature && goal && other).toBeTruthy();
@@ -171,28 +197,31 @@ test("whoever deleted a feature or a goal sees it in Trash and restores it, with
   // This scenario's Goal buckets show no bucket for its goals (its Priorities buckets are other
   // names), so the approver's goal delete goes through the mock route; the bucket menu's Delete
   // goal is driven in the test above.
-  expect((await call(page, "DELETE", `/v1/simple/goal-buckets/goals/${goal.id}?to_goal_id=${other.id}`)).status).toBe(200);
+  expect(
+    (await call(page, 'DELETE', `/v1/simple/goal-buckets/goals/${goal.id}?to_goal_id=${other.id}`))
+      .status,
+  ).toBe(200);
 
-  await page.goto("/settings");
-  await page.getByTestId("nav-trash").filter({ visible: true }).click();
+  await page.goto('/settings');
+  await page.getByTestId('nav-trash').filter({ visible: true }).click();
   await expect(page).toHaveURL(/\/settings\/trash$/);
-  const entries = page.getByTestId("trash-entry");
+  const entries = page.getByTestId('trash-entry');
   await expect(entries).toHaveCount(2);
   await expect(entries.filter({ hasText: theirs.title })).toHaveCount(0);
   const featureRow = entries.filter({ hasText: feature.title });
   const goalRow = entries.filter({ hasText: goal.title });
-  await expect(featureRow).toContainText("Feature");
-  await expect(goalRow).toContainText("Goal");
+  await expect(featureRow).toContainText('Feature');
+  await expect(goalRow).toContainText('Goal');
   // Only owners delete for good: an approver has Restore, never Delete for good or Empty Trash.
-  await expect(featureRow.getByRole("button", { name: `Restore ${feature.title}` })).toBeVisible();
-  await expect(page.getByRole("button", { name: /for good$/ })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Empty Trash" })).toHaveCount(0);
+  await expect(featureRow.getByRole('button', { name: `Restore ${feature.title}` })).toBeVisible();
+  await expect(page.getByRole('button', { name: /for good$/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Empty Trash' })).toHaveCount(0);
 
-  await featureRow.getByRole("button", { name: `Restore ${feature.title}` }).click();
+  await featureRow.getByRole('button', { name: `Restore ${feature.title}` }).click();
   await expect(featureRow).toHaveCount(0);
-  await goalRow.getByRole("button", { name: `Restore ${goal.title}` }).click();
+  await goalRow.getByRole('button', { name: `Restore ${goal.title}` }).click();
   await expect(goalRow).toHaveCount(0);
-  await expect(page.getByTestId("trash-empty")).toBeVisible();
+  await expect(page.getByTestId('trash-empty')).toBeVisible();
 
   expect((await items(page)).map((i) => i.id)).toContain(feature.id);
   expect((await goals(page)).map((g) => g.id)).toContain(goal.id);
@@ -200,7 +229,7 @@ test("whoever deleted a feature or a goal sees it in Trash and restores it, with
 });
 
 /** The alerts roadmap's required reviewer ("trash-reviewer"), who approves its drafts. */
-const REVIEWER = "avery.lane@example.com";
+const REVIEWER = 'avery.lane@example.com';
 
 /** Signs in as the alerts roadmap's required reviewer and approves the Alerts roadmap's draft in
  * review (the version is published), and stays signed in as them. This branch has no screen for a
@@ -209,43 +238,60 @@ const REVIEWER = "avery.lane@example.com";
 async function approveOnHome(page: Page) {
   await signOut(page);
   await login(page, REVIEWER);
-  await page.goto("/simple");
-  const drafts = (await call(page, "GET", "/v1/simple/drafts")).body as { id: string; status: string; document: { title: string } }[];
-  const draft = drafts.find((d) => d.status === "submitted" && d.document.title === "Alerts roadmap")!;
+  await page.goto('/simple');
+  const drafts = (await call(page, 'GET', '/v1/simple/drafts')).body as {
+    id: string;
+    status: string;
+    document: { title: string };
+  }[];
+  const draft = drafts.find(
+    (d) => d.status === 'submitted' && d.document.title === 'Alerts roadmap',
+  )!;
   expect(draft).toBeTruthy();
-  const approved = await call(page, "POST", `/v1/simple/drafts/${draft.id}/approve`);
+  const approved = await call(page, 'POST', `/v1/simple/drafts/${draft.id}/approve`);
   expect(approved.status).toBe(200);
-  expect((approved.body as { status: string }).status).toBe("approved");
+  expect((approved.body as { status: string }).status).toBe('approved');
 }
 
 /** Moves `key`'s bar on the Timeline a step later: one change in the open draft. */
 async function moveBar(page: Page, key: string) {
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-chart")).toBeVisible();
-  const count = page.getByTestId("draft-count");
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-chart')).toBeVisible();
+  const count = page.getByTestId('draft-count');
   const before = (await count.count()) ? await count.textContent() : null;
-  await page.locator(`[data-testid="timeline-row"][data-item="${key}"] [data-testid="timeline-bar"]`).focus();
-  await page.keyboard.press("ArrowRight");
-  await expect(count).not.toHaveText(before ?? "");
+  await page
+    .locator(`[data-testid="timeline-row"][data-item="${key}"] [data-testid="timeline-bar"]`)
+    .focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(count).not.toHaveText(before ?? '');
 }
 
 /** The owner sends the draft on: with no named decider, their Approve and publish (roadmap-decide),
  * after which it waits in review on the roadmap's required reviewer. */
 async function ownerApproves(page: Page) {
-  await page.getByTestId("draft-banner").getByRole("button", { name: "Approve and publish" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Approved: Alerts roadmap waits for 1 more reviewer" })).toBeVisible();
+  await page
+    .getByTestId('draft-banner')
+    .getByRole('button', { name: 'Approve and publish' })
+    .click();
+  await expect(
+    page
+      .getByRole('status')
+      .filter({ hasText: 'Approved: Alerts roadmap waits for 1 more reviewer' }),
+  ).toBeVisible();
 }
 
 type RoadmapItem = Item & { key: string; roadmap: { slug: string } };
 
 async function alerts(page: Page): Promise<RoadmapItem[]> {
-  const all = (await call(page, "GET", "/v1/simple/roadmap")).body as { items: RoadmapItem[] };
+  const all = (await call(page, 'GET', '/v1/simple/roadmap')).body as { items: RoadmapItem[] };
   // The Alerts roadmap as the API names it: its document's slug.
-  return all.items.filter((i) => i.roadmap.slug === "usage-alerts-roadmap");
+  return all.items.filter((i) => i.roadmap.slug === 'usage-alerts-roadmap');
 }
 
-test("a feature deleted before the roadmap's next version is published comes back on it from Trash", async ({ page }) => {
-  await page.addInitScript((key) => localStorage.setItem(key, "trash-reviewer"), MOCK_SCENARIO_KEY);
+test("a feature deleted before the roadmap's next version is published comes back on it from Trash", async ({
+  page,
+}) => {
+  await page.addInitScript((key) => localStorage.setItem(key, 'trash-reviewer'), MOCK_SCENARIO_KEY);
   await login(page);
   const mine = await alerts(page);
   const feature = mine.find((i) => i.can_decide && i.code)!;
@@ -255,7 +301,7 @@ test("a feature deleted before the roadmap's next version is published comes bac
 
   // Another feature's dates moved on the Timeline and the owner's Approve and publish on the draft.
   await moveBar(page, other.key);
-  const roadmap = page.getByTestId("simple-roadmap");
+  const roadmap = page.getByTestId('simple-roadmap');
   await expect(roadmap).not.toContainText(feature.title);
   await ownerApproves(page);
   // The required reviewer's approval on Home publishes the next version, made without the
@@ -264,12 +310,12 @@ test("a feature deleted before the roadmap's next version is published comes bac
   await signOut(page);
   await login(page);
 
-  await page.goto("/settings/trash");
-  const row = page.getByTestId("trash-entry").filter({ hasText: feature.title });
-  await row.getByRole("button", { name: `Restore ${feature.title}` }).click();
+  await page.goto('/settings/trash');
+  const row = page.getByTestId('trash-entry').filter({ hasText: feature.title });
+  await row.getByRole('button', { name: `Restore ${feature.title}` }).click();
   await expect(row).toHaveCount(0);
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-chart")).toBeVisible();
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-chart')).toBeVisible();
   await expect(roadmap).toContainText(feature.title);
   await expect(roadmap).toContainText(other.title);
 });
@@ -282,58 +328,66 @@ test("a feature deleted before the roadmap's next version is published comes bac
  * the draft waits on no one, or the approval loses it; no_claim = the API's copy onto the version
  * in review (pytest test_a_feature_only_in_the_draft_is_restored_to_the_draft_only).
  */
-test("a feature added in the draft and restored while the draft is in review stays off the published roadmap until approved", async ({ page }) => {
-  await page.addInitScript((key) => localStorage.setItem(key, "trash-reviewer"), MOCK_SCENARIO_KEY);
+test('a feature added in the draft and restored while the draft is in review stays off the published roadmap until approved', async ({
+  page,
+}) => {
+  await page.addInitScript((key) => localStorage.setItem(key, 'trash-reviewer'), MOCK_SCENARIO_KEY);
   await login(page);
   const other = (await alerts(page)).find((i) => i.can_decide)!;
-  const title = "Quiet hours digest";
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-chart")).toBeVisible();
+  const title = 'Quiet hours digest';
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-chart')).toBeVisible();
   // Six months shows Q1 2027's drop target (the Timeline opens on 3 months).
-  await page.getByTestId("zoom-6m").click();
-  await page.getByLabel("Add an item").fill(title);
-  await page.getByTestId("quick-add-roadmap").selectOption({ label: "Alerts roadmap" });
-  const chip = page.getByTestId("quick-add-chip");
-  await expect(chip).toHaveAttribute("aria-disabled", "false");
+  await page.getByTestId('zoom-6m').click();
+  await page.getByLabel('Add an item').fill(title);
+  await page.getByTestId('quick-add-roadmap').selectOption({ label: 'Alerts roadmap' });
+  const chip = page.getByTestId('quick-add-chip');
+  await expect(chip).toHaveAttribute('aria-disabled', 'false');
   await page.evaluate(() => window.scrollTo(0, 0));
   const target = page.locator('[data-testid="quarter-drop"][data-add-where="quarter:2027-Q1"]');
   const from = (await chip.boundingBox())!;
   const to = (await target.boundingBox())!;
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
-  await page.mouse.move(to.x + to.width / 2, Math.min(to.y + 20, (page.viewportSize()?.height ?? 800) - 12), { steps: 12 });
+  await page.mouse.move(
+    to.x + to.width / 2,
+    Math.min(to.y + 20, (page.viewportSize()?.height ?? 800) - 12),
+    { steps: 12 },
+  );
   await page.mouse.up();
-  await expect(page.getByRole("status").filter({ hasText: `Added ${title} as a draft` })).toBeVisible();
+  await expect(
+    page.getByRole('status').filter({ hasText: `Added ${title} as a draft` }),
+  ).toBeVisible();
   const added = (await alerts(page)).find((i) => i.title === title)!;
   expect(added).toBeTruthy();
   await deleteFeature(page, added);
 
   await moveBar(page, other.key);
-  const roadmap = page.getByTestId("simple-roadmap");
+  const roadmap = page.getByTestId('simple-roadmap');
   await expect(roadmap).not.toContainText(title);
   await ownerApproves(page);
 
-  await page.goto("/settings/trash");
-  const row = page.getByTestId("trash-entry").filter({ hasText: title });
-  await row.getByRole("button", { name: `Restore ${title}` }).click();
+  await page.goto('/settings/trash');
+  const row = page.getByTestId('trash-entry').filter({ hasText: title });
+  await row.getByRole('button', { name: `Restore ${title}` }).click();
   await expect(row).toHaveCount(0);
   // Back in the draft, which its owner reads.
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-chart")).toBeVisible();
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-chart')).toBeVisible();
   await expect(roadmap).toContainText(title);
 
   // A viewer reads the published roadmap: it is not there.
   await signOut(page);
-  await login(page, "vic.moss@example.com");
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-chart")).toBeVisible();
+  await login(page, 'vic.moss@example.com');
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-chart')).toBeVisible();
   await expect(roadmap).toContainText(other.title);
   await expect(roadmap).not.toContainText(title);
 
   // Approved on Home, it is on the roadmap.
   await approveOnHome(page);
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-chart")).toBeVisible();
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-chart')).toBeVisible();
   await expect(roadmap).toContainText(title);
 });
 
@@ -346,37 +400,45 @@ test("a feature added in the draft and restored while the draft is in review sta
  * it on the published roadmap, or the owner cannot approve the new draft with it; no_claim = the API's rows
  * (pytest test_a_feature_only_in_the_draft_is_restored_to_the_draft_only[draft_approved]).
  */
-test("a feature added in the draft and restored after the draft was approved without it comes back in a new draft", async ({ page }) => {
+test('a feature added in the draft and restored after the draft was approved without it comes back in a new draft', async ({
+  page,
+}) => {
   // Two drafts approved, with sign-ins between: past the default 30 s.
   test.slow();
-  await page.addInitScript((key) => localStorage.setItem(key, "trash-reviewer"), MOCK_SCENARIO_KEY);
+  await page.addInitScript((key) => localStorage.setItem(key, 'trash-reviewer'), MOCK_SCENARIO_KEY);
   await login(page);
   const other = (await alerts(page)).find((i) => i.can_decide)!;
-  const title = "Quiet hours digest";
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-chart")).toBeVisible();
+  const title = 'Quiet hours digest';
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-chart')).toBeVisible();
   // Six months shows Q1 2027's drop target (the Timeline opens on 3 months).
-  await page.getByTestId("zoom-6m").click();
-  await page.getByLabel("Add an item").fill(title);
-  await page.getByTestId("quick-add-roadmap").selectOption({ label: "Alerts roadmap" });
-  const chip = page.getByTestId("quick-add-chip");
-  await expect(chip).toHaveAttribute("aria-disabled", "false");
+  await page.getByTestId('zoom-6m').click();
+  await page.getByLabel('Add an item').fill(title);
+  await page.getByTestId('quick-add-roadmap').selectOption({ label: 'Alerts roadmap' });
+  const chip = page.getByTestId('quick-add-chip');
+  await expect(chip).toHaveAttribute('aria-disabled', 'false');
   await page.evaluate(() => window.scrollTo(0, 0));
   const target = page.locator('[data-testid="quarter-drop"][data-add-where="quarter:2027-Q1"]');
   const from = (await chip.boundingBox())!;
   const to = (await target.boundingBox())!;
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
-  await page.mouse.move(to.x + to.width / 2, Math.min(to.y + 20, (page.viewportSize()?.height ?? 800) - 12), { steps: 12 });
+  await page.mouse.move(
+    to.x + to.width / 2,
+    Math.min(to.y + 20, (page.viewportSize()?.height ?? 800) - 12),
+    { steps: 12 },
+  );
   await page.mouse.up();
-  await expect(page.getByRole("status").filter({ hasText: `Added ${title} as a draft` })).toBeVisible();
+  await expect(
+    page.getByRole('status').filter({ hasText: `Added ${title} as a draft` }),
+  ).toBeVisible();
   const added = (await alerts(page)).find((i) => i.title === title)!;
   expect(added).toBeTruthy();
   await deleteFeature(page, added);
 
   // The owner's Approve and publish, then the reviewer's approval on Home, while the feature is in Trash.
   await moveBar(page, other.key);
-  const roadmap = page.getByTestId("simple-roadmap");
+  const roadmap = page.getByTestId('simple-roadmap');
   await expect(roadmap).not.toContainText(title);
   await ownerApproves(page);
   await approveOnHome(page);
@@ -384,57 +446,63 @@ test("a feature added in the draft and restored after the draft was approved wit
   await login(page);
 
   // Still in Trash, and Restore brings it back.
-  await page.goto("/settings/trash");
-  const row = page.getByTestId("trash-entry").filter({ hasText: title });
+  await page.goto('/settings/trash');
+  const row = page.getByTestId('trash-entry').filter({ hasText: title });
   await expect(row).toHaveCount(1);
-  await row.getByRole("button", { name: `Restore ${title}` }).click();
+  await row.getByRole('button', { name: `Restore ${title}` }).click();
   await expect(row).toHaveCount(0);
   // In the roadmap's new working draft, which its owner reads.
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-chart")).toBeVisible();
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-chart')).toBeVisible();
   await expect(roadmap).toContainText(title);
 
   // A viewer reads the published roadmap: it is not there.
   await signOut(page);
-  await login(page, "vic.moss@example.com");
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-chart")).toBeVisible();
+  await login(page, 'vic.moss@example.com');
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-chart')).toBeVisible();
   await expect(roadmap).toContainText(other.title);
   await expect(roadmap).not.toContainText(title);
 
   // The owner approves the new draft with it and, once the reviewer approves it on Home, it is on the roadmap.
   await signOut(page);
   await login(page);
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-chart")).toBeVisible();
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-chart')).toBeVisible();
   await ownerApproves(page);
   await approveOnHome(page);
   await signOut(page);
-  await login(page, "vic.moss@example.com");
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-chart")).toBeVisible();
+  await login(page, 'vic.moss@example.com');
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-chart')).toBeVisible();
   await expect(roadmap).toContainText(title);
 });
 
 /** Adds `title` to the Alerts roadmap's open draft from the quick add (a 2027-Q1 drop). */
 async function addInDraft(page: Page, title: string): Promise<RoadmapItem> {
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-chart")).toBeVisible();
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-chart')).toBeVisible();
   // Six months shows Q1 2027's drop target (the Timeline opens on 3 months).
-  await page.getByTestId("zoom-6m").click();
-  await page.getByLabel("Add an item").fill(title);
-  await page.getByTestId("quick-add-roadmap").selectOption({ label: "Alerts roadmap" });
-  const chip = page.getByTestId("quick-add-chip");
-  await expect(chip).toHaveAttribute("aria-disabled", "false");
+  await page.getByTestId('zoom-6m').click();
+  await page.getByLabel('Add an item').fill(title);
+  await page.getByTestId('quick-add-roadmap').selectOption({ label: 'Alerts roadmap' });
+  const chip = page.getByTestId('quick-add-chip');
+  await expect(chip).toHaveAttribute('aria-disabled', 'false');
   await page.evaluate(() => window.scrollTo(0, 0));
   const target = page.locator('[data-testid="quarter-drop"][data-add-where="quarter:2027-Q1"]');
   const from = (await chip.boundingBox())!;
   const to = (await target.boundingBox())!;
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
-  await page.mouse.move(to.x + to.width / 2, Math.min(to.y + 20, (page.viewportSize()?.height ?? 800) - 12), { steps: 12 });
+  await page.mouse.move(
+    to.x + to.width / 2,
+    Math.min(to.y + 20, (page.viewportSize()?.height ?? 800) - 12),
+    { steps: 12 },
+  );
   await page.mouse.up();
-  await expect(page.getByRole("status").filter({ hasText: `Added ${title} as a draft` })).toBeVisible();
+  await expect(
+    page.getByRole('status').filter({ hasText: `Added ${title} as a draft` }),
+  ).toBeVisible();
   const added = (await alerts(page)).find((i) => i.title === title)!;
   expect(added).toBeTruthy();
   return added;
@@ -449,15 +517,20 @@ async function addInDraft(page: Page, title: string): Promise<RoadmapItem> {
  * it, or approving shows none or two; no_claim = the API's rows (pytest
  * test_approved_meanwhile_restore_lands_in_the_open_draft_only).
  */
-for (const then of ["working", "in review"] as const) {
-  test(`a feature restored after its draft was approved, while the next draft is ${then}, lands in that draft only`, async ({ page }) => {
+for (const then of ['working', 'in review'] as const) {
+  test(`a feature restored after its draft was approved, while the next draft is ${then}, lands in that draft only`, async ({
+    page,
+  }) => {
     // Two drafts approved, with sign-ins between: past the default 30 s.
     test.slow();
-    await page.addInitScript((key) => localStorage.setItem(key, "trash-reviewer"), MOCK_SCENARIO_KEY);
+    await page.addInitScript(
+      (key) => localStorage.setItem(key, 'trash-reviewer'),
+      MOCK_SCENARIO_KEY,
+    );
     await login(page);
     const [first, second] = (await alerts(page)).filter((i) => i.can_decide);
     expect(first && second).toBeTruthy();
-    const title = "Quiet hours digest";
+    const title = 'Quiet hours digest';
     const added = await addInDraft(page, title);
     await deleteFeature(page, added);
 
@@ -470,35 +543,35 @@ for (const then of ["working", "in review"] as const) {
 
     // The roadmap's next draft: another bar moved, and maybe the owner's Approve and publish.
     await moveBar(page, second.key);
-    if (then === "in review") await ownerApproves(page);
+    if (then === 'in review') await ownerApproves(page);
 
-    await page.goto("/settings/trash");
-    const row = page.getByTestId("trash-entry").filter({ hasText: title });
-    await row.getByRole("button", { name: `Restore ${title}` }).click();
+    await page.goto('/settings/trash');
+    const row = page.getByTestId('trash-entry').filter({ hasText: title });
+    await row.getByRole('button', { name: `Restore ${title}` }).click();
     await expect(row).toHaveCount(0);
-    const roadmap = page.getByTestId("simple-roadmap");
+    const roadmap = page.getByTestId('simple-roadmap');
     const rows = page.locator(`[data-testid="timeline-row"][data-item="${added.key}"]`);
-    await page.goto("/simple/roadmap");
-    await expect(page.getByTestId("simple-chart")).toBeVisible();
+    await page.goto('/simple/roadmap');
+    await expect(page.getByTestId('simple-chart')).toBeVisible();
     await expect(rows).toHaveCount(1);
     // Still one draft for the owner to approve (when it was working), with the feature in it.
-    if (then === "working") await ownerApproves(page);
+    if (then === 'working') await ownerApproves(page);
 
     // A viewer reads the published roadmap: it is not there.
     await signOut(page);
-    await login(page, "vic.moss@example.com");
-    await page.goto("/simple/roadmap");
-    await expect(page.getByTestId("simple-chart")).toBeVisible();
+    await login(page, 'vic.moss@example.com');
+    await page.goto('/simple/roadmap');
+    await expect(page.getByTestId('simple-chart')).toBeVisible();
     await expect(roadmap).toContainText(first.title);
     await expect(roadmap).not.toContainText(title);
 
     // Approved on Home, exactly one row of it is on the roadmap.
     await approveOnHome(page);
     await signOut(page);
-    await login(page, "vic.moss@example.com");
-    await page.goto("/simple/roadmap");
-    await expect(page.getByTestId("simple-chart")).toBeVisible();
+    await login(page, 'vic.moss@example.com');
+    await page.goto('/simple/roadmap');
+    await expect(page.getByTestId('simple-chart')).toBeVisible();
     await expect(rows).toHaveCount(1);
-    await expect(roadmap.getByTestId("timeline-row").filter({ hasText: title })).toHaveCount(1);
+    await expect(roadmap.getByTestId('timeline-row').filter({ hasText: title })).toHaveCount(1);
   });
 }

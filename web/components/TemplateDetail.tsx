@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { Link } from "@/lib/nav";
-import { useMemo, useState } from "react";
+import { Link } from '@/lib/nav';
+import { useMemo, useState } from 'react';
 
 import {
   Button,
@@ -18,10 +18,10 @@ import {
   ViewOnly,
   Panel,
   Split,
-} from "@/components/ds";
-import { GrowingTextarea } from "@/app/settings/_components/GrowingTextarea";
-import { Field, INPUT, SELECT, SELECT_FIELD } from "@/app/settings/_components/fields";
-import { FormActions } from "@/app/settings/_components/FormActions";
+} from '@/components/ds';
+import { GrowingTextarea } from '@/app/settings/_components/GrowingTextarea';
+import { Field, INPUT, SELECT, SELECT_FIELD } from '@/app/settings/_components/fields';
+import { FormActions } from '@/app/settings/_components/FormActions';
 import {
   CheckStatus,
   ProblemList,
@@ -36,15 +36,15 @@ import {
   useThemeNames,
   useThemeOptions,
   type ParsedTemplate,
-} from "@/components/TemplateBodyEditor";
-import { LoadError, Loading } from "@/components/ui";
-import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
-import { ProblemsError, unwrapProblems, type Problem } from "@/lib/api/problems";
-import { formatDate } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { errorMessage, useQuery } from "@/lib/use-query";
+} from '@/components/TemplateBodyEditor';
+import { LoadError, Loading } from '@/components/ui';
+import { ApiError, api, unwrap, type Schemas } from '@/lib/api/client';
+import { ProblemsError, unwrapProblems, type Problem } from '@/lib/api/problems';
+import { formatDate } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-type TemplateOut = Schemas["TemplateOut"];
+type TemplateOut = Schemas['TemplateOut'];
 
 function message(e: unknown) {
   return e instanceof Error && e.message ? e.message : errorMessage(e);
@@ -54,7 +54,10 @@ function message(e: unknown) {
 const TEMPLATE_MISSING = "This template doesn't exist or was deleted.";
 
 const BACK = (
-  <Link href="/settings/templates" className="inline-flex items-center hover:text-text hover:underline max-[600px]:min-h-11">
+  <Link
+    href="/settings/templates"
+    className="inline-flex items-center hover:text-text hover:underline max-[600px]:min-h-11"
+  >
     ← Templates
   </Link>
 );
@@ -62,14 +65,14 @@ const BACK = (
 /** A template: its versions, an editor for the next version, details, archive / restore. */
 export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
   const q = useQuery(`template|${key}`, () =>
-    unwrap(api.GET("/v1/templates/{key}", { params: { path: { key } } })).catch((e: unknown) => {
+    unwrap(api.GET('/v1/templates/{key}', { params: { path: { key } } })).catch((e: unknown) => {
       throw e instanceof ApiError && e.status === 404 ? new ApiError(404, TEMPLATE_MISSING) : e;
     }),
   );
   const t = q.data;
   // #370: approvers and owners change templates; other roles read them, with no editors.
   const { can, capsReady } = useMe();
-  const canEdit = can("update_template");
+  const canEdit = can('update_template');
   const [viewed, setViewed] = useState<number | null>(null);
   const [draft, setDraft] = useState<string | null>(null);
   // qa-F-75: the next version, edited as rows; set once the stored body is read into rows, or
@@ -87,15 +90,15 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
   const latest = t?.versions[t.versions.length - 1];
   // The stored body read into rows, when it is simple enough (qa-F-75); null falls back to
   // the Markdown editor with no toggle.
-  const parsed = useMemo(() => parseTemplateSections(latest?.body ?? ""), [latest?.body]);
+  const parsed = useMemo(() => parseTemplateSections(latest?.body ?? ''), [latest?.body]);
   const inRows = parsed != null && !markdownMode;
   const rows = rowState ?? parsed;
-  const body = rowState ? serializeTemplateSections(rowState) : draft ?? latest?.body ?? "";
+  const body = rowState ? serializeTemplateSections(rowState) : (draft ?? latest?.body ?? '');
   const live = useTemplateCheck(body, !!t);
   const themeName = useThemeNames();
   const themeOptions = useThemeOptions();
 
-  function updateRows(patch: Partial<Pick<ParsedTemplate, "theme" | "secs">>) {
+  function updateRows(patch: Partial<Pick<ParsedTemplate, 'theme' | 'secs'>>) {
     setRowState({ ...(rowState ?? parsed!), ...patch });
   }
 
@@ -158,11 +161,16 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
 
   const shown = t.versions.find((v) => v.version === (viewed ?? latest.version)) ?? latest;
   const nameValue = name ?? t.name;
-  const descriptionValue = description ?? t.description ?? "";
-  const detailsChanged = nameValue.trim() !== t.name || (descriptionValue.trim() || null) !== (t.description ?? null);
+  const descriptionValue = description ?? t.description ?? '';
+  const detailsChanged =
+    nameValue.trim() !== t.name || (descriptionValue.trim() || null) !== (t.description ?? null);
   const check = live.data;
 
-  async function run(label: string, call: () => Promise<TemplateOut>, done: (t: TemplateOut) => string) {
+  async function run(
+    label: string,
+    call: () => Promise<TemplateOut>,
+    done: (t: TemplateOut) => string,
+  ) {
     setBusy(label);
     setError(null);
     setProblems([]);
@@ -182,8 +190,11 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
 
   const saveVersion = () =>
     run(
-      "version",
-      () => unwrapProblems(api.PATCH("/v1/templates/{key}", { params: { path: { key } }, body: { body } })),
+      'version',
+      () =>
+        unwrapProblems(
+          api.PATCH('/v1/templates/{key}', { params: { path: { key } }, body: { body } }),
+        ),
       (next) => {
         setDraft(null);
         setRowState(null);
@@ -194,10 +205,10 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
     );
   const saveDetails = () =>
     run(
-      "details",
+      'details',
       () =>
         unwrapProblems(
-          api.PATCH("/v1/templates/{key}", {
+          api.PATCH('/v1/templates/{key}', {
             params: { path: { key } },
             body: { name: nameValue.trim(), description: descriptionValue.trim() || null },
           }),
@@ -205,23 +216,23 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
       () => {
         setName(null);
         setDescription(null);
-        return "Details saved.";
+        return 'Details saved.';
       },
     );
   const archive = () =>
     run(
-      "archive",
-      () => unwrap(api.DELETE("/v1/templates/{key}", { params: { path: { key } } })),
-      () => "Archived: hidden from the new-draft picker. Documents using it keep working.",
+      'archive',
+      () => unwrap(api.DELETE('/v1/templates/{key}', { params: { path: { key } } })),
+      () => 'Archived: hidden from the new-draft picker. Documents using it keep working.',
     );
   const restore = () =>
     run(
-      "restore",
-      () => unwrap(api.POST("/v1/templates/{key}/restore", { params: { path: { key } } })),
-      () => "Restored.",
+      'restore',
+      () => unwrap(api.POST('/v1/templates/{key}/restore', { params: { path: { key } } })),
+      () => 'Restored.',
     );
 
-  const kindLabel = t.kind === "prd" ? "PRD" : "Roadmap";
+  const kindLabel = t.kind === 'prd' ? 'PRD' : 'Roadmap';
   const dirty = body !== latest.body;
   const shownTitles = sectionTitles(shown.body);
   // qa-settings-28: why the main action is disabled, said next to it.
@@ -230,16 +241,16 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
     busy !== null || saveUnchanged
       ? null
       : live.pending || !check
-        ? "Checking the template…"
+        ? 'Checking the template…'
         : !check.valid
-          ? "Fix the problems above to save."
+          ? 'Fix the problems above to save.'
           : null;
   const detailsUnchanged = busy === null && !detailsChanged;
   const detailsReason =
     busy !== null || detailsUnchanged
       ? null
       : !nameValue.trim()
-        ? "A template needs a name."
+        ? 'A template needs a name.'
         : null;
 
   const inspector = (
@@ -250,22 +261,36 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
         <InspectorSection label="Details">
           <div className="flex flex-col gap-3">
             <Field label="Name">
-              <input className={INPUT} value={nameValue} onChange={(e) => setName(e.target.value)} />
+              <input
+                className={INPUT}
+                value={nameValue}
+                onChange={(e) => setName(e.target.value)}
+              />
             </Field>
             <Field label="Description">
-              <GrowingTextarea value={descriptionValue} onChange={(e) => setDescription(e.target.value)} />
+              <GrowingTextarea
+                value={descriptionValue}
+                onChange={(e) => setDescription(e.target.value)}
+              />
             </Field>
             <FormActions id="details-save-reason" reason={detailsReason}>
               <Button
                 onClick={saveDetails}
                 disabled={!detailsChanged || !nameValue.trim() || busy !== null}
-                aria-describedby={detailsReason || detailsUnchanged ? "details-save-reason" : undefined}
+                aria-describedby={
+                  detailsReason || detailsUnchanged ? 'details-save-reason' : undefined
+                }
               >
-                {busy === "details" ? "Saving…" : "Save details"}
+                {busy === 'details' ? 'Saving…' : 'Save details'}
               </Button>
               {detailsUnchanged && (
                 // #1590: why Save details is disabled sits behind the (i).
-                <InfoTip label="saving the details" align="start" testId="template-meta-save-tip" id="details-save-reason">
+                <InfoTip
+                  label="saving the details"
+                  align="start"
+                  testId="template-meta-save-tip"
+                  id="details-save-reason"
+                >
                   Change the name or description to save them.
                 </InfoTip>
               )}
@@ -285,7 +310,9 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
             <span className="font-semibold break-words">{latest.suggest_when}</span>
           </div>
         )}
-        <InspectorRow value={<span data-testid="suggested-theme">{themeName(t.suggested_theme)}</span>}>
+        <InspectorRow
+          value={<span data-testid="suggested-theme">{themeName(t.suggested_theme)}</span>}
+        >
           Suggested theme
         </InspectorRow>
         <InspectorRow value={formatDate(t.created_at)}>Added</InspectorRow>
@@ -295,11 +322,11 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
         <InspectorSection>
           {t.archived_at ? (
             <Button onClick={restore} disabled={busy !== null}>
-              {busy === "restore" ? "Restoring…" : "Restore"}
+              {busy === 'restore' ? 'Restoring…' : 'Restore'}
             </Button>
           ) : (
             <Button onClick={archive} disabled={busy !== null}>
-              {busy === "archive" ? "Archiving…" : "Archive"}
+              {busy === 'archive' ? 'Archiving…' : 'Archive'}
             </Button>
           )}
         </InspectorSection>
@@ -336,7 +363,7 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
             tools={
               parsed && (
                 <Button variant="ghost" onClick={toggleMarkdown} data-testid="toggle-markdown">
-                  {inRows ? "Edit as Markdown" : "Back to rows"}
+                  {inRows ? 'Edit as Markdown' : 'Back to rows'}
                 </Button>
               )
             }
@@ -345,8 +372,16 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
             {inRows && rows ? (
               <div className="flex flex-col gap-3">
                 <Field label="Theme">
-                  <select aria-label="Theme" className={SELECT_FIELD} value={rows.theme} onChange={(e) => updateRows({ theme: e.target.value })}>
-                    {(themeOptions.length ? themeOptions : [{ key: rows.theme, name: themeName(rows.theme) }]).map((th) => (
+                  <select
+                    aria-label="Theme"
+                    className={SELECT_FIELD}
+                    value={rows.theme}
+                    onChange={(e) => updateRows({ theme: e.target.value })}
+                  >
+                    {(themeOptions.length
+                      ? themeOptions
+                      : [{ key: rows.theme, name: themeName(rows.theme) }]
+                    ).map((th) => (
                       <option key={th.key} value={th.key}>
                         {th.name}
                       </option>
@@ -357,7 +392,12 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
                 <CheckStatus live={live} value={body} />
               </div>
             ) : (
-              <TemplateBodyEditor value={body} onChange={setDraft} label="Template body" live={live} />
+              <TemplateBodyEditor
+                value={body}
+                onChange={setDraft}
+                label="Template body"
+                live={live}
+              />
             )}
             <FormActions id="version-save-reason" reason={saveReason} sticky className="mt-3">
               <Button
@@ -365,13 +405,18 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
                 icon="check"
                 onClick={saveVersion}
                 disabled={busy !== null || live.pending || !check?.valid || body === latest.body}
-                aria-describedby={saveReason || saveUnchanged ? "version-save-reason" : undefined}
+                aria-describedby={saveReason || saveUnchanged ? 'version-save-reason' : undefined}
               >
-                {busy === "version" ? "Saving…" : "Save as new version"}
+                {busy === 'version' ? 'Saving…' : 'Save as new version'}
               </Button>
               {saveUnchanged && (
                 // #1590: why Save as new version is disabled sits behind the (i).
-                <InfoTip label="saving a new version" align="start" testId="template-save-tip" id="version-save-reason">
+                <InfoTip
+                  label="saving a new version"
+                  align="start"
+                  testId="template-save-tip"
+                  id="version-save-reason"
+                >
                   Change the template to save a new version.
                 </InfoTip>
               )}
@@ -424,7 +469,7 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
                 {[...t.versions].reverse().map((v) => (
                   <option key={v.version} value={v.version}>
                     v{v.version} · {formatDate(v.created_at)}
-                    {v.version === latest.version ? " · latest" : ""}
+                    {v.version === latest.version ? ' · latest' : ''}
                   </option>
                 ))}
               </select>
@@ -442,13 +487,13 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
               {sectionNames(shownTitles, shown.brief_sections)}
             </span>
           </div>
-          {shown.warnings.some((w) => w.code === "no_brief_sections") && (
+          {shown.warnings.some((w) => w.code === 'no_brief_sections') && (
             <div className="flex flex-col gap-1 text-sm">
               <p data-testid="version-no-brief" className="flex items-center gap-2">
                 <Chip kind="warn">No brief markers</Chip>
                 <InfoTip label="no brief markers" align="start">
-                  Saved before templates had to mark a brief. Documents drafted from it keep working; the next version must
-                  add brief markers.
+                  Saved before templates had to mark a brief. Documents drafted from it keep
+                  working; the next version must add brief markers.
                 </InfoTip>
               </p>
               <WarningList warnings={shown.warnings} />
@@ -456,7 +501,9 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
           )}
           {/* F-75: the sections above say what the version holds; its Markdown is one click away. */}
           <details data-testid="version-markdown" className="text-sm">
-            <summary className="cursor-pointer font-semibold text-accent-ink">Show as Markdown</summary>
+            <summary className="cursor-pointer font-semibold text-accent-ink">
+              Show as Markdown
+            </summary>
             <pre
               data-testid="version-body"
               className="mt-2 max-h-[32rem] overflow-auto rounded-button border border-line bg-surface2 p-3 font-mono text-[13px] leading-5 whitespace-pre-wrap text-text"

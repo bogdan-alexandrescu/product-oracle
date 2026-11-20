@@ -1,13 +1,13 @@
-import type { ReactNode } from "react";
+import type { ReactNode } from 'react';
 
-import { Numeral } from "./Figures";
-import { PanelCloseButton } from "./panel-close";
+import { Numeral } from './Figures';
+import { PanelCloseButton } from './panel-close';
 
 export type InspectorStat = {
   label: string;
   value?: ReactNode;
   of?: ReactNode;
-  tone?: "crit" | "warn";
+  tone?: 'crit' | 'warn';
   /** Replaces the numeral, e.g. a Ring. */
   figure?: ReactNode;
   /** Rendered after the label, on its line: an InfoTip. */
@@ -17,7 +17,7 @@ export type InspectorStat = {
 
 /** The card head: the hero tokens re-pointed at the card surface's, for everything inside. */
 const CARD_HEAD =
-  "border-b border-line [--hero:var(--surface)] [--hero-2:var(--surface2)] [--hero-text:var(--text)] [--hero-text2:var(--text2)] [--hero-line:var(--line)] [--hero-accent:var(--accent)]";
+  'border-b border-line [--hero:var(--surface)] [--hero-2:var(--surface2)] [--hero-text:var(--text)] [--hero-text2:var(--text2)] [--hero-line:var(--line)] [--hero-accent:var(--accent)]';
 
 /**
  * B1's Atlas inspector: a dark head (eyebrow, title, chips, Open), a strip of big
@@ -36,8 +36,8 @@ export function Inspector({
   children,
   label,
   testId,
-  className = "",
-  tone = "hero",
+  className = '',
+  tone = 'hero',
 }: {
   /** "Feature · selected" */
   eyebrow: ReactNode;
@@ -68,28 +68,32 @@ export function Inspector({
    * hero chips, buttons and rings passed in follow it (their hero colours are re-pointed at
    * the card's), so a caller changes nothing else.
    */
-  tone?: "hero" | "card";
+  tone?: 'hero' | 'card';
 }) {
   const cols = Math.max(1, Math.min(statColumns ?? stats?.length ?? 1, stats?.length ?? 1));
   return (
     <aside
-      aria-label={label ?? (typeof title === "string" ? title : "Inspector")}
+      aria-label={label ?? (typeof title === 'string' ? title : 'Inspector')}
       data-testid={testId}
       className={`min-w-0 overflow-hidden rounded-inspector border border-line bg-surface shadow-panel max-[600px]:rounded-[14px] ${className}`}
     >
       <div
         data-inspector-head={tone}
-        className={`flex-none bg-hero px-5 pt-4 pb-[18px] text-hero-text max-[600px]:px-4 ${tone === "card" ? CARD_HEAD : ""}`}
+        className={`flex-none bg-hero px-5 pt-4 pb-[18px] text-hero-text max-[600px]:px-4 ${tone === 'card' ? CARD_HEAD : ''}`}
       >
         <div className="flex items-center justify-between gap-3">
-          <span className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-hero-text2">{eyebrow}</span>
+          <span className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-hero-text2">
+            {eyebrow}
+          </span>
           <span className="flex items-center gap-3">
             {action}
             <PanelCloseButton onClose={onClose} />
           </span>
         </div>
         {title && (
-          <h2 className="mt-1.5 mb-2.5 font-display text-[22px] leading-[27px] font-bold tracking-heading break-words">{title}</h2>
+          <h2 className="mt-1.5 mb-2.5 font-display text-[22px] leading-[27px] font-bold tracking-heading break-words">
+            {title}
+          </h2>
         )}
         {chips && <div className="flex flex-wrap gap-2">{chips}</div>}
         {head}
@@ -108,21 +112,26 @@ export function Inspector({
                   <span>{s.label}</span>
                   {s.extra}
                 </dt>
-                <dd className="whitespace-nowrap">{s.figure ?? <Numeral value={s.value} of={s.of} tone={s.tone} />}</dd>
+                <dd className="whitespace-nowrap">
+                  {s.figure ?? <Numeral value={s.value} of={s.of} tone={s.tone} />}
+                </dd>
               </div>
             ))}
           </dl>
         </div>
       )}
       {stats && stats.length > 0 && !fitStats && (
-        <dl className="grid border-b border-line" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+        <dl
+          className="grid border-b border-line"
+          style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+        >
           {stats.map((s, i) => (
             <div
               key={s.label}
               data-testid={s.testId}
               className={`flex min-w-0 flex-col-reverse justify-end pt-3.5 pr-2 pb-3 pl-5 max-[600px]:pl-4 ${
-                (i + 1) % cols !== 0 && i !== stats.length - 1 ? "border-r border-line" : ""
-              } ${i >= cols ? "border-t border-line" : ""}`}
+                (i + 1) % cols !== 0 && i !== stats.length - 1 ? 'border-r border-line' : ''
+              } ${i >= cols ? 'border-t border-line' : ''}`}
             >
               <dt className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
                 {/* qa-shell-17: a stat's label wraps, never cut short. */}
@@ -152,7 +161,10 @@ export function InspectorSection({
   testId?: string;
 }) {
   return (
-    <section data-testid={testId} className="border-b border-line px-5 py-3.5 last:border-b-0 max-[600px]:px-4 max-[600px]:py-3">
+    <section
+      data-testid={testId}
+      className="border-b border-line px-5 py-3.5 last:border-b-0 max-[600px]:px-4 max-[600px]:py-3"
+    >
       {label && (
         <div className="mb-2.5 flex items-center gap-2 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
           {label}
@@ -189,9 +201,15 @@ export function InspectorRow({
     );
   return (
     <div className="flex min-h-8 items-center gap-2.5">
-      <span className={fit ? "flex-none whitespace-nowrap" : "min-w-0 flex-1 truncate"}>{children}</span>
+      <span className={fit ? 'flex-none whitespace-nowrap' : 'min-w-0 flex-1 truncate'}>
+        {children}
+      </span>
       {value != null && (
-        <span className={`tnum font-semibold ${fit ? "flex min-w-0 flex-1 justify-end" : "flex-none"}`}>{value}</span>
+        <span
+          className={`tnum font-semibold ${fit ? 'flex min-w-0 flex-1 justify-end' : 'flex-none'}`}
+        >
+          {value}
+        </span>
       )}
     </div>
   );

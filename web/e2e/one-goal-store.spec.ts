@@ -1,6 +1,6 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /*
  * Train AO fix 2: one goal, read and changed in one place. On Priorities ("goal-buckets-undated":
@@ -26,131 +26,167 @@ import { expect, test, type Locator, type Page } from "./test";
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
-const panel = (page: Page) => page.getByTestId("floating-card");
-const bucket = (page: Page) => page.locator('[data-testid="goal-bucket"][data-key="grow-retention"]');
-const WAS = "Teams active after 90 days";
-const NEW = "Teams active after 60 days";
+const panel = (page: Page) => page.getByTestId('floating-card');
+const bucket = (page: Page) =>
+  page.locator('[data-testid="goal-bucket"][data-key="grow-retention"]');
+const WAS = 'Teams active after 90 days';
+const NEW = 'Teams active after 60 days';
 
 async function tap(l: Locator) {
-  await l.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await l.evaluate((el) => el.scrollIntoView({ block: 'center' }));
   await l.click();
 }
 
 /** With the keyboard: the open panel sits over the page's right side. */
 async function press(l: Locator) {
   await l.focus();
-  await l.press("Enter");
+  await l.press('Enter');
 }
 
 /** Priorities, with Weekly alert digest's panel open over the Goal buckets tab. */
 async function open(page: Page) {
-  await page.context().addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, "goal-buckets-undated"] as const);
+  await page
+    .context()
+    .addInitScript(([k, v]) => localStorage.setItem(k, v), [
+      MOCK_SCENARIO_KEY,
+      'goal-buckets-undated',
+    ] as const);
   await login(page);
-  await page.goto("/simple/priorities");
-  await tap(page.getByTestId("prio-title").filter({ hasText: "Weekly alert digest" }));
-  await expect(panel(page).getByTestId("card-goal-measure")).toHaveText(WAS);
-  await tap(page.locator("#prio-tab-buckets"));
-  await expect(bucket(page).getByRole("button", { name: "More for Grow retention" })).toBeVisible();
+  await page.goto('/simple/priorities');
+  await tap(page.getByTestId('prio-title').filter({ hasText: 'Weekly alert digest' }));
+  await expect(panel(page).getByTestId('card-goal-measure')).toHaveText(WAS);
+  await tap(page.locator('#prio-tab-buckets'));
+  await expect(bucket(page).getByRole('button', { name: 'More for Grow retention' })).toBeVisible();
 }
 
 async function panelMeasure(page: Page, to: string) {
-  await tap(panel(page).getByRole("button", { name: "Change the measure" }));
-  await panel(page).getByTestId("card-goal-measure-edit").getByLabel("Measure").fill(to);
-  await tap(panel(page).getByTestId("card-goal-measure-edit").getByRole("button", { name: "Save" }));
-  await expect(panel(page).getByTestId("card-goal-measure")).toHaveText(to);
+  await tap(panel(page).getByRole('button', { name: 'Change the measure' }));
+  await panel(page).getByTestId('card-goal-measure-edit').getByLabel('Measure').fill(to);
+  await tap(
+    panel(page).getByTestId('card-goal-measure-edit').getByRole('button', { name: 'Save' }),
+  );
+  await expect(panel(page).getByTestId('card-goal-measure')).toHaveText(to);
 }
 
 async function editGoal(page: Page): Promise<Locator> {
-  await tap(bucket(page).getByRole("button", { name: "More for Grow retention" }));
-  await tap(page.getByRole("menuitem", { name: "Edit goal" }));
-  return bucket(page).getByTestId("goal-form").getByLabel("Measure");
+  await tap(bucket(page).getByRole('button', { name: 'More for Grow retention' }));
+  await tap(page.getByRole('menuitem', { name: 'Edit goal' }));
+  return bucket(page).getByTestId('goal-form').getByLabel('Measure');
 }
 
-test("a measure changed in the panel shows in the bucket's Edit goal, and its Undo too", async ({ page }) => {
+test("a measure changed in the panel shows in the bucket's Edit goal, and its Undo too", async ({
+  page,
+}) => {
   await open(page);
   await panelMeasure(page, NEW);
   await expect(await editGoal(page)).toHaveValue(NEW);
-  await tap(bucket(page).getByRole("button", { name: "Cancel" }));
-  await tap(page.getByRole("button", { name: "Undo" }).last());
-  await expect(panel(page).getByTestId("card-goal-measure")).toHaveText(WAS);
+  await tap(bucket(page).getByRole('button', { name: 'Cancel' }));
+  await tap(page.getByRole('button', { name: 'Undo' }).last());
+  await expect(panel(page).getByTestId('card-goal-measure')).toHaveText(WAS);
   await expect(await editGoal(page)).toHaveValue(WAS);
 });
 
-test("a measure changed in Edit goal shows in the open panel, and its Undo too", async ({ page }) => {
+test('a measure changed in Edit goal shows in the open panel, and its Undo too', async ({
+  page,
+}) => {
   await open(page);
   const measure = await editGoal(page);
   await measure.fill(NEW);
-  await tap(bucket(page).getByRole("button", { name: "Save goal" }));
-  await expect(page.getByTestId("bucket-note")).toContainText("Saved Grow retention");
-  await expect(panel(page).getByTestId("card-goal-measure")).toHaveText(NEW);
-  await press(page.getByTestId("bucket-note").getByRole("button", { name: "Undo" }));
-  await expect(panel(page).getByTestId("card-goal-measure")).toHaveText(WAS);
+  await tap(bucket(page).getByRole('button', { name: 'Save goal' }));
+  await expect(page.getByTestId('bucket-note')).toContainText('Saved Grow retention');
+  await expect(panel(page).getByTestId('card-goal-measure')).toHaveText(NEW);
+  await press(page.getByTestId('bucket-note').getByRole('button', { name: 'Undo' }));
+  await expect(panel(page).getByTestId('card-goal-measure')).toHaveText(WAS);
 });
 
-test("Edit goal opened before the panel changed the measure is refused, in plain words, then saves", async ({ page }) => {
+test('Edit goal opened before the panel changed the measure is refused, in plain words, then saves', async ({
+  page,
+}) => {
   await open(page);
   const measure = await editGoal(page);
-  await measure.fill("Teams active after 30 days");
+  await measure.fill('Teams active after 30 days');
   await panelMeasure(page, NEW);
-  await tap(bucket(page).getByRole("button", { name: "Save goal" }));
+  await tap(bucket(page).getByRole('button', { name: 'Save goal' }));
   // The refusal shows in the open form, which keeps what the person typed.
-  const form = bucket(page).getByTestId("goal-form");
-  await expect(form.getByRole("alert")).toHaveText("This goal changed since you opened it. Look again and save.");
-  await expect(page.getByRole("alert").filter({ hasText: "This goal changed since you opened it." })).toHaveCount(1);
-  await expect(panel(page).getByTestId("card-goal-measure")).toHaveText(NEW);
-  await expect(measure).toHaveValue("Teams active after 30 days");
-  await expect(form.getByTestId("goal-form-now")).toHaveText(`Saved now: ${NEW}`);
+  const form = bucket(page).getByTestId('goal-form');
+  await expect(form.getByRole('alert')).toHaveText(
+    'This goal changed since you opened it. Look again and save.',
+  );
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'This goal changed since you opened it.' }),
+  ).toHaveCount(1);
+  await expect(panel(page).getByTestId('card-goal-measure')).toHaveText(NEW);
+  await expect(measure).toHaveValue('Teams active after 30 days');
+  await expect(form.getByTestId('goal-form-now')).toHaveText(`Saved now: ${NEW}`);
   // The form now reads the goal as it is, so the next Save goal goes through.
-  await tap(form.getByRole("button", { name: "Save goal" }));
+  await tap(form.getByRole('button', { name: 'Save goal' }));
   await expect(form).toHaveCount(0);
-  await expect(panel(page).getByTestId("card-goal-measure")).toHaveText("Teams active after 30 days");
-  await expect(await editGoal(page)).toHaveValue("Teams active after 30 days");
+  await expect(panel(page).getByTestId('card-goal-measure')).toHaveText(
+    'Teams active after 30 days',
+  );
+  await expect(await editGoal(page)).toHaveValue('Teams active after 30 days');
 });
 
-test("deleting a feature from its row closes its open panel", async ({ page }) => {
-  await page.context().addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, "goal-buckets-undated"] as const);
+test('deleting a feature from its row closes its open panel', async ({ page }) => {
+  await page
+    .context()
+    .addInitScript(([k, v]) => localStorage.setItem(k, v), [
+      MOCK_SCENARIO_KEY,
+      'goal-buckets-undated',
+    ] as const);
   await login(page);
-  await page.goto("/simple/priorities");
-  const row = page.getByTestId("prio-title").filter({ hasText: "Weekly alert digest" });
+  await page.goto('/simple/priorities');
+  const row = page.getByTestId('prio-title').filter({ hasText: 'Weekly alert digest' });
   await tap(row);
   await expect(panel(page)).toBeVisible();
   // prio-company: a row names a feature's own code only; qa-nov17 gave the digest its own F-79 (F-06 is
   // the Ground Truth's Setup error report), so its ⋯ names it with that code.
-  await press(page.getByRole("button", { name: "More for Weekly alert digest (F-79)", exact: true }));
-  await press(page.getByRole("menuitem", { name: "Delete feature" }));
-  await expect(page.getByText("Moved Weekly alert digest to Trash.")).toBeVisible();
+  await press(
+    page.getByRole('button', { name: 'More for Weekly alert digest (F-79)', exact: true }),
+  );
+  await press(page.getByRole('menuitem', { name: 'Delete feature' }));
+  await expect(page.getByText('Moved Weekly alert digest to Trash.')).toBeVisible();
   await expect(panel(page)).toHaveCount(0);
 });
 
-test("once a goal is in Trash, the panel leaves it out and changes the feature's goal", async ({ page }) => {
-  await page.context().addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, "goal-buckets-undated"] as const);
+test("once a goal is in Trash, the panel leaves it out and changes the feature's goal", async ({
+  page,
+}) => {
+  await page
+    .context()
+    .addInitScript(([k, v]) => localStorage.setItem(k, v), [
+      MOCK_SCENARIO_KEY,
+      'goal-buckets-undated',
+    ] as const);
   await login(page);
-  await page.goto("/simple/priorities?tab=buckets");
-  await tap(bucket(page).getByRole("button", { name: "More for Grow retention" }));
-  await tap(page.getByRole("menuitem", { name: "Delete goal" }));
+  await page.goto('/simple/priorities?tab=buckets');
+  await tap(bucket(page).getByRole('button', { name: 'More for Grow retention' }));
+  await tap(page.getByRole('menuitem', { name: 'Delete goal' }));
   // This quarter's bucket holds none of the alerts work (it is dated past the quarter), yet the
   // goal still holds it: the dialog names it and asks where it goes.
-  const dialog = page.getByRole("dialog", { name: "Delete Grow retention" });
-  await expect(dialog).not.toContainText("It holds no features.");
-  const to = dialog.getByLabel("Goal", { exact: true });
-  const goals = await to.locator("option").allTextContents();
-  await to.selectOption({ label: goals.find((o) => o.includes("Faster activation"))! });
-  await expect(dialog).toContainText("Faster activation will hold");
-  await tap(dialog.getByRole("button", { name: "Delete goal" }));
+  const dialog = page.getByRole('dialog', { name: 'Delete Grow retention' });
+  await expect(dialog).not.toContainText('It holds no features.');
+  const to = dialog.getByLabel('Goal', { exact: true });
+  const goals = await to.locator('option').allTextContents();
+  await to.selectOption({ label: goals.find((o) => o.includes('Faster activation'))! });
+  await expect(dialog).toContainText('Faster activation will hold');
+  await tap(dialog.getByRole('button', { name: 'Delete goal' }));
   await expect(bucket(page)).toHaveCount(0);
 
-  await tap(page.locator("#prio-tab-ranked"));
-  await tap(page.getByTestId("prio-title").filter({ hasText: "Weekly alert digest" }));
-  const goal = panel(page).getByTestId("card-goal");
-  await expect(goal).toContainText("Faster activation");
-  await expect(goal).not.toContainText("Grow retention");
-  await tap(panel(page).getByRole("button", { name: "Change the goal" }));
-  const pick = panel(page).getByTestId("card-goal-edit").getByLabel("Goal");
-  const options = await pick.locator("option").allTextContents();
-  expect(options.some((o) => o.includes("Grow retention"))).toBe(false);
-  const other = options.find((o) => o.trim() && !o.includes("Faster activation") && !o.startsWith("Its feature's goal"))!;
+  await tap(page.locator('#prio-tab-ranked'));
+  await tap(page.getByTestId('prio-title').filter({ hasText: 'Weekly alert digest' }));
+  const goal = panel(page).getByTestId('card-goal');
+  await expect(goal).toContainText('Faster activation');
+  await expect(goal).not.toContainText('Grow retention');
+  await tap(panel(page).getByRole('button', { name: 'Change the goal' }));
+  const pick = panel(page).getByTestId('card-goal-edit').getByLabel('Goal');
+  const options = await pick.locator('option').allTextContents();
+  expect(options.some((o) => o.includes('Grow retention'))).toBe(false);
+  const other = options.find(
+    (o) => o.trim() && !o.includes('Faster activation') && !o.startsWith("Its feature's goal"),
+  )!;
   await pick.selectOption({ label: other });
-  await tap(panel(page).getByTestId("card-goal-edit").getByRole("button", { name: "Save" }));
-  await expect(goal).toContainText(other.replace(/ \(measured by .*\)$/, ""));
-  await expect(page.getByText("Changed since you saw it")).toHaveCount(0);
+  await tap(panel(page).getByTestId('card-goal-edit').getByRole('button', { name: 'Save' }));
+  await expect(goal).toContainText(other.replace(/ \(measured by .*\)$/, ''));
+  await expect(page.getByText('Changed since you saw it')).toHaveCount(0);
 });

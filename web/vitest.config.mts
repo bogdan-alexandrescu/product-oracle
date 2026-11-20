@@ -1,7 +1,7 @@
-import { fileURLToPath } from "node:url";
+import { fileURLToPath } from 'node:url';
 
-import react from "@vitejs/plugin-react";
-import { defineConfig } from "vitest/config";
+import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vitest/config';
 
 /**
  * Unit tests beside their module (#1583): pure logic in `*.test.ts` runs in Node; a render
@@ -11,29 +11,33 @@ import { defineConfig } from "vitest/config";
  */
 export default defineConfig({
   plugins: [react()],
-  resolve: { alias: { "@": fileURLToPath(new URL(".", import.meta.url)) } },
+  resolve: { alias: { '@': fileURLToPath(new URL('.', import.meta.url)) } },
   test: {
     projects: [
       {
         extends: true,
         test: {
-          name: "logic",
-          environment: "node",
-          include: ["{app,components,lib,scripts}/**/*.test.ts"],
-          exclude: ["**/node_modules/**", "**/*.timing.test.ts"],
+          name: 'logic',
+          environment: 'node',
+          include: ['{app,components,lib,scripts}/**/*.test.ts'],
+          exclude: ['**/node_modules/**', '**/*.timing.test.ts'],
         },
       },
       {
         extends: true,
-        test: { name: "timing", environment: "node", include: ["{app,components,lib}/**/*.timing.test.ts"] },
+        test: {
+          name: 'timing',
+          environment: 'node',
+          include: ['{app,components,lib}/**/*.timing.test.ts'],
+        },
       },
       {
         extends: true,
         test: {
-          name: "render",
-          environment: "happy-dom",
-          include: ["{app,components,lib}/**/*.test.tsx"],
-          setupFiles: ["./vitest.setup.ts"],
+          name: 'render',
+          environment: 'happy-dom',
+          include: ['{app,components,lib}/**/*.test.tsx'],
+          setupFiles: ['./vitest.setup.ts'],
         },
       },
     ],

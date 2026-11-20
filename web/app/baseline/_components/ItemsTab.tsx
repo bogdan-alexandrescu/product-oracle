@@ -1,24 +1,24 @@
-"use client";
+'use client';
 
-import { useState } from "react";
+import { useState } from 'react';
 
-import { Button, DataTable, FilterChips, Panel, type Column } from "@/components/ds";
-import type { EntityOut, GraphOut } from "@/lib/api/client";
-import { formatDate } from "@/lib/format";
+import { Button, DataTable, FilterChips, Panel, type Column } from '@/components/ds';
+import type { EntityOut, GraphOut } from '@/lib/api/client';
+import { formatDate } from '@/lib/format';
 
-import type { AddKind } from "./AddItem";
-import { LockMark, NodeStatusBadge } from "./common";
-import { byTitle } from "./order";
+import type { AddKind } from './AddItem';
+import { LockMark, NodeStatusBadge } from './common';
+import { byTitle } from './order';
 
 const KINDS = [
-  { value: "risk", label: "Risks", one: "Risk" },
-  { value: "assumption", label: "Assumptions", one: "Assumption" },
-  { value: "requirement", label: "Requirements", one: "Requirement" },
-  { value: "strategy_choice", label: "Strategy choices", one: "Strategy choice" },
+  { value: 'risk', label: 'Risks', one: 'Risk' },
+  { value: 'assumption', label: 'Assumptions', one: 'Assumption' },
+  { value: 'requirement', label: 'Requirements', one: 'Requirement' },
+  { value: 'strategy_choice', label: 'Strategy choices', one: 'Strategy choice' },
 ] as const;
 
-type Kind = (typeof KINDS)[number]["value"];
-type Filter = Kind | "all";
+type Kind = (typeof KINDS)[number]['value'];
+type Filter = Kind | 'all';
 
 /**
  * The items the Ledger does not draw (#337): risks, assumptions, requirements and strategy
@@ -39,17 +39,17 @@ export function ItemsTab({
   onOpen: (id: string) => void;
   onAdd: (kind: AddKind) => void;
 }) {
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilter] = useState<Filter>('all');
   const items = graph.entities
-    .filter((e) => e.status !== "rejected" && KINDS.some((k) => k.value === e.type))
+    .filter((e) => e.status !== 'rejected' && KINDS.some((k) => k.value === e.type))
     .sort(byTitle);
-  const shown = filter === "all" ? items : items.filter((e) => e.type === filter);
-  const label = (t: EntityOut["type"]) => KINDS.find((k) => k.value === t)?.one ?? t;
+  const shown = filter === 'all' ? items : items.filter((e) => e.type === filter);
+  const label = (t: EntityOut['type']) => KINDS.find((k) => k.value === t)?.one ?? t;
 
   const cols: Column<EntityOut>[] = [
     {
-      key: "title",
-      header: "Item",
+      key: 'title',
+      header: 'Item',
       cell: (e) => (
         <span className="flex min-w-0 items-center gap-2">
           <button
@@ -66,12 +66,22 @@ export function ItemsTab({
         </span>
       ),
     },
-    { key: "kind", header: "Kind", width: "150px", cell: (e) => <span className="text-text2">{label(e.type)}</span> },
-    { key: "state", header: "Review", width: "120px", cell: (e) => <NodeStatusBadge status={e.status} /> },
     {
-      key: "updated",
-      header: "Updated",
-      width: "120px",
+      key: 'kind',
+      header: 'Kind',
+      width: '150px',
+      cell: (e) => <span className="text-text2">{label(e.type)}</span>,
+    },
+    {
+      key: 'state',
+      header: 'Review',
+      width: '120px',
+      cell: (e) => <NodeStatusBadge status={e.status} />,
+    },
+    {
+      key: 'updated',
+      header: 'Updated',
+      width: '120px',
       hideOnPhone: true,
       cell: (e) => <span className="tnum text-text2">{formatDate(e.updated_at)}</span>,
     },
@@ -83,7 +93,7 @@ export function ItemsTab({
       count={items.length}
       tools={
         canWrite ? (
-          <Button icon="plus" onClick={() => onAdd(filter === "all" ? "risk" : filter)}>
+          <Button icon="plus" onClick={() => onAdd(filter === 'all' ? 'risk' : filter)}>
             Add
           </Button>
         ) : undefined
@@ -95,8 +105,12 @@ export function ItemsTab({
           value={filter}
           onChange={setFilter}
           items={[
-            { value: "all", label: "All", count: items.length },
-            ...KINDS.map((k) => ({ value: k.value, label: k.label, count: items.filter((e) => e.type === k.value).length })),
+            { value: 'all', label: 'All', count: items.length },
+            ...KINDS.map((k) => ({
+              value: k.value,
+              label: k.label,
+              count: items.filter((e) => e.type === k.value).length,
+            })),
           ]}
         />
       </div>
@@ -108,8 +122,8 @@ export function ItemsTab({
         selected={selectedId}
         onSelect={(id) => onOpen(id)}
         empty={
-          filter === "all"
-            ? "No risks, assumptions, requirements or strategy choices yet"
+          filter === 'all'
+            ? 'No risks, assumptions, requirements or strategy choices yet'
             : `No ${KINDS.find((k) => k.value === filter)!.label.toLowerCase()} yet`
         }
       />

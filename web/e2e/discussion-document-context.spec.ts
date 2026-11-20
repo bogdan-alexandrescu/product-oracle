@@ -1,7 +1,7 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login, openSection, sectionAction } from "./helpers";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login, openSection, sectionAction } from './helpers';
 
 /*
  * #406 through the UI, on the mock layer ("discussion-replies" scenario): in a discussion on
@@ -16,23 +16,32 @@ import { login, openSection, sectionAction } from "./helpers";
  * api/tests/test_discussion_document_context.py).
  */
 
-const DOC = "/documents/annual-billing/v/2";
-const COMMENTER = "commenter@example.com";
-const QUESTION = "When does the experiment stop early?";
+const DOC = '/documents/annual-billing/v/2';
+const COMMENTER = 'commenter@example.com';
+const QUESTION = 'When does the experiment stop early?';
 
-const thread = (page: Page) => page.getByTestId("discussion-thread").filter({ visible: true });
-const reply = (page: Page) => thread(page).getByTestId("oracle-reply").last();
+const thread = (page: Page) => page.getByTestId('discussion-thread').filter({ visible: true });
+const reply = (page: Page) => thread(page).getByTestId('oracle-reply').last();
 
-test("asked about the document, Oracle's streamed reply cites it and never shows a raw marker", async ({ page }) => {
-  await page.addInitScript((key) => localStorage.setItem(key, "discussion-replies"), MOCK_SCENARIO_KEY);
+test("asked about the document, Oracle's streamed reply cites it and never shows a raw marker", async ({
+  page,
+}) => {
+  await page.addInitScript(
+    (key) => localStorage.setItem(key, 'discussion-replies'),
+    MOCK_SCENARIO_KEY,
+  );
   await login(page, COMMENTER);
   await page.goto(DOC);
-  const s = await openSection(page, "problem");
-  await sectionAction(s, "2. Problem", "Start a discussion");
-  await page.getByTestId("start-discussion").filter({ visible: true }).getByRole("button", { name: "Start discussion" }).click();
+  const s = await openSection(page, 'problem');
+  await sectionAction(s, '2. Problem', 'Start a discussion');
+  await page
+    .getByTestId('start-discussion')
+    .filter({ visible: true })
+    .getByRole('button', { name: 'Start discussion' })
+    .click();
   await expect(thread(page)).toBeVisible();
-  await thread(page).getByRole("textbox", { name: "Message" }).fill(QUESTION);
-  await thread(page).getByRole("button", { name: "Send" }).click();
+  await thread(page).getByRole('textbox', { name: 'Message' }).fill(QUESTION);
+  await thread(page).getByRole('button', { name: 'Send' }).click();
 
   // What a reader sees at each paint, sampled until the reply ends.
   const seen: { status: string | null; text: string; chip: boolean }[] = [];
@@ -40,8 +49,8 @@ test("asked about the document, Oracle's streamed reply cites it and never shows
     .poll(
       async () => {
         const sample = await reply(page).evaluate((el) => ({
-          status: el.getAttribute("data-status"),
-          text: el.querySelector('[data-testid="oracle-reply-text"]')?.textContent ?? "",
+          status: el.getAttribute('data-status'),
+          text: el.querySelector('[data-testid="oracle-reply-text"]')?.textContent ?? '',
           chip: !!el.querySelector('[data-testid^="cite-"]'),
         }));
         seen.push(sample);
@@ -49,15 +58,17 @@ test("asked about the document, Oracle's streamed reply cites it and never shows
       },
       { intervals: [20], timeout: 10_000 },
     )
-    .toBe("complete");
+    .toBe('complete');
 
-  const streaming = seen.filter((x) => x.status === "streaming" && x.text);
+  const streaming = seen.filter((x) => x.status === 'streaming' && x.text);
   expect(streaming.length).toBeGreaterThan(1);
   expect(seen.filter((x) => /\[c(:|$)|\[$/.test(x.text))).toEqual([]);
   // The chip comes while it still streams, not only at the end.
   expect(streaming.some((x) => x.chip)).toBe(true);
 
-  await expect(reply(page).getByTestId("oracle-reply-text")).toContainText("refund-rate guardrail is breached for two consecutive weeks");
-  const chip = reply(page).getByRole("button", { name: /^Citation \d+: .*Success metrics/ });
+  await expect(reply(page).getByTestId('oracle-reply-text')).toContainText(
+    'refund-rate guardrail is breached for two consecutive weeks',
+  );
+  const chip = reply(page).getByRole('button', { name: /^Citation \d+: .*Success metrics/ });
   await expect(chip).toBeVisible();
 });

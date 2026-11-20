@@ -1,32 +1,32 @@
-"use client";
+'use client';
 
-import { useId, useMemo, useState, type FormEvent } from "react";
+import { useId, useMemo, useState, type FormEvent } from 'react';
 
-import { ConfidenceBadge, DEFAULT_LOW, sourceKindLabel } from "@/app/baseline/_components/common";
-import { InfoTip } from "@/components/ds";
-import { Button, ErrorNote, INPUT } from "@/components/ui";
-import { api, ApiError, type EntityOut, type LinkPreviewOut } from "@/lib/api/client";
-import { formatDate } from "@/lib/format";
-import { useAuthRedirect } from "@/lib/use-query";
+import { ConfidenceBadge, DEFAULT_LOW, sourceKindLabel } from '@/app/baseline/_components/common';
+import { InfoTip } from '@/components/ds';
+import { Button, ErrorNote, INPUT } from '@/components/ui';
+import { api, ApiError, type EntityOut, type LinkPreviewOut } from '@/lib/api/client';
+import { formatDate } from '@/lib/format';
+import { useAuthRedirect } from '@/lib/use-query';
 
 type Target = { entity_id: string } | { edge_id: string };
 
-const LABEL = "block text-[13px] font-semibold tracking-[0.02em] text-text2";
+const LABEL = 'block text-[13px] font-semibold tracking-[0.02em] text-text2';
 
 const FACTOR_LABEL: Record<string, string> = {
-  source: "Source",
-  freshness: "Freshness",
-  mentions: "Mentions",
-  goal_impact: "Goal impact",
+  source: 'Source',
+  freshness: 'Freshness',
+  mentions: 'Mentions',
+  goal_impact: 'Goal impact',
 };
 
 /** The API's own words for a refused link ("This link is not public: …"), else a plain sentence. */
 function linkError(error: unknown, status: number): string {
-  if (error && typeof error === "object" && "detail" in error && typeof error.detail === "string") {
+  if (error && typeof error === 'object' && 'detail' in error && typeof error.detail === 'string') {
     return error.detail;
   }
-  if (status === 403) return "You need the commenter role to add evidence.";
-  return "Could not fetch the link. Try again.";
+  if (status === 403) return 'You need the commenter role to add evidence.';
+  return 'Could not fetch the link. Try again.';
 }
 
 /**
@@ -68,9 +68,9 @@ export function AddEvidenceLink({
   onSaved?: () => void;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  const [url, setUrl] = useState("");
-  const [note, setNote] = useState("");
-  const [picked, setPicked] = useState<string>(suggested ?? "");
+  const [url, setUrl] = useState('');
+  const [note, setNote] = useState('');
+  const [picked, setPicked] = useState<string>(suggested ?? '');
   const [preview, setPreview] = useState<LinkPreviewOut | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,33 +81,35 @@ export function AddEvidenceLink({
   const choices = useMemo(
     () =>
       [...(entities ?? [])]
-        .filter((e) => e.status !== "rejected")
+        .filter((e) => e.status !== 'rejected')
         .sort((a, b) => a.type.localeCompare(b.type) || a.title.localeCompare(b.title)),
     [entities],
   );
   const chosen: Target | null = target ?? (picked ? { entity_id: picked } : null);
 
   function reset() {
-    setUrl("");
-    setNote("");
+    setUrl('');
+    setNote('');
     setPreview(null);
     setError(null);
   }
 
-  async function call<T>(run: () => Promise<{ data?: T; error?: unknown; response: Response }>): Promise<T | null> {
+  async function call<T>(
+    run: () => Promise<{ data?: T; error?: unknown; response: Response }>,
+  ): Promise<T | null> {
     setBusy(true);
     setError(null);
     try {
       const { data, error: err, response } = await run();
       if (response.ok) return data as T;
       if (response.status === 401) {
-        onAuth(new ApiError(401, "Your session has expired. Sign in again."));
+        onAuth(new ApiError(401, 'Your session has expired. Sign in again.'));
         return null;
       }
       setError(linkError(err, response.status));
       return null;
     } catch {
-      setError("Cannot reach the API.");
+      setError('Cannot reach the API.');
       return null;
     } finally {
       setBusy(false);
@@ -118,22 +120,26 @@ export function AddEvidenceLink({
     e?.preventDefault();
     setSaved(null);
     if (!chosen) {
-      setError("Pick the Ground Truth item this link supports.");
+      setError('Pick the Ground Truth item this link supports.');
       return;
     }
     if (!url.trim()) {
-      setError("Paste a link first.");
+      setError('Paste a link first.');
       return;
     }
     setPreview(null);
-    const out = await call(() => api.POST("/v1/baseline/evidence/link/preview", { body: { ...chosen, url: url.trim() } }));
+    const out = await call(() =>
+      api.POST('/v1/baseline/evidence/link/preview', { body: { ...chosen, url: url.trim() } }),
+    );
     if (out) setPreview(out);
   }
 
   async function save() {
     if (!chosen || !preview) return;
     const out = await call(() =>
-      api.POST("/v1/baseline/evidence/link", { body: { ...chosen, url: preview.url, note: note.trim() || null } }),
+      api.POST('/v1/baseline/evidence/link', {
+        body: { ...chosen, url: preview.url, note: note.trim() || null },
+      }),
     );
     if (out) {
       setSaved(`Saved “${out.ref ?? out.url}” as evidence. Everyone can see it.`);
@@ -151,23 +157,28 @@ export function AddEvidenceLink({
             {saved}
           </p>
         )}
-        {!onClose && <Button
-          size="sm"
-          variant={quiet ? "ghost" : "secondary"}
-          onClick={() => {
-            setSaved(null);
-            setOpen(true);
-          }}
-          aria-label={context ? `Add evidence link to ${context}` : "Add evidence link"}
-        >
-          Add evidence link
-        </Button>}
+        {!onClose && (
+          <Button
+            size="sm"
+            variant={quiet ? 'ghost' : 'secondary'}
+            onClick={() => {
+              setSaved(null);
+              setOpen(true);
+            }}
+            aria-label={context ? `Add evidence link to ${context}` : 'Add evidence link'}
+          >
+            Add evidence link
+          </Button>
+        )}
       </div>
     );
   }
 
-  const breakdown = (preview?.confidence_factors as { breakdown?: Record<string, { value?: number; weight?: number }> })
-    ?.breakdown;
+  const breakdown = (
+    preview?.confidence_factors as {
+      breakdown?: Record<string, { value?: number; weight?: number }>;
+    }
+  )?.breakdown;
 
   return (
     <form
@@ -205,8 +216,8 @@ export function AddEvidenceLink({
             Public link
           </label>
           <InfoTip label="link rules" align="start">
-            No account needed: the page must be public (a Google Doc shared with anyone with the link). Everyone in the
-            company will see it.
+            No account needed: the page must be public (a Google Doc shared with anyone with the
+            link). Everyone in the company will see it.
           </InfoTip>
         </span>
         <input
@@ -241,12 +252,16 @@ export function AddEvidenceLink({
       {error && <ErrorNote>{error}</ErrorNote>}
 
       {preview && (
-        <div className="rounded-button border border-line bg-surface p-3" data-testid="link-preview" aria-label="Link preview">
+        <div
+          className="rounded-button border border-line bg-surface p-3"
+          data-testid="link-preview"
+          aria-label="Link preview"
+        >
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="tnum text-[13px] font-semibold text-text2">
                 {sourceKindLabel(preview.kind)} · fetched {formatDate(preview.fetched_at)}
-                {preview.last_modified ? ` · updated ${formatDate(preview.last_modified)}` : ""}
+                {preview.last_modified ? ` · updated ${formatDate(preview.last_modified)}` : ''}
               </p>
               <p className="font-semibold break-words" data-testid="link-preview-title">
                 {preview.title ?? preview.url}
@@ -254,14 +269,20 @@ export function AddEvidenceLink({
             </div>
             <ConfidenceBadge value={preview.confidence} low={low} />
           </div>
-          <p className="mt-2 line-clamp-4 border-l-2 border-accent pl-2.5 text-text2" data-testid="link-preview-excerpt">
+          <p
+            className="mt-2 line-clamp-4 border-l-2 border-accent pl-2.5 text-text2"
+            data-testid="link-preview-excerpt"
+          >
             “{preview.excerpt}”
           </p>
           {breakdown && (
             <p className="tnum mt-2 text-[13px] text-text2" data-testid="link-preview-factors">
               {Object.entries(breakdown)
-                .map(([k, f]) => `${FACTOR_LABEL[k] ?? k} ${typeof f.value === "number" ? f.value.toFixed(2) : "—"}`)
-                .join(" · ")}
+                .map(
+                  ([k, f]) =>
+                    `${FACTOR_LABEL[k] ?? k} ${typeof f.value === 'number' ? f.value.toFixed(2) : '—'}`,
+                )
+                .join(' · ')}
             </p>
           )}
           {preview.already_cited && (
@@ -275,11 +296,11 @@ export function AddEvidenceLink({
       <div className="flex flex-wrap gap-2">
         {preview && !preview.already_cited ? (
           <Button variant="primary" size="sm" onClick={save} disabled={busy}>
-            {busy ? "Saving…" : "Save evidence"}
+            {busy ? 'Saving…' : 'Save evidence'}
           </Button>
         ) : (
           <Button type="submit" variant="primary" size="sm" disabled={busy}>
-            {busy ? "Fetching…" : "Preview"}
+            {busy ? 'Fetching…' : 'Preview'}
           </Button>
         )}
         <Button

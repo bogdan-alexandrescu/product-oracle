@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { useLayoutEffect, useRef, type TextareaHTMLAttributes } from "react";
+import { useLayoutEffect, useRef, type TextareaHTMLAttributes } from 'react';
 
-import { TEXTAREA } from "@/app/settings/_components/fields";
+import { TEXTAREA } from '@/app/settings/_components/fields';
 
 /**
  * A text box that grows with its text, so a long description is read whole instead of
@@ -10,15 +10,15 @@ import { TEXTAREA } from "@/app/settings/_components/fields";
  */
 export function GrowingTextarea({
   value,
-  className = "",
+  className = '',
   ...rest
-}: Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "value" | "rows"> & { value: string }) {
+}: Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'value' | 'rows'> & { value: string }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
     const fit = () => {
-      el.style.height = "auto";
+      el.style.height = 'auto';
       // Hidden (not laid out): keep the natural height rather than a height of 0.
       if (!el.scrollHeight) return;
       el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
@@ -34,5 +34,13 @@ export function GrowingTextarea({
     ro.observe(el);
     return () => ro.disconnect();
   }, [value]);
-  return <textarea ref={ref} rows={1} value={value} className={`${TEXTAREA} resize-none overflow-hidden ${className}`} {...rest} />;
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      value={value}
+      className={`${TEXTAREA} resize-none overflow-hidden ${className}`}
+      {...rest}
+    />
+  );
 }

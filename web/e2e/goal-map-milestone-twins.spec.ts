@@ -1,7 +1,7 @@
-import { LADDER_TWINS, LADDER_TWINS_SCENARIO } from "../lib/api/mock/goal-ladder";
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { LADDER_TWINS, LADDER_TWINS_SCENARIO } from '../lib/api/mock/goal-ladder';
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /*
  * Goal map milestone twins (the owner's Goal map findings of Nov 10), on the mock's "goal-ladder-twins"
@@ -23,23 +23,29 @@ import { expect, test, type Page } from "./test";
  */
 
 async function open(page: Page) {
-  await page.addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, LADDER_TWINS_SCENARIO] as const);
+  await page.addInitScript(([k, v]) => localStorage.setItem(k, v), [
+    MOCK_SCENARIO_KEY,
+    LADDER_TWINS_SCENARIO,
+  ] as const);
   await login(page);
-  await page.goto("/simple/goals");
-  await expect(page.getByTestId("gm-grid")).toBeVisible();
-  await expect(page.getByTestId("gm-strip-milestone").first().locator("b")).toHaveText(/^M\d+$/);
+  await page.goto('/simple/goals');
+  await expect(page.getByTestId('gm-grid')).toBeVisible();
+  await expect(page.getByTestId('gm-strip-milestone').first().locator('b')).toHaveText(/^M\d+$/);
 }
 
 /** A milestone in the strip, by its whole name. */
-const strip = (page: Page, name: string) => page.getByTestId("gm-strip-milestone").filter({ has: page.getByTitle(name, { exact: true }) });
+const strip = (page: Page, name: string) =>
+  page.getByTestId('gm-strip-milestone').filter({ has: page.getByTitle(name, { exact: true }) });
 
-test.describe("Goal map milestone twins", () => {
-  test("a goal's milestone and the PRD's of the same name are drawn once, with one code", async ({ page }) => {
+test.describe('Goal map milestone twins', () => {
+  test("a goal's milestone and the PRD's of the same name are drawn once, with one code", async ({
+    page,
+  }) => {
     await open(page);
     const twin = strip(page, LADDER_TWINS.twin);
     await expect(twin).toHaveCount(1);
-    await expect(twin.locator("b")).toHaveText(/^M\d+$/);
-    await expect(twin).toContainText("Dec 18");
+    await expect(twin.locator('b')).toHaveText(/^M\d+$/);
+    await expect(twin).toContainText('Dec 18');
   });
 
   test("two goals' milestones of matching names show two codes", async ({ page }) => {
@@ -48,23 +54,26 @@ test.describe("Goal map milestone twins", () => {
     const other = strip(page, LADDER_TWINS.other);
     await expect(twin).toHaveCount(1);
     await expect(other).toHaveCount(1);
-    const code = (await twin.locator("b").textContent())!.trim();
-    await expect(other.locator("b")).toHaveText(/^M\d+$/);
-    await expect(other.locator("b")).not.toHaveText(code);
+    const code = (await twin.locator('b').textContent())!.trim();
+    await expect(other.locator('b')).toHaveText(/^M\d+$/);
+    await expect(other.locator('b')).not.toHaveText(code);
   });
 
   test("a PRD's milestone never offers Move to Trash", async ({ page }) => {
     await open(page);
     const lone = strip(page, LADDER_TWINS.lone);
     await lone.hover();
-    await lone.getByRole("button", { name: new RegExp(`More for .*${LADDER_TWINS.lone}`) }).click();
-    await expect(page.getByRole("menuitem").first()).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: "Move to Trash" })).toHaveCount(0);
+    await lone.getByRole('button', { name: new RegExp(`More for .*${LADDER_TWINS.lone}`) }).click();
+    await expect(page.getByRole('menuitem').first()).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Move to Trash' })).toHaveCount(0);
   });
 
-  test("every milestone in the strip carries its code", async ({ page }) => {
+  test('every milestone in the strip carries its code', async ({ page }) => {
     await open(page);
-    await expect(page.getByTestId("gm-strip-milestone").filter({ hasText: LADDER_TWINS.stale })).toHaveCount(0);
-    for (const m of await page.getByTestId("gm-strip-milestone").all()) await expect(m.locator("b")).toHaveText(/^M\d+$/);
+    await expect(
+      page.getByTestId('gm-strip-milestone').filter({ hasText: LADDER_TWINS.stale }),
+    ).toHaveCount(0);
+    for (const m of await page.getByTestId('gm-strip-milestone').all())
+      await expect(m.locator('b')).toHaveText(/^M\d+$/);
   });
 });

@@ -1,6 +1,6 @@
-import { byGoalOrder } from "@/lib/goal-order";
-import { named, type Names } from "@/lib/codes";
-import { goalName } from "@/lib/placeholders";
+import { byGoalOrder } from '@/lib/goal-order';
+import { named, type Names } from '@/lib/codes';
+import { goalName } from '@/lib/placeholders';
 
 /** The fields the goal tree reads (an EntityOut is one). */
 type GoalLike = {
@@ -36,7 +36,7 @@ export type GoalNode<T extends GoalLike> = {
 };
 
 const oldest = (a: GoalLike, b: GoalLike) =>
-  (a.created_at ?? "").localeCompare(b.created_at ?? "") || a.id.localeCompare(b.id);
+  (a.created_at ?? '').localeCompare(b.created_at ?? '') || a.id.localeCompare(b.id);
 
 /**
  * A subgoal's number under its parent: the order the parent's subgoals were created in,
@@ -45,8 +45,13 @@ const oldest = (a: GoalLike, b: GoalLike) =>
  */
 function subgoalNumbers(goals: GoalLike[]): Map<string, number> {
   const byParent = new Map<string, GoalLike[]>();
-  for (const g of goals) if (g.parent_id) byParent.set(g.parent_id, [...(byParent.get(g.parent_id) ?? []), g]);
-  return new Map([...byParent.values()].flatMap((subs) => subs.sort(oldest).map((s, i) => [s.id, i + 1] as const)));
+  for (const g of goals)
+    if (g.parent_id) byParent.set(g.parent_id, [...(byParent.get(g.parent_id) ?? []), g]);
+  return new Map(
+    [...byParent.values()].flatMap((subs) =>
+      subs.sort(oldest).map((s, i) => [s.id, i + 1] as const),
+    ),
+  );
 }
 
 /**
@@ -56,9 +61,12 @@ function subgoalNumbers(goals: GoalLike[]): Map<string, number> {
  * parent has none. A subgoal whose parent is archived or gone stands as a goal. Archived
  * subgoals keep their numbers: `numbered` is every goal, when `entities` holds only some.
  */
-export function goalTree<T extends GoalLike>(entities: T[], numbered: GoalLike[] = entities): GoalNode<T>[] {
-  const numbers = subgoalNumbers(numbered.filter((e) => e.type === "goal"));
-  const live = entities.filter((e) => e.type === "goal" && e.status !== "rejected");
+export function goalTree<T extends GoalLike>(
+  entities: T[],
+  numbered: GoalLike[] = entities,
+): GoalNode<T>[] {
+  const numbers = subgoalNumbers(numbered.filter((e) => e.type === 'goal'));
+  const live = entities.filter((e) => e.type === 'goal' && e.status !== 'rejected');
   const ids = new Set(live.map((g) => g.id));
   const isSub = (g: T) => !!g.parent_id && ids.has(g.parent_id);
   const out: GoalNode<T>[] = [];
@@ -99,10 +107,11 @@ export function goalTree<T extends GoalLike>(entities: T[], numbered: GoalLike[]
  */
 export function goalNumbers(entities: GoalLike[]): Map<string, number> {
   const out = new Map<string, number>();
-  goalTree(entities.filter((e) => e.type === "goal" && e.status === "confirmed"))
+  goalTree(entities.filter((e) => e.type === 'goal' && e.status === 'confirmed'))
     .filter((n) => !n.parentId)
     .forEach((n, i) => {
-      for (const k of [n.goal.id, n.goal.key, n.goal.title]) if (k && !out.has(k)) out.set(k, i + 1);
+      for (const k of [n.goal.id, n.goal.key, n.goal.title])
+        if (k && !out.has(k)) out.set(k, i + 1);
     });
   return out;
 }
@@ -113,7 +122,12 @@ const codesOf = new WeakMap<Names, Map<string, string | null>>();
 export function treeCodes(names: Names): Map<string, string | null> {
   let codes = codesOf.get(names);
   if (!codes) {
-    codes = new Map(goalTree(names.goals).flatMap((n) => [[n.goal.id, n.code] as const, [n.goal.key, n.code] as const]));
+    codes = new Map(
+      goalTree(names.goals).flatMap((n) => [
+        [n.goal.id, n.code] as const,
+        [n.goal.key, n.code] as const,
+      ]),
+    );
     codesOf.set(names, codes);
   }
   return codes;
@@ -127,7 +141,10 @@ export const percent = (v: number) => `${Math.round(v * 100)}%`;
  * so with none it has no score (qa-plan-8). Baseline's rings and Home's and Plan's goal cards
  * read this one rule, so a goal never shows 78 on one page and "–" on another.
  */
-export function scoredConfidence(confidence: number | null | undefined, evidence: number | null | undefined): number | null {
+export function scoredConfidence(
+  confidence: number | null | undefined,
+  evidence: number | null | undefined,
+): number | null {
   if (evidence === 0) return null;
   return confidence ?? null;
 }

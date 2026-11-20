@@ -1,6 +1,6 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login, signOut } from "./helpers";
-import { expect, test, type BrowserContext, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login, signOut } from './helpers';
+import { expect, test, type BrowserContext, type Page } from './test';
 
 /**
  * #734 review (D-a): who decides a Simple change, in the "simple-deciders" scenario: the
@@ -18,7 +18,12 @@ import { expect, test, type BrowserContext, type Page } from "./test";
  * no_claim = Simple's screens (none yet), the real API (api/tests/test_simple_review_fixes.py).
  */
 
-type Item = { key: string; id: string; title: string; suggestion: { id: string; can_decide: boolean } | null };
+type Item = {
+  key: string;
+  id: string;
+  title: string;
+  suggestion: { id: string; can_decide: boolean } | null;
+};
 /** The fields this spec reads from Simple's answers (a change, the roadmap, me, the Inbox). */
 type Body = {
   change: { id: string; status: string; can_undo: boolean; routed_to: string[] };
@@ -34,7 +39,7 @@ async function call(page: Page, method: string, path: string, body?: unknown): P
       const w = globalThis as unknown as { __poMockFetch?: (r: Request) => Promise<Response> };
       const req = new Request(new URL(path, location.origin), {
         method,
-        headers: { "content-type": "application/json" },
+        headers: { 'content-type': 'application/json' },
         body: body === undefined ? undefined : JSON.stringify(body),
       });
       const res = await w.__poMockFetch!(req);
@@ -52,7 +57,7 @@ async function as(page: Page, email: string): Promise<Page> {
   const context = page.context();
   const tab = await context.newPage();
   if (signedIn.has(context)) {
-    await tab.goto("/home");
+    await tab.goto('/home');
     await signOut(tab);
   }
   await login(tab, email);
@@ -61,77 +66,88 @@ async function as(page: Page, email: string): Promise<Page> {
 }
 
 async function items(tab: Page): Promise<Record<string, Item>> {
-  const r = await call(tab, "GET", "/v1/simple/roadmap");
+  const r = await call(tab, 'GET', '/v1/simple/roadmap');
   expect(r.status).toBe(200);
   return Object.fromEntries(r.body.items.map((i) => [i.key, i]));
 }
 
 async function retitle(tab: Page, key: string, title: string): Promise<Call> {
   const item = (await items(tab))[key];
-  return call(tab, "POST", "/v1/simple/changes", { op: "edit_title", target: { item_id: item.id }, before: { title: item.title }, after: { title } });
+  return call(tab, 'POST', '/v1/simple/changes', {
+    op: 'edit_title',
+    target: { item_id: item.id },
+    before: { title: item.title },
+    after: { title },
+  });
 }
 
 async function meId(tab: Page): Promise<string> {
-  return (await call(tab, "GET", "/v1/me")).body.user_id;
+  return (await call(tab, 'GET', '/v1/me')).body.user_id;
 }
 
 test.beforeEach(async ({ context }) => {
   // Every tab of the context: each person signs in in a tab of their own.
-  await context.addInitScript((key) => localStorage.setItem(key, "simple-deciders"), MOCK_SCENARIO_KEY);
+  await context.addInitScript(
+    (key) => localStorage.setItem(key, 'simple-deciders'),
+    MOCK_SCENARIO_KEY,
+  );
 });
 
 test("an approver track owner's change applies and undoes", async ({ page }) => {
-  const avery = await as(page, "avery.lane@example.com");
-  expect((await items(avery))["alert-sso"].suggestion?.can_decide).toBe(true);
-  const r = await retitle(avery, "alert-export", "Alert history export (CSV)");
+  const avery = await as(page, 'avery.lane@example.com');
+  expect((await items(avery))['alert-sso'].suggestion?.can_decide).toBe(true);
+  const r = await retitle(avery, 'alert-export', 'Alert history export (CSV)');
   expect(r.status).toBe(201);
-  expect(r.body.change.status).toBe("applied");
+  expect(r.body.change.status).toBe('applied');
   expect(r.body.change.can_undo).toBe(true);
-  expect((await items(avery))["alert-export"].title).toBe("Alert history export (CSV)");
-  const undo = await call(avery, "POST", `/v1/simple/changes/${r.body.change.id}/undo`);
+  expect((await items(avery))['alert-export'].title).toBe('Alert history export (CSV)');
+  const undo = await call(avery, 'POST', `/v1/simple/changes/${r.body.change.id}/undo`);
   expect(undo.status).toBe(201);
-  expect((await items(avery))["alert-export"].title).toBe("Alert history export");
+  expect((await items(avery))['alert-export'].title).toBe('Alert history export');
 });
 
 test("a commenter track owner's change is a proposal to the company's owners", async ({ page }) => {
-  const admin = await as(page, "admin@example.com");
-  const cory = await as(page, "cory.hale@example.com");
-  const r = await retitle(cory, "setup-checklist", "Setup checklist v2");
+  const admin = await as(page, 'admin@example.com');
+  const cory = await as(page, 'cory.hale@example.com');
+  const r = await retitle(cory, 'setup-checklist', 'Setup checklist v2');
   expect(r.status).toBe(201);
-  expect(r.body.change.status).toBe("proposed");
+  expect(r.body.change.status).toBe('proposed');
   expect(r.body.change.routed_to).toEqual([await meId(admin)]);
   expect(r.body.change.routed_to).not.toContain(await meId(cory));
-  expect((await items(cory))["setup-checklist"].title).toBe("Setup checklist");
-  const inbox = await call(admin, "GET", "/v1/inbox");
+  expect((await items(cory))['setup-checklist'].title).toBe('Setup checklist');
+  const inbox = await call(admin, 'GET', '/v1/inbox');
   expect(inbox.body.simple_proposals.map((x) => x.id)).toContain(r.body.change.id);
 });
 
-test("a viewer track owner decides nothing", async ({ page }) => {
-  const vic = await as(page, "vic.moss@example.com");
-  const video = (await items(vic))["setup-video"];
+test('a viewer track owner decides nothing', async ({ page }) => {
+  const vic = await as(page, 'vic.moss@example.com');
+  const video = (await items(vic))['setup-video'];
   expect(video.suggestion).not.toBeNull();
   expect(video.suggestion?.can_decide).toBe(false);
-  expect((await retitle(vic, "setup-video", "Welcome video, short")).status).toBe(403);
-  expect((await call(vic, "POST", `/v1/simple/roadmap/date-suggestions/${video.suggestion!.id}/dismiss`)).status).toBe(403);
+  expect((await retitle(vic, 'setup-video', 'Welcome video, short')).status).toBe(403);
+  expect(
+    (await call(vic, 'POST', `/v1/simple/roadmap/date-suggestions/${video.suggestion!.id}/dismiss`))
+      .status,
+  ).toBe(403);
   // Someone else's change on Vic's track goes to the owners, not to Vic.
-  const admin = await as(page, "admin@example.com");
-  const cory = await as(page, "cory.hale@example.com");
-  const r = await retitle(cory, "setup-video", "Welcome video, short");
-  expect(r.body.change.status).toBe("proposed");
+  const admin = await as(page, 'admin@example.com');
+  const cory = await as(page, 'cory.hale@example.com');
+  const r = await retitle(cory, 'setup-video', 'Welcome video, short');
+  expect(r.body.change.status).toBe('proposed');
   expect(r.body.change.routed_to).toEqual([await meId(admin)]);
 });
 
 test("the named decider applies directly; others' changes go to them", async ({ page }) => {
-  const dana = await as(page, "dana.decider@example.com");
-  const approver = await as(page, "approver@example.com");
-  const p = await retitle(approver, "price-tiers", "New plan tiers, annual");
-  expect(p.body.change.status).toBe("proposed");
+  const dana = await as(page, 'dana.decider@example.com');
+  const approver = await as(page, 'approver@example.com');
+  const p = await retitle(approver, 'price-tiers', 'New plan tiers, annual');
+  expect(p.body.change.status).toBe('proposed');
   expect(p.body.change.routed_to).toEqual([await meId(dana)]);
-  const inbox = await call(dana, "GET", "/v1/inbox");
+  const inbox = await call(dana, 'GET', '/v1/inbox');
   expect(inbox.body.simple_proposals.map((x) => x.id)).toContain(p.body.change.id);
-  const r = await retitle(dana, "price-tiers", "New plan tiers 2027");
+  const r = await retitle(dana, 'price-tiers', 'New plan tiers 2027');
   expect(r.status).toBe(201);
-  expect(r.body.change.status).toBe("applied");
+  expect(r.body.change.status).toBe('applied');
   expect(r.body.change.can_undo).toBe(true);
-  expect((await items(dana))["price-tiers"].title).toBe("New plan tiers 2027");
+  expect((await items(dana))['price-tiers'].title).toBe('New plan tiers 2027');
 });

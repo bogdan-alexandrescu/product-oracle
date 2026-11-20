@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { Link } from "@/lib/nav";
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { Link } from '@/lib/nav';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 
 import {
   applyAll,
@@ -17,16 +17,16 @@ import {
   sendCardChanged,
   type ChatMessage,
   type ChatThread as Thread,
-} from "@/lib/api/simple-chat";
-import { LiveChip } from "@/components/discuss/cited";
-import { useCompanyZone } from "@/lib/dates";
-import { useMe } from "@/lib/me";
-import { errorMessage } from "@/lib/use-query";
+} from '@/lib/api/simple-chat';
+import { LiveChip } from '@/components/discuss/cited';
+import { useCompanyZone } from '@/lib/dates';
+import { useMe } from '@/lib/me';
+import { errorMessage } from '@/lib/use-query';
 
-import { AnswerSources, Who } from "./AskAnswer";
-import { ChatCard } from "./ChatCard";
+import { AnswerSources, Who } from './AskAnswer';
+import { ChatCard } from './ChatCard';
 
-const detail = (e: unknown) => errorMessage(e).replace(/ \(\d{3}\)$/, "");
+const detail = (e: unknown) => errorMessage(e).replace(/ \(\d{3}\)$/, '');
 
 /** A change-by-chat thread (Simple S9): the lines oldest first, Oracle's cards, and the composer. */
 /** Words typed into a chat box for the person, and which ask put them there. */
@@ -63,12 +63,15 @@ export function ChatThreadView({
   const end = useRef<HTMLDivElement>(null);
   const count = thread?.messages.length ?? 0;
   useEffect(() => {
-    end.current?.scrollIntoView?.({ block: "nearest" });
+    end.current?.scrollIntoView?.({ block: 'nearest' });
   }, [count]);
 
   return (
     <div className="flex min-h-0 flex-col gap-3" data-testid={testId}>
-      <div className={scroll ? `flex min-h-0 flex-col gap-3 overflow-y-auto ${scroll}` : "contents"} data-testid={scroll ? `${testId}-scroll` : undefined}>
+      <div
+        className={scroll ? `flex min-h-0 flex-col gap-3 overflow-y-auto ${scroll}` : 'contents'}
+        data-testid={scroll ? `${testId}-scroll` : undefined}
+      >
         <ChatMessages
           messages={thread?.messages ?? []}
           onCardChanged={onCardChanged}
@@ -76,34 +79,34 @@ export function ChatThreadView({
         />
         <div ref={end} />
       </div>
-      <ChatComposer
-        send={send}
-        placeholder={placeholder}
-        hint={hint}
-        typed={typed}
-        note={note}
-      />
+      <ChatComposer send={send} placeholder={placeholder} hint={hint} typed={typed} note={note} />
     </div>
   );
 }
 
 /** fix4 qa-simple-roadmap-41: an empty box's Send reads disabled the same in both themes, its
  * words legible (the secondary text on the raised surface, not a half-faded accent). */
-const SEND = "simple-button simple-button-primary disabled:!border-line-strong disabled:!bg-surface2 disabled:!text-text2 disabled:!opacity-100";
+const SEND =
+  'simple-button simple-button-primary disabled:!border-line-strong disabled:!bg-surface2 disabled:!text-text2 disabled:!opacity-100';
 /** The box's focus: one ring (the outline drawn over its own border, not a second ring outside it). */
 // Important: the global :focus-visible rule is unlayered and would win over a layered utility.
-const BOX_FOCUS = "focus-visible:!outline-offset-[-1px]";
+const BOX_FOCUS = 'focus-visible:!outline-offset-[-1px]';
 
 /** ask-length-limit: "4,050" (a count as people read it). */
-const count = (n: number) => n.toLocaleString("en-US");
+const count = (n: number) => n.toLocaleString('en-US');
 /** ask-length-limit: a message past the limit is refused in words, the limit named; the text stays in the box. */
-export const tooLong = (n: number, max = CHAT_TEXT_MAX) => `This message is ${count(n)} characters; Oracle takes up to ${count(max)}. Shorten it and send again.`;
+export const tooLong = (n: number, max = CHAT_TEXT_MAX) =>
+  `This message is ${count(n)} characters; Oracle takes up to ${count(max)}. Shorten it and send again.`;
 
 /** ask-length-limit: the quiet count under a long message (past 3,000 characters), red past the limit. */
 function CharCount({ n }: { n: number }) {
   if (n <= CHAT_COUNT_FROM) return null;
   return (
-    <p data-testid="chat-count" aria-live="polite" className={`text-right text-xs tabular-nums ${n > CHAT_TEXT_MAX ? "text-crit" : "text-text2"}`}>
+    <p
+      data-testid="chat-count"
+      aria-live="polite"
+      className={`text-right text-xs tabular-nums ${n > CHAT_TEXT_MAX ? 'text-crit' : 'text-text2'}`}
+    >
       {count(n)} of {count(CHAT_TEXT_MAX)} characters
     </p>
   );
@@ -132,13 +135,13 @@ export function ChatComposer({
   /** qa-simple-home-22: whose chat the box writes to; an unsent draft stays with it and comes back with it. */
   draftKey?: string;
 }) {
-  const [text, setText] = useState(typed?.text ?? "");
+  const [text, setText] = useState(typed?.text ?? '');
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [draftAt, setDraftAt] = useState(draftKey);
   if (draftKey !== draftAt) {
     setDraftAt(draftKey);
     if (draftAt !== undefined) setDrafts((d) => ({ ...d, [draftAt]: text }));
-    setText((draftKey !== undefined ? drafts[draftKey] : undefined) ?? "");
+    setText((draftKey !== undefined ? drafts[draftKey] : undefined) ?? '');
   }
   const box = useRef<HTMLTextAreaElement>(null);
   const [had, setHad] = useState(typed?.n ?? 0);
@@ -152,10 +155,7 @@ export function ChatComposer({
     const t = box.current;
     if (t) {
       t.focus();
-      window.setTimeout(
-        () => t.setSelectionRange(words.length, words.length),
-        0,
-      );
+      window.setTimeout(() => t.setSelectionRange(words.length, words.length), 0);
     }
   }, [typed]);
   const [busy, setBusy] = useState(false);
@@ -169,7 +169,7 @@ export function ChatComposer({
     setError(null);
     try {
       await send(t);
-      setText("");
+      setText('');
     } catch (e) {
       // The server's own length check says the same words, with its limit.
       setError(e instanceof ChatTextTooLong ? tooLong(t.length, e.max) : detail(e));
@@ -178,7 +178,7 @@ export function ChatComposer({
     }
   };
   const keys = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       void submit();
     }
@@ -284,14 +284,15 @@ export function usePendingPoll(
   // `thread` changes on each read, so each read that is still pending schedules the next.
   useEffect(() => {
     if (!pending) return;
-    const timer = window.setTimeout(
-      () => void latest.current(),
-      PENDING_POLL_MS,
-    );
+    const timer = window.setTimeout(() => void latest.current(), PENDING_POLL_MS);
     return () => window.clearTimeout(timer);
   }, [pending, thread]);
   // spent-pool: a line failed on a spent pool is read once more when its window clears (it then offers Retry).
-  const clears = thread?.messages.reduce((at, m) => (m.retry_after ? Math.min(at, Date.parse(m.retry_after)) : at), Infinity) ?? Infinity;
+  const clears =
+    thread?.messages.reduce(
+      (at, m) => (m.retry_after ? Math.min(at, Date.parse(m.retry_after)) : at),
+      Infinity,
+    ) ?? Infinity;
   useEffect(() => {
     if (clears === Infinity) return;
     // Never sooner than a pending poll (a clock ahead of the API's would read it in a loop), and
@@ -314,7 +315,7 @@ export function ChatMessages({
   onThread,
   ask,
 }: {
-  messages: Thread["messages"];
+  messages: Thread['messages'];
   onCardChanged?: () => void;
   onThread?: (t: Thread) => void;
   /** Lines drawn as the Ask panel's (author · time, Oracle's answer with its sources): the roadmap card's talk, pick C. */
@@ -322,7 +323,10 @@ export function ChatMessages({
 }) {
   const corrected = useCorrections();
   const shown = shownLines(messages);
-  const acted = useActedNow(messages, shown.map((m) => m.id));
+  const acted = useActedNow(
+    messages,
+    shown.map((m) => m.id),
+  );
   return (
     <ol className="flex flex-col gap-3" aria-label="Messages">
       {shown.map((m, i) => (
@@ -352,14 +356,17 @@ export function useActedNow(source: unknown, ids: string[]) {
   const at = live ? ids.indexOf(live.line) : -1;
   return {
     replacedFor: (i: number) => (live && i < at ? live.card : null),
-    onActed: useCallback((line: string, card: string) => setActed({ from: source, line, card }), [source]),
+    onActed: useCallback(
+      (line: string, card: string) => setActed({ from: source, line, card }),
+      [source],
+    ),
   };
 }
 
 /** The lines a chat shows: a line handed to Oracle's Ask (kind "ask") lives in Ask's chat, so neither it nor the person's line shows. */
-export function shownLines(messages: Thread["messages"]): Thread["messages"] {
+export function shownLines(messages: Thread['messages']): Thread['messages'] {
   const handed = new Set(
-    messages.filter((m) => m.kind === "ask").flatMap((m) => [m.id, m.reply_to]),
+    messages.filter((m) => m.kind === 'ask').flatMap((m) => [m.id, m.reply_to]),
   );
   return messages.filter((m) => !handed.has(m.id));
 }
@@ -367,17 +374,12 @@ export function shownLines(messages: Thread["messages"]): Thread["messages"] {
 /** roadmap-talk: the values typed into each card's open Correct form (by card id), for Apply all. */
 export type Corrections = {
   corrections: Map<string, Record<string, string | null>>;
-  onCorrecting: (
-    id: string,
-    values: Record<string, string | null> | null,
-  ) => void;
+  onCorrecting: (id: string, values: Record<string, string | null> | null) => void;
 };
 
 /** A chat's open Correct forms: one map per chat, kept across its reads. */
 export function useCorrections(): Corrections {
-  const [corrections] = useState(
-    () => new Map<string, Record<string, string | null>>(),
-  );
+  const [corrections] = useState(() => new Map<string, Record<string, string | null>>());
   const onCorrecting = useCallback(
     (id: string, values: Record<string, string | null> | null) => {
       if (values) corrections.set(id, values);
@@ -412,12 +414,17 @@ export function ChatLine({
 }) {
   const zone = useCompanyZone();
   const { me } = useMe();
-  const mine = m.author_kind === "person";
+  const mine = m.author_kind === 'person';
   // qa-simple-home-16: the reader's own lines say "You".
   const you = mine && !!m.author_id && m.author_id === me?.user_id;
   // chat-latest-card: replaced at once, until the chat reads again.
   const cards = useMemo(
-    () => (replaced ? m.cards.map((c) => (c.status === "open" && !c.replaced_by ? { ...c, replaced_by: replaced, may: null } : c)) : m.cards),
+    () =>
+      replaced
+        ? m.cards.map((c) =>
+            c.status === 'open' && !c.replaced_by ? { ...c, replaced_by: replaced, may: null } : c,
+          )
+        : m.cards,
     [m.cards, replaced],
   );
   return (
@@ -425,18 +432,22 @@ export function ChatLine({
       data-testid="chat-message"
       data-kind={m.kind}
       data-author={m.author_kind}
-      className={`flex flex-col gap-2 ${mine ? "items-end" : "items-start"}`}
+      className={`flex flex-col gap-2 ${mine ? 'items-end' : 'items-start'}`}
     >
       {/* qa-simple-decide-23: your own lines in body text on the tint, never the link colour. */}
       <div
         className={
           ask
-            ? `min-w-0 max-w-[94%] rounded-[14px] px-3 py-2 text-[15px] leading-[22px] ${mine ? "bg-accent-soft text-text" : "bg-surface2 text-text"}`
-            : `min-w-0 max-w-[95%] rounded-xl px-3 py-2 ${mine ? "bg-accent-soft text-text" : "bg-surface2 text-text"}`
+            ? `min-w-0 max-w-[94%] rounded-[14px] px-3 py-2 text-[15px] leading-[22px] ${mine ? 'bg-accent-soft text-text' : 'bg-surface2 text-text'}`
+            : `min-w-0 max-w-[95%] rounded-xl px-3 py-2 ${mine ? 'bg-accent-soft text-text' : 'bg-surface2 text-text'}`
         }
       >
-        {ask ? <Who name={you ? "You" : m.author_name} at={m.at} zone={zone} mine={mine} /> : <p className="simple-small font-semibold">{m.author_name}</p>}
-        {m.kind === "pending" ? (
+        {ask ? (
+          <Who name={you ? 'You' : m.author_name} at={m.at} zone={zone} mine={mine} />
+        ) : (
+          <p className="simple-small font-semibold">{m.author_name}</p>
+        )}
+        {m.kind === 'pending' ? (
           <p
             className="whitespace-pre-wrap text-text2 [overflow-wrap:anywhere]"
             data-testid="chat-pending"
@@ -446,14 +457,17 @@ export function ChatLine({
           </p>
         ) : (
           // qa-simple-home-29: a long unbroken word wraps inside the bubble (never a sideways scroll).
-          <p className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]" data-testid="chat-message-body">
+          <p
+            className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]"
+            data-testid="chat-message-body"
+          >
             {m.body}
           </p>
         )}
         {!!m.live_reads?.length && (
           <p className="mt-1 flex flex-wrap gap-1.5" data-testid="chat-live-reads">
             {m.live_reads.map((c) => (
-              <LiveChip key={c.ref} c={{ ...c, kind: "live", title: c.source }} />
+              <LiveChip key={c.ref} c={{ ...c, kind: 'live', title: c.source }} />
             ))}
           </p>
         )}
@@ -467,21 +481,19 @@ export function ChatLine({
           </p>
         )}
         {m.source && ask ? (
-          <AnswerSources cites={[{ kind: "simple_source", title: m.source }]} />
-        ) : m.source && (
-          <p
-            className="simple-small text-text2 [overflow-wrap:anywhere]"
-            data-testid="chat-message-source"
-          >
-            {m.source}
-          </p>
+          <AnswerSources cites={[{ kind: 'simple_source', title: m.source }]} />
+        ) : (
+          m.source && (
+            <p
+              className="simple-small text-text2 [overflow-wrap:anywhere]"
+              data-testid="chat-message-source"
+            >
+              {m.source}
+            </p>
+          )
         )}
       </div>
-      <LineActions
-        message={m}
-        onThread={onThread}
-        corrections={corrected?.corrections}
-      />
+      <LineActions message={m} onThread={onThread} corrections={corrected?.corrections} />
       {cards.length > 0 && (
         <div className="flex w-full flex-col gap-2">
           {cards.map((c) => (
@@ -489,7 +501,7 @@ export function ChatLine({
               key={c.id}
               card={c}
               onChanged={(after) => {
-                if (after.status !== "open") onActed?.(m.id, after.id);
+                if (after.status !== 'open') onActed?.(m.id, after.id);
                 onCardChanged?.();
               }}
               onCorrecting={corrected?.onCorrecting}
@@ -532,8 +544,10 @@ function LineActions({
     }
   };
   // ask-oracle-actions: an API action's card is applied on its own (the API's Apply all leaves it).
-  const open = m.cards.filter((c) => c.status === "open" && c.may !== null && c.op !== "api_action");
-  const retry = m.kind === "failed" && m.retry;
+  const open = m.cards.filter(
+    (c) => c.status === 'open' && c.may !== null && c.op !== 'api_action',
+  );
+  const retry = m.kind === 'failed' && m.retry;
   const choices = m.choices.length > 0;
   if (!retry && !choices && open.length < 2 && !said && !error) return null;
   return (
@@ -563,9 +577,7 @@ function LineActions({
               type="button"
               className="simple-button simple-button-wrap"
               disabled={busy || m.picked !== null}
-              aria-pressed={
-                m.picked === null ? undefined : m.picked === c.index
-              }
+              aria-pressed={m.picked === null ? undefined : m.picked === c.index}
               onClick={() => void run(() => chooseChoice(m.id, c.index))}
             >
               {c.label}
@@ -589,7 +601,7 @@ function LineActions({
                     if (!values) continue;
                     const one = await applyCard(c.id, null, values);
                     done += 1;
-                    if (one.card.status === "applied" && one.card.item_id)
+                    if (one.card.status === 'applied' && one.card.item_id)
                       flashed.push(one.card.item_id);
                   }
                   // Every card was corrected and applied: nothing is left for Apply all.
@@ -597,16 +609,11 @@ function LineActions({
                   const r = await applyAll(m.id);
                   if (r.stopped)
                     setSaid(
-                      `Applied ${done + r.applied.length} of ${open.length}. Stopped at “${r.stopped.summary}”: ${r.stopped.reason.replace(/\.$/, "")}.`,
+                      `Applied ${done + r.applied.length} of ${open.length}. Stopped at “${r.stopped.summary}”: ${r.stopped.reason.replace(/\.$/, '')}.`,
                     );
-                  const cards =
-                    r.thread.messages.find((x) => x.id === m.id)?.cards ?? [];
+                  const cards = r.thread.messages.find((x) => x.id === m.id)?.cards ?? [];
                   for (const c of cards)
-                    if (
-                      r.applied.includes(c.id) &&
-                      c.status === "applied" &&
-                      c.item_id
-                    )
+                    if (r.applied.includes(c.id) && c.status === 'applied' && c.item_id)
                       flashed.push(c.item_id);
                   return r.thread;
                 } finally {
@@ -617,16 +624,12 @@ function LineActions({
             }
           >
             {/* qa-simple-decide-13: a person who proposes proposes them all. */}
-            {open.every((c) => c.may === "propose") ? "Propose all" : "Apply all"}
+            {open.every((c) => c.may === 'propose') ? 'Propose all' : 'Apply all'}
           </button>
         </div>
       )}
       {said && (
-        <p
-          role="status"
-          className="simple-small text-text"
-          data-testid="chat-apply-all-stopped"
-        >
+        <p role="status" className="simple-small text-text" data-testid="chat-apply-all-stopped">
           {said}
         </p>
       )}

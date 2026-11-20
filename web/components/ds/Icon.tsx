@@ -1,4 +1,4 @@
-import type { ReactElement } from "react";
+import type { ReactElement } from 'react';
 
 /** The B1 icon set: 24 px grid, 1.8 stroke, round caps. */
 const PATHS = {
@@ -100,10 +100,10 @@ const PATHS = {
   ),
   arrow: <path d="M5 12h14M13 6l6 6-6 6" />,
   back: <path d="M19 12H5M11 6l-6 6 6 6" />,
-  "chevron-left": <path d="M15 6l-6 6 6 6" />,
-  "chevron-right": <path d="M9 6l6 6-6 6" />,
-  "chevron-down": <path d="M6 9l6 6 6-6" />,
-  "chevron-up": <path d="M6 15l6-6 6 6" />,
+  'chevron-left': <path d="M15 6l-6 6 6 6" />,
+  'chevron-right': <path d="M9 6l6 6-6 6" />,
+  'chevron-down': <path d="M6 9l6 6 6-6" />,
+  'chevron-up': <path d="M6 15l6-6 6 6" />,
   outline: (
     <>
       <rect x="3.5" y="4" width="17" height="16" rx="2" />
@@ -171,9 +171,13 @@ const PATHS = {
       <path d="M14 8l4 4-4 4M18 12H9" />
     </>
   ),
-  folder: <path d="M3.5 7.5A1.5 1.5 0 015 6h4.5l2 2.5H19a1.5 1.5 0 011.5 1.5v7.5A1.5 1.5 0 0119 19H5a1.5 1.5 0 01-1.5-1.5z" />,
+  folder: (
+    <path d="M3.5 7.5A1.5 1.5 0 015 6h4.5l2 2.5H19a1.5 1.5 0 011.5 1.5v7.5A1.5 1.5 0 0119 19H5a1.5 1.5 0 01-1.5-1.5z" />
+  ),
   pencil: <path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" />,
-  link: <path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1" />,
+  link: (
+    <path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1" />
+  ),
   sources: (
     <>
       <ellipse cx="12" cy="6" rx="7" ry="3" />
@@ -188,7 +192,7 @@ export function Icon({
   name,
   size = 20,
   stroke = 1.8,
-  className = "",
+  className = '',
 }: {
   name: IconName;
   size?: 16 | 18 | 20 | 24;

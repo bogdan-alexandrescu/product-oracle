@@ -1,24 +1,28 @@
-"use client";
+'use client';
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useState } from 'react';
 
-import { InlineError, TEXTAREA } from "@/components/review/parts";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { errorMessage } from "@/lib/use-query";
+import { InlineError, TEXTAREA } from '@/components/review/parts';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { errorMessage } from '@/lib/use-query';
 
-export type Person = Schemas["PersonOut"];
+export type Person = Schemas['PersonOut'];
 
 /** The member directory (GET /v1/people), matched on email; `q` empty lists the first page. */
 export function findPeople(q: string): Promise<Person[]> {
-  return unwrap(api.GET("/v1/people", { params: { query: { q: q.trim() || undefined, limit: 20 } } }));
+  return unwrap(
+    api.GET('/v1/people', { params: { query: { q: q.trim() || undefined, limit: 20 } } }),
+  );
 }
 
 /** The named people (GET /v1/people?ids=), by id, however many the company has: who a
  * question waits on or who answered it. */
-export async function peopleByIds(ids: readonly (string | null | undefined)[]): Promise<Map<string, Person>> {
+export async function peopleByIds(
+  ids: readonly (string | null | undefined)[],
+): Promise<Map<string, Person>> {
   const unique = [...new Set(ids.filter((id): id is string => !!id))];
   if (unique.length === 0) return new Map();
-  const people = await unwrap(api.GET("/v1/people", { params: { query: { ids: unique } } }));
+  const people = await unwrap(api.GET('/v1/people', { params: { query: { ids: unique } } }));
   return new Map(people.map((p) => [p.user_id, p]));
 }
 
@@ -42,7 +46,7 @@ export function PersonPicker({
   autoFocus?: boolean;
 }) {
   const id = useId();
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState('');
   const [people, setPeople] = useState<Person[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,7 +64,12 @@ export function PersonPicker({
     };
   }, [q]);
 
-  const shown = (people ?? []).filter((p) => (!writersOnly || p.can_write) && (!approversOnly || p.role === "approver" || p.role === "owner") && !exclude.includes(p.user_id));
+  const shown = (people ?? []).filter(
+    (p) =>
+      (!writersOnly || p.can_write) &&
+      (!approversOnly || p.role === 'approver' || p.role === 'owner') &&
+      !exclude.includes(p.user_id),
+  );
   return (
     <div className="flex min-w-0 flex-col gap-1.5" data-testid="person-picker">
       <input
@@ -73,7 +82,12 @@ export function PersonPicker({
         onChange={(e) => setQ(e.target.value)}
         className={`${TEXTAREA} h-9`}
       />
-      <ul id={`${id}-list`} role="listbox" aria-label="People" className="flex max-h-48 min-w-0 flex-col gap-0.5 overflow-y-auto">
+      <ul
+        id={`${id}-list`}
+        role="listbox"
+        aria-label="People"
+        className="flex max-h-48 min-w-0 flex-col gap-0.5 overflow-y-auto"
+      >
         {shown.map((p) => (
           <li key={p.user_id} className="min-w-0">
             <button
@@ -88,7 +102,9 @@ export function PersonPicker({
             </button>
           </li>
         ))}
-        {people && shown.length === 0 && <li className="px-2 py-1.5 text-sm text-text2">Nobody found</li>}
+        {people && shown.length === 0 && (
+          <li className="px-2 py-1.5 text-sm text-text2">Nobody found</li>
+        )}
       </ul>
       {error && <InlineError>{error}</InlineError>}
     </div>

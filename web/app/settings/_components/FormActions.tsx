@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode } from 'react';
 
 /**
  * A form's main action under the form it saves (qa-settings-28). `sticky` keeps it in sight
@@ -11,7 +11,7 @@ export function FormActions({
   reason,
   children,
   sticky = false,
-  className = "",
+  className = '',
 }: {
   /** The reason's id, for the button's aria-describedby. */
   id: string;
@@ -24,7 +24,9 @@ export function FormActions({
     <div
       data-testid={`${id}-bar`}
       className={`flex flex-wrap items-center gap-x-3 gap-y-2 ${
-        sticky ? "sticky bottom-0 z-[2] -mx-4 -mb-4 rounded-b-panel border-t border-line bg-surface px-4 py-3 max-[600px]:bottom-[var(--phone-tab-bar)] max-[600px]:-mx-3 max-[600px]:-mb-3 max-[600px]:px-3" : ""
+        sticky
+          ? 'sticky bottom-0 z-[2] -mx-4 -mb-4 rounded-b-panel border-t border-line bg-surface px-4 py-3 max-[600px]:bottom-[var(--phone-tab-bar)] max-[600px]:-mx-3 max-[600px]:-mb-3 max-[600px]:px-3'
+          : ''
       } ${className}`}
     >
       {children}

@@ -9,16 +9,16 @@
  * straight back to the page. The Drive picker config is a fake (e2e mocks Google itself).
  * Claude is not a connection: see ./claude-accounts.ts.
  */
-import type { Schemas } from "@/lib/api/client";
+import type { Schemas } from '@/lib/api/client';
 
-import { FIREFLIES_CONNECTION_ID } from "./fireflies";
-import { MOCK_LOGIN } from "./fixtures";
-import { newCompany } from "./ids";
-import { MOCK_NOTION_CONNECTION_ID, notionPages } from "./notion";
-import { forgetMockConnection, relinkMockSources } from "./sources";
-import { reply } from "./typed";
+import { FIREFLIES_CONNECTION_ID } from './fireflies';
+import { MOCK_LOGIN } from './fixtures';
+import { newCompany } from './ids';
+import { MOCK_NOTION_CONNECTION_ID, notionPages } from './notion';
+import { forgetMockConnection, relinkMockSources } from './sources';
+import { reply } from './typed';
 
-type ConnectionRow = Schemas["ConnectionOut"];
+type ConnectionRow = Schemas['ConnectionOut'];
 
 interface ConnDb {
   connections: ConnectionRow[];
@@ -27,90 +27,103 @@ interface ConnDb {
   owners?: Record<string, string>;
 }
 
-const STORAGE_KEY = "po-mock-connections-v1";
-const DRIVE_FILE = "https://www.googleapis.com/auth/drive.file";
-const DRIVE_READONLY = "https://www.googleapis.com/auth/drive.readonly";
-export const MOCK_PICKER_CONFIG: Schemas["PickerConfigOut"] = {
-  client_id: "000000000000-mock.apps.googleusercontent.com",
-  app_id: "000000000000",
-  developer_key: "mock-browser-key",
+const STORAGE_KEY = 'po-mock-connections-v1';
+const DRIVE_FILE = 'https://www.googleapis.com/auth/drive.file';
+const DRIVE_READONLY = 'https://www.googleapis.com/auth/drive.readonly';
+export const MOCK_PICKER_CONFIG: Schemas['PickerConfigOut'] = {
+  client_id: '000000000000-mock.apps.googleusercontent.com',
+  app_id: '000000000000',
+  developer_key: 'mock-browser-key',
 };
 
 /** As oracle.connections.providers.reconnect_reason. */
 export function reconnectReason(provider: string, scopes: string[]): string | null {
-  return provider === "google" && scopes.length > 0 && !scopes.includes(DRIVE_READONLY) ? "Reconnect to choose files" : null;
+  return provider === 'google' && scopes.length > 0 && !scopes.includes(DRIVE_READONLY)
+    ? 'Reconnect to choose files'
+    : null;
 }
-const PROVIDERS: Schemas["ProviderOut"][] = [
+const PROVIDERS: Schemas['ProviderOut'][] = [
   {
-    key: "github",
-    name: "GitHub",
-    source_kinds: ["github"],
+    key: 'github',
+    name: 'GitHub',
+    source_kinds: ['github'],
     oauth_configured: true,
-    oauth_scopes: ["read:user", "repo"],
-    token_help: "A fine-grained personal access token with read access to the repos to pull in.",
+    oauth_scopes: ['read:user', 'repo'],
+    token_help: 'A fine-grained personal access token with read access to the repos to pull in.',
   },
   {
-    key: "slack",
-    name: "Slack",
-    source_kinds: ["slack"],
+    key: 'slack',
+    name: 'Slack',
+    source_kinds: ['slack'],
     oauth_configured: false,
-    oauth_scopes: ["channels:history", "channels:read", "groups:history", "groups:read", "users:read"],
-    token_help: "A Slack user token from a Slack app. Direct messages are never read.",
+    oauth_scopes: [
+      'channels:history',
+      'channels:read',
+      'groups:history',
+      'groups:read',
+      'users:read',
+    ],
+    token_help: 'A Slack user token from a Slack app. Direct messages are never read.',
   },
   {
-    key: "notion",
-    name: "Notion",
-    source_kinds: ["notion"],
+    key: 'notion',
+    name: 'Notion',
+    source_kinds: ['notion'],
     oauth_configured: false,
     oauth_scopes: [],
-    token_help: "An internal integration secret; share the pages to pull in with the integration.",
+    token_help: 'An internal integration secret; share the pages to pull in with the integration.',
   },
   {
-    key: "fireflies",
-    name: "Fireflies",
-    source_kinds: ["fireflies"],
+    key: 'fireflies',
+    name: 'Fireflies',
+    source_kinds: ['fireflies'],
     oauth_configured: false,
     oauth_scopes: [],
-    token_help: "Your API key from app.fireflies.ai, Settings > Developer settings.",
+    token_help: 'Your API key from app.fireflies.ai, Settings > Developer settings.',
   },
   {
-    key: "google",
-    name: "Google Docs",
-    source_kinds: ["google_docs"],
+    key: 'google',
+    name: 'Google Docs',
+    source_kinds: ['google_docs'],
     oauth_configured: true,
-    oauth_scopes: ["openid", "email", DRIVE_READONLY],
-    token_help: "Google access tokens expire within an hour; connect with Google sign-in.",
+    oauth_scopes: ['openid', 'email', DRIVE_READONLY],
+    token_help: 'Google access tokens expire within an hour; connect with Google sign-in.',
   },
 ];
 
 const SETTING_DEFAULTS: Record<string, unknown> = {
-  iap_default_role: "commenter",
+  iap_default_role: 'commenter',
   // A5: a Google sign-in without an invite asks an owner (request), joins (join) or is refused (refuse).
-  sign_in_without_invite: "request",
+  sign_in_without_invite: 'request',
   confidence_weights: {},
-  blocker_risk_acceptance_role: "owner",
+  blocker_risk_acceptance_role: 'owner',
   blocker_risk_review_max_days: 90,
   // H1: hard-to-reverse decisions are an owner's call unless an owner lowers it.
-  decision_irreversible_role: "owner",
+  decision_irreversible_role: 'owner',
   // S5 (owner settings, Settings > Sources > Google Drive). The API's default is []; the
   // mock company's members are all @example.com.
-  company_email_domains: ["example.com"],
+  company_email_domains: ['example.com'],
   company_shared_drives: [],
   // A1, B2 Goals framework: Now = the current quarter, Next = the next 2, Later = 12-24 months.
-  planning_horizons: { short_quarters: 1, medium_quarters: 2, long_from_months: 12, long_to_months: 24 },
+  planning_horizons: {
+    short_quarters: 1,
+    medium_quarters: 2,
+    long_from_months: 12,
+    long_to_months: 24,
+  },
   // one-roadmap-many-prds: one team plans every PRD's items (team size x focus).
   team_capacity: { team_size: 1, focus: 1.0 },
   // F6: the weekly alignment report, Monday 08:00 in the Company time zone; the channel once Slack is connected.
-  alignment_report: { enabled: true, weekday: "mon", time: "08:00", slack_channel: null },
+  alignment_report: { enabled: true, weekday: 'mon', time: '08:00', slack_channel: null },
   // The Company time zone: goals' today, the weekly report and rituals (Los Angeles until an
   // owner sets one, owner decision 2026-10-22).
-  company_timezone: "America/Los_Angeles",
+  company_timezone: 'America/Los_Angeles',
   // H9: the pricing owner's member id; null is the earliest active owner.
   pricing_owner: null,
   // INT2: Oracle reads new intakes ($1.50 a read), on by default (owner answer Q2).
   intake_ai_read: true,
   // Code maps (owner, 2026-10-26): a stale map's refresh at most daily.
-  code_map_refresh: "daily",
+  code_map_refresh: 'daily',
 };
 
 /** A company setting's value as stored, else its default (./reports.ts reads the report's channel). */
@@ -120,25 +133,25 @@ export function mockSettingValue(key: string): unknown {
 }
 
 export function companyZone(): string {
-  const zone = String(mockSettingValue("company_timezone") ?? "America/Los_Angeles");
+  const zone = String(mockSettingValue('company_timezone') ?? 'America/Los_Angeles');
   try {
-    new Intl.DateTimeFormat("en-US", { timeZone: zone });
+    new Intl.DateTimeFormat('en-US', { timeZone: zone });
     return zone;
   } catch {
-    return "America/Los_Angeles";
+    return 'America/Los_Angeles';
   }
 }
 
 function companyParts(at: string | Date): Record<string, string> {
-  const parts = new Intl.DateTimeFormat("en-US", {
+  const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: companyZone(),
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-    timeZoneName: "short",
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    timeZoneName: 'short',
   }).formatToParts(new Date(at));
   return Object.fromEntries(parts.map((p) => [p.type, p.value]));
 }
@@ -155,19 +168,25 @@ export function companyDayIso(at: string | Date): string {
  */
 export function companyStamp(at: string | Date): string {
   const p = companyParts(at);
-  const month = new Intl.DateTimeFormat("en-US", { timeZone: companyZone(), month: "short" }).format(new Date(at));
+  const month = new Intl.DateTimeFormat('en-US', {
+    timeZone: companyZone(),
+    month: 'short',
+  }).format(new Date(at));
   const hour = Number(p.hour);
-  return `${month} ${Number(p.day)}, ${p.year}, ${hour % 12 || 12}:${p.minute} ${hour < 12 ? "AM" : "PM"} ${p.timeZoneName}`;
+  return `${month} ${Number(p.day)}, ${p.year}, ${hour % 12 || 12}:${p.minute} ${hour < 12 ? 'AM' : 'PM'} ${p.timeZoneName}`;
 }
 
 /** "Oct 12": the Company time zone's day at `at`, as the API words a day in text it writes (#463). */
 export function companyDayInWords(at: string | Date): string {
-  const options = { month: "short", day: "numeric" } as const;
+  const options = { month: 'short', day: 'numeric' } as const;
   try {
-    const timeZone = String(mockSettingValue("company_timezone") ?? "America/Los_Angeles");
-    return new Date(at).toLocaleDateString("en-US", { ...options, timeZone });
+    const timeZone = String(mockSettingValue('company_timezone') ?? 'America/Los_Angeles');
+    return new Date(at).toLocaleDateString('en-US', { ...options, timeZone });
   } catch {
-    return new Date(at).toLocaleDateString("en-US", { ...options, timeZone: "America/Los_Angeles" });
+    return new Date(at).toLocaleDateString('en-US', {
+      ...options,
+      timeZone: 'America/Los_Angeles',
+    });
   }
 }
 
@@ -177,17 +196,19 @@ export function companyDayInWords(at: string | Date): string {
  * read the zone, not UTC (as the shared ``dayWords`` helpers do for already-zoned days).
  */
 export function companyDateInWords(at: string | Date): string {
-  const options = { weekday: "short", month: "short", day: "numeric" } as const;
-  let timeZone = "America/Los_Angeles";
+  const options = { weekday: 'short', month: 'short', day: 'numeric' } as const;
+  let timeZone = 'America/Los_Angeles';
   try {
-    timeZone = String(mockSettingValue("company_timezone") ?? timeZone);
-    new Intl.DateTimeFormat("en-US", { timeZone });
+    timeZone = String(mockSettingValue('company_timezone') ?? timeZone);
+    new Intl.DateTimeFormat('en-US', { timeZone });
   } catch {
-    timeZone = "America/Los_Angeles";
+    timeZone = 'America/Los_Angeles';
   }
-  const parts = new Intl.DateTimeFormat("en-US", { ...options, timeZone }).formatToParts(new Date(at));
-  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
-  return `${get("weekday")} ${get("month")} ${get("day")}`;
+  const parts = new Intl.DateTimeFormat('en-US', { ...options, timeZone }).formatToParts(
+    new Date(at),
+  );
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  return `${get('weekday')} ${get('month')} ${get('day')}`;
 }
 
 /** Stores a company setting's value, as PUT /v1/settings/{key} would. */
@@ -197,63 +218,96 @@ export function setMockSetting(key: string, value: unknown) {
   save(db);
 }
 
-const HORIZON_KEYS = ["short_quarters", "medium_quarters", "long_from_months", "long_to_months"];
+const HORIZON_KEYS = ['short_quarters', 'medium_quarters', 'long_from_months', 'long_to_months'];
 
 /** As oracle.tenant_settings_api.validate_planning_horizons: the message, or null when valid. */
 function horizonsError(value: unknown): string | null {
   const v = value as Record<string, unknown>;
   if (
     !v ||
-    typeof v !== "object" ||
+    typeof v !== 'object' ||
     Array.isArray(v) ||
     Object.keys(v).length !== HORIZON_KEYS.length ||
     !HORIZON_KEYS.every((k) => Number.isInteger(v[k]))
   ) {
-    return "planning_horizons needs short_quarters, medium_quarters, long_from_months and long_to_months as whole numbers";
+    return 'planning_horizons needs short_quarters, medium_quarters, long_from_months and long_to_months as whole numbers';
   }
   const [short, medium, from, to] = HORIZON_KEYS.map((k) => v[k] as number);
-  if (short < 1 || short > 2) return "'Now' must be the current quarter, or the current and next quarter.";
+  if (short < 1 || short > 2)
+    return "'Now' must be the current quarter, or the current and next quarter.";
   if (medium < 1 || medium > 4) return "'Next' must be 1 to 4 quarters.";
   const nextEnds = 3 * (short + medium);
-  if (from < nextEnds || from > 36) return `'From' must start after Next ends (at least ${nextEnds} months) and be at most 36 months.`;
+  if (from < nextEnds || from > 36)
+    return `'From' must start after Next ends (at least ${nextEnds} months) and be at most 36 months.`;
   if (to <= from || to > 60) return "'To' must be after 'From' and at most 60 months.";
   return null;
 }
 
 /** A mail provider anyone can sign up with, which the API refuses as a company domain. */
 function publicMailDomain(domain: string): boolean {
-  if (["gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "live.com", "yahoo.com", "icloud.com", "me.com", "aol.com", "proton.me", "protonmail.com"].includes(domain)) {
+  if (
+    [
+      'gmail.com',
+      'googlemail.com',
+      'outlook.com',
+      'hotmail.com',
+      'live.com',
+      'yahoo.com',
+      'icloud.com',
+      'me.com',
+      'aol.com',
+      'proton.me',
+      'protonmail.com',
+    ].includes(domain)
+  ) {
     return true;
   }
-  return /^(gmail|googlemail|outlook|hotmail|live|msn|yahoo|aol|icloud|protonmail|gmx|yandex)\.[a-z]{2,3}(\.[a-z]{2,3})?$/.test(domain);
+  return /^(gmail|googlemail|outlook|hotmail|live|msn|yahoo|aol|icloud|protonmail|gmx|yandex)\.[a-z]{2,3}(\.[a-z]{2,3})?$/.test(
+    domain,
+  );
 }
 
 /** The shared drives a mock Google connection can see. */
 export const MOCK_SHARED_DRIVES = [
-  { id: "0ADriveProductExample", name: "Product" },
-  { id: "0ADriveDesignExample", name: "Design" },
-  { id: "0ADrivePartnerAcmeExample", name: "Partner: Acme" },
+  { id: '0ADriveProductExample', name: 'Product' },
+  { id: '0ADriveDesignExample', name: 'Design' },
+  { id: '0ADrivePartnerAcmeExample', name: 'Partner: Acme' },
 ];
 
 /** As oracle.sources.connectors.fireflies.DEFAULT_ENDPOINT. */
-export const FIREFLIES_DEFAULT_ENDPOINT = "https://api.fireflies.ai/graphql";
-const PRIVATE_ENDPOINT = "The endpoint points to a private, local or internal network address, which Product Oracle does not call.";
-const OWNER_ONLY = "Only an Oracle owner can set or change a Fireflies endpoint";
-const ANOTHER_ACCOUNT = "That key belongs to another Fireflies account than this connection's; connect it as a new connection";
-const ODD_IPV4 = "The endpoint writes an IP address in an octal, hex or shortened form; write it as four decimal numbers, or use the host name.";
+export const FIREFLIES_DEFAULT_ENDPOINT = 'https://api.fireflies.ai/graphql';
+const PRIVATE_ENDPOINT =
+  'The endpoint points to a private, local or internal network address, which Product Oracle does not call.';
+const OWNER_ONLY = 'Only an Oracle owner can set or change a Fireflies endpoint';
+const ANOTHER_ACCOUNT =
+  "That key belongs to another Fireflies account than this connection's; connect it as a new connection";
+const ODD_IPV4 =
+  'The endpoint writes an IP address in an octal, hex or shortened form; write it as four decimal numbers, or use the host name.';
 
 function privateIp(host: string): boolean {
-  let h = host.replace(/^\[|\]$/g, "").toLowerCase();
+  let h = host.replace(/^\[|\]$/g, '').toLowerCase();
   const mapped = /^::ffff:(.+)$/.exec(h);
   if (mapped) h = mapped[1];
-  if (/^::ffff:[0-9a-f]{1,4}:[0-9a-f]{1,4}$/.test(host.replace(/^\[|\]$/g, "").toLowerCase())) return true;
+  if (/^::ffff:[0-9a-f]{1,4}:[0-9a-f]{1,4}$/.test(host.replace(/^\[|\]$/g, '').toLowerCase()))
+    return true;
   const v4 = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(h);
   if (v4) {
     const [a, b] = [Number(v4[1]), Number(v4[2])];
-    return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b < 128) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b < 32) || (a === 192 && b === 168) || a >= 224 || (a === 198 && (b === 18 || b === 19));
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 100 && b >= 64 && b < 128) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b < 32) ||
+      (a === 192 && b === 168) ||
+      a >= 224 ||
+      (a === 198 && (b === 18 || b === 19))
+    );
   }
-  if (h.includes(":")) return h === "::1" || h === "::" || /^f[cd]/.test(h) || /^fe[89ab]/.test(h) || /^ff/.test(h);
-  return !h.includes(".");
+  if (h.includes(':'))
+    return h === '::1' || h === '::' || /^f[cd]/.test(h) || /^fe[89ab]/.test(h) || /^ff/.test(h);
+  return !h.includes('.');
 }
 
 /**
@@ -261,30 +315,42 @@ function privateIp(host: string): boolean {
  * the default, or the API's refusal in words. (Where a name resolves is checked by the
  * API's guarded transport; the mock resolves nothing.)
  */
-export function checkEndpoint(raw: string | null | undefined): { url: string | null } | { error: string } {
-  const text = (raw ?? "").trim();
+export function checkEndpoint(
+  raw: string | null | undefined,
+): { url: string | null } | { error: string } {
+  const text = (raw ?? '').trim();
   if (!text) return { url: null };
-  if (!/^https:\/\//i.test(text)) return { error: "The endpoint must be an https:// URL." };
+  if (!/^https:\/\//i.test(text)) return { error: 'The endpoint must be an https:// URL.' };
   let u: URL;
   try {
     u = new URL(text);
   } catch {
-    return { error: "The endpoint is not a valid URL." };
+    return { error: 'The endpoint is not a valid URL.' };
   }
-  if (u.username || u.password || /^https:\/\/[^/]*@/i.test(text)) return { error: "The endpoint cannot contain a user name or password." };
+  if (u.username || u.password || /^https:\/\/[^/]*@/i.test(text))
+    return { error: 'The endpoint cannot contain a user name or password.' };
   const port = /^https:\/\/(?:\[[^\]]*\]|[^/:?#]*):(\d*)/i.exec(text)?.[1];
-  if (port !== undefined && port !== "443") return { error: "The endpoint must use the standard https port (443)." };
-  if (u.search || u.hash || /[?#]/.test(text)) return { error: "The endpoint cannot have a query or a fragment." };
+  if (port !== undefined && port !== '443')
+    return { error: 'The endpoint must use the standard https port (443).' };
+  if (u.search || u.hash || /[?#]/.test(text))
+    return { error: 'The endpoint cannot have a query or a fragment.' };
   // As the API: a host whose last label is a number reads as an IPv4 address (0177.0.0.1,
   // 0x7f000001, 127.1); unless written as four decimal numbers it is refused. (The browser
   // has already read it as the address it means, or refused it as not a valid URL.)
-  const host = (/^https:\/\/([^/?#]*)/i.exec(text)?.[1] ?? "").replace(/:\d*$/, "").replace(/\.$/, "").toLowerCase();
+  const host = (/^https:\/\/([^/?#]*)/i.exec(text)?.[1] ?? '')
+    .replace(/:\d*$/, '')
+    .replace(/\.$/, '')
+    .toLowerCase();
   const plainV4 = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
-  if (!host.startsWith("[") && /^(0x[0-9a-f]*|\d+)$/.test(host.split(".").pop() ?? "") && !plainV4.test(host)) {
+  if (
+    !host.startsWith('[') &&
+    /^(0x[0-9a-f]*|\d+)$/.test(host.split('.').pop() ?? '') &&
+    !plainV4.test(host)
+  ) {
     return { error: privateIp(u.hostname) ? PRIVATE_ENDPOINT : ODD_IPV4 };
   }
   if (privateIp(u.hostname)) return { error: PRIVATE_ENDPOINT };
-  const url = `https://${u.hostname.toLowerCase()}${u.pathname || "/"}`;
+  const url = `https://${u.hostname.toLowerCase()}${u.pathname || '/'}`;
   return { url: url === FIREFLIES_DEFAULT_ENDPOINT ? null : url };
 }
 
@@ -307,7 +373,7 @@ export function mockConnectionRows(email?: string): ConnectionRow[] {
 
 /** #710: the active Fireflies connections, read live (./live.ts); the mock's store is everyone's. */
 export function liveConnections(): ConnectionRow[] {
-  return load().connections.filter((c) => c.provider === "fireflies" && c.status === "active");
+  return load().connections.filter((c) => c.provider === 'fireflies' && c.status === 'active');
 }
 
 function load(): ConnDb {
@@ -326,13 +392,13 @@ function load(): ConnDb {
  * while ./fireflies.ts, which imports this file, may not be loaded yet.
  */
 export const SEEDED_CONNECTION = {
-  slack: "c0000000-0000-4000-8000-000000000001",
-  github: "c0000000-0000-4000-8000-000000000002",
-  fireflies: "c0000000-0000-4000-8000-000000000003",
-  notion: "c0000000-0000-4000-8000-000000000004",
-  google: "c0000000-0000-4000-8000-000000000005",
-  oldGoogle: "c0000000-0000-4000-8000-000000000006",
-  partnerSlack: "c0000000-0000-4000-8000-000000000007",
+  slack: 'c0000000-0000-4000-8000-000000000001',
+  github: 'c0000000-0000-4000-8000-000000000002',
+  fireflies: 'c0000000-0000-4000-8000-000000000003',
+  notion: 'c0000000-0000-4000-8000-000000000004',
+  google: 'c0000000-0000-4000-8000-000000000005',
+  oldGoogle: 'c0000000-0000-4000-8000-000000000006',
+  partnerSlack: 'c0000000-0000-4000-8000-000000000007',
 } as const;
 const SEEDED_IDS: string[] = Object.values(SEEDED_CONNECTION);
 
@@ -347,7 +413,7 @@ function seedConnections(): ConnectionRow[] {
   const row = (
     id: string,
     provider: string,
-    auth_mode: "oauth" | "token",
+    auth_mode: 'oauth' | 'token',
     account_id: string,
     account_label: string,
     scopes: string[],
@@ -360,7 +426,7 @@ function seedConnections(): ConnectionRow[] {
     account_id,
     account_label,
     scopes,
-    status: "active",
+    status: 'active',
     last_error: null,
     expires_at: null,
     last_used_at,
@@ -369,14 +435,77 @@ function seedConnections(): ConnectionRow[] {
   });
   const c = SEEDED_CONNECTION;
   return [
-    row(c.github, "github", "token", "github-example-org", "example-org", ["repo"], "2026-09-02T10:00:00Z", "2026-10-20T06:00:00Z"),
-    row(c.notion, "notion", "token", "notion-example", "Example Notion", [], "2026-09-10T14:30:00Z", "2026-10-19T06:00:00Z"),
-    row(c.slack, "slack", "token", "slack-example-co", "Example Co chat", [], "2026-09-03T09:00:00Z", "2026-10-20T06:00:00Z"),
-    row(c.partnerSlack, "slack", "token", "slack-partner", "Partner workspace", [], "2026-09-04T09:00:00Z", "2026-10-20T06:00:00Z"),
+    row(
+      c.github,
+      'github',
+      'token',
+      'github-example-org',
+      'example-org',
+      ['repo'],
+      '2026-09-02T10:00:00Z',
+      '2026-10-20T06:00:00Z',
+    ),
+    row(
+      c.notion,
+      'notion',
+      'token',
+      'notion-example',
+      'Example Notion',
+      [],
+      '2026-09-10T14:30:00Z',
+      '2026-10-19T06:00:00Z',
+    ),
+    row(
+      c.slack,
+      'slack',
+      'token',
+      'slack-example-co',
+      'Example Co chat',
+      [],
+      '2026-09-03T09:00:00Z',
+      '2026-10-20T06:00:00Z',
+    ),
+    row(
+      c.partnerSlack,
+      'slack',
+      'token',
+      'slack-partner',
+      'Partner workspace',
+      [],
+      '2026-09-04T09:00:00Z',
+      '2026-10-20T06:00:00Z',
+    ),
     // The account a Fireflies key connects (identity below), so pasting it again keeps this row.
-    row(c.fireflies, "fireflies", "token", "fireflies-1", "pat@example.com", [], "2026-09-12T11:00:00Z", "2026-10-19T06:00:00Z"),
-    row(c.google, "google", "oauth", "google-1", "pat@example.com", ["openid", "email", DRIVE_READONLY], "2026-09-15T16:00:00Z", "2026-10-20T06:00:00Z"),
-    row(c.oldGoogle, "google", "oauth", "google-old-drive", "old-drive@example.com", ["openid", "email", DRIVE_FILE], "2026-08-20T16:00:00Z", "2026-10-01T06:00:00Z"),
+    row(
+      c.fireflies,
+      'fireflies',
+      'token',
+      'fireflies-1',
+      'pat@example.com',
+      [],
+      '2026-09-12T11:00:00Z',
+      '2026-10-19T06:00:00Z',
+    ),
+    row(
+      c.google,
+      'google',
+      'oauth',
+      'google-1',
+      'pat@example.com',
+      ['openid', 'email', DRIVE_READONLY],
+      '2026-09-15T16:00:00Z',
+      '2026-10-20T06:00:00Z',
+    ),
+    row(
+      c.oldGoogle,
+      'google',
+      'oauth',
+      'google-old-drive',
+      'old-drive@example.com',
+      ['openid', 'email', DRIVE_FILE],
+      '2026-08-20T16:00:00Z',
+      '2026-10-01T06:00:00Z',
+    ),
   ];
 }
 
@@ -404,7 +533,7 @@ function save(db: ConnDb) {
 function json(status: number, body: unknown): Response {
   return new Response(status === 204 ? null : JSON.stringify(body), {
     status,
-    headers: { "content-type": "application/json" },
+    headers: { 'content-type': 'application/json' },
   });
 }
 
@@ -414,42 +543,60 @@ const now = () => new Date().toISOString();
  * The account a provider reads from a token: "bad…" and "not-…" ones it turns down. `account`, a
  * sign-in again to an account it knows (a seeded one), reads that account and its own name.
  */
-function identity(provider: string, token: string, account?: string): { account_id: string; label: string; scopes: string[] } | string {
+function identity(
+  provider: string,
+  token: string,
+  account?: string,
+): { account_id: string; label: string; scopes: string[] } | string {
   // As a provider would turn them down: "bad…" and "not-…" (e.g. "not-a-token") tokens.
-  if (token.startsWith("bad") || token.startsWith("not-")) return `${PROVIDERS.find((p) => p.key === provider)?.name ?? provider} rejected the token (401)`;
-  const known = account ? seedConnections().find((c) => c.provider === provider && c.account_id === account) : undefined;
+  if (token.startsWith('bad') || token.startsWith('not-'))
+    return `${PROVIDERS.find((p) => p.key === provider)?.name ?? provider} rejected the token (401)`;
+  const known = account
+    ? seedConnections().find((c) => c.provider === provider && c.account_id === account)
+    : undefined;
   const labels: Record<string, string> = {
-    github: "example-user",
-    slack: "pat in Example",
-    notion: "Example Notion",
-    fireflies: "pat@example.com",
-    google: "pat@example.com",
+    github: 'example-user',
+    slack: 'pat in Example',
+    notion: 'Example Notion',
+    fireflies: 'pat@example.com',
+    google: 'pat@example.com',
   };
-  const google = token.startsWith("legacy") ? ["openid", "email", DRIVE_FILE] : ["openid", "email", DRIVE_READONLY];
-  const scopes = provider === "github" ? ["repo"] : provider === "google" ? google : [];
-  return { account_id: known?.account_id ?? `${provider}-1`, label: known?.account_label ?? labels[provider] ?? provider, scopes };
+  const google = token.startsWith('legacy')
+    ? ['openid', 'email', DRIVE_FILE]
+    : ['openid', 'email', DRIVE_READONLY];
+  const scopes = provider === 'github' ? ['repo'] : provider === 'google' ? google : [];
+  return {
+    account_id: known?.account_id ?? `${provider}-1`,
+    label: known?.account_label ?? labels[provider] ?? provider,
+    scopes,
+  };
 }
 
 function upsert(
   db: ConnDb,
   email: string | undefined,
   provider: string,
-  auth_mode: "oauth" | "token",
+  auth_mode: 'oauth' | 'token',
   who: { account_id: string; label: string; scopes: string[] },
   label?: string | null,
 ): ConnectionRow {
   // As the API: one row per person, provider and account.
-  let row = db.connections.find((c) => c.provider === provider && c.account_id === who.account_id && yours(db, c, email));
+  let row = db.connections.find(
+    (c) => c.provider === provider && c.account_id === who.account_id && yours(db, c, email),
+  );
   if (!row) {
     row = {
       // The mock's one Fireflies account is the one the Sources page's Fireflies source reads.
-      id: provider === "fireflies" && !db.connections.some((c) => c.id === FIREFLIES_CONNECTION_ID) ? FIREFLIES_CONNECTION_ID : crypto.randomUUID(),
+      id:
+        provider === 'fireflies' && !db.connections.some((c) => c.id === FIREFLIES_CONNECTION_ID)
+          ? FIREFLIES_CONNECTION_ID
+          : crypto.randomUUID(),
       provider,
       auth_mode,
       account_id: who.account_id,
       account_label: null,
       scopes: [],
-      status: "active",
+      status: 'active',
       last_error: null,
       expires_at: null,
       last_used_at: null,
@@ -462,10 +609,13 @@ function upsert(
   Object.assign(row, {
     auth_mode,
     account_label: label || who.label,
-    scopes: auth_mode === "oauth" ? (PROVIDERS.find((p) => p.key === provider)?.oauth_scopes ?? []) : who.scopes,
-    status: "active",
+    scopes:
+      auth_mode === 'oauth'
+        ? (PROVIDERS.find((p) => p.key === provider)?.oauth_scopes ?? [])
+        : who.scopes,
+    status: 'active',
     last_error: null,
-    expires_at: auth_mode === "oauth" ? new Date(Date.now() + 3600_000).toISOString() : null,
+    expires_at: auth_mode === 'oauth' ? new Date(Date.now() + 3600_000).toISOString() : null,
     updated_at: now(),
   });
   // As the API's save: the sources a Disconnect of this very account left without a connection.
@@ -477,11 +627,12 @@ function out(_db: ConnDb, c: ConnectionRow): ConnectionRow {
   return {
     ...c,
     reconnect_reason: reconnectReason(c.provider, c.scopes),
-    endpoint_url: c.provider === "fireflies" ? (c.endpoint_url ?? FIREFLIES_DEFAULT_ENDPOINT) : null,
+    endpoint_url:
+      c.provider === 'fireflies' ? (c.endpoint_url ?? FIREFLIES_DEFAULT_ENDPOINT) : null,
   };
 }
 
-function settingOut(db: ConnDb, key: string): Schemas["SettingOut"] {
+function settingOut(db: ConnDb, key: string): Schemas['SettingOut'] {
   const stored = key in db.settings;
   return {
     key,
@@ -496,187 +647,313 @@ function settingOut(db: ConnDb, key: string): Schemas["SettingOut"] {
  * What the Set up checklist reads from this store (A1): active connections, the company's
  * domains and whether the horizons were confirmed (a stored row).
  */
-export function setupFacts(email?: string): { connections: number; domains: string[]; horizons: boolean; timezone: string | null } {
+export function setupFacts(email?: string): {
+  connections: number;
+  domains: string[];
+  horizons: boolean;
+  timezone: string | null;
+} {
   const db = load();
-  const domains = ("company_email_domains" in db.settings ? db.settings.company_email_domains : SETTING_DEFAULTS.company_email_domains) as string[];
+  const domains = (
+    'company_email_domains' in db.settings
+      ? db.settings.company_email_domains
+      : SETTING_DEFAULTS.company_email_domains
+  ) as string[];
   return {
-    connections: db.connections.filter((c) => c.status === "active" && yours(db, c, email)).length,
+    connections: db.connections.filter((c) => c.status === 'active' && yours(db, c, email)).length,
     domains,
-    horizons: "planning_horizons" in db.settings,
-    timezone: "company_timezone" in db.settings ? String(db.settings.company_timezone) : null,
+    horizons: 'planning_horizons' in db.settings,
+    timezone: 'company_timezone' in db.settings ? String(db.settings.company_timezone) : null,
   };
 }
 
 /** Handles /v1/connections… and /v1/settings…; null for other routes. */
-export async function connectionsRoute(req: Request, p: string[], role: string = "owner", email?: string): Promise<Response | null> {
-  if (p[1] !== "connections" && p[1] !== "settings") return null;
+export async function connectionsRoute(
+  req: Request,
+  p: string[],
+  role: string = 'owner',
+  email?: string,
+): Promise<Response | null> {
+  if (p[1] !== 'connections' && p[1] !== 'settings') return null;
   const db = load();
   const res = await handle(db, req, p, role, email);
   save(db);
   return res;
 }
 
-async function handle(db: ConnDb, req: Request, p: string[], role: string, email?: string): Promise<Response> {
+async function handle(
+  db: ConnDb,
+  req: Request,
+  p: string[],
+  role: string,
+  email?: string,
+): Promise<Response> {
   const m = req.method;
-  const body = async <T,>() => JSON.parse((await req.text()) || "null") as T;
+  const body = async <T>() => JSON.parse((await req.text()) || 'null') as T;
 
-  if (p[1] === "settings") {
-    if (!p[2] && m === "GET") return reply("/v1/settings", "get", Object.keys(SETTING_DEFAULTS).map((k) => settingOut(db, k)));
+  if (p[1] === 'settings') {
+    if (!p[2] && m === 'GET')
+      return reply(
+        '/v1/settings',
+        'get',
+        Object.keys(SETTING_DEFAULTS).map((k) => settingOut(db, k)),
+      );
     const key = p[2];
     if (!(key in SETTING_DEFAULTS)) return json(404, { detail: `Unknown setting '${key}'` });
-    if (m === "GET") return reply("/v1/settings/{key}", "get", settingOut(db, key));
-    if (m === "PUT") {
-      const { value: given } = await body<Schemas["SettingIn"]>();
+    if (m === 'GET') return reply('/v1/settings/{key}', 'get', settingOut(db, key));
+    if (m === 'PUT') {
+      const { value: given } = await body<Schemas['SettingIn']>();
       let value = given;
-      if (key === "alignment_report" && value && typeof value === "object") {
+      if (key === 'alignment_report' && value && typeof value === 'object') {
         // As the API: a partial value takes the defaults for the rest.
         value = { ...(SETTING_DEFAULTS.alignment_report as object), ...(value as object) };
         const v = value as { weekday: string; time: string };
-        if (!["mon", "tue", "wed", "thu", "fri", "sat", "sun"].includes(v.weekday)) return json(422, { detail: "alignment_report.weekday must be one of mon, tue, wed, thu, fri, sat, sun" });
-        if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(v.time)) return json(422, { detail: "alignment_report.time must be HH:MM, 00:00 to 23:59" });
-        const unknown = Object.keys(value as object).find((k) => !(k in (SETTING_DEFAULTS.alignment_report as object)));
+        if (!['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].includes(v.weekday))
+          return json(422, {
+            detail: 'alignment_report.weekday must be one of mon, tue, wed, thu, fri, sat, sun',
+          });
+        if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(v.time))
+          return json(422, { detail: 'alignment_report.time must be HH:MM, 00:00 to 23:59' });
+        const unknown = Object.keys(value as object).find(
+          (k) => !(k in (SETTING_DEFAULTS.alignment_report as object)),
+        );
         if (unknown) return json(422, { detail: `alignment_report: unknown key '${unknown}'` });
       }
-      if (key === "company_timezone" && value !== null && value !== undefined) {
-        let ok = typeof value === "string" && value !== "";
+      if (key === 'company_timezone' && value !== null && value !== undefined) {
+        let ok = typeof value === 'string' && value !== '';
         try {
-          if (ok) new Intl.DateTimeFormat("en-US", { timeZone: value as string });
+          if (ok) new Intl.DateTimeFormat('en-US', { timeZone: value as string });
         } catch {
           ok = false;
         }
-        if (!ok) return json(422, { detail: "company_timezone must be an IANA time zone name" });
+        if (!ok) return json(422, { detail: 'company_timezone must be an IANA time zone name' });
       }
       // INT2: as oracle.tenant_settings_api.validate (null resets it, on).
-      if (key === "intake_ai_read" && value !== null && value !== undefined && typeof value !== "boolean") {
-        return json(422, { detail: "intake_ai_read must be true or false" });
+      if (
+        key === 'intake_ai_read' &&
+        value !== null &&
+        value !== undefined &&
+        typeof value !== 'boolean'
+      ) {
+        return json(422, { detail: 'intake_ai_read must be true or false' });
       }
-      if (key === "sign_in_without_invite" && !["request", "join", "refuse"].includes(String(value))) {
-        return json(422, { detail: "sign_in_without_invite must be request, join or refuse" });
+      if (
+        key === 'sign_in_without_invite' &&
+        !['request', 'join', 'refuse'].includes(String(value))
+      ) {
+        return json(422, { detail: 'sign_in_without_invite must be request, join or refuse' });
       }
-      if (key === "company_email_domains" && Array.isArray(value)) {
-        const domain = value.map((d) => String(d).trim().toLowerCase().replace(/^@/, "")).find(publicMailDomain);
+      if (key === 'company_email_domains' && Array.isArray(value)) {
+        const domain = value
+          .map((d) => String(d).trim().toLowerCase().replace(/^@/, ''))
+          .find(publicMailDomain);
         if (domain) {
           return json(422, {
             detail: `company_email_domains: ${domain} is a public mail provider, where anyone can have an address; enter the company's own domain`,
           });
         }
       }
-      if (key === "code_map_refresh" && value !== null && value !== undefined && !["hourly", "every_6_hours", "daily", "weekly", "on_demand"].includes(String(value))) {
-        return json(422, { detail: "code_map_refresh must be one of hourly, every_6_hours, daily, weekly, on_demand" });
+      if (
+        key === 'code_map_refresh' &&
+        value !== null &&
+        value !== undefined &&
+        !['hourly', 'every_6_hours', 'daily', 'weekly', 'on_demand'].includes(String(value))
+      ) {
+        return json(422, {
+          detail: 'code_map_refresh must be one of hourly, every_6_hours, daily, weekly, on_demand',
+        });
       }
-      if (key === "team_capacity" && value !== null && value !== undefined) {
+      if (key === 'team_capacity' && value !== null && value !== undefined) {
         // As oracle.tenant_settings_api.validate_team_capacity.
         const v = value as Record<string, unknown>;
-        if (typeof v !== "object" || Array.isArray(v) || Object.keys(v).sort().join() !== "focus,team_size") return json(422, { detail: "team_capacity needs team_size and focus" });
-        if (typeof v.team_size !== "number" || !Number.isInteger(v.team_size) || v.team_size < 1 || v.team_size > 1000) return json(422, { detail: "team_size must be a whole number from 1 to 1000" });
-        if (typeof v.focus !== "number" || !(v.focus > 0 && v.focus <= 1)) return json(422, { detail: "focus must be more than 0 and at most 1" });
+        if (
+          typeof v !== 'object' ||
+          Array.isArray(v) ||
+          Object.keys(v).sort().join() !== 'focus,team_size'
+        )
+          return json(422, { detail: 'team_capacity needs team_size and focus' });
+        if (
+          typeof v.team_size !== 'number' ||
+          !Number.isInteger(v.team_size) ||
+          v.team_size < 1 ||
+          v.team_size > 1000
+        )
+          return json(422, { detail: 'team_size must be a whole number from 1 to 1000' });
+        if (typeof v.focus !== 'number' || !(v.focus > 0 && v.focus <= 1))
+          return json(422, { detail: 'focus must be more than 0 and at most 1' });
         value = { team_size: v.team_size, focus: v.focus };
       }
-      if (key === "planning_horizons" && value !== null && value !== undefined) {
+      if (key === 'planning_horizons' && value !== null && value !== undefined) {
         const error = horizonsError(value);
         if (error) return json(422, { detail: error });
       }
       if (value === null || value === undefined) delete db.settings[key];
       else db.settings[key] = value;
-      return reply("/v1/settings/{key}", "put", settingOut(db, key));
+      return reply('/v1/settings/{key}', 'put', settingOut(db, key));
     }
   }
 
-  if (p[1] === "connections") {
-    if (!p[2] && m === "GET") return reply("/v1/connections", "get", db.connections.filter((c) => yours(db, c, email)).map((c) => out(db, c)));
-    if (p[2] === "providers" && m === "GET") return reply("/v1/connections/providers", "get", PROVIDERS);
-    if (p[2] === "google" && p[3] === "picker-config" && m === "GET") return reply("/v1/connections/google/picker-config", "get", MOCK_PICKER_CONFIG);
+  if (p[1] === 'connections') {
+    if (!p[2] && m === 'GET')
+      return reply(
+        '/v1/connections',
+        'get',
+        db.connections.filter((c) => yours(db, c, email)).map((c) => out(db, c)),
+      );
+    if (p[2] === 'providers' && m === 'GET')
+      return reply('/v1/connections/providers', 'get', PROVIDERS);
+    if (p[2] === 'google' && p[3] === 'picker-config' && m === 'GET')
+      return reply('/v1/connections/google/picker-config', 'get', MOCK_PICKER_CONFIG);
     const provider = PROVIDERS.find((x) => x.key === p[2]);
 
-    if (provider && p[3] === "token" && m === "POST") {
-      const { token, label, endpoint_url } = await body<Schemas["TokenIn"]>();
+    if (provider && p[3] === 'token' && m === 'POST') {
+      const { token, label, endpoint_url } = await body<Schemas['TokenIn']>();
       // As the API: owners only, Fireflies only, the endpoint rule, then the key.
       let endpoint: string | null = null;
       if (endpoint_url) {
-        if (role !== "owner") return json(403, { detail: OWNER_ONLY });
-        if (provider.key !== "fireflies") return json(422, { detail: "Only a Fireflies connection takes an endpoint" });
+        if (role !== 'owner') return json(403, { detail: OWNER_ONLY });
+        if (provider.key !== 'fireflies')
+          return json(422, { detail: 'Only a Fireflies connection takes an endpoint' });
         const checked = checkEndpoint(endpoint_url);
-        if ("error" in checked) return json(422, { detail: checked.error });
+        if ('error' in checked) return json(422, { detail: checked.error });
         endpoint = checked.url;
       }
       const who = identity(provider.key, token.trim());
-      if (typeof who === "string") return json(400, { detail: who });
-      const existing = db.connections.find((c) => c.provider === provider.key && c.account_id === who.account_id && yours(db, c, email));
-      if (provider.key === "fireflies" && existing && (existing.endpoint_url ?? null) !== endpoint && role !== "owner") {
-        return json(403, { detail: "This Fireflies account is connected through an endpoint an owner set; only an Oracle owner can change it" });
+      if (typeof who === 'string') return json(400, { detail: who });
+      const existing = db.connections.find(
+        (c) =>
+          c.provider === provider.key && c.account_id === who.account_id && yours(db, c, email),
+      );
+      if (
+        provider.key === 'fireflies' &&
+        existing &&
+        (existing.endpoint_url ?? null) !== endpoint &&
+        role !== 'owner'
+      ) {
+        return json(403, {
+          detail:
+            'This Fireflies account is connected through an endpoint an owner set; only an Oracle owner can change it',
+        });
       }
-      const row = upsert(db, email, provider.key, "token", who, label);
-      if (provider.key === "fireflies") row.endpoint_url = endpoint;
-      return reply("/v1/connections/{provider}/token", "post", out(db, row));
+      const row = upsert(db, email, provider.key, 'token', who, label);
+      if (provider.key === 'fireflies') row.endpoint_url = endpoint;
+      return reply('/v1/connections/{provider}/token', 'post', out(db, row));
     }
-    if (provider && p[3] === "authorize" && m === "GET") {
+    if (provider && p[3] === 'authorize' && m === 'GET') {
       if (!provider.oauth_configured) {
-        return json(409, { detail: `Sign-in with ${provider.name} is not configured; paste a token instead` });
+        return json(409, {
+          detail: `Sign-in with ${provider.name} is not configured; paste a token instead`,
+        });
       }
-      const who = identity(provider.key, "oauth-token");
-      if (typeof who !== "string") upsert(db, email, provider.key, "oauth", who);
-      return reply("/v1/connections/{provider}/authorize", "get", { url: `/settings/connections?connected=${provider.key}` });
+      const who = identity(provider.key, 'oauth-token');
+      if (typeof who !== 'string') upsert(db, email, provider.key, 'oauth', who);
+      return reply('/v1/connections/{provider}/authorize', 'get', {
+        url: `/settings/connections?connected=${provider.key}`,
+      });
     }
 
-    if (p[3] === "notion" && p[4] === "pages" && m === "GET") {
+    if (p[3] === 'notion' && p[4] === 'pages' && m === 'GET') {
       // The seeded Notion connection (every person may browse it), or one of the person's own.
       const own = db.connections.find((c) => c.id === p[2] && yours(db, c, email));
-      if (p[2] !== MOCK_NOTION_CONNECTION_ID && !own) return json(404, { detail: "Connection not found" });
-      if (own && own.provider !== "notion") return json(409, { detail: "This is not a Notion connection" });
-      return notionPages(new URL(req.url, "http://mock"));
+      if (p[2] !== MOCK_NOTION_CONNECTION_ID && !own)
+        return json(404, { detail: 'Connection not found' });
+      if (own && own.provider !== 'notion')
+        return json(409, { detail: 'This is not a Notion connection' });
+      return notionPages(new URL(req.url, 'http://mock'));
     }
 
     // As the API's get_own: another person's connection is not found.
     const row = db.connections.find((c) => c.id === p[2] && yours(db, c, email));
-    if (!row) return json(404, { detail: "Connection not found" });
-    if (p[3] === "google" && p[4] === "shared-drives" && m === "GET") {
-      if (row.provider !== "google") return json(404, { detail: "Not your Google connection" });
-      if (reconnectReason(row.provider, row.scopes)) return json(409, { detail: "Reconnect Google to list shared drives" });
-      return reply("/v1/connections/{connection_id}/google/shared-drives", "get", { drives: MOCK_SHARED_DRIVES });
+    if (!row) return json(404, { detail: 'Connection not found' });
+    if (p[3] === 'google' && p[4] === 'shared-drives' && m === 'GET') {
+      if (row.provider !== 'google') return json(404, { detail: 'Not your Google connection' });
+      if (reconnectReason(row.provider, row.scopes))
+        return json(409, { detail: 'Reconnect Google to list shared drives' });
+      return reply('/v1/connections/{connection_id}/google/shared-drives', 'get', {
+        drives: MOCK_SHARED_DRIVES,
+      });
     }
-    if (p[3] === "endpoint" && m === "PUT") {
-      if (role !== "owner") return json(403, { detail: "Requires the owner role" });
-      const sent = (await body<Partial<Schemas["EndpointIn"]> | null>()) ?? {};
+    if (p[3] === 'endpoint' && m === 'PUT') {
+      if (role !== 'owner') return json(403, { detail: 'Requires the owner role' });
+      const sent = (await body<Partial<Schemas['EndpointIn']> | null>()) ?? {};
       const { endpoint_url, token } = sent;
       // FastAPI's own validation answer, as the API gives it (EndpointIn.token: required, 1+).
-      if (token === undefined || token === null) return json(422, { detail: [{ type: "missing", loc: ["body", "token"], msg: "Field required", input: sent }] });
-      if (token === "") return json(422, { detail: [{ type: "string_too_short", loc: ["body", "token"], msg: "String should have at least 1 character", input: token, ctx: { min_length: 1 } }] });
-      if (row.provider !== "fireflies") return json(422, { detail: "Only a Fireflies connection takes an endpoint" });
+      if (token === undefined || token === null)
+        return json(422, {
+          detail: [{ type: 'missing', loc: ['body', 'token'], msg: 'Field required', input: sent }],
+        });
+      if (token === '')
+        return json(422, {
+          detail: [
+            {
+              type: 'string_too_short',
+              loc: ['body', 'token'],
+              msg: 'String should have at least 1 character',
+              input: token,
+              ctx: { min_length: 1 },
+            },
+          ],
+        });
+      if (row.provider !== 'fireflies')
+        return json(422, { detail: 'Only a Fireflies connection takes an endpoint' });
       const checked = checkEndpoint(endpoint_url);
-      if ("error" in checked) return json(422, { detail: checked.error });
+      if ('error' in checked) return json(422, { detail: checked.error });
       const who = identity(row.provider, token.trim());
-      if (typeof who === "string") return json(400, { detail: who });
+      if (typeof who === 'string') return json(400, { detail: who });
       if (who.account_id !== row.account_id) return json(400, { detail: ANOTHER_ACCOUNT });
-      Object.assign(row, { endpoint_url: checked.url, status: "active", last_error: null, updated_at: now() });
-      return reply("/v1/connections/{connection_id}/endpoint", "put", out(db, row));
+      Object.assign(row, {
+        endpoint_url: checked.url,
+        status: 'active',
+        last_error: null,
+        updated_at: now(),
+      });
+      return reply('/v1/connections/{connection_id}/endpoint', 'put', out(db, row));
     }
-    if (!p[3] && m === "DELETE") {
+    if (!p[3] && m === 'DELETE') {
       db.connections = db.connections.filter((c) => c.id !== row.id);
       if (db.owners) delete db.owners[row.id];
       // The sources it synced keep the account they lost (as the API's forget_connection).
       forgetMockConnection(row, email);
-      return reply("/v1/connections/{connection_id}", "delete", undefined, 204);
+      return reply('/v1/connections/{connection_id}', 'delete', undefined, 204);
     }
-    if (p[3] === "reconnect" && m === "POST") {
-      const { token } = (await body<Schemas["ReconnectIn"] | null>()) ?? {};
+    if (p[3] === 'reconnect' && m === 'POST') {
+      const { token } = (await body<Schemas['ReconnectIn'] | null>()) ?? {};
       if (token) {
         const who = identity(row.provider, token.trim());
-        if (typeof who === "string") return json(400, { detail: who });
-        if (who.account_id !== row.account_id) return json(400, { detail: "That token belongs to another account" });
+        if (typeof who === 'string') return json(400, { detail: who });
+        if (who.account_id !== row.account_id)
+          return json(400, { detail: 'That token belongs to another account' });
         // As the API's reconnect: save() with the token's account, its label kept only on a token connection.
-        upsert(db, email, row.provider, "token", who, row.auth_mode === "token" ? row.account_label : null);
-        return reply("/v1/connections/{connection_id}/reconnect", "post", { connection: out(db, row), authorize_url: null });
+        upsert(
+          db,
+          email,
+          row.provider,
+          'token',
+          who,
+          row.auth_mode === 'token' ? row.account_label : null,
+        );
+        return reply('/v1/connections/{connection_id}/reconnect', 'post', {
+          connection: out(db, row),
+          authorize_url: null,
+        });
       }
       if (reconnectReason(row.provider, row.scopes)) {
         // Signs in again for drive.readonly, as the real API's authorize_url would; its callback
         // (connect_oauth) saves with no label, so the account takes the name the provider reads now.
-        const who = identity(row.provider, "oauth-token", row.account_id);
-        if (typeof who !== "string") upsert(db, email, row.provider, "oauth", { ...who, account_id: row.account_id });
-        return reply("/v1/connections/{connection_id}/reconnect", "post", { connection: out(db, row), authorize_url: `/settings/connections?connected=${row.provider}` });
+        const who = identity(row.provider, 'oauth-token', row.account_id);
+        if (typeof who !== 'string')
+          upsert(db, email, row.provider, 'oauth', { ...who, account_id: row.account_id });
+        return reply('/v1/connections/{connection_id}/reconnect', 'post', {
+          connection: out(db, row),
+          authorize_url: `/settings/connections?connected=${row.provider}`,
+        });
       }
-      Object.assign(row, { status: "active", last_error: null, updated_at: now() });
-      return reply("/v1/connections/{connection_id}/reconnect", "post", { connection: out(db, row), authorize_url: null });
+      Object.assign(row, { status: 'active', last_error: null, updated_at: now() });
+      return reply('/v1/connections/{connection_id}/reconnect', 'post', {
+        connection: out(db, row),
+        authorize_url: null,
+      });
     }
   }
-  return json(404, { detail: "Route not found" });
+  return json(404, { detail: 'Route not found' });
 }

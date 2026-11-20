@@ -1,7 +1,7 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login, openTab, signOut } from "./helpers";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login, openTab, signOut } from './helpers';
 
 /*
  * G2 §4 Research this, from inside a discussion, on the mock layer ("discussion-replies"
@@ -18,27 +18,32 @@ import { login, openTab, signOut } from "./helpers";
  * by api/tests/test_discussion_research.py.
  */
 
-const SEEDED = "/documents/team-invites/v/2";
-const TITLE = "Caps: ship without detection?";
-const QUESTION = "Can caps ship without detection?";
-const COMMENTER = "commenter@example.com";
-const APPROVER = "approver@example.com";
+const SEEDED = '/documents/team-invites/v/2';
+const TITLE = 'Caps: ship without detection?';
+const QUESTION = 'Can caps ship without detection?';
+const COMMENTER = 'commenter@example.com';
+const APPROVER = 'approver@example.com';
 
-const WEB_URL = "https://news.example/caps";
+const WEB_URL = 'https://news.example/caps';
 
-const withScenario = (page: Page, scenario = "discussion-replies") =>
-  page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, scenario] as const);
-const panel = (page: Page) => page.getByRole("complementary", { name: "Review panel" }).filter({ visible: true });
-const thread = (page: Page) => page.getByTestId("discussion-thread").filter({ visible: true });
-const question = (page: Page) => thread(page).getByTestId("discussion-message").filter({ hasText: QUESTION });
+const withScenario = (page: Page, scenario = 'discussion-replies') =>
+  page.addInitScript(([key, value]) => localStorage.setItem(key, value), [
+    MOCK_SCENARIO_KEY,
+    scenario,
+  ] as const);
+const panel = (page: Page) =>
+  page.getByRole('complementary', { name: 'Review panel' }).filter({ visible: true });
+const thread = (page: Page) => page.getByTestId('discussion-thread').filter({ visible: true });
+const question = (page: Page) =>
+  thread(page).getByTestId('discussion-message').filter({ hasText: QUESTION });
 
 async function openDiscussion(page: Page, who: string, scenario?: string) {
   await withScenario(page, scenario);
   await login(page, who);
   await page.goto(SEEDED);
-  await openTab(page, "Feedback");
-  await panel(page).getByTestId("feedback-discussions").click();
-  await panel(page).getByTestId("discussion-row").filter({ hasText: TITLE }).first().click();
+  await openTab(page, 'Feedback');
+  await panel(page).getByTestId('feedback-discussions').click();
+  await panel(page).getByTestId('discussion-row').filter({ hasText: TITLE }).first().click();
   await expect(thread(page)).toBeVisible();
   await expect(question(page)).toBeVisible();
 }
@@ -47,38 +52,50 @@ async function openDiscussion(page: Page, who: string, scenario?: string) {
 // then starts it; the thread says Oracle is researching, then shows Oracle's answer marked
 // as research with a citation chip; fails_when=no cost first, no line, or no answer;
 // no_claim=the agent's answer.
-test("an approver researches a question and Oracle's answer comes back into the thread", async ({ page }) => {
+test("an approver researches a question and Oracle's answer comes back into the thread", async ({
+  page,
+}) => {
   await openDiscussion(page, APPROVER);
-  await question(page).getByRole("button", { name: "Research this" }).click();
-  const confirm = thread(page).getByTestId("research-confirm");
-  await expect(confirm).toContainText("One research run · $2.00 est.");
-  await expect(confirm).toContainText("Oracle posts what it finds here, with its sources.");
-  await confirm.getByRole("button", { name: "Cancel" }).click();
+  await question(page).getByRole('button', { name: 'Research this' }).click();
+  const confirm = thread(page).getByTestId('research-confirm');
+  await expect(confirm).toContainText('One research run · $2.00 est.');
+  await expect(confirm).toContainText('Oracle posts what it finds here, with its sources.');
+  await confirm.getByRole('button', { name: 'Cancel' }).click();
   await expect(confirm).toBeHidden();
 
-  await question(page).getByRole("button", { name: "Research this" }).click();
-  await thread(page).getByTestId("research-confirm").getByRole("button", { name: "Start research" }).click();
-  const line = thread(page).getByTestId("research-line");
-  await expect(line).toContainText("Priya Raman asked Oracle to research this");
-  await expect(line).toContainText("Oracle is researching…");
-  await expect(line.getByRole("link", { name: "See the run" })).toHaveAttribute("href", /^\/runs\//);
-  await expect(question(page).getByRole("button", { name: "Research this" })).toBeHidden();
+  await question(page).getByRole('button', { name: 'Research this' }).click();
+  await thread(page)
+    .getByTestId('research-confirm')
+    .getByRole('button', { name: 'Start research' })
+    .click();
+  const line = thread(page).getByTestId('research-line');
+  await expect(line).toContainText('Priya Raman asked Oracle to research this');
+  await expect(line).toContainText('Oracle is researching…');
+  await expect(line.getByRole('link', { name: 'See the run' })).toHaveAttribute(
+    'href',
+    /^\/runs\//,
+  );
+  await expect(question(page).getByRole('button', { name: 'Research this' })).toBeHidden();
 
-  const answer = thread(page).getByTestId("discussion-message").filter({ has: page.getByTestId("research-answer") });
+  const answer = thread(page)
+    .getByTestId('discussion-message')
+    .filter({ has: page.getByTestId('research-answer') });
   await expect(answer).toBeVisible({ timeout: 15_000 });
-  await expect(answer).toContainText("Oracle");
-  await expect(answer.getByTestId("research-answer")).toHaveText("From research");
-  await expect(answer.getByTestId("oracle-reply-text")).toContainText("Teams on the starter plan asked for caps");
-  await expect(answer.getByTestId("cite-c-1")).toBeVisible();
-  await expect(line).toContainText("Research done");
+  await expect(answer).toContainText('Oracle');
+  await expect(answer.getByTestId('research-answer')).toHaveText('From research');
+  await expect(answer.getByTestId('oracle-reply-text')).toContainText(
+    'Teams on the starter plan asked for caps',
+  );
+  await expect(answer.getByTestId('cite-c-1')).toBeVisible();
+  await expect(line).toContainText('Research done');
 });
 
 // protects=a commenter cannot start research (an approver's run); fails_when=the button
 // shows to a commenter; no_claim=the API's 403 (pytest).
-test("a commenter does not see Research this", async ({ page }) => {
+test('a commenter does not see Research this', async ({ page }) => {
   await openDiscussion(page, COMMENTER);
-  await expect(question(page).getByRole("button", { name: "Edit" })).toBeVisible();
-  await expect(thread(page).getByRole("button", { name: "Research this" })).toHaveCount(0);
+  await expect(question(page).getByRole('button', { name: 'Edit' })).toBeVisible();
+  await expect(thread(page).getByRole('button', { name: 'Research this' })).toHaveCount(0);
 });
 
 // protects=the decided change (#584 review): research may read the open web, and a web page
@@ -86,73 +103,100 @@ test("a commenter does not see Research this", async ({ page }) => {
 // links elsewhere; no_claim=the real search provider.
 test("a web page Oracle's research cites shows as a link to it", async ({ page }) => {
   await openDiscussion(page, APPROVER);
-  await question(page).getByRole("button", { name: "Research this" }).click();
-  await thread(page).getByTestId("research-confirm").getByRole("button", { name: "Start research" }).click();
-  const answer = thread(page).getByTestId("discussion-message").filter({ has: page.getByTestId("research-answer") });
+  await question(page).getByRole('button', { name: 'Research this' }).click();
+  await thread(page)
+    .getByTestId('research-confirm')
+    .getByRole('button', { name: 'Start research' })
+    .click();
+  const answer = thread(page)
+    .getByTestId('discussion-message')
+    .filter({ has: page.getByTestId('research-answer') });
   await expect(answer).toBeVisible({ timeout: 15_000 });
   // qa-nov17 ask 3: in a reply the chip reads its number alone; its name and card say Web.
-  const chip = answer.getByTestId("cite-c-2");
-  await expect(chip).toHaveText("2");
-  await expect(chip).toHaveAttribute("aria-label", /^Citation 2: Web/);
+  const chip = answer.getByTestId('cite-c-2');
+  await expect(chip).toHaveText('2');
+  await expect(chip).toHaveAttribute('aria-label', /^Citation 2: Web/);
   await chip.hover();
-  const card = page.getByRole("tooltip");
-  await expect(card.getByTestId("cite-source")).toContainText("Web");
-  await expect(card).toContainText("Caps at Example");
-  await expect(card.getByRole("link", { name: /Open source/ })).toHaveAttribute("href", WEB_URL);
+  const card = page.getByRole('tooltip');
+  await expect(card.getByTestId('cite-source')).toContainText('Web');
+  await expect(card).toContainText('Caps at Example');
+  await expect(card.getByRole('link', { name: /Open source/ })).toHaveAttribute('href', WEB_URL);
 });
 
 // protects=MAJOR 2 (#584 review): a research run the runs refuse to start shows the failure
 // in the thread, in words, and Research this is offered again; trying again starts it;
 // fails_when=the line says Oracle is researching forever, or there is no way to try again;
 // no_claim=why the API refuses (pytest).
-test("a research run that cannot start says so in the thread and can be tried again", async ({ page }) => {
-  await openDiscussion(page, APPROVER, "research-refused");
-  await question(page).getByRole("button", { name: "Research this" }).click();
-  await thread(page).getByTestId("research-confirm").getByRole("button", { name: "Start research" }).click();
-  const line = thread(page).getByTestId("research-line");
-  await expect(line).toHaveAttribute("data-status", "failed");
-  await expect(line).toContainText("Research didn't start: The company's monthly run budget is spent.");
-  await expect(line).not.toContainText("Oracle is researching");
+test('a research run that cannot start says so in the thread and can be tried again', async ({
+  page,
+}) => {
+  await openDiscussion(page, APPROVER, 'research-refused');
+  await question(page).getByRole('button', { name: 'Research this' }).click();
+  await thread(page)
+    .getByTestId('research-confirm')
+    .getByRole('button', { name: 'Start research' })
+    .click();
+  const line = thread(page).getByTestId('research-line');
+  await expect(line).toHaveAttribute('data-status', 'failed');
+  await expect(line).toContainText(
+    "Research didn't start: The company's monthly run budget is spent.",
+  );
+  await expect(line).not.toContainText('Oracle is researching');
 
-  await question(page).getByRole("button", { name: "Research this" }).click();
-  await thread(page).getByTestId("research-confirm").getByRole("button", { name: "Start research" }).click();
-  await expect(thread(page).getByTestId("research-line").filter({ hasText: "Oracle is researching…" })).toBeVisible();
+  await question(page).getByRole('button', { name: 'Research this' }).click();
+  await thread(page)
+    .getByTestId('research-confirm')
+    .getByRole('button', { name: 'Start research' })
+    .click();
+  await expect(
+    thread(page).getByTestId('research-line').filter({ hasText: 'Oracle is researching…' }),
+  ).toBeVisible();
 });
 
 // protects=minor (#606 re-review): a commenter reads that a research start failed, in a
 // plain sentence, never the runs' own words (which can name another run); fails_when=the
 // commenter reads the refusal's text; no_claim=the approver's view (the test above).
 test("a commenter reads a failed research start without the runs' detail", async ({ page }) => {
-  await openDiscussion(page, APPROVER, "research-refused");
-  await question(page).getByRole("button", { name: "Research this" }).click();
-  await thread(page).getByTestId("research-confirm").getByRole("button", { name: "Start research" }).click();
-  await expect(thread(page).getByTestId("research-line")).toContainText("The company's monthly run budget is spent.");
+  await openDiscussion(page, APPROVER, 'research-refused');
+  await question(page).getByRole('button', { name: 'Research this' }).click();
+  await thread(page)
+    .getByTestId('research-confirm')
+    .getByRole('button', { name: 'Start research' })
+    .click();
+  await expect(thread(page).getByTestId('research-line')).toContainText(
+    "The company's monthly run budget is spent.",
+  );
   await signOut(page);
 
   await login(page, COMMENTER);
   await page.goto(SEEDED);
-  await openTab(page, "Feedback");
-  await panel(page).getByTestId("feedback-discussions").click();
-  await panel(page).getByTestId("discussion-row").filter({ hasText: TITLE }).first().click();
-  const line = thread(page).getByTestId("research-line");
-  await expect(line).toHaveAttribute("data-status", "failed");
+  await openTab(page, 'Feedback');
+  await panel(page).getByTestId('feedback-discussions').click();
+  await panel(page).getByTestId('discussion-row').filter({ hasText: TITLE }).first().click();
+  const line = thread(page).getByTestId('research-line');
+  await expect(line).toHaveAttribute('data-status', 'failed');
   await expect(line).toContainText("Research didn't start: Oracle couldn't start this research.");
-  await expect(line).not.toContainText("budget");
+  await expect(line).not.toContainText('budget');
 });
 
 // protects=minor (#606 re-review): a web citation whose address is not http(s) shows its
 // title but opens nothing; fails_when=the card links to a javascript: address;
 // no_claim=other citation kinds (lib/format citationHref).
-test("a cited page whose address is not http(s) is not a link", async ({ page }) => {
-  await openDiscussion(page, APPROVER, "research-unsafe-link");
-  await question(page).getByRole("button", { name: "Research this" }).click();
-  await thread(page).getByTestId("research-confirm").getByRole("button", { name: "Start research" }).click();
-  const answer = thread(page).getByTestId("discussion-message").filter({ has: page.getByTestId("research-answer") });
+test('a cited page whose address is not http(s) is not a link', async ({ page }) => {
+  await openDiscussion(page, APPROVER, 'research-unsafe-link');
+  await question(page).getByRole('button', { name: 'Research this' }).click();
+  await thread(page)
+    .getByTestId('research-confirm')
+    .getByRole('button', { name: 'Start research' })
+    .click();
+  const answer = thread(page)
+    .getByTestId('discussion-message')
+    .filter({ has: page.getByTestId('research-answer') });
   await expect(answer).toBeVisible({ timeout: 15_000 });
-  const chip = answer.getByTestId("cite-c-2");
+  const chip = answer.getByTestId('cite-c-2');
   await chip.hover();
-  const card = page.getByRole("tooltip");
-  await expect(card).toContainText("Caps at Example");
-  await expect(card.getByRole("link")).toHaveCount(0);
+  const card = page.getByRole('tooltip');
+  await expect(card).toContainText('Caps at Example');
+  await expect(card.getByRole('link')).toHaveCount(0);
   await expect(page.locator('a[href^="javascript:"]')).toHaveCount(0);
 });

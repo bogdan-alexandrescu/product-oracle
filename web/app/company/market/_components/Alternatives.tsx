@@ -1,18 +1,29 @@
-"use client";
+'use client';
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 
-import { Button, Chip, DataTable, InfoTip, Inspector, InspectorSection, Panel, Split, useFocusTrap, type Column } from "@/components/ds";
-import { ErrorNote, INPUT } from "@/components/ui";
-import { api, unwrap } from "@/lib/api/client";
-import { useCompanyZone } from "@/lib/dates";
-import { formatDay } from "@/lib/format";
-import { isHttpsSite } from "@/lib/https-site";
-import { useMe } from "@/lib/me";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import {
+  Button,
+  Chip,
+  DataTable,
+  InfoTip,
+  Inspector,
+  InspectorSection,
+  Panel,
+  Split,
+  useFocusTrap,
+  type Column,
+} from '@/components/ds';
+import { ErrorNote, INPUT } from '@/components/ui';
+import { api, unwrap } from '@/lib/api/client';
+import { useCompanyZone } from '@/lib/dates';
+import { formatDay } from '@/lib/format';
+import { isHttpsSite } from '@/lib/https-site';
+import { useMe } from '@/lib/me';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-import { CompanyEmpty } from "../../_empty";
-import { FindingCard } from "./FindingCard";
+import { CompanyEmpty } from '../../_empty';
+import { FindingCard } from './FindingCard';
 import {
   KIND_LABEL,
   KINDS,
@@ -29,7 +40,7 @@ import {
   type Kind,
   type Label,
   type WatchedPage,
-} from "./lib";
+} from './lib';
 
 /**
  * Market › Alternatives: what a customer could use instead (direct, indirect, the status
@@ -53,8 +64,8 @@ export function Alternatives({
   onEmpty?: (empty: boolean | null) => void;
 }) {
   const zone = useCompanyZone();
-  const mayAdd = useMe().can("create_competitor");
-  const list = useQuery("competitors", () => unwrap(api.GET("/v1/competitors")));
+  const mayAdd = useMe().can('create_competitor');
+  const list = useQuery('competitors', () => unwrap(api.GET('/v1/competitors')));
   const rows = list.data ?? [];
   const empty = list.data ? list.data.length === 0 : null;
   useEffect(() => {
@@ -62,21 +73,39 @@ export function Alternatives({
   }, [empty, onEmpty]);
   const selected = rows.find((c) => c.id === picked) ?? rows[0] ?? null;
   const detail = useQuery(
-    `competitor|${selected?.id ?? "none"}`,
-    () => (selected ? unwrap(api.GET("/v1/competitors/{competitor_id}", { params: { path: { competitor_id: selected.id } } })) : Promise.resolve(null)),
+    `competitor|${selected?.id ?? 'none'}`,
+    () =>
+      selected
+        ? unwrap(
+            api.GET('/v1/competitors/{competitor_id}', {
+              params: { path: { competitor_id: selected.id } },
+            }),
+          )
+        : Promise.resolve(null),
     { keepPrevious: true },
   );
   const shown = detail.data && detail.data.id === selected?.id ? detail.data : null;
 
   const columns: Column<Competitor>[] = [
-    { key: "name", header: "Alternative", phone: "title", cell: (c) => <span className="truncate font-medium">{c.name}</span> },
-    { key: "kind", header: "Kind", width: "112px", phone: "hide", cell: (c) => <span className="text-sm text-text2">{KIND_LABEL[c.kind]}</span> },
     {
-      key: "pages",
-      header: "Pages",
-      width: "72px",
-      align: "right",
-      phone: "hide",
+      key: 'name',
+      header: 'Alternative',
+      phone: 'title',
+      cell: (c) => <span className="truncate font-medium">{c.name}</span>,
+    },
+    {
+      key: 'kind',
+      header: 'Kind',
+      width: '112px',
+      phone: 'hide',
+      cell: (c) => <span className="text-sm text-text2">{KIND_LABEL[c.kind]}</span>,
+    },
+    {
+      key: 'pages',
+      header: 'Pages',
+      width: '72px',
+      align: 'right',
+      phone: 'hide',
       cell: (c) => (
         <span data-col="pages" className="tnum text-sm">
           {c.pages}
@@ -84,32 +113,34 @@ export function Alternatives({
       ),
     },
     {
-      key: "last",
-      header: "Last change",
-      width: "112px",
-      phone: "meta",
-      phoneLabel: "Last change",
-      cell: (c) => <span className="tnum text-sm">{c.last_change_on ? formatDay(c.last_change_on) : "—"}</span>,
+      key: 'last',
+      header: 'Last change',
+      width: '112px',
+      phone: 'meta',
+      phoneLabel: 'Last change',
+      cell: (c) => (
+        <span className="tnum text-sm">{c.last_change_on ? formatDay(c.last_change_on) : '—'}</span>
+      ),
     },
     {
-      key: "month",
-      header: "Changes this month",
-      width: "160px",
-      align: "right",
-      phone: "hide",
+      key: 'month',
+      header: 'Changes this month',
+      width: '160px',
+      align: 'right',
+      phone: 'hide',
       cell: (c) => <span className="tnum text-sm">{c.changes_this_month}</span>,
     },
     {
-      key: "state",
-      header: "State",
-      width: "180px",
-      phone: "hide",
+      key: 'state',
+      header: 'State',
+      width: '180px',
+      phone: 'hide',
       cell: (c) =>
         c.watch_problem ? (
           <Chip kind="crit" dot>
             {c.watch_problem}
           </Chip>
-        ) : c.status === "archived" ? (
+        ) : c.status === 'archived' ? (
           <Chip kind="na">Archived</Chip>
         ) : (
           <Chip kind="pass" dot>
@@ -128,7 +159,15 @@ export function Alternatives({
       {list.error && <ErrorNote>{list.error}</ErrorNote>}
       <Split
         inspector={
-          shown ? <CompetitorInspector key={shown.id} detail={shown} zone={zone} onChanged={changed} onOpenChange={onOpenChange} /> : undefined
+          shown ? (
+            <CompetitorInspector
+              key={shown.id}
+              detail={shown}
+              zone={zone}
+              onChanged={changed}
+              onOpenChange={onOpenChange}
+            />
+          ) : undefined
         }
       >
         <Panel
@@ -136,8 +175,9 @@ export function Alternatives({
           count={list.data ? rows.length : undefined}
           tools={
             <InfoTip label="alternatives" align="end">
-              What a customer could use instead: a direct competitor, an indirect one (a different product for the same job) or the status quo (a
-              spreadsheet, an agency, doing nothing). Oracle reads their watched public pages once a week and lists what changed.
+              What a customer could use instead: a direct competitor, an indirect one (a different
+              product for the same job) or the status quo (a spreadsheet, an agency, doing nothing).
+              Oracle reads their watched public pages once a week and lists what changed.
             </InfoTip>
           }
         >
@@ -154,7 +194,7 @@ export function Alternatives({
                 ) : undefined
               }
             >
-              {!mayAdd && "Approvers and owners add them."}
+              {!mayAdd && 'Approvers and owners add them.'}
             </CompanyEmpty>
           ) : (
             <DataTable
@@ -166,7 +206,7 @@ export function Alternatives({
               rowKey={(c) => c.id}
               selected={selected?.id ?? null}
               onSelect={(id) => onPick(id)}
-              rowProps={(c) => ({ "data-testid": "alternative-row", "data-id": c.id })}
+              rowProps={(c) => ({ 'data-testid': 'alternative-row', 'data-id': c.id })}
             />
           )}
         </Panel>
@@ -209,7 +249,11 @@ function CompetitorInspector({
     setBusy(true);
     setError(null);
     try {
-      await unwrap(api.POST("/v1/competitors/{competitor_id}/archive", { params: { path: { competitor_id: detail.id } } }));
+      await unwrap(
+        api.POST('/v1/competitors/{competitor_id}/archive', {
+          params: { path: { competitor_id: detail.id } },
+        }),
+      );
       setArchiving(false);
       await onChanged();
     } catch (e) {
@@ -233,24 +277,24 @@ function CompetitorInspector({
           </>
         }
         stats={[
-          { label: "Pages", value: detail.pages },
-          { label: "Changes this month", value: detail.changes_this_month },
-          { label: "From the web", value: detail.open_web_findings },
+          { label: 'Pages', value: detail.pages },
+          { label: 'Changes this month', value: detail.changes_this_month },
+          { label: 'From the web', value: detail.open_web_findings },
         ]}
       >
         <InspectorSection
           label="About"
           testId="alternative-about"
           tools={
-            (can("update_competitor") || can("archive_competitor")) &&
+            (can('update_competitor') || can('archive_competitor')) &&
             !archiving && (
               <div className="flex gap-1">
-                {can("update_competitor") && (
+                {can('update_competitor') && (
                   <Button variant="ghost" onClick={() => setEditing(true)}>
                     Edit
                   </Button>
                 )}
-                {can("archive_competitor") && (
+                {can('archive_competitor') && (
                   <Button variant="ghost" onClick={() => setArchiving(true)}>
                     Archive
                   </Button>
@@ -261,7 +305,10 @@ function CompetitorInspector({
         >
           {archiving && (
             <div data-testid="archive-confirm" className="mb-3 flex flex-col gap-2 text-sm">
-              <p>Archive {detail.name}? Its watched pages stop being read and it leaves the list. This cannot be undone here.</p>
+              <p>
+                Archive {detail.name}? Its watched pages stop being read and it leaves the list.
+                This cannot be undone here.
+              </p>
               <div className="flex gap-2">
                 <Button variant="solid" disabled={busy} onClick={() => void archive()}>
                   Archive
@@ -277,11 +324,11 @@ function CompetitorInspector({
             {detail.description && <dd className="text-[15px]">{detail.description}</dd>}
             <div className="flex gap-2">
               <dt className="font-semibold text-text2">Website</dt>
-              <dd>{detail.website ? hostOf(detail.website) : "—"}</dd>
+              <dd>{detail.website ? hostOf(detail.website) : '—'}</dd>
             </div>
             <div className="flex gap-2">
               <dt className="font-semibold text-text2">Also called</dt>
-              <dd>{detail.aliases.length ? detail.aliases.join(", ") : "—"}</dd>
+              <dd>{detail.aliases.length ? detail.aliases.join(', ') : '—'}</dd>
             </div>
           </dl>
         </InspectorSection>
@@ -289,7 +336,7 @@ function CompetitorInspector({
           label="Watched pages"
           testId="watched-pages"
           tools={
-            can("watch_competitor_page") &&
+            can('watch_competitor_page') &&
             !watching && (
               <Button variant="ghost" icon="plus" onClick={() => setWatching(true)}>
                 Watch a page
@@ -313,7 +360,13 @@ function CompetitorInspector({
           ) : (
             <ul className="flex flex-col divide-y divide-line">
               {detail.page_list.map((p) => (
-                <PageRow key={p.id} page={p} zone={zone} first={p.id === firstRead} onChanged={onChanged} />
+                <PageRow
+                  key={p.id}
+                  page={p}
+                  zone={zone}
+                  first={p.id === firstRead}
+                  onChanged={onChanged}
+                />
               ))}
             </ul>
           )}
@@ -333,13 +386,17 @@ function CompetitorInspector({
                   >
                     <span className="font-semibold">{originOf(c)}</span>
                     <span className="tnum text-text2">{day(c.detected_at, zone)}</span>
-                    {c.origin === "page" && (
+                    {c.origin === 'page' && (
                       <span className="tnum text-text2">
                         +{c.added_lines} −{c.removed_lines}
                       </span>
                     )}
                     <Chip kind={RATING_KIND[c.rating]}>{RATING_LABEL[c.rating]}</Chip>
-                    {c.summary && <span className="basis-full text-text2 [overflow-wrap:anywhere]">{c.summary}</span>}
+                    {c.summary && (
+                      <span className="basis-full text-text2 [overflow-wrap:anywhere]">
+                        {c.summary}
+                      </span>
+                    )}
                   </button>
                 </li>
               ))}
@@ -356,7 +413,7 @@ function CompetitorInspector({
                   key={f.id}
                   finding={f}
                   showCompetitor={false}
-                  canDecide={can("promote_web_finding")}
+                  canDecide={can('promote_web_finding')}
                   onPromoted={() => void onChanged()}
                   onDismissed={() => void onChanged()}
                 />
@@ -380,7 +437,17 @@ function CompetitorInspector({
 }
 
 /** A watched page: label, host, last read, state; Check now, Pause or Resume, Remove (approvers). */
-function PageRow({ page, zone, first, onChanged }: { page: WatchedPage; zone: string; first: boolean; onChanged: () => Promise<void> }) {
+function PageRow({
+  page,
+  zone,
+  first,
+  onChanged,
+}: {
+  page: WatchedPage;
+  zone: string;
+  first: boolean;
+  onChanged: () => Promise<void>;
+}) {
   const { can } = useMe();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -398,7 +465,9 @@ function PageRow({ page, zone, first, onChanged }: { page: WatchedPage; zone: st
       setBusy(false);
     }
   }
-  const read = page.last_checked_at ? `${first ? "First read" : "Read"} ${day(page.last_checked_at, zone)}` : "Not read yet";
+  const read = page.last_checked_at
+    ? `${first ? 'First read' : 'Read'} ${day(page.last_checked_at, zone)}`
+    : 'Not read yet';
   return (
     <li data-testid="watched-page" className="flex min-w-0 flex-col gap-1 py-2 text-sm">
       <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
@@ -413,24 +482,42 @@ function PageRow({ page, zone, first, onChanged }: { page: WatchedPage; zone: st
       </div>
       {page.last_error && <p className="text-text2">{page.last_error}</p>}
       <div className="flex flex-wrap gap-1.5">
-        {can("check_competitor_page") && page.status !== "paused" && (
-          <Button variant="ghost" disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/competitor-pages/{page_id}/check", path)))}>
-            Check now
-          </Button>
-        )}
-        {can("update_competitor_page") && (page.status === "active" || page.status === "paused") && (
+        {can('check_competitor_page') && page.status !== 'paused' && (
           <Button
             variant="ghost"
             disabled={busy}
             onClick={() =>
-              act(() => unwrap(api.PATCH("/v1/competitor-pages/{page_id}", { ...path, body: { status: page.status === "active" ? "paused" : "active" } })))
+              act(() => unwrap(api.POST('/v1/competitor-pages/{page_id}/check', path)))
             }
           >
-            {page.status === "active" ? "Pause" : "Resume"}
+            Check now
           </Button>
         )}
-        {can("delete_competitor_page") && (
-          <Button variant="ghost" disabled={busy} onClick={() => act(() => unwrap(api.DELETE("/v1/competitor-pages/{page_id}", path)))}>
+        {can('update_competitor_page') &&
+          (page.status === 'active' || page.status === 'paused') && (
+            <Button
+              variant="ghost"
+              disabled={busy}
+              onClick={() =>
+                act(() =>
+                  unwrap(
+                    api.PATCH('/v1/competitor-pages/{page_id}', {
+                      ...path,
+                      body: { status: page.status === 'active' ? 'paused' : 'active' },
+                    }),
+                  ),
+                )
+              }
+            >
+              {page.status === 'active' ? 'Pause' : 'Resume'}
+            </Button>
+          )}
+        {can('delete_competitor_page') && (
+          <Button
+            variant="ghost"
+            disabled={busy}
+            onClick={() => act(() => unwrap(api.DELETE('/v1/competitor-pages/{page_id}', path)))}
+          >
             Remove
           </Button>
         )}
@@ -441,19 +528,31 @@ function PageRow({ page, zone, first, onChanged }: { page: WatchedPage; zone: st
 }
 
 /** Watch a page: its https URL and label; Oracle reads it at once. */
-function WatchForm({ competitorId, onCancel, onWatched }: { competitorId: string; onCancel: () => void; onWatched: (p: WatchedPage) => Promise<void> }) {
-  const [url, setUrl] = useState("");
-  const [label, setLabel] = useState<Label>("pricing");
+function WatchForm({
+  competitorId,
+  onCancel,
+  onWatched,
+}: {
+  competitorId: string;
+  onCancel: () => void;
+  onWatched: (p: WatchedPage) => Promise<void>;
+}) {
+  const [url, setUrl] = useState('');
+  const [label, setLabel] = useState<Label>('pricing');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!url.trim().toLowerCase().startsWith("https://")) return setError("Only https:// pages can be watched");
+    if (!url.trim().toLowerCase().startsWith('https://'))
+      return setError('Only https:// pages can be watched');
     setBusy(true);
     setError(null);
     try {
       const page = await unwrap(
-        api.POST("/v1/competitors/{competitor_id}/pages", { params: { path: { competitor_id: competitorId } }, body: { url: url.trim(), label } }),
+        api.POST('/v1/competitors/{competitor_id}/pages', {
+          params: { path: { competitor_id: competitorId } },
+          body: { url: url.trim(), label },
+        }),
       );
       await onWatched(page);
     } catch (err) {
@@ -462,10 +561,21 @@ function WatchForm({ competitorId, onCancel, onWatched }: { competitorId: string
     }
   }
   return (
-    <form className="mb-3 flex flex-col gap-2" onSubmit={submit} noValidate data-testid="watch-form">
+    <form
+      className="mb-3 flex flex-col gap-2"
+      onSubmit={submit}
+      noValidate
+      data-testid="watch-form"
+    >
       <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
         Page URL
-        <input className={INPUT} type="url" value={url} placeholder="https://" onChange={(e) => setUrl(e.target.value)} />
+        <input
+          className={INPUT}
+          type="url"
+          value={url}
+          placeholder="https://"
+          onChange={(e) => setUrl(e.target.value)}
+        />
       </label>
       <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
         Label
@@ -477,7 +587,9 @@ function WatchForm({ competitorId, onCancel, onWatched }: { competitorId: string
           ))}
         </select>
       </label>
-      <p className="text-sm text-text2">Oracle reads it now, then once a week. A page the site asks bots not to read is not read.</p>
+      <p className="text-sm text-text2">
+        Oracle reads it now, then once a week. A page the site asks bots not to read is not read.
+      </p>
       {error && <ErrorNote>{error}</ErrorNote>}
       <div className="flex gap-2">
         <Button type="submit" variant="solid" disabled={busy}>
@@ -495,12 +607,11 @@ function WatchForm({ competitorId, onCancel, onWatched }: { competitorId: string
 function Required() {
   return (
     <span aria-hidden="true" className="font-normal text-text2">
-      {" "}
+      {' '}
       (required)
     </span>
   );
 }
-
 
 /**
  * Add alternative (approvers and owners): name, kind, website, description and aliases.
@@ -519,43 +630,52 @@ function AlternativeDialog({
 }) {
   const panel = useRef<HTMLDivElement>(null);
   useFocusTrap(panel, true, onClose);
-  const [name, setName] = useState(editing?.name ?? "");
-  const [kind, setKind] = useState<Kind | "">(editing?.kind ?? "");
-  const [website, setWebsite] = useState(editing?.website ?? "");
-  const [description, setDescription] = useState(editing?.description ?? "");
-  const [aliases, setAliases] = useState(editing?.aliases.join(", ") ?? "");
+  const [name, setName] = useState(editing?.name ?? '');
+  const [kind, setKind] = useState<Kind | ''>(editing?.kind ?? '');
+  const [website, setWebsite] = useState(editing?.website ?? '');
+  const [description, setDescription] = useState(editing?.description ?? '');
+  const [aliases, setAliases] = useState(editing?.aliases.join(', ') ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [siteError, setSiteError] = useState<string | null>(null);
-  const title = editing ? "Edit alternative" : "Add alternative";
+  const title = editing ? 'Edit alternative' : 'Add alternative';
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     const site = website.trim();
     // An edit sends the website only when it changed, so an older one the API would now
     // refuse does not block a name-only edit.
-    const siteChanged = !editing || site !== (editing.website ?? "");
-    const badSite = siteChanged && site && !isHttpsSite(site) ? "Only https:// addresses can be added, like https://example.com" : null;
+    const siteChanged = !editing || site !== (editing.website ?? '');
+    const badSite =
+      siteChanged && site && !isHttpsSite(site)
+        ? 'Only https:// addresses can be added, like https://example.com'
+        : null;
     setSiteError(badSite);
-    if (!name.trim()) return setError("Give the alternative a name");
-    if (!kind) return setError("Pick a kind");
+    if (!name.trim()) return setError('Give the alternative a name');
+    if (!kind) return setError('Pick a kind');
     if (badSite) return;
     const names = aliases
-      .split(",")
+      .split(',')
       .map((a) => a.trim())
       .filter(Boolean);
-    if (names.length > 5) return setError("At most 5 other names");
+    if (names.length > 5) return setError('At most 5 other names');
     setBusy(true);
     try {
-      const fields = { name: name.trim(), kind, ...(siteChanged && { website: site || null }), description: description.trim() || null, aliases: names };
+      const fields = {
+        name: name.trim(),
+        kind,
+        ...(siteChanged && { website: site || null }),
+        description: description.trim() || null,
+        aliases: names,
+      };
       const c = editing
         ? await unwrap(
-            api.PATCH("/v1/competitors/{competitor_id}", {
+            api.PATCH('/v1/competitors/{competitor_id}', {
               params: { path: { competitor_id: editing.id } },
               body: { lock_version: editing.lock_version, ...fields },
             }),
           )
-        : await unwrap(api.POST("/v1/competitors", { body: fields }));
+        : await unwrap(api.POST('/v1/competitors', { body: fields }));
       await onAdded(c);
     } catch (err) {
       setError(errorMessage(err));
@@ -563,7 +683,10 @@ function AlternativeDialog({
     }
   }
   return (
-    <div data-backdrop="" className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4">
+    <div
+      data-backdrop=""
+      className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4"
+    >
       <div
         ref={panel}
         role="dialog"
@@ -573,11 +696,18 @@ function AlternativeDialog({
         className="w-full max-w-lg min-w-0 rounded-inspector border border-line bg-surface text-text shadow-tip outline-none"
       >
         <div className="flex min-h-14 items-center border-b border-line px-5 max-[600px]:px-4">
-          <h2 id="add-alternative-title" className="font-display text-xl font-bold tracking-heading">
+          <h2
+            id="add-alternative-title"
+            className="font-display text-xl font-bold tracking-heading"
+          >
             {title}
           </h2>
         </div>
-        <form className="flex flex-col gap-3 px-5 py-4 max-[600px]:px-4" onSubmit={submit} noValidate>
+        <form
+          className="flex flex-col gap-3 px-5 py-4 max-[600px]:px-4"
+          onSubmit={submit}
+          noValidate
+        >
           <p className="text-[13px] text-text2">Fields marked (required) must be filled in.</p>
           <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
             <span>
@@ -604,7 +734,7 @@ function AlternativeDialog({
               aria-labelledby="alternative-kind-label"
               aria-required="true"
               value={kind}
-              onChange={(e) => setKind(e.target.value as Kind | "")}
+              onChange={(e) => setKind(e.target.value as Kind | '')}
             >
               <option value="" disabled>
                 Pick a kind
@@ -625,34 +755,50 @@ function AlternativeDialog({
               placeholder="https://"
               maxLength={500}
               aria-invalid={!!siteError}
-              aria-describedby={siteError ? "alternative-website-error" : undefined}
+              aria-describedby={siteError ? 'alternative-website-error' : undefined}
               onChange={(e) => {
                 setWebsite(e.target.value);
                 setSiteError(null);
               }}
             />
             {siteError && (
-              <span id="alternative-website-error" data-testid="website-error" className="text-[13px] font-medium text-crit">
+              <span
+                id="alternative-website-error"
+                data-testid="website-error"
+                className="text-[13px] font-medium text-crit"
+              >
                 {siteError}
               </span>
             )}
           </label>
           <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
             Description
-            <textarea className={`${INPUT} min-h-20`} value={description} maxLength={2000} onChange={(e) => setDescription(e.target.value)} />
+            <textarea
+              className={`${INPUT} min-h-20`}
+              value={description}
+              maxLength={2000}
+              onChange={(e) => setDescription(e.target.value)}
+            />
           </label>
           <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
             Aliases
-            <input className={INPUT} value={aliases} placeholder="Other names, separated by commas" onChange={(e) => setAliases(e.target.value)} />
+            <input
+              className={INPUT}
+              value={aliases}
+              placeholder="Other names, separated by commas"
+              onChange={(e) => setAliases(e.target.value)}
+            />
           </label>
-          <p className="text-sm text-text2">Oracle lists requests that name it or one of its aliases in the monthly digest.</p>
+          <p className="text-sm text-text2">
+            Oracle lists requests that name it or one of its aliases in the monthly digest.
+          </p>
           {error && <ErrorNote>{error}</ErrorNote>}
           <div className="flex justify-end gap-2 border-t border-line pt-3">
             <Button variant="ghost" onClick={onClose}>
               Cancel
             </Button>
             <Button type="submit" variant="primary" disabled={busy}>
-              {editing ? "Save" : "Add alternative"}
+              {editing ? 'Save' : 'Add alternative'}
             </Button>
           </div>
         </form>

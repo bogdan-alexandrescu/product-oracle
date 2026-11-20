@@ -1,51 +1,62 @@
-"use client";
+'use client';
 
-import { Link, usePathname, useRouter, useSearchParams } from "@/lib/nav";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Link, usePathname, useRouter, useSearchParams } from '@/lib/nav';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
-import { Button, Chip, FilterChips, InfoTip, InspectorSection, Notice, Panel, Sheet, Split, type Column } from "@/components/ds";
-import { usePolling } from "@/components/JobsPanel";
-import { ItemInspector } from "@/components/review/ItemInspector";
-import { ItemsTable } from "@/components/review/ItemsTable";
-import { ErrorNote, Loading } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { named, namedText } from "@/lib/codes";
+import {
+  Button,
+  Chip,
+  FilterChips,
+  InfoTip,
+  InspectorSection,
+  Notice,
+  Panel,
+  Sheet,
+  Split,
+  type Column,
+} from '@/components/ds';
+import { usePolling } from '@/components/JobsPanel';
+import { ItemInspector } from '@/components/review/ItemInspector';
+import { ItemsTable } from '@/components/review/ItemsTable';
+import { ErrorNote, Loading } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { named, namedText } from '@/lib/codes';
 import {
   deriveDraftRoadmap,
   getDraftRoadmap,
   putDraftRoadmapSettings,
   type DraftRoadmapOut,
   type DraftRoadmapProblem,
-} from "@/lib/api/draft-roadmap";
-import { sectionHref } from "@/lib/section-link";
-import { errorMessage, useQuery } from "@/lib/use-query";
-import { failedAt, formatDateTime } from "@/lib/format";
+} from '@/lib/api/draft-roadmap';
+import { sectionHref } from '@/lib/section-link';
+import { errorMessage, useQuery } from '@/lib/use-query';
+import { failedAt, formatDateTime } from '@/lib/format';
 
-import { baseName, CompareBar } from "./CompareBar";
-import { HORIZONS, needsAttention, toItemRow, type ItemRow } from "./item-row";
-import { ChangeChips, ItemHistory, WhatChanged } from "./ItemChanges";
-import { CHANGED, changeChips, useItemsDiff, type Compare, type ItemChange } from "./useItemsDiff";
+import { baseName, CompareBar } from './CompareBar';
+import { HORIZONS, needsAttention, toItemRow, type ItemRow } from './item-row';
+import { ChangeChips, ItemHistory, WhatChanged } from './ItemChanges';
+import { CHANGED, changeChips, useItemsDiff, type Compare, type ItemChange } from './useItemsDiff';
 
-type Filter = "all" | "changed" | "attention";
+type Filter = 'all' | 'changed' | 'attention';
 
 /** Every 10 s while a derivation is queued or running (JobsPanel's usePolling). */
 const POLL_MS = 10_000;
 
 /** The check's problem codes as people read them; any other code is "Check problem". */
 const PROBLEM_LABEL: Record<string, string> = {
-  unverified_date: "Date unverified",
-  date_outside_now: "Date outside Now",
-  undated_source: "Date without a source",
-  invalid_date: "Unreadable date",
-  unknown_dependency: "Unknown dependency",
-  horizon_breaks_dependency: "Depends on a later item",
-  order_breaks_dependency: "Listed before what it needs",
-  unknown_prd_section: "No PRD section",
+  unverified_date: 'Date unverified',
+  date_outside_now: 'Date outside Now',
+  undated_source: 'Date without a source',
+  invalid_date: 'Unreadable date',
+  unknown_dependency: 'Unknown dependency',
+  horizon_breaks_dependency: 'Depends on a later item',
+  order_breaks_dependency: 'Listed before what it needs',
+  unknown_prd_section: 'No PRD section',
 };
-export const problemLabel = (code: string) => PROBLEM_LABEL[code] ?? "Check problem";
+export const problemLabel = (code: string) => PROBLEM_LABEL[code] ?? 'Check problem';
 
 /** An item's feature code: written before its title, else its feature's (F-31), else none. */
-function itemCode(i: Schemas["RoadmapItemOut"]): string | null {
+function itemCode(i: Schemas['RoadmapItemOut']): string | null {
   const f = i.feature;
   return named(i.title, f?.key).code ?? (f ? named(f.title, f.key).code : null);
 }
@@ -54,14 +65,13 @@ function itemCode(i: Schemas["RoadmapItemOut"]): string | null {
  * docs/ground-truth.md: an item is a Ground Truth feature by code. One with no code, no feature
  * or a feature only proposed (or rejected) is flagged "Not in the Ground Truth", never refused.
  */
-const outsideGroundTruth = (i: Schemas["RoadmapItemOut"]) =>
-  !itemCode(i) || !i.feature || i.feature.status === "proposed" || i.feature.status === "rejected";
-
+const outsideGroundTruth = (i: Schemas['RoadmapItemOut']) =>
+  !itemCode(i) || !i.feature || i.feature.status === 'proposed' || i.feature.status === 'rejected';
 
 function ago(iso: string | null): string {
-  if (!iso) return "just now";
+  if (!iso) return 'just now';
   const min = Math.floor((Date.now() - Date.parse(iso)) / 60_000);
-  if (min < 1) return "just now";
+  if (min < 1) return 'just now';
   if (min < 60) return `${min} min ago`;
   return `${Math.floor(min / 60)} h ago`;
 }
@@ -97,10 +107,10 @@ export function DraftRoadmapPane({
   /** The status changed: the version (and its tab label) is read again. */
   onStatus?: () => void;
 }) {
-  const q = useQuery(`draft-roadmap|${doc}|${n}`, () => getDraftRoadmap(doc, n, "full"));
+  const q = useQuery(`draft-roadmap|${doc}|${n}`, () => getDraftRoadmap(doc, n, 'full'));
   const data = q.data;
   const status = data?.status;
-  usePolling(status === "queued" || status === "running", q.reload, POLL_MS);
+  usePolling(status === 'queued' || status === 'running', q.reload, POLL_MS);
 
   // The tab label follows the status (and the item count once they are stored).
   const seen = useRef<string | undefined>(undefined);
@@ -110,7 +120,10 @@ export function DraftRoadmapPane({
     seen.current = status;
   }, [status, onStatus]);
 
-  const headings = useMemo(() => new Map(sections.map((s) => [s.section_key, s.heading])), [sections]);
+  const headings = useMemo(
+    () => new Map(sections.map((s) => [s.section_key, s.heading])),
+    [sections],
+  );
   const items = useMemo(() => data?.items ?? [], [data]);
   // Each item reads its feature code before its name ("F-31 Alert routing by team").
   const rows = useMemo(
@@ -122,7 +135,10 @@ export function DraftRoadmapPane({
       }),
     [items, headings],
   );
-  const outside = useMemo(() => new Set(items.filter(outsideGroundTruth).map((i) => i.item_key)), [items]);
+  const outside = useMemo(
+    () => new Set(items.filter(outsideGroundTruth).map((i) => i.item_key)),
+    [items],
+  );
   const problems = useMemo(() => data?.check?.problems ?? [], [data]);
   const byItem = useMemo(() => {
     const m = new Map<string, DraftRoadmapProblem[]>();
@@ -133,40 +149,57 @@ export function DraftRoadmapPane({
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const compare: Compare = params.get("compare") === "approved" ? "approved" : "previous";
+  const compare: Compare = params.get('compare') === 'approved' ? 'approved' : 'previous';
   // Asked again once the draft's items are (re)stored; nothing to ask before. qa4-docs-47:
   // while it builds again the last build's items stay, and so does what they are compared with.
-  const stamp = status === "ready" ? (data?.ready_at ?? "ready") : data?.items.length && data.ready_at ? data.ready_at : null;
+  const stamp =
+    status === 'ready'
+      ? (data?.ready_at ?? 'ready')
+      : data?.items.length && data.ready_at
+        ? data.ready_at
+        : null;
   const { diff, byKey, ghosts } = useItemsDiff(doc, n, compare, stamp);
   const compared = !!diff?.base;
-  const changed = diff?.summary ? [...CHANGED].reduce((sum, k) => sum + (diff.summary?.[k] ?? 0), 0) : 0;
-  const asked = params.get("filter");
+  const changed = diff?.summary
+    ? [...CHANGED].reduce((sum, k) => sum + (diff.summary?.[k] ?? 0), 0)
+    : 0;
+  const asked = params.get('filter');
   // Opening a draft with something to compare with shows its changes first.
-  const filter: Filter = asked === "attention" || asked === "all" ? asked : compared ? "changed" : "all";
+  const filter: Filter =
+    asked === 'attention' || asked === 'all' ? asked : compared ? 'changed' : 'all';
   const setUrl = (key: string, value: string) => {
     const next = new URLSearchParams(params.toString());
     next.set(key, value);
     router.replace(`${pathname}?${next.toString()}`, { scroll: false });
   };
-  const shownRows = useMemo(() => (compared ? [...rows, ...ghosts] : rows), [compared, rows, ghosts]);
+  const shownRows = useMemo(
+    () => (compared ? [...rows, ...ghosts] : rows),
+    [compared, rows, ghosts],
+  );
   const titles = useMemo(() => new Map(shownRows.map((r) => [r.key, r.title])), [shownRows]);
 
   const [selected, setSelected] = useState<string | null>(null);
   const [sheet, setSheet] = useState(false);
   const selectedRow = shownRows.find((r) => r.key === selected) ?? null;
-  const historyKey = selectedRow && !selectedRow.ghost ? selectedRow.key : "";
+  const historyKey = selectedRow && !selectedRow.ghost ? selectedRow.key : '';
   const historyQ = useQuery(`roadmap-item-history|${doc}|${historyKey}`, () =>
     historyKey
-      ? unwrap(api.GET("/v1/roadmap-items/history", { params: { query: { prd: doc, item_key: historyKey } } }))
+      ? unwrap(
+          api.GET('/v1/roadmap-items/history', {
+            params: { query: { prd: doc, item_key: historyKey } },
+          }),
+        )
       : Promise.resolve(null),
   );
   const onSelect = useCallback((key: string) => {
     setSelected(key);
-    if (window.matchMedia("(max-width: 639px)").matches) setSheet(true);
+    if (window.matchMedia('(max-width: 639px)').matches) setSheet(true);
   }, []);
   const goToRow = (key: string) => {
     onSelect(key);
-    document.querySelector(`[data-testid="draft-roadmap"] [data-key="${CSS.escape(key)}"]`)?.scrollIntoView({ block: "center" });
+    document
+      .querySelector(`[data-testid="draft-roadmap"] [data-key="${CSS.escape(key)}"]`)
+      ?.scrollIntoView({ block: 'center' });
   };
 
   const [busy, setBusy] = useState(false);
@@ -190,33 +223,44 @@ export function DraftRoadmapPane({
   const row = selectedRow;
   const item = items.find((i) => i.item_key === selected);
   const attention = rows.filter(needsAttention).length;
-  const since = diff && compared ? baseName(diff, compare) : "";
+  const since = diff && compared ? baseName(diff, compare) : '';
   const filterFn =
-    filter === "attention"
+    filter === 'attention'
       ? (r: ItemRow) => !r.ghost && needsAttention(r)
-      : filter === "changed"
-        ? (r: ItemRow) => CHANGED.has(byKey.get(r.key)?.change ?? "unchanged")
+      : filter === 'changed'
+        ? (r: ItemRow) => CHANGED.has(byKey.get(r.key)?.change ?? 'unchanged')
         : undefined;
   // qa4-docs-5: a filter shows some items: say how many, and that # is each one's place in the whole list.
   // Detailed QA Nov 12 #17: the rows the table shows of all it can show, a dropped (struck) one
   // included both times, as the Changed chip counts it.
   const showing = filterFn ? shownRows.filter((r) => filterFn(r)).length : shownRows.length;
   const decorate = (r: ItemRow) =>
-    r.ghost ? { "data-testid": "roadmap-item-ghost", "data-change": "dropped" } : { "data-change": byKey.get(r.key)?.change };
+    r.ghost
+      ? { 'data-testid': 'roadmap-item-ghost', 'data-change': 'dropped' }
+      : { 'data-change': byKey.get(r.key)?.change };
   const columns: Column<ItemRow>[] = [
     ...(compared
-      ? [{ key: "change", header: "Change", width: "190px", phone: "meta" as const, cell: (r: ItemRow) => <ChangeCell change={byKey.get(r.key)} /> }]
+      ? [
+          {
+            key: 'change',
+            header: 'Change',
+            width: '190px',
+            phone: 'meta' as const,
+            cell: (r: ItemRow) => <ChangeCell change={byKey.get(r.key)} />,
+          },
+        ]
       : []),
     {
-      key: "check",
-      header: "Check",
-      width: "170px",
-      phone: "meta",
+      key: 'check',
+      header: 'Check',
+      width: '170px',
+      phone: 'meta',
       cell: (r) => {
         const own = byItem.get(r.key) ?? [];
         const flagged = !r.ghost && outside.has(r.key);
         // qa4-docs-48: on a phone an unlabelled "—" reads as a second dash after Depends on.
-        if (!own.length && !flagged) return <span className="text-text2 max-[600px]:hidden">—</span>;
+        if (!own.length && !flagged)
+          return <span className="text-text2 max-[600px]:hidden">—</span>;
         return (
           <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
             {flagged && (
@@ -225,7 +269,10 @@ export function DraftRoadmapPane({
               </Chip>
             )}
             {own.length > 0 && (
-              <span data-testid="draft-roadmap-chips" className="inline-flex min-w-0 flex-wrap items-center gap-1">
+              <span
+                data-testid="draft-roadmap-chips"
+                className="inline-flex min-w-0 flex-wrap items-center gap-1"
+              >
                 {[...new Set(own.map((p) => problemLabel(p.code)))].map((label) => (
                   <Chip key={label} kind="warn">
                     {label}
@@ -238,10 +285,10 @@ export function DraftRoadmapPane({
       },
     },
     {
-      key: "prd_section",
-      header: "PRD",
-      width: "150px",
-      phone: "meta",
+      key: 'prd_section',
+      header: 'PRD',
+      width: '150px',
+      phone: 'meta',
       cell: (r) => {
         const key = items.find((i) => i.item_key === r.key)?.prd.section_key;
         if (!key) return <span className="text-text2 max-[600px]:hidden">—</span>;
@@ -263,7 +310,13 @@ export function DraftRoadmapPane({
     const key = items.find((i) => i.item_key === r.key)?.prd.section_key;
     const change = byKey.get(r.key);
     return (
-      <ItemInspector row={r} item={r.ghost ? undefined : item} total={rows.length} rows={rows} documentHref={key ? sectionHref(doc, n, key) : null}>
+      <ItemInspector
+        row={r}
+        item={r.ghost ? undefined : item}
+        total={rows.length}
+        rows={rows}
+        documentHref={key ? sectionHref(doc, n, key) : null}
+      >
         {change && <WhatChanged change={change} since={since} titles={titles} />}
         {!r.ghost && <ItemHistory q={historyQ} />}
         {(byItem.get(r.key)?.length ?? 0) > 0 && (
@@ -285,15 +338,24 @@ export function DraftRoadmapPane({
     <div data-testid="draft-roadmap" className="flex min-w-0 flex-col gap-3">
       <p className="flex flex-wrap items-center gap-1.5 text-sm text-text2">
         <span>
-          <b className="font-semibold text-text">Proposed by draft v{n}</b> · not an approved roadmap
+          <b className="font-semibold text-text">Proposed by draft v{n}</b> · not an approved
+          roadmap
         </span>
         <InfoTip label="draft roadmaps" side="bottom" align="start">
-          Oracle builds an items-only draft roadmap from every PRD draft, so you can see the plan while the PRD changes. Items
-          here are proposals until a roadmap is approved.
+          Oracle builds an items-only draft roadmap from every PRD draft, so you can see the plan
+          while the PRD changes. Items here are proposals until a roadmap is approved.
         </InfoTip>
       </p>
 
-      <StatusRow data={data} n={n} latest={latest} doc={doc} canDerive={canDerive} busy={busy} onDerive={derive} />
+      <StatusRow
+        data={data}
+        n={n}
+        latest={latest}
+        doc={doc}
+        canDerive={canDerive}
+        busy={busy}
+        onDerive={derive}
+      />
       {error && <ErrorNote>{error}</ErrorNote>}
 
       {problems.length > 0 && (
@@ -305,7 +367,7 @@ export function DraftRoadmapPane({
                 <b className="font-semibold">{problemLabel(p.code)}</b>
                 {title && (
                   <>
-                    {" · "}
+                    {' · '}
                     <a
                       href={`#item-${p.item}`}
                       data-testid="draft-roadmap-problem-link"
@@ -329,22 +391,36 @@ export function DraftRoadmapPane({
       {isOwner && <AutoSwitch doc={doc} initial={data.auto} />}
 
       {rows.length > 0 && (
-        <Split inspector={row ? <div className="max-[639px]:hidden">{inspector(row)}</div> : undefined}>
-          {diff && <CompareBar diff={diff} compare={compare} onCompare={(c) => setUrl("compare", c)} />}
+        <Split
+          inspector={row ? <div className="max-[639px]:hidden">{inspector(row)}</div> : undefined}
+        >
+          {diff && (
+            <CompareBar diff={diff} compare={compare} onCompare={(c) => setUrl('compare', c)} />
+          )}
           <FilterChips<Filter>
             label="Items"
             testId="items-filter"
             value={filter}
-            onChange={(f) => setUrl("filter", f)}
+            onChange={(f) => setUrl('filter', f)}
             items={[
-              { value: "all", label: "All", count: rows.length },
-              ...(compared ? [{ value: "changed" as const, label: "Changed", count: changed, testId: "filter-changed" }] : []),
-              { value: "attention", label: "Needs attention", count: attention },
+              { value: 'all', label: 'All', count: rows.length },
+              ...(compared
+                ? [
+                    {
+                      value: 'changed' as const,
+                      label: 'Changed',
+                      count: changed,
+                      testId: 'filter-changed',
+                    },
+                  ]
+                : []),
+              { value: 'attention', label: 'Needs attention', count: attention },
             ]}
           />
           {showing < shownRows.length && (
             <p data-testid="items-filter-note" className="tnum text-sm text-text2">
-              Showing {showing} of {shownRows.length} items · # is each item&apos;s place in the full list
+              Showing {showing} of {shownRows.length} items · # is each item&apos;s place in the
+              full list
             </p>
           )}
           <Panel>
@@ -353,7 +429,7 @@ export function DraftRoadmapPane({
               selected={selected}
               onSelect={onSelect}
               filter={filterFn}
-              hide={["state", "engineering", "prd"]}
+              hide={['state', 'engineering', 'prd']}
               extraColumns={columns}
               rowDecorations={decorate}
               label="Proposed roadmap items"
@@ -361,7 +437,12 @@ export function DraftRoadmapPane({
           </Panel>
         </Split>
       )}
-      <Sheet open={sheet && !!row} title={row?.title ?? "Item"} onClose={() => setSheet(false)} testId="sheet-item">
+      <Sheet
+        open={sheet && !!row}
+        title={row?.title ?? 'Item'}
+        onClose={() => setSheet(false)}
+        testId="sheet-item"
+      >
         {row && inspector(row)}
       </Sheet>
     </div>
@@ -370,7 +451,8 @@ export function DraftRoadmapPane({
 
 /** An item's change chips; an unchanged item's "—" is left out on a phone (qa4-docs-48). */
 function ChangeCell({ change }: { change?: ItemChange }) {
-  if (change && !changeChips(change).length) return <span className="text-text2 max-[600px]:hidden">—</span>;
+  if (change && !changeChips(change).length)
+    return <span className="text-text2 max-[600px]:hidden">—</span>;
   return <ChangeChips change={change} />;
 }
 
@@ -402,76 +484,88 @@ function StatusRow({
   let act: ReactNode = null;
   switch (data.status) {
     // qa4-docs-47: plain words, and a rebuild says the table is the last build until it ends.
-    case "queued":
+    case 'queued':
       copy = data.items.length
-        ? "Building again: starts within a minute. The table shows the last build until the new one is ready."
-        : "Queued. Oracle starts building within a minute.";
+        ? 'Building again: starts within a minute. The table shows the last build until the new one is ready.'
+        : 'Queued. Oracle starts building within a minute.';
       break;
-    case "running":
+    case 'running':
       copy = (
         <>
           Building roadmap items from v{n} · started {ago(data.requested_at)}
           {data.run_id && (
             <>
-              {" · "}
-              <Link href={`/runs/${data.run_id}`} className="font-semibold text-accent-ink underline underline-offset-2">
+              {' · '}
+              <Link
+                href={`/runs/${data.run_id}`}
+                className="font-semibold text-accent-ink underline underline-offset-2"
+              >
                 Open run
               </Link>
             </>
           )}
-          {data.items.length > 0 && " · the table shows the last build until the new one is ready"}
+          {data.items.length > 0 && ' · the table shows the last build until the new one is ready'}
         </>
       );
       break;
-    case "ready": {
+    case 'ready': {
       const count = (h: string) => data.items.filter((i) => i.horizon === h).length;
-      const horizons = HORIZONS.filter((h) => count(h.value) > 0).map((h) => ` · ${count(h.value)} ${h.label}`).join("");
+      const horizons = HORIZONS.filter((h) => count(h.value) > 0)
+        .map((h) => ` · ${count(h.value)} ${h.label}`)
+        .join('');
       const p = data.check?.problems.length ?? 0;
       copy = (
         <span className="tnum">
           <b className="font-semibold text-text">
-            {data.items.length} item{data.items.length === 1 ? "" : "s"}
+            {data.items.length} item{data.items.length === 1 ? '' : 's'}
           </b>
           {horizons}
-          {data.ready_at ? ` · built ${formatDateTime(data.ready_at)}` : ""}
-          {p ? ` · ${p} problem${p === 1 ? "" : "s"}` : ""}
+          {data.ready_at ? ` · built ${formatDateTime(data.ready_at)}` : ''}
+          {p ? ` · ${p} problem${p === 1 ? '' : 's'}` : ''}
         </span>
       );
-      act = action("Build again");
+      act = action('Build again');
       break;
     }
-    case "failed":
+    case 'failed':
       copy = (
         <span className="font-medium">
-          {data.requested_at && <span data-testid="failed-at">{failedAt(data.requested_at)}. </span>}
-          Oracle could not build the draft roadmap: {data.error ?? "unknown error"}
+          {data.requested_at && (
+            <span data-testid="failed-at">{failedAt(data.requested_at)}. </span>
+          )}
+          Oracle could not build the draft roadmap: {data.error ?? 'unknown error'}
         </span>
       );
-      act = action("Try again");
+      act = action('Try again');
       break;
-    case "superseded":
+    case 'superseded':
       copy = (
         <>
-          A newer draft (v{latest}) was imported before this one&apos;s draft roadmap was built.{" "}
-          <Link href={`/documents/${doc}/v/${latest}/roadmap`} className="font-semibold text-accent-ink underline underline-offset-2">
+          A newer draft (v{latest}) was imported before this one&apos;s draft roadmap was built.{' '}
+          <Link
+            href={`/documents/${doc}/v/${latest}/roadmap`}
+            className="font-semibold text-accent-ink underline underline-offset-2"
+          >
             Go to v{latest}&apos;s roadmap
           </Link>
         </>
       );
       act = action(`Build for v${n} anyway`);
       break;
-    case "off":
-      copy = "Refreshing this roadmap for each new PRD version is turned off.";
-      act = action("Build draft roadmap now");
+    case 'off':
+      copy = 'Refreshing this roadmap for each new PRD version is turned off.';
+      act = action('Build draft roadmap now');
       break;
-    case "skipped":
+    case 'skipped':
       copy = "Nothing to build yet: this version is the template's empty skeleton.";
-      act = action("Build anyway");
+      act = action('Build anyway');
       break;
     default:
       // qa-docs-64: someone who cannot build it is told who can.
-      copy = canDerive ? "No roadmap items for this version yet." : "No roadmap items for this version yet. Approvers and owners can build them.";
-      act = action("Build draft roadmap now");
+      copy = canDerive
+        ? 'No roadmap items for this version yet.'
+        : 'No roadmap items for this version yet. Approvers and owners can build them.';
+      act = action('Build draft roadmap now');
   }
   return (
     <div
@@ -480,7 +574,9 @@ function StatusRow({
       data-status={data.status}
       // qa-docs-65: on a phone the words sit above the button, not squeezed beside it.
       className={`flex min-h-10 flex-wrap items-center gap-x-3 gap-y-2 rounded-button px-3 py-2 text-sm max-[600px]:flex-col max-[600px]:items-start ${
-        data.status === "failed" ? "bg-warn-bg text-warn" : "border border-line bg-surface text-text2"
+        data.status === 'failed'
+          ? 'bg-warn-bg text-warn'
+          : 'border border-line bg-surface text-text2'
       }`}
     >
       <span className="min-w-0 flex-1 max-[600px]:flex-none">{copy}</span>
@@ -513,8 +609,16 @@ function AutoSwitch({ doc, initial }: { doc: string; initial: boolean }) {
       {/* qa4-docs-48: the info icon stays beside its label on a phone; the label wraps instead. */}
       <div className="flex min-w-0 items-center gap-x-2">
         <label className="flex min-h-10 min-w-0 items-center gap-2 text-sm font-medium text-text">
-          <input type="checkbox" className="size-4 flex-none accent-[var(--accent)]" checked={on} disabled={busy} onChange={(e) => void toggle(e.target.checked)} />
-          <span data-testid="draft-roadmap-auto-label">Refresh this roadmap whenever a new PRD version is drafted</span>
+          <input
+            type="checkbox"
+            className="size-4 flex-none accent-[var(--accent)]"
+            checked={on}
+            disabled={busy}
+            onChange={(e) => void toggle(e.target.checked)}
+          />
+          <span data-testid="draft-roadmap-auto-label">
+            Refresh this roadmap whenever a new PRD version is drafted
+          </span>
         </label>
         <span className="flex-none">
           <InfoTip label="refreshing with each new version" side="bottom" align="start">

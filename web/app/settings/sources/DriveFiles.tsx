@@ -1,24 +1,30 @@
-"use client";
+'use client';
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from 'react';
 
-import { Button, Chip, Icon, InfoTip, LinkButton, Notice } from "@/components/ds";
-import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
-import { chooseFromDrive, drivePickerReady, preloadDrivePicker, type PickerConfig } from "@/lib/google-picker";
-import { errorMessage } from "@/lib/use-query";
+import { Button, Chip, Icon, InfoTip, LinkButton, Notice } from '@/components/ds';
+import { api, ApiError, unwrap, type Schemas } from '@/lib/api/client';
+import {
+  chooseFromDrive,
+  drivePickerReady,
+  preloadDrivePicker,
+  type PickerConfig,
+} from '@/lib/google-picker';
+import { errorMessage } from '@/lib/use-query';
 
-import { TEXTAREA } from "../_components/fields";
+import { TEXTAREA } from '../_components/fields';
 
 /** One picked Drive item, as the source config keeps it: `docs` or `folders` ids plus `names`. */
 export interface DriveFile {
   id: string;
   name: string;
-  kind: "doc" | "folder";
+  kind: 'doc' | 'folder';
 }
 
-export const RECONNECT_TO_CHOOSE_FILES = "Reconnect to choose files";
+export const RECONNECT_TO_CHOOSE_FILES = 'Reconnect to choose files';
 /** What Oracle can read through a Google connection, said plainly (S5, 'Drive folders'). */
-export const DRIVE_ACCESS = "Oracle can read your Drive; it pulls in only the files and folders you choose here.";
+export const DRIVE_ACCESS =
+  'Oracle can read your Drive; it pulls in only the files and folders you choose here.';
 
 function ids(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String) : [];
@@ -26,11 +32,14 @@ function ids(value: unknown): string[] {
 
 /** The picked folders and files in a Google Docs source config, folders first. */
 export function driveFiles(config: Record<string, unknown>): DriveFile[] {
-  const names = (config.names && typeof config.names === "object" ? config.names : {}) as Record<string, unknown>;
-  const name = (id: string) => (typeof names[id] === "string" ? (names[id] as string) : id);
+  const names = (config.names && typeof config.names === 'object' ? config.names : {}) as Record<
+    string,
+    unknown
+  >;
+  const name = (id: string) => (typeof names[id] === 'string' ? (names[id] as string) : id);
   return [
-    ...ids(config.folders).map((id) => ({ id, name: name(id), kind: "folder" as const })),
-    ...ids(config.docs).map((id) => ({ id, name: name(id), kind: "doc" as const })),
+    ...ids(config.folders).map((id) => ({ id, name: name(id), kind: 'folder' as const })),
+    ...ids(config.docs).map((id) => ({ id, name: name(id), kind: 'doc' as const })),
   ];
 }
 
@@ -39,12 +48,14 @@ export const MAX_NAME = 500;
 
 /** The config to save for `files`: `docs`, `folders` (when any) and their `names`. */
 export function driveConfig(config: Record<string, unknown>, files: DriveFile[]) {
-  const folders = files.filter((f) => f.kind === "folder").map((f) => f.id);
+  const folders = files.filter((f) => f.kind === 'folder').map((f) => f.id);
   const next: Record<string, unknown> = {
     ...config,
-    docs: files.filter((f) => f.kind === "doc").map((f) => f.id),
+    docs: files.filter((f) => f.kind === 'doc').map((f) => f.id),
     folders,
-    names: Object.fromEntries(files.filter((f) => f.name !== f.id).map((f) => [f.id, f.name.slice(0, MAX_NAME)])),
+    names: Object.fromEntries(
+      files.filter((f) => f.name !== f.id).map((f) => [f.id, f.name.slice(0, MAX_NAME)]),
+    ),
   };
   if (folders.length === 0) delete next.folders;
   return next;
@@ -58,8 +69,8 @@ export function pastedFile(text: string): DriveFile | null {
   const folder = text.match(/\/folders\/([A-Za-z0-9_-]+)/);
   const doc = text.match(/\/d\/([A-Za-z0-9_-]+)/) ?? text.match(/[?&]id=([A-Za-z0-9_-]+)/);
   const id = folder?.[1] ?? doc?.[1] ?? text;
-  if (!DRIVE_ID.test(id) || id.toLowerCase() === "root") return null;
-  return { id, name: id, kind: folder ? "folder" : "doc" };
+  if (!DRIVE_ID.test(id) || id.toLowerCase() === 'root') return null;
+  return { id, name: id, kind: folder ? 'folder' : 'doc' };
 }
 
 function merge(list: DriveFile[], more: DriveFile[]): DriveFile[] {
@@ -68,14 +79,18 @@ function merge(list: DriveFile[], more: DriveFile[]): DriveFile[] {
 }
 
 /** "Reconnect to choose files": the Google grant lacks drive.readonly, so folders cannot be read. */
-export function ReconnectToChoose({ className = "" }: { className?: string }) {
+export function ReconnectToChoose({ className = '' }: { className?: string }) {
   return (
-    <div className={`flex flex-wrap items-center gap-2 ${className}`} data-testid="reconnect-to-choose">
+    <div
+      className={`flex flex-wrap items-center gap-2 ${className}`}
+      data-testid="reconnect-to-choose"
+    >
       <Chip kind="warn" dot>
         {RECONNECT_TO_CHOOSE_FILES}
       </Chip>
       <InfoTip label="reconnecting Google" align="start">
-        This Google sign-in cannot read folders. Reconnect Google once, then choose files and folders. {DRIVE_ACCESS}
+        This Google sign-in cannot read folders. Reconnect Google once, then choose files and
+        folders. {DRIVE_ACCESS}
       </InfoTip>
       <LinkButton href="/settings/connections" icon="link">
         Reconnect
@@ -89,16 +104,18 @@ export function ReconnectToChoose({ className = "" }: { className?: string }) {
  * (which may name settings) go behind an (i). A failed script load has no words of its own.
  */
 export function driveLoadFailure(e: unknown): { line: string; why: string } {
-  if (!(e instanceof ApiError)) return { line: "Could not open Google Drive.", why: "" };
-  if (e.status === 404) return { line: "Could not open Google Drive: it is not set up yet.", why: e.message };
-  if (e.status === 403) return { line: "Could not open Google Drive: you do not have access.", why: e.message };
-  return { line: "Could not open Google Drive.", why: e.message };
+  if (!(e instanceof ApiError)) return { line: 'Could not open Google Drive.', why: '' };
+  if (e.status === 404)
+    return { line: 'Could not open Google Drive: it is not set up yet.', why: e.message };
+  if (e.status === 403)
+    return { line: 'Could not open Google Drive: you do not have access.', why: e.message };
+  return { line: 'Could not open Google Drive.', why: e.message };
 }
 
 let configPromise: Promise<PickerConfig> | null = null;
 
 function pickerConfig(): Promise<PickerConfig> {
-  configPromise ??= unwrap(api.GET("/v1/connections/google/picker-config")).catch((e) => {
+  configPromise ??= unwrap(api.GET('/v1/connections/google/picker-config')).catch((e) => {
     configPromise = null;
     throw e;
   });
@@ -131,7 +148,7 @@ export function DriveFiles({
 }) {
   const pasteId = useId();
   const [pasting, setPasting] = useState(false);
-  const [pasted, setPasted] = useState("");
+  const [pasted, setPasted] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [config, setConfig] = useState<PickerConfig | null>(null);
@@ -173,17 +190,29 @@ export function DriveFiles({
   }
 
   function addPasted() {
-    const parts = [...new Set(pasted.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean))];
+    const parts = [
+      ...new Set(
+        pasted
+          .split(/[\s,]+/)
+          .map((s) => s.trim())
+          .filter(Boolean),
+      ),
+    ];
     const found = parts.map(pastedFile);
     const bad = parts.filter((_, i) => !found[i]);
-    onChange(merge(files, found.filter((f): f is DriveFile => f !== null)));
+    onChange(
+      merge(
+        files,
+        found.filter((f): f is DriveFile => f !== null),
+      ),
+    );
     if (bad.length) {
-      setPasted(bad.join("\n"));
-      setError(`Not a Drive file or folder id: ${bad.join(", ")}`);
+      setPasted(bad.join('\n'));
+      setError(`Not a Drive file or folder id: ${bad.join(', ')}`);
       return;
     }
     setError(null);
-    setPasted("");
+    setPasted('');
     setPasting(false);
   }
 
@@ -211,16 +240,19 @@ export function DriveFiles({
       ) : (
         <div className="flex flex-wrap items-center gap-1">
           <Button variant="solid" icon="doc" onClick={choose} disabled={busy || !config}>
-            {busy ? "Opening Drive…" : config ? "Choose from Drive" : "Loading Drive…"}
+            {busy ? 'Opening Drive…' : config ? 'Choose from Drive' : 'Loading Drive…'}
           </Button>
           <InfoTip label="choosing from Drive" align="start">
-            {DRIVE_ACCESS} Choose Google Docs, or a folder to bring in every doc in it, including docs added to it later.
-            Removing one hides what came from it when you save.
+            {DRIVE_ACCESS} Choose Google Docs, or a folder to bring in every doc in it, including
+            docs added to it later. Removing one hides what came from it when you save.
           </InfoTip>
         </div>
       )}
       {files.length > 0 && (
-        <ul aria-label="Picked files and folders" className="flex flex-col rounded-button border border-line bg-surface">
+        <ul
+          aria-label="Picked files and folders"
+          className="flex flex-col rounded-button border border-line bg-surface"
+        >
           {files.map((f) => (
             <li
               key={f.id}
@@ -228,18 +260,21 @@ export function DriveFiles({
               className="flex min-h-12 items-center gap-2.5 border-t border-line px-3 py-1.5 first:border-t-0"
             >
               <span className="grid size-7 flex-none place-items-center rounded-lg bg-accent-soft text-accent-ink">
-                <Icon name={f.kind === "folder" ? "folder" : "doc"} size={16} />
+                <Icon name={f.kind === 'folder' ? 'folder' : 'doc'} size={16} />
               </span>
               <span className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-[15px] font-medium" title={f.name === f.id ? f.id : `${f.name} (${f.id})`}>
+                <span
+                  className="truncate text-[15px] font-medium"
+                  title={f.name === f.id ? f.id : `${f.name} (${f.id})`}
+                >
                   {f.name}
                 </span>
                 <span className="text-[13px] leading-4 text-text2">
-                  {f.kind === "folder"
-                    ? "Folder · every doc in it"
+                  {f.kind === 'folder'
+                    ? 'Folder · every doc in it'
                     : f.name === f.id
-                      ? "Drive id"
-                      : "Google Doc"}
+                      ? 'Drive id'
+                      : 'Google Doc'}
                 </span>
               </span>
               {unavailable[f.id] && (
@@ -261,7 +296,10 @@ export function DriveFiles({
       )}
       {pasting ? (
         <div className="flex flex-col gap-1.5">
-          <label htmlFor={pasteId} className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
+          <label
+            htmlFor={pasteId}
+            className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2"
+          >
             Drive links
           </label>
           <span className="text-[13px] leading-4 text-text2">One per line.</span>
@@ -294,34 +332,37 @@ export function DriveFiles({
   );
 }
 
-type SourceNote = Schemas["UnavailableItem"];
+type SourceNote = Schemas['UnavailableItem'];
 
 /** The chip for an item the last sync could not read. */
 function noAccessLabel(reason: string): string {
-  if (reason.startsWith("Lost access")) return "Lost access";
-  if (reason.startsWith("In the trash")) return "In the trash";
-  if (reason.startsWith("Not a")) return reason;
-  if (reason.startsWith("Not picked")) return "Not picked";
-  return "No access";
+  if (reason.startsWith('Lost access')) return 'Lost access';
+  if (reason.startsWith('In the trash')) return 'In the trash';
+  if (reason.startsWith('Not a')) return reason;
+  if (reason.startsWith('Not picked')) return 'Not picked';
+  return 'No access';
 }
 
 /** Why docs in a picked folder were skipped, for the chip's title. */
 function skippedTitle(reason: string): string {
   if (/shared drive/i.test(reason)) {
-    return "Docs in a picked folder in a shared drive that is not on the company list (Settings › Sources › Google Drive) are not pulled in";
+    return 'Docs in a picked folder in a shared drive that is not on the company list (Settings › Sources › Google Drive) are not pulled in';
   }
   if (/domain not set/i.test(reason)) {
-    return "No company email domain is set (Settings › Sources › Google Drive), so docs in picked folders are not pulled in";
+    return 'No company email domain is set (Settings › Sources › Google Drive), so docs in picked folders are not pulled in';
   }
-  return "Docs in a picked folder whose owner is outside the company are not pulled in";
+  return 'Docs in a picked folder whose owner is outside the company are not pulled in';
 }
 
 /** Up to `shown` names, then "+N more"; every name is in the title. */
 function NameList({ names, shown = 4 }: { names: string[]; shown?: number }) {
   const rest = names.length - shown;
   return (
-    <span className="min-w-0 truncate text-text max-[600px]:whitespace-normal" title={names.join(", ")}>
-      {names.slice(0, shown).join(", ")}
+    <span
+      className="min-w-0 truncate text-text max-[600px]:whitespace-normal"
+      title={names.join(', ')}
+    >
+      {names.slice(0, shown).join(', ')}
       {rest > 0 && <span className="text-text2">{` +${rest} more`}</span>}
     </span>
   );
@@ -349,22 +390,27 @@ export function DriveNotes({
 }) {
   const byId = new Map(picked.map((f) => [f.id, f]));
   const nameOf = (n: SourceNote) => byId.get(n.external_id)?.name ?? n.name ?? n.external_id;
-  const unreadable = notes.filter((n) => (n.status ?? "unavailable") === "unavailable");
-  const limited = notes.filter((n) => n.status === "limited");
-  const groups = (status: "skipped" | "flagged") => {
+  const unreadable = notes.filter((n) => (n.status ?? 'unavailable') === 'unavailable');
+  const limited = notes.filter((n) => n.status === 'limited');
+  const groups = (status: 'skipped' | 'flagged') => {
     const out = new Map<string, string[]>();
-    for (const n of notes.filter((x) => x.status === status)) out.set(n.reason, [...(out.get(n.reason) ?? []), nameOf(n)]);
+    for (const n of notes.filter((x) => x.status === status))
+      out.set(n.reason, [...(out.get(n.reason) ?? []), nameOf(n)]);
     return [...out.entries()];
   };
-  const skipped = groups("skipped");
-  const flagged = groups("flagged");
+  const skipped = groups('skipped');
+  const flagged = groups('flagged');
   if (!notes.length) return null;
   return (
-    <ul aria-label={`Sync notes for ${sourceName}`} className="mt-2 flex flex-col gap-1.5" data-testid="drive-notes">
+    <ul
+      aria-label={`Sync notes for ${sourceName}`}
+      className="mt-2 flex flex-col gap-1.5"
+      data-testid="drive-notes"
+    >
       {unreadable.map((n) => {
-        const folder = byId.get(n.external_id)?.kind === "folder";
+        const folder = byId.get(n.external_id)?.kind === 'folder';
         const label = noAccessLabel(n.reason);
-        const lost = label === "Lost access";
+        const lost = label === 'Lost access';
         return (
           <li
             key={n.external_id}
@@ -376,13 +422,17 @@ export function DriveNotes({
             </Chip>
             {lost && <span className="text-text2">to</span>}
             <span className="flex min-w-0 items-center gap-1.5">
-              <Icon name={folder ? "folder" : "doc"} size={16} className="flex-none text-text2" />
+              <Icon name={folder ? 'folder' : 'doc'} size={16} className="flex-none text-text2" />
               <span className="min-w-0 truncate font-medium" title={`${nameOf(n)}: ${n.reason}`}>
                 {nameOf(n)}
               </span>
             </span>
             {/* Pass F F-36: why behind an (i), not a sentence on the card. */}
-            {folder && <InfoTip label={`why ${nameOf(n)} is hidden`}>Its docs are hidden until Oracle can read it again.</InfoTip>}
+            {folder && (
+              <InfoTip label={`why ${nameOf(n)} is hidden`}>
+                Its docs are hidden until Oracle can read it again.
+              </InfoTip>
+            )}
             {onChoose && (
               <Button onClick={onChoose} aria-label={`Choose another in place of ${nameOf(n)}`}>
                 Choose another
@@ -397,11 +447,13 @@ export function DriveNotes({
           <Chip kind="line" title={skippedTitle(reason)}>
             Skipped
           </Chip>
-          <span className="tnum flex-none font-medium">{names.length === 1 ? "1 doc" : `${names.length} docs`}</span>
+          <span className="tnum flex-none font-medium">
+            {names.length === 1 ? '1 doc' : `${names.length} docs`}
+          </span>
           <NameList names={names} />
           {/* D-10: why behind the (i), not a sentence on the row. */}
           <InfoTip label="why these docs are skipped" align="start">
-            {reason.replace(/^Skipped:\s*/, "")}. {skippedTitle(reason)}.
+            {reason.replace(/^Skipped:\s*/, '')}. {skippedTitle(reason)}.
           </InfoTip>
         </li>
       ))}
@@ -410,12 +462,17 @@ export function DriveNotes({
           <Chip kind="warn" title="Pulled in, but owned outside the company">
             {reason}
           </Chip>
-          <span className="tnum flex-none font-medium">{names.length === 1 ? "1 doc" : `${names.length} docs`}</span>
+          <span className="tnum flex-none font-medium">
+            {names.length === 1 ? '1 doc' : `${names.length} docs`}
+          </span>
           <NameList names={names} />
         </li>
       ))}
       {limited.map((n) => (
-        <li key={`limit-${n.external_id}`} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
+        <li
+          key={`limit-${n.external_id}`}
+          className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-sm"
+        >
           <Chip kind="warn">Capped</Chip>
           <span className="min-w-0 font-medium">{nameOf(n)}</span>
           <InfoTip label={`why ${nameOf(n)} is capped`} align="start">

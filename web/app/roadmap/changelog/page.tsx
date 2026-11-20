@@ -1,32 +1,57 @@
-"use client";
+'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
-import { Button, Chip, InfoTip, Notice, Page, PageHeader, Panel, toast, type ChipKind } from "@/components/ds";
-import { usePhone } from "@/components/ds/page-info";
-import { PlanCrumb } from "@/app/plan/_crumb";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDate, plural } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import {
+  Button,
+  Chip,
+  InfoTip,
+  Notice,
+  Page,
+  PageHeader,
+  Panel,
+  toast,
+  type ChipKind,
+} from '@/components/ds';
+import { usePhone } from '@/components/ds/page-info';
+import { PlanCrumb } from '@/app/plan/_crumb';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { formatDate, plural } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-import { NewEntryDialog } from "./_new-entry";
+import { NewEntryDialog } from './_new-entry';
 
-type Entry = Schemas["ChangelogEntryOut"];
+type Entry = Schemas['ChangelogEntryOut'];
 
-const CATEGORIES: Entry["category"][] = ["added", "changed", "deprecated", "removed", "fixed", "security"];
-const CATEGORY_LABEL: Record<Entry["category"], string> = {
-  added: "Added",
-  changed: "Changed",
-  deprecated: "Deprecated",
-  removed: "Removed",
-  fixed: "Fixed",
-  security: "Security",
+const CATEGORIES: Entry['category'][] = [
+  'added',
+  'changed',
+  'deprecated',
+  'removed',
+  'fixed',
+  'security',
+];
+const CATEGORY_LABEL: Record<Entry['category'], string> = {
+  added: 'Added',
+  changed: 'Changed',
+  deprecated: 'Deprecated',
+  removed: 'Removed',
+  fixed: 'Fixed',
+  security: 'Security',
 };
-const STATUS_LABEL: Record<Entry["status"], string> = { draft: "Draft", published: "Published", withdrawn: "Withdrawn" };
-const STATUS_KIND: Record<Entry["status"], ChipKind> = { draft: "na", published: "pass", withdrawn: "line" };
+const STATUS_LABEL: Record<Entry['status'], string> = {
+  draft: 'Draft',
+  published: 'Published',
+  withdrawn: 'Withdrawn',
+};
+const STATUS_KIND: Record<Entry['status'], ChipKind> = {
+  draft: 'na',
+  published: 'pass',
+  withdrawn: 'line',
+};
 /** qa-plan-38: a secondary button in the header row is the primary's 40 px height. */
-const HEADER_BUTTON = "h-10! rounded-button! px-4! text-[15px]!";
+const HEADER_BUTTON = 'h-10! rounded-button! px-4! text-[15px]!';
 /**
  * qa-plan-37: a disabled export has no outline and no fill and is dimmed, so in dark it does
  * not read like an enabled bordered button.
@@ -44,18 +69,18 @@ function PhoneMore({ on, children }: { on: boolean; children: ReactNode }) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+      if (e.key !== 'Escape') return;
       setOpen(false);
-      root.current?.querySelector<HTMLElement>("[data-more-button]")?.focus();
+      root.current?.querySelector<HTMLElement>('[data-more-button]')?.focus();
     };
     const onDown = (e: PointerEvent) => {
       if (!root.current?.contains(e.target as Node)) setOpen(false);
     };
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("pointerdown", onDown);
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onDown);
     return () => {
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onDown);
     };
   }, [open]);
   if (!on) return <>{children}</>;
@@ -88,13 +113,17 @@ function PhoneMore({ on, children }: { on: boolean; children: ReactNode }) {
 }
 
 /** Days newest first, each with its categories in Keep a Changelog's order. */
-function grouped(entries: Entry[]): [string, [Entry["category"], Entry[]][]][] {
+function grouped(entries: Entry[]): [string, [Entry['category'], Entry[]][]][] {
   const days = [...new Set(entries.map((e) => e.released_on))].sort().reverse();
   return days.map((day) => [
     day,
-    CATEGORIES.map((c) => [c, entries.filter((e) => e.released_on === day && e.category === c)] as [Entry["category"], Entry[]]).filter(
-      ([, rows]) => rows.length > 0,
-    ),
+    CATEGORIES.map(
+      (c) =>
+        [c, entries.filter((e) => e.released_on === day && e.category === c)] as [
+          Entry['category'],
+          Entry[],
+        ],
+    ).filter(([, rows]) => rows.length > 0),
   ]);
 }
 
@@ -104,20 +133,27 @@ function grouped(entries: Entry[]): [string, [Entry["category"], Entry[]][]][] {
  * post on the company's site. Oracle posts nothing outside.
  */
 export default function ChangelogPage() {
-  const q = useQuery("changelog", () => unwrap(api.GET("/v1/changelog", { params: { query: { limit: 500 } } })));
+  const q = useQuery('changelog', () =>
+    unwrap(api.GET('/v1/changelog', { params: { query: { limit: 500 } } })),
+  );
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const { can } = useMe();
   const entries = q.data ?? [];
   // Export gives the published public entries (GET /v1/changelog/export?audience=public): none, nothing to export.
-  const exportable = entries.filter((e) => e.audience === "public" && e.status === "published").length;
+  const exportable = entries.filter(
+    (e) => e.audience === 'public' && e.status === 'published',
+  ).length;
   // fix4 qa-plan-57: the Export buttons and their hint are for those who can publish an entry
   // (who can make one to export); others see Export only once there is something to export.
-  const canPublish = can("publish_changelog_entry");
+  const canPublish = can('publish_changelog_entry');
   const showExport = canPublish || exportable > 0;
-  const exportWhy = canPublish && q.data && exportable === 0 ? "Nothing to export yet: export gives the published public entries." : null;
-  const canCreate = can("create_changelog_entry");
+  const exportWhy =
+    canPublish && q.data && exportable === 0
+      ? 'Nothing to export yet: export gives the published public entries.'
+      : null;
+  const canCreate = can('create_changelog_entry');
   const empty = !!q.data && entries.length === 0;
   const phone = usePhone();
 
@@ -134,24 +170,31 @@ export default function ChangelogPage() {
     }
   }
 
-  async function exportAs(format: "md" | "html") {
+  async function exportAs(format: 'md' | 'html') {
     setBusy(`export-${format}`);
     setError(null);
     try {
-      const { data, error: failed, response } = await api.GET("/v1/changelog/export", {
-        params: { query: { audience: "public", format } },
-        parseAs: "text",
+      const {
+        data,
+        error: failed,
+        response,
+      } = await api.GET('/v1/changelog/export', {
+        params: { query: { audience: 'public', format } },
+        parseAs: 'text',
       });
-      if (!response.ok || typeof data !== "string") throw new Error(typeof failed === "string" ? failed : "The export failed.");
-      const blob = new Blob([data], { type: format === "html" ? "text/html" : "text/markdown" });
-      const a = document.createElement("a");
+      if (!response.ok || typeof data !== 'string')
+        throw new Error(typeof failed === 'string' ? failed : 'The export failed.');
+      const blob = new Blob([data], { type: format === 'html' ? 'text/html' : 'text/markdown' });
+      const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = `changelog.${format}`;
       document.body.append(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(a.href);
-      toast({ message: `Downloaded changelog.${format} with ${plural(exportable, "published public entry", "published public entries")}.` });
+      toast({
+        message: `Downloaded changelog.${format} with ${plural(exportable, 'published public entry', 'published public entries')}.`,
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : errorMessage(e));
     } finally {
@@ -165,8 +208,9 @@ export default function ChangelogPage() {
         title="Changelog"
         info={
           <InfoTip label="Changelog" align="start" side="bottom">
-            Internal entries are for everyone at the company. Public entries need an approver&apos;s Publish; Export
-            gives the published ones as Markdown or HTML for a person to post. Oracle posts nothing outside.
+            Internal entries are for everyone at the company. Public entries need an approver&apos;s
+            Publish; Export gives the published ones as Markdown or HTML for a person to post.
+            Oracle posts nothing outside.
           </InfoTip>
         }
         back={<PlanCrumb />}
@@ -177,7 +221,7 @@ export default function ChangelogPage() {
         status={
           q.data && (
             <>
-              <Chip kind="acc">{plural(entries.length, "entry", "entries")}</Chip>
+              <Chip kind="acc">{plural(entries.length, 'entry', 'entries')}</Chip>
             </>
           )
         }
@@ -189,9 +233,9 @@ export default function ChangelogPage() {
                 <Button
                   disabled={busy !== null || exportable === 0}
                   title={exportWhy ?? undefined}
-                  aria-describedby={exportWhy ? "export-why" : undefined}
+                  aria-describedby={exportWhy ? 'export-why' : undefined}
                   className={EXPORT_BUTTON}
-                  onClick={() => exportAs("md")}
+                  onClick={() => exportAs('md')}
                   data-testid="export-md"
                 >
                   Export Markdown
@@ -199,9 +243,9 @@ export default function ChangelogPage() {
                 <Button
                   disabled={busy !== null || exportable === 0}
                   title={exportWhy ?? undefined}
-                  aria-describedby={exportWhy ? "export-why" : undefined}
+                  aria-describedby={exportWhy ? 'export-why' : undefined}
                   className={EXPORT_BUTTON}
-                  onClick={() => exportAs("html")}
+                  onClick={() => exportAs('html')}
                   data-testid="export-html"
                 >
                   Export HTML
@@ -210,7 +254,12 @@ export default function ChangelogPage() {
             )}
             {/* fix4 qa-plan-15, qa-plan-58: while empty, New entry is in the empty card only. */}
             {canCreate && !empty && (
-              <Button variant="primary" icon="plus" onClick={() => setCreating(true)} data-testid="new-entry">
+              <Button
+                variant="primary"
+                icon="plus"
+                onClick={() => setCreating(true)}
+                data-testid="new-entry"
+              >
                 New entry
               </Button>
             )}
@@ -221,20 +270,21 @@ export default function ChangelogPage() {
         {(q.error || error) && <Notice tone="error">{q.error ?? error}</Notice>}
         {exportWhy && (
           <p id="export-why" className="text-sm text-text2" data-testid="export-why">
-            Nothing to export yet.{" "}
-            {/* #1590: what export gives sits behind the (i). */}
+            Nothing to export yet. {/* #1590: what export gives sits behind the (i). */}
             <InfoTip label="what export gives" align="start" testId="changelog-export-tip">
               export gives the published public entries.
-            </InfoTip>{" "}
+            </InfoTip>{' '}
             Publish a public entry to export it.
           </p>
         )}
         <Panel testId="changelog">
           {empty && (
-            <div data-testid="changelog-empty" className="flex flex-col items-center gap-3 px-4 py-8 text-center">
+            <div
+              data-testid="changelog-empty"
+              className="flex flex-col items-center gap-3 px-4 py-8 text-center"
+            >
               <p data-testid="changelog-empty-text" className="text-[15px] text-text2">
-                No entries yet.{" "}
-                {/* #1590: how an entry gets added sits behind the (i). */}
+                No entries yet. {/* #1590: how an entry gets added sits behind the (i). */}
                 <InfoTip label="how entries get added" align="start" testId="changelog-empty-tip">
                   {canCreate
                     ? "Add the first; Oracle adds one when it drafts a launch's kit."
@@ -242,20 +292,37 @@ export default function ChangelogPage() {
                 </InfoTip>
               </p>
               {canCreate && (
-                <Button variant="primary" icon="plus" onClick={() => setCreating(true)} data-testid="new-entry">
+                <Button
+                  variant="primary"
+                  icon="plus"
+                  onClick={() => setCreating(true)}
+                  data-testid="new-entry"
+                >
                   New entry
                 </Button>
               )}
             </div>
           )}
           {grouped(entries).map(([day, groups]) => (
-            <section key={day} aria-label={formatDate(day)} data-testid="changelog-day" className="border-b border-line px-4 py-3 last:border-b-0 max-[600px]:px-3">
+            <section
+              key={day}
+              aria-label={formatDate(day)}
+              data-testid="changelog-day"
+              className="border-b border-line px-4 py-3 last:border-b-0 max-[600px]:px-3"
+            >
               <h2 className="font-display text-lg font-bold tracking-heading">
                 <time dateTime={day}>{formatDate(day)}</time>
               </h2>
               {groups.map(([category, rows]) => (
-                <div key={category} data-testid="changelog-category" data-category={category} className="mt-2">
-                  <h3 className="text-[13px] font-semibold tracking-[0.02em] text-text2">{CATEGORY_LABEL[category]}</h3>
+                <div
+                  key={category}
+                  data-testid="changelog-category"
+                  data-category={category}
+                  className="mt-2"
+                >
+                  <h3 className="text-[13px] font-semibold tracking-[0.02em] text-text2">
+                    {CATEGORY_LABEL[category]}
+                  </h3>
                   <ul className="mt-1 flex flex-col divide-y divide-line">
                     {rows.map((e) => (
                       <EntryRow key={e.id} entry={e} busy={busy} act={act} />
@@ -297,10 +364,16 @@ function EntryRow({
   const [body, setBody] = useState(entry.body);
   const path = { params: { path: { entry_id: entry.id } } };
   return (
-    <li className="flex flex-col gap-1.5 py-2" data-testid="changelog-entry" data-status={entry.status}>
+    <li
+      className="flex flex-col gap-1.5 py-2"
+      data-testid="changelog-entry"
+      data-status={entry.status}
+    >
       <div className="flex flex-wrap items-center gap-2">
         <span className="min-w-0 flex-1 font-medium">{entry.title}</span>
-        <Chip kind={entry.audience === "public" ? "acc" : "line"}>{entry.audience === "public" ? "Public" : "Internal"}</Chip>
+        <Chip kind={entry.audience === 'public' ? 'acc' : 'line'}>
+          {entry.audience === 'public' ? 'Public' : 'Internal'}
+        </Chip>
         <Chip kind={STATUS_KIND[entry.status]} dot data-testid="entry-status">
           {STATUS_LABEL[entry.status]}
         </Chip>
@@ -308,21 +381,32 @@ function EntryRow({
       {entry.body && <p className="text-[15px] leading-6 text-text2">{entry.body}</p>}
       {/* #370: each action shows only for a role that may call it. */}
       <div className="flex flex-wrap gap-1.5 empty:hidden">
-        {can("update_changelog_entry") && (
+        {can('update_changelog_entry') && (
           <Button variant="ghost" onClick={() => setEditing((x) => !x)}>
             Edit
           </Button>
         )}
-        {entry.status === "draft" && can("publish_changelog_entry") && (
-          <Button disabled={busy !== null} onClick={() => act(`publish-${entry.id}`, () => unwrap(api.POST("/v1/changelog/{entry_id}/publish", path)))}>
+        {entry.status === 'draft' && can('publish_changelog_entry') && (
+          <Button
+            disabled={busy !== null}
+            onClick={() =>
+              act(`publish-${entry.id}`, () =>
+                unwrap(api.POST('/v1/changelog/{entry_id}/publish', path)),
+              )
+            }
+          >
             Publish
           </Button>
         )}
-        {entry.status === "published" && can("withdraw_changelog_entry") && (
+        {entry.status === 'published' && can('withdraw_changelog_entry') && (
           <Button
             variant="ghost"
             disabled={busy !== null}
-            onClick={() => act(`withdraw-${entry.id}`, () => unwrap(api.POST("/v1/changelog/{entry_id}/withdraw", path)))}
+            onClick={() =>
+              act(`withdraw-${entry.id}`, () =>
+                unwrap(api.POST('/v1/changelog/{entry_id}/withdraw', path)),
+              )
+            }
           >
             Withdraw
           </Button>
@@ -332,18 +416,31 @@ function EntryRow({
         <div className="flex flex-col gap-2">
           <label className="flex flex-col gap-1 text-sm font-medium">
             Title
-            <input className="h-9 rounded-lg border border-line-strong bg-surface px-2.5 text-[15px]" value={title} onChange={(e) => setTitle(e.target.value)} />
+            <input
+              className="h-9 rounded-lg border border-line-strong bg-surface px-2.5 text-[15px]"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
           </label>
           <label className="flex flex-col gap-1 text-sm font-medium">
             What changed
-            <textarea className="min-h-20 rounded-lg border border-line-strong bg-surface p-2.5 text-[15px]" value={body} onChange={(e) => setBody(e.target.value)} />
+            <textarea
+              className="min-h-20 rounded-lg border border-line-strong bg-surface p-2.5 text-[15px]"
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+            />
           </label>
           <Button
             variant="solid"
             disabled={busy !== null || !title.trim()}
             onClick={() =>
               act(`edit-${entry.id}`, async () => {
-                await unwrap(api.PATCH("/v1/changelog/{entry_id}", { ...path, body: { title: title.trim(), body, lock_version: entry.lock_version } }));
+                await unwrap(
+                  api.PATCH('/v1/changelog/{entry_id}', {
+                    ...path,
+                    body: { title: title.trim(), body, lock_version: entry.lock_version },
+                  }),
+                );
                 setEditing(false);
               })
             }

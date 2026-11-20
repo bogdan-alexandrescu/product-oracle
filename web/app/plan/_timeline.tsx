@@ -1,19 +1,19 @@
-"use client";
+'use client';
 
-import { useMemo } from "react";
+import { useMemo } from 'react';
 
-import { InfoTip, Notice } from "@/components/ds";
-import { usePhone } from "@/components/simple/PrdTimeline";
-import { Loading } from "@/components/ui";
-import { api, unwrap } from "@/lib/api/client";
-import { useQuery } from "@/lib/use-query";
+import { InfoTip, Notice } from '@/components/ds';
+import { usePhone } from '@/components/simple/PrdTimeline';
+import { Loading } from '@/components/ui';
+import { api, unwrap } from '@/lib/api/client';
+import { useQuery } from '@/lib/use-query';
 
-import { setRoadmapToday, type Item, type Milestone, type Roadmap } from "../simple/roadmap/_lib";
-import { Chart } from "../simple/roadmap/_timeline";
-import type { GoalView } from "../home/_goals";
-import type { PlanItem } from "./_lib";
-import { grouped, type GroupBy } from "./_table";
-import { sortedMilestones, type Track } from "./_tracks";
+import { setRoadmapToday, type Item, type Milestone, type Roadmap } from '../simple/roadmap/_lib';
+import { Chart } from '../simple/roadmap/_timeline';
+import type { GoalView } from '../home/_goals';
+import type { PlanItem } from './_lib';
+import { grouped, type GroupBy } from './_table';
+import { sortedMilestones, type Track } from './_tracks';
 
 const none = () => {};
 
@@ -34,25 +34,46 @@ export function timelineMatch(rows: PlanItem[], items: Item[]): Map<string, Item
  * when it has one, else at the item's (approved) dates, marked so (`approved`).
  */
 function draftDates(r: PlanItem, it: Item): { item: Item; approved: boolean } {
-  if (r.origin !== "draft" || r.id === it.id) return { item: it, approved: false };
+  if (r.origin !== 'draft' || r.id === it.id) return { item: it, approved: false };
   const end = r.engineering.date;
   if (!end) return { item: it, approved: true };
   const start = it.start.date > end ? end : it.start.date;
-  return { item: { ...it, start: { ...it.start, date: start }, end: { ...it.end, date: end, estimated: false } }, approved: false };
+  return {
+    item: {
+      ...it,
+      start: { ...it.start, date: start },
+      end: { ...it.end, date: end, estimated: false },
+    },
+    approved: false,
+  };
 }
 
 /**
  * The Plan's track milestones as the chart's milestone marks ("M1 First release" on its date), for
  * the tracks of the rows drawn; one the roadmap already marks (the same id) is not drawn twice.
  */
-function trackMarks(tracks: Track[] | undefined, trackIds: Set<string>, have: Milestone[]): Milestone[] {
+function trackMarks(
+  tracks: Track[] | undefined,
+  trackIds: Set<string>,
+  have: Milestone[],
+): Milestone[] {
   const seen = new Set(have.map((m) => m.id));
   const out: Milestone[] = [];
   for (const t of tracks ?? []) {
     if (!trackIds.has(t.id)) continue;
     sortedMilestones(t).forEach((m, n) => {
-      if (!m.target_date || m.status === "dropped" || seen.has(m.id)) return;
-      out.push({ id: m.id, track_id: t.id, name: `M${n + 1} ${m.name}`, date: m.target_date, horizon: m.horizon, status: m.status, item_ids: [], done_when: [], targets: [] });
+      if (!m.target_date || m.status === 'dropped' || seen.has(m.id)) return;
+      out.push({
+        id: m.id,
+        track_id: t.id,
+        name: `M${n + 1} ${m.name}`,
+        date: m.target_date,
+        horizon: m.horizon,
+        status: m.status,
+        item_ids: [],
+        done_when: [],
+        targets: [],
+      });
     });
   }
   return out;
@@ -89,7 +110,7 @@ export function PlanTimeline({
   const q = useQuery(
     `plan|timeline|simple-roadmap|${live}`,
     () =>
-      unwrap(api.GET("/v1/simple/roadmap", {})).then((d) => {
+      unwrap(api.GET('/v1/simple/roadmap', {})).then((d) => {
         setRoadmapToday(d.today);
         return d;
       }),
@@ -100,7 +121,7 @@ export function PlanTimeline({
     const { rows, group } = grouped(items, by, tags, prdOrder);
     const match = timelineMatch(rows, q.data.items);
     const plan = new Map([...match].map(([planId, it]) => [it.id, planId]));
-    const groups = new Map<string, Roadmap["groups"][number]>();
+    const groups = new Map<string, Roadmap['groups'][number]>();
     const drawnItems: Item[] = [];
     const approved = new Set<string>();
     const trackIds = new Set<string>();
@@ -117,7 +138,12 @@ export function PlanTimeline({
       g.item_ids.push(it.id);
     }
     const milestones = [...q.data.milestones, ...trackMarks(tracks, trackIds, q.data.milestones)];
-    const data: Roadmap = { ...q.data, items: drawnItems, groups: [...groups.values()], milestones };
+    const data: Roadmap = {
+      ...q.data,
+      items: drawnItems,
+      groups: [...groups.values()],
+      milestones,
+    };
     return { data, plan, match, approved, undated: rows.filter((r) => !match.has(r.id)) };
   }, [q.data, items, tracks, by, tags, prdOrder]);
 
@@ -132,9 +158,9 @@ export function PlanTimeline({
       {drawn.data.items.length > 0 ? (
         <Chart
           data={drawn.data}
-          lane={by === "prd" ? "prd" : by === "goal" ? "goal" : "track"}
+          lane={by === 'prd' ? 'prd' : by === 'goal' ? 'goal' : 'track'}
           // B-26: the label column's heading names the Group by ("Horizon", not the lane's "Track").
-          laneWord={by === "horizon" ? "Horizon" : undefined}
+          laneWord={by === 'horizon' ? 'Horizon' : undefined}
           format="timeline"
           unit="week"
           compact={phone}
@@ -156,7 +182,11 @@ export function PlanTimeline({
                   data-testid="plan-timeline-approved-dates"
                   data-item={it.key}
                   className="absolute z-[6] flex items-center"
-                  style={{ left: sc.x(it.end.date) + sc.px + 4, top: l.y.get(it.id)!, height: l.rowH }}
+                  style={{
+                    left: sc.x(it.end.date) + sc.px + 4,
+                    top: l.y.get(it.id)!,
+                    height: l.rowH,
+                  }}
                 >
                   <InfoTip label={`the dates of ${it.title}`}>
                     The draft has no dates for this item yet, so its bar shows the approved dates.
@@ -171,11 +201,17 @@ export function PlanTimeline({
         </p>
       )}
       {drawn.undated.length > 0 && (
-        <section data-testid="plan-timeline-undated" aria-label="Not on the timeline" className="flex flex-col gap-1.5">
+        <section
+          data-testid="plan-timeline-undated"
+          aria-label="Not on the timeline"
+          className="flex flex-col gap-1.5"
+        >
           <h3 className="flex items-center gap-1.5 text-sm font-semibold text-text2">
-            Not on the timeline · <span className="tnum text-accent-ink">{drawn.undated.length}</span>
+            Not on the timeline ·{' '}
+            <span className="tnum text-accent-ink">{drawn.undated.length}</span>
             <InfoTip label="Not on the timeline">
-              The roadmap has no dates for these items yet, such as a draft&apos;s new items. Pick one to see it.
+              The roadmap has no dates for these items yet, such as a draft&apos;s new items. Pick
+              one to see it.
             </InfoTip>
           </h3>
           <ul className="flex flex-wrap gap-1.5">
@@ -188,8 +224,10 @@ export function PlanTimeline({
                   aria-pressed={selected === r.id}
                   onClick={() => onSelect(r.id)}
                   className={`inline-flex min-h-8 items-center rounded-lg border px-2.5 text-sm font-semibold ${
-                    selected === r.id ? "border-accent bg-accent-soft" : "border-line-strong hover:bg-surface2"
-                  } ${r.origin === "draft" ? "border-dashed" : ""}`}
+                    selected === r.id
+                      ? 'border-accent bg-accent-soft'
+                      : 'border-line-strong hover:bg-surface2'
+                  } ${r.origin === 'draft' ? 'border-dashed' : ''}`}
                 >
                   {r.title}
                 </button>

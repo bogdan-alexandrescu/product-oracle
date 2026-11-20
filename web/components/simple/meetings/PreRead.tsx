@@ -1,14 +1,14 @@
-"use client";
+'use client';
 
-import { Link } from "@/lib/nav";
+import { Link } from '@/lib/nav';
 
-import { SimpleEmpty, SimpleSection } from "@/components/simple/SimplePage";
-import { ErrorNote, Loading } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatInZone, useCompanyZone } from "@/lib/dates";
-import { useQuery } from "@/lib/use-query";
+import { SimpleEmpty, SimpleSection } from '@/components/simple/SimplePage';
+import { ErrorNote, Loading } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { formatInZone, useCompanyZone } from '@/lib/dates';
+import { useQuery } from '@/lib/use-query';
 
-type Upcoming = Schemas["SimpleUpcomingMeeting"];
+type Upcoming = Schemas['SimpleUpcomingMeeting'];
 /** An open decision as the pre-read lists it: its number and title. */
 type Open = { key: string; number: number; title: string };
 
@@ -17,13 +17,16 @@ type Open = { key: string; number: number; title: string };
  * decision a meeting's minutes name as an open question ("D-3: ...") is not listed again among
  * the others (qa-simple-decide-20), so it is read from the minutes; one decided since is left out.
  */
-export function openDecisions(d: Schemas["SimpleDecisionsOut"]): Open[] {
+export function openDecisions(d: Schemas['SimpleDecisionsOut']): Open[] {
   const rows = [...d.meetings.flatMap((g) => g.decisions), ...d.other];
-  const settled = new Set(rows.filter((r) => r.status !== "proposed").map((r) => r.number));
-  const open: Open[] = rows.filter((r) => r.status === "proposed").map((r) => ({ key: r.id, number: r.number, title: r.title }));
+  const settled = new Set(rows.filter((r) => r.status !== 'proposed').map((r) => r.number));
+  const open: Open[] = rows
+    .filter((r) => r.status === 'proposed')
+    .map((r) => ({ key: r.id, number: r.number, title: r.title }));
   for (const q of d.meetings.flatMap((g) => g.minutes?.open_questions ?? [])) {
     const m = /^D-(\d+):\s*(.+)$/.exec(q);
-    if (m && !settled.has(Number(m[1]))) open.push({ key: `d-${m[1]}`, number: Number(m[1]), title: m[2] });
+    if (m && !settled.has(Number(m[1])))
+      open.push({ key: `d-${m[1]}`, number: Number(m[1]), title: m[2] });
   }
   return [...new Map(open.map((r) => [r.number, r])).values()].sort((a, b) => b.number - a.number);
 }
@@ -36,31 +39,58 @@ export function openDecisions(d: Schemas["SimpleDecisionsOut"]): Open[] {
  */
 export function PreRead({ review }: { review: Upcoming }) {
   const zone = useCompanyZone();
-  const q = useQuery(`simple-pre-read|${review.occurrence_id ?? review.ritual_id}|${review.meeting_id ?? ""}`, async () => {
-    // A started review is about one PRD: its decisions; before, every open one.
-    const prd = review.meeting_id
-      ? (await unwrap(api.GET("/v1/simple/meetings/{meeting_id}", { params: { path: { meeting_id: review.meeting_id } } }))).prd.slug
-      : undefined;
-    return openDecisions(await unwrap(api.GET("/v1/simple/decisions", { params: { query: { prd } } })));
-  });
+  const q = useQuery(
+    `simple-pre-read|${review.occurrence_id ?? review.ritual_id}|${review.meeting_id ?? ''}`,
+    async () => {
+      // A started review is about one PRD: its decisions; before, every open one.
+      const prd = review.meeting_id
+        ? (
+            await unwrap(
+              api.GET('/v1/simple/meetings/{meeting_id}', {
+                params: { path: { meeting_id: review.meeting_id } },
+              }),
+            )
+          ).prd.slug
+        : undefined;
+      return openDecisions(
+        await unwrap(api.GET('/v1/simple/decisions', { params: { query: { prd } } })),
+      );
+    },
+  );
   return (
     <SimpleSection title="Pre-read" testId="meetings-pre-read">
       <p>
-        <strong>{review.ritual_title}</strong> ·{" "}
-        <span className="tnum">{formatInZone(review.due_at, zone, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span> · {review.length_min} min
+        <strong>{review.ritual_title}</strong> ·{' '}
+        <span className="tnum">
+          {formatInZone(review.due_at, zone, {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+          })}
+        </span>{' '}
+        · {review.length_min} min
       </p>
-      {review.attendees.length > 0 && <p className="simple-small">Attendees: {review.attendees.map((a) => a.name).join(", ")}</p>}
+      {review.attendees.length > 0 && (
+        <p className="simple-small">Attendees: {review.attendees.map((a) => a.name).join(', ')}</p>
+      )}
       <h3 className="mt-3 font-semibold">Open decisions</h3>
       {q.loading && !q.data && <Loading />}
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
-      {q.data && q.data.length === 0 && <SimpleEmpty testId="pre-read-decisions-empty">No decision is open.</SimpleEmpty>}
+      {q.data && q.data.length === 0 && (
+        <SimpleEmpty testId="pre-read-decisions-empty">No decision is open.</SimpleEmpty>
+      )}
       {q.data && q.data.length > 0 && (
         <ul className="mt-2 space-y-1" aria-label="Open decisions">
           {q.data.map((d) => (
             <li key={d.key} data-testid="pre-read-decision" className="[overflow-wrap:anywhere]">
-              <Link className="font-semibold text-accent-ink hover:underline" href={`/simple/decisions#d-${d.number}`}>
+              <Link
+                className="font-semibold text-accent-ink hover:underline"
+                href={`/simple/decisions#d-${d.number}`}
+              >
                 D-{d.number}
-              </Link>{" "}
+              </Link>{' '}
               {d.title}
             </li>
           ))}

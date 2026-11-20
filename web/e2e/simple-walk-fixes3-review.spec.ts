@@ -1,7 +1,7 @@
-import { expect, test } from "./test";
+import { expect, test } from './test';
 
-import { THEME_KEY } from "../lib/theme";
-import { login } from "./helpers";
+import { THEME_KEY } from '../lib/theme';
+import { login } from './helpers';
 
 /*
  * The walk-fixes-3 review: a ritual's occurrence held by its Simple review meeting is still
@@ -18,42 +18,65 @@ import { login } from "./helpers";
 const PHONE = { width: 390, height: 844 };
 const DESKTOP = { width: 1366, height: 820 };
 
-for (const [phone, scheme] of [[false, "light"], [false, "dark"], [true, "light"]] as const) {
-  const where = `${phone ? "phone" : "desktop"}, ${scheme}`;
+for (const [phone, scheme] of [
+  [false, 'light'],
+  [false, 'dark'],
+  [true, 'light'],
+] as const) {
+  const where = `${phone ? 'phone' : 'desktop'}, ${scheme}`;
   test.describe(where, () => {
     test.use({ viewport: phone ? PHONE : DESKTOP, colorScheme: scheme });
 
     test(`the owner records the notes of a review held in Simple (${where})`, async ({ page }) => {
-      await page.context().addInitScript(([key, theme]) => localStorage.setItem(key, theme), [THEME_KEY, scheme] as const);
+      await page
+        .context()
+        .addInitScript(([key, theme]) => localStorage.setItem(key, theme), [
+          THEME_KEY,
+          scheme,
+        ] as const);
       await login(page);
       // The owner prepares the next weekly goals check-in in Detailed: its occurrence page.
       await page.setViewportSize(DESKTOP);
-      await page.goto("/company/rituals");
-      await page.getByTestId("ritual-row").filter({ hasText: "Weekly goals check-in" }).click();
-      await page.getByTestId("ritual-inspector").filter({ visible: true }).getByRole("button", { name: "Prepare now" }).click();
+      await page.goto('/company/rituals');
+      await page.getByTestId('ritual-row').filter({ hasText: 'Weekly goals check-in' }).click();
+      await page
+        .getByTestId('ritual-inspector')
+        .filter({ visible: true })
+        .getByRole('button', { name: 'Prepare now' })
+        .click();
       await expect(page).toHaveURL(/\/company\/rituals\/[0-9a-f-]{36}$/);
       const occurrence = page.url();
       if (phone) await page.setViewportSize(PHONE);
 
       // The review is held early in Simple: started from Upcoming, then ended.
-      await page.goto("/simple/meetings");
-      const row = page.getByRole("region", { name: "Upcoming" }).getByTestId("meetings-upcoming-row").filter({ hasText: "Weekly goals check-in" }).first();
-      await row.getByRole("button", { name: "Start review" }).click();
-      await page.getByRole("dialog", { name: "Start a review" }).getByRole("button", { name: "Start", exact: true }).click();
-      await page.getByRole("button", { name: "End meeting" }).click();
-      await page.getByRole("alertdialog").getByRole("button", { name: "End meeting" }).click();
-      await expect(page.getByRole("button", { name: "End meeting" })).toHaveCount(0);
+      await page.goto('/simple/meetings');
+      const row = page
+        .getByRole('region', { name: 'Upcoming' })
+        .getByTestId('meetings-upcoming-row')
+        .filter({ hasText: 'Weekly goals check-in' })
+        .first();
+      await row.getByRole('button', { name: 'Start review' }).click();
+      await page
+        .getByRole('dialog', { name: 'Start a review' })
+        .getByRole('button', { name: 'Start', exact: true })
+        .click();
+      await page.getByRole('button', { name: 'End meeting' }).click();
+      await page.getByRole('alertdialog').getByRole('button', { name: 'End meeting' }).click();
+      await expect(page.getByRole('button', { name: 'End meeting' })).toHaveCount(0);
 
       // Back on the occurrence page: the notes are still the owner's to record.
       await page.goto(occurrence);
-      const record = page.getByRole("region", { name: "Record the meeting" });
+      const record = page.getByRole('region', { name: 'Record the meeting' });
       await expect(record).toBeVisible();
-      await expect(record.getByRole("button", { name: "Skip" })).toHaveCount(0);
-      await record.getByLabel("Notes").fill("Agreed to ship F-03 Guided setup first.");
-      await record.getByRole("button", { name: "Mark held" }).click();
-      await expect(page.getByRole("region", { name: "Record the meeting" })).toHaveCount(0);
-      await expect(page.getByText("Agreed to ship F-03 Guided setup first.")).toBeVisible();
-      if (phone) expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(PHONE.width);
+      await expect(record.getByRole('button', { name: 'Skip' })).toHaveCount(0);
+      await record.getByLabel('Notes').fill('Agreed to ship F-03 Guided setup first.');
+      await record.getByRole('button', { name: 'Mark held' }).click();
+      await expect(page.getByRole('region', { name: 'Record the meeting' })).toHaveCount(0);
+      await expect(page.getByText('Agreed to ship F-03 Guided setup first.')).toBeVisible();
+      if (phone)
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+          PHONE.width,
+        );
     });
   });
 }

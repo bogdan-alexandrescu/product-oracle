@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from 'react';
 
-import { api, unwrap, type EntityOut } from "@/lib/api/client";
-import { buildCodeIndex, type CodeEntity, type CodeIndex } from "@/lib/code-index";
-import { useMe } from "@/lib/me";
+import { api, unwrap, type EntityOut } from '@/lib/api/client';
+import { buildCodeIndex, type CodeEntity, type CodeIndex } from '@/lib/code-index';
+import { useMe } from '@/lib/me';
 
 /**
  * Named codes (#304). A code is the company's own: written before the name in the title
@@ -42,10 +42,16 @@ const cache = new Map<string, { at: number; names: Promise<Names> }>();
 function load(company: string): Promise<Names> {
   const hit = cache.get(company);
   if (hit && Date.now() - hit.at < TTL) return hit.names;
-  const names = unwrap(api.GET("/v1/baseline/entities")).then((list) => {
-    const all = list.filter((e) => (e.type === "goal" || e.type === "feature") && e.status !== "rejected");
-    const goals = list.filter((e) => e.type === "goal");
-    return { byKey: new Map(all.map((e) => [e.key, e])), byId: new Map(all.map((e) => [e.id, e])), goals };
+  const names = unwrap(api.GET('/v1/baseline/entities')).then((list) => {
+    const all = list.filter(
+      (e) => (e.type === 'goal' || e.type === 'feature') && e.status !== 'rejected',
+    );
+    const goals = list.filter((e) => e.type === 'goal');
+    return {
+      byKey: new Map(all.map((e) => [e.key, e])),
+      byId: new Map(all.map((e) => [e.id, e])),
+      goals,
+    };
   });
   names.catch(() => cache.delete(company));
   cache.set(company, { at: Date.now(), names });
@@ -55,7 +61,7 @@ function load(company: string): Promise<Names> {
 /** The company's goals and features by key and id; undefined until loaded. */
 export function useNames(): Names | undefined {
   const { me } = useMe();
-  const company = me ? (me.tenant_id ?? "me") : null;
+  const company = me ? (me.tenant_id ?? 'me') : null;
   const [state, setState] = useState<{ company: string; names: Names } | null>(null);
   useEffect(() => {
     if (!company) return;
@@ -81,7 +87,17 @@ export function useCodeEntities(): CodeEntity[] {
       names
         ? [...names.byId.values()].flatMap((e) => {
             const n = named(e.title, e.key);
-            return n.code ? [{ id: e.id, kind: e.type === "goal" ? ("Goal" as const) : ("Feature" as const), code: n.code, name: n.name, status: e.status }] : [];
+            return n.code
+              ? [
+                  {
+                    id: e.id,
+                    kind: e.type === 'goal' ? ('Goal' as const) : ('Feature' as const),
+                    code: n.code,
+                    name: n.name,
+                    status: e.status,
+                  },
+                ]
+              : [];
           })
         : NO_ENTITIES,
     [names],

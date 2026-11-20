@@ -1,24 +1,31 @@
-"use client";
+'use client';
 
-import { Link, usePathname, useRouter, useSearchParams } from "@/lib/nav";
-import { useCallback, useMemo, useState } from "react";
+import { Link, usePathname, useRouter, useSearchParams } from '@/lib/nav';
+import { useCallback, useMemo, useState } from 'react';
 
-import { FilterChips, InfoTip, Panel, Sheet, Split, type Column } from "@/components/ds";
-import { ItemInspector } from "@/components/review/ItemInspector";
-import { ItemsTable } from "@/components/review/ItemsTable";
-import { ErrorNote, LoadError, Loading } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { sectionHref } from "@/lib/section-link";
-import { useQuery } from "@/lib/use-query";
+import { FilterChips, InfoTip, Panel, Sheet, Split, type Column } from '@/components/ds';
+import { ItemInspector } from '@/components/review/ItemInspector';
+import { ItemsTable } from '@/components/review/ItemsTable';
+import { ErrorNote, LoadError, Loading } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { sectionHref } from '@/lib/section-link';
+import { useQuery } from '@/lib/use-query';
 
-import { baseName, CompareBar } from "./CompareBar";
-import { HORIZONS, needsAttention, sectionFor, toItemRow, withUnbacked, type ItemRow } from "./item-row";
-import { ChangeChips, ItemHistory, WhatChanged } from "./ItemChanges";
-import { StalenessActions } from "./StalenessActions";
-import { CHANGED, useItemsDiff, type Compare } from "./useItemsDiff";
+import { baseName, CompareBar } from './CompareBar';
+import {
+  HORIZONS,
+  needsAttention,
+  sectionFor,
+  toItemRow,
+  withUnbacked,
+  type ItemRow,
+} from './item-row';
+import { ChangeChips, ItemHistory, WhatChanged } from './ItemChanges';
+import { StalenessActions } from './StalenessActions';
+import { CHANGED, useItemsDiff, type Compare } from './useItemsDiff';
 
-type Filter = "all" | "changed" | "attention";
-type Item = Schemas["RoadmapItemOut"];
+type Filter = 'all' | 'changed' | 'attention';
+type Item = Schemas['RoadmapItemOut'];
 
 /**
  * A roadmap version's Items tab (E2): its items as rows grouped by horizon, a summary line,
@@ -42,29 +49,45 @@ export function RoadmapItemsPane({
   sections: readonly { section_key: string; heading: string }[];
   canDecide: boolean;
   /** qa-docs-6: the version's date marks; an item whose section writes an unconfirmed date needs attention. */
-  dateMarks?: readonly Schemas["DateMarkOut"][];
+  dateMarks?: readonly Schemas['DateMarkOut'][];
 }) {
   const itemsQ = useQuery(`roadmap-items|${doc}|${n}`, () =>
-    unwrap(api.GET("/v1/roadmaps/{doc}/items", { params: { path: { doc }, query: { version: n, view: "full" } } })),
+    unwrap(
+      api.GET('/v1/roadmaps/{doc}/items', {
+        params: { path: { doc }, query: { version: n, view: 'full' } },
+      }),
+    ),
   );
   const source = itemsQ.data?.source;
   // The PRD version's headings, for "§ heading".
-  const prdQ = useQuery(`roadmap-items-prd|${source?.slug ?? ""}|${source?.version ?? ""}`, () =>
+  const prdQ = useQuery(`roadmap-items-prd|${source?.slug ?? ''}|${source?.version ?? ''}`, () =>
     source?.slug && source.version != null
-      ? unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc: source.slug, n: source.version } } }))
+      ? unwrap(
+          api.GET('/v1/documents/{doc}/versions/{n}', {
+            params: { path: { doc: source.slug, n: source.version } },
+          }),
+        )
       : Promise.resolve(null),
   );
   // The PRD's schedule bases: a dated milestone's references.
-  const basesQ = useQuery(`roadmap-items-bases|${source?.slug ?? ""}`, () =>
+  const basesQ = useQuery(`roadmap-items-bases|${source?.slug ?? ''}`, () =>
     source?.slug
-      ? unwrap(api.GET("/v1/schedule-bases", { params: { query: { prd: source.slug } } }))
+      ? unwrap(api.GET('/v1/schedule-bases', { params: { query: { prd: source.slug } } }))
       : Promise.resolve([]),
   );
 
   const items = useMemo(() => itemsQ.data?.items ?? [], [itemsQ.data]);
-  const headings = useMemo(() => new Map((prdQ.data?.sections ?? []).map((s) => [s.section_key, s.heading])), [prdQ.data]);
+  const headings = useMemo(
+    () => new Map((prdQ.data?.sections ?? []).map((s) => [s.section_key, s.heading])),
+    [prdQ.data],
+  );
   const rows = useMemo(
-    () => withUnbacked(items.map((i) => toItemRow(i, headings)), dateMarks, sections),
+    () =>
+      withUnbacked(
+        items.map((i) => toItemRow(i, headings)),
+        dateMarks,
+        sections,
+      ),
     [items, headings, dateMarks, sections],
   );
   const attention = rows.filter(needsAttention).length;
@@ -72,50 +95,73 @@ export function RoadmapItemsPane({
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const compare: Compare = params.get("compare") === "approved" ? "approved" : "previous";
+  const compare: Compare = params.get('compare') === 'approved' ? 'approved' : 'previous';
   const { diff, byKey, ghosts } = useItemsDiff(doc, n, compare);
   const compared = !!diff?.base;
-  const changed = diff?.summary ? [...CHANGED].reduce((sum, k) => sum + (diff.summary?.[k] ?? 0), 0) : 0;
-  const asked = params.get("filter");
+  const changed = diff?.summary
+    ? [...CHANGED].reduce((sum, k) => sum + (diff.summary?.[k] ?? 0), 0)
+    : 0;
+  const asked = params.get('filter');
   // Opening a version with something to compare with shows its changes first.
-  const filter: Filter = asked === "attention" || asked === "all" ? asked : compared ? "changed" : "all";
+  const filter: Filter =
+    asked === 'attention' || asked === 'all' ? asked : compared ? 'changed' : 'all';
   const setUrl = (key: string, value: string) => {
     const next = new URLSearchParams(params.toString());
     next.set(key, value);
     router.replace(`${pathname}?${next.toString()}`, { scroll: false });
   };
-  const setFilter = (f: Filter) => setUrl("filter", f);
-  const setCompare = (c: Compare) => setUrl("compare", c);
-  const shownRows = useMemo(() => (compared ? [...rows, ...ghosts] : rows), [compared, rows, ghosts]);
+  const setFilter = (f: Filter) => setUrl('filter', f);
+  const setCompare = (c: Compare) => setUrl('compare', c);
+  const shownRows = useMemo(
+    () => (compared ? [...rows, ...ghosts] : rows),
+    [compared, rows, ghosts],
+  );
 
   const [selected, setSelected] = useState<string | null>(null);
   const [sheet, setSheet] = useState(false);
   const row = shownRows.find((r) => r.key === selected) ?? null;
   const item = items.find((i) => i.item_key === selected);
-  const historyQ = useQuery(`roadmap-item-history|${source?.slug ?? ""}|${row && !row.ghost ? row.key : ""}`, () =>
-    source?.slug && row && !row.ghost
-      ? unwrap(api.GET("/v1/roadmap-items/history", { params: { query: { prd: source.slug, item_key: row.key } } }))
-      : Promise.resolve(null),
+  const historyQ = useQuery(
+    `roadmap-item-history|${source?.slug ?? ''}|${row && !row.ghost ? row.key : ''}`,
+    () =>
+      source?.slug && row && !row.ghost
+        ? unwrap(
+            api.GET('/v1/roadmap-items/history', {
+              params: { query: { prd: source.slug, item_key: row.key } },
+            }),
+          )
+        : Promise.resolve(null),
   );
 
   const onSelect = useCallback((key: string) => {
     setSelected(key);
-    if (window.matchMedia("(max-width: 639px)").matches) setSheet(true);
+    if (window.matchMedia('(max-width: 639px)').matches) setSheet(true);
   }, []);
 
   const filterFn =
-    filter === "attention"
+    filter === 'attention'
       ? (r: ItemRow) => !r.ghost && needsAttention(r)
-      : filter === "changed"
-        ? (r: ItemRow) => CHANGED.has(byKey.get(r.key)?.change ?? "unchanged")
+      : filter === 'changed'
+        ? (r: ItemRow) => CHANGED.has(byKey.get(r.key)?.change ?? 'unchanged')
         : undefined;
   const titles = useMemo(() => new Map(shownRows.map((r) => [r.key, r.title])), [shownRows]);
   const changeColumn: Column<ItemRow>[] = compared
-    ? [{ key: "change", header: "Change", width: "190px", phone: "meta", cell: (r) => <ChangeChips change={byKey.get(r.key)} /> }]
+    ? [
+        {
+          key: 'change',
+          header: 'Change',
+          width: '190px',
+          phone: 'meta',
+          cell: (r) => <ChangeChips change={byKey.get(r.key)} />,
+        },
+      ]
     : [];
   const decorate = (r: ItemRow) =>
-    r.ghost ? { "data-testid": "roadmap-item-ghost", "data-change": "dropped" } : { "data-change": byKey.get(r.key)?.change };
-  const onChanged = (next: Item[]) => itemsQ.setData((prev) => (prev ? { ...prev, items: next } : prev));
+    r.ghost
+      ? { 'data-testid': 'roadmap-item-ghost', 'data-change': 'dropped' }
+      : { 'data-change': byKey.get(r.key)?.change };
+  const onChanged = (next: Item[]) =>
+    itemsQ.setData((prev) => (prev ? { ...prev, items: next } : prev));
 
   if (itemsQ.error) return <ErrorNote>{itemsQ.error}</ErrorNote>;
   if (!itemsQ.data) return <Loading label="Loading items…" />;
@@ -127,11 +173,14 @@ export function RoadmapItemsPane({
           <p className="flex items-center gap-1.5 text-[15px] font-semibold text-text2">
             No items for this version
             <InfoTip label="roadmap items" side="bottom">
-              Items come from the roadmap run&apos;s items file. A version imported without one keeps the previous
-              version&apos;s items that its text still names.
+              Items come from the roadmap run&apos;s items file. A version imported without one
+              keeps the previous version&apos;s items that its text still names.
             </InfoTip>
           </p>
-          <Link href={`/documents/${doc}/v/${n}`} className="font-semibold text-accent-ink underline-offset-2 hover:underline">
+          <Link
+            href={`/documents/${doc}/v/${n}`}
+            className="font-semibold text-accent-ink underline-offset-2 hover:underline"
+          >
             Open the document
           </Link>
         </div>
@@ -142,7 +191,7 @@ export function RoadmapItemsPane({
   const count = (h: string) => rows.filter((r) => r.horizon === h).length;
   const docKey = row ? sectionFor(row, sections) : null;
   const change = row ? byKey.get(row.key) : undefined;
-  const since = diff && compared ? baseName(diff, compare) : "";
+  const since = diff && compared ? baseName(diff, compare) : '';
   const inspector = (r: ItemRow) => (
     <ItemInspector
       row={r}
@@ -154,8 +203,15 @@ export function RoadmapItemsPane({
       // The stale-marks walk: a dependency outside this version reads by its name, never its key.
       dependencyTitles={r.ghost ? undefined : item?.depends_titles}
       freshnessActions={
-        canDecide && (r.freshness === "potentially_stale" || r.freshness === "under_review") ? (
-          <StalenessActions key={`${r.key}|${r.freshness}`} doc={doc} n={n} itemKey={r.key} freshness={r.freshness} onChanged={onChanged} />
+        canDecide && (r.freshness === 'potentially_stale' || r.freshness === 'under_review') ? (
+          <StalenessActions
+            key={`${r.key}|${r.freshness}`}
+            doc={doc}
+            n={n}
+            itemKey={r.key}
+            freshness={r.freshness}
+            onChanged={onChanged}
+          />
         ) : undefined
       }
     >
@@ -166,17 +222,31 @@ export function RoadmapItemsPane({
 
   return (
     <div data-testid="roadmap-items-pane">
-      <Split inspector={row ? <div className="max-[639px]:hidden">{inspector(row)}</div> : undefined}>
+      <Split
+        inspector={row ? <div className="max-[639px]:hidden">{inspector(row)}</div> : undefined}
+      >
         {/* #1586: a read that failed says so; the items stay. */}
-        {prdQ.error && <LoadError what="the PRD's section names" error={prdQ.error} onRetry={() => void prdQ.reload()} />}
-        {basesQ.error && <LoadError what="the milestone references" error={basesQ.error} onRetry={() => void basesQ.reload()} />}
+        {prdQ.error && (
+          <LoadError
+            what="the PRD's section names"
+            error={prdQ.error}
+            onRetry={() => void prdQ.reload()}
+          />
+        )}
+        {basesQ.error && (
+          <LoadError
+            what="the milestone references"
+            error={basesQ.error}
+            onRetry={() => void basesQ.reload()}
+          />
+        )}
         {diff && <CompareBar diff={diff} compare={compare} onCompare={setCompare} />}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <p data-testid="items-summary" className="tnum text-sm text-text2">
             <b className="font-semibold text-text">
-              {rows.length} item{rows.length === 1 ? "" : "s"}
+              {rows.length} item{rows.length === 1 ? '' : 's'}
             </b>
-            {HORIZONS.map((h) => ` · ${count(h.value)} ${h.label}`).join("")}
+            {HORIZONS.map((h) => ` · ${count(h.value)} ${h.label}`).join('')}
           </p>
           <FilterChips<Filter>
             label="Items"
@@ -184,9 +254,18 @@ export function RoadmapItemsPane({
             value={filter}
             onChange={setFilter}
             items={[
-              { value: "all", label: "All", count: rows.length },
-              ...(compared ? [{ value: "changed" as const, label: "Changed", count: changed, testId: "filter-changed" }] : []),
-              { value: "attention", label: "Needs attention", count: attention },
+              { value: 'all', label: 'All', count: rows.length },
+              ...(compared
+                ? [
+                    {
+                      value: 'changed' as const,
+                      label: 'Changed',
+                      count: changed,
+                      testId: 'filter-changed',
+                    },
+                  ]
+                : []),
+              { value: 'attention', label: 'Needs attention', count: attention },
             ]}
           />
         </div>
@@ -199,11 +278,22 @@ export function RoadmapItemsPane({
             extraColumns={changeColumn}
             rowDecorations={decorate}
             // qa-docs-34: no item is stale or under review: no empty State column.
-            hide={rows.some((r) => r.freshness === "potentially_stale" || r.freshness === "under_review") ? [] : ["state"]}
+            hide={
+              rows.some(
+                (r) => r.freshness === 'potentially_stale' || r.freshness === 'under_review',
+              )
+                ? []
+                : ['state']
+            }
           />
         </Panel>
       </Split>
-      <Sheet open={sheet && !!row} title={row?.title ?? "Item"} onClose={() => setSheet(false)} testId="sheet-item">
+      <Sheet
+        open={sheet && !!row}
+        title={row?.title ?? 'Item'}
+        onClose={() => setSheet(false)}
+        testId="sheet-item"
+      >
         {row && inspector(row)}
       </Sheet>
     </div>

@@ -1,7 +1,7 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { THEME_KEY } from "../lib/theme";
-import { ADMIN, login } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { THEME_KEY } from '../lib/theme';
+import { ADMIN, login } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /*
  * fix2-simple-roadmap-gantt: the Gantt and Waterfall charts' QA findings (reported first on
@@ -20,7 +20,7 @@ import { expect, test, type Locator, type Page } from "./test";
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 const DESKTOP = { viewport: { width: 1366, height: 820 } };
 
-async function open(page: Page, scenario: string, scheme: "light" | "dark" = "light") {
+async function open(page: Page, scenario: string, scheme: 'light' | 'dark' = 'light') {
   await page.context().addInitScript(
     ([key, value, themeKey, theme]) => {
       localStorage.setItem(key, value);
@@ -30,139 +30,196 @@ async function open(page: Page, scenario: string, scheme: "light" | "dark" = "li
   );
   await page.emulateMedia({ colorScheme: scheme });
   await login(page, ADMIN.email);
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-chart")).toBeVisible();
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-chart')).toBeVisible();
 }
 
-const row = (page: Page, title: string): Locator => page.getByTestId("chart-label").filter({ has: page.getByTestId("label-title").getByText(title, { exact: true }) });
-const slice = (page: Page, code: string): Locator => page.locator(`g[data-testid="slice-bar"][data-code="${code}"]`);
-const bar = (page: Page, key: string): Locator => page.locator(`g[data-testid="bar"][data-item="${key}"]`);
+const row = (page: Page, title: string): Locator =>
+  page
+    .getByTestId('chart-label')
+    .filter({ has: page.getByTestId('label-title').getByText(title, { exact: true }) });
+const slice = (page: Page, code: string): Locator =>
+  page.locator(`g[data-testid="slice-bar"][data-code="${code}"]`);
+const bar = (page: Page, key: string): Locator =>
+  page.locator(`g[data-testid="bar"][data-item="${key}"]`);
 
-test.describe("desktop", () => {
+test.describe('desktop', () => {
   test.use(DESKTOP);
 
-  for (const format of ["gantt", "waterfall"] as const) {
-    test(`${format}: a row shows its code then its name, once, never a bare code (findings 15, 16; fix4 qa-simple-roadmap-3)`, async ({ page }) => {
-      await open(page, "simple-plan");
+  for (const format of ['gantt', 'waterfall'] as const) {
+    test(`${format}: a row shows its code then its name, once, never a bare code (findings 15, 16; fix4 qa-simple-roadmap-3)`, async ({
+      page,
+    }) => {
+      await open(page, 'simple-plan');
       await page.getByTestId(`format-${format}`).click();
-      await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", format);
+      await expect(page.getByTestId('simple-chart')).toHaveAttribute('data-format', format);
       // docs/ground-truth.md: a feature shows its code with its name ("F-05 Team invites"); one with
       // no code reads its name with the Not in the Ground Truth flag. The code shows once, never alone.
-      await expect(row(page, "F-05 Team invites").getByTestId("label-title")).toHaveAttribute("title", "F-05 Team invites");
-      await expect(page.getByTestId("label-code")).toHaveCount(0);
-      const labels = page.getByTestId("chart-label");
+      await expect(row(page, 'F-05 Team invites').getByTestId('label-title')).toHaveAttribute(
+        'title',
+        'F-05 Team invites',
+      );
+      await expect(page.getByTestId('label-code')).toHaveCount(0);
+      const labels = page.getByTestId('chart-label');
       await expect(labels.first()).toBeVisible();
       for (const label of await labels.all()) {
-        const name = ((await label.getByTestId("label-title").textContent()) ?? "").trim();
-        expect(name, "a row is never a bare code").not.toMatch(/^[A-Z]-\d+[a-z]?$/);
-        expect(name, "a code shows once, never repeated").not.toMatch(/^([A-Z]-\d+[a-z]?) .*\b\1\b/);
-        if (!/^[A-Z]-\d+[a-z]? \S/.test(name)) await expect(label.getByTestId("not-in-gt"), `${name} is flagged`).toHaveCount(1);
+        const name = ((await label.getByTestId('label-title').textContent()) ?? '').trim();
+        expect(name, 'a row is never a bare code').not.toMatch(/^[A-Z]-\d+[a-z]?$/);
+        expect(name, 'a code shows once, never repeated').not.toMatch(
+          /^([A-Z]-\d+[a-z]?) .*\b\1\b/,
+        );
+        if (!/^[A-Z]-\d+[a-z]? \S/.test(name))
+          await expect(label.getByTestId('not-in-gt'), `${name} is flagged`).toHaveCount(1);
       }
     });
   }
 
-  test("gantt: the axis's right-most tick stays inside the chart (finding 19)", async ({ page }) => {
-    await open(page, "default");
-    await page.getByTestId("format-gantt").click();
-    const chart = (await page.getByTestId("chart-svg").boundingBox())!;
-    const ticks = await page.getByTestId("axis-tick").all();
+  test("gantt: the axis's right-most tick stays inside the chart (finding 19)", async ({
+    page,
+  }) => {
+    await open(page, 'default');
+    await page.getByTestId('format-gantt').click();
+    const chart = (await page.getByTestId('chart-svg').boundingBox())!;
+    const ticks = await page.getByTestId('axis-tick').all();
     for (const t of ticks.slice(-3)) {
       const box = (await t.boundingBox())!;
-      expect(box.x + box.width, "a tick's label stays left of the chart's right edge").toBeLessThanOrEqual(chart.x + chart.width + 1);
+      expect(
+        box.x + box.width,
+        "a tick's label stays left of the chart's right edge",
+      ).toBeLessThanOrEqual(chart.x + chart.width + 1);
     }
   });
 
-  for (const format of ["gantt", "waterfall"] as const) {
-    test(`${format}: Today's line never runs through the axis's own labels (finding 18)`, async ({ page }) => {
-      await open(page, "default");
+  for (const format of ['gantt', 'waterfall'] as const) {
+    test(`${format}: Today's line never runs through the axis's own labels (finding 18)`, async ({
+      page,
+    }) => {
+      await open(page, 'default');
       await page.getByTestId(`format-${format}`).click();
-      await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", format);
-      const axisBottom = await page.getByTestId("axis-tick").evaluateAll((els) => Math.max(...els.map((e) => e.getBoundingClientRect().bottom)));
-      const lineTop = (await page.getByTestId("today-line").boundingBox())!.y;
-      expect(lineTop, "the red line starts at or below the axis tick row").toBeGreaterThanOrEqual(axisBottom - 1);
+      await expect(page.getByTestId('simple-chart')).toHaveAttribute('data-format', format);
+      const axisBottom = await page
+        .getByTestId('axis-tick')
+        .evaluateAll((els) => Math.max(...els.map((e) => e.getBoundingClientRect().bottom)));
+      const lineTop = (await page.getByTestId('today-line').boundingBox())!.y;
+      expect(lineTop, 'the red line starts at or below the axis tick row').toBeGreaterThanOrEqual(
+        axisBottom - 1,
+      );
     });
   }
 
-  test("gantt: a dependency's arrow sits beside the bar it points to, not over its edge (finding 40)", async ({ page }) => {
-    await open(page, "default");
-    await page.getByTestId("format-gantt").click();
-    const arrow = page.locator('[data-testid="dep-arrow"][data-from="setup-checklist"][data-to="setup-import"]');
+  test("gantt: a dependency's arrow sits beside the bar it points to, not over its edge (finding 40)", async ({
+    page,
+  }) => {
+    await open(page, 'default');
+    await page.getByTestId('format-gantt').click();
+    const arrow = page.locator(
+      '[data-testid="dep-arrow"][data-from="setup-checklist"][data-to="setup-import"]',
+    );
     await expect(arrow).toBeVisible();
     // The arrow's path ends (its head) beside the bar's left edge, not on it.
-    const d = (await arrow.evaluate((el) => (el.tagName === "path" ? el : el.querySelector("path"))?.getAttribute("d") ?? ""));
+    const d = await arrow.evaluate(
+      (el) => (el.tagName === 'path' ? el : el.querySelector('path'))?.getAttribute('d') ?? '',
+    );
     const nums = (d.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
     const endX = nums[nums.length - 2];
-    const barX = Number(await bar(page, "setup-import").locator("rect[data-body]").getAttribute("x"));
+    const barX = Number(
+      await bar(page, 'setup-import').locator('rect[data-body]').getAttribute('x'),
+    );
     expect(endX, "the arrow's head stops before the bar's left edge").toBeLessThan(barX);
   });
 
-  for (const format of ["gantt", "waterfall"] as const) {
-    test(`${format}: Oracle's date-suggestion marker says what it is, and its outline never runs past the chart (findings 21, 49)`, async ({ page }) => {
-      await open(page, "default");
+  for (const format of ['gantt', 'waterfall'] as const) {
+    test(`${format}: Oracle's date-suggestion marker says what it is, and its outline never runs past the chart (findings 21, 49)`, async ({
+      page,
+    }) => {
+      await open(page, 'default');
       await page.getByTestId(`format-${format}`).click();
       const open_ = page.locator('[data-testid="suggestion-open"][data-item="alert-sso"]');
       await expect(open_).toBeVisible();
       await expect(open_).toHaveAccessibleName(/Oracle suggests dates for/);
-      const chart = (await page.getByTestId("chart-svg").boundingBox())!;
+      const chart = (await page.getByTestId('chart-svg').boundingBox())!;
       const outlines = page.locator('[data-testid="suggestion-outline"]');
       const n = await outlines.count();
       for (let i = 0; i < n; i++) {
         const box = (await outlines.nth(i).boundingBox())!;
-        expect(box.x + box.width, "a suggestion's dashed outline stays inside the chart's width").toBeLessThanOrEqual(chart.x + chart.width + 1);
+        expect(
+          box.x + box.width,
+          "a suggestion's dashed outline stays inside the chart's width",
+        ).toBeLessThanOrEqual(chart.x + chart.width + 1);
       }
     });
   }
 
-  test("gantt: opens scrolled to the plan's dated work, not a window with no bars in it (finding 8/38)", async ({ page }) => {
-    await open(page, "simple-plan");
-    await page.getByTestId("format-gantt").click();
-    const scroller = page.getByTestId("chart-scroll");
+  test("gantt: opens scrolled to the plan's dated work, not a window with no bars in it (finding 8/38)", async ({
+    page,
+  }) => {
+    await open(page, 'simple-plan');
+    await page.getByTestId('format-gantt').click();
+    const scroller = page.getByTestId('chart-scroll');
     const sv = (await scroller.boundingBox())!;
     // board-quarters: F-05 has no dates of its own, so it is Later's; F-12a is dated work.
-    const a = (await slice(page, "F-12a").boundingBox())!;
-    expect(a.x, "the current milestone's work is in view without scrolling first").toBeGreaterThanOrEqual(sv.x - 1);
+    const a = (await slice(page, 'F-12a').boundingBox())!;
+    expect(
+      a.x,
+      "the current milestone's work is in view without scrolling first",
+    ).toBeGreaterThanOrEqual(sv.x - 1);
     expect(a.x).toBeLessThan(sv.x + sv.width);
   });
 
-  test("dark: an undated bar's outline keeps contrast, like a dated bar's (finding 17)", async ({ page }) => {
-    await open(page, "simple-plan", "dark");
-    await page.getByTestId("format-gantt").click();
-    await expect(bar(page, "setup-ideas")).toBeVisible();
+  test("dark: an undated bar's outline keeps contrast, like a dated bar's (finding 17)", async ({
+    page,
+  }) => {
+    await open(page, 'simple-plan', 'dark');
+    await page.getByTestId('format-gantt').click();
+    await expect(bar(page, 'setup-ideas')).toBeVisible();
     // No bar body is outlined in the dark accent any more; undated ones use the bar-outline token (qa4-simple-roadmap-6).
-    await expect(page.locator('g[data-testid="bar"] rect[data-body][stroke="var(--accent)"]')).toHaveCount(0);
-    expect(await page.locator('g[data-testid="bar"] rect[data-body][stroke="var(--simple-bar-outline)"]').count()).toBeGreaterThan(0);
+    await expect(
+      page.locator('g[data-testid="bar"] rect[data-body][stroke="var(--accent)"]'),
+    ).toHaveCount(0);
+    expect(
+      await page
+        .locator('g[data-testid="bar"] rect[data-body][stroke="var(--simple-bar-outline)"]')
+        .count(),
+    ).toBeGreaterThan(0);
   });
 });
 
-test.describe("phone", () => {
+test.describe('phone', () => {
   test.use(PHONE);
 
-  test("gantt: every row shows its name; its chips shrink instead of hiding it (findings 6, 7)", async ({ page }) => {
-    await open(page, "simple-plan");
-    await page.getByTestId("format-gantt").click();
-    const nudges = row(page, "Team invite nudges");
+  test('gantt: every row shows its name; its chips shrink instead of hiding it (findings 6, 7)', async ({
+    page,
+  }) => {
+    await open(page, 'simple-plan');
+    await page.getByTestId('format-gantt').click();
+    const nudges = row(page, 'Team invite nudges');
     await expect(nudges).toBeVisible();
-    const name = nudges.getByTestId("label-title");
-    await expect(name).toHaveText("Team invite nudges");
+    const name = nudges.getByTestId('label-title');
+    await expect(name).toHaveText('Team invite nudges');
     const nameBox = (await name.boundingBox())!;
     expect(nameBox.width, "the row's name keeps a real, readable width").toBeGreaterThan(30);
-    await expect(nudges.getByTestId("draft-tag")).toBeVisible();
-    await expect(nudges.getByTestId("pending-tag")).toHaveText("Pending decision");
+    await expect(nudges.getByTestId('draft-tag')).toBeVisible();
+    await expect(nudges.getByTestId('pending-tag')).toHaveText('Pending decision');
 
     // finding 6: the goal's metric line fits inside its own row, not spilling into the next one
     // (tb-mk: the Gantt starts by track; Group by Goal draws the goal's two lines).
-    await page.getByTestId("group-goal").click();
-    await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
-    const activation = page.getByTestId("chart-group").filter({ hasText: "Faster activation" });
+    await page.getByTestId('group-goal').click();
+    await expect(page.getByTestId('group-goal')).toHaveAttribute('aria-pressed', 'true');
+    const activation = page.getByTestId('chart-group').filter({ hasText: 'Faster activation' });
     const groupBox = (await activation.boundingBox())!;
-    const metricBox = (await activation.getByTestId("group-metric").boundingBox())!;
-    expect(metricBox.y + metricBox.height, "the subtitle's bottom stays inside its row").toBeLessThanOrEqual(groupBox.y + groupBox.height + 1);
+    const metricBox = (await activation.getByTestId('group-metric').boundingBox())!;
+    expect(
+      metricBox.y + metricBox.height,
+      "the subtitle's bottom stays inside its row",
+    ).toBeLessThanOrEqual(groupBox.y + groupBox.height + 1);
   });
 
-  test("waterfall: a bar never draws narrower than 24px, even at a zoomed-out scale (finding 11)", async ({ page }) => {
-    await open(page, "default");
-    await page.getByTestId("format-waterfall").click();
-    await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "waterfall");
+  test('waterfall: a bar never draws narrower than 24px, even at a zoomed-out scale (finding 11)', async ({
+    page,
+  }) => {
+    await open(page, 'default');
+    await page.getByTestId('format-waterfall').click();
+    await expect(page.getByTestId('simple-chart')).toHaveAttribute('data-format', 'waterfall');
     const bodies = page.locator('rect[data-body]');
     const n = await bodies.count();
     expect(n).toBeGreaterThan(0);
@@ -172,14 +229,20 @@ test.describe("phone", () => {
     }
   });
 
-  test("waterfall: a quarter header keeps its year even when it is squeezed (finding 28)", async ({ page }) => {
-    await open(page, "default");
-    await page.getByTestId("format-waterfall").click();
-    const ticks = await page.getByTestId("axis-tick").allTextContents();
+  test('waterfall: a quarter header keeps its year even when it is squeezed (finding 28)', async ({
+    page,
+  }) => {
+    await open(page, 'default');
+    await page.getByTestId('format-waterfall').click();
+    const ticks = await page.getByTestId('axis-tick').allTextContents();
     const quarters = ticks.filter((t) => /^Q[1-4]/.test(t));
-    expect(quarters.length, "the chart has quarter headers").toBeGreaterThan(0);
+    expect(quarters.length, 'the chart has quarter headers').toBeGreaterThan(0);
     // None reads as a bare "Q4" with no year; a squeezed one abbreviates the year instead of dropping it.
-    for (const t of quarters) expect(t, `"${t}" names its year`).toMatch(/^Q[1-4]( \d{4}| '\d{2})$/);
-    expect(quarters.some((t) => /'\d{2}$/.test(t)), "at least one header is squeezed and keeps an abbreviated year").toBe(true);
+    for (const t of quarters)
+      expect(t, `"${t}" names its year`).toMatch(/^Q[1-4]( \d{4}| '\d{2})$/);
+    expect(
+      quarters.some((t) => /'\d{2}$/.test(t)),
+      'at least one header is squeezed and keeps an abbreviated year',
+    ).toBe(true);
   });
 });

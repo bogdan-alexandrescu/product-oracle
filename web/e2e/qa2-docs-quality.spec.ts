@@ -1,7 +1,7 @@
-import { expect, test, type Locator, type Page } from "./test";
+import { expect, test, type Locator, type Page } from './test';
 
-import { MOCK_ROLE_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
+import { MOCK_ROLE_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
 
 /*
  * QA pass 2, docs lane: Evidence coverage (qa-docs-7), Quality History and inspector
@@ -9,21 +9,25 @@ import { login } from "./helpers";
  * (24) and the Simple one-pager's Timeline on a phone (10). Driven through the UI on the mock.
  */
 
-type Role = "viewer" | "commenter" | "approver" | "owner";
+type Role = 'viewer' | 'commenter' | 'approver' | 'owner';
 
 async function asRole(page: Page, role: Role) {
-  await page.addInitScript(([rk, r]) => localStorage.setItem(rk, r), [MOCK_ROLE_KEY, role] as const);
+  await page.addInitScript(([rk, r]) => localStorage.setItem(rk, r), [
+    MOCK_ROLE_KEY,
+    role,
+  ] as const);
   await login(page);
 }
 
-async function openQuality(page: Page, role: Role = "owner") {
+async function openQuality(page: Page, role: Role = 'owner') {
   await asRole(page, role);
-  await page.goto("/documents/referral-link/v/2/quality");
-  await expect(page.getByTestId("criterion-row")).toHaveCount(13);
+  await page.goto('/documents/referral-link/v/2/quality');
+  await expect(page.getByTestId('criterion-row')).toHaveCount(13);
 }
 
-const history = (page: Page) => page.getByRole("region", { name: "History" });
-const qualityRow = (page: Page, key: string) => page.locator(`[data-testid="criterion-row"][data-key="${key}"]`);
+const history = (page: Page) => page.getByRole('region', { name: 'History' });
+const qualityRow = (page: Page, key: string) =>
+  page.locator(`[data-testid="criterion-row"][data-key="${key}"]`);
 
 /** The number on a chip such as "5 n/a" in `scope`, 0 when there is none. */
 async function naCount(scope: Locator): Promise<number> {
@@ -31,162 +35,199 @@ async function naCount(scope: Locator): Promise<number> {
   return texts.reduce((sum, t) => sum + Number(t.match(/\d+/)![0]), 0);
 }
 
-test.describe("desktop", () => {
+test.describe('desktop', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
   // qa-docs-7
-  test("qa-docs-7: coverage column heads carry no repeated 'unsupported'; the note is plain and short", async ({ page }) => {
+  test("qa-docs-7: coverage column heads carry no repeated 'unsupported'; the note is plain and short", async ({
+    page,
+  }) => {
     await login(page);
-    await page.goto("/documents/referral-link/v/2");
-    await page.getByTestId("version-tab-evidence").filter({ visible: true }).click();
+    await page.goto('/documents/referral-link/v/2');
+    await page.getByTestId('version-tab-evidence').filter({ visible: true }).click();
     await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2\/evidence/);
-    const matrix = page.getByTestId("evidence-matrix");
+    const matrix = page.getByTestId('evidence-matrix');
     await expect(matrix).toBeVisible();
 
-    const gapHeads = matrix.locator("thead th[data-gap]");
+    const gapHeads = matrix.locator('thead th[data-gap]');
     expect(await gapHeads.count()).toBeGreaterThan(0);
     // What a sighted reader sees in each red head: the section's name only.
     const shown = await gapHeads.evaluateAll((ths) =>
       ths.map((th) => {
         const copy = th.cloneNode(true) as HTMLElement;
-        copy.querySelectorAll(".sr-only").forEach((n) => n.remove());
-        return copy.textContent ?? "";
+        copy.querySelectorAll('.sr-only').forEach((n) => n.remove());
+        return copy.textContent ?? '';
       }),
     );
     for (const text of shown) expect(text).not.toMatch(/unsupported/i);
     // A screen reader still hears what red means.
-    await expect(gapHeads.first()).toContainText("no links or citations");
+    await expect(gapHeads.first()).toContainText('no links or citations');
 
-    const note = page.getByTestId("evidence-coverage").locator("p").last();
-    await expect(note.getByText("A red column is a section with no links or citations", { exact: false }).filter({ visible: true })).toHaveCount(0);
-    await note.getByTestId("evidence-red-tip").filter({ visible: true }).first().click();
+    const note = page.getByTestId('evidence-coverage').locator('p').last();
     await expect(
-      page.getByRole("tooltip").filter({ hasText: "A red column is a section with no links or citations, in it or in its subsections", visible: true }),
+      note
+        .getByText('A red column is a section with no links or citations', { exact: false })
+        .filter({ visible: true }),
+    ).toHaveCount(0);
+    await note.getByTestId('evidence-red-tip').filter({ visible: true }).first().click();
+    await expect(
+      page.getByRole('tooltip').filter({
+        hasText:
+          'A red column is a section with no links or citations, in it or in its subsections',
+        visible: true,
+      }),
     ).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(note).not.toContainText(/nor has any section|rejected and superseded|Rendered pages|Per section:/);
+    await page.keyboard.press('Escape');
+    await expect(note).not.toContainText(
+      /nor has any section|rejected and superseded|Rendered pages|Per section:/,
+    );
     // Two sentences, then when the sources were read.
     const sentences = (await note.innerText()).split(/(?<=\.)\s+/).filter(Boolean);
     expect(sentences.length).toBeLessThanOrEqual(3);
   });
 
   // qa-docs-14
-  test("qa-docs-14: History says Oracle review, with no model id or cost, even to an owner", async ({ page }) => {
-    await openQuality(page, "owner");
-    await page.getByRole("button", { name: "Ask Oracle to review" }).click();
-    await expect(page.getByTestId("job-done")).toBeVisible();
-    const first = history(page).getByTestId("history-row").first();
-    await expect(first).toContainText("Oracle review");
-    await expect(first).toContainText("Succeeded");
+  test('qa-docs-14: History says Oracle review, with no model id or cost, even to an owner', async ({
+    page,
+  }) => {
+    await openQuality(page, 'owner');
+    await page.getByRole('button', { name: 'Ask Oracle to review' }).click();
+    await expect(page.getByTestId('job-done')).toBeVisible();
+    const first = history(page).getByTestId('history-row').first();
+    await expect(first).toContainText('Oracle review');
+    await expect(first).toContainText('Succeeded');
     await expect(first).not.toContainText(/claude-|\$\d/);
-    await history(page).getByRole("button", { name: /^Oracle review/ }).click();
-    await expect(history(page).getByTestId("history-row")).toHaveCount(1);
+    await history(page)
+      .getByRole('button', { name: /^Oracle review/ })
+      .click();
+    await expect(history(page).getByTestId('history-row')).toHaveCount(1);
     await expect(history(page)).not.toContainText(/claude-|\$\d/);
   });
 
   // qa-docs-28
-  test("qa-docs-28: with no model review, the inspector tile says so instead of a dash under 'Model agrees'", async ({ page }) => {
-    await openQuality(page, "owner");
-    await expect(page.getByTestId("no-model-review")).toContainText("No model review for v2 yet");
-    await qualityRow(page, "alternatives_tradeoffs").click();
-    const tile = page.getByTestId("quality-inspector").getByTestId("stat-model-agrees");
-    await expect(tile).toContainText("No model review yet");
-    await expect(tile).not.toContainText("Model agrees with rules");
+  test("qa-docs-28: with no model review, the inspector tile says so instead of a dash under 'Model agrees'", async ({
+    page,
+  }) => {
+    await openQuality(page, 'owner');
+    await expect(page.getByTestId('no-model-review')).toContainText('No model review for v2 yet');
+    await qualityRow(page, 'alternatives_tradeoffs').click();
+    const tile = page.getByTestId('quality-inspector').getByTestId('stat-model-agrees');
+    await expect(tile).toContainText('No model review yet');
+    await expect(tile).not.toContainText('Model agrees with rules');
 
     // Once Oracle has reviewed, the tile no longer says there is no review.
-    await page.getByRole("button", { name: "Ask Oracle to review" }).click();
-    await expect(page.getByTestId("job-done")).toBeVisible();
-    await expect(tile).not.toContainText("No model review yet");
+    await page.getByRole('button', { name: 'Ask Oracle to review' }).click();
+    await expect(page.getByTestId('job-done')).toBeVisible();
+    await expect(tile).not.toContainText('No model review yet');
     await expect(tile).toContainText(/Model agrees with rules|Model did not judge this/);
   });
 
   // qa-docs-29
-  test("qa-docs-29: Quality's n/a count is labelled as all checks and Publish's hard and advisory n/a add up to it", async ({ page }) => {
-    await openQuality(page, "owner");
-    await expect(page.getByTestId("criteria-tally-label")).toHaveText("All checks");
-    const quality = await naCount(page.getByTestId("criteria-tally"));
+  test("qa-docs-29: Quality's n/a count is labelled as all checks and Publish's hard and advisory n/a add up to it", async ({
+    page,
+  }) => {
+    await openQuality(page, 'owner');
+    await expect(page.getByTestId('criteria-tally-label')).toHaveText('All checks');
+    const quality = await naCount(page.getByTestId('criteria-tally'));
     expect(quality).toBeGreaterThan(0);
 
-    await page.goto("/documents/referral-link/publish");
-    await expect(page.getByTestId("publish-readiness")).toBeVisible();
-    const hard = await naCount(page.getByRole("region", { name: "Hard checks" }).locator("div").first());
-    const advisory = await naCount(page.getByRole("region", { name: "Advisory" }).locator("div").first());
+    await page.goto('/documents/referral-link/publish');
+    await expect(page.getByTestId('publish-readiness')).toBeVisible();
+    const hard = await naCount(
+      page.getByRole('region', { name: 'Hard checks' }).locator('div').first(),
+    );
+    const advisory = await naCount(
+      page.getByRole('region', { name: 'Advisory' }).locator('div').first(),
+    );
     expect(hard).toBeGreaterThan(0);
     expect(hard + advisory).toBe(quality);
   });
 
   // qa-docs-30
-  test("qa-docs-30: the composition page speaks plainly and its main button says what it does", async ({ page }) => {
-    await login(page, "approver@example.com");
-    await page.goto("/documents/team-invites/composition");
-    await expect(page.getByRole("heading", { level: 1, name: "Composition" })).toBeVisible();
-    const modules = page.getByTestId("composition-modules");
+  test('qa-docs-30: the composition page speaks plainly and its main button says what it does', async ({
+    page,
+  }) => {
+    await login(page, 'approver@example.com');
+    await page.goto('/documents/team-invites/composition');
+    await expect(page.getByRole('heading', { level: 1, name: 'Composition' })).toBeVisible();
+    const modules = page.getByTestId('composition-modules');
     await expect(modules).toBeVisible();
-    await expect(page.getByText("No composition yet", { exact: true })).toBeVisible();
+    await expect(page.getByText('No composition yet', { exact: true })).toBeVisible();
 
-    const body = page.locator("body");
-    for (const raw of ["Pack policy", "Condition holds", "Decided by"]) await expect(body).not.toContainText(raw);
+    const body = page.locator('body');
+    for (const raw of ['Pack policy', 'Condition holds', 'Decided by'])
+      await expect(body).not.toContainText(raw);
     await expect(modules).not.toContainText(/\d+ in (brief|full)\b/);
-    await expect(modules.getByRole("columnheader", { name: "Why" })).toBeVisible();
-    await expect(page.getByTestId("composition-pack")).toContainText(/^Company packs?: /);
+    await expect(modules.getByRole('columnheader', { name: 'Why' })).toBeVisible();
+    await expect(page.getByTestId('composition-pack')).toContainText(/^Company packs?: /);
 
-    await expect(page.getByRole("button", { name: /^Confirm revision/ })).toHaveCount(0);
-    await page.getByRole("button", { name: "Use these modules" }).click();
-    await expect(page.getByRole("dialog", { name: "Confirm revision 1" })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Confirm revision/ })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Use these modules' }).click();
+    await expect(page.getByRole('dialog', { name: 'Confirm revision 1' })).toBeVisible();
   });
 
   // qa-docs-24
-  test("qa-docs-24: Present mode has a heading per slide and key hints that say what they do", async ({ page }) => {
+  test('qa-docs-24: Present mode has a heading per slide and key hints that say what they do', async ({
+    page,
+  }) => {
     await login(page);
-    await page.goto("/documents/referral-link/v/2");
-    await page.getByRole("link", { name: "Present" }).filter({ visible: true }).first().click();
+    await page.goto('/documents/referral-link/v/2');
+    await page.getByRole('link', { name: 'Present' }).filter({ visible: true }).first().click();
     await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2\/present$/);
-    const present = page.getByTestId("present-mode");
-    await expect(page.getByTestId("slide-counter")).toHaveText("1 / 10");
+    const present = page.getByTestId('present-mode');
+    await expect(page.getByTestId('slide-counter')).toHaveText('1 / 10');
     // Level-one headings shown on the page, the slides' shadow roots included (Next keeps visited pages, hidden).
     const h1s = () =>
       page.evaluate(() => {
         const out: string[] = [];
         const walk = (root: Document | ShadowRoot) => {
-          root.querySelectorAll("h1").forEach((h) => h.checkVisibility() && out.push(h.textContent ?? ""));
-          root.querySelectorAll("*").forEach((el) => el.shadowRoot && walk(el.shadowRoot));
+          root
+            .querySelectorAll('h1')
+            .forEach((h) => h.checkVisibility() && out.push(h.textContent ?? ''));
+          root.querySelectorAll('*').forEach((el) => el.shadowRoot && walk(el.shadowRoot));
         };
         walk(document);
         return out;
       });
-    const heading = present.getByTestId("present-heading");
+    const heading = present.getByTestId('present-heading');
     // The title slide has its own h1: no second one is added beside it.
-    await expect(present.getByTestId("current-slide-box")).toBeVisible();
+    await expect(present.getByTestId('current-slide-box')).toBeVisible();
     await expect.poll(async () => (await h1s()).length).toBe(1);
     await expect(heading).toHaveCount(0);
-    await page.keyboard.press("ArrowRight");
-    await expect(heading).toHaveText("Slide 2 of 10");
-    expect(await heading.evaluate((el) => el.tagName)).toBe("H1");
+    await page.keyboard.press('ArrowRight');
+    await expect(heading).toHaveText('Slide 2 of 10');
+    expect(await heading.evaluate((el) => el.tagName)).toBe('H1');
     await expect.poll(async () => (await h1s()).length).toBe(1);
 
-    const keys = page.getByTestId("present-keys");
+    const keys = page.getByTestId('present-keys');
     await expect(keys).toBeVisible();
-    await expect(keys).toContainText("Slides");
-    await expect(keys).toContainText("S");
-    await expect(keys).toContainText("Notes");
+    await expect(keys).toContainText('Slides');
+    await expect(keys).toContainText('S');
+    await expect(keys).toContainText('Notes');
     // qa-docs-63: F is the Full screen button's tooltip, not a second "Full screen" here.
-    await expect(keys).not.toContainText("Full screen");
-    await expect(keys.locator("kbd")).toHaveText(["←", "→", "S"]);
-    const mono = await keys.locator("kbd").evaluateAll((els) => els.filter((el) => /mono/i.test(getComputedStyle(el).fontFamily)).length);
+    await expect(keys).not.toContainText('Full screen');
+    await expect(keys.locator('kbd')).toHaveText(['←', '→', 'S']);
+    const mono = await keys
+      .locator('kbd')
+      .evaluateAll(
+        (els) => els.filter((el) => /mono/i.test(getComputedStyle(el).fontFamily)).length,
+      );
     expect(mono).toBe(0);
   });
 });
 
-test.describe("phone", () => {
+test.describe('phone', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
   // qa-docs-30
-  test("qa-docs-30: the composition button reads 'Use these modules' in full on a phone", async ({ page }) => {
-    await login(page, "approver@example.com");
-    await page.goto("/documents/team-invites/composition");
-    await expect(page.getByTestId("composition-modules")).toBeVisible();
-    const action = page.getByRole("button", { name: "Use these modules" });
-    await expect(action).toHaveText("Use these modules");
+  test("qa-docs-30: the composition button reads 'Use these modules' in full on a phone", async ({
+    page,
+  }) => {
+    await login(page, 'approver@example.com');
+    await page.goto('/documents/team-invites/composition');
+    await expect(page.getByTestId('composition-modules')).toBeVisible();
+    const action = page.getByRole('button', { name: 'Use these modules' });
+    await expect(action).toHaveText('Use these modules');
     const box = (await action.boundingBox())!;
     expect(box.x + box.width).toBeLessThanOrEqual(390);
     expect(await action.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
@@ -197,34 +238,42 @@ test.describe("phone", () => {
   // that opens on a tap as well as on hover. C-13: only a PRD with roadmap items has a Timeline
   // strip (Referral link has none in this mock: "No roadmap items yet"), so this opens Guided
   // setup's one-pager at its address (the default list does not carry it).
-  test("qa-docs-10: the one-pager's Timeline labels keep to one line and never lose their item count", async ({ page }) => {
+  test("qa-docs-10: the one-pager's Timeline labels keep to one line and never lose their item count", async ({
+    page,
+  }) => {
     await login(page);
     // C-13 (PR 1307): Referral link reads its own sections and has no roadmap items of its own, so
     // no Timeline; Guided setup's one-pager is the one whose strip has milestones.
-    await page.goto("/simple/one-pagers/guided-setup");
-    await expect(page.getByRole("heading", { level: 1, name: "Guided setup" })).toBeVisible();
-    const strip = page.getByTestId("one-pager").getByTestId("plan-strip");
-    const labels = strip.getByTestId("plan-strip-label");
+    await page.goto('/simple/one-pagers/guided-setup');
+    await expect(page.getByRole('heading', { level: 1, name: 'Guided setup' })).toBeVisible();
+    const strip = page.getByTestId('one-pager').getByTestId('plan-strip');
+    const labels = strip.getByTestId('plan-strip-label');
     await expect(labels.first()).toBeVisible();
     // Every label ends with its item count.
     for (const t of await labels.allTextContents()) expect(t).toMatch(/· \d+ roadmap items?$/);
-    const rows = strip.getByTestId("plan-strip-row");
+    const rows = strip.getByTestId('plan-strip-row');
     for (let k = 0; k < (await rows.count()); k++) {
-      const label = rows.nth(k).getByTestId("plan-strip-label");
+      const label = rows.nth(k).getByTestId('plan-strip-label');
       const { lines, cut } = await label.evaluate((el) => ({
-        lines: Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)),
+        lines: Math.round(
+          el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight),
+        ),
         cut: el.scrollWidth > el.clientWidth + 1,
       }));
       expect(lines, `row ${k + 1}'s label is one line`).toBe(1);
       // A cut label's whole words are behind its (i).
-      const tip = rows.nth(k).getByTestId("plan-strip-label-tip");
+      const tip = rows.nth(k).getByTestId('plan-strip-label-tip');
       if (cut) {
         await tip.click();
-        await expect(rows.nth(k).getByRole("tooltip")).toHaveText((await label.textContent())!.replace(/\s+/g, " ").trim());
-        await page.keyboard.press("Escape");
+        await expect(rows.nth(k).getByRole('tooltip')).toHaveText(
+          (await label.textContent())!.replace(/\s+/g, ' ').trim(),
+        );
+        await page.keyboard.press('Escape');
       } else await expect(tip).toHaveCount(0);
     }
     // No sideways scroll on the page.
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
   });
 });

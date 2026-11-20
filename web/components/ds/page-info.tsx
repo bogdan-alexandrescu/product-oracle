@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useId, useLayoutEffect, useSyncExternalStore, type ReactNode } from "react";
+import { useId, useLayoutEffect, useSyncExternalStore, type ReactNode } from 'react';
 
 /*
  * qa-shell-22: a PageHeader's info tip (`info`). On a phone the H1 is for screen readers only,
@@ -23,16 +23,21 @@ function subscribe(l: () => void) {
   };
 }
 
-export const PHONE = "(max-width: 600px)";
+export const PHONE = '(max-width: 600px)';
 
 function subscribePhone(l: () => void) {
   const mq = window.matchMedia(PHONE);
-  mq.addEventListener("change", l);
-  return () => mq.removeEventListener("change", l);
+  mq.addEventListener('change', l);
+  return () => mq.removeEventListener('change', l);
 }
 
 /** Whether the window is phone-sized; false on the server and until hydration. */
-export const usePhone = () => useSyncExternalStore(subscribePhone, () => window.matchMedia(PHONE).matches, () => false);
+export const usePhone = () =>
+  useSyncExternalStore(
+    subscribePhone,
+    () => window.matchMedia(PHONE).matches,
+    () => false,
+  );
 
 /**
  * The page's info tip in one place only (no tip, and no test id, drawn twice): after the H1
@@ -40,7 +45,11 @@ export const usePhone = () => useSyncExternalStore(subscribePhone, () => window.
  */
 export function PageInfo({ info }: { info: ReactNode }) {
   const phone = usePhone();
-  return phone ? <PublishPageInfo info={info} /> : <span className="-ml-1 flex flex-none items-center">{info}</span>;
+  return phone ? (
+    <PublishPageInfo info={info} />
+  ) : (
+    <span className="-ml-1 flex flex-none items-center">{info}</span>
+  );
 }
 
 /** Publishes the page's info tip while the header that draws it is mounted. */

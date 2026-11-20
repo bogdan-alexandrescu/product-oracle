@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 
-import { Button, Chip, Icon } from "@/components/ds";
-import { errorMessage } from "@/lib/use-query";
+import { Button, Chip, Icon } from '@/components/ds';
+import { errorMessage } from '@/lib/use-query';
 
-import { INPUT, TEXTAREA } from "../_components/fields";
+import { INPUT, TEXTAREA } from '../_components/fields';
 
 /** What every source picker takes: the connection to browse and the source's config. */
 export type PickerProps = {
@@ -39,8 +39,10 @@ export function listOf(config: Record<string, unknown>, key: string): string[] {
 /** A config's `labels`: the display names of its picks, by id (only for people to read). */
 export function labelsOf(config: Record<string, unknown>): Record<string, string> {
   const value = config.labels;
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  return Object.fromEntries(Object.entries(value).filter((e): e is [string, string] => typeof e[1] === "string"));
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter((e): e is [string, string] => typeof e[1] === 'string'),
+  );
 }
 
 /** The names of `picked`, from what a list showed (`listed`) or else what was saved. */
@@ -71,10 +73,25 @@ function fromLink(line: string): string {
 }
 
 function parseLines(text: string): string[] {
-  return [...new Set(text.split(/[\n,]/).map((l) => fromLink(l.trim())).filter(Boolean))];
+  return [
+    ...new Set(
+      text
+        .split(/[\n,]/)
+        .map((l) => fromLink(l.trim()))
+        .filter(Boolean),
+    ),
+  ];
 }
 
-function Row({ item, checked, onToggle }: { item: BrowseItem; checked: boolean; onToggle: (on: boolean) => void }) {
+function Row({
+  item,
+  checked,
+  onToggle,
+}: {
+  item: BrowseItem;
+  checked: boolean;
+  onToggle: (on: boolean) => void;
+}) {
   return (
     <li data-testid="pick-row" className="border-t border-line first:border-t-0">
       <label
@@ -88,13 +105,19 @@ function Row({ item, checked, onToggle }: { item: BrowseItem; checked: boolean; 
           onChange={(e) => onToggle(e.target.checked)}
           className="size-4 flex-none accent-accent"
         />
-        <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-text">{item.label}</span>
+        <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-text">
+          {item.label}
+        </span>
         {item.isPrivate && (
           <span title="Private" className="flex-none text-text2">
             <Icon name="lock" size={16} />
           </span>
         )}
-        {item.meta && <span className="tnum flex flex-none items-center gap-1 text-[13px] text-text2">{item.meta}</span>}
+        {item.meta && (
+          <span className="tnum flex flex-none items-center gap-1 text-[13px] text-text2">
+            {item.meta}
+          </span>
+        )}
       </label>
     </li>
   );
@@ -145,8 +168,8 @@ export function BrowseList({
 }) {
   const pasteId = useId();
   const [pasting, setPasting] = useState(connectionId === null);
-  const [text, setText] = useState(connectionId === null ? picked.join("\n") : "");
-  const [search, setSearch] = useState("");
+  const [text, setText] = useState(connectionId === null ? picked.join('\n') : '');
+  const [search, setSearch] = useState('');
   const [items, setItems] = useState<BrowseItem[] | null>(null);
   const [next, setNext] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -199,7 +222,8 @@ export function BrowseList({
   }, [search, pasting, connectionId, attempt]);
 
   const chosen = new Set(picked);
-  const toggle = (id: string, on: boolean) => onPicked(on ? [...picked.filter((x) => x !== id), id] : picked.filter((x) => x !== id));
+  const toggle = (id: string, on: boolean) =>
+    onPicked(on ? [...picked.filter((x) => x !== id), id] : picked.filter((x) => x !== id));
   const listed = new Set((items ?? []).map((i) => i.id));
   // Picks the current list does not show, first, while not searching.
   const unnamed = (id: string) => !seen[id] && !labels[id];
@@ -212,7 +236,13 @@ export function BrowseList({
             seen[id] ??
             (labels[id] || !unknownLabel
               ? { id, label: labels[id] ?? id, isPrivate: false }
-              : { id, label: unknownLabel, hint: id, meta: <span className="max-w-24 truncate font-mono">{id}</span>, isPrivate: false }),
+              : {
+                  id,
+                  label: unknownLabel,
+                  hint: id,
+                  meta: <span className="max-w-24 truncate font-mono">{id}</span>,
+                  isPrivate: false,
+                }),
         );
   const unknownPicks = unknownLabel ? picked.filter((id) => !listed.has(id) && unnamed(id)) : [];
 
@@ -221,7 +251,10 @@ export function BrowseList({
       <div className="flex flex-wrap items-center gap-2">
         {!pasting && (
           <span className="relative min-w-0 flex-1 basis-48">
-            <span aria-hidden className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-text2">
+            <span
+              aria-hidden
+              className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-text2"
+            >
               <Icon name="search" size={16} />
             </span>
             <input
@@ -235,18 +268,18 @@ export function BrowseList({
           </span>
         )}
         <span className="flex flex-none items-center gap-1.5 max-[600px]:w-full max-[600px]:justify-between">
-          <Chip kind={picked.length ? "acc" : "na"} data-testid="picked-count">
+          <Chip kind={picked.length ? 'acc' : 'na'} data-testid="picked-count">
             {picked.length} selected
           </Chip>
           {connectionId !== null && (
             <Button
               variant="ghost"
               onClick={() => {
-                if (!pasting) setText(picked.join("\n"));
+                if (!pasting) setText(picked.join('\n'));
                 setPasting((v) => !v);
               }}
             >
-              {pasting ? "Pick from list" : "Paste links"}
+              {pasting ? 'Pick from list' : 'Paste links'}
             </Button>
           )}
         </span>
@@ -255,15 +288,20 @@ export function BrowseList({
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="text-text2" data-testid="unknown-picks">
             {unknownPicks.length} {unknownLabel?.toLowerCase()}
-            {unknownPicks.length === 1 ? "" : "s"}
+            {unknownPicks.length === 1 ? '' : 's'}
           </span>
-          <Button onClick={() => onPicked(picked.filter((id) => !unknownPicks.includes(id)))}>Remove unknown</Button>
+          <Button onClick={() => onPicked(picked.filter((id) => !unknownPicks.includes(id)))}>
+            Remove unknown
+          </Button>
         </div>
       )}
 
       {pasting ? (
         <div className="flex min-w-0 flex-col gap-1.5">
-          <label htmlFor={pasteId} className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
+          <label
+            htmlFor={pasteId}
+            className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2"
+          >
             {pasteLabel} (one per line)
           </label>
           <textarea
@@ -291,7 +329,10 @@ export function BrowseList({
             </div>
           )}
           {notice && !error && (
-            <p role="note" className="border-b border-line bg-warn-bg px-3 py-2 text-sm font-medium text-warn">
+            <p
+              role="note"
+              className="border-b border-line bg-warn-bg px-3 py-2 text-sm font-medium text-warn"
+            >
               {notice}
             </p>
           )}
@@ -300,7 +341,12 @@ export function BrowseList({
               <Row key={`picked-${it.id}`} item={it} checked onToggle={(on) => toggle(it.id, on)} />
             ))}
             {(items ?? []).map((it) => (
-              <Row key={it.id} item={it} checked={chosen.has(it.id)} onToggle={(on) => toggle(it.id, on)} />
+              <Row
+                key={it.id}
+                item={it}
+                checked={chosen.has(it.id)}
+                onToggle={(on) => toggle(it.id, on)}
+              />
             ))}
             {items === null && !error && (
               <li className="flex h-10 items-center px-3">
@@ -313,7 +359,11 @@ export function BrowseList({
           </ul>
           {next && (
             <div className="border-t border-line px-3 py-1.5">
-              <Button variant="ghost" disabled={busy} onClick={() => void fetchPage(search.trim(), next)}>
+              <Button
+                variant="ghost"
+                disabled={busy}
+                onClick={() => void fetchPage(search.trim(), next)}
+              >
                 Load more
               </Button>
             </div>

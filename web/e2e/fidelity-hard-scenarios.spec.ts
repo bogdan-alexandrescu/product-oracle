@@ -1,7 +1,11 @@
-import { GOAL_BUCKETS_HARD_SCENARIO, MOCK_SCENARIO_KEY, ROADMAP_MILESTONES_HARD_SCENARIO } from "../lib/api/mock/server";
-import { THEME_KEY } from "../lib/theme";
-import { ADMIN, login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import {
+  GOAL_BUCKETS_HARD_SCENARIO,
+  MOCK_SCENARIO_KEY,
+  ROADMAP_MILESTONES_HARD_SCENARIO,
+} from '../lib/api/mock/server';
+import { THEME_KEY } from '../lib/theme';
+import { ADMIN, login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /*
  * Fidelity checks for the mock's two "hard" scenarios, driven through the UI as a person would:
@@ -17,16 +21,21 @@ import { expect, test, type Page } from "./test";
  */
 
 const SIZES = [
-  { name: "desktop", viewport: { width: 1440, height: 900 } },
-  { name: "phone", viewport: { width: 390, height: 844 } },
+  { name: 'desktop', viewport: { width: 1440, height: 900 } },
+  { name: 'phone', viewport: { width: 390, height: 844 } },
 ] as const;
 
-async function openScenario(page: Page, viewport: { width: number; height: number }, scenario: string, path: string) {
+async function openScenario(
+  page: Page,
+  viewport: { width: number; height: number },
+  scenario: string,
+  path: string,
+) {
   await page.setViewportSize(viewport);
   await page.context().addInitScript(
     ([key, value, themeKey]) => {
       localStorage.setItem(key, value);
-      localStorage.setItem(themeKey, "light");
+      localStorage.setItem(themeKey, 'light');
     },
     [MOCK_SCENARIO_KEY, scenario, THEME_KEY] as const,
   );
@@ -34,36 +43,63 @@ async function openScenario(page: Page, viewport: { width: number; height: numbe
   await page.goto(path);
 }
 
-const bucket = (page: Page, goal: string) => page.locator(`[data-testid="plan-goal"][data-goal="${goal}"]`);
+const bucket = (page: Page, goal: string) =>
+  page.locator(`[data-testid="plan-goal"][data-goal="${goal}"]`);
 
 for (const size of SIZES) {
   test.describe(size.name, () => {
-    test("goal-buckets-hard: Archive goal says Grow partner network holds 15 features", async ({ page }) => {
-      await openScenario(page, size.viewport, GOAL_BUCKETS_HARD_SCENARIO, "/simple/priorities?tab=buckets");
-      await expect(page.getByTestId("buckets-head")).toBeVisible();
-      const big = bucket(page, "Grow partner network");
-      await expect(big.getByTestId("plan-feature")).toHaveCount(15);
-      await expect(big.getByTestId("also-goals")).toHaveCount(4);
-      await big.getByRole("button", { name: "More for Grow partner network" }).click();
-      await page.getByRole("menuitem", { name: "Archive goal" }).click();
-      const dialog = page.getByRole("dialog", { name: "Archive Grow partner network" });
-      await expect(dialog).toContainText("It holds 15 features");
-      await expect(dialog).toContainText("4 serve another goal too and go there");
+    test('goal-buckets-hard: Archive goal says Grow partner network holds 15 features', async ({
+      page,
+    }) => {
+      await openScenario(
+        page,
+        size.viewport,
+        GOAL_BUCKETS_HARD_SCENARIO,
+        '/simple/priorities?tab=buckets',
+      );
+      await expect(page.getByTestId('buckets-head')).toBeVisible();
+      const big = bucket(page, 'Grow partner network');
+      await expect(big.getByTestId('plan-feature')).toHaveCount(15);
+      await expect(big.getByTestId('also-goals')).toHaveCount(4);
+      await big.getByRole('button', { name: 'More for Grow partner network' }).click();
+      await page.getByRole('menuitem', { name: 'Archive goal' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Archive Grow partner network' });
+      await expect(dialog).toContainText('It holds 15 features');
+      await expect(dialog).toContainText('4 serve another goal too and go there');
     });
 
-    test("roadmap-milestones-hard: Grow retention holds 30 items", async ({ page }) => {
-      await openScenario(page, size.viewport, ROADMAP_MILESTONES_HARD_SCENARIO, "/simple/roadmap");
-      await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-      await expect(page.getByTestId("goal-counter").filter({ hasText: "Grow retention" })).toContainText("30 items");
+    test('roadmap-milestones-hard: Grow retention holds 30 items', async ({ page }) => {
+      await openScenario(page, size.viewport, ROADMAP_MILESTONES_HARD_SCENARIO, '/simple/roadmap');
+      await expect(page.getByTestId('simple-roadmap')).toBeVisible();
+      await expect(
+        page.getByTestId('goal-counter').filter({ hasText: 'Grow retention' }),
+      ).toContainText('30 items');
     });
 
-    if (size.name === "desktop") {
-      test("roadmap-milestones-hard: two milestones share Dec 22, each late milestone names what ends after it", async ({ page }) => {
-        await openScenario(page, size.viewport, ROADMAP_MILESTONES_HARD_SCENARIO, "/simple/roadmap");
-        await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-        await expect(page.getByTestId("ms-same-day").filter({ hasText: /on Dec 22$/ })).toHaveText("2 on Dec 22");
-        await expect(page.getByTestId("ms-late").filter({ hasText: "Ends after M6 Teams set 3 rules in week 1" })).toBeVisible();
-        await expect(page.getByTestId("ms-late").filter({ hasText: "Ends after M5 Half of new teams invite a teammate" })).toBeVisible();
+    if (size.name === 'desktop') {
+      test('roadmap-milestones-hard: two milestones share Dec 22, each late milestone names what ends after it', async ({
+        page,
+      }) => {
+        await openScenario(
+          page,
+          size.viewport,
+          ROADMAP_MILESTONES_HARD_SCENARIO,
+          '/simple/roadmap',
+        );
+        await expect(page.getByTestId('simple-roadmap')).toBeVisible();
+        await expect(page.getByTestId('ms-same-day').filter({ hasText: /on Dec 22$/ })).toHaveText(
+          '2 on Dec 22',
+        );
+        await expect(
+          page
+            .getByTestId('ms-late')
+            .filter({ hasText: 'Ends after M6 Teams set 3 rules in week 1' }),
+        ).toBeVisible();
+        await expect(
+          page
+            .getByTestId('ms-late')
+            .filter({ hasText: 'Ends after M5 Half of new teams invite a teammate' }),
+        ).toBeVisible();
       });
     }
   });

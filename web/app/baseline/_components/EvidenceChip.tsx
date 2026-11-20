@@ -1,32 +1,33 @@
-"use client";
+'use client';
 
-import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 
-import { Chip } from "@/components/ds";
-import type { EvidenceOut } from "@/lib/api/client";
-import { formatDate, formatPercent } from "@/lib/format";
+import { Chip } from '@/components/ds';
+import type { EvidenceOut } from '@/lib/api/client';
+import { formatDate, formatPercent } from '@/lib/format';
 
-import { ConfidenceBadge, DEFAULT_LOW, sourceKindLabel } from "./common";
+import { ConfidenceBadge, DEFAULT_LOW, sourceKindLabel } from './common';
 
 const FACTOR_LABEL: Record<string, string> = {
-  source: "Source",
-  freshness: "Freshness",
-  mentions: "Mentions",
-  goal_impact: "Goal impact",
+  source: 'Source',
+  freshness: 'Freshness',
+  mentions: 'Mentions',
+  goal_impact: 'Goal impact',
 };
-const FACTOR_ORDER = ["source", "freshness", "mentions", "goal_impact"];
+const FACTOR_ORDER = ['source', 'freshness', 'mentions', 'goal_impact'];
 
 type Factor = { value?: unknown; weight?: unknown };
 
 function breakdownOf(ev: EvidenceOut): [string, Factor][] {
-  const raw = (ev.confidence_factors as { breakdown?: Record<string, Factor> } | undefined)?.breakdown;
-  if (!raw || typeof raw !== "object") return [];
+  const raw = (ev.confidence_factors as { breakdown?: Record<string, Factor> } | undefined)
+    ?.breakdown;
+  if (!raw || typeof raw !== 'object') return [];
   return Object.entries(raw).sort(
     ([a], [b]) => (FACTOR_ORDER.indexOf(a) + 1 || 99) - (FACTOR_ORDER.indexOf(b) + 1 || 99),
   );
 }
 
-const fmt = (v: unknown) => (typeof v === "number" ? v.toFixed(2) : "—");
+const fmt = (v: unknown) => (typeof v === 'number' ? v.toFixed(2) : '—');
 
 /**
  * One piece of evidence: source kind and confidence. Hover or focus previews the
@@ -35,12 +36,18 @@ const fmt = (v: unknown) => (typeof v === "number" ? v.toFixed(2) : "—");
  * Evidence from a source item since removed (a narrowed source, or deleted upstream)
  * says 'source removed' and no longer links out; its stored excerpt stays.
  */
-export function EvidenceChip({ evidence, low = DEFAULT_LOW }: { evidence: EvidenceOut; low?: number }) {
+export function EvidenceChip({
+  evidence,
+  low = DEFAULT_LOW,
+}: {
+  evidence: EvidenceOut;
+  low?: number;
+}) {
   const [hover, setHover] = useState(false);
   const [pinned, setPinned] = useState(false);
   const ref = useRef<HTMLSpanElement>(null);
   const btn = useRef<HTMLButtonElement>(null);
-  const [pos, setPos] = useState<CSSProperties>({ top: 0, left: 0, visibility: "hidden" });
+  const [pos, setPos] = useState<CSSProperties>({ top: 0, left: 0, visibility: 'hidden' });
   const cardId = useId();
   const open = hover || pinned;
   const label = sourceKindLabel(evidence.source_kind);
@@ -63,11 +70,11 @@ export function EvidenceChip({ evidence, low = DEFAULT_LOW }: { evidence: Eviden
       );
     };
     place();
-    window.addEventListener("scroll", place, true);
-    window.addEventListener("resize", place);
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
     return () => {
-      window.removeEventListener("scroll", place, true);
-      window.removeEventListener("resize", place);
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
     };
   }, [hover, pinned]);
 
@@ -76,8 +83,8 @@ export function EvidenceChip({ evidence, low = DEFAULT_LOW }: { evidence: Eviden
     const onDown = (e: MouseEvent) => {
       if (!ref.current?.contains(e.target as Node)) setPinned(false);
     };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
   }, [pinned]);
 
   return (
@@ -87,7 +94,7 @@ export function EvidenceChip({ evidence, low = DEFAULT_LOW }: { evidence: Eviden
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       onKeyDown={(e) => {
-        if (e.key === "Escape" && open) {
+        if (e.key === 'Escape' && open) {
           // Close the card only, not the panel around it.
           e.preventDefault();
           setPinned(false);
@@ -101,12 +108,12 @@ export function EvidenceChip({ evidence, low = DEFAULT_LOW }: { evidence: Eviden
         data-testid="evidence-chip"
         aria-expanded={open}
         aria-describedby={open ? cardId : undefined}
-        aria-label={`Evidence: ${label}${removed ? ", source removed" : ""}, confidence ${evidence.confidence != null ? formatPercent(evidence.confidence) : "not scored"}`}
+        aria-label={`Evidence: ${label}${removed ? ', source removed' : ''}, confidence ${evidence.confidence != null ? formatPercent(evidence.confidence) : 'not scored'}`}
         onClick={() => setPinned((p) => !p)}
         onFocus={() => setHover(true)}
         onBlur={() => setHover(false)}
         className={`inline-flex h-8 max-w-full flex-none items-center gap-2 rounded-lg border bg-surface pr-1 pl-2.5 text-sm font-semibold whitespace-nowrap hover:bg-surface2 ${
-          open ? "border-accent" : "border-line-strong"
+          open ? 'border-accent' : 'border-line-strong'
         }`}
       >
         {label}
@@ -130,11 +137,17 @@ export function EvidenceChip({ evidence, low = DEFAULT_LOW }: { evidence: Eviden
               {evidence.retrieved_at && ` · retrieved ${formatDate(evidence.retrieved_at)}`}
             </span>
             {(evidence.source_item?.title || evidence.ref) && (
-              <span className="block font-semibold">{evidence.source_item?.title ?? evidence.ref}</span>
+              <span className="block font-semibold">
+                {evidence.source_item?.title ?? evidence.ref}
+              </span>
             )}
-            {evidence.ref && evidence.source_item?.title && evidence.ref !== evidence.source_item.title && (
-              <span className="block truncate font-mono text-[13px] text-text2">{evidence.ref}</span>
-            )}
+            {evidence.ref &&
+              evidence.source_item?.title &&
+              evidence.ref !== evidence.source_item.title && (
+                <span className="block truncate font-mono text-[13px] text-text2">
+                  {evidence.ref}
+                </span>
+              )}
             {evidence.excerpt && (
               <span className="mt-2 block border-l-2 border-accent pl-2.5 text-text2">
                 “{evidence.excerpt}”
@@ -146,18 +159,29 @@ export function EvidenceChip({ evidence, low = DEFAULT_LOW }: { evidence: Eviden
               </span>
             )}
             {evidence.link && (
-              <span className="mt-2 block rounded-lg bg-surface2 px-2 py-1 text-[13px] text-text2" data-testid="public-link-note">
+              <span
+                className="mt-2 block rounded-lg bg-surface2 px-2 py-1 text-[13px] text-text2"
+                data-testid="public-link-note"
+              >
                 Public link, visible to everyone · fetched {formatDate(evidence.link.fetched_at)}
-                {evidence.link.last_modified && ` · page updated ${formatDate(evidence.link.last_modified)}`}
+                {evidence.link.last_modified &&
+                  ` · page updated ${formatDate(evidence.link.last_modified)}`}
               </span>
             )}
             {removed && (
-              <span className="mt-2 block rounded-lg bg-na-bg px-2 py-1 text-[13px] text-na" data-testid="source-removed-note">
-                Source removed: the item was taken out of its source or deleted where it came from. The stored excerpt stays.
+              <span
+                className="mt-2 block rounded-lg bg-na-bg px-2 py-1 text-[13px] text-na"
+                data-testid="source-removed-note"
+              >
+                Source removed: the item was taken out of its source or deleted where it came from.
+                The stored excerpt stays.
               </span>
             )}
             {evidence.source_item_private && (
-              <span className="mt-2 block rounded-lg bg-warn-bg px-2 py-1 text-[13px] text-warn" data-testid="private-note">
+              <span
+                className="mt-2 block rounded-lg bg-warn-bg px-2 py-1 text-[13px] text-warn"
+                data-testid="private-note"
+              >
                 From another person&apos;s private source: you see the excerpt, not the item.
               </span>
             )}

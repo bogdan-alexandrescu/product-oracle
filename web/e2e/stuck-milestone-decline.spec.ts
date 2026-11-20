@@ -1,6 +1,6 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /**
  * stuck-milestone-decline: a change asked of a PRD's milestone whose milestone has since moved on
@@ -22,113 +22,128 @@ import { expect, test, type Page } from "./test";
  */
 
 async function open(page: Page, path: string, email?: string) {
-  await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "simple-prd-milestone-stuck"] as const);
+  await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [
+    MOCK_SCENARIO_KEY,
+    'simple-prd-milestone-stuck',
+  ] as const);
   await login(page, email);
   await page.goto(path);
 }
 
-test("the company's owner declines a stuck milestone ask on Home and it goes, the newer ask stays", async ({ page }) => {
-  await open(page, "/simple");
-  const proposals = page.getByTestId("home-proposals");
-  await expect(proposals.getByRole("heading", { name: "Proposals on your items" })).toBeVisible();
-  const asks = proposals.getByTestId("home-proposal");
-  const stuck = asks.filter({ hasText: "Nov 4," });
+test("the company's owner declines a stuck milestone ask on Home and it goes, the newer ask stays", async ({
+  page,
+}) => {
+  await open(page, '/simple');
+  const proposals = page.getByTestId('home-proposals');
+  await expect(proposals.getByRole('heading', { name: 'Proposals on your items' })).toBeVisible();
+  const asks = proposals.getByTestId('home-proposal');
+  const stuck = asks.filter({ hasText: 'Nov 4,' });
   await expect(stuck).toHaveCount(1);
-  await expect(asks.filter({ hasText: "Nov 5," })).toHaveCount(1);
+  await expect(asks.filter({ hasText: 'Nov 5,' })).toHaveCount(1);
   // Accepting it is still refused, in words, and it stays.
-  await stuck.getByRole("button", { name: "Accept" }).click();
-  await expect(page.getByText("This proposal no longer waits on this milestone")).toBeVisible();
+  await stuck.getByRole('button', { name: 'Accept' }).click();
+  await expect(page.getByText('This proposal no longer waits on this milestone')).toBeVisible();
   await expect(stuck).toHaveCount(1);
-  await stuck.getByRole("button", { name: "Decline" }).click();
-  await expect(page.getByText("Declined", { exact: true })).toBeVisible();
+  await stuck.getByRole('button', { name: 'Decline' }).click();
+  await expect(page.getByText('Declined', { exact: true })).toBeVisible();
   await expect(stuck).toHaveCount(0);
-  await expect(asks.filter({ hasText: "Nov 5," })).toHaveCount(1);
+  await expect(asks.filter({ hasText: 'Nov 5,' })).toHaveCount(1);
   // It stays gone after a reload.
   await page.reload();
-  await expect(asks.filter({ hasText: "Nov 5," })).toHaveCount(1);
+  await expect(asks.filter({ hasText: 'Nov 5,' })).toHaveCount(1);
   await expect(stuck).toHaveCount(0);
 });
 
-test("the company's owner declines a stuck milestone ask in the roadmap's Needs a decision, the newer ask stays", async ({ page }) => {
+test("the company's owner declines a stuck milestone ask in the roadmap's Needs a decision, the newer ask stays", async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await open(page, "/simple/roadmap");
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  const tray = page.getByTestId("decision-tray");
-  const asks = tray.getByTestId("tray-proposal").filter({ hasText: /PRD milestone ‘M\d+ Digest for all teams’: change a milestone/ });
-  await page.getByTestId("needs-decision").click();
+  await open(page, '/simple/roadmap');
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
+  const tray = page.getByTestId('decision-tray');
+  const asks = tray
+    .getByTestId('tray-proposal')
+    .filter({ hasText: /PRD milestone ‘M\d+ Digest for all teams’: change a milestone/ });
+  await page.getByTestId('needs-decision').click();
   await expect(tray).toBeVisible();
   await expect(asks).toHaveCount(2);
   // Newest first: the Nov 4 ask is the second. Accepting it is refused, in words, and both stay.
   const stuck = asks.nth(1);
-  await stuck.getByRole("button", { name: "Accept" }).click();
-  await expect(page.getByText("This proposal no longer waits on this milestone")).toBeVisible();
+  await stuck.getByRole('button', { name: 'Accept' }).click();
+  await expect(page.getByText('This proposal no longer waits on this milestone')).toBeVisible();
   await expect(asks).toHaveCount(2);
-  await stuck.getByRole("button", { name: "Decline" }).click();
-  await expect(page.getByText("Declined", { exact: true })).toBeVisible();
+  await stuck.getByRole('button', { name: 'Decline' }).click();
+  await expect(page.getByText('Declined', { exact: true })).toBeVisible();
   await expect(asks).toHaveCount(1);
   // It stays gone after a reload; the one left is the Nov 5 ask, as Home says.
   await page.reload();
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  await page.getByTestId("needs-decision").click();
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
+  await page.getByTestId('needs-decision').click();
   await expect(tray).toBeVisible();
   await expect(asks).toHaveCount(1);
-  await page.goto("/simple");
-  const home = page.getByTestId("home-proposals").getByTestId("home-proposal");
-  await expect(home.filter({ hasText: "Nov 5," })).toHaveCount(1);
-  await expect(home.filter({ hasText: "Nov 4," })).toHaveCount(0);
+  await page.goto('/simple');
+  const home = page.getByTestId('home-proposals').getByTestId('home-proposal');
+  await expect(home.filter({ hasText: 'Nov 5,' })).toHaveCount(1);
+  await expect(home.filter({ hasText: 'Nov 4,' })).toHaveCount(0);
 });
 
-test("the PRD's owner, not a company owner, declines on Home an ask whose milestone is gone", async ({ page }) => {
-  await open(page, "/simple", "approver@example.com");
-  const proposals = page.getByTestId("home-proposals");
-  await expect(proposals.getByRole("heading", { name: "Proposals on your items" })).toBeVisible();
-  const asks = proposals.getByTestId("home-proposal");
-  const gone = asks.filter({ hasText: "Nov 3," });
+test("the PRD's owner, not a company owner, declines on Home an ask whose milestone is gone", async ({
+  page,
+}) => {
+  await open(page, '/simple', 'approver@example.com');
+  const proposals = page.getByTestId('home-proposals');
+  await expect(proposals.getByRole('heading', { name: 'Proposals on your items' })).toBeVisible();
+  const asks = proposals.getByTestId('home-proposal');
+  const gone = asks.filter({ hasText: 'Nov 3,' });
   await expect(gone).toHaveCount(1);
   // Accepting it is refused, in words, and it stays.
-  await gone.getByRole("button", { name: "Accept" }).click();
-  await expect(page.getByText("The milestone is gone")).toBeVisible();
+  await gone.getByRole('button', { name: 'Accept' }).click();
+  await expect(page.getByText('The milestone is gone')).toBeVisible();
   await expect(gone).toHaveCount(1);
-  await gone.getByRole("button", { name: "Decline" }).click();
-  await expect(page.getByText("Declined", { exact: true })).toBeVisible();
+  await gone.getByRole('button', { name: 'Decline' }).click();
+  await expect(page.getByText('Declined', { exact: true })).toBeVisible();
   await expect(gone).toHaveCount(0);
-  await expect(asks.filter({ hasText: "Nov 5," })).toHaveCount(1);
+  await expect(asks.filter({ hasText: 'Nov 5,' })).toHaveCount(1);
   // It stays gone after a reload.
   await page.reload();
-  await expect(asks.filter({ hasText: "Nov 5," })).toHaveCount(1);
+  await expect(asks.filter({ hasText: 'Nov 5,' })).toHaveCount(1);
   await expect(gone).toHaveCount(0);
 });
 
-test("the PRD's owner, not a company owner, declines in the roadmap's Needs a decision an ask whose milestone is gone", async ({ page }) => {
+test("the PRD's owner, not a company owner, declines in the roadmap's Needs a decision an ask whose milestone is gone", async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await open(page, "/simple/roadmap", "approver@example.com");
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  const tray = page.getByTestId("decision-tray");
-  const proposals = tray.getByTestId("tray-proposal");
-  const gone = proposals.filter({ hasText: "PRD milestone ‘Routing by team’: change a milestone" });
+  await open(page, '/simple/roadmap', 'approver@example.com');
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
+  const tray = page.getByTestId('decision-tray');
+  const proposals = tray.getByTestId('tray-proposal');
+  const gone = proposals.filter({ hasText: 'PRD milestone ‘Routing by team’: change a milestone' });
   // A live milestone reads by its roadmap code (roadmap-milestone-codes); the gone one has none.
-  const digest = proposals.filter({ hasText: /PRD milestone ‘M\d+ Digest for all teams’: change a milestone/ });
-  await page.getByTestId("needs-decision").click();
+  const digest = proposals.filter({
+    hasText: /PRD milestone ‘M\d+ Digest for all teams’: change a milestone/,
+  });
+  await page.getByTestId('needs-decision').click();
   await expect(tray).toBeVisible();
   await expect(gone).toHaveCount(1);
   await expect(digest).toHaveCount(2);
   // Accepting it is refused, in words, and it stays.
-  await gone.getByRole("button", { name: "Accept" }).click();
-  await expect(page.getByText("The milestone is gone")).toBeVisible();
+  await gone.getByRole('button', { name: 'Accept' }).click();
+  await expect(page.getByText('The milestone is gone')).toBeVisible();
   await expect(gone).toHaveCount(1);
-  await gone.getByRole("button", { name: "Decline" }).click();
-  await expect(page.getByText("Declined", { exact: true })).toBeVisible();
+  await gone.getByRole('button', { name: 'Decline' }).click();
+  await expect(page.getByText('Declined', { exact: true })).toBeVisible();
   await expect(gone).toHaveCount(0);
   await expect(digest).toHaveCount(2);
   // It stays gone after a reload, on the roadmap and on Home.
   await page.reload();
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  await page.getByTestId("needs-decision").click();
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
+  await page.getByTestId('needs-decision').click();
   await expect(tray).toBeVisible();
   await expect(digest).toHaveCount(2);
   await expect(gone).toHaveCount(0);
-  await page.goto("/simple");
-  const home = page.getByTestId("home-proposals").getByTestId("home-proposal");
-  await expect(home.filter({ hasText: "Nov 5," })).toHaveCount(1);
-  await expect(home.filter({ hasText: "Nov 3," })).toHaveCount(0);
+  await page.goto('/simple');
+  const home = page.getByTestId('home-proposals').getByTestId('home-proposal');
+  await expect(home.filter({ hasText: 'Nov 5,' })).toHaveCount(1);
+  await expect(home.filter({ hasText: 'Nov 3,' })).toHaveCount(0);
 });

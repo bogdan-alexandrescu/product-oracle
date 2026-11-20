@@ -1,43 +1,81 @@
-"use client";
+'use client';
 
-import { Link } from "@/lib/nav";
-import { useMemo, useState } from "react";
+import { Link } from '@/lib/nav';
+import { useMemo, useState } from 'react';
 
-import { ClaudeOffNotice } from "@/components/ClaudeOffNotice";
-import { Chip, Empty, Icon, InfoTip, LinkButton, Notice, Page, PageHeader, Panel, Split } from "@/components/ds";
-import { LoadError } from "@/components/ui";
-import { sortPrds } from "@/lib/prd-order";
-import { api, unwrap } from "@/lib/api/client";
-import { useMe } from "@/lib/me";
-import { errorMessage, useQuery } from "@/lib/use-query";
-import { invalidateWaiting, loadInbox, loadMyQuestions, NEED_KINDS, needKind, waitingChanged, type NeedKind } from "@/lib/waiting";
+import { ClaudeOffNotice } from '@/components/ClaudeOffNotice';
+import {
+  Chip,
+  Empty,
+  Icon,
+  InfoTip,
+  LinkButton,
+  Notice,
+  Page,
+  PageHeader,
+  Panel,
+  Split,
+} from '@/components/ds';
+import { LoadError } from '@/components/ui';
+import { sortPrds } from '@/lib/prd-order';
+import { api, unwrap } from '@/lib/api/client';
+import { useMe } from '@/lib/me';
+import { errorMessage, useQuery } from '@/lib/use-query';
+import {
+  invalidateWaiting,
+  loadInbox,
+  loadMyQuestions,
+  NEED_KINDS,
+  needKind,
+  waitingChanged,
+  type NeedKind,
+} from '@/lib/waiting';
 
-import { useAccessRequestRows } from "../inbox/_access";
-import { useActed } from "../inbox/_actions";
-import { allNeeds, NEED_COLUMNS_COMPACT, NeedTable, usePerms, waitingNeeds, type Need, type StatedNeed } from "../inbox/_needs";
-import { approvalRows, dateSuggestionRows, goalSuggestionRows, proposalRows, trackSuggestionRows } from "../inbox/_proposals";
-import { useQuestionRows } from "../inbox/_questions";
-import { GoalsPanel } from "./_goals-panel";
-import { FlightInspector, FlightTable, type Flight, type GoalIndex } from "./_in-flight";
-import { baselineStep, SetupChip, SetupPanel, setupOpen } from "./_setup";
-import { WelcomePanel } from "./_welcome";
-import { useGoals } from "./_use-goals";
+import { useAccessRequestRows } from '../inbox/_access';
+import { useActed } from '../inbox/_actions';
+import {
+  allNeeds,
+  NEED_COLUMNS_COMPACT,
+  NeedTable,
+  usePerms,
+  waitingNeeds,
+  type Need,
+  type StatedNeed,
+} from '../inbox/_needs';
+import {
+  approvalRows,
+  dateSuggestionRows,
+  goalSuggestionRows,
+  proposalRows,
+  trackSuggestionRows,
+} from '../inbox/_proposals';
+import { useQuestionRows } from '../inbox/_questions';
+import { GoalsPanel } from './_goals-panel';
+import { FlightInspector, FlightTable, type Flight, type GoalIndex } from './_in-flight';
+import { baselineStep, SetupChip, SetupPanel, setupOpen } from './_setup';
+import { WelcomePanel } from './_welcome';
+import { useGoals } from './_use-goals';
 
 /** Runs that are still going: under way, or waiting on a person. */
-const IN_FLIGHT = new Set(["running", "awaiting_checkpoint", "awaiting_approval", "paused_overrun"]);
+const IN_FLIGHT = new Set([
+  'running',
+  'awaiting_checkpoint',
+  'awaiting_approval',
+  'paused_overrun',
+]);
 /** A phone's width, as the layout's max-[600px]. */
-const PHONE = "(max-width: 600px)";
+const PHONE = '(max-width: 600px)';
 
 /**
  * QA Nov 12 #12: Needs you's Kind takes the Inbox's room plus the icon's, so a kind
  * ("Cost approval", "Review reminder") reads whole on one line; a longer one wraps, never cut.
  */
 const HOME_NEED_COLUMNS = NEED_COLUMNS_COMPACT.map((c) =>
-  c.key === "kind"
+  c.key === 'kind'
     ? {
         ...c,
-        width: "180px",
-        className: `${c.className ?? ""} min-[601px]:[&_.truncate]:line-clamp-2 min-[601px]:[&_.truncate]:whitespace-normal min-[601px]:[&_.truncate]:break-words`,
+        width: '180px',
+        className: `${c.className ?? ''} min-[601px]:[&_.truncate]:line-clamp-2 min-[601px]:[&_.truncate]:whitespace-normal min-[601px]:[&_.truncate]:break-words`,
       }
     : c,
 );
@@ -68,10 +106,13 @@ const MAX_NEEDS = 7;
  */
 function pickNeeds(rows: StatedNeed[], max: number): { rows: Need[]; more: number } {
   if (rows.length <= max) return { rows, more: 0 };
-  const questions = rows.filter((r) => r.group === "questions");
-  const others = rows.filter((r) => r.group !== "questions");
+  const questions = rows.filter((r) => r.group === 'questions');
+  const others = rows.filter((r) => r.group !== 'questions');
   const keep = max - 1;
-  const shown = questions.length === 0 || others.length < keep ? rows.slice(0, keep) : [...others.slice(0, keep - 1), questions[0]];
+  const shown =
+    questions.length === 0 || others.length < keep
+      ? rows.slice(0, keep)
+      : [...others.slice(0, keep - 1), questions[0]];
   return { rows: shown, more: rows.length - shown.length };
 }
 
@@ -89,24 +130,31 @@ function pickNeeds(rows: StatedNeed[], max: number): { rows: Need[]; more: numbe
 export default function HomePage() {
   const { can, capsReady } = useMe();
   // #370: New PRD starts a draft (a PRD, any approver's); Build the baseline opens where the baseline's writers build it.
-  const canWrite = can("start_draft", true);
-  const canBuild = can("confirm_entity");
+  const canWrite = can('start_draft', true);
+  const canBuild = can('confirm_entity');
   // #403: only a role that can act on the notice (add an account, set the fallback: owners) reads the pool.
-  const owner = can("add_claude_account");
-  const poolQ = useQuery(owner ? "home|claude-pool" : "home|no-pool", () => (owner ? unwrap(api.GET("/v1/claude-accounts")) : Promise.resolve(null)));
+  const owner = can('add_claude_account');
+  const poolQ = useQuery(owner ? 'home|claude-pool' : 'home|no-pool', () =>
+    owner ? unwrap(api.GET('/v1/claude-accounts')) : Promise.resolve(null),
+  );
 
-  const inboxQ = useQuery("home|inbox", loadInbox);
+  const inboxQ = useQuery('home|inbox', loadInbox);
   // Asked of me, filtered by the API so none is cut off; a failure shows in Needs you.
-  const questionsQ = useQuery("home|questions", loadMyQuestions);
-  const docsQ = useQuery("home|documents", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
-  const runsQ = useQuery("home|runs", () => unwrap(api.GET("/v1/runs")));
+  const questionsQ = useQuery('home|questions', loadMyQuestions);
+  const docsQ = useQuery('home|documents', () =>
+    unwrap(api.GET('/v1/documents', { params: { query: { kind: 'prd' } } })),
+  );
+  const runsQ = useQuery('home|runs', () => unwrap(api.GET('/v1/runs')));
   // A1: the Set up checklist, read live; only the hide choice is stored (a preference).
-  const setupQ = useQuery("home|setup", () => unwrap(api.GET("/v1/setup")));
+  const setupQ = useQuery('home|setup', () => unwrap(api.GET('/v1/setup')));
   // qa-onboarding-3: Pick sources says the sources the Sources page lists (its own query), so
   // the two never contradict; read only while the checklist holds that step not yet done (a
   // done step says its own count, so Home's call budget stays as it was).
-  const listSources = setupOpen(setupQ.data) && setupQ.data.steps.some((s) => s.key === "sources" && !s.done);
-  const sourcesQ = useQuery(listSources ? "sources" : "home|no-sources", () => (listSources ? unwrap(api.GET("/v1/sources")) : Promise.resolve(null)));
+  const listSources =
+    setupOpen(setupQ.data) && setupQ.data.steps.some((s) => s.key === 'sources' && !s.done);
+  const sourcesQ = useQuery(listSources ? 'sources' : 'home|no-sources', () =>
+    listSources ? unwrap(api.GET('/v1/sources')) : Promise.resolve(null),
+  );
   const [setupBusy, setSetupBusy] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
   async function hideSetup(hidden: boolean) {
@@ -115,7 +163,7 @@ export default function HomePage() {
     const before = setupQ.data;
     setupQ.setData((s) => (s ? { ...s, hidden } : s));
     try {
-      await unwrap(api.PATCH("/v1/me/preferences", { body: { setup_hidden: hidden } }));
+      await unwrap(api.PATCH('/v1/me/preferences', { body: { setup_hidden: hidden } }));
     } catch (e) {
       setupQ.setData(() => before);
       setSetupError(errorMessage(e));
@@ -134,7 +182,7 @@ export default function HomePage() {
     setWelcomeBusy(true);
     setWelcomeError(null);
     try {
-      await unwrap(api.PATCH("/v1/me/preferences", { body: { welcome_dismissed: true } }));
+      await unwrap(api.PATCH('/v1/me/preferences', { body: { welcome_dismissed: true } }));
       setupQ.setData((s) => (s ? { ...s, welcome: false } : s));
     } catch (e) {
       setWelcomeError(errorMessage(e));
@@ -143,22 +191,37 @@ export default function HomePage() {
     }
   }
 
-  const { goals, history, historyPending, historyFailed, error: goalsError, loading: goalsLoading } = useGoals("home", { short: true });
+  const {
+    goals,
+    history,
+    historyPending,
+    historyFailed,
+    error: goalsError,
+    loading: goalsLoading,
+  } = useGoals('home', { short: true });
   const goalIndex: GoalIndex = useMemo(
-    () => new Map((goals ?? []).map((g) => [g.id, { id: g.id, tag: g.tag, title: g.title, proposed: g.proposed }])),
+    () =>
+      new Map(
+        (goals ?? []).map((g) => [
+          g.id,
+          { id: g.id, tag: g.tag, title: g.title, proposed: g.proposed },
+        ]),
+      ),
     [goals],
   );
 
   const docs = useMemo(() => docsQ.data ?? [], [docsQ.data]);
   // prd-order: the PRDs in review in the company PRD order (the runs after them).
-  const inReview = sortPrds(docs.filter((d) => d.status === "in_review"));
-  const activeRuns = (runsQ.data ?? []).filter((r) => IN_FLIGHT.has(r.status)).sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const inReview = sortPrds(docs.filter((d) => d.status === 'in_review'));
+  const activeRuns = (runsQ.data ?? [])
+    .filter((r) => IN_FLIGHT.has(r.status))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
 
   const flights: Flight[] | undefined =
     docsQ.data && runsQ.data
       ? [
-          ...inReview.map((doc): Flight => ({ kind: "prd", key: `prd:${doc.slug}`, doc })),
-          ...activeRuns.map((run): Flight => ({ kind: "run", key: `run:${run.id}`, run })),
+          ...inReview.map((doc): Flight => ({ kind: 'prd', key: `prd:${doc.slug}`, doc })),
+          ...activeRuns.map((run): Flight => ({ kind: 'run', key: `run:${run.id}`, run })),
         ]
       : undefined;
   const [picked, setPicked] = useState<string | null>(null);
@@ -167,8 +230,12 @@ export default function HomePage() {
   // shows right under In flight; untapped, the row alone says what is in flight.
   function pick(key: string) {
     setPicked(key);
-    if (typeof window !== "undefined" && window.matchMedia(PHONE).matches) {
-      requestAnimationFrame(() => document.getElementById("home-inspector-slot")?.scrollIntoView({ block: "start", behavior: "smooth" }));
+    if (typeof window !== 'undefined' && window.matchMedia(PHONE).matches) {
+      requestAnimationFrame(() =>
+        document
+          .getElementById('home-inspector-slot')
+          ?.scrollIntoView({ block: 'start', behavior: 'smooth' }),
+      );
     }
   }
 
@@ -192,13 +259,15 @@ export default function HomePage() {
     }
   }
   // D14: feedback rows act in place (one primary action each); what they did shows here.
-  const { onActed, notice, say } = useActed(() => Promise.all([inboxQ.reload(), questionsQ.reload()]));
+  const { onActed, notice, say } = useActed(() =>
+    Promise.all([inboxQ.reload(), questionsQ.reload()]),
+  );
   const inbox = inboxQ.data;
   // The API filters (asked of me, still open): Home counts exactly what the badge counts.
   // qa4-company-47: answered here, a question leaves Needs you as it leaves the count; the
   // line above the list says what was done ("Answered: <the question>").
   const questionRows = useQuestionRows(questionsQ.data ?? [], questionsQ.reload, (q, label) =>
-    say(`${label.replace(/\s*✓$/, "")}: ${q.question.prompt}`),
+    say(`${label.replace(/\s*✓$/, '')}: ${q.question.prompt}`),
   );
   // A5: access requests, approved or declined in their line (as the Inbox).
   const requestRows = useAccessRequestRows(inbox?.access_requests ?? [], inboxQ.reload);
@@ -211,7 +280,18 @@ export default function HomePage() {
   const seen = inbox?.last_seen_at ?? null;
   const all = inbox
     ? [
-        ...allNeeds(inbox, questionRows.rows, busy, act, seen, onActed, true, undefined, requestRows.rows, perms),
+        ...allNeeds(
+          inbox,
+          questionRows.rows,
+          busy,
+          act,
+          seen,
+          onActed,
+          true,
+          undefined,
+          requestRows.rows,
+          perms,
+        ),
         ...proposalRows(inbox.simple_proposals ?? [], busy, act, seen),
         ...approvalRows(inbox.simple_approvals ?? [], seen),
         ...dateSuggestionRows(inbox.simple_date_suggestions ?? [], seen),
@@ -220,13 +300,20 @@ export default function HomePage() {
       ]
     : [];
   const needs = waitingNeeds(all);
-  const visible = all.filter((r) => needs.includes(r) || (r.group === "access-requests" && !r.counted && r.state !== "done"));
+  const visible = all.filter(
+    (r) => needs.includes(r) || (r.group === 'access-requests' && !r.counted && r.state !== 'done'),
+  );
   // QA pass D-2: one chip per kind, built from the rows the total counts, so they add up to it.
   // Checkpoints, cost approvals, overruns and a roadmap version waiting for my approval are
   // "Approvals" (qa-shell-6), apart from the decision log's Decisions.
   // counts-wait: the counts wait for the questions asked of me too, so none shows a lower number first.
   const counted = !!inbox && (questionsQ.data !== undefined || !!questionsQ.error);
-  const kinds = !counted ? [] : NEED_KINDS.map((k) => ({ ...k, n: needs.filter((r) => needKind(r.group) === k.id).length })).filter((k) => k.n > 0);
+  const kinds = !counted
+    ? []
+    : NEED_KINDS.map((k) => ({
+        ...k,
+        n: needs.filter((r) => needKind(r.group) === k.id).length,
+      })).filter((k) => k.n > 0);
   const { rows: shownNeeds, more: moreNeeds } = pickNeeds(visible, MAX_NEEDS);
   // The rail badge's count: the Inbox's New + Open items.
   const waiting = counted ? needs.length : undefined;
@@ -238,12 +325,19 @@ export default function HomePage() {
   const flightHeader = (
     <span className="font-display text-lg leading-6 font-bold tracking-heading text-text">
       In flight
-      {flights && flights.length > 0 && <span className="tnum ml-1.5 text-accent-ink">{flights.length}</span>}
+      {flights && flights.length > 0 && (
+        <span className="tnum ml-1.5 text-accent-ink">{flights.length}</span>
+      )}
     </span>
   );
   const newPrd = (className?: string) =>
     canWrite && (
-      <LinkButton href="/documents/new?kind=prd" variant="primary" icon="plus" className={className}>
+      <LinkButton
+        href="/documents/new?kind=prd"
+        variant="primary"
+        icon="plus"
+        className={className}
+      >
         New PRD
       </LinkButton>
     );
@@ -257,11 +351,17 @@ export default function HomePage() {
             <>
               {/* qa-nov17 plan 3: the count leads to what it counts, as Needs you's "Inbox →". */}
               {waiting != null && waiting > 0 && (
-                <Link href="/inbox" className="rounded-full hover:underline" data-testid="home-waiting">
+                <Link
+                  href="/inbox"
+                  className="rounded-full hover:underline"
+                  data-testid="home-waiting"
+                >
                   <Chip kind="acc">{waiting} waiting</Chip>
                 </Link>
               )}
-              {setup?.hidden && <SetupChip setup={setup} onShow={() => hideSetup(false)} busy={setupBusy} />}
+              {setup?.hidden && (
+                <SetupChip setup={setup} onShow={() => hideSetup(false)} busy={setupBusy} />
+              )}
             </>
           )
         }
@@ -271,8 +371,17 @@ export default function HomePage() {
       <Split
         inspector={
           selected ? (
-            <div id="home-inspector-slot" data-testid="home-inspector-slot" className={picked ? "scroll-mt-3" : "max-[600px]:hidden"}>
-              <FlightInspector f={selected} openItems={openItems} docs={docs} goalIndex={goalIndex} />
+            <div
+              id="home-inspector-slot"
+              data-testid="home-inspector-slot"
+              className={picked ? 'scroll-mt-3' : 'max-[600px]:hidden'}
+            >
+              <FlightInspector
+                f={selected}
+                openItems={openItems}
+                docs={docs}
+                goalIndex={goalIndex}
+              />
             </div>
           ) : undefined
         }
@@ -284,7 +393,12 @@ export default function HomePage() {
           </Notice>
         )}
         {setupQ.data?.welcome && capsReady && (
-          <WelcomePanel onDismiss={dismissWelcome} busy={welcomeBusy} setup={setupQ.data} setupShown={!!setup && !setup.hidden} />
+          <WelcomePanel
+            onDismiss={dismissWelcome}
+            busy={welcomeBusy}
+            setup={setupQ.data}
+            setupShown={!!setup && !setup.hidden}
+          />
         )}
         {setupError && (
           <Notice tone="error" testId="home-setup-error">
@@ -293,7 +407,7 @@ export default function HomePage() {
         )}
         {/* QA pass D-7, F-8: Set up is a commenter's and up (the API's setup roles); a failed load says so in its
             place, with Try again, never vanishes; a viewer is not told. One note, named as Simple's ("Set up"). */}
-        {setupQ.error && capsReady && can("create_comment") && (
+        {setupQ.error && capsReady && can('create_comment') && (
           <div data-testid="home-setup-load-error">
             <LoadError what="Set up" error={setupQ.error} onRetry={() => void setupQ.reload()} />
           </div>
@@ -315,7 +429,7 @@ export default function HomePage() {
           error={goalsError}
           loading={goalsLoading}
           canImport={canBuild}
-          canInterview={can("start_goal_interview")}
+          canInterview={can('start_goal_interview')}
           baseline={baselineStep(setupQ.data)}
           openGoals
         />
@@ -331,14 +445,19 @@ export default function HomePage() {
             <>
               {/* qa-shell-16: what this count counts, and why Simple's Home says another number. */}
               <InfoTip label="Needs you" side="bottom">
-                Everything the Inbox has waiting on you: approvals, runs, access, reviews, decisions, the questions asked of you, proposals, Oracle&apos;s dates and goal suggestions.
-                Simple&apos;s Home counts something else, the product decisions on PRDs that wait on you, so its number can differ.
+                Everything the Inbox has waiting on you: approvals, runs, access, reviews,
+                decisions, the questions asked of you, proposals, Oracle&apos;s dates and goal
+                suggestions. Simple&apos;s Home counts something else, the product decisions on PRDs
+                that wait on you, so its number can differ.
               </InfoTip>
               {/* qa-company-5: plain counts; the Inbox link opens the Inbox, where the items are.
                   qa4-company-50: one group; on a phone it takes its own line under the title, so
                   no count is left alone beside Inbox. */}
               {kinds.length > 0 && (
-                <span data-testid="home-needs-counts" className="flex flex-wrap items-center gap-x-2.5 max-[600px]:order-last max-[600px]:basis-full">
+                <span
+                  data-testid="home-needs-counts"
+                  className="flex flex-wrap items-center gap-x-2.5 max-[600px]:order-last max-[600px]:basis-full"
+                >
                   {kinds.map((k) => (
                     <Count key={k.id} kind={k.id} label={k.label} n={k.n} />
                   ))}
@@ -378,26 +497,43 @@ export default function HomePage() {
               <span className="inline-flex items-center gap-1.5 font-semibold">
                 Nothing waiting
                 <InfoTip label="what needs you" align="start" testId="home-needs-empty-what">
-                  {can("approve_version", true)
-                    ? "Approvals, reviews and the questions asked of you show here."
-                    : can("create_comment")
-                      ? "Reviews of your PRDs and the questions asked of you show here."
-                      : "Questions someone asks you show here."}
+                  {can('approve_version', true)
+                    ? 'Approvals, reviews and the questions asked of you show here.'
+                    : can('create_comment')
+                      ? 'Reviews of your PRDs and the questions asked of you show here.'
+                      : 'Questions someone asks you show here.'}
                 </InfoTip>
               </span>
-              {!can("create_comment") && (
-                <Link href="/plan" className="mt-1 block font-semibold text-accent-ink hover:underline" data-testid="home-needs-empty-link">
+              {!can('create_comment') && (
+                <Link
+                  href="/plan"
+                  className="mt-1 block font-semibold text-accent-ink hover:underline"
+                  data-testid="home-needs-empty-link"
+                >
                   Read the plan
                 </Link>
               )}
             </Empty>
           )}
-          <NeedTable title="Needs you" testId="home-needs-table" rows={shownNeeds} columns={HOME_NEED_COLUMNS} compact />
+          <NeedTable
+            title="Needs you"
+            testId="home-needs-table"
+            rows={shownNeeds}
+            columns={HOME_NEED_COLUMNS}
+            compact
+          />
           {moreNeeds > 0 && (
             // qa-company-12: the footer's icon and link on one line, on a phone too.
-            <div className="flex min-h-11 items-center gap-2.5 border-t border-line px-4 py-2 max-[600px]:px-3" data-testid="home-needs-footer">
+            <div
+              className="flex min-h-11 items-center gap-2.5 border-t border-line px-4 py-2 max-[600px]:px-3"
+              data-testid="home-needs-footer"
+            >
               <Icon name="inbox" className="flex-none text-accent-ink" />
-              <Link href="/inbox" className="font-semibold text-accent-ink hover:underline" data-testid="home-needs-more">
+              <Link
+                href="/inbox"
+                className="font-semibold text-accent-ink hover:underline"
+                data-testid="home-needs-more"
+              >
                 +{moreNeeds} more in Inbox
               </Link>
             </div>
@@ -406,19 +542,35 @@ export default function HomePage() {
         </Panel>
 
         {/* qa-company-31: In flight is its own panel, apart from Needs you. */}
-        <section aria-label="In flight" data-testid="home-in-flight" className="min-w-0 overflow-clip rounded-panel border border-line bg-surface shadow-panel">
-          <div data-testid="home-in-flight-phone-title" className="hidden min-h-12 items-center border-b border-line bg-surface2 px-3 max-[600px]:flex">
+        <section
+          aria-label="In flight"
+          data-testid="home-in-flight"
+          className="min-w-0 overflow-clip rounded-panel border border-line bg-surface shadow-panel"
+        >
+          <div
+            data-testid="home-in-flight-phone-title"
+            className="hidden min-h-12 items-center border-b border-line bg-surface2 px-3 max-[600px]:flex"
+          >
             {flightHeader}
           </div>
           {flightError ? (
             <div className="p-4 pb-0 max-[600px]:px-3">
-              <LoadError what="what's in flight" error={flightError} onRetry={() => void Promise.all([docsQ.reload(), runsQ.reload()])} />
+              <LoadError
+                what="what's in flight"
+                error={flightError}
+                onRetry={() => void Promise.all([docsQ.reload(), runsQ.reload()])}
+              />
             </div>
           ) : nothingInFlight ? (
-            <div data-testid="home-in-flight-empty" className="flex flex-wrap items-center gap-3 px-4 py-4 max-[600px]:px-3">
-              <span className="hidden font-display text-lg font-bold tracking-heading min-[601px]:inline">In flight</span>
+            <div
+              data-testid="home-in-flight-empty"
+              className="flex flex-wrap items-center gap-3 px-4 py-4 max-[600px]:px-3"
+            >
+              <span className="hidden font-display text-lg font-bold tracking-heading min-[601px]:inline">
+                In flight
+              </span>
               <span className="text-[15px] font-semibold text-text2">Nothing in flight</span>
-              {newPrd("ml-auto")}
+              {newPrd('ml-auto')}
             </div>
           ) : (
             <FlightTable

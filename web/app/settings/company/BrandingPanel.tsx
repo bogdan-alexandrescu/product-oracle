@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect, useState } from 'react';
 
-import { Button, InfoTip, Notice, Panel } from "@/components/ds";
+import { Button, InfoTip, Notice, Panel } from '@/components/ds';
 import {
   BRANDING_LIMITS,
   contrastOnWhite,
@@ -17,22 +17,27 @@ import {
   type BrandingOut,
   type BrandLogo,
   type LogoVariant,
-} from "@/lib/api/branding";
-import { errorMessage, useQuery } from "@/lib/use-query";
+} from '@/lib/api/branding';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-import { Field, INPUT, TEXTAREA } from "../_components/fields";
+import { Field, INPUT, TEXTAREA } from '../_components/fields';
 
 /** What the form holds: the fields as typed. */
 type Form = { name: string; accent: string; disclaimer: string; mark: boolean };
 
-const formOf = (b: BrandingOut): Form => ({ name: b.display_name, accent: b.accent ?? "", disclaimer: b.public_disclaimer, mark: b.oracle_mark });
+const formOf = (b: BrandingOut): Form => ({
+  name: b.display_name,
+  accent: b.accent ?? '',
+  disclaimer: b.public_disclaimer,
+  mark: b.oracle_mark,
+});
 const MARK_LABEL = "Show 'Made with Product Oracle' on shared pages";
 
 /** The logos as data: URLs (the CSP allows no blob: images), by sha256. */
 function useLogoUrls(logos: (BrandLogo | null | undefined)[]) {
   const [urls, setUrls] = useState<Record<string, string>>({});
   const missing = logos.filter((l): l is BrandLogo => !!l && !urls[l.sha256]);
-  const key = missing.map((l) => l.sha256).join(",");
+  const key = missing.map((l) => l.sha256).join(',');
   useEffect(() => {
     if (!key) return;
     let alive = true;
@@ -62,19 +67,27 @@ const accentRefused = (accent: string) => {
  */
 function ContrastResult({ accent, alert }: { accent: string; alert: boolean }) {
   const hex = normalHex(accent);
-  const role = alert ? "alert" : undefined;
-  if (!accent.trim()) return <span className="text-[13px] text-text2">No accent: Oracle&apos;s own</span>;
+  const role = alert ? 'alert' : undefined;
+  if (!accent.trim())
+    return <span className="text-[13px] text-text2">No accent: Oracle&apos;s own</span>;
   if (!hex)
     return (
-      <span role={role} className={`text-[13px] ${alert ? "font-semibold text-crit" : "text-text2"}`}>
+      <span
+        role={role}
+        className={`text-[13px] ${alert ? 'font-semibold text-crit' : 'text-text2'}`}
+      >
         Not a hex colour like #0369a1
       </span>
     );
   const ratio = contrastOnWhite(hex);
   const ok = passesAA(ratio);
   return (
-    <span role={ok ? undefined : role} className={`text-[13px] font-semibold ${ok ? "text-pass" : "text-crit"}`}>
-      {ratio.toFixed(2)}:1 · {ok ? "Passes AA" : alert ? "Too light to read on white. Pick a darker one." : "Too light"}
+    <span
+      role={ok ? undefined : role}
+      className={`text-[13px] font-semibold ${ok ? 'text-pass' : 'text-crit'}`}
+    >
+      {ratio.toFixed(2)}:1 ·{' '}
+      {ok ? 'Passes AA' : alert ? 'Too light to read on white. Pick a darker one.' : 'Too light'}
     </span>
   );
 }
@@ -83,16 +96,30 @@ function ContrastResult({ accent, alert }: { accent: string; alert: boolean }) {
  * qa-settings-5: the preview's colours are fixed, whatever the app's theme: the dark theme maps
  * `white` and `black` (and the tokens) onto its own surface and text, so they are inline here.
  */
-const PREVIEW_LIGHT = { background: "#ffffff", color: "#111827", border: "1px solid #d1d9e2" };
+const PREVIEW_LIGHT = { background: '#ffffff', color: '#111827', border: '1px solid #d1d9e2' };
 // qa-settings-16: each framed by an edge that shows on the app's light and dark backgrounds.
-const PREVIEW_DARK = { background: "#111827", color: "#ffffff", border: "1px solid #6b7280" };
+const PREVIEW_DARK = { background: '#111827', color: '#ffffff', border: '1px solid #6b7280' };
 
 /** The live preview: the logo and name on a light header and on a dark slide. */
-function Preview({ name, accent, light, dark }: { name: string; accent: string | null; light?: string; dark?: string }) {
+function Preview({
+  name,
+  accent,
+  light,
+  dark,
+}: {
+  name: string;
+  accent: string | null;
+  light?: string;
+  dark?: string;
+}) {
   const edge = accent ? { borderBottom: `3px solid ${accent}` } : {};
   return (
     <div className="grid grid-cols-2 gap-3 max-[600px]:grid-cols-1">
-      <div data-testid="brand-preview-light" className="flex h-16 items-center gap-3 rounded-lg px-4" style={{ ...PREVIEW_LIGHT, ...edge }}>
+      <div
+        data-testid="brand-preview-light"
+        className="flex h-16 items-center gap-3 rounded-lg px-4"
+        style={{ ...PREVIEW_LIGHT, ...edge }}
+      >
         {/* A data: URL: next/image would fetch it again through its optimiser. */}
         {light && (
           // eslint-disable-next-line @next/next/no-img-element
@@ -102,7 +129,11 @@ function Preview({ name, accent, light, dark }: { name: string; accent: string |
           {name}
         </span>
       </div>
-      <div data-testid="brand-preview-dark" className="flex h-16 items-center gap-3 rounded-lg px-4" style={{ ...PREVIEW_DARK, ...edge }}>
+      <div
+        data-testid="brand-preview-dark"
+        className="flex h-16 items-center gap-3 rounded-lg px-4"
+        style={{ ...PREVIEW_DARK, ...edge }}
+      >
         {/* A data: URL: next/image would fetch it again through its optimiser. */}
         {dark && (
           // eslint-disable-next-line @next/next/no-img-element
@@ -117,7 +148,7 @@ function Preview({ name, accent, light, dark }: { name: string; accent: string |
 }
 
 const UPLOAD =
-  "inline-flex h-8 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-line-strong bg-surface px-3 text-sm font-semibold text-text hover:bg-surface2 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent has-[:disabled]:cursor-not-allowed has-[:disabled]:border-line has-[:disabled]:text-text2";
+  'inline-flex h-8 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-line-strong bg-surface px-3 text-sm font-semibold text-text hover:bg-surface2 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent has-[:disabled]:cursor-not-allowed has-[:disabled]:border-line has-[:disabled]:text-text2';
 
 /**
  * qa-settings-20: a logo's upload as a button (the file input kept, out of sight, with the
@@ -138,10 +169,12 @@ function LogoUpload({
   fileName?: string;
   onFile: (file: File | undefined) => void;
 }) {
-  const now = fileName ?? (logo ? `${logo.width} × ${logo.height} px` : "None yet");
+  const now = fileName ?? (logo ? `${logo.width} × ${logo.height} px` : 'None yet');
   return (
     <div className="flex min-w-56 flex-col gap-1.5">
-      <span className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">{label}</span>
+      <span className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
+        {label}
+      </span>
       <span className="flex min-w-0 items-center gap-2">
         <label className={UPLOAD}>
           <input
@@ -152,7 +185,7 @@ function LogoUpload({
             className="sr-only"
             onChange={(e) => {
               onFile(e.target.files?.[0]);
-              e.target.value = "";
+              e.target.value = '';
             }}
           />
           {logo ? `Replace ${action}` : `Upload ${action}`}
@@ -179,12 +212,12 @@ function ThemeLogos({ brand }: { brand: BrandingOut }) {
       </span>
     );
   }
-  const dark = brand.theme_logos.filter((t) => t.variant === "dark").map((t) => t.name);
+  const dark = brand.theme_logos.filter((t) => t.variant === 'dark').map((t) => t.name);
   return (
     <span data-testid="brand-theme-note" className="mt-1 block">
       {dark.length
-        ? `The dark logo goes on dark themes (${dark.join(", ")}); the logo on every other.`
-        : "Every theme has a light background, so exports and decks use the logo."}
+        ? `The dark logo goes on dark themes (${dark.join(', ')}); the logo on every other.`
+        : 'Every theme has a light background, so exports and decks use the logo.'}
     </span>
   );
 }
@@ -195,7 +228,7 @@ function ThemeLogos({ brand }: { brand: BrandingOut }) {
  * shared page uses them. Owners edit (`can_edit`); everyone else reads.
  */
 export function BrandingPanel() {
-  const brandQ = useQuery("branding", getBranding);
+  const brandQ = useQuery('branding', getBranding);
   const brand = brandQ.data;
   const [edit, setEdit] = useState<Form | null>(null);
   const [busy, setBusy] = useState(false);
@@ -211,7 +244,7 @@ export function BrandingPanel() {
     setEdit({ ...form, ...patch });
     setSaved(false);
     setError(null);
-    if ("accent" in patch) setAccentTried(false);
+    if ('accent' in patch) setAccentTried(false);
   };
 
   async function run(action: () => Promise<BrandingOut>, after?: () => void) {
@@ -231,7 +264,11 @@ export function BrandingPanel() {
 
   const [fileNames, setFileNames] = useState<Partial<Record<LogoVariant, string>>>({});
   const upload = (file: File | undefined, variant: LogoVariant) => {
-    if (file) void run(() => uploadBrandLogo(file, variant), () => setFileNames((n) => ({ ...n, [variant]: file.name })));
+    if (file)
+      void run(
+        () => uploadBrandLogo(file, variant),
+        () => setFileNames((n) => ({ ...n, [variant]: file.name })),
+      );
   };
   const remove = (variant: LogoVariant) =>
     void run(
@@ -248,7 +285,13 @@ export function BrandingPanel() {
       return;
     }
     return run(
-      () => putBranding({ display_name: form.name, accent: form.accent.trim() || null, public_disclaimer: form.disclaimer, oracle_mark: form.mark }),
+      () =>
+        putBranding({
+          display_name: form.name,
+          accent: form.accent.trim() || null,
+          public_disclaimer: form.disclaimer,
+          oracle_mark: form.mark,
+        }),
       () => {
         setEdit(null);
         setSaved(true);
@@ -266,7 +309,8 @@ export function BrandingPanel() {
         title="Branding"
         tools={
           <InfoTip label="branding" side="bottom">
-            Every export and shared page carries the company&apos;s name and logo, in its accent colour.
+            Every export and shared page carries the company&apos;s name and logo, in its accent
+            colour.
             {brand && <ThemeLogos brand={brand} />}
           </InfoTip>
         }
@@ -278,10 +322,16 @@ export function BrandingPanel() {
         )}
         {brand && form && (
           <div className="flex flex-col gap-4 p-4 max-[600px]:p-3">
-            <Preview name={form.name.trim() || brand.display_name} accent={previewAccent} light={light} dark={dark} />
+            <Preview
+              name={form.name.trim() || brand.display_name}
+              accent={previewAccent}
+              light={light}
+              dark={dark}
+            />
             {brand.logo && (
               <p className="text-[13px] text-text2">
-                Logo <span data-testid="brand-logo-size">{`${brand.logo.width} × ${brand.logo.height} px`}</span>
+                Logo{' '}
+                <span data-testid="brand-logo-size">{`${brand.logo.width} × ${brand.logo.height} px`}</span>
               </p>
             )}
             {brand.can_edit ? (
@@ -299,7 +349,7 @@ export function BrandingPanel() {
                     busy={busy}
                     logo={brand.logo}
                     fileName={brand.logo ? fileNames.light : undefined}
-                    onFile={(f) => upload(f, "light")}
+                    onFile={(f) => upload(f, 'light')}
                   />
                   <LogoUpload
                     label="Dark logo"
@@ -307,22 +357,23 @@ export function BrandingPanel() {
                     busy={busy}
                     logo={brand.logo_dark}
                     fileName={brand.logo_dark ? fileNames.dark : undefined}
-                    onFile={(f) => upload(f, "dark")}
+                    onFile={(f) => upload(f, 'dark')}
                   />
                   {brand.logo && (
-                    <Button variant="ghost" disabled={busy} onClick={() => remove("light")}>
+                    <Button variant="ghost" disabled={busy} onClick={() => remove('light')}>
                       Remove logo
                     </Button>
                   )}
                   {brand.logo_dark && (
-                    <Button variant="ghost" disabled={busy} onClick={() => remove("dark")}>
+                    <Button variant="ghost" disabled={busy} onClick={() => remove('dark')}>
                       Remove dark logo
                     </Button>
                   )}
                   {/* F-70: the file rules behind the (i). */}
                   <span className="self-center">
                     <InfoTip label="logo files" align="start" testId="brand-logo-rules">
-                      PNG, JPEG or WebP, at most 512 KB and 2,000 × 2,000 px. Shown at most 40 px high.
+                      PNG, JPEG or WebP, at most 512 KB and 2,000 × 2,000 px. Shown at most 40 px
+                      high.
                     </InfoTip>
                   </span>
                 </div>
@@ -358,7 +409,7 @@ export function BrandingPanel() {
                         className="flex h-9 min-w-9 shrink-0 items-center justify-center rounded-lg border border-line-strong px-1.5 text-[13px] font-semibold text-text2"
                         style={previewAccent ? { background: previewAccent } : undefined}
                       >
-                        {previewAccent ? "" : "None"}
+                        {previewAccent ? '' : 'None'}
                       </span>
                       <input
                         className={`${INPUT} max-w-40`}
@@ -385,7 +436,11 @@ export function BrandingPanel() {
                   />
                 </Field>
                 <label className="flex items-center gap-2 text-[15px]">
-                  <input type="checkbox" checked={form.mark} onChange={(e) => set({ mark: e.target.checked })} />
+                  <input
+                    type="checkbox"
+                    checked={form.mark}
+                    onChange={(e) => set({ mark: e.target.checked })}
+                  />
                   {MARK_LABEL}
                 </label>
                 {error && <Notice tone="error">{error}</Notice>}
@@ -403,13 +458,13 @@ export function BrandingPanel() {
             ) : (
               <dl className="grid grid-cols-[160px_minmax(0,1fr)] gap-x-3 gap-y-2 text-[15px] max-[600px]:grid-cols-1">
                 <dt className="font-semibold">Display name</dt>
-                <dd>{brand.display_name || "None yet"}</dd>
+                <dd>{brand.display_name || 'None yet'}</dd>
                 <dt className="font-semibold">Accent</dt>
                 <dd>{brand.accent ?? "Oracle's own"}</dd>
                 <dt className="font-semibold">Public disclaimer</dt>
                 <dd>{brand.public_disclaimer}</dd>
                 <dt className="font-semibold">Made with Product Oracle</dt>
-                <dd>{brand.oracle_mark ? "Shown on shared pages" : "Not shown"}</dd>
+                <dd>{brand.oracle_mark ? 'Shown on shared pages' : 'Not shown'}</dd>
               </dl>
             )}
           </div>

@@ -1,6 +1,6 @@
-import { expect, test } from "./test";
+import { expect, test } from './test';
 
-import { login } from "./helpers";
+import { login } from './helpers';
 
 /**
  * Issue #260: a PRD run names the goals it serves. Draft with Oracle carries the brief's
@@ -13,40 +13,46 @@ import { login } from "./helpers";
  * prompts the run's agents get (test_runs_target_goals.py).
  */
 
-const PROBLEM = "Returning buyers retype their address at every checkout. Bulk import would make repeat checkout faster.";
+const PROBLEM =
+  'Returning buyers retype their address at every checkout. Bulk import would make repeat checkout faster.';
 
-test("goals in Draft with Oracle: the brief's goals are picked, and a change sticks to the draft run", async ({ page }) => {
-  await login(page, "approver@example.com");
-  await page.goto("/documents/new?kind=prd");
-  await page.getByRole("textbox", { name: "Title" }).fill("Bulk import for teams");
-  await page.getByRole("textbox", { name: "What problem does it solve?" }).fill(PROBLEM);
-  await page.getByRole("group", { name: "Which goals does it serve?" }).getByRole("checkbox", { name: /Activation/ }).check();
-  await page.getByRole("button", { name: "Continue" }).first().click();
+test("goals in Draft with Oracle: the brief's goals are picked, and a change sticks to the draft run", async ({
+  page,
+}) => {
+  await login(page, 'approver@example.com');
+  await page.goto('/documents/new?kind=prd');
+  await page.getByRole('textbox', { name: 'Title' }).fill('Bulk import for teams');
+  await page.getByRole('textbox', { name: 'What problem does it solve?' }).fill(PROBLEM);
+  await page
+    .getByRole('group', { name: 'Which goals does it serve?' })
+    .getByRole('checkbox', { name: /Activation/ })
+    .check();
+  await page.getByRole('button', { name: 'Continue' }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
 
-  const sheet = page.getByRole("dialog", { name: "Draft with Oracle" });
-  await page.getByRole("button", { name: "Draft with Oracle" }).click();
-  const goals = sheet.getByRole("group", { name: "Goals this PRD serves" });
-  await expect(goals.getByRole("checkbox")).toHaveCount(2);
-  await expect(goals.getByRole("checkbox", { name: /Activation/ })).toBeChecked();
-  await expect(goals.getByRole("checkbox", { name: /Growth/ })).not.toBeChecked();
+  const sheet = page.getByRole('dialog', { name: 'Draft with Oracle' });
+  await page.getByRole('button', { name: 'Draft with Oracle' }).click();
+  const goals = sheet.getByRole('group', { name: 'Goals this PRD serves' });
+  await expect(goals.getByRole('checkbox')).toHaveCount(2);
+  await expect(goals.getByRole('checkbox', { name: /Activation/ })).toBeChecked();
+  await expect(goals.getByRole('checkbox', { name: /Growth/ })).not.toBeChecked();
 
-  await goals.getByRole("checkbox", { name: /Growth/ }).check();
-  await goals.getByRole("checkbox", { name: /Activation/ }).uncheck();
-  await sheet.getByRole("button", { name: "Estimate" }).click();
-  await expect(sheet.getByTestId("draft-estimate")).toContainText("$29.50 estimated");
-  await sheet.getByRole("button", { name: "Close Draft with Oracle" }).click();
+  await goals.getByRole('checkbox', { name: /Growth/ }).check();
+  await goals.getByRole('checkbox', { name: /Activation/ }).uncheck();
+  await sheet.getByRole('button', { name: 'Estimate' }).click();
+  await expect(sheet.getByTestId('draft-estimate')).toContainText('$29.50 estimated');
+  await sheet.getByRole('button', { name: 'Close Draft with Oracle' }).click();
   await expect(sheet).toHaveCount(0);
 
   // Reopened, the sheet takes up the draft run's goals, not the brief's.
   await page.reload();
-  await page.getByRole("button", { name: "Draft with Oracle" }).click();
-  await expect(sheet.getByTestId("draft-estimate")).toContainText("$29.50 estimated");
-  await expect(goals.getByRole("checkbox", { name: /Activation/ })).not.toBeChecked();
-  await expect(goals.getByRole("checkbox", { name: /Growth/ })).toBeChecked();
-  await sheet.getByRole("button", { name: "Start drafting" }).click();
+  await page.getByRole('button', { name: 'Draft with Oracle' }).click();
+  await expect(sheet.getByTestId('draft-estimate')).toContainText('$29.50 estimated');
+  await expect(goals.getByRole('checkbox', { name: /Activation/ })).not.toBeChecked();
+  await expect(goals.getByRole('checkbox', { name: /Growth/ })).toBeChecked();
+  await sheet.getByRole('button', { name: 'Start drafting' }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
-  await expect(page.getByTestId("run-goals")).toHaveText("Serves Growth");
+  await expect(page.getByTestId('run-goals')).toHaveText('Serves Growth');
 });
 
 /**
@@ -59,38 +65,42 @@ test("goals in Draft with Oracle: the brief's goals are picked, and a change sti
  *   serves, beside its PRD document field, and the run page names them; fails_when=the
  *   dialog has no goal picker, or the run serves no goal; no_claim=the prompts.
  */
-test("brief goal rejected since: Draft with Oracle leaves it out, says so, and estimates", async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "brief-goal-rejected"));
-  await login(page, "approver@example.com");
-  await page.goto("/intakes/c2600000-0000-4000-8000-000000000001");
-  await page.getByRole("button", { name: "Draft with Oracle" }).click();
-  const sheet = page.getByRole("dialog", { name: "Draft with Oracle" });
-  const goals = sheet.getByRole("group", { name: "Goals this PRD serves" });
-  await expect(goals.getByRole("checkbox", { name: /Activation/ })).toBeChecked();
-  await sheet.getByRole("button", { name: "Estimate" }).click();
-  await expect(sheet.getByTestId("draft-estimate")).toHaveText(/^\$[\d.]+ estimated/);
-  await expect(sheet.getByTestId("draft-goals-left-out")).toHaveText(
-    "1 goal of this brief is no longer a confirmed goal: this PRD leaves it out.",
+test('brief goal rejected since: Draft with Oracle leaves it out, says so, and estimates', async ({
+  page,
+}) => {
+  await page.addInitScript(() => localStorage.setItem('po-mock-scenario', 'brief-goal-rejected'));
+  await login(page, 'approver@example.com');
+  await page.goto('/intakes/c2600000-0000-4000-8000-000000000001');
+  await page.getByRole('button', { name: 'Draft with Oracle' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Draft with Oracle' });
+  const goals = sheet.getByRole('group', { name: 'Goals this PRD serves' });
+  await expect(goals.getByRole('checkbox', { name: /Activation/ })).toBeChecked();
+  await sheet.getByRole('button', { name: 'Estimate' }).click();
+  await expect(sheet.getByTestId('draft-estimate')).toHaveText(/^\$[\d.]+ estimated/);
+  await expect(sheet.getByTestId('draft-goals-left-out')).toHaveText(
+    '1 goal of this brief is no longer a confirmed goal: this PRD leaves it out.',
   );
-  await sheet.getByRole("button", { name: "Start drafting" }).click();
+  await sheet.getByRole('button', { name: 'Start drafting' }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
-  await expect(page.getByTestId("run-goals")).toHaveText("Serves Activation");
+  await expect(page.getByTestId('run-goals')).toHaveText('Serves Activation');
 });
 
-test("New run goals: the dialog picks the goals a Ground Truth to PRD run serves", async ({ page }) => {
+test('New run goals: the dialog picks the goals a Ground Truth to PRD run serves', async ({
+  page,
+}) => {
   // The "new-run-prd" scenario keeps Ground Truth to PRD in the New run dialog (#257).
-  await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "new-run-prd"));
+  await page.addInitScript(() => localStorage.setItem('po-mock-scenario', 'new-run-prd'));
   await login(page);
-  await page.getByTestId("nav-runs").click();
-  await page.getByRole("button", { name: "Start a run…" }).click();
-  const dialog = page.getByRole("dialog", { name: "New run" });
-  const goals = dialog.getByRole("group", { name: "Goals this PRD serves" });
-  await expect(goals.getByRole("checkbox")).toHaveCount(2);
-  await expect(goals.getByRole("checkbox", { name: /Activation/ })).not.toBeChecked();
-  await goals.getByRole("checkbox", { name: /Growth/ }).check();
-  await dialog.getByRole("combobox", { name: "PRD document" }).fill("gift-cards-for-teams");
-  await dialog.getByRole("button", { name: "Estimate" }).click();
-  await dialog.getByRole("button", { name: /^(Start run|Approve \$[\d.]+ and start)$/ }).click();
+  await page.getByTestId('nav-runs').click();
+  await page.getByRole('button', { name: 'Start a run…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'New run' });
+  const goals = dialog.getByRole('group', { name: 'Goals this PRD serves' });
+  await expect(goals.getByRole('checkbox')).toHaveCount(2);
+  await expect(goals.getByRole('checkbox', { name: /Activation/ })).not.toBeChecked();
+  await goals.getByRole('checkbox', { name: /Growth/ }).check();
+  await dialog.getByRole('combobox', { name: 'PRD document' }).fill('gift-cards-for-teams');
+  await dialog.getByRole('button', { name: 'Estimate' }).click();
+  await dialog.getByRole('button', { name: /^(Start run|Approve \$[\d.]+ and start)$/ }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
-  await expect(page.getByTestId("run-goals")).toHaveText("Serves Growth");
+  await expect(page.getByTestId('run-goals')).toHaveText('Serves Growth');
 });

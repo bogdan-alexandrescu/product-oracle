@@ -1,7 +1,7 @@
-import { MOCK_NOW } from "../lib/api/mock/clock";
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { ADMIN, login, signOut } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { MOCK_NOW } from '../lib/api/mock/clock';
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { ADMIN, login, signOut } from './helpers';
+import { expect, test, type Page } from './test';
 
 /**
  * Simple changes keep the order they were made in (qaC-numfix): the clock is held at the
@@ -23,52 +23,60 @@ import { expect, test, type Page } from "./test";
  */
 
 /** Time held still, and each new id lower than the last: an order by id is the reverse of the order made. */
-async function fallingIds(page: Page, scenario = "") {
+async function fallingIds(page: Page, scenario = '') {
   await page.clock.setFixedTime(new Date(MOCK_NOW));
   await page.context().addInitScript(
     ([key, s]) => {
       if (s) localStorage.setItem(key, s);
       let n = 0xffffffff;
-      crypto.randomUUID = () => `${(n--).toString(16).padStart(8, "0")}-0000-4000-8000-000000000000` as `${string}-${string}-${string}-${string}-${string}`;
+      crypto.randomUUID = () =>
+        `${(n--).toString(16).padStart(8, '0')}-0000-4000-8000-000000000000` as `${string}-${string}-${string}-${string}-${string}`;
     },
     [MOCK_SCENARIO_KEY, scenario] as const,
   );
 }
 
-test("a commenter's two asks of one instant read newest first on the owner's Home", async ({ page }) => {
-  await fallingIds(page, "simple-plan");
-  await login(page, "commenter@example.com");
-  await page.goto("/simple/priorities?tab=buckets");
-  const fold = page.getByTestId("archived-goals");
-  await fold.locator("summary").click();
-  const row = (title: string) => fold.getByTestId("archived-goal").filter({ hasText: title });
-  const note = page.getByTestId("bucket-note");
-  await row("Cut support tickets in half").getByRole("button", { name: "Ask to restore" }).click();
-  await expect(note).toContainText("restore Cut support tickets in half.");
-  await row("Faster first report").getByRole("button", { name: "Ask to restore" }).click();
-  await expect(note).toContainText("restore Faster first report.");
+test("a commenter's two asks of one instant read newest first on the owner's Home", async ({
+  page,
+}) => {
+  await fallingIds(page, 'simple-plan');
+  await login(page, 'commenter@example.com');
+  await page.goto('/simple/priorities?tab=buckets');
+  const fold = page.getByTestId('archived-goals');
+  await fold.locator('summary').click();
+  const row = (title: string) => fold.getByTestId('archived-goal').filter({ hasText: title });
+  const note = page.getByTestId('bucket-note');
+  await row('Cut support tickets in half').getByRole('button', { name: 'Ask to restore' }).click();
+  await expect(note).toContainText('restore Cut support tickets in half.');
+  await row('Faster first report').getByRole('button', { name: 'Ask to restore' }).click();
+  await expect(note).toContainText('restore Faster first report.');
 
   await signOut(page);
   await login(page, ADMIN.email);
-  await page.goto("/simple");
-  const asks = page.getByTestId("home-proposal").filter({ hasText: "Restore the goal:" });
+  await page.goto('/simple');
+  const asks = page.getByTestId('home-proposal').filter({ hasText: 'Restore the goal:' });
   await expect(asks).toHaveCount(2);
-  await expect(asks.nth(0)).toContainText("Restore the goal: Faster first report");
-  await expect(asks.nth(1)).toContainText("Restore the goal: Cut support tickets in half");
+  await expect(asks.nth(0)).toContainText('Restore the goal: Faster first report');
+  await expect(asks.nth(1)).toContainText('Restore the goal: Cut support tickets in half');
 });
 
 test("an owner's two number fixes of one instant list in the order made", async ({ page }) => {
   await fallingIds(page);
   await login(page);
-  await page.goto("/simple/one-pagers/guided-setup");
-  const look = page.getByRole("region", { name: "Needs a look" });
-  const item = (text: string) => look.getByRole("listitem").filter({ has: page.getByTestId("needs-look-line").getByText(text, { exact: true }) });
-  const fixed = look.getByTestId("needs-look-fixed").getByRole("status");
+  await page.goto('/simple/one-pagers/guided-setup');
+  const look = page.getByRole('region', { name: 'Needs a look' });
+  const item = (text: string) =>
+    look
+      .getByRole('listitem')
+      .filter({ has: page.getByTestId('needs-look-line').getByText(text, { exact: true }) });
+  const fixed = look.getByTestId('needs-look-fixed').getByRole('status');
   // The section's later number first, so the order made is not the page's order either.
-  await item("Numbers disagree in “Targets”").getByRole("button", { name: "Use 200" }).click();
-  await expect(fixed).toHaveText(["Fixed: set to 200 in “Targets”"]);
-  await item("Numbers disagree in “Not this quarter”").getByRole("button", { name: "Use 6" }).click();
-  const made = ["Fixed: set to 200 in “Targets”", "Fixed: set to 6 in “Not this quarter”"];
+  await item('Numbers disagree in “Targets”').getByRole('button', { name: 'Use 200' }).click();
+  await expect(fixed).toHaveText(['Fixed: set to 200 in “Targets”']);
+  await item('Numbers disagree in “Not this quarter”')
+    .getByRole('button', { name: 'Use 6' })
+    .click();
+  const made = ['Fixed: set to 200 in “Targets”', 'Fixed: set to 6 in “Not this quarter”'];
   await expect(fixed).toHaveText(made);
   await page.reload();
   await expect(fixed).toHaveText(made);

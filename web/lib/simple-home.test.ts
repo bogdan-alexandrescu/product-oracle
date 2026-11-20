@@ -1,6 +1,6 @@
-import { contract } from "./ownTreeOnly";
-import { planByMonth, type PlanInput } from "./simple-home";
-import { expect, test } from "vitest";
+import { contract } from './ownTreeOnly';
+import { planByMonth, type PlanInput } from './simple-home';
+import { expect, test } from 'vitest';
 
 /*
  * Card plan-strip-rules (#723 polish review): protects = Home's strip (lib/simple-home.ts
@@ -15,7 +15,7 @@ import { expect, test } from "vitest";
 
 type Case = { name: string; today: string; coded?: boolean; items: PlanInput[]; expected: unknown };
 // The API publishes its cases as docs/contracts/api-plan-strip-cases.json (#1570).
-const CASES = contract("api-plan-strip-cases") as Case[];
+const CASES = contract('api-plan-strip-cases') as Case[];
 
 for (const c of CASES) {
   test(`the plan strip as the API draws it: ${c.name}`, () => {
@@ -37,19 +37,25 @@ for (const c of CASES) {
  * its earliest slice, or a sliced feature falls into no milestone. No page: pure rules.
  */
 test("a dated plan milestone's row spans its start to its end", () => {
-  const slice = (start: string, end: string, milestone: string, milestoneStart: string, milestoneDate: string): PlanInput => ({ start, end, estimated: false, milestone, milestoneStart, milestoneDate });
+  const slice = (
+    start: string,
+    end: string,
+    milestone: string,
+    milestoneStart: string,
+    milestoneDate: string,
+  ): PlanInput => ({ start, end, estimated: false, milestone, milestoneStart, milestoneDate });
   const strip = planByMonth(
     [
-      slice("2026-11-09", "2026-11-20", "M1 · Prove it", "2026-11-02", "2026-11-27"),
-      slice("2026-12-07", "2026-12-18", "M2 · Scale volume", "2026-11-30", "2026-12-25"),
-      slice("2027-01-04", "2027-02-05", "M3 · Open to all", "2026-12-28", "2027-02-12"),
+      slice('2026-11-09', '2026-11-20', 'M1 · Prove it', '2026-11-02', '2026-11-27'),
+      slice('2026-12-07', '2026-12-18', 'M2 · Scale volume', '2026-11-30', '2026-12-25'),
+      slice('2027-01-04', '2027-02-05', 'M3 · Open to all', '2026-12-28', '2027-02-12'),
     ],
-    "2026-11-05",
+    '2026-11-05',
   )!;
   expect(strip.rows.map((r) => [r.name, r.start, r.end, r.estimated, r.items])).toEqual([
-    ["M1 · Prove it", "2026-11-02", "2026-11-27", false, 1],
-    ["M2 · Scale volume", "2026-11-30", "2026-12-25", false, 1],
-    ["M3 · Open to all", "2026-12-28", "2027-02-12", false, 1],
+    ['M1 · Prove it', '2026-11-02', '2026-11-27', false, 1],
+    ['M2 · Scale volume', '2026-11-30', '2026-12-25', false, 1],
+    ['M3 · Open to all', '2026-12-28', '2027-02-12', false, 1],
   ]);
-  expect(strip.months).toEqual(["2026-11-01", "2026-12-01", "2027-01-01", "2027-02-01"]);
+  expect(strip.months).toEqual(['2026-11-01', '2026-12-01', '2027-01-01', '2027-02-01']);
 });

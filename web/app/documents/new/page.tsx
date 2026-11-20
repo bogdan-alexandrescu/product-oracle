@@ -1,16 +1,22 @@
-import { Suspense } from "react";
+import { Suspense } from 'react';
 
-import { NewDraft, NewPrd } from "@/components/NewDraft";
-import type { RouteProps } from "@/lib/route-props";
-import { PageSkeleton } from "@/components/ds";
+import { NewDraft, NewPrd } from '@/components/NewDraft';
+import type { RouteProps } from '@/lib/route-props';
+import { PageSkeleton } from '@/components/ds';
 
-async function Picker({ searchParams }: { searchParams: RouteProps["searchParams"] }) {
+async function Picker({ searchParams }: { searchParams: RouteProps['searchParams'] }) {
   const { kind, requests } = await searchParams;
-  const k = kind === "roadmap" ? "roadmap" : "prd";
+  const k = kind === 'roadmap' ? 'roadmap' : 'prd';
   // C1 lane 2: Start a PRD on requests (`requests=<id,id>`) ticks them under "Requests behind it".
-  const ids = (typeof requests === "string" ? requests.split(",") : []).filter(Boolean).slice(0, 50);
+  const ids = (typeof requests === 'string' ? requests.split(',') : [])
+    .filter(Boolean)
+    .slice(0, 50);
   // C4: New PRD is the brief door; the roadmap door is the template picker, unchanged.
-  return k === "roadmap" ? <NewDraft key={k} kind={k} /> : <NewPrd key={`${k}:${ids.join(",")}`} requestIds={ids} />;
+  return k === 'roadmap' ? (
+    <NewDraft key={k} kind={k} />
+  ) : (
+    <NewPrd key={`${k}:${ids.join(',')}`} requestIds={ids} />
+  );
 }
 
 export default function NewDraftPage({ searchParams }: RouteProps) {

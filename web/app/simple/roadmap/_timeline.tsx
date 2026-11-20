@@ -1,16 +1,37 @@
-"use client";
+'use client';
 
-import { GoalNum, GoalNumbers } from "@/components/simple/GoalOrder";
-import { InfoTip } from "@/components/ds";
-import { MkLegend } from "./_mk";
-import { TrackHead } from "./_trackbands";
-import { memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { GoalNum, GoalNumbers } from '@/components/simple/GoalOrder';
+import { InfoTip } from '@/components/ds';
+import { MkLegend } from './_mk';
+import { TrackHead } from './_trackbands';
+import {
+  memo,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react';
 
-import { FeatureMarks, markWords, type FeatureState } from "@/components/current-state/CurrentState";
-import { useMsBand } from "./_milestones";
-import { itemName, NOT_IN_GT_SHORT, NotInGt } from "./_gtflag";
-import { APPLIED_EVENT, lastPreview, PREVIEW_EVENT, type AppliedDetail, type ChatPreview, type PreviewDetail } from "@/lib/api/simple-chat";
-import { joinedNames, joinedWords } from "@/lib/milestone-code";
+import {
+  FeatureMarks,
+  markWords,
+  type FeatureState,
+} from '@/components/current-state/CurrentState';
+import { useMsBand } from './_milestones';
+import { itemName, NOT_IN_GT_SHORT, NotInGt } from './_gtflag';
+import {
+  APPLIED_EVENT,
+  lastPreview,
+  PREVIEW_EVENT,
+  type AppliedDetail,
+  type ChatPreview,
+  type PreviewDetail,
+} from '@/lib/api/simple-chat';
+import { joinedNames, joinedWords } from '@/lib/milestone-code';
 
 import {
   addDays,
@@ -53,10 +74,19 @@ import {
   codedFlag,
   type GoalMilestone,
   type Milestone,
-} from "./_lib";
+} from './_lib';
 
 /** One row of the chart: a group's heading (its metric line) or an item. */
-export type Row = { kind: "group"; key: string; title: string; metric: string | null; below?: boolean; count?: number } | { kind: "item"; item: Item; place?: number; depth?: number };
+export type Row =
+  | {
+      kind: 'group';
+      key: string;
+      title: string;
+      metric: string | null;
+      below?: boolean;
+      count?: number;
+    }
+  | { kind: 'item'; item: Item; place?: number; depth?: number };
 
 export interface Layout {
   rows: Row[];
@@ -84,9 +114,12 @@ export const LONG_PRESS_MS = 450;
 export const DRAG_PX = 4;
 /** Which part of a bar a press at `x` takes: an end within 10 px of the bar's edge (a quarter of
  * a short bar), else the whole bar. The Gantt's and the Timeline's drags read it. */
-export function grabAt(r: { left: number; right: number; width: number }, x: number): "start" | "end" | "move" {
+export function grabAt(
+  r: { left: number; right: number; width: number },
+  x: number,
+): 'start' | 'end' | 'move' {
   const edge = Math.min(10, r.width / 4);
-  return x - r.left < edge ? "start" : r.right - x < edge ? "end" : "move";
+  return x - r.left < edge ? 'start' : r.right - x < edge ? 'end' : 'move';
 }
 /** A bar's narrowest width, however short its span or far the scale is zoomed out: it stays a
  * visible, clickable shape beside its label rather than a blob a few pixels wide (finding 11). */
@@ -114,14 +147,33 @@ export function layout(
     if (!live.length) continue;
     // kr-in-goal-card: a goal's lane holds its key results' items too; its own metric first.
     // Roadmap Nov 10: No goal and PM-owned work are no goal, so no goal's measure under them.
-    const metric = g.key === "none" || g.key === "pm-owned" ? null : ((live.find((i) => i.goal?.id === g.key && i.goal.metric) ?? live.find((i) => i.goal?.metric))?.goal?.metric ?? null);
-    rows.push({ kind: "group", key: g.key, title: g.title, metric: lane === "goal" ? metric : null, count: live.length });
+    const metric =
+      g.key === 'none' || g.key === 'pm-owned'
+        ? null
+        : ((
+            live.find((i) => i.goal?.id === g.key && i.goal.metric) ??
+            live.find((i) => i.goal?.metric)
+          )?.goal?.metric ?? null);
+    rows.push({
+      kind: 'group',
+      key: g.key,
+      title: g.title,
+      metric: lane === 'goal' ? metric : null,
+      count: live.length,
+    });
     // feature-parts: the group's parts under their parents (oneLane's order), drawn as a tree.
-    for (const x of partsTree([live.map((i) => i.id)], byId)[0]) rows.push({ kind: "item", item: byId.get(x.id)!, depth: x.depth });
+    for (const x of partsTree([live.map((i) => i.id)], byId)[0])
+      rows.push({ kind: 'item', item: byId.get(x.id)!, depth: x.depth });
   }
   if (below.length) {
-    rows.push({ kind: "group", key: "below-the-line", title: "Below the line", metric: null, below: true });
-    below.forEach((item, n) => rows.push({ kind: "item", item, place: n + 1 }));
+    rows.push({
+      kind: 'group',
+      key: 'below-the-line',
+      title: 'Below the line',
+      metric: null,
+      below: true,
+    });
+    below.forEach((item, n) => rows.push({ kind: 'item', item, place: n + 1 }));
   }
   const rowH = compact ? 30 : 36;
   // fix2-simple-roadmap-gantt: a phone's label column is wide enough for a name, its chips and
@@ -129,19 +181,21 @@ export function layout(
   const labelW = compact ? 152 : 248;
   // qa4-simple-roadmap-16: each row's height (one rowH, unless `wrap` makes it taller) and top.
   const room = labelW - 24;
-  const lines = (s: string, size: number, weight: number, w: number) => Math.max(1, Math.ceil((textWidth(s, size, weight) * 1.08) / w));
+  const lines = (s: string, size: number, weight: number, w: number) =>
+    Math.max(1, Math.ceil((textWidth(s, size, weight) * 1.08) / w));
   // An item's name wraps whole (a phone: 14 px a line; else 18), with its Current-state pill
   // (`tails`: its width by item id) beside it when both fit on one line, else on a line of its
   // own under it; a row that needs more than its rowH grows, so no name or pill is ever cut.
   const nameH = new Map<string, number>();
   const [size, lineH, padX, padY, gapY] = compact ? [12.5, 14, 16, 2, 2] : [15, 18, 24, 6, 4];
   for (const r of rows) {
-    if (r.kind !== "item") continue;
+    if (r.kind !== 'item') continue;
     const it = r.item;
     // The name's group: the row less its padding, or its 60% when other chips share the row.
     // QA Nov 14 #5: a phone's return place ("1st to return") takes a line of its own under the name.
     const own = compact && r.place != null;
-    const w = (labelW - padX) * ((r.place != null && !own) || it.draft || it.estimate_pending ? 0.6 : 1);
+    const w =
+      (labelW - padX) * ((r.place != null && !own) || it.draft || it.estimate_pending ? 0.6 : 1);
     // QA Nov 12 #1/#2: the name reads with its code (F-06 Weekly alert digest); an item with no
     // code has its "Not in the Ground Truth" mark after it, measured as the pill is.
     const words = itemName(it);
@@ -156,19 +210,28 @@ export function layout(
     if (h > rowH) nameH.set(it.id, h);
   }
   const hs = rows.map((r) => {
-    const base = r.kind === "item" ? (nameH.get(r.item.id) ?? rowH) : rowH;
+    const base = r.kind === 'item' ? (nameH.get(r.item.id) ?? rowH) : rowH;
     // qa-nov17 #5: a phone's band names wrap whole (never "Usage alerts t…"): the row is as tall as its lines.
-    if (r.kind === "group" && (wrap || compact)) {
+    if (r.kind === 'group' && (wrap || compact)) {
       const t = (data.tracks ?? []).find((x) => x.id === r.key);
-      const count = r.count != null && !r.below ? `${r.count} ${r.count === 1 ? "item" : "items"}` : "";
+      const count =
+        r.count != null && !r.below ? `${r.count} ${r.count === 1 ? 'item' : 'items'}` : '';
       // (Its count wraps with it: measured in the name's type, a little wider than its own.)
       const name = lines(count ? `${r.title}  ${count}` : r.title, 14, 600, room - (t ? 22 : 0));
-      const sub = t ? (t.goal_name ? lines(t.goal_name, 12, 400, room) * 15 : 0) : r.metric ? lines(r.metric, 11, 400, room) * 13 : 0;
+      const sub = t
+        ? t.goal_name
+          ? lines(t.goal_name, 12, 400, room) * 15
+          : 0
+        : r.metric
+          ? lines(r.metric, 11, 400, room) * 13
+          : 0;
       return Math.max(rowH, (wrap ? 8 : 4) + name * 16 + sub);
     }
     if (!wrap) return base;
-    if (r.kind === "group") return base;
-    const flag = closedItem(r.item) ? undefined : broken(r.item).find((f) => f.kind === "dependency_order");
+    if (r.kind === 'group') return base;
+    const flag = closedItem(r.item)
+      ? undefined
+      : broken(r.item).find((f) => f.kind === 'dependency_order');
     if (!flag) return base;
     // The callout: its words wrap at 220 px (or the chart's width, less its padding), 18 px a line.
     const words = Math.min(220, Math.max(160, wrap.callW - 8) - 18);
@@ -179,7 +242,7 @@ export function layout(
   const y = new Map<string, number>();
   const under = new Map<string, number>();
   rows.forEach((r, n) => {
-    if (r.kind !== "item") return;
+    if (r.kind !== 'item') return;
     // (A taller name row keeps its bar in the middle.)
     const base = nameH.get(r.item.id) ?? rowH;
     y.set(r.item.id, top + ys[n] + (base - rowH) / 2);
@@ -187,15 +250,27 @@ export function layout(
     if (hs[n] > base) under.set(r.item.id, top + ys[n] + base - 2);
   });
   const total = hs.reduce((a, b) => a + b, 0);
-  return { rows, rowH, labelW, top, height: top + total + 8, y, under: wrap ? under : undefined, nameH, hs, ys };
+  return {
+    rows,
+    rowH,
+    labelW,
+    top,
+    height: top + total + 8,
+    y,
+    under: wrap ? under : undefined,
+    nameH,
+    hs,
+    ys,
+  };
 }
 
 /** QA Nov 12 #2: the row's "Not in the Ground Truth" mark's width (its 12 px words, padding, the gap before it). */
-const gtMarkW = (compact: boolean) => Math.ceil(textWidth(NOT_IN_GT_SHORT, 12, 600) * 1.05) + 16 + (compact ? 4 : 8);
+const gtMarkW = (compact: boolean) =>
+  Math.ceil(textWidth(NOT_IN_GT_SHORT, 12, 600) * 1.05) + 16 + (compact ? 4 : 8);
 
 /** How many lines `s` takes at width `w`, broken between words as the browser breaks it. */
 function wordLines(s: string, size: number, weight: number, w: number): number {
-  const space = textWidth(" ", size, weight);
+  const space = textWidth(' ', size, weight);
   let n = 1;
   let at = 0;
   for (const word of s.split(/\s+/).filter(Boolean)) {
@@ -215,7 +290,7 @@ function wordLines(s: string, size: number, weight: number, w: number): number {
 
 /** A label's width in the chart's type (a canvas measures it; an estimate before there is one). */
 let measure: CanvasRenderingContext2D | null | undefined;
-let family = "";
+let family = '';
 const widths = new Map<string, number>();
 function textWidth(s: string, size: number, weight: number): number {
   // fix4 (500 items): each label's width once; a name is cut to fit by many measures (ellipsize).
@@ -227,8 +302,8 @@ function textWidth(s: string, size: number, weight: number): number {
   return w;
 }
 function measured(s: string, size: number, weight: number): number {
-  if (typeof document !== "undefined") {
-    if (measure === undefined) measure = document.createElement("canvas").getContext("2d");
+  if (typeof document !== 'undefined') {
+    if (measure === undefined) measure = document.createElement('canvas').getContext('2d');
     if (measure) {
       family ||= getComputedStyle(document.body).fontFamily;
       measure.font = `${weight} ${size}px ${family}`;
@@ -246,7 +321,7 @@ export function ellipsize(s: string, room: number, size: number, weight: number)
   const cut = (n: number) => `${s.slice(0, n).trimEnd()}…`;
   let lo = 3;
   let hi = s.length - 1;
-  if (hi < lo || textWidth(cut(lo), size, weight) > room) return "";
+  if (hi < lo || textWidth(cut(lo), size, weight) > room) return '';
   while (lo < hi) {
     const mid = Math.ceil((lo + hi) / 2);
     if (textWidth(cut(mid), size, weight) <= room) lo = mid;
@@ -255,7 +330,7 @@ export function ellipsize(s: string, room: number, size: number, weight: number)
   return cut(lo);
 }
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 /** fix4 qa-simple-roadmap-30: a month tick's words: three letters ("Sep"), with the year on the first tick and each January. */
 export const monthTick = (day: string, first: boolean): string => {
   const m = Number(day.slice(5, 7)) - 1;
@@ -265,12 +340,12 @@ export const monthTick = (day: string, first: boolean): string => {
 /** A mark on the time axis: a milestone's end, a key date, a track milestone or Today. */
 export type Mark = {
   key: string;
-  kind: "end" | "key" | "track" | "today";
+  kind: 'end' | 'key' | 'track' | 'today';
   x: number;
   /** The words drawn beside it ("" draws none). */
   words: string;
   /** Its words before (left of) or after (right of) its glyph. */
-  side: "before" | "after";
+  side: 'before' | 'after';
   /** Its row in the header (0: the first under the ticks); marks never share a row where their words would touch. */
   row: number;
   w: number;
@@ -278,35 +353,40 @@ export type Mark = {
   box: [number, number];
 };
 
-const GLYPH: Record<Mark["kind"], number> = { end: 9, key: 7, track: 7, today: 1 };
+const GLYPH: Record<Mark['kind'], number> = { end: 9, key: 7, track: 7, today: 1 };
 
 /** The marks' rows: each mark takes the first row where its glyph and words touch no other's; words
  * that would run off the chart go on the glyph's other side. Labels never overlap (roadmap-milestones). */
-export function placeMarks(marks: Omit<Mark, "row" | "w" | "box">[], width: number, flags = false, size = 11): Mark[] {
+export function placeMarks(
+  marks: Omit<Mark, 'row' | 'w' | 'box'>[],
+  width: number,
+  flags = false,
+  size = 11,
+): Mark[] {
   const rows: [number, number][][] = [];
   const out: Mark[] = [];
   for (const m of marks) {
     if (m.x < -1 || m.x > width + 1) continue;
-    const w = m.words ? textWidth(m.words, m.kind === "today" ? 11 : size, 700) : 0;
+    const w = m.words ? textWidth(m.words, m.kind === 'today' ? 11 : size, 700) : 0;
     const g = GLYPH[m.kind];
     // Today's pill: 38 px right of the line (left of it at the chart's right edge). The
     // Timeline's milestone end is a flag and its words beside the line (timeline-overlap B2).
-    const box = (side: Mark["side"]): [number, number] =>
-      m.kind === "today"
-        ? side === "after"
+    const box = (side: Mark['side']): [number, number] =>
+      m.kind === 'today'
+        ? side === 'after'
           ? [m.x - 1, m.x + (w ? 45 : 1)]
           : [m.x - (w ? 45 : 1), m.x + 1]
-        : m.kind === "end" && flags
-          ? side === "before"
+        : m.kind === 'end' && flags
+          ? side === 'before'
             ? [m.x - 18 - w, m.x]
             : [m.x, m.x + 18 + w]
-          : side === "before"
+          : side === 'before'
             ? [m.x - g - 2 - w, m.x + g]
             : [m.x - g, m.x + g + 2 + w];
     let side = m.side;
     const [a, b] = box(side);
-    if (side === "before" && a < 0) side = "after";
-    else if (side === "after" && b > width) side = "before";
+    if (side === 'before' && a < 0) side = 'after';
+    else if (side === 'after' && b > width) side = 'before';
     const [x0, x1] = box(side);
     let row = 0;
     while (rows[row]?.some(([p, q]) => p < x1 + 6 && x0 < q + 6)) row++;
@@ -317,26 +397,46 @@ export function placeMarks(marks: Omit<Mark, "row" | "w" | "box">[], width: numb
 }
 
 /** A milestone's colour (M1 blue, M2 violet, M3 amber, then round again): the PRD timeline's edge tokens. */
-export const msEdge = (code: string): string => `var(--simple-m${((Number(code.replace(/\D/g, "")) || 1) - 1) % 3 + 1}-edge)`;
+export const msEdge = (code: string): string =>
+  `var(--simple-m${(((Number(code.replace(/\D/g, '')) || 1) - 1) % 3) + 1}-edge)`;
 /** Its words' colour: the edge darkened (light) or lightened (dark) toward the text for contrast. */
-export const msInk = (code: string): string => `color-mix(in srgb, ${msEdge(code)} 70%, var(--text))`;
+export const msInk = (code: string): string =>
+  `color-mix(in srgb, ${msEdge(code)} 70%, var(--text))`;
 /** Its pale fill (the Timeline's pieces). */
-export const msFill = (code: string): string => `color-mix(in srgb, ${msEdge(code)} 16%, var(--surface))`;
+export const msFill = (code: string): string =>
+  `color-mix(in srgb, ${msEdge(code)} 16%, var(--surface))`;
 
 /** The waterfall's phases in order, each with its colour (solid: a milestone or gate dates
  * it; hatched: estimated from the bar's split). */
-export const PHASES: { key: Item["phases"][number]["key"]; label: string; ink: string; soft: string }[] = [
+export const PHASES: {
+  key: Item['phases'][number]['key'];
+  label: string;
+  ink: string;
+  soft: string;
+}[] = [
   // qa-simple-roadmap-23: Discover gets a hue of its own (the violet milestone edge), not the
   // grey that means "not in a milestone" or cut elsewhere on the Roadmap.
-  { key: "discover", label: "Discover", ink: "var(--simple-m2-edge)", soft: "color-mix(in srgb, var(--simple-m2-edge) 16%, var(--surface))" },
-  { key: "build", label: "Build", ink: "var(--accent)", soft: "var(--accent-soft)" },
-  { key: "beta", label: "Beta", ink: "var(--warn)", soft: "var(--warn-bg)" },
-  { key: "launch", label: "Launch", ink: "var(--pass)", soft: "var(--pass-bg)" },
+  {
+    key: 'discover',
+    label: 'Discover',
+    ink: 'var(--simple-m2-edge)',
+    soft: 'color-mix(in srgb, var(--simple-m2-edge) 16%, var(--surface))',
+  },
+  { key: 'build', label: 'Build', ink: 'var(--accent)', soft: 'var(--accent-soft)' },
+  { key: 'beta', label: 'Beta', ink: 'var(--warn)', soft: 'var(--warn-bg)' },
+  { key: 'launch', label: 'Launch', ink: 'var(--pass)', soft: 'var(--pass-bg)' },
 ];
 
 /** The chart's span and pixels per day: the timeline and the waterfall fit their quarters to
  * the width; the Gantt is a day or week scale around the items, scrolling sideways. */
-export function chartScale(data: Roadmap, format: Format, unit: GanttUnit, width: number, weeks = false, extra: string[] = []): { scale: Scale; ticks: { day: string; label: string; major: boolean }[] } {
+export function chartScale(
+  data: Roadmap,
+  format: Format,
+  unit: GanttUnit,
+  width: number,
+  weeks = false,
+  extra: string[] = [],
+): { scale: Scale; ticks: { day: string; label: string; major: boolean }[] } {
   // fix4 qa-simple-roadmap-5: the span takes every day the chart draws (a planned item's slices,
   // a suggestion, a chat preview's ghost), not only the items' own dates: a slice past the last
   // item's end no longer falls off the chart and leaves its row empty.
@@ -356,19 +456,30 @@ export function chartScale(data: Roadmap, format: Format, unit: GanttUnit, width
     const e = addDays(`${addDays(`${hi.slice(0, 8)}28`, 7).slice(0, 8)}01`, -1);
     const sc = scale(s, e, Math.max(3.5, width / (daysBetween(s, e) + 1)));
     const ticks: { day: string; label: string; major: boolean }[] = [];
-    for (let d = s, n = 0; d <= e && n < 120; d = `${addDays(`${d.slice(0, 8)}28`, 7).slice(0, 8)}01`, n++) ticks.push({ day: d, label: monthTick(d, n === 0), major: true });
+    for (
+      let d = s, n = 0;
+      d <= e && n < 120;
+      d = `${addDays(`${d.slice(0, 8)}28`, 7).slice(0, 8)}01`, n++
+    )
+      ticks.push({ day: d, label: monthTick(d, n === 0), major: true });
     return { scale: sc, ticks };
   }
-  if (format !== "gantt" && !weeks) {
+  if (format !== 'gantt' && !weeks) {
     const qs = quarters(lo < data.windows.now.start ? lo : data.windows.now.start, hi);
     const s = qs[0].start;
     const e = qs[qs.length - 1].end;
     // fix4 qa-simple-roadmap-6: a phone's quarter is never narrower than its squeezed header ("Q4 '26").
-    const px = Math.max(format === "waterfall" && width < 400 ? 0.6 : 0.5, width / (daysBetween(s, e) + 1));
-    return { scale: scale(s, e, px), ticks: qs.map((q) => ({ day: q.start, label: q.label, major: true })) };
+    const px = Math.max(
+      format === 'waterfall' && width < 400 ? 0.6 : 0.5,
+      width / (daysBetween(s, e) + 1),
+    );
+    return {
+      scale: scale(s, e, px),
+      ticks: qs.map((q) => ({ day: q.start, label: q.label, major: true })),
+    };
   }
   const ticks: { day: string; label: string; major: boolean }[] = [];
-  if (unit === "week") {
+  if (unit === 'week') {
     // roadmap-milestones D: whole weeks, Monday to Sunday, from the first item's week to the last
     // one's; on a desktop they share the chart's width (a long span scrolls). A month's first
     // week draws a stronger line.
@@ -377,7 +488,8 @@ export function chartScale(data: Roadmap, format: Format, unit: GanttUnit, width
     const span = daysBetween(s, e) + 1;
     // A span that fits at 5 px a day or more fills the width; a longer one scrolls at 7 px a day.
     const sc = scale(s, e, width / span >= 5 ? Math.min(14, width / span) : 7);
-    for (let d = s, n = 0; d <= e && n < 600; d = addDays(d, 7), n++) ticks.push({ day: d, label: shortDay(d), major: new Date(ms(d)).getUTCDate() <= 7 });
+    for (let d = s, n = 0; d <= e && n < 600; d = addDays(d, 7), n++)
+      ticks.push({ day: d, label: shortDay(d), major: new Date(ms(d)).getUTCDate() <= 7 });
     return { scale: sc, ticks };
   }
   const s = addDays(lo, -7);
@@ -385,7 +497,11 @@ export function chartScale(data: Roadmap, format: Format, unit: GanttUnit, width
   const sc = scale(s, e, 26);
   for (let d = s, n = 0; d <= e && n < 2000; d = addDays(d, 1), n++) {
     const date = new Date(ms(d));
-    ticks.push({ day: d, label: String(date.getUTCDate()), major: date.getUTCDate() === 1 || date.getUTCDay() === 1 });
+    ticks.push({
+      day: d,
+      label: String(date.getUTCDate()),
+      major: date.getUTCDate() === 1 || date.getUTCDay() === 1,
+    });
   }
   return { scale: sc, ticks };
 }
@@ -433,11 +549,16 @@ export const planned = (i: Item): boolean => i.slices.some((x) => x.start_date &
 /** The days a row's bar (or its slices) cover. */
 function drawnSpan(i: Item, span?: [string, string]): [string, string] {
   const d = placedSlices(i);
-  if (d.length) return [d.map((x) => x.start_date!).reduce((a, b) => (a < b ? a : b)), d.map((x) => x.end_date!).reduce((a, b) => (a > b ? a : b))];
+  if (d.length)
+    return [
+      d.map((x) => x.start_date!).reduce((a, b) => (a < b ? a : b)),
+      d.map((x) => x.end_date!).reduce((a, b) => (a > b ? a : b)),
+    ];
   return span ?? barSpan(i);
 }
 /** fix4 qa-simple-roadmap-3: a place in the return queue in words ("1st", "2nd"), not "#1". */
-export const ordinal = (n: number): string => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+export const ordinal = (n: number): string =>
+  `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th')}`;
 /** QA Nov 12 #5: grouped by Milestone, a track milestone's lane reads its roadmap code with its
  * name ("M1 Beta (Nov 30)"), as the Timeline and the board name it, not its name alone. */
 function codedMilestoneLanes(data: Roadmap): Roadmap {
@@ -446,7 +567,9 @@ function codedMilestoneLanes(data: Roadmap): Roadmap {
   return {
     ...data,
     groups: data.groups.map((g) => {
-      const m = g.key.startsWith("track-milestone:") ? byId.get(g.key.slice("track-milestone:".length)) : undefined;
+      const m = g.key.startsWith('track-milestone:')
+        ? byId.get(g.key.slice('track-milestone:'.length))
+        : undefined;
       return m?.date ? { ...g, title: `${joinedWords(m, joined)} (${shortDay(m.date)})` } : g;
     }),
   };
@@ -455,14 +578,20 @@ function codedMilestoneLanes(data: Roadmap): Roadmap {
 /** A milestone's code from its name ("M2 · Scale volume": "M2"). */
 const codeOf = (name: string): string => name.split(/[\s·]/)[0];
 
-const LANE_WORDS: Record<Lane, string> = { goal: "Goal", milestone: "Milestone", track: "Track", prd: "PRD" };
+const LANE_WORDS: Record<Lane, string> = {
+  goal: 'Goal',
+  milestone: 'Milestone',
+  track: 'Track',
+  prd: 'PRD',
+};
 /** A goal lane the API names (its key is a goal's id): quick add and the suggestions button work on it. */
 // qa4-simple-roadmap-8: PM-owned work's own lane ("pm-owned") is no goal either.
-const goalLane = (key: string) => key !== "none" && key !== "pm-owned" && !key.startsWith("plan-goal:");
+const goalLane = (key: string) =>
+  key !== 'none' && key !== 'pm-owned' && !key.startsWith('plan-goal:');
 
 type Drag = {
   id: string;
-  mode: "move" | "start" | "end";
+  mode: 'move' | 'start' | 'end';
   x0: number;
   start: string;
   end: string;
@@ -486,12 +615,41 @@ declare global {
   }
 }
 
-export function Chart({ data: given, format, unit, compact, canDrag, moved, open, onOpen, onMove, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion, overlay, chartRef, dropTargets, lane = given.group, laneWord, trackBands = false, noWork = [], onOffscreen, pulled }: ChartProps) {
-  const data = useMemo(() => (lane === "milestone" ? codedMilestoneLanes(given) : given), [given, lane]);
+export function Chart({
+  data: given,
+  format,
+  unit,
+  compact,
+  canDrag,
+  moved,
+  open,
+  onOpen,
+  onMove,
+  onKeyMove,
+  onKeyEnd,
+  onKeyCancel,
+  onSuggestion,
+  overlay,
+  chartRef,
+  dropTargets,
+  lane = given.group,
+  laneWord,
+  trackBands = false,
+  noWork = [],
+  onOffscreen,
+  pulled,
+}: ChartProps) {
+  const data = useMemo(
+    () => (lane === 'milestone' ? codedMilestoneLanes(given) : given),
+    [given, lane],
+  );
   const box = useRef<HTMLDivElement>(null);
   // build-goal-order-control: a goal lane's header leads with the goal's number.
   const numbers = useContext(GoalNumbers);
-  const laneNum = (r: { key: string; title: string; below?: boolean }) => (lane === "goal" && !r.below && goalLane(r.key) ? (numbers.get(r.key) ?? numbers.get(r.title) ?? null) : null);
+  const laneNum = (r: { key: string; title: string; below?: boolean }) =>
+    lane === 'goal' && !r.below && goalLane(r.key)
+      ? (numbers.get(r.key) ?? numbers.get(r.title) ?? null)
+      : null;
   const [width, setWidth] = useState(900);
   const flash = useAppliedFlash();
   useEffect(() => {
@@ -503,16 +661,19 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
   }, []);
   // A phone's Gantt scrolls sideways by months (the names stay pinned on the left; fix4
   // qa-simple-roadmap-6: any phone Gantt, not only a plan's).
-  const weeks = compact && format === "gantt";
+  const weeks = compact && format === 'gantt';
   // fix4 qa-simple-roadmap-10: a chat card's preview is drawn where it lands, inside the chart.
   const preview = usePreview();
   const previewDays = useMemo(() => previewSpan(preview, data), [preview, data]);
-  const { scale: sc, ticks } = useMemo(() => chartScale(data, format, unit, width, weeks, previewDays), [data, format, unit, width, weeks, previewDays]);
-  const axisFormat: Format = weeks ? "gantt" : format;
+  const { scale: sc, ticks } = useMemo(
+    () => chartScale(data, format, unit, width, weeks, previewDays),
+    [data, format, unit, width, weeks, previewDays],
+  );
+  const axisFormat: Format = weeks ? 'gantt' : format;
   // roadmap-milestones D: the Gantt draws one bar per slice in the accent, labelled with its code.
-  const gantt = format === "gantt";
+  const gantt = format === 'gantt';
   // timeline-overlap B2: the Timeline marks a milestone's end with a flag (the Gantt, D: a diamond).
-  const flags = format === "timeline";
+  const flags = format === 'timeline';
   const chartW = sc.width;
   // The marks on the time axis, in rows that keep their words apart (Today first, then the
   // milestone ends, the tracks' milestones and the key dates).
@@ -520,15 +681,37 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
     const many = planPrds(data).size > 1;
     // qa4-simple-roadmap-34: a phone's chart has its Today pill too (D3 drew the line only), so
     // its red line is named as on a desktop.
-    const list: Omit<Mark, "row" | "w" | "box">[] = [{ key: "today", kind: "today", x: sc.x(data.today), words: "Today", side: "after" }];
+    const list: Omit<Mark, 'row' | 'w' | 'box'>[] = [
+      { key: 'today', kind: 'today', x: sc.x(data.today), words: 'Today', side: 'after' },
+    ];
     for (const m of planMilestones(data)) {
       const prd = many ? milestonePrd(data, m) : null;
-      const code = `${codeOf(m.name)}${prd ? ` ${prd.title}` : ""}`;
-      list.push({ key: `end-${m.id}`, kind: "end", x: sc.x(m.end_date!) + sc.px, words: compact ? `${code} ends` : `${code} ends ${shortDay(m.end_date!)}`, side: "before" });
+      const code = `${codeOf(m.name)}${prd ? ` ${prd.title}` : ''}`;
+      list.push({
+        key: `end-${m.id}`,
+        kind: 'end',
+        x: sc.x(m.end_date!) + sc.px,
+        words: compact ? `${code} ends` : `${code} ends ${shortDay(m.end_date!)}`,
+        side: 'before',
+      });
     }
     const joined = joinedNames(data.goal_milestones ?? [], data.milestones);
-    for (const m of data.milestones.filter((x) => x.date && !(x.start_date && x.end_date))) list.push({ key: `track-${m.id}`, kind: "track", x: sc.x(m.date!), words: joinedWords(m, joined), side: "after" });
-    for (const k of drawnKeyDates(data)) list.push({ key: `key-${k.id}`, kind: "key", x: sc.x(k.date) + sc.px / 2, words: k.name, side: "after" });
+    for (const m of data.milestones.filter((x) => x.date && !(x.start_date && x.end_date)))
+      list.push({
+        key: `track-${m.id}`,
+        kind: 'track',
+        x: sc.x(m.date!),
+        words: joinedWords(m, joined),
+        side: 'after',
+      });
+    for (const k of drawnKeyDates(data))
+      list.push({
+        key: `key-${k.id}`,
+        kind: 'key',
+        x: sc.x(k.date) + sc.px / 2,
+        words: k.name,
+        side: 'after',
+      });
     // finding 18: pack rows in date order left to right, so a later mark never takes a lower
     // row an earlier one needed (the list above is built milestone-ends, then tracks, then key
     // dates, not by date).
@@ -539,11 +722,12 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
   // roadmap-milestone-codes: the Gantt's milestone band under the date axis. qa-nov17 #3: the
   // Waterfall draws the same band, so it gets its own room too, never over the key dates' names.
   const band = useMsBand(compact);
-  const msBandH = format === "gantt" || format === "waterfall" ? band : 0;
+  const msBandH = format === 'gantt' || format === 'waterfall' ? band : 0;
   // qa-nov17 #3: the band's diamonds sit on the axis 4 px under the last row of names, never on them.
-  const top = headerHeight(Math.max(0, ...marks.map((m) => m.row + 1))) + (msBandH ? 4 + msBandH : 0);
+  const top =
+    headerHeight(Math.max(0, ...marks.map((m) => m.row + 1))) + (msBandH ? 4 + msBandH : 0);
   // qa4-simple-roadmap-16: a phone's waterfall wraps its goals' names and gives each warning a band under its bar.
-  const wrapRows = compact && format === "waterfall";
+  const wrapRows = compact && format === 'waterfall';
   // The names wrap beside the Current-state pill after them: the pill's width, by item.
   const states = useContext(FeatureMarks);
   const tails = useMemo(() => {
@@ -552,11 +736,20 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
     for (const i of data.items) {
       const f = states.get(`item:${i.id}`);
       // The pill's word in its 12 px capitals, its padding and the gap before it.
-      if (f) m.set(i.id, Math.ceil(textWidth(markWords(f, compact, data.today).toUpperCase(), 12, 600) * 1.05) + 16 + (compact ? 4 : 8));
+      if (f)
+        m.set(
+          i.id,
+          Math.ceil(textWidth(markWords(f, compact, data.today).toUpperCase(), 12, 600) * 1.05) +
+            16 +
+            (compact ? 4 : 8),
+        );
     }
     return m;
   }, [compact, states, data.items, data.today]);
-  const l = useMemo(() => layout(data, compact, lane, top, wrapRows ? { callW: chartW } : null, tails), [data, compact, lane, top, wrapRows, chartW, tails]);
+  const l = useMemo(
+    () => layout(data, compact, lane, top, wrapRows ? { callW: chartW } : null, tails),
+    [data, compact, lane, top, wrapRows, chartW, tails],
+  );
   // fix4 qa-simple-roadmap-5: the part of the chart in view (it scrolls sideways), so a row whose
   // bar is out of view says where it lies, with a button that scrolls to it.
   const [view, setView] = useState<[number, number] | null>(null);
@@ -566,34 +759,47 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
     let raf = 0;
     const on = () => {
       cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => setView(el.scrollWidth > el.clientWidth + 1 ? [el.scrollLeft, el.scrollLeft + el.clientWidth] : null));
+      raf = requestAnimationFrame(() =>
+        setView(
+          el.scrollWidth > el.clientWidth + 1
+            ? [el.scrollLeft, el.scrollLeft + el.clientWidth]
+            : null,
+        ),
+      );
     };
     on();
-    el.addEventListener("scroll", on, { passive: true });
+    el.addEventListener('scroll', on, { passive: true });
     return () => {
       cancelAnimationFrame(raf);
-      el.removeEventListener("scroll", on);
+      el.removeEventListener('scroll', on);
     };
   }, [sc, width]);
   // D3: on a phone, which milestone ends off screen to the right ("Swipe sideways for M3").
   useEffect(() => {
     const el = box.current;
     if (!el || !onOffscreen) return;
-    const ends = planMilestones(data).map((m) => ({ code: codeOf(m.name), x: sc.x(m.end_date!) + sc.px }));
-    const tell = () => onOffscreen(compact ? (ends.find((e) => e.x > el.scrollLeft + el.clientWidth)?.code ?? null) : null);
+    const ends = planMilestones(data).map((m) => ({
+      code: codeOf(m.name),
+      x: sc.x(m.end_date!) + sc.px,
+    }));
+    const tell = () =>
+      onOffscreen(
+        compact ? (ends.find((e) => e.x > el.scrollLeft + el.clientWidth)?.code ?? null) : null,
+      );
     tell();
-    el.addEventListener("scroll", tell, { passive: true });
-    return () => el.removeEventListener("scroll", tell);
+    el.addEventListener('scroll', tell, { passive: true });
+    return () => el.removeEventListener('scroll', tell);
   }, [data, sc, compact, onOffscreen, width]);
   // The current milestone scrolled into view once per format (where the chart scrolls). A
   // desktop Gantt also opens scrolled here (finding 8/38): its day scale spans every item's
   // whole date range, so without this it can open on a window where most rows show no bar.
-  const scrolled = useRef("");
+  const scrolled = useRef('');
   const current = currentMilestone(data);
   useEffect(() => {
     const el = box.current;
     const key = `${format}:${unit}:${weeks}`;
-    if (!el || !current?.start_date || scrolled.current === key || !(weeks || format === "gantt")) return;
+    if (!el || !current?.start_date || scrolled.current === key || !(weeks || format === 'gantt'))
+      return;
     scrolled.current = key;
     el.scrollLeft = Math.max(0, sc.x(current.start_date) - 16);
   }, [format, unit, weeks, compact, current, sc]);
@@ -614,25 +820,25 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
     d.lift ??= liftBar(own);
     const g = d.lift.bar;
     const days = Math.round(d.dx / sc.px);
-    const start = d.mode === "end" ? d.start : addDays(d.start, days);
-    const end = d.mode === "start" ? d.end : addDays(d.end, days);
+    const start = d.mode === 'end' ? d.start : addDays(d.start, days);
+    const end = d.mode === 'start' ? d.end : addDays(d.end, days);
     const s = start > end ? end : start;
     const e = end < start ? start : end;
     const x = sc.x(s);
     const w = Math.max(MIN_BAR_W, sc.x(e) - x + sc.px);
-    const rect = g.querySelector<SVGRectElement>("rect[data-body]");
-    rect?.setAttribute("x", String(x));
-    rect?.setAttribute("width", String(w));
+    const rect = g.querySelector<SVGRectElement>('rect[data-body]');
+    rect?.setAttribute('x', String(x));
+    rect?.setAttribute('width', String(w));
     const it = items.get(d.id);
-    if (format === "waterfall" && it) drawPhases(g, rephase(it, s, e), sc, x, w);
+    if (format === 'waterfall' && it) drawPhases(g, rephase(it, s, e), sc, x, w);
     const breaks = liveBreaks(items, d.id, s, e);
     markDrag(own, s, e, breaks.length > 0);
-    rect?.setAttribute("stroke", breaks.length ? "var(--crit)" : "var(--accent-ink)");
+    rect?.setAttribute('stroke', breaks.length ? 'var(--crit)' : 'var(--accent-ink)');
     if (live.current) {
       live.current.hidden = false;
-      const words = `${shortDay(s)} – ${shortDay(e)}${breaks.length ? ` · ${breaks[0]}` : " · no broken links"}`;
+      const words = `${shortDay(s)} – ${shortDay(e)}${breaks.length ? ` · ${breaks[0]}` : ' · no broken links'}`;
       if (live.current.textContent !== words) live.current.textContent = words;
-      live.current.dataset.state = breaks.length ? "broken" : "ok";
+      live.current.dataset.state = breaks.length ? 'broken' : 'ok';
       // On its own layer, moved by a transform: no layout of the chart's box per frame.
       live.current.style.transform = `translate(${Math.min(x, sc.width - 280)}px, ${(l.y.get(d.id) ?? 0) - 24}px)`;
     }
@@ -659,19 +865,37 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
   const onDown = (e: ReactPointerEvent<SVGGElement>, item: Item) => {
     if (e.button !== 0) return;
     const [start, end] = moved[item.id] ?? barSpan(item);
-    const r = (e.currentTarget.querySelector("rect[data-body]") as SVGRectElement).getBoundingClientRect();
+    const r = (
+      e.currentTarget.querySelector('rect[data-body]') as SVGRectElement
+    ).getBoundingClientRect();
     // The waterfall moves the whole item (its phases follow); the timeline and Gantt also stretch an end.
-    const mode = !canDrag || closedItem(item) || planned(item) || format === "waterfall" ? "move" : grabAt(r, e.clientX);
-    const touch = e.pointerType === "touch";
+    const mode =
+      !canDrag || closedItem(item) || planned(item) || format === 'waterfall'
+        ? 'move'
+        : grabAt(r, e.clientX);
+    const touch = e.pointerType === 'touch';
     // React clears currentTarget once the handler returns: keep the bar for the timeout.
     const target = e.currentTarget;
-    const d: Drag = { id: item.id, mode, x0: e.clientX, start, end, dx: 0, moved: false, frame: null, pointer: e.pointerId, touch, armed: !touch, timer: null };
+    const d: Drag = {
+      id: item.id,
+      mode,
+      x0: e.clientX,
+      start,
+      end,
+      dx: 0,
+      moved: false,
+      frame: null,
+      pointer: e.pointerId,
+      touch,
+      armed: !touch,
+      timer: null,
+    };
     drag.current = d;
     if (touch && canDrag && !closedItem(item) && !planned(item)) {
       // Phone: a long press picks the bar up; moving first scrolls.
       d.timer = window.setTimeout(() => {
         begin(d);
-        target.setAttribute("data-picked", "true");
+        target.setAttribute('data-picked', 'true');
         navigator.vibrate?.(10);
       }, LONG_PRESS_MS);
     } else if (!touch) begin(d);
@@ -714,7 +938,7 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
     const item = items.get(d.id);
     if (!item) return;
     const g = svg.current?.querySelector<SVGGElement>(`g[data-bar-id="${d.id}"]`);
-    g?.removeAttribute("data-picked");
+    g?.removeAttribute('data-picked');
     if (!d.moved) {
       const y = l.y.get(d.id) ?? 0;
       onOpen(item, { x: sc.x(d.start), y: y + l.rowH });
@@ -727,16 +951,18 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
     if (s && en && (s !== d.start || en !== d.end)) onMove(item, s, en);
     else if (g) {
       // Back where it was: redraw it from its dates.
-      const rect = g.querySelector<SVGRectElement>("rect[data-body]");
+      const rect = g.querySelector<SVGRectElement>('rect[data-body]');
       const x0 = sc.x(d.start);
       const w0 = Math.max(MIN_BAR_W, sc.x(d.end) - x0 + sc.px);
-      rect?.setAttribute("x", String(x0));
-      rect?.setAttribute("width", String(w0));
-      if (format === "waterfall") drawPhases(g, moved[item.id] ? rephase(item, d.start, d.end) : item.phases, sc, x0, w0);
+      rect?.setAttribute('x', String(x0));
+      rect?.setAttribute('width', String(w0));
+      if (format === 'waterfall')
+        drawPhases(g, moved[item.id] ? rephase(item, d.start, d.end) : item.phases, sc, x0, w0);
     }
   };
 
-  const keyOpen = (it: Item) => onOpen(it, { x: sc.x((moved[it.id] ?? barSpan(it))[0]), y: (l.y.get(it.id) ?? 0) + l.rowH });
+  const keyOpen = (it: Item) =>
+    onOpen(it, { x: sc.x((moved[it.id] ?? barSpan(it))[0]), y: (l.y.get(it.id) ?? 0) + l.rowH });
   // The keyboard's drag: an arrow moves a focused bar by a day (the Gantt's day scale) or a
   // week; Shift+arrow moves only its end. Each press builds on the last one's local move;
   // the burst is one change (onKeyMove's caller sends it on a pause or blur).
@@ -744,8 +970,8 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
     if (!canDrag || closedItem(it) || planned(it)) return;
     const [s, e] = moved[it.id] ?? barSpan(it);
     // The waterfall moves the whole item: Shift+arrow moves it too.
-    if (format === "waterfall") resize = false;
-    const n = dir * (format === "gantt" && unit === "day" ? 1 : 7);
+    if (format === 'waterfall') resize = false;
+    const n = dir * (format === 'gantt' && unit === 'day' ? 1 : 7);
     const end = addDays(e, n);
     if (resize && end < s) return;
     onKeyMove(it, resize ? s : addDays(s, n), end);
@@ -760,90 +986,133 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
     () => ({
       onDown: (e: ReactPointerEvent<SVGGElement>, it: Item) => handlers.current.onDown(e, it),
       onKeyOpen: (it: Item) => handlers.current.keyOpen(it),
-      onKeyMove: (it: Item, dir: 1 | -1, resize: boolean) => handlers.current.keyMove(it, dir, resize),
+      onKeyMove: (it: Item, dir: 1 | -1, resize: boolean) =>
+        handlers.current.keyMove(it, dir, resize),
       onKeyEnd: (it: Item) => handlers.current.onKeyEnd(it),
       onKeyCancel: (it: Item) => handlers.current.onKeyCancel(it),
-      onSuggestion: (it: Item, anchor: { x: number; y: number }) => handlers.current.onSuggestion(it, anchor),
+      onSuggestion: (it: Item, anchor: { x: number; y: number }) =>
+        handlers.current.onSuggestion(it, anchor),
     }),
     [],
   );
   const today = sc.x(data.today);
-  const todayMark = marks.find((m) => m.kind === "today");
+  const todayMark = marks.find((m) => m.kind === 'today');
   // A mark's line of words: its baseline, and its glyph's centre just above it.
   const baseline = (row: number) => TICK_H + 14 + row * MARK_ROW;
   // A mark's line starts under any words of a lower row it would cross (a line never runs through a label).
   const lineTop = (x: number, row: number, from: number) => {
-    const below = marks.filter((o) => o.row > row && o.words && o.box[0] - 2 <= x && x <= o.box[1] + 2).map((o) => o.row);
+    const below = marks
+      .filter((o) => o.row > row && o.words && o.box[0] - 2 <= x && x <= o.box[1] + 2)
+      .map((o) => o.row);
     return below.length ? Math.max(from, baseline(Math.max(...below)) + 5) : from;
   };
   const openY = open ? l.y.get(open) : undefined;
   return (
-    <div className="isolate flex border border-line bg-surface" data-testid="simple-chart" data-format={format} data-unit={format === "gantt" ? unit : undefined} data-weeks={weeks ? "true" : undefined}>
-      <div className="min-w-0 flex-none border-r border-line" style={{ width: l.labelW }} data-testid="chart-labels">
+    <div
+      className="isolate flex border border-line bg-surface"
+      data-testid="simple-chart"
+      data-format={format}
+      data-unit={format === 'gantt' ? unit : undefined}
+      data-weeks={weeks ? 'true' : undefined}
+    >
+      <div
+        className="min-w-0 flex-none border-r border-line"
+        style={{ width: l.labelW }}
+        data-testid="chart-labels"
+      >
         {/* fix4 qa-simple-roadmap-34: the grouping as the Group by names it ("PRD", "Goal"), not in capitals. */}
-        <div style={{ height: l.top - msBandH }} className="flex items-end px-3 pb-1.5 text-xs font-semibold text-text2">
+        <div
+          style={{ height: l.top - msBandH }}
+          className="flex items-end px-3 pb-1.5 text-xs font-semibold text-text2"
+        >
           {laneWord ?? LANE_WORDS[lane]}
         </div>
         {msBandH > 0 && (
-          <div style={{ height: msBandH }} className="flex items-center border-t border-line px-3 text-xs font-semibold text-text2">
+          <div
+            style={{ height: msBandH }}
+            className="flex items-center border-t border-line px-3 text-xs font-semibold text-text2"
+          >
             Milestones
-                <span className="ml-1.5 font-normal">
-                  <InfoTip label="the milestone marks" align="start" side="bottom" testId="ms-legend-tip">
-                    <MkLegend />
-                  </InfoTip>
-                </span>
+            <span className="ml-1.5 font-normal">
+              <InfoTip
+                label="the milestone marks"
+                align="start"
+                side="bottom"
+                testId="ms-legend-tip"
+              >
+                <MkLegend />
+              </InfoTip>
+            </span>
           </div>
         )}
         {l.rows.map((r, n) =>
-          r.kind === "group" ? (
+          r.kind === 'group' ? (
             <div
               key={`g-${r.key}-${n}`}
-              data-testid={r.below ? "below-the-line" : "chart-group"}
+              data-testid={r.below ? 'below-the-line' : 'chart-group'}
               data-add-where={
                 !dropTargets || r.below
                   ? undefined
-                  : lane === "goal" && goalLane(r.key)
-                    ? whereAttr("goal", r.key)
-                    : trackBands && lane === "track" && (data.tracks ?? []).some((t) => t.id === r.key)
-                      ? whereAttr("track", r.key)
+                  : lane === 'goal' && goalLane(r.key)
+                    ? whereAttr('goal', r.key)
+                    : trackBands &&
+                        lane === 'track' &&
+                        (data.tracks ?? []).some((t) => t.id === r.key)
+                      ? whereAttr('track', r.key)
                       : undefined
               }
               data-add-label={r.title}
               style={{ height: l.hs[n] }}
-              className={`flex min-w-0 flex-col justify-center bg-surface2 px-3 ${r.below ? "text-text2" : ""}`}
+              className={`flex min-w-0 flex-col justify-center bg-surface2 px-3 ${r.below ? 'text-text2' : ''}`}
             >
-              {trackBands && lane === "track" && !r.below ? (
+              {trackBands && lane === 'track' && !r.below ? (
                 <TrackHead data={data} laneKey={r.key} title={r.title} stack wrap={compact} />
               ) : gantt ? (
                 // D: the goal's name and, under it, its metric. The row's height must fit both
                 // lines (finding 6): a phone's tighter leading keeps the subtitle from being
                 // painted over by the next row.
                 <>
-                  <span className={`${compact ? "min-w-0 break-words text-sm leading-[16px]" : "truncate text-[15px] leading-[18px]"} font-semibold`} title={r.title}>
+                  <span
+                    className={`${compact ? 'min-w-0 break-words text-sm leading-[16px]' : 'truncate text-[15px] leading-[18px]'} font-semibold`}
+                    title={r.title}
+                  >
                     <GoalNum n={laneNum(r)} />
                     {r.title}
                   </span>
                   {r.metric && (
-                    <span className={`${compact ? "break-words text-[11px] leading-[13px]" : "truncate text-xs leading-[15px]"} text-text2`} data-testid="group-metric" title={r.metric}>
+                    <span
+                      className={`${compact ? 'break-words text-[11px] leading-[13px]' : 'truncate text-xs leading-[15px]'} text-text2`}
+                      data-testid="group-metric"
+                      title={r.metric}
+                    >
                       {r.metric}
                     </span>
                   )}
                 </>
               ) : (
                 <>
-                  <span className={`flex min-w-0 items-baseline ${compact ? "flex-wrap gap-x-2" : "gap-2"}`}>
-                    <span className={`${compact ? "min-w-0 break-words" : "truncate"} font-semibold ${compact ? "text-sm leading-[16px]" : "text-[15px] leading-tight"}`} title={r.title}>
+                  <span
+                    className={`flex min-w-0 items-baseline ${compact ? 'flex-wrap gap-x-2' : 'gap-2'}`}
+                  >
+                    <span
+                      className={`${compact ? 'min-w-0 break-words' : 'truncate'} font-semibold ${compact ? 'text-sm leading-[16px]' : 'text-[15px] leading-tight'}`}
+                      title={r.title}
+                    >
                       <GoalNum n={laneNum(r)} />
                       {r.title}
                     </span>
                     {r.count != null && !r.below && (
                       <span className="tnum flex-none text-xs text-text2" data-testid="lane-count">
-                        {r.count} {r.count === 1 ? "item" : "items"}
+                        {r.count} {r.count === 1 ? 'item' : 'items'}
                       </span>
                     )}
                   </span>
                   {r.metric && (
-                    <span className={`${compact ? "break-words" : "truncate"} text-text2 ${compact ? "text-[11px] leading-[13px]" : "text-xs"}`} data-testid="group-metric" title={r.metric}>
+                    <span
+                      className={`${compact ? 'break-words' : 'truncate'} text-text2 ${compact ? 'text-[11px] leading-[13px]' : 'text-xs'}`}
+                      data-testid="group-metric"
+                      title={r.metric}
+                    >
                       {r.metric}
                     </span>
                   )}
@@ -852,78 +1121,106 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
             </div>
           ) : (
             <div key={r.item.id} style={{ height: l.hs[n] }}>
-            <button
-              type="button"
-              data-testid="chart-label"
-              data-item-id={r.item.id}
-              data-open={open === r.item.id ? "true" : undefined}
-              data-depth={r.depth || undefined}
-              style={{ height: l.nameH?.get(r.item.id) ?? l.rowH, paddingLeft: r.depth ? (compact ? 8 : 12) + r.depth * (compact ? 10 : 14) : undefined }}
-              onClick={() => onOpen(r.item, { x: sc.x((moved[r.item.id] ?? barSpan(r.item))[0]), y: (l.y.get(r.item.id) ?? 0) + l.rowH })}
-              className={`flex w-full min-w-0 items-center text-left hover:bg-surface2 ${compact ? "gap-1 px-2 text-[13px]" : "gap-2 px-3 text-[15px]"} ${open === r.item.id ? "bg-accent-soft" : ""}`}
-            >
-              {/* fix4 qa-simple-roadmap-3: no "#1" on a row: the place in the return queue in words
+              <button
+                type="button"
+                data-testid="chart-label"
+                data-item-id={r.item.id}
+                data-open={open === r.item.id ? 'true' : undefined}
+                data-depth={r.depth || undefined}
+                style={{
+                  height: l.nameH?.get(r.item.id) ?? l.rowH,
+                  paddingLeft: r.depth
+                    ? (compact ? 8 : 12) + r.depth * (compact ? 10 : 14)
+                    : undefined,
+                }}
+                onClick={() =>
+                  onOpen(r.item, {
+                    x: sc.x((moved[r.item.id] ?? barSpan(r.item))[0]),
+                    y: (l.y.get(r.item.id) ?? 0) + l.rowH,
+                  })
+                }
+                className={`flex w-full min-w-0 items-center text-left hover:bg-surface2 ${compact ? 'gap-1 px-2 text-[13px]' : 'gap-2 px-3 text-[15px]'} ${open === r.item.id ? 'bg-accent-soft' : ''}`}
+              >
+                {/* fix4 qa-simple-roadmap-3: no "#1" on a row: the place in the return queue in words
                   ("1st"). QA Nov 12 #1: the name reads with its code first ("F-06 Weekly alert
                   digest"), as its card does. The name gets the row's space first; the chips after
                   it shrink (finding 7). */}
-              {r.place != null && !compact && (
-                <span className="tnum flex-none text-xs text-text2" data-testid="return-place" title={`${ordinal(r.place)} to come back if room opens`}>
-                  {/* qa4-simple-roadmap-23: the number says what it is. */}
-                  {ordinal(r.place)} to return
-                </span>
-              )}
-              {/* The Current-state pill follows the name, as chips do, so every name starts at one x.
-                  The two wrap as a group (the name takes 60% of the row at least): the pill beside a
-                  short name, under a long one, so neither is cut (layout's nameH). */}
-              {/* feature-parts: a part drawn as a branch of its parent's tree. */}
-              {!!r.depth && (
-                <span aria-hidden className="flex-none text-text2">
-                  └
-                </span>
-              )}
-              <span className={`flex min-w-[60%] flex-1 flex-wrap items-center ${compact ? "gap-x-1 gap-y-0.5" : "gap-x-2 gap-y-1"}`}>
-                <span
-                  data-testid="label-title"
-                  title={itemName(r.item)}
-                  // fix4 qa-simple-roadmap-6: a name wraps whole instead of being cut mid-word.
-                  className={`min-w-0 max-w-full break-words ${compact ? "text-[12.5px] leading-[14px]" : "leading-[18px]"} ${closedItem(r.item) ? "text-text2 line-through" : ""}`}
-                >
-                  {itemName(r.item)}
-                </span>
-                <ItemMark f={states?.get(`item:${r.item.id}`)} compact={compact} today={data.today} />
-                {/* QA Nov 12 #2: an item with no Ground Truth code is flagged on its row (QA Nov 14 #5:
-                    cut to the column on a phone, whole in its title). */}
-                <NotInGt item={r.item} short className="h-5! px-2! text-xs!" />
-                {r.place != null && compact && (
-                  <span className="tnum basis-full text-xs text-text2" data-testid="return-place" title={`${ordinal(r.place)} to come back if room opens`}>
+                {r.place != null && !compact && (
+                  <span
+                    className="tnum flex-none text-xs text-text2"
+                    data-testid="return-place"
+                    title={`${ordinal(r.place)} to come back if room opens`}
+                  >
+                    {/* qa4-simple-roadmap-23: the number says what it is. */}
                     {ordinal(r.place)} to return
                   </span>
                 )}
-              </span>
-              {r.item.draft && !closedItem(r.item) && (
-                <span className="flex-none rounded-full bg-na-bg px-1.5 text-xs text-na" data-testid="draft-tag" title="Draft">
-                  Draft
-                </span>
-              )}
-              {r.item.estimate_pending && (
+                {/* The Current-state pill follows the name, as chips do, so every name starts at one x.
+                  The two wrap as a group (the name takes 60% of the row at least): the pill beside a
+                  short name, under a long one, so neither is cut (layout's nameH). */}
+                {/* feature-parts: a part drawn as a branch of its parent's tree. */}
+                {!!r.depth && (
+                  <span aria-hidden className="flex-none text-text2">
+                    └
+                  </span>
+                )}
                 <span
-                  className="flex h-5 max-w-[120px] min-w-0 shrink items-center truncate rounded-full bg-warn-bg px-2 text-xs font-semibold text-warn"
-                  data-testid="estimate-pending"
-                  title="Estimate pending"
+                  className={`flex min-w-[60%] flex-1 flex-wrap items-center ${compact ? 'gap-x-1 gap-y-0.5' : 'gap-x-2 gap-y-1'}`}
                 >
-                  Estimate pending
+                  <span
+                    data-testid="label-title"
+                    title={itemName(r.item)}
+                    // fix4 qa-simple-roadmap-6: a name wraps whole instead of being cut mid-word.
+                    className={`min-w-0 max-w-full break-words ${compact ? 'text-[12.5px] leading-[14px]' : 'leading-[18px]'} ${closedItem(r.item) ? 'text-text2 line-through' : ''}`}
+                  >
+                    {itemName(r.item)}
+                  </span>
+                  <ItemMark
+                    f={states?.get(`item:${r.item.id}`)}
+                    compact={compact}
+                    today={data.today}
+                  />
+                  {/* QA Nov 12 #2: an item with no Ground Truth code is flagged on its row (QA Nov 14 #5:
+                    cut to the column on a phone, whole in its title). */}
+                  <NotInGt item={r.item} short className="h-5! px-2! text-xs!" />
+                  {r.place != null && compact && (
+                    <span
+                      className="tnum basis-full text-xs text-text2"
+                      data-testid="return-place"
+                      title={`${ordinal(r.place)} to come back if room opens`}
+                    >
+                      {ordinal(r.place)} to return
+                    </span>
+                  )}
                 </span>
-              )}
-              {gantt && pulled?.has(r.item.id) && (
-                <span
-                  className="flex h-5 max-w-[104px] min-w-0 shrink items-center truncate rounded-full bg-warn-bg px-2 text-xs font-semibold text-warn"
-                  data-testid="pending-tag"
-                  title="Pending decision"
-                >
-                  Pending decision
-                </span>
-              )}
-            </button>
+                {r.item.draft && !closedItem(r.item) && (
+                  <span
+                    className="flex-none rounded-full bg-na-bg px-1.5 text-xs text-na"
+                    data-testid="draft-tag"
+                    title="Draft"
+                  >
+                    Draft
+                  </span>
+                )}
+                {r.item.estimate_pending && (
+                  <span
+                    className="flex h-5 max-w-[120px] min-w-0 shrink items-center truncate rounded-full bg-warn-bg px-2 text-xs font-semibold text-warn"
+                    data-testid="estimate-pending"
+                    title="Estimate pending"
+                  >
+                    Estimate pending
+                  </span>
+                )}
+                {gantt && pulled?.has(r.item.id) && (
+                  <span
+                    className="flex h-5 max-w-[104px] min-w-0 shrink items-center truncate rounded-full bg-warn-bg px-2 text-xs font-semibold text-warn"
+                    data-testid="pending-tag"
+                    title="Pending decision"
+                  >
+                    Pending decision
+                  </span>
+                )}
+              </button>
             </div>
           ),
         )}
@@ -947,35 +1244,102 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
             aria-label="Roadmap chart"
           >
             <defs>
-              <pattern id="simple-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+              <pattern
+                id="simple-hatch"
+                width="8"
+                height="8"
+                patternUnits="userSpaceOnUse"
+                patternTransform="rotate(45)"
+              >
                 <rect width="8" height="8" fill="var(--simple-hatch-bg)" />
-                <line x1="0" y1="0" x2="0" y2="8" stroke="var(--simple-hatch-line)" strokeWidth="4" />
+                <line
+                  x1="0"
+                  y1="0"
+                  x2="0"
+                  y2="8"
+                  stroke="var(--simple-hatch-line)"
+                  strokeWidth="4"
+                />
               </pattern>
-              {format === "waterfall" &&
+              {format === 'waterfall' &&
                 PHASES.map((p) => (
-                  <pattern key={p.key} id={`simple-hatch-${p.key}`} width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                  <pattern
+                    key={p.key}
+                    id={`simple-hatch-${p.key}`}
+                    width="8"
+                    height="8"
+                    patternUnits="userSpaceOnUse"
+                    patternTransform="rotate(45)"
+                  >
                     <rect width="8" height="8" fill={p.soft} />
                     {/* qa-simple-roadmap-41: the phase's own ink at full strength, as its key draws it. */}
                     <line x1="0" y1="0" x2="0" y2="8" stroke={p.ink} strokeWidth="3" />
                   </pattern>
                 ))}
               {/* D: pulled in, pending a decision (amber hatch). */}
-              <pattern id="simple-pulled" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+              <pattern
+                id="simple-pulled"
+                width="8"
+                height="8"
+                patternUnits="userSpaceOnUse"
+                patternTransform="rotate(45)"
+              >
                 <rect width="8" height="8" fill="var(--warn-bg)" />
-                <line x1="0" y1="0" x2="0" y2="8" stroke="var(--warn)" strokeWidth="2" opacity=".55" />
+                <line
+                  x1="0"
+                  y1="0"
+                  x2="0"
+                  y2="8"
+                  stroke="var(--warn)"
+                  strokeWidth="2"
+                  opacity=".55"
+                />
               </pattern>
-              <marker id="simple-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+              <marker
+                id="simple-arrow"
+                viewBox="0 0 8 8"
+                refX="7"
+                refY="4"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto"
+              >
                 <path d="M0,0 L8,4 L0,8 z" fill="var(--line-strong)" />
               </marker>
-              <marker id="simple-arrow-red" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+              <marker
+                id="simple-arrow-red"
+                viewBox="0 0 8 8"
+                refX="7"
+                refY="4"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto"
+              >
                 <path d="M0,0 L8,4 L0,8 z" fill="var(--crit)" />
               </marker>
-              <marker id="simple-arrow-amber" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+              <marker
+                id="simple-arrow-amber"
+                viewBox="0 0 8 8"
+                refX="7"
+                refY="4"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto"
+              >
                 <path d="M0,0 L8,4 L0,8 z" fill="var(--warn)" />
               </marker>
             </defs>
             <rect x={0} y={0} width={chartW} height={l.height} fill="var(--surface)" />
-            <Axis ticks={ticks} sc={sc} height={l.height} format={axisFormat} drop={!!dropTargets && axisFormat !== "gantt"} compact={compact} monthly={weeks} view={view} />
+            <Axis
+              ticks={ticks}
+              sc={sc}
+              height={l.height}
+              format={axisFormat}
+              drop={!!dropTargets && axisFormat !== 'gantt'}
+              compact={compact}
+              monthly={weeks}
+              view={view}
+            />
             {/* D: holidays are grey columns under the rows. */}
             {noWork.map((h) => (
               <rect
@@ -991,50 +1355,119 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
                 opacity={0.9}
                 pointerEvents="none"
               >
-                <title>{`${h.label || "No-work week"}: ${shortDay(h.start)} – ${shortDay(h.end)}`}</title>
+                <title>{`${h.label || 'No-work week'}: ${shortDay(h.start)} – ${shortDay(h.end)}`}</title>
               </rect>
             ))}
             {l.rows.map((r, n) =>
-              r.kind === "group" ? <rect key={`gb-${n}`} x={0} y={l.top + l.ys[n]} width={chartW} height={l.hs[n]} fill="var(--surface2)" /> : null,
+              r.kind === 'group' ? (
+                <rect
+                  key={`gb-${n}`}
+                  x={0}
+                  y={l.top + l.ys[n]}
+                  width={chartW}
+                  height={l.hs[n]}
+                  fill="var(--surface2)"
+                />
+              ) : null,
             )}
             {/* D: the open item's row is tinted across the chart. */}
-            {openY != null && <rect data-testid="open-row" x={0} y={openY} width={chartW} height={l.rowH} fill="var(--accent-soft)" opacity={0.7} pointerEvents="none" />}
+            {openY != null && (
+              <rect
+                data-testid="open-row"
+                x={0}
+                y={openY}
+                width={chartW}
+                height={l.rowH}
+                fill="var(--accent-soft)"
+                opacity={0.7}
+                pointerEvents="none"
+              />
+            )}
             {planMilestones(data).map((m) => {
               const mk = marks.find((x) => x.key === `end-${m.id}`);
               const mx = sc.x(m.end_date!) + sc.px;
               const code = codeOf(m.name);
               // Two or more planned PRDs: each end names its PRD ("M1 Prove it (Usage alerts)").
               const prd = planPrds(data).size > 1 ? milestonePrd(data, m) : null;
-              const words = `${milestoneWords(m.name)}${prd ? ` (${prd.title})` : ""} ends ${shortDay(m.end_date!)}`;
+              const words = `${milestoneWords(m.name)}${prd ? ` (${prd.title})` : ''} ends ${shortDay(m.end_date!)}`;
               const by = baseline(mk?.row ?? 0);
               const cy = by - 4;
               return (
-                <g key={m.id} data-testid="milestone-end" data-date={m.end_date!} data-row={mk?.row ?? 0} role="img" aria-label={words} pointerEvents="none">
+                <g
+                  key={m.id}
+                  data-testid="milestone-end"
+                  data-date={m.end_date!}
+                  data-row={mk?.row ?? 0}
+                  role="img"
+                  aria-label={words}
+                  pointerEvents="none"
+                >
                   <title>{words}</title>
                   {flags ? (
                     // B2: a flag, then "M1 ends Nov 27", against the line.
                     <>
-                      <line data-testid="milestone-end-line" x1={mx} x2={mx} y1={lineTop(mx, mk?.row ?? 0, cy - 7)} y2={l.height} stroke={msEdge(code)} strokeWidth={1.2} strokeDasharray="4 3" />
+                      <line
+                        data-testid="milestone-end-line"
+                        x1={mx}
+                        x2={mx}
+                        y1={lineTop(mx, mk?.row ?? 0, cy - 7)}
+                        y2={l.height}
+                        stroke={msEdge(code)}
+                        strokeWidth={1.2}
+                        strokeDasharray="4 3"
+                      />
                       <path
                         data-testid="milestone-flag"
-                        d={`M${mk?.side === "after" ? mx + 5 : mx - 16 - (mk?.w ?? 0)} ${cy + 5} v-11 h8 l-2 3 l2 3 h-8`}
+                        d={`M${mk?.side === 'after' ? mx + 5 : mx - 16 - (mk?.w ?? 0)} ${cy + 5} v-11 h8 l-2 3 l2 3 h-8`}
                         fill={msEdge(code)}
                         stroke={msEdge(code)}
                         strokeWidth={1.2}
                         strokeLinejoin="round"
                       />
                       {mk?.words && (
-                        <text x={mk.side === "before" ? mx - 3 : mx + 17} y={by} fontSize={11} fontWeight={700} fill={msInk(code)} textAnchor={mk.side === "before" ? "end" : "start"} data-testid="milestone-end-label">
+                        <text
+                          x={mk.side === 'before' ? mx - 3 : mx + 17}
+                          y={by}
+                          fontSize={11}
+                          fontWeight={700}
+                          fill={msInk(code)}
+                          textAnchor={mk.side === 'before' ? 'end' : 'start'}
+                          data-testid="milestone-end-label"
+                        >
                           {mk.words}
                         </text>
                       )}
                     </>
                   ) : (
                     <>
-                      <line data-testid="milestone-end-line" x1={mx} x2={mx} y1={lineTop(mx, mk?.row ?? 0, cy + 6)} y2={l.height} stroke={msEdge(code)} strokeWidth={1.2} strokeDasharray="4 3" />
-                      <rect x={mx - 6} y={cy - 6} width={12} height={12} transform={`rotate(45 ${mx} ${cy})`} fill={msEdge(code)} />
+                      <line
+                        data-testid="milestone-end-line"
+                        x1={mx}
+                        x2={mx}
+                        y1={lineTop(mx, mk?.row ?? 0, cy + 6)}
+                        y2={l.height}
+                        stroke={msEdge(code)}
+                        strokeWidth={1.2}
+                        strokeDasharray="4 3"
+                      />
+                      <rect
+                        x={mx - 6}
+                        y={cy - 6}
+                        width={12}
+                        height={12}
+                        transform={`rotate(45 ${mx} ${cy})`}
+                        fill={msEdge(code)}
+                      />
                       {mk?.words && (
-                        <text x={mk.side === "before" ? mx - 10 : mx + 10} y={by} fontSize={11} fontWeight={700} fill={msInk(code)} textAnchor={mk.side === "before" ? "end" : "start"} data-testid="milestone-end-label">
+                        <text
+                          x={mk.side === 'before' ? mx - 10 : mx + 10}
+                          y={by}
+                          fontSize={11}
+                          fontWeight={700}
+                          fill={msInk(code)}
+                          textAnchor={mk.side === 'before' ? 'end' : 'start'}
+                          data-testid="milestone-end-label"
+                        >
                           {mk.words}
                         </text>
                       )}
@@ -1050,10 +1483,31 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
                 if (!mk) return null;
                 const cy = baseline(mk.row) - 4;
                 return (
-                  <g key={m.id} data-testid="track-milestone" data-row={mk.row} data-keep-clear transform={`translate(${mk.x}, ${cy})`}>
-                    <rect x={-5} y={-5} width={10} height={10} transform="rotate(45)" fill="var(--warn)" />
+                  <g
+                    key={m.id}
+                    data-testid="track-milestone"
+                    data-row={mk.row}
+                    data-keep-clear
+                    transform={`translate(${mk.x}, ${cy})`}
+                  >
+                    <rect
+                      x={-5}
+                      y={-5}
+                      width={10}
+                      height={10}
+                      transform="rotate(45)"
+                      fill="var(--warn)"
+                    />
                     {/* QA Nov 12 #5: named by its roadmap code, as the Timeline and the board name it ("M1 Beta"). */}
-                    <text data-testid="track-milestone-label" x={mk.side === "after" ? 9 : -9} y={4} fontSize={11} fontWeight={700} fill="var(--text2)" textAnchor={mk.side === "after" ? "start" : "end"}>
+                    <text
+                      data-testid="track-milestone-label"
+                      x={mk.side === 'after' ? 9 : -9}
+                      y={4}
+                      fontSize={11}
+                      fontWeight={700}
+                      fill="var(--text2)"
+                      textAnchor={mk.side === 'after' ? 'start' : 'end'}
+                    >
                       {mk.words}
                     </text>
                   </g>
@@ -1065,11 +1519,46 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
               const kx = mk.x;
               const cy = baseline(mk.row) - 4;
               return (
-                <g key={k.id} data-testid="key-date-marker" data-name={k.name} data-date={k.date} data-draft={k.in_draft ? "true" : undefined} data-row={mk.row} pointerEvents="none">
-                  <title>{`${k.name} · ${shortDay(k.date)}${k.note ? ` · ${k.note}` : ""} (${k.roadmap.title})`}</title>
-                  <line x1={kx} x2={kx} y1={lineTop(kx, mk.row, cy + 5)} y2={l.height} stroke="var(--accent-ink)" strokeWidth={1} opacity={0.7} strokeDasharray={k.in_draft ? "3 3" : undefined} />
-                  <rect data-keep-clear x={kx - 5} y={cy - 5} width={10} height={10} transform={`rotate(45 ${kx} ${cy})`} fill={k.in_draft ? "var(--surface)" : "var(--accent-ink)"} stroke="var(--accent-ink)" />
-                  <text x={mk.side === "after" ? kx + 9 : kx - 9} y={cy + 4} fontSize={11} fontWeight={700} fill="var(--accent-ink)" textAnchor={mk.side === "after" ? "start" : "end"} data-testid="key-date-label" data-keep-clear>
+                <g
+                  key={k.id}
+                  data-testid="key-date-marker"
+                  data-name={k.name}
+                  data-date={k.date}
+                  data-draft={k.in_draft ? 'true' : undefined}
+                  data-row={mk.row}
+                  pointerEvents="none"
+                >
+                  <title>{`${k.name} · ${shortDay(k.date)}${k.note ? ` · ${k.note}` : ''} (${k.roadmap.title})`}</title>
+                  <line
+                    x1={kx}
+                    x2={kx}
+                    y1={lineTop(kx, mk.row, cy + 5)}
+                    y2={l.height}
+                    stroke="var(--accent-ink)"
+                    strokeWidth={1}
+                    opacity={0.7}
+                    strokeDasharray={k.in_draft ? '3 3' : undefined}
+                  />
+                  <rect
+                    data-keep-clear
+                    x={kx - 5}
+                    y={cy - 5}
+                    width={10}
+                    height={10}
+                    transform={`rotate(45 ${kx} ${cy})`}
+                    fill={k.in_draft ? 'var(--surface)' : 'var(--accent-ink)'}
+                    stroke="var(--accent-ink)"
+                  />
+                  <text
+                    x={mk.side === 'after' ? kx + 9 : kx - 9}
+                    y={cy + 4}
+                    fontSize={11}
+                    fontWeight={700}
+                    fill="var(--accent-ink)"
+                    textAnchor={mk.side === 'after' ? 'start' : 'end'}
+                    data-testid="key-date-label"
+                    data-keep-clear
+                  >
                     {k.name}
                   </text>
                 </g>
@@ -1077,8 +1566,26 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
             })}
             <Arrows data={data} l={l} sc={sc} moved={moved} />
             {l.rows.map((r) =>
-              r.kind === "item" ? (
-                <Bar key={r.item.id} item={r.item} milestones={data.goal_milestones} planned={data.milestones} y={l.y.get(r.item.id)!} h={l.rowH} sc={sc} span={moved[r.item.id]} open={open === r.item.id} flash={flash.has(r.item.id)} canDrag={canDrag} phased={format === "waterfall"} gantt={gantt} compact={compact} pulled={gantt && !!pulled?.has(r.item.id)} width={chartW} {...bars} />
+              r.kind === 'item' ? (
+                <Bar
+                  key={r.item.id}
+                  item={r.item}
+                  milestones={data.goal_milestones}
+                  planned={data.milestones}
+                  y={l.y.get(r.item.id)!}
+                  h={l.rowH}
+                  sc={sc}
+                  span={moved[r.item.id]}
+                  open={open === r.item.id}
+                  flash={flash.has(r.item.id)}
+                  canDrag={canDrag}
+                  phased={format === 'waterfall'}
+                  gantt={gantt}
+                  compact={compact}
+                  pulled={gantt && !!pulled?.has(r.item.id)}
+                  width={chartW}
+                  {...bars}
+                />
               ) : null,
             )}
             <PreviewGhost l={l} sc={sc} items={items} preview={preview} data={data} />
@@ -1086,22 +1593,53 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
             <g data-testid="today-mark" pointerEvents="none">
               {/* finding 18: the line starts below the axis's own tick labels (never above
                   TICK_H), so it never draws through them on its way down to the Today pill. */}
-              <line x1={today} x2={today} y1={compact && !todayMark ? l.top - 4 : lineTop(today, 0, Math.max(TICK_H + 2, baseline(0) - 25))} y2={l.height} stroke="var(--crit)" strokeWidth={1.5} data-testid="today-line" />
+              <line
+                x1={today}
+                x2={today}
+                y1={
+                  compact && !todayMark
+                    ? l.top - 4
+                    : lineTop(today, 0, Math.max(TICK_H + 2, baseline(0) - 25))
+                }
+                y2={l.height}
+                stroke="var(--crit)"
+                strokeWidth={1.5}
+                data-testid="today-line"
+              />
               {todayMark?.words && (
                 <g data-testid="today-pill" data-keep-clear>
                   {/* fix4 qa-simple-roadmap-54: 11 px words (were 10), clear of the header above. */}
-                  <rect x={todayMark.side === "after" ? today + 2 : today - 44} y={baseline(0) - 18} width={42} height={16} rx={8} fill="var(--crit)" />
-                  <text x={todayMark.side === "after" ? today + 23 : today - 23} y={baseline(0) - 6.5} fontSize={11} fontWeight={700} fill="var(--surface)" textAnchor="middle">
+                  <rect
+                    x={todayMark.side === 'after' ? today + 2 : today - 44}
+                    y={baseline(0) - 18}
+                    width={42}
+                    height={16}
+                    rx={8}
+                    fill="var(--crit)"
+                  />
+                  <text
+                    x={todayMark.side === 'after' ? today + 23 : today - 23}
+                    y={baseline(0) - 6.5}
+                    fontSize={11}
+                    fontWeight={700}
+                    fill="var(--surface)"
+                    textAnchor="middle"
+                  >
                     Today
                   </text>
                 </g>
               )}
             </g>
           </svg>
-          <div ref={live} hidden data-testid="drag-live" className="pointer-events-none absolute top-0 left-0 z-20 will-change-transform rounded bg-tip px-2 py-0.5 text-xs whitespace-nowrap text-tip-text" />
+          <div
+            ref={live}
+            hidden
+            data-testid="drag-live"
+            className="pointer-events-none absolute top-0 left-0 z-20 will-change-transform rounded bg-tip px-2 py-0.5 text-xs whitespace-nowrap text-tip-text"
+          />
           {view &&
             l.rows.map((r) => {
-              if (r.kind !== "item") return null;
+              if (r.kind !== 'item') return null;
               const [a, b] = drawnSpan(r.item, moved[r.item.id]);
               const x0 = sc.x(a);
               const x1 = Math.max(x0 + MIN_BAR_W, sc.x(b) + sc.px);
@@ -1115,15 +1653,29 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
                   data-testid="row-offscreen"
                   data-item={r.item.key}
                   title={`${itemName(r.item)}: ${spanWords(a, b, data.today, true)}`}
-                  onClick={() => box.current?.scrollTo({ left: Math.max(0, x0 - 24), behavior: "smooth" })}
-                  style={{ top: y + 5, height: l.rowH - 10, ...(right ? { left: view[1] - 6, transform: "translateX(-100%)" } : { left: view[0] + 6 }) }}
+                  onClick={() =>
+                    box.current?.scrollTo({ left: Math.max(0, x0 - 24), behavior: 'smooth' })
+                  }
+                  style={{
+                    top: y + 5,
+                    height: l.rowH - 10,
+                    ...(right
+                      ? { left: view[1] - 6, transform: 'translateX(-100%)' }
+                      : { left: view[0] + 6 }),
+                  }}
                   className="absolute z-[5] flex items-center rounded-full border border-line bg-surface px-2 text-xs whitespace-nowrap text-text2 hover:bg-surface2"
                 >
-                  {right ? `${spanWords(a, b, data.today, true)} →` : `← ${spanWords(a, b, data.today, true)}`}
+                  {right
+                    ? `${spanWords(a, b, data.today, true)} →`
+                    : `← ${spanWords(a, b, data.today, true)}`}
                 </button>
               );
             })}
-          {overlay?.(l, sc, marks.filter((m) => m.kind !== "today").map((m) => m.box))}
+          {overlay?.(
+            l,
+            sc,
+            marks.filter((m) => m.kind !== 'today').map((m) => m.box),
+          )}
         </div>
       </div>
     </div>
@@ -1132,67 +1684,101 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
 
 /** A phase's x and width inside its bar: a phase a gate dates past the item's end is drawn
  * inside the bar (its title keeps the dates). */
-function phaseBox(p: Item["phases"][number], sc: Scale, x: number, w: number): [number, number] {
+function phaseBox(p: Item['phases'][number], sc: Scale, x: number, w: number): [number, number] {
   const px = Math.min(Math.max(sc.x(p.start), x), x + w - 1);
   const right = Math.min(sc.x(p.end) + sc.px, x + w);
   return [px, Math.max(1, right - px)];
 }
 
 /** Redraws a phased bar's phases by direct DOM writes (the drag paints without React). */
-function drawPhases(g: SVGGElement, phases: Item["phases"], sc: Scale, x: number, w: number) {
+function drawPhases(g: SVGGElement, phases: Item['phases'], sc: Scale, x: number, w: number) {
   for (const p of phases) {
     const r = g.querySelector<SVGRectElement>(`rect[data-phase="${p.key}"]`);
     if (!r) continue;
     const [px, pw] = phaseBox(p, sc, x, w);
-    r.setAttribute("x", String(px));
-    r.setAttribute("width", String(pw));
+    r.setAttribute('x', String(px));
+    r.setAttribute('width', String(pw));
     r.dataset.start = p.start;
     r.dataset.end = p.end;
   }
 }
 
-const MARK_TONE: Record<FeatureState["mark"], string> = {
-  new: "bg-accent-soft text-accent-ink",
-  in_progress: "bg-warn-bg text-warn",
-  exists: "bg-pass-bg text-pass",
-  exists_old: "bg-warn-bg text-warn",
+const MARK_TONE: Record<FeatureState['mark'], string> = {
+  new: 'bg-accent-soft text-accent-ink',
+  in_progress: 'bg-warn-bg text-warn',
+  exists: 'bg-pass-bg text-pass',
+  exists_old: 'bg-warn-bg text-warn',
 };
 
 /** An item's Current-state pill beside its name (as MarkForItem draws it, in the roadmap's words). */
-function ItemMark({ f, compact, today }: { f: FeatureState | undefined; compact: boolean; today: string }) {
+function ItemMark({
+  f,
+  compact,
+  today,
+}: {
+  f: FeatureState | undefined;
+  compact: boolean;
+  today: string;
+}) {
   if (!f) return null;
   const words = markWords(f, compact, today);
   return (
     <span title={words} className="inline-flex flex-none">
-      <span data-testid="cs-mark" data-mark={f.mark} className={`inline-flex flex-none items-center whitespace-nowrap rounded-full px-2 py-px text-[12px] font-semibold uppercase tracking-wide ${MARK_TONE[f.mark]}`}>
+      <span
+        data-testid="cs-mark"
+        data-mark={f.mark}
+        className={`inline-flex flex-none items-center whitespace-nowrap rounded-full px-2 py-px text-[12px] font-semibold uppercase tracking-wide ${MARK_TONE[f.mark]}`}
+      >
         {words}
       </span>
     </span>
   );
 }
 
-function Axis({ ticks, sc, height, format, drop, compact, monthly = false, view = null }: { ticks: { day: string; label: string; major: boolean }[]; sc: Scale; height: number; format: Format; drop: boolean; compact: boolean; monthly?: boolean; view?: [number, number] | null }) {
+function Axis({
+  ticks,
+  sc,
+  height,
+  format,
+  drop,
+  compact,
+  monthly = false,
+  view = null,
+}: {
+  ticks: { day: string; label: string; major: boolean }[];
+  sc: Scale;
+  height: number;
+  format: Format;
+  drop: boolean;
+  compact: boolean;
+  monthly?: boolean;
+  view?: [number, number] | null;
+}) {
   // D: a week's date over each week (D3: every other week on a phone, or where a week is too
   // narrow for its date); the day scale numbers its days. fix4 qa-simple-roadmap-6: a phone's
   // months each name themselves.
-  const weekly = format === "gantt" && sc.px < 20 && !monthly;
+  const weekly = format === 'gantt' && sc.px < 20 && !monthly;
   const everyOther = compact || sc.px * 7 < 46;
   return (
     <g data-testid="chart-axis">
       {ticks.map((t, n) => {
         const x = sc.x(t.day);
         const next = ticks[n + 1] ? sc.x(ticks[n + 1].day) : sc.width;
-        const labelled = format !== "gantt" || monthly || (weekly ? !everyOther || n % 2 === 0 : t.major || sc.px >= 20);
+        const labelled =
+          format !== 'gantt' ||
+          monthly ||
+          (weekly ? !everyOther || n % 2 === 0 : t.major || sc.px >= 20);
         // finding 28: a narrow quarter header still names its year ("Q4 '26"), not just "Q4".
         // E-17: the quarters read one way: the year in full on the first quarter and each Q1
         // ("Q4 2026", "Q1 2027"), the short form on the rest ("Q2 '27"); a Q1 too narrow for its
         // full year takes the short form too.
-        const [qWord, qYear] = t.label.split(" ");
-        const short = `${qWord}${qYear ? ` '${qYear.slice(-2)}` : ""}`;
-        const size = format !== "gantt" ? 13 : 11;
-        const weight = format !== "gantt" ? 600 : 400;
-        const full = (n === 0 || qWord === "Q1") && next - x >= textWidth(t.label, size, weight) + 5;
-        const whole = format !== "gantt" ? (full ? t.label : short) : t.label;
+        const [qWord, qYear] = t.label.split(' ');
+        const short = `${qWord}${qYear ? ` '${qYear.slice(-2)}` : ''}`;
+        const size = format !== 'gantt' ? 13 : 11;
+        const weight = format !== 'gantt' ? 600 : 400;
+        const full =
+          (n === 0 || qWord === 'Q1') && next - x >= textWidth(t.label, size, weight) + 5;
+        const whole = format !== 'gantt' ? (full ? t.label : short) : t.label;
         let text = whole;
         // finding 19: the right-most ticks keep their whole label inside the chart instead of
         // running past its edge (where the svg clips them): they anchor from their end once
@@ -1205,47 +1791,90 @@ function Axis({ ticks, sc, height, format, drop, compact, monthly = false, view 
         // place stay on it (data-whole*), so an export (a copy of the whole chart) draws every
         // quarter's label whole at its line.
         let at = x + 3;
-        if (view && format !== "gantt") {
+        if (view && format !== 'gantt') {
           const lo = Math.max(x, view[0]);
           const hi = Math.min(next, view[1], sc.width);
           const fits = (s: string) => lo + 3 + textWidth(s, size, weight) <= hi - 2;
-          if (lo < hi && (x + 3 < view[0] || x + 3 + textWidth(text, size, weight) > Math.min(view[1], sc.width))) {
-            text = fits(text) ? text : fits(short) ? short : "";
+          if (
+            lo < hi &&
+            (x + 3 < view[0] || x + 3 + textWidth(text, size, weight) > Math.min(view[1], sc.width))
+          ) {
+            text = fits(text) ? text : fits(short) ? short : '';
             at = lo + 3;
           }
         }
-        const anchorEnd = !view || format === "gantt" ? clipped : false;
+        const anchorEnd = !view || format === 'gantt' ? clipped : false;
         const wholeX = clipped ? Math.max(0, sc.width - 2) : x + 3;
-        const moved = text !== whole || (anchorEnd ? Math.max(0, sc.width - 2) : at) !== wholeX || anchorEnd !== clipped;
+        const moved =
+          text !== whole ||
+          (anchorEnd ? Math.max(0, sc.width - 2) : at) !== wholeX ||
+          anchorEnd !== clipped;
         // E-3: the week scale names the year over its first tick and each new year's first;
         // E-4: the day scale names the month over its first day and each 1st (the year on the
         // first and each January).
-        const yearMark = format === "gantt" && !monthly && weekly && (n === 0 || ticks[n - 1].day.slice(0, 4) !== t.day.slice(0, 4)) ? t.day.slice(0, 4) : "";
-        const monthMark = format === "gantt" && !monthly && !weekly && (n === 0 || t.day.endsWith("-01")) ? monthTick(t.day, n === 0) : "";
+        const yearMark =
+          format === 'gantt' &&
+          !monthly &&
+          weekly &&
+          (n === 0 || ticks[n - 1].day.slice(0, 4) !== t.day.slice(0, 4))
+            ? t.day.slice(0, 4)
+            : '';
+        const monthMark =
+          format === 'gantt' && !monthly && !weekly && (n === 0 || t.day.endsWith('-01'))
+            ? monthTick(t.day, n === 0)
+            : '';
         return (
-          <g key={t.day} data-day={format === "gantt" ? t.day : undefined}>
-            {format !== "gantt" && n % 2 === 1 && <rect x={x} y={0} width={next - x} height={height} fill="var(--bg)" opacity={0.5} />}
-            {drop && <rect data-testid="quarter-drop" data-add-where={whereAttr("quarter", quarterValue(t.day))} data-add-label={t.label} x={x} y={0} width={next - x} height={height} fill="transparent" />}
-            <line x1={x} x2={x} y1={0} y2={height} stroke="var(--line)" strokeWidth={t.major ? 1 : 0.5} />
+          <g key={t.day} data-day={format === 'gantt' ? t.day : undefined}>
+            {format !== 'gantt' && n % 2 === 1 && (
+              <rect x={x} y={0} width={next - x} height={height} fill="var(--bg)" opacity={0.5} />
+            )}
+            {drop && (
+              <rect
+                data-testid="quarter-drop"
+                data-add-where={whereAttr('quarter', quarterValue(t.day))}
+                data-add-label={t.label}
+                x={x}
+                y={0}
+                width={next - x}
+                height={height}
+                fill="transparent"
+              />
+            )}
+            <line
+              x1={x}
+              x2={x}
+              y1={0}
+              y2={height}
+              stroke="var(--line)"
+              strokeWidth={t.major ? 1 : 0.5}
+            />
             {(yearMark || monthMark) && (
-              <text x={x + 3} y={11} fontSize={10} fontWeight={600} fill="var(--text2)" data-testid={yearMark ? "axis-year" : "axis-month"} data-keep-clear>
+              <text
+                x={x + 3}
+                y={11}
+                fontSize={10}
+                fontWeight={600}
+                fill="var(--text2)"
+                data-testid={yearMark ? 'axis-year' : 'axis-month'}
+                data-keep-clear
+              >
                 {yearMark || monthMark}
               </text>
             )}
             {labelled && (text || moved) && (
               <text
                 x={anchorEnd ? Math.max(0, sc.width - 2) : at}
-                y={format !== "gantt" ? 24 : !weekly && !monthly ? 28 : 22}
+                y={format !== 'gantt' ? 24 : !weekly && !monthly ? 28 : 22}
                 fontSize={size}
                 fontWeight={weight}
                 fill="var(--text2)"
-                textAnchor={anchorEnd ? "end" : "start"}
+                textAnchor={anchorEnd ? 'end' : 'start'}
                 // A label left out of the part in view keeps its place (for the export) under another name.
-                data-testid={text ? "axis-tick" : "axis-tick-out"}
-                data-keep-clear={text ? "" : undefined}
+                data-testid={text ? 'axis-tick' : 'axis-tick-out'}
+                data-keep-clear={text ? '' : undefined}
                 data-whole={moved ? whole : undefined}
                 data-whole-x={moved ? wholeX : undefined}
-                data-whole-anchor={moved ? (clipped ? "end" : "start") : undefined}
+                data-whole-anchor={moved ? (clipped ? 'end' : 'start') : undefined}
               >
                 {text}
               </text>
@@ -1257,7 +1886,17 @@ function Axis({ ticks, sc, height, format, drop, compact, monthly = false, view 
   );
 }
 
-function Arrows({ data, l, sc, moved }: { data: Roadmap; l: Layout; sc: Scale; moved: Record<string, [string, string]> }) {
+function Arrows({
+  data,
+  l,
+  sc,
+  moved,
+}: {
+  data: Roadmap;
+  l: Layout;
+  sc: Scale;
+  moved: Record<string, [string, string]>;
+}) {
   const byId = new Map(data.items.map((i) => [i.id, i]));
   const out: ReactNode[] = [];
   for (const it of data.items) {
@@ -1267,8 +1906,8 @@ function Arrows({ data, l, sc, moved }: { data: Roadmap; l: Layout; sc: Scale; m
       const dep = byId.get(depId);
       const dy = l.y.get(depId);
       if (!dep || dy == null) continue;
-      const flag = it.flags.find((f) => f.kind === "dependency_order" && f.subject === depId);
-      const tone = flag ? (flag.state === "red" ? "red" : "amber") : "ok";
+      const flag = it.flags.find((f) => f.kind === 'dependency_order' && f.subject === depId);
+      const tone = flag ? (flag.state === 'red' ? 'red' : 'amber') : 'ok';
       const [, depEnd] = moved[depId] ?? barSpan(dep);
       const [itStart] = moved[it.id] ?? barSpan(it);
       const x1 = sc.x(depEnd) + sc.px;
@@ -1288,10 +1927,12 @@ function Arrows({ data, l, sc, moved }: { data: Roadmap; l: Layout; sc: Scale; m
           data-state={tone}
           data-from={dep.key}
           data-to={it.key}
-          stroke={tone === "red" ? "var(--crit)" : tone === "amber" ? "var(--warn)" : "var(--line-strong)"}
-          strokeWidth={tone === "ok" ? 1.25 : 2}
-          strokeDasharray={tone === "amber" ? "4 3" : undefined}
-          markerEnd={`url(#simple-arrow${tone === "red" ? "-red" : tone === "amber" ? "-amber" : ""})`}
+          stroke={
+            tone === 'red' ? 'var(--crit)' : tone === 'amber' ? 'var(--warn)' : 'var(--line-strong)'
+          }
+          strokeWidth={tone === 'ok' ? 1.25 : 2}
+          strokeDasharray={tone === 'amber' ? '4 3' : undefined}
+          markerEnd={`url(#simple-arrow${tone === 'red' ? '-red' : tone === 'amber' ? '-amber' : ''})`}
         />,
       );
     }
@@ -1331,7 +1972,29 @@ type BarProps = {
   onSuggestion: (item: Item, anchor: { x: number; y: number }) => void;
 };
 
-const Bar = memo(function Bar({ item, milestones, planned: roadmapMs, y, h, sc, span, open, flash, canDrag, phased, gantt = false, compact = false, pulled = false, width, onDown, onKeyOpen, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion }: BarProps) {
+const Bar = memo(function Bar({
+  item,
+  milestones,
+  planned: roadmapMs,
+  y,
+  h,
+  sc,
+  span,
+  open,
+  flash,
+  canDrag,
+  phased,
+  gantt = false,
+  compact = false,
+  pulled = false,
+  width,
+  onDown,
+  onKeyOpen,
+  onKeyMove,
+  onKeyEnd,
+  onKeyCancel,
+  onSuggestion,
+}: BarProps) {
   const [start, end] = span ?? barSpan(item);
   const kind = barKind(item);
   const red = broken(item).length > 0;
@@ -1341,10 +2004,24 @@ const Bar = memo(function Bar({ item, milestones, planned: roadmapMs, y, h, sc, 
   // scale stays a real, clickable shape rather than a few-pixel blob.
   const w = Math.max(MIN_BAR_W, sc.x(end) - x + sc.px);
   const pad = Math.round(h * 0.2);
-  const fill = closedItem(item) ? "var(--na-bg)" : pulled ? "url(#simple-pulled)" : kind === "estimated" ? "url(#simple-hatch)" : kind === "draft" ? "var(--surface)" : "var(--accent)";
+  const fill = closedItem(item)
+    ? 'var(--na-bg)'
+    : pulled
+      ? 'url(#simple-pulled)'
+      : kind === 'estimated'
+        ? 'url(#simple-hatch)'
+        : kind === 'draft'
+          ? 'var(--surface)'
+          : 'var(--accent)';
   // finding 17: an undated (draft/estimated) bar's outline uses the line token, not the accent,
   // so it keeps contrast against a dark background the way a dated bar's accent-ink does.
-  const stroke = red ? "var(--crit)" : amber || pulled ? "var(--warn)" : kind === "dated" ? "var(--accent-ink)" : "var(--simple-bar-outline)";
+  const stroke = red
+    ? 'var(--crit)'
+    : amber || pulled
+      ? 'var(--warn)'
+      : kind === 'dated'
+        ? 'var(--accent-ink)'
+        : 'var(--simple-bar-outline)';
   const s = item.suggestion;
   // The suggestion's handle sits left of the bar (a broken link's callout is on its right).
   const left = Math.min(x, s ? sc.x(s.start_date) : x) - 14;
@@ -1352,11 +2029,19 @@ const Bar = memo(function Bar({ item, milestones, planned: roadmapMs, y, h, sc, 
   // A moved bar's phases as the API will work them out again (dated gates stay).
   const phases = phased && span ? rephase(item, start, end) : item.phases;
   // finding 14: plain words for a screen reader, not the API's enum values.
-  const phaseWords = phased ? `, ${phases.map((p) => `${phaseWord(p.key)} to ${shortDay(p.end)}${p.estimated ? " (estimated)" : ""}`).join(", ")}` : "";
+  const phaseWords = phased
+    ? `, ${phases.map((p) => `${phaseWord(p.key)} to ${shortDay(p.end)}${p.estimated ? ' (estimated)' : ''}`).join(', ')}`
+    : '';
   const sliced = !phased && planned(item);
   const fixed = closedItem(item) || planned(item);
   // qa4-simple-roadmap-30: each red flag in its own words ("ends Jun 8, after its milestone 'Beta'"), as Now / Next / Later says it.
-  const label = `${itemName(item)}: ${!span && estimateOnly(item) ? estimateWords(start, end) : `${yearSpan(start, end, " to ")}, ${item.estimated ? "Estimated by Oracle" : datesFrom(item)}`}${item.estimate_pending ? ", estimate pending" : ""}${phaseWords}${red ? `, ${broken(item).map((f) => codedFlag(item, f, milestones, roadmapMs).reason).join("; ")}` : ""}${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(", ")}` : ""}${canDrag && planned(item) && !closedItem(item) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${canDrag && !fixed ? (phased ? ". Arrows move the whole item" : ". Arrows move it, Shift+arrows its end") + ", sent when you pause; Escape cancels" : ""}`;
+  const label = `${itemName(item)}: ${!span && estimateOnly(item) ? estimateWords(start, end) : `${yearSpan(start, end, ' to ')}, ${item.estimated ? 'Estimated by Oracle' : datesFrom(item)}`}${item.estimate_pending ? ', estimate pending' : ''}${phaseWords}${
+    red
+      ? `, ${broken(item)
+          .map((f) => codedFlag(item, f, milestones, roadmapMs).reason)
+          .join('; ')}`
+      : ''
+  }${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(', ')}` : ''}${canDrag && planned(item) && !closedItem(item) ? ". Its dates follow the PRD's plan: change them in the PRD" : ''}${canDrag && !fixed ? (phased ? '. Arrows move the whole item' : '. Arrows move it, Shift+arrows its end') + ', sent when you pause; Escape cancels' : ''}`;
   // finding 49: the suggestion's dashed outline is clamped to the chart's own width (its dates
   // can run past the chart's span); a small arrow says it continues past the edge.
   const sx = sc.x(s?.start_date ?? start);
@@ -1370,28 +2055,28 @@ const Bar = memo(function Bar({ item, milestones, planned: roadmapMs, y, h, sc, 
         data-testid="bar"
         data-bar-id={item.id}
         data-item={item.key}
-        data-kind={closedItem(item) ? "cut" : kind}
-        data-broken={red ? "true" : amber ? "amber" : "false"}
+        data-kind={closedItem(item) ? 'cut' : kind}
+        data-broken={red ? 'true' : amber ? 'amber' : 'false'}
         data-start={start}
         data-end={end}
-        data-open={open ? "true" : undefined}
-        data-pulled={pulled ? "true" : undefined}
-        data-flash={flash ? "true" : undefined}
-        data-phased={phased ? "true" : undefined}
+        data-open={open ? 'true' : undefined}
+        data-pulled={pulled ? 'true' : undefined}
+        data-flash={flash ? 'true' : undefined}
+        data-phased={phased ? 'true' : undefined}
         role="button"
         tabIndex={0}
         aria-label={label}
-        className={`${canDrag && !fixed ? "cursor-grab" : "cursor-pointer"} ${flash ? "simple-bar-flash" : ""} data-[picked=true]:[filter:drop-shadow(0_3px_6px_rgb(0_0_0/0.35))]`}
-        style={{ touchAction: canDrag && !fixed ? "none" : "auto" }}
+        className={`${canDrag && !fixed ? 'cursor-grab' : 'cursor-pointer'} ${flash ? 'simple-bar-flash' : ''} data-[picked=true]:[filter:drop-shadow(0_3px_6px_rgb(0_0_0/0.35))]`}
+        style={{ touchAction: canDrag && !fixed ? 'none' : 'auto' }}
         onPointerDown={(e) => onDown(e, item)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
+          if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
             onKeyOpen(item);
-          } else if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+          } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
             e.preventDefault();
-            onKeyMove(item, e.key === "ArrowRight" ? 1 : -1, e.shiftKey);
-          } else if (e.key === "Escape") onKeyCancel(item);
+            onKeyMove(item, e.key === 'ArrowRight' ? 1 : -1, e.shiftKey);
+          } else if (e.key === 'Escape') onKeyCancel(item);
         }}
         onBlur={() => onKeyEnd(item)}
       >
@@ -1404,7 +2089,7 @@ const Bar = memo(function Bar({ item, milestones, planned: roadmapMs, y, h, sc, 
                 key={p.key}
                 data-testid="phase"
                 data-phase={p.key}
-                data-estimated={p.estimated ? "true" : "false"}
+                data-estimated={p.estimated ? 'true' : 'false'}
                 data-start={p.start}
                 data-end={p.end}
                 x={px}
@@ -1413,10 +2098,10 @@ const Bar = memo(function Bar({ item, milestones, planned: roadmapMs, y, h, sc, 
                 height={h - 2 * pad}
                 // walkb-review-5b: hatched means the item's dates are estimated, as on the
                 // Timeline and the Gantt; a dated item's phases are solid, gate or not.
-                fill={kind === "estimated" ? `url(#simple-hatch-${p.key})` : tone.ink}
+                fill={kind === 'estimated' ? `url(#simple-hatch-${p.key})` : tone.ink}
                 opacity={closedItem(item) ? 0.4 : 1}
               >
-                <title>{`${tone.label}: ${shortDay(p.start)} – ${shortDay(p.end)}${p.estimated ? ", estimated" : ""}`}</title>
+                <title>{`${tone.label}: ${shortDay(p.start)} – ${shortDay(p.end)}${p.estimated ? ', estimated' : ''}`}</title>
               </rect>
             );
           })}
@@ -1427,12 +2112,22 @@ const Bar = memo(function Bar({ item, milestones, planned: roadmapMs, y, h, sc, 
           width={w}
           height={h - 2 * pad}
           rx={4}
-          fill={phased || sliced ? "transparent" : fill}
-          stroke={sliced ? ((open && !gantt) || red || amber ? stroke : "none") : stroke}
+          fill={phased || sliced ? 'transparent' : fill}
+          stroke={sliced ? ((open && !gantt) || red || amber ? stroke : 'none') : stroke}
           strokeWidth={red || amber || open ? 2.5 : gantt ? 1 : 1.25}
-          strokeDasharray={kind === "draft" ? "6 4" : undefined}
+          strokeDasharray={kind === 'draft' ? '6 4' : undefined}
         />
-        {sliced && <Slices item={item} y={y + pad} h={h - 2 * pad} sc={sc} gantt={gantt} open={open} compact={compact} />}
+        {sliced && (
+          <Slices
+            item={item}
+            y={y + pad}
+            h={h - 2 * pad}
+            sc={sc}
+            gantt={gantt}
+            open={open}
+            compact={compact}
+          />
+        )}
         {item.milestone?.date && !sliced && (
           <rect
             data-testid="item-milestone"
@@ -1444,7 +2139,7 @@ const Bar = memo(function Bar({ item, milestones, planned: roadmapMs, y, h, sc, 
             fill="var(--warn)"
             stroke="var(--surface)"
           >
-            <title>{`${item.milestone.name ?? "Milestone"} · ${shortDay(item.milestone.date)}`}</title>
+            <title>{`${item.milestone.name ?? 'Milestone'} · ${shortDay(item.milestone.date)}`}</title>
           </rect>
         )}
       </g>
@@ -1453,7 +2148,7 @@ const Bar = memo(function Bar({ item, milestones, planned: roadmapMs, y, h, sc, 
           <rect
             data-testid="suggestion-outline"
             data-item={item.key}
-            data-clamped={sOverflows ? "true" : undefined}
+            data-clamped={sOverflows ? 'true' : undefined}
             x={sxDraw}
             y={y + pad - 3}
             width={sClampedW}
@@ -1481,12 +2176,13 @@ const Bar = memo(function Bar({ item, milestones, planned: roadmapMs, y, h, sc, 
             data-item={item.key}
             role="button"
             tabIndex={0}
-            aria-label={`Oracle suggests dates for ${itemName(item)}: ${yearSpan(s.start_date, s.end_date, " to ")}`}
+            aria-label={`Oracle suggests dates for ${itemName(item)}: ${yearSpan(s.start_date, s.end_date, ' to ')}`}
             className="cursor-pointer"
             transform={`translate(${mark}, ${y + h / 2})`}
             onClick={() => onSuggestion(item, { x: sc.x(s.start_date), y: y + h })}
             onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") onSuggestion(item, { x: sc.x(s.start_date), y: y + h });
+              if (e.key === 'Enter' || e.key === ' ')
+                onSuggestion(item, { x: sc.x(s.start_date), y: y + h });
             }}
           >
             <title>{`Oracle suggests dates for ${itemName(item)}`}</title>
@@ -1505,7 +2201,23 @@ const Bar = memo(function Bar({ item, milestones, planned: roadmapMs, y, h, sc, 
  * D) draws them in the accent, a feature cut in two or more labelled with each slice's code
  * (F-05a, beside the bar when it is too short), PM-owned work as a dashed outline; the Timeline
  * colours them by milestone with code and name where the words fit, joined by a dotted line. */
-function Slices({ item, y, h, sc, gantt, open, compact }: { item: Item; y: number; h: number; sc: Scale; gantt: boolean; open: boolean; compact: boolean }) {
+function Slices({
+  item,
+  y,
+  h,
+  sc,
+  gantt,
+  open,
+  compact,
+}: {
+  item: Item;
+  y: number;
+  h: number;
+  sc: Scale;
+  gantt: boolean;
+  open: boolean;
+  compact: boolean;
+}) {
   const dated = placedSlices(item);
   const feature = dated[0]?.feature_code ?? item.code ?? item.key;
   // finding 11: a slice is never a sub-24px blob, even a one-day slice at a zoomed-out scale.
@@ -1543,14 +2255,15 @@ function Slices({ item, y, h, sc, gantt, open, compact }: { item: Item; y: numbe
       {dated.map((x) => {
         const b = box(x);
         const pm = x.pm_owned || x.effort_weeks == null;
-        const edge = gantt ? "var(--accent-ink)" : msEdge(x.milestone);
-        const fill = pm ? "var(--surface)" : gantt ? "var(--accent)" : msFill(x.milestone);
+        const edge = gantt ? 'var(--accent-ink)' : msEdge(x.milestone);
+        const fill = pm ? 'var(--surface)' : gantt ? 'var(--accent)' : msFill(x.milestone);
         // fix4 qa-simple-roadmap-3: a slice is named by its name, not its code ("F-05b"): cut
         // with "…" to its bar, or (the Gantt) beside a bar too short for it, up to the next slice.
-        const name = gantt ? (dated.length > 1 ? x.name : "") : x.name;
+        const name = gantt ? (dated.length > 1 ? x.name : '') : x.name;
         const inRoom = b.w - (gantt ? 10 : 12);
         const next = dated.find((o) => o.start_date! > x.start_date!);
-        const outRoom = Math.min(next ? sc.x(next.start_date!) : sc.width, sc.width) - (b.x + b.w) - 8;
+        const outRoom =
+          Math.min(next ? sc.x(next.start_date!) : sc.width, sc.width) - (b.x + b.w) - 8;
         // train BW: the first slice, short with its next close, may read before its bar instead.
         const first = !dated.some((o) => o.start_date! < x.start_date!);
         const beforeRoom = first ? b.x - 8 : 0;
@@ -1559,26 +2272,40 @@ function Slices({ item, y, h, sc, gantt, open, compact }: { item: Item; y: numbe
         // ("Part 1 of 2": the row already names the feature) in or beside the bar, else (the
         // first slice) before it; only then cut.
         const part = gantt ? x.name.match(/,\s*(part \d+ of \d+)$/i)?.[1] : undefined;
-        const short = part ? part[0].toUpperCase() + part.slice(1) : "";
-        const fits = (w: string, room: number, weight: number) => !!w && textWidth(w, size, weight) <= room;
-        const whole: [string, "in" | "after" | "before"] | null = !gantt || !name
-          ? null
-          : fits(name, inRoom, 650)
-            ? [name, "in"]
-            : fits(name, outRoom, 400)
-              ? [name, "after"]
-              : fits(short, inRoom, 650)
-                ? [short, "in"]
-                : fits(short, outRoom, 400)
-                  ? [short, "after"]
-                  : fits(name, beforeRoom, 400)
-                    ? [name, "before"]
-                    : fits(short, beforeRoom, 400)
-                      ? [short, "before"]
-                      : null;
-        const before = whole?.[1] === "before";
-        const inner = whole ? (whole[1] === "in" ? whole[0] : "") : name ? ellipsize(name, inRoom, size, 650) : "";
-        const besideWords = whole ? (whole[1] === "after" ? whole[0] : "") : gantt && name && inner.length < 4 ? ellipsize(name, outRoom, size, 400) : "";
+        const short = part ? part[0].toUpperCase() + part.slice(1) : '';
+        const fits = (w: string, room: number, weight: number) =>
+          !!w && textWidth(w, size, weight) <= room;
+        const whole: [string, 'in' | 'after' | 'before'] | null =
+          !gantt || !name
+            ? null
+            : fits(name, inRoom, 650)
+              ? [name, 'in']
+              : fits(name, outRoom, 400)
+                ? [name, 'after']
+                : fits(short, inRoom, 650)
+                  ? [short, 'in']
+                  : fits(short, outRoom, 400)
+                    ? [short, 'after']
+                    : fits(name, beforeRoom, 400)
+                      ? [name, 'before']
+                      : fits(short, beforeRoom, 400)
+                        ? [short, 'before']
+                        : null;
+        const before = whole?.[1] === 'before';
+        const inner = whole
+          ? whole[1] === 'in'
+            ? whole[0]
+            : ''
+          : name
+            ? ellipsize(name, inRoom, size, 650)
+            : '';
+        const besideWords = whole
+          ? whole[1] === 'after'
+            ? whole[0]
+            : ''
+          : gantt && name && inner.length < 4
+            ? ellipsize(name, outRoom, size, 400)
+            : '';
         const beside = besideWords.length >= 4;
         const inside = !beside && !before && inner.length >= 4;
         const words = before ? whole![0] : beside ? besideWords : inner;
@@ -1590,11 +2317,11 @@ function Slices({ item, y, h, sc, gantt, open, compact }: { item: Item; y: numbe
             data-milestone={x.milestone}
             data-start={x.start_date!}
             data-end={x.end_date!}
-            data-colour={gantt ? "var(--accent)" : msEdge(x.milestone)}
-            data-estimated={x.estimated ? "true" : "false"}
-            data-pm-owned={pm ? "true" : undefined}
+            data-colour={gantt ? 'var(--accent)' : msEdge(x.milestone)}
+            data-estimated={x.estimated ? 'true' : 'false'}
+            data-pm-owned={pm ? 'true' : undefined}
           >
-            <title>{`${x.name} · ${x.milestone} ${x.milestone_name} · ${shortDay(x.start_date!)} – ${shortDay(x.end_date!)}${pm ? " · PM-owned" : ` · ${x.effort_weeks} engineer-weeks`}${x.estimated ? " · placed by Oracle" : ""}`}</title>
+            <title>{`${x.name} · ${x.milestone} ${x.milestone_name} · ${shortDay(x.start_date!)} – ${shortDay(x.end_date!)}${pm ? ' · PM-owned' : ` · ${x.effort_weeks} engineer-weeks`}${x.estimated ? ' · placed by Oracle' : ''}`}</title>
             <rect
               data-slice-body
               x={b.x}
@@ -1603,20 +2330,28 @@ function Slices({ item, y, h, sc, gantt, open, compact }: { item: Item; y: numbe
               height={h}
               rx={4}
               fill={fill}
-              stroke={pm && gantt ? "var(--line-strong)" : edge}
+              stroke={pm && gantt ? 'var(--line-strong)' : edge}
               strokeWidth={gantt && open ? 2.5 : 1}
-              strokeDasharray={pm ? "3 2" : undefined}
+              strokeDasharray={pm ? '3 2' : undefined}
             />
             {(inside || beside || before) && (
               <text
                 data-testid="slice-label"
-                data-beside={beside ? "true" : before ? "before" : undefined}
+                data-beside={beside ? 'true' : before ? 'before' : undefined}
                 x={beside ? b.x + b.w + 5 : before ? b.x - 5 : b.x + (gantt ? 5 : 6)}
-                textAnchor={before ? "end" : undefined}
+                textAnchor={before ? 'end' : undefined}
                 y={y + h / 2 + 4}
                 fontSize={size}
                 fontWeight={beside || before ? 400 : 650}
-                fill={beside || before ? "var(--text2)" : pm ? "var(--accent-ink)" : gantt ? "var(--on-accent)" : msInk(x.milestone)}
+                fill={
+                  beside || before
+                    ? 'var(--text2)'
+                    : pm
+                      ? 'var(--accent-ink)'
+                      : gantt
+                        ? 'var(--on-accent)'
+                        : msInk(x.milestone)
+                }
                 pointerEvents="none"
               >
                 {words}
@@ -1666,16 +2401,21 @@ export function usePreview(): ChatPreview {
 
 /** A horizon's window (a "move to Next" ghost is drawn there), when the roadmap has it. */
 function windowOf(data: Roadmap, horizon: string): { start: string; end: string } | null {
-  const w = (data.windows as unknown as Record<string, { start?: string | null; end?: string | null } | undefined>)[horizon];
+  const w = (
+    data.windows as unknown as Record<
+      string,
+      { start?: string | null; end?: string | null } | undefined
+    >
+  )[horizon];
   return w?.start && w?.end ? { start: w.start, end: w.end } : null;
 }
 
 /** fix4 qa-simple-roadmap-10: the days a preview's ghost covers, so the chart's span takes them (a move to Q2 2027 ghosts in Apr–May, not off the chart). */
 export function previewSpan(preview: ChatPreview, data: Roadmap): string[] {
   if (!preview || !data.items.some((i) => i.id === preview.item_id)) return [];
-  if (preview.kind === "dates") return [preview.start_date, preview.end_date];
-  if (preview.kind === "milestone") return [preview.date];
-  if (preview.kind === "horizon") {
+  if (preview.kind === 'dates') return [preview.start_date, preview.end_date];
+  if (preview.kind === 'milestone') return [preview.date];
+  if (preview.kind === 'horizon') {
     const w = windowOf(data, preview.horizon);
     return w ? [w.start, w.end] : [];
   }
@@ -1684,7 +2424,21 @@ export function previewSpan(preview: ChatPreview, data: Roadmap): string[] {
 
 /** S9: a chat card's Preview, ghosted on its bar: new dates (or a horizon's window), title, milestone, or a cut strike.
  * `inset`: the bar's top and height inside its row box (the lanes' pills: 4 and 20). */
-export function PreviewGhost({ l, sc, items, preview, data, inset }: { l: Pick<Layout, "y" | "rowH">; sc: Scale; items: Map<string, Item>; preview: ChatPreview; data: Roadmap; inset?: { top: number; h: number } }) {
+export function PreviewGhost({
+  l,
+  sc,
+  items,
+  preview,
+  data,
+  inset,
+}: {
+  l: Pick<Layout, 'y' | 'rowH'>;
+  sc: Scale;
+  items: Map<string, Item>;
+  preview: ChatPreview;
+  data: Roadmap;
+  inset?: { top: number; h: number };
+}) {
   if (!preview) return null;
   const item = items.get(preview.item_id);
   const y = l.y.get(preview.item_id);
@@ -1694,28 +2448,62 @@ export function PreviewGhost({ l, sc, items, preview, data, inset }: { l: Pick<L
   const top = y + (inset ? inset.top : Math.round(l.rowH * 0.2));
   const h = inset ? inset.h : l.rowH - 2 * Math.round(l.rowH * 0.2);
   const mid = top + h / 2;
-  const box = (a: string, b: string) => ({ x: sc.x(a), w: Math.max(sc.px, sc.x(b) - sc.x(a) + sc.px) });
+  const box = (a: string, b: string) => ({
+    x: sc.x(a),
+    w: Math.max(sc.px, sc.x(b) - sc.x(a) + sc.px),
+  });
   const cur = box(start, end);
-  const common = { "data-testid": "preview-ghost", "data-kind": preview.kind, pointerEvents: "none" as const };
-  if (preview.kind === "dates") {
+  const common = {
+    'data-testid': 'preview-ghost',
+    'data-kind': preview.kind,
+    pointerEvents: 'none' as const,
+  };
+  if (preview.kind === 'dates') {
     const b = box(preview.start_date, preview.end_date);
     return (
       <g {...common} data-start={preview.start_date} data-end={preview.end_date}>
-        <rect x={b.x} y={top} width={b.w} height={h} rx={Math.min(4, h / 2)} fill="var(--accent)" opacity={0.35} stroke="var(--accent-ink)" strokeDasharray="4 3" />
+        <rect
+          x={b.x}
+          y={top}
+          width={b.w}
+          height={h}
+          rx={Math.min(4, h / 2)}
+          fill="var(--accent)"
+          opacity={0.35}
+          stroke="var(--accent-ink)"
+          strokeDasharray="4 3"
+        />
       </g>
     );
   }
-  if (preview.kind === "cut") {
+  if (preview.kind === 'cut') {
     return (
       <g {...common}>
-        <line x1={cur.x} x2={cur.x + cur.w} y1={mid} y2={mid} stroke="var(--crit)" strokeWidth={3} />
+        <line
+          x1={cur.x}
+          x2={cur.x + cur.w}
+          y1={mid}
+          y2={mid}
+          stroke="var(--crit)"
+          strokeWidth={3}
+        />
       </g>
     );
   }
-  if (preview.kind === "milestone") {
+  if (preview.kind === 'milestone') {
     return (
       <g {...common} transform={`translate(${sc.x(preview.date)}, ${mid})`}>
-        <rect x={-6} y={-6} width={12} height={12} transform="rotate(45)" fill="var(--warn)" opacity={0.5} stroke="var(--warn)" strokeDasharray="3 2" />
+        <rect
+          x={-6}
+          y={-6}
+          width={12}
+          height={12}
+          transform="rotate(45)"
+          fill="var(--warn)"
+          opacity={0.5}
+          stroke="var(--warn)"
+          strokeDasharray="3 2"
+        />
         <text x={10} y={4} fontSize={11} fill="var(--text2)">
           {preview.name}
         </text>
@@ -1723,16 +2511,36 @@ export function PreviewGhost({ l, sc, items, preview, data, inset }: { l: Pick<L
     );
   }
   // fix4 qa-simple-roadmap-10: a move to another horizon ghosts over that horizon's window.
-  const win = preview.kind === "horizon" ? windowOf(data, preview.horizon) : null;
+  const win = preview.kind === 'horizon' ? windowOf(data, preview.horizon) : null;
   const at = win ? box(win.start, win.end) : cur;
-  const words = preview.kind === "title" ? preview.title : `Moves to ${preview.horizon[0].toUpperCase()}${preview.horizon.slice(1)}`;
+  const words =
+    preview.kind === 'title'
+      ? preview.title
+      : `Moves to ${preview.horizon[0].toUpperCase()}${preview.horizon.slice(1)}`;
   const tw = textWidth(words, 12, 600);
   // The words after the ghost, or before it at the chart's right edge.
   const after = at.x + at.w + 8 + tw <= sc.width;
   return (
     <g {...common} data-start={win?.start} data-end={win?.end}>
-      <rect x={at.x} y={top} width={at.w} height={h} rx={Math.min(4, h / 2)} fill={win ? "var(--accent)" : "none"} opacity={win ? 0.35 : 1} stroke="var(--accent-ink)" strokeDasharray="4 3" />
-      <text x={after ? at.x + at.w + 8 : Math.max(0, at.x - 8)} y={mid + 4} textAnchor={after ? "start" : "end"} fontSize={12} fill="var(--accent-ink)" fontWeight={600}>
+      <rect
+        x={at.x}
+        y={top}
+        width={at.w}
+        height={h}
+        rx={Math.min(4, h / 2)}
+        fill={win ? 'var(--accent)' : 'none'}
+        opacity={win ? 0.35 : 1}
+        stroke="var(--accent-ink)"
+        strokeDasharray="4 3"
+      />
+      <text
+        x={after ? at.x + at.w + 8 : Math.max(0, at.x - 8)}
+        y={mid + 4}
+        textAnchor={after ? 'start' : 'end'}
+        fontSize={12}
+        fill="var(--accent-ink)"
+        fontWeight={600}
+      >
         {words}
       </text>
     </g>

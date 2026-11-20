@@ -1,7 +1,7 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Page } from './test';
 
-import { login } from "./helpers";
-import { contrast } from "./contrast-helpers";
+import { login } from './helpers';
+import { contrast } from './contrast-helpers';
 
 /*
  * QA pass 1, docs lane: the Evidence tab of a PRD version (/documents/referral-link/v/2/evidence),
@@ -11,58 +11,71 @@ import { contrast } from "./contrast-helpers";
 async function openEvidence(page: Page) {
   await page.setViewportSize({ width: 1440, height: 900 });
   await login(page);
-  await page.goto("/documents/referral-link/v/2");
-  await page.getByTestId("version-tab-evidence").filter({ visible: true }).click();
+  await page.goto('/documents/referral-link/v/2');
+  await page.getByTestId('version-tab-evidence').filter({ visible: true }).click();
   await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2\/evidence/);
-  await expect(page.getByTestId("evidence-matrix")).toBeVisible();
+  await expect(page.getByTestId('evidence-matrix')).toBeVisible();
 }
 
 /** WCAG contrast of an element's text against the first opaque background behind it. */
-test("qa-docs-29: the coverage matrix shows names only, no section keys or citation ids", async ({ page }) => {
+test('qa-docs-29: the coverage matrix shows names only, no section keys or citation ids', async ({
+  page,
+}) => {
   await openEvidence(page);
-  const matrix = page.getByTestId("evidence-matrix");
-  const head = matrix.locator("thead");
-  await expect(head).toContainText("Goal trace");
-  for (const key of ["summary", "goal-trace", "brief-items"]) await expect(head).not.toContainText(key);
+  const matrix = page.getByTestId('evidence-matrix');
+  const head = matrix.locator('thead');
+  await expect(head).toContainText('Goal trace');
+  for (const key of ['summary', 'goal-trace', 'brief-items'])
+    await expect(head).not.toContainText(key);
   // Draft citations are named by their title and source, never by their marker id.
-  await expect(matrix.getByText("Draft citations")).toBeVisible();
-  await expect(page.getByTestId("evidence-coverage")).not.toContainText(/c:c\d/);
+  await expect(matrix.getByText('Draft citations')).toBeVisible();
+  await expect(page.getByTestId('evidence-coverage')).not.toContainText(/c:c\d/);
 });
 
-test("qa-docs-29: the per-section totals and the score legend say what they count", async ({ page }) => {
+test('qa-docs-29: the per-section totals and the score legend say what they count', async ({
+  page,
+}) => {
   await openEvidence(page);
-  const totals = page.getByTestId("evidence-totals").locator("td[data-section]");
+  const totals = page.getByTestId('evidence-totals').locator('td[data-section]');
   expect(await totals.count()).toBeGreaterThan(0);
   for (const t of await totals.all()) await expect(t).toHaveText(/^\d+ links?, \d+ citations?$/);
-  await expect(page.getByTestId("evidence-totals")).not.toContainText("0 · 0");
+  await expect(page.getByTestId('evidence-totals')).not.toContainText('0 · 0');
 
-  const legend = page.getByLabel("Legend");
+  const legend = page.getByLabel('Legend');
   // qa-docs-53: words, not scores.
-  await expect(legend).toContainText("Link confidence:");
-  await expect(legend).toContainText("StrongMediumWeak");
+  await expect(legend).toContainText('Link confidence:');
+  await expect(legend).toContainText('StrongMediumWeak');
   await expect(legend).not.toContainText(/\d\.\d/);
 });
 
-test("qa-docs-29: the coverage panel uses no monospace font and words for a missing snapshot", async ({ page }) => {
+test('qa-docs-29: the coverage panel uses no monospace font and words for a missing snapshot', async ({
+  page,
+}) => {
   await openEvidence(page);
-  const panel = page.getByTestId("evidence-coverage");
-  await expect(panel).toContainText("The draft does not say when its sources were read.");
-  await expect(panel).not.toContainText("Snapshot not recorded");
+  const panel = page.getByTestId('evidence-coverage');
+  await expect(panel).toContainText('The draft does not say when its sources were read.');
+  await expect(panel).not.toContainText('Snapshot not recorded');
   const mono = await panel.evaluate((root) =>
-    [root, ...root.querySelectorAll("*")].filter((el) => /mono/i.test(getComputedStyle(el).fontFamily) && (el.textContent ?? "").trim()).map((el) => el.textContent),
+    [root, ...root.querySelectorAll('*')]
+      .filter(
+        (el) => /mono/i.test(getComputedStyle(el).fontFamily) && (el.textContent ?? '').trim(),
+      )
+      .map((el) => el.textContent),
   );
   expect(mono).toEqual([]);
 });
 
-for (const scheme of ["light", "dark"] as const) {
+for (const scheme of ['light', 'dark'] as const) {
   test(`qa-docs-29: the empty-cell dots are readable in ${scheme}`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: scheme });
     await openEvidence(page);
-    const dots = page.getByTestId("evidence-matrix").locator("td[data-section]:not([data-gap]) [data-testid=evidence-empty-cell]");
+    const dots = page
+      .getByTestId('evidence-matrix')
+      .locator('td[data-section]:not([data-gap]) [data-testid=evidence-empty-cell]');
     await expect(dots.first()).toBeVisible();
     // The old colour was the line-strong border token, too faint for text.
-    const old = scheme === "light" ? "rgb(125, 142, 163)" : "rgb(95, 112, 135)";
-    await expect(dots.first()).not.toHaveCSS("color", old);
+    const old = scheme === 'light' ? 'rgb(125, 142, 163)' : 'rgb(95, 112, 135)';
+    await expect(dots.first()).not.toHaveCSS('color', old);
     expect(await contrast(dots.first())).toBeGreaterThanOrEqual(4.5);
   });
 }

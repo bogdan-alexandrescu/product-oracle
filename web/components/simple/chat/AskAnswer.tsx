@@ -1,15 +1,20 @@
-"use client";
+'use client';
 
-import { Link } from "@/lib/nav";
-import { createContext, Fragment, useContext, useMemo, type ReactNode } from "react";
+import { Link } from '@/lib/nav';
+import { createContext, Fragment, useContext, useMemo, type ReactNode } from 'react';
 
-import { FeatureMarks, MarkFor, WithFeatureMarks, type FeatureState } from "@/components/current-state/CurrentState";
-import { liveWords } from "@/components/discuss/cited";
-import { CodeTag, Icon } from "@/components/ds";
-import { named } from "@/lib/codes";
-import { formatInZone, useCompanyZone } from "@/lib/dates";
-import { isSafeHref, parseBlocks, type Block, type Inline } from "@/lib/markdown";
-import { answerWords, noRawTokens } from "@/lib/raw-tokens";
+import {
+  FeatureMarks,
+  MarkFor,
+  WithFeatureMarks,
+  type FeatureState,
+} from '@/components/current-state/CurrentState';
+import { liveWords } from '@/components/discuss/cited';
+import { CodeTag, Icon } from '@/components/ds';
+import { named } from '@/lib/codes';
+import { formatInZone, useCompanyZone } from '@/lib/dates';
+import { isSafeHref, parseBlocks, type Block, type Inline } from '@/lib/markdown';
+import { answerWords, noRawTokens } from '@/lib/raw-tokens';
 
 /**
  * Oracle's answer in Simple's Ask panel, as the owner's pick C draws it (ask-panel fidelity,
@@ -24,34 +29,61 @@ import { answerWords, noRawTokens } from "@/lib/raw-tokens";
 
 /** "7:42 PM": a line's time in the company's time zone, with no zone after it. */
 export function chatTime(iso: string, zone: string): string {
-  return formatInZone(iso, zone, { hour: "numeric", minute: "2-digit" }).replace(/([AP]M)\s.*$/, "$1");
+  return formatInZone(iso, zone, { hour: 'numeric', minute: '2-digit' }).replace(
+    /([AP]M)\s.*$/,
+    '$1',
+  );
 }
 
 /** The author and time over a line: "Bogdan · 7:42 PM". */
-export function Who({ name, at, zone, mine }: { name: string; at: string; zone: string; mine: boolean }) {
+export function Who({
+  name,
+  at,
+  zone,
+  mine,
+}: {
+  name: string;
+  at: string;
+  zone: string;
+  mine: boolean;
+}) {
   return (
     <span className="mb-0.5 block text-[13px] leading-[18px] font-semibold" data-testid="chat-who">
-      {name}{" "}
-      <i className={`font-normal not-italic ${mine ? "opacity-80" : "text-text2"}`}>· {chatTime(at, zone)}</i>
+      {name}{' '}
+      <i className={`font-normal not-italic ${mine ? 'opacity-80' : 'text-text2'}`}>
+        · {chatTime(at, zone)}
+      </i>
     </span>
   );
 }
 
 /** A citation as an answer carries it (oracle.discussions.context: n, kind, title, url). */
-export type AnswerCite = { n?: number; kind?: string; title?: string; url?: string | null; label?: string; ref?: string; source?: string; call?: string; read_at?: string };
+export type AnswerCite = {
+  n?: number;
+  kind?: string;
+  title?: string;
+  url?: string | null;
+  label?: string;
+  ref?: string;
+  source?: string;
+  call?: string;
+  read_at?: string;
+};
 
 function plain(nodes: Inline[]): boolean {
-  return nodes.every((n) => n.t === "cite" || (n.t === "text" && !n.v.trim()));
+  return nodes.every((n) => n.t === 'cite' || (n.t === 'text' && !n.v.trim()));
 }
 
 /** The answer's first block is its title: a heading, or a line that is all bold (its markers kept, for the pill of what it names). */
 function titleOf(b: Block | undefined): { c: Inline[]; cites: string[] } | null {
   if (!b) return null;
-  if (b.t === "h") return { c: b.c, cites: [] };
-  if (b.t !== "p") return null;
-  const strong = b.c.filter((n) => n.t === "strong");
-  const cites = b.c.flatMap((n) => (n.t === "cite" ? [n.key] : []));
-  return strong.length === 1 && plain(b.c.filter((n) => n.t !== "strong")) ? { c: (strong[0] as { c: Inline[] }).c, cites } : null;
+  if (b.t === 'h') return { c: b.c, cites: [] };
+  if (b.t !== 'p') return null;
+  const strong = b.c.filter((n) => n.t === 'strong');
+  const cites = b.c.flatMap((n) => (n.t === 'cite' ? [n.key] : []));
+  return strong.length === 1 && plain(b.c.filter((n) => n.t !== 'strong'))
+    ? { c: (strong[0] as { c: Inline[] }).c, cites }
+    : null;
 }
 
 /**
@@ -64,21 +96,25 @@ type Namer = { re: RegExp; byName: Map<string, FeatureState> };
 /** How a block's words are drawn: who is named, and the features already marked by name in it. */
 type Ctx = { namer: Namer | null; named: Set<string> };
 
-const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 function namerOf(marks: Map<string, FeatureState> | null, cites: AnswerCite[]): Namer | null {
   if (!marks) return null;
   const byName = new Map<string, FeatureState>();
-  for (const f of marks.values()) if (f.title.trim().length >= 3 && !byName.has(f.title.trim())) byName.set(f.title.trim(), f);
+  for (const f of marks.values())
+    if (f.title.trim().length >= 3 && !byName.has(f.title.trim())) byName.set(f.title.trim(), f);
   for (const c of cites) {
     const f = featureOf(marks, c);
-    const title = String(c.title ?? "").trim();
-    const name = title.includes(": ") ? title.slice(title.indexOf(": ") + 2).trim() : title;
+    const title = String(c.title ?? '').trim();
+    const name = title.includes(': ') ? title.slice(title.indexOf(': ') + 2).trim() : title;
     if (f && name.length >= 3 && !byName.has(name)) byName.set(name, f);
   }
   if (!byName.size) return null;
-  const alts = [...byName.keys()].sort((a, b) => b.length - a.length).map(escapeRe).join("|");
-  return { re: new RegExp(`(?<![\\p{L}\\p{N}])(?:${alts})(?![\\p{L}\\p{N}])`, "gu"), byName };
+  const alts = [...byName.keys()]
+    .sort((a, b) => b.length - a.length)
+    .map(escapeRe)
+    .join('|');
+  return { re: new RegExp(`(?<![\\p{L}\\p{N}])(?:${alts})(?![\\p{L}\\p{N}])`, 'gu'), byName };
 }
 
 /** Whether a spot in the words is inside quotes: a person's own words said back ("“Cut Welcome video”") carry no pill. */
@@ -89,20 +125,26 @@ function quoted(v: string, at: number): boolean {
 }
 
 /** The names in some words that carry a pill: outside quotes. */
-const namesIn = (v: string, namer: Namer) => [...v.matchAll(namer.re)].filter((m) => !quoted(v, m.index!));
+const namesIn = (v: string, namer: Namer) =>
+  [...v.matchAll(namer.re)].filter((m) => !quoted(v, m.index!));
 
 /** The features named in a block's words (not in code or a link's words). */
 function namedIn(nodes: Inline[], namer: Namer | null, into = new Set<string>()): Set<string> {
   if (!namer) return into;
   for (const n of nodes) {
-    if (n.t === "text") for (const m of namesIn(noRawTokens(n.v), namer)) into.add(namer.byName.get(m[0])!.feature_id);
-    else if (n.t === "strong" || n.t === "em") namedIn(n.c, namer, into);
+    if (n.t === 'text')
+      for (const m of namesIn(noRawTokens(n.v), namer))
+        into.add(namer.byName.get(m[0])!.feature_id);
+    else if (n.t === 'strong' || n.t === 'em') namedIn(n.c, namer, into);
   }
   return into;
 }
 
 /** A block's drawing context: its features named in words carry their pill there, not after a marker. */
-const ctxOf = (nodes: Inline[], namer: Namer | null): Ctx => ({ namer, named: namedIn(nodes, namer) });
+const ctxOf = (nodes: Inline[], namer: Namer | null): Ctx => ({
+  namer,
+  named: namedIn(nodes, namer),
+});
 
 /** A feature's pill, right after its name in the answer's words. */
 function NameMark({ f }: { f: FeatureState }) {
@@ -128,7 +170,8 @@ function withMarks(v: string, namer: Namer | null): ReactNode {
     const before = v.slice(at, m.index!);
     // The feature's key is its code where it has one (lib/codes: "F-06", never a slug).
     const code = named(f.title, f.code).code;
-    const said = !code || new RegExp(`(?<![\\p{L}\\p{N}-])${escapeRe(code)}\\s*$`, "u").test(before);
+    const said =
+      !code || new RegExp(`(?<![\\p{L}\\p{N}-])${escapeRe(code)}\\s*$`, 'u').test(before);
     out.push(
       before,
       code && !said && (
@@ -149,24 +192,24 @@ function withMarks(v: string, namer: Namer | null): ReactNode {
 function inline(nodes: Inline[], ctx: Ctx): ReactNode {
   return nodes.map((n, i) => {
     switch (n.t) {
-      case "text": {
+      case 'text': {
         // qa-simple-home-17: no space left between a word and its marker ("only [c:1]." reads "only¹.").
-        const v = noRawTokens(nodes[i + 1]?.t === "cite" ? n.v.replace(/\s+$/, "") : n.v);
+        const v = noRawTokens(nodes[i + 1]?.t === 'cite' ? n.v.replace(/\s+$/, '') : n.v);
         return <Fragment key={i}>{withMarks(v, ctx.namer)}</Fragment>;
       }
-      case "cite":
+      case 'cite':
         return <Cite key={i} id={n.key} named={ctx.named} />;
-      case "code":
+      case 'code':
         return <code key={i}>{n.v}</code>;
-      case "strong":
+      case 'strong':
         return (
           <b key={i} className="font-[650]">
             {inline(n.c, ctx)}
           </b>
         );
-      case "em":
+      case 'em':
         return <em key={i}>{inline(n.c, ctx)}</em>;
-      case "link":
+      case 'link':
         // A link's words carry no pill: a pill is a button, never inside a link.
         return isSafeHref(n.href) ? (
           <a key={i} href={n.href} className="font-semibold text-accent-ink underline">
@@ -185,7 +228,7 @@ function inline(nodes: Inline[], ctx: Ctx): ReactNode {
 const Cites = createContext<AnswerCite[]>([]);
 
 /** chat-citations: a footnote's own raised number, set off from the word and the number before it. */
-const SUP = "ml-[3px] text-[11px] leading-none font-semibold";
+const SUP = 'ml-[3px] text-[11px] leading-none font-semibold';
 
 /**
  * qa4-simple-home-3: a marker is a link to its own source, named for a screen reader ("Source 1:
@@ -198,14 +241,25 @@ function Cite({ id, named }: { id: string; named: Set<string> }) {
   const zone = useCompanyZone();
   const read = /^l\.(\d{1,4})$/.exec(id)?.[1];
   if (read) {
-    const c = cites.find((x) => x.kind === "live" && x.ref === `l:${read}`);
+    const c = cites.find((x) => x.kind === 'live' && x.ref === `l:${read}`);
     if (!c) return null;
-    const after = Math.max(0, ...cites.map((x) => (x.kind !== "live" && typeof x.n === "number" ? x.n : 0)));
+    const after = Math.max(
+      0,
+      ...cites.map((x) => (x.kind !== 'live' && typeof x.n === 'number' ? x.n : 0)),
+    );
     const num = after + Number(read);
-    const words = [c.source || "Meeting notes", c.read_at && `read ${chatTime(c.read_at, zone)}`].filter(Boolean).join(" · ");
+    const words = [c.source || 'Meeting notes', c.read_at && `read ${chatTime(c.read_at, zone)}`]
+      .filter(Boolean)
+      .join(' · ');
     return (
       <sup className={SUP}>
-        <span data-testid="answer-cite" data-n={num} aria-label={`Source ${num}: ${words}`} title={words} className="text-accent-ink">
+        <span
+          data-testid="answer-cite"
+          data-n={num}
+          aria-label={`Source ${num}: ${words}`}
+          title={words}
+          className="text-accent-ink"
+        >
           {num}
         </span>
       </sup>
@@ -213,13 +267,20 @@ function Cite({ id, named }: { id: string; named: Set<string> }) {
   }
   if (!/^\d{1,4}$/.test(id)) return null;
   const num = id;
-  const c = cites.find((x) => x.kind !== "live" && String(x.n) === num);
+  const c = cites.find((x) => x.kind !== 'live' && String(x.n) === num);
   const s = c ? source(c, zone) : null;
   if (!s?.url) return null;
   return (
     <>
       <sup className={SUP}>
-        <Link href={s.url} data-testid="answer-cite" data-n={num} aria-label={`Source ${num}: ${s.words}`} title={s.words} className="text-accent-ink hover:underline">
+        <Link
+          href={s.url}
+          data-testid="answer-cite"
+          data-n={num}
+          aria-label={`Source ${num}: ${s.words}`}
+          title={s.words}
+          className="text-accent-ink hover:underline"
+        >
           {num}
         </Link>
       </sup>
@@ -234,7 +295,7 @@ function Cite({ id, named }: { id: string; named: Set<string> }) {
  */
 function CiteMark({ id, named }: { id: string; named: Set<string> }) {
   const marks = useContext(FeatureMarks);
-  const c = useContext(Cites).find((x) => x.kind !== "live" && String(x.n) === id);
+  const c = useContext(Cites).find((x) => x.kind !== 'live' && String(x.n) === id);
   const mark = c && markOf(c);
   const f = c && marks ? featureOf(marks, c) : undefined;
   if (!mark || (f && named.has(f.feature_id))) return null;
@@ -248,15 +309,20 @@ function CiteMark({ id, named }: { id: string; named: Set<string> }) {
 /** The feature a citation names, by its id (a baseline feature) or its roadmap item's id. */
 function markOf(c: AnswerCite): { featureId?: string; itemId?: string } | null {
   if (!c.ref) return null;
-  if (c.kind === "roadmap_item") return { itemId: c.ref };
-  if (c.kind === "entity" && String(c.title ?? "").startsWith("Feature: ")) return { featureId: c.ref };
+  if (c.kind === 'roadmap_item') return { itemId: c.ref };
+  if (c.kind === 'entity' && String(c.title ?? '').startsWith('Feature: '))
+    return { featureId: c.ref };
   return null;
 }
 
 /** The feature's state a citation stands for, from the read marks. */
 function featureOf(marks: Map<string, FeatureState>, c: AnswerCite): FeatureState | undefined {
-  const m = c.kind !== "live" ? markOf(c) : null;
-  return m?.featureId ? marks.get(m.featureId) : m?.itemId ? marks.get(`item:${m.itemId}`) : undefined;
+  const m = c.kind !== 'live' ? markOf(c) : null;
+  return m?.featureId
+    ? marks.get(m.featureId)
+    : m?.itemId
+      ? marks.get(`item:${m.itemId}`)
+      : undefined;
 }
 
 /**
@@ -264,7 +330,15 @@ function featureOf(marks: Map<string, FeatureState>, c: AnswerCite): FeatureStat
  * it names carries its Current-state pill right after its name (cs2-b, the owner's later pick),
  * in the title and in its lines; a cited feature not named in words carries it after its marker.
  */
-export function AnswerText({ text, live = false, cites = [] }: { text: string; live?: boolean; cites?: AnswerCite[] }) {
+export function AnswerText({
+  text,
+  live = false,
+  cites = [],
+}: {
+  text: string;
+  live?: boolean;
+  cites?: AnswerCite[];
+}) {
   // The states are read for every answer: any line may name a feature.
   return (
     <Cites.Provider value={cites}>
@@ -295,18 +369,22 @@ function AnswerBody({ text, live, cites }: { text: string; live: boolean; cites:
   }
   rest.forEach((b, i) => {
     // As the pick spaces them: a line after a line (or the title, or a label) 6 px down; after a list, none.
-    const prev = i === 0 ? (title ? "p" : null) : rest[i - 1].t;
-    const after = prev === "p" || prev === "h";
-    if (b.t === "h")
+    const prev = i === 0 ? (title ? 'p' : null) : rest[i - 1].t;
+    const after = prev === 'p' || prev === 'h';
+    if (b.t === 'h')
       out.push(
-        <p key={i} className="mt-2 text-xs leading-4 font-semibold tracking-[.06em] text-text2 uppercase" data-testid="answer-label">
+        <p
+          key={i}
+          className="mt-2 text-xs leading-4 font-semibold tracking-[.06em] text-text2 uppercase"
+          data-testid="answer-label"
+        >
           {inline(b.c, ctxOf(b.c, null))}
         </p>,
       );
-    else if (b.t === "ul" || b.t === "ol") {
+    else if (b.t === 'ul' || b.t === 'ol') {
       const List = b.t;
       out.push(
-        <List key={i} className={`mt-0.5 pl-[18px] ${b.t === "ul" ? "list-disc" : "list-decimal"}`}>
+        <List key={i} className={`mt-0.5 pl-[18px] ${b.t === 'ul' ? 'list-disc' : 'list-decimal'}`}>
           {b.items.map((it, j) => (
             <li key={j} className="my-px">
               {inline(it, ctxOf(it, namer))}
@@ -314,13 +392,13 @@ function AnswerBody({ text, live, cites }: { text: string; live: boolean; cites:
           ))}
         </List>,
       );
-    } else if (b.t === "pre")
+    } else if (b.t === 'pre')
       out.push(
-        <pre key={i} className={`${after ? "mt-1.5" : ""} font-sans whitespace-pre-wrap`}>
+        <pre key={i} className={`${after ? 'mt-1.5' : ''} font-sans whitespace-pre-wrap`}>
           {b.v}
-        </pre>
+        </pre>,
       );
-    else if (b.t === "table")
+    else if (b.t === 'table')
       out.push(
         <ul key={i} className="mt-0.5 list-disc pl-[18px]">
           {b.rows.map((r, j) => {
@@ -329,7 +407,7 @@ function AnswerBody({ text, live, cites }: { text: string; live: boolean; cites:
               <li key={j} className="my-px">
                 {r.map((c, k) => (
                   <Fragment key={k}>
-                    {k > 0 && " · "}
+                    {k > 0 && ' · '}
                     {inline(c, ctx)}
                   </Fragment>
                 ))}
@@ -339,9 +417,9 @@ function AnswerBody({ text, live, cites }: { text: string; live: boolean; cites:
         </ul>,
       );
     else {
-      const c = "c" in b ? b.c : [];
+      const c = 'c' in b ? b.c : [];
       out.push(
-        <p key={i} className={`${after ? "mt-1.5" : ""} whitespace-pre-wrap`}>
+        <p key={i} className={`${after ? 'mt-1.5' : ''} whitespace-pre-wrap`}>
           {inline(c, ctxOf(c, namer))}
         </p>,
       );
@@ -351,28 +429,51 @@ function AnswerBody({ text, live, cites }: { text: string; live: boolean; cites:
 }
 
 /** One source under an answer: an icon, its words, a link when it has one. A live read is its words alone, as Detailed's live chip. */
-function source(c: AnswerCite, zone: string): { key: string; icon: "prds" | "roadmap" | "flag" | "link" | null; words: string; url: string | null } | null {
-  if (c.kind === "live") {
-    const words = liveWords({ ...c, source: c.source || "Meeting notes" }, zone);
+function source(
+  c: AnswerCite,
+  zone: string,
+): {
+  key: string;
+  icon: 'prds' | 'roadmap' | 'flag' | 'link' | null;
+  words: string;
+  url: string | null;
+} | null {
+  if (c.kind === 'live') {
+    const words = liveWords({ ...c, source: c.source || 'Meeting notes' }, zone);
     return { key: `live:${c.ref ?? words}`, icon: null, words, url: null };
   }
-  const title = String(c.title ?? c.label ?? "").trim();
+  const title = String(c.title ?? c.label ?? '').trim();
   if (!title) return null;
-  const after = (s: string) => s.slice(s.indexOf(": ") + 2);
+  const after = (s: string) => s.slice(s.indexOf(': ') + 2);
   const url = c.url && isSafeHref(c.url) ? c.url : null;
   switch (c.kind) {
-    case "simple_source":
-      return { key: title, icon: title.startsWith("From the roadmap") ? "roadmap" : "prds", words: title, url };
-    case "section":
-    case "document":
-      return { key: title, icon: "prds", words: `From the PRD · ${title.includes(": ") ? after(title) : title}`, url };
-    case "roadmap_item":
-    case "milestone":
-      return { key: title, icon: "roadmap", words: `Open ${title.includes(": ") ? after(title) : title} on the roadmap`, url };
-    case "decision":
-      return { key: title, icon: "flag", words: `Open ${title}`, url };
+    case 'simple_source':
+      return {
+        key: title,
+        icon: title.startsWith('From the roadmap') ? 'roadmap' : 'prds',
+        words: title,
+        url,
+      };
+    case 'section':
+    case 'document':
+      return {
+        key: title,
+        icon: 'prds',
+        words: `From the PRD · ${title.includes(': ') ? after(title) : title}`,
+        url,
+      };
+    case 'roadmap_item':
+    case 'milestone':
+      return {
+        key: title,
+        icon: 'roadmap',
+        words: `Open ${title.includes(': ') ? after(title) : title} on the roadmap`,
+        url,
+      };
+    case 'decision':
+      return { key: title, icon: 'flag', words: `Open ${title}`, url };
     default:
-      return { key: title, icon: "link", words: title, url };
+      return { key: title, icon: 'link', words: title, url };
   }
 }
 
@@ -383,8 +484,11 @@ export function AnswerSources({ cites }: { cites: AnswerCite[] }) {
   const rank = { prds: 0, roadmap: 1, flag: 2, link: 3, live: 4 } as const;
   const list = cites
     .map((c) => source(c, zone))
-    .filter((s): s is NonNullable<ReturnType<typeof source>> => !!s && !seen.has(s.words) && !!seen.add(s.words))
-    .sort((a, b) => rank[a.icon ?? "live"] - rank[b.icon ?? "live"]);
+    .filter(
+      (s): s is NonNullable<ReturnType<typeof source>> =>
+        !!s && !seen.has(s.words) && !!seen.add(s.words),
+    )
+    .sort((a, b) => rank[a.icon ?? 'live'] - rank[b.icon ?? 'live']);
   if (list.length === 0) return null;
   return (
     <p className="mt-2.5 flex flex-wrap gap-x-3.5 gap-y-1" data-testid="answer-sources">
@@ -396,9 +500,14 @@ export function AnswerSources({ cites }: { cites: AnswerCite[] }) {
           </>
         );
         // A live read is no link: its words in the line's quieter colour.
-        const cls = `inline-flex items-center gap-1.5 text-[13px] leading-[18px] font-semibold ${s.icon ? "text-accent-ink" : "text-text2"}`;
+        const cls = `inline-flex items-center gap-1.5 text-[13px] leading-[18px] font-semibold ${s.icon ? 'text-accent-ink' : 'text-text2'}`;
         return s.url ? (
-          <Link key={s.key} href={s.url} className={`${cls} hover:underline`} data-testid="answer-source">
+          <Link
+            key={s.key}
+            href={s.url}
+            className={`${cls} hover:underline`}
+            data-testid="answer-source"
+          >
             {inner}
           </Link>
         ) : (

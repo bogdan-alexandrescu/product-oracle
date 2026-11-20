@@ -1,6 +1,6 @@
-import { MOCK_SCENARIO_KEY, MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from "../lib/api/mock/server";
-import { login, openRoadmapItem, signOut } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { MOCK_SCENARIO_KEY, MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from '../lib/api/mock/server';
+import { login, openRoadmapItem, signOut } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /**
  * roadmap-decide (the owner's Nov 4 rule: a person always sees what is happening to a roadmap
@@ -31,19 +31,22 @@ const DESKTOP = { viewport: { width: 1440, height: 900 } };
 
 async function open(page: Page, scenario?: string) {
   if (scenario)
-    await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, scenario] as const);
+    await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [
+      MOCK_SCENARIO_KEY,
+      scenario,
+    ] as const);
   await login(page);
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
 }
 
-const strip = (page: Page) => page.getByTestId("conflicts");
-const tray = (page: Page) => page.getByTestId("decision-tray");
-const badge = (page: Page) => page.getByTestId("simple-nav-roadmap-count").first();
+const strip = (page: Page) => page.getByTestId('conflicts');
+const tray = (page: Page) => page.getByTestId('decision-tray');
+const badge = (page: Page) => page.getByTestId('simple-nav-roadmap-count').first();
 
 /** The strip's own count ("⚠ 2 broken links"; 0 for "No broken links"). */
 async function stripCount(page: Page): Promise<number> {
-  const words = (await strip(page).innerText()).split("\n")[0];
+  const words = (await strip(page).innerText()).split('\n')[0];
   if (/No broken links/.test(words)) return 0;
   return Number(/(\d+) broken link/.exec(words)?.[1] ?? NaN);
 }
@@ -54,241 +57,348 @@ const tileWhole = (t: string) => Number(/of (\d+)/.exec(t)?.[1] ?? tileHere(t));
 
 /** Needs a decision's Broken links tile: the whole roadmap's count. */
 async function trayLinks(page: Page): Promise<number> {
-  await page.getByTestId("needs-decision").click();
-  const tile = tray(page).getByTestId("tray-counter").filter({ hasText: "Broken links" });
-  const n = tileWhole(await tile.locator("b").innerText());
-  await tray(page).getByRole("button", { name: "Close" }).click();
+  await page.getByTestId('needs-decision').click();
+  const tile = tray(page).getByTestId('tray-counter').filter({ hasText: 'Broken links' });
+  const n = tileWhole(await tile.locator('b').innerText());
+  await tray(page).getByRole('button', { name: 'Close' }).click();
   return n;
 }
 
 /** The side menu's Roadmap count says how many broken links it holds. */
 async function badgeLinks(page: Page): Promise<number> {
-  const words = (await badge(page).getAttribute("aria-label")) ?? "";
+  const words = (await badge(page).getAttribute('aria-label')) ?? '';
   return Number(/(\d+) broken link/.exec(words)?.[1] ?? NaN);
 }
 
 async function homeLinks(page: Page): Promise<number> {
-  await page.goto("/simple");
-  const tile = page.getByTestId("home-summary-broken-links");
-  await expect(tile).not.toContainText("–");
-  return Number(await tile.locator(".simple-number").innerText());
+  await page.goto('/simple');
+  const tile = page.getByTestId('home-summary-broken-links');
+  await expect(tile).not.toContainText('–');
+  return Number(await tile.locator('.simple-number').innerText());
 }
 
 test.use(DESKTOP);
 
-test("acting on a broken link drops the strip, Needs a decision, Home and the side menu together", async ({ page }) => {
+test('acting on a broken link drops the strip, Needs a decision, Home and the side menu together', async ({
+  page,
+}) => {
   await open(page);
   const before = await stripCount(page);
   expect(before).toBeGreaterThan(0);
   expect(await trayLinks(page)).toBe(before);
   await expect.poll(() => badgeLinks(page)).toBe(before);
-  await page.getByTestId("needs-decision").click();
-  await expect(tray(page).getByTestId("tray-scope")).not.toContainText("can differ");
-  await tray(page).getByRole("button", { name: "Close" }).click();
+  await page.getByTestId('needs-decision').click();
+  await expect(tray(page).getByTestId('tray-scope')).not.toContainText('can differ');
+  await tray(page).getByRole('button', { name: 'Close' }).click();
   // pre-demo QA S-5: Home's tile counts the same broken links (every red flag with a fix, an end past its milestone too).
   const home = await homeLinks(page);
   expect(home).toBe(before);
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  await strip(page).locator('[data-testid="conflict"][data-item="alert-digest"]').getByRole("button", { name: "Move the dependents" }).click();
-  await expect(page.getByText(/Moved what depends on 'Alert rules engine' in your working draft/)).toBeVisible();
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
+  await strip(page)
+    .locator('[data-testid="conflict"][data-item="alert-digest"]')
+    .getByRole('button', { name: 'Move the dependents' })
+    .click();
+  await expect(
+    page.getByText(/Moved what depends on 'Alert rules engine' in your working draft/),
+  ).toBeVisible();
   // The prompt leaves at once, without a reload; every count drops with it.
   // Its end past its milestone Beta stays a broken link of its own.
-  await expect(strip(page).locator('[data-testid="conflict"][data-item="alert-digest"]').filter({ hasText: "starts" })).toHaveCount(0);
+  await expect(
+    strip(page)
+      .locator('[data-testid="conflict"][data-item="alert-digest"]')
+      .filter({ hasText: 'starts' }),
+  ).toHaveCount(0);
   await expect.poll(() => stripCount(page)).toBe(before - 1);
   expect(await trayLinks(page)).toBe(before - 1);
   await expect.poll(() => badgeLinks(page)).toBe(before - 1);
   expect(await homeLinks(page)).toBe(home - 1);
 });
 
-test("the draft's change list names the item on every line, and the banner says who acts next", async ({ page }) => {
+test("the draft's change list names the item on every line, and the banner says who acts next", async ({
+  page,
+}) => {
   await open(page);
-  await strip(page).locator('[data-testid="conflict"][data-item="alert-digest"]').getByRole("button", { name: "Move the dependents" }).click();
-  const banner = page.getByTestId("draft-banner");
+  await strip(page)
+    .locator('[data-testid="conflict"][data-item="alert-digest"]')
+    .getByRole('button', { name: 'Move the dependents' })
+    .click();
+  const banner = page.getByTestId('draft-banner');
   // roadmap-decide (owner, Nov 4: draft, shown live): the decider approves and publishes in place.
-  await expect(banner.getByTestId("draft-next")).toContainText("Next: you approve it");
-  await expect(banner).not.toContainText("no approved version yet");
-  await banner.getByRole("button", { name: "See changes" }).click();
-  const rows = banner.getByTestId("draft-changes").locator("li");
+  await expect(banner.getByTestId('draft-next')).toContainText('Next: you approve it');
+  await expect(banner).not.toContainText('no approved version yet');
+  await banner.getByRole('button', { name: 'See changes' }).click();
+  const rows = banner.getByTestId('draft-changes').locator('li');
   // A Ground Truth feature reads with its code before its name.
-  await expect(rows.first()).toContainText("Move the dependents: F-79 Weekly alert digest");
+  await expect(rows.first()).toContainText('Move the dependents: F-79 Weekly alert digest');
   for (const row of await rows.all()) await expect(row).toContainText(/: \S/);
-  await expect(banner.getByRole("button", { name: "Send for review" })).toHaveCount(0);
-  await banner.getByTestId("draft-publish").click();
+  await expect(banner.getByRole('button', { name: 'Send for review' })).toHaveCount(0);
+  await banner.getByTestId('draft-publish').click();
   await expect(page.getByText(/Approved: .* is published/)).toBeVisible();
 });
 
 async function cutKeepingDependents(page: Page, key: string) {
   await openRoadmapItem(page, key);
-  const card = page.getByTestId("floating-card");
+  const card = page.getByTestId('floating-card');
   // The feature panel: a desktop's talk is beside the details, a phone's behind its tab.
-  const talkTab = card.getByRole("tab", { name: "Talk to Oracle" });
+  const talkTab = card.getByRole('tab', { name: 'Talk to Oracle' });
   if (await talkTab.isVisible()) await talkTab.click();
   // This line's feature panel (PR 1297) opens its talk from its Talk to Oracle button on a desktop.
-  else await card.getByRole("button", { name: "Talk to Oracle" }).click();
-  const talk = card.getByTestId("item-talk");
-  await talk.getByRole("textbox", { name: "Message Oracle" }).fill("cut it");
-  await talk.getByRole("button", { name: "Send" }).click();
-  await talk.getByTestId("chat-card").filter({ hasText: "Cut Alert rules engine" }).getByRole("button", { name: "Cut it, keep the dependents" }).click();
-  await card.getByRole("button", { name: "Close" }).first().click().catch(() => undefined);
+  else await card.getByRole('button', { name: 'Talk to Oracle' }).click();
+  const talk = card.getByTestId('item-talk');
+  await talk.getByRole('textbox', { name: 'Message Oracle' }).fill('cut it');
+  await talk.getByRole('button', { name: 'Send' }).click();
+  await talk
+    .getByTestId('chat-card')
+    .filter({ hasText: 'Cut Alert rules engine' })
+    .getByRole('button', { name: 'Cut it, keep the dependents' })
+    .click();
+  await card
+    .getByRole('button', { name: 'Close' })
+    .first()
+    .click()
+    .catch(() => undefined);
   // The feature panel closes on Escape too; its backdrop gone, the page is clickable again.
-  if (await page.getByTestId("floating-card-backdrop").isVisible()) await page.keyboard.press("Escape");
-  await expect(page.getByTestId("floating-card-backdrop")).toHaveCount(0);
+  if (await page.getByTestId('floating-card-backdrop').isVisible())
+    await page.keyboard.press('Escape');
+  await expect(page.getByTestId('floating-card-backdrop')).toHaveCount(0);
 }
 
-test("a cut item others depend on: Bring it back, or Remove the dependency, each with Undo", async ({ page }) => {
-  await open(page, "roadmap-talk");
-  await cutKeepingDependents(page, "alert-rules");
+test('a cut item others depend on: Bring it back, or Remove the dependency, each with Undo', async ({
+  page,
+}) => {
+  await open(page, 'roadmap-talk');
+  await cutKeepingDependents(page, 'alert-rules');
   const cut: Locator = strip(page).locator('[data-testid="conflict"][data-item="alert-rules"]');
-  await expect(cut).toContainText("Cut, but");
-  await expect(cut.getByRole("button", { name: "Bring it back" })).toBeVisible();
+  await expect(cut).toContainText('Cut, but');
+  await expect(cut.getByRole('button', { name: 'Bring it back' })).toBeVisible();
   // A cut item is never listed as starting before what it depends on ends.
-  await expect(strip(page)).not.toContainText("‘Alert rules engine’ starts");
-  const removes = cut.getByRole("button", { name: /^Remove the dependency/ });
+  await expect(strip(page)).not.toContainText('‘Alert rules engine’ starts');
+  const removes = cut.getByRole('button', { name: /^Remove the dependency/ });
   const n = await removes.count();
   expect(n).toBeGreaterThan(0);
   await removes.first().click();
-  await expect(page.getByText(/Removed the dependency of ‘.*’ on ‘Alert rules engine’/)).toBeVisible();
+  await expect(
+    page.getByText(/Removed the dependency of ‘.*’ on ‘Alert rules engine’/),
+  ).toBeVisible();
   if (n === 1) await expect(cut).toHaveCount(0);
-  else await expect(cut.getByRole("button", { name: /^Remove the dependency/ })).toHaveCount(n - 1);
-  await page.getByRole("button", { name: "Undo" }).first().click();
-  await expect(cut.getByRole("button", { name: /^Remove the dependency/ })).toHaveCount(n);
-  await cut.getByRole("button", { name: "Bring it back" }).click();
+  else await expect(cut.getByRole('button', { name: /^Remove the dependency/ })).toHaveCount(n - 1);
+  await page.getByRole('button', { name: 'Undo' }).first().click();
+  await expect(cut.getByRole('button', { name: /^Remove the dependency/ })).toHaveCount(n);
+  await cut.getByRole('button', { name: 'Bring it back' }).click();
   await expect(page.getByText("Brought back 'Alert rules engine'", { exact: false })).toBeVisible();
   await expect(cut).toHaveCount(0);
 });
 
-test("under a filter, every dependent of a cut item can drop it, and every count reads the whole roadmap", async ({ page }) => {
-  await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "roadmap-talk-two-deps"] as const);
+test('under a filter, every dependent of a cut item can drop it, and every count reads the whole roadmap', async ({
+  page,
+}) => {
+  await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [
+    MOCK_SCENARIO_KEY,
+    'roadmap-talk-two-deps',
+  ] as const);
   await login(page);
   // The Grow retention goal: Alert SLA report shows, Reliability work (which it also waits on) and Uptime alerts do not.
-  await page.goto("/simple/roadmap?goal=grow-retention");
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await page.goto('/simple/roadmap?goal=grow-retention');
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
   await expect(page.locator('[data-testid="timeline-row"][data-item="alert-sla"]')).toHaveCount(1);
-  await expect(page.locator('[data-testid="timeline-row"][data-item="uptime-alerts"]')).toHaveCount(0);
-  await cutKeepingDependents(page, "alert-rules");
+  await expect(page.locator('[data-testid="timeline-row"][data-item="uptime-alerts"]')).toHaveCount(
+    0,
+  );
+  await cutKeepingDependents(page, 'alert-rules');
   const cut = strip(page).locator('[data-testid="conflict"][data-item="alert-rules"]');
-  await expect(cut).toContainText("Cut, but");
+  await expect(cut).toContainText('Cut, but');
   // Uptime alerts is out of this view, yet it depends on the cut item: its button is there.
-  await expect(cut.getByRole("button", { name: "Remove the dependency of ‘Uptime alerts’" })).toBeVisible();
-  await cut.getByRole("button", { name: "Remove the dependency of ‘Alert SLA report’" }).click();
-  await expect(page.getByText("Removed the dependency of ‘Alert SLA report’ on ‘Alert rules engine’", { exact: false })).toBeVisible();
-  await expect(cut.getByRole("button", { name: "Remove the dependency of ‘Alert SLA report’" })).toHaveCount(0);
-  await expect(cut.getByRole("button", { name: "Remove the dependency of ‘Uptime alerts’" })).toBeVisible();
+  await expect(
+    cut.getByRole('button', { name: 'Remove the dependency of ‘Uptime alerts’' }),
+  ).toBeVisible();
+  await cut.getByRole('button', { name: 'Remove the dependency of ‘Alert SLA report’' }).click();
+  await expect(
+    page.getByText('Removed the dependency of ‘Alert SLA report’ on ‘Alert rules engine’', {
+      exact: false,
+    }),
+  ).toBeVisible();
+  await expect(
+    cut.getByRole('button', { name: 'Remove the dependency of ‘Alert SLA report’' }),
+  ).toHaveCount(0);
+  await expect(
+    cut.getByRole('button', { name: 'Remove the dependency of ‘Uptime alerts’' }),
+  ).toBeVisible();
   // One number everywhere: the side menu, the strip's "in all" and Needs a decision count the whole roadmap.
-  const all = strip(page).getByTestId("conflicts-all");
+  const all = strip(page).getByTestId('conflicts-all');
   await expect(all).toContainText(/\d+ in all/);
   const whole = Number(/(\d+) in all/.exec(await all.innerText())![1]);
   expect(whole).toBeGreaterThan(await stripCount(page));
   await expect.poll(() => badgeLinks(page)).toBe(whole);
   expect(await trayLinks(page)).toBe(whole);
-  await page.getByTestId("needs-decision").click();
+  await page.getByTestId('needs-decision').click();
   const shown = await stripCount(page);
-  await expect(tray(page).getByTestId("tray-links-here")).toContainText(`${shown} of the ${whole} broken ${whole === 1 ? "link" : "links"} ${shown === 1 ? "is" : "are"} in these filters`);
-  await tray(page).getByRole("button", { name: "Close" }).click();
-  await all.getByRole("button", { name: "Clear filters" }).click();
-  await expect(page.locator('[data-testid="timeline-row"][data-item="uptime-alerts"]')).toHaveCount(1);
-  await expect(strip(page).getByTestId("conflicts-all")).toHaveCount(0);
+  await expect(tray(page).getByTestId('tray-links-here')).toContainText(
+    `${shown} of the ${whole} broken ${whole === 1 ? 'link' : 'links'} ${shown === 1 ? 'is' : 'are'} in these filters`,
+  );
+  await tray(page).getByRole('button', { name: 'Close' }).click();
+  await all.getByRole('button', { name: 'Clear filters' }).click();
+  await expect(page.locator('[data-testid="timeline-row"][data-item="uptime-alerts"]')).toHaveCount(
+    1,
+  );
+  await expect(strip(page).getByTestId('conflicts-all')).toHaveCount(0);
   await expect.poll(() => stripCount(page)).toBe(whole);
 });
 
-test("Approve and publish names the required reviewers still to come before the click", async ({ page }) => {
-  await open(page, "roadmap-reviewers");
-  await strip(page).locator('[data-testid="conflict"][data-item="alert-digest"]').getByRole("button", { name: "Move the dependents" }).click();
-  const banner = page.getByTestId("draft-banner");
-  await expect(banner.getByTestId("draft-next")).toContainText("Next: you approve it, then Priya Raman reviews it. When they approve, version");
-  await banner.getByTestId("draft-publish").click();
+test('Approve and publish names the required reviewers still to come before the click', async ({
+  page,
+}) => {
+  await open(page, 'roadmap-reviewers');
+  await strip(page)
+    .locator('[data-testid="conflict"][data-item="alert-digest"]')
+    .getByRole('button', { name: 'Move the dependents' })
+    .click();
+  const banner = page.getByTestId('draft-banner');
+  await expect(banner.getByTestId('draft-next')).toContainText(
+    'Next: you approve it, then Priya Raman reviews it. When they approve, version',
+  );
+  await banner.getByTestId('draft-publish').click();
   await expect(page.getByText(/Approved: .* waits for 1 more reviewer/)).toBeVisible();
-  await expect(banner.getByTestId("draft-next")).toContainText("it waits for Priya Raman to approve");
+  await expect(banner.getByTestId('draft-next')).toContainText(
+    'it waits for Priya Raman to approve',
+  );
 });
 
-test("with two working drafts, the banner has a line per draft: its roadmap, its own next step, its own button", async ({ page }) => {
-  await open(page, "roadmap-two-drafts");
-  await strip(page).locator('[data-testid="conflict"][data-item="alert-digest"]').getByRole("button", { name: "Move the dependents" }).click();
-  await expect(page.getByText(/Moved what depends on 'Alert rules engine' in your working draft/)).toBeVisible();
+test('with two working drafts, the banner has a line per draft: its roadmap, its own next step, its own button', async ({
+  page,
+}) => {
+  await open(page, 'roadmap-two-drafts');
+  await strip(page)
+    .locator('[data-testid="conflict"][data-item="alert-digest"]')
+    .getByRole('button', { name: 'Move the dependents' })
+    .click();
+  await expect(
+    page.getByText(/Moved what depends on 'Alert rules engine' in your working draft/),
+  ).toBeVisible();
   // Guided setup's roadmap, which Priya Raman decides: the owner sends its draft for review.
-  await strip(page).locator('[data-testid="conflict"][data-item="setup-tour"]').getByRole("button", { name: "Bring it back" }).click();
+  await strip(page)
+    .locator('[data-testid="conflict"][data-item="setup-tour"]')
+    .getByRole('button', { name: 'Bring it back' })
+    .click();
   await expect(page.getByText(/Brought back 'In-app tour'/)).toBeVisible();
-  const banner = page.getByTestId("draft-banner");
-  const lines = banner.getByTestId("draft-line");
+  const banner = page.getByTestId('draft-banner');
+  const lines = banner.getByTestId('draft-line');
   await expect(lines).toHaveCount(2);
-  const alerts = lines.filter({ hasText: "Alerts roadmap" });
-  const onboarding = lines.filter({ hasText: "Onboarding roadmap" });
-  await expect(alerts.getByTestId("draft-next")).toContainText("Next: you approve it");
-  await expect(alerts.getByRole("button", { name: "Approve and publish" })).toBeVisible();
-  await expect(alerts.getByRole("button", { name: "Send for review" })).toHaveCount(0);
-  await expect(onboarding.getByTestId("draft-next")).toContainText("Next: you send it for review.");
-  await expect(onboarding.getByRole("button", { name: "Approve and publish" })).toHaveCount(0);
-  await onboarding.getByRole("button", { name: "Send for review" }).click();
+  const alerts = lines.filter({ hasText: 'Alerts roadmap' });
+  const onboarding = lines.filter({ hasText: 'Onboarding roadmap' });
+  await expect(alerts.getByTestId('draft-next')).toContainText('Next: you approve it');
+  await expect(alerts.getByRole('button', { name: 'Approve and publish' })).toBeVisible();
+  await expect(alerts.getByRole('button', { name: 'Send for review' })).toHaveCount(0);
+  await expect(onboarding.getByTestId('draft-next')).toContainText('Next: you send it for review.');
+  await expect(onboarding.getByRole('button', { name: 'Approve and publish' })).toHaveCount(0);
+  await onboarding.getByRole('button', { name: 'Send for review' }).click();
   await expect(page.getByText(/Sent for review/).first()).toBeVisible();
   // Sent, the line says so with its own step: Priya Raman decides it, so it waits for her (as the
   // API has it, the owner who sent it does not approve it); no Send for review is left, disabled or not.
-  await expect(onboarding.getByTestId("draft-next")).toContainText("Sent for review: it waits for Priya Raman to approve");
-  await expect(onboarding.getByTestId("draft-next")).not.toContainText("your approval");
-  await expect(onboarding.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
-  await expect(banner.getByRole("button", { name: "Send for review" })).toHaveCount(0);
-  await alerts.getByRole("button", { name: "Approve and publish" }).click();
+  await expect(onboarding.getByTestId('draft-next')).toContainText(
+    'Sent for review: it waits for Priya Raman to approve',
+  );
+  await expect(onboarding.getByTestId('draft-next')).not.toContainText('your approval');
+  await expect(onboarding.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
+  await expect(banner.getByRole('button', { name: 'Send for review' })).toHaveCount(0);
+  await alerts.getByRole('button', { name: 'Approve and publish' }).click();
   await expect(page.getByText(/Approved: Alerts roadmap is published/)).toBeVisible();
 });
 
 test("Home's Open draft to approve opens the Roadmap on that draft", async ({ page }) => {
-  await open(page, "roadmap-two-drafts");
-  await strip(page).locator('[data-testid="conflict"][data-item="alert-digest"]').getByRole("button", { name: "Move the dependents" }).click();
-  await expect(page.getByText(/Moved what depends on 'Alert rules engine' in your working draft/)).toBeVisible();
-  await strip(page).locator('[data-testid="conflict"][data-item="setup-tour"]').getByRole("button", { name: "Bring it back" }).click();
+  await open(page, 'roadmap-two-drafts');
+  await strip(page)
+    .locator('[data-testid="conflict"][data-item="alert-digest"]')
+    .getByRole('button', { name: 'Move the dependents' })
+    .click();
+  await expect(
+    page.getByText(/Moved what depends on 'Alert rules engine' in your working draft/),
+  ).toBeVisible();
+  await strip(page)
+    .locator('[data-testid="conflict"][data-item="setup-tour"]')
+    .getByRole('button', { name: 'Bring it back' })
+    .click();
   await expect(page.getByText(/Brought back 'In-app tour'/)).toBeVisible();
-  await page.goto("/simple");
-  await page.getByTestId("home-draft").filter({ hasText: "Alerts roadmap" }).getByRole("link", { name: "Open draft to approve" }).click();
+  await page.goto('/simple');
+  await page
+    .getByTestId('home-draft')
+    .filter({ hasText: 'Alerts roadmap' })
+    .getByRole('link', { name: 'Open draft to approve' })
+    .click();
   await expect(page).toHaveURL(/\/simple\/roadmap\?draft=/);
-  const focused = page.getByTestId("draft-banner").locator('[data-testid="draft-line"][data-focused="true"]');
+  const focused = page
+    .getByTestId('draft-banner')
+    .locator('[data-testid="draft-line"][data-focused="true"]');
   await expect(focused).toHaveCount(1);
-  await expect(focused).toContainText("Alerts roadmap");
-  await expect(focused.getByRole("button", { name: "Approve and publish" })).toBeFocused();
+  await expect(focused).toContainText('Alerts roadmap');
+  await expect(focused.getByRole('button', { name: 'Approve and publish' })).toBeFocused();
 });
 
-test("a change asked of a PRD is its owner's to approve: on the chip and under Proposals", async ({ page }) => {
-  await open(page, "simple-prd-milestones");
-  await page.getByTestId("ms-prd-label").filter({ hasText: "Digest for all teams" }).click();
-  const prd = page.getByTestId("ms-prd-card");
-  await prd.getByLabel("Date").fill("2027-01-05");
-  await prd.getByRole("button", { name: "Ask to change it" }).click();
-  const chip = page.getByTestId("ms-asked");
-  await expect(chip).toHaveText("Asked the PRD: move M4 Digest for all teams to Jan 5 · waits for Nora Vance");
+test("a change asked of a PRD is its owner's to approve: on the chip and under Proposals", async ({
+  page,
+}) => {
+  await open(page, 'simple-prd-milestones');
+  await page.getByTestId('ms-prd-label').filter({ hasText: 'Digest for all teams' }).click();
+  const prd = page.getByTestId('ms-prd-card');
+  await prd.getByLabel('Date').fill('2027-01-05');
+  await prd.getByRole('button', { name: 'Ask to change it' }).click();
+  const chip = page.getByTestId('ms-asked');
+  await expect(chip).toHaveText(
+    'Asked the PRD: move M4 Digest for all teams to Jan 5 · waits for Nora Vance',
+  );
   // The company's owner decides it: listed under Needs a decision > Proposals.
-  await page.getByTestId("needs-decision").click();
-  await expect(tray(page).getByTestId("tray-proposal").filter({ hasText: /PRD milestone ‘M\d+ Digest for all teams’/ })).toBeVisible();
-  await tray(page).getByRole("button", { name: "Close" }).click();
+  await page.getByTestId('needs-decision').click();
+  await expect(
+    tray(page)
+      .getByTestId('tray-proposal')
+      .filter({ hasText: /PRD milestone ‘M\d+ Digest for all teams’/ }),
+  ).toBeVisible();
+  await tray(page).getByRole('button', { name: 'Close' }).click();
   await chip.click();
-  const decide = page.getByTestId("ms-asked-decide");
-  await expect(decide.getByRole("button", { name: "Decline" })).toBeVisible();
-  await decide.getByRole("button", { name: "Approve" }).click();
-  await expect(page.getByText("Approved: M4 Digest for all teams moves to Jan 5 in the PRD")).toBeVisible();
+  const decide = page.getByTestId('ms-asked-decide');
+  await expect(decide.getByRole('button', { name: 'Decline' })).toBeVisible();
+  await decide.getByRole('button', { name: 'Approve' }).click();
+  await expect(
+    page.getByText('Approved: M4 Digest for all teams moves to Jan 5 in the PRD'),
+  ).toBeVisible();
   await expect(chip).toHaveCount(0);
-  await page.getByTestId("needs-decision").click();
-  await expect(tray(page).getByTestId("tray-proposal").filter({ hasText: "PRD milestone" })).toHaveCount(0);
+  await page.getByTestId('needs-decision').click();
+  await expect(
+    tray(page).getByTestId('tray-proposal').filter({ hasText: 'PRD milestone' }),
+  ).toHaveCount(0);
 });
 
-test("milestone labels and the PRD ask keep to their header row: none covers another or a bar, at every zoom", async ({ page }) => {
-  await open(page, "simple-prd-milestones");
-  await page.getByTestId("ms-prd-label").filter({ hasText: "Digest for all teams" }).click();
-  const prd = page.getByTestId("ms-prd-card");
-  await prd.getByLabel("Date").fill("2027-01-05");
-  await prd.getByRole("button", { name: "Ask to change it" }).click();
-  await expect(page.getByTestId("ms-asked")).toBeVisible();
-  for (const zoom of ["6m", "1y", "all"]) {
+test('milestone labels and the PRD ask keep to their header row: none covers another or a bar, at every zoom', async ({
+  page,
+}) => {
+  await open(page, 'simple-prd-milestones');
+  await page.getByTestId('ms-prd-label').filter({ hasText: 'Digest for all teams' }).click();
+  const prd = page.getByTestId('ms-prd-card');
+  await prd.getByLabel('Date').fill('2027-01-05');
+  await prd.getByRole('button', { name: 'Ask to change it' }).click();
+  await expect(page.getByTestId('ms-asked')).toBeVisible();
+  for (const zoom of ['6m', '1y', 'all']) {
     await page.getByTestId(`zoom-${zoom}`).click();
-    await expect(page.getByTestId(`zoom-${zoom}`)).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTestId(`zoom-${zoom}`)).toHaveAttribute('aria-pressed', 'true');
     const hits = await page.evaluate(() => {
       const box = (e: Element) => e.getBoundingClientRect();
-      const meet = (a: DOMRect, b: DOMRect) => a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
-      const labels = [...document.querySelectorAll("[data-ms-label]")].filter((e) => (e as HTMLElement).style.visibility !== "hidden");
+      const meet = (a: DOMRect, b: DOMRect) =>
+        a.left < b.right - 1 &&
+        b.left < a.right - 1 &&
+        a.top < b.bottom - 1 &&
+        b.top < a.bottom - 1;
+      const labels = [...document.querySelectorAll('[data-ms-label]')].filter(
+        (e) => (e as HTMLElement).style.visibility !== 'hidden',
+      );
       const bars = [...document.querySelectorAll('[data-testid="timeline-bar"]')];
       const out: string[] = [];
       labels.forEach((a, n) => {
         const ra = box(a);
         if (ra.height > 24) out.push(`${a.textContent} wraps`);
-        for (const b of labels.slice(n + 1)) if (meet(ra, box(b))) out.push(`${a.textContent} / ${b.textContent}`);
-        for (const b of bars) if (meet(ra, box(b))) out.push(`${a.textContent} / ${b.getAttribute("aria-label")}`);
+        for (const b of labels.slice(n + 1))
+          if (meet(ra, box(b))) out.push(`${a.textContent} / ${b.textContent}`);
+        for (const b of bars)
+          if (meet(ra, box(b))) out.push(`${a.textContent} / ${b.getAttribute('aria-label')}`);
       });
       return out;
     });
@@ -296,130 +406,180 @@ test("milestone labels and the PRD ask keep to their header row: none covers ano
   }
 });
 
-test("an item with no dates of its own says so beside its bar when the bar has no room for its dates", async ({ page }) => {
+test('an item with no dates of its own says so beside its bar when the bar has no room for its dates', async ({
+  page,
+}) => {
   await open(page);
-  await page.getByTestId("zoom-all").click();
+  await page.getByTestId('zoom-all').click();
   const row = (key: string) => page.locator(`[data-testid="timeline-row"][data-item="${key}"]`);
-  await expect(row("setup-video").getByTestId("bar-no-dates")).toHaveText(/^No dates yet · estimated [A-Z][a-z]{2} \d/);
-  await expect(row("alert-rules").getByTestId("bar-no-dates")).toHaveCount(0);
+  await expect(row('setup-video').getByTestId('bar-no-dates')).toHaveText(
+    /^No dates yet · estimated [A-Z][a-z]{2} \d/,
+  );
+  await expect(row('alert-rules').getByTestId('bar-no-dates')).toHaveCount(0);
 });
 
 /** How many lines a cut flag's sentence takes. */
 async function sentenceLines(row: Locator): Promise<number> {
-  return row.locator("button").first().evaluate((el) => Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)));
+  return row
+    .locator('button')
+    .first()
+    .evaluate((el) =>
+      Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)),
+    );
 }
 
-test("a cut flag with many fixes keeps its sentence to two lines, its fixes on their own line under it, at 1440 and 390", async ({ page }) => {
-  await open(page, "roadmap-talk-two-deps");
-  await cutKeepingDependents(page, "alert-rules");
+test('a cut flag with many fixes keeps its sentence to two lines, its fixes on their own line under it, at 1440 and 390', async ({
+  page,
+}) => {
+  await open(page, 'roadmap-talk-two-deps');
+  await cutKeepingDependents(page, 'alert-rules');
   const cut = strip(page).locator('[data-testid="conflict"][data-item="alert-rules"]');
-  await expect(cut).toContainText("Cut, but");
+  await expect(cut).toContainText('Cut, but');
   // Bring it back, a Remove the dependency per dependent (four) and Accept as risk.
-  await expect(cut.getByRole("button", { name: /^Remove the dependency of/ })).toHaveCount(4);
+  await expect(cut.getByRole('button', { name: /^Remove the dependency of/ })).toHaveCount(4);
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: width > 1000 ? 900 : 844 });
     await expect.poll(() => sentenceLines(cut)).toBeLessThanOrEqual(2);
     // The fixes sit under the sentence, not beside it.
-    const words = (await cut.locator("button").first().boundingBox())!;
-    const fixes = (await cut.getByTestId("fixes").boundingBox())!;
+    const words = (await cut.locator('button').first().boundingBox())!;
+    const fixes = (await cut.getByTestId('fixes').boundingBox())!;
     expect(fixes.y).toBeGreaterThanOrEqual(words.y + words.height - 1);
     // Every fix stays inside the strip.
     const box = (await strip(page).boundingBox())!;
-    for (const b of await cut.getByTestId("fixes").getByRole("button").all()) {
+    for (const b of await cut.getByTestId('fixes').getByRole('button').all()) {
       const r = (await b.boundingBox())!;
       expect(r.x + r.width).toBeLessThanOrEqual(box.x + box.width + 1);
     }
   }
 });
 
-test("an approver's proposed Remove the dependency says who it waits for and is not offered again", async ({ page }) => {
-  await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "roadmap-talk-own-decider"] as const);
+test("an approver's proposed Remove the dependency says who it waits for and is not offered again", async ({
+  page,
+}) => {
+  await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [
+    MOCK_SCENARIO_KEY,
+    'roadmap-talk-own-decider',
+  ] as const);
   // Names answer late: the line holds its "waits for" until it knows whom, never "its decider".
-  await page.addInitScript(([key, value, msKey]) => {
-    localStorage.setItem(key, value);
-    localStorage.setItem(msKey, "4000");
-  }, [MOCK_SLOW_KEY, "/v1/people", MOCK_SLOW_MS_KEY] as const);
-  await login(page, "approver@example.com");
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  await cutKeepingDependents(page, "alert-rules");
+  await page.addInitScript(
+    ([key, value, msKey]) => {
+      localStorage.setItem(key, value);
+      localStorage.setItem(msKey, '4000');
+    },
+    [MOCK_SLOW_KEY, '/v1/people', MOCK_SLOW_MS_KEY] as const,
+  );
+  await login(page, 'approver@example.com');
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
+  await cutKeepingDependents(page, 'alert-rules');
   const cut = strip(page).locator('[data-testid="conflict"][data-item="alert-rules"]');
-  await expect(cut).toContainText("Cut, but");
-  const propose = cut.getByRole("button", { name: /^Propose: remove the dependency/ }).first();
+  await expect(cut).toContainText('Cut, but');
+  const propose = cut.getByRole('button', { name: /^Propose: remove the dependency/ }).first();
   const label = (await propose.innerText()).trim();
   await propose.click();
   // Nothing was removed yet: the toast says it was proposed, and to whom.
-  await expect(page.getByText(/^Proposed: remove the dependency of ‘.+’ on ‘Alert rules engine’; it waits for Avery Stone in Needs a decision/).first()).toBeVisible();
+  await expect(
+    page
+      .getByText(
+        /^Proposed: remove the dependency of ‘.+’ on ‘Alert rules engine’; it waits for Avery Stone in Needs a decision/,
+      )
+      .first(),
+  ).toBeVisible();
   await expect(page.getByText(/^Removed the dependency/)).toHaveCount(0);
-  await expect(cut.getByRole("button", { name: label, exact: true })).toHaveCount(0);
-  const line = cut.getByTestId("fix-proposed").first();
+  await expect(cut.getByRole('button', { name: label, exact: true })).toHaveCount(0);
+  const line = cut.getByTestId('fix-proposed').first();
   await expect(line).toBeVisible();
-  await expect(line).not.toContainText("its decider");
+  await expect(line).not.toContainText('its decider');
   await expect(line).toContainText(/[Pp]roposed,? waits for Avery Stone/, { timeout: 15_000 });
   // The proposed line's item name opens that item's panel, as other item names do, and looks it.
   const dependent = /of ‘(.+?)’/.exec(await line.innerText())![1];
-  const name = line.getByRole("button", { name: `‘${dependent}’` });
+  const name = line.getByRole('button', { name: `‘${dependent}’` });
   const accent = await page.evaluate(() => {
-    const probe = document.createElement("span");
-    probe.style.color = "var(--accent-ink)";
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--accent-ink)';
     document.body.append(probe);
     const c = getComputedStyle(probe).color;
     probe.remove();
     return c;
   });
-  await expect(name).toHaveCSS("color", accent);
+  await expect(name).toHaveCSS('color', accent);
   await name.click();
-  await expect(page.getByTestId("floating-card")).toContainText(dependent);
+  await expect(page.getByTestId('floating-card')).toContainText(dependent);
   // The feature panel closes (Escape) before the account menu is used: its backdrop covers the rail.
-  await page.keyboard.press("Escape");
-  await expect(page.getByTestId("floating-card-backdrop")).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('floating-card-backdrop')).toHaveCount(0);
   // The person it waits for reads "waits for you", on the strip and in Needs a decision.
   await signOut(page);
   await login(page);
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  await expect(strip(page).locator('[data-testid="conflict"][data-item="alert-rules"]').getByTestId("fix-proposed").first()).toContainText(/waits for you/);
-  await page.getByTestId("needs-decision").click();
-  await expect(tray(page).getByTestId("tray-proposal").filter({ hasText: "remove the dependency" }).first()).toContainText("waits for you");
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
+  await expect(
+    strip(page)
+      .locator('[data-testid="conflict"][data-item="alert-rules"]')
+      .getByTestId('fix-proposed')
+      .first(),
+  ).toContainText(/waits for you/);
+  await page.getByTestId('needs-decision').click();
+  await expect(
+    tray(page).getByTestId('tray-proposal').filter({ hasText: 'remove the dependency' }).first(),
+  ).toContainText('waits for you');
 });
 
-test("the decider of a draft sent for review sees Approve, not Send for review, on the owner's named draft", async ({ page }) => {
-  await open(page, "roadmap-two-drafts");
-  await strip(page).locator('[data-testid="conflict"][data-item="setup-tour"]').getByRole("button", { name: "Bring it back" }).click();
+test("the decider of a draft sent for review sees Approve, not Send for review, on the owner's named draft", async ({
+  page,
+}) => {
+  await open(page, 'roadmap-two-drafts');
+  await strip(page)
+    .locator('[data-testid="conflict"][data-item="setup-tour"]')
+    .getByRole('button', { name: 'Bring it back' })
+    .click();
   await expect(page.getByText(/Brought back 'In-app tour'/)).toBeVisible();
-  const banner = page.getByTestId("draft-banner");
-  await banner.getByRole("button", { name: "Send for review" }).click();
+  const banner = page.getByTestId('draft-banner');
+  await banner.getByRole('button', { name: 'Send for review' }).click();
   await expect(page.getByText(/Sent for review/).first()).toBeVisible();
   // Priya Raman decides the Onboarding roadmap; the people lookup answers late.
   await signOut(page);
-  await page.evaluate(([key, value, msKey]) => {
-    localStorage.setItem(key, value);
-    localStorage.setItem(msKey, "20000");
-  }, [MOCK_SLOW_KEY, "/v1/people", MOCK_SLOW_MS_KEY] as const);
-  await login(page, "approver@example.com");
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await page.evaluate(
+    ([key, value, msKey]) => {
+      localStorage.setItem(key, value);
+      localStorage.setItem(msKey, '20000');
+    },
+    [MOCK_SLOW_KEY, '/v1/people', MOCK_SLOW_MS_KEY] as const,
+  );
+  await login(page, 'approver@example.com');
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
   await expect(banner).toBeVisible();
   // Right after load, before the people lookup answers, the banner names whose draft it is.
-  await expect(banner.getByTestId("draft-words")).toContainText("Avery Stone's working draft of the Onboarding roadmap", { timeout: 10_000 });
-  await expect(banner.getByTestId("draft-words")).not.toContainText("Someone");
-  await expect(banner.getByRole("button", { name: "Send for review" })).toHaveCount(0);
-  await expect(banner.getByRole("button", { name: "Approve", exact: true })).toBeVisible();
+  await expect(banner.getByTestId('draft-words')).toContainText(
+    "Avery Stone's working draft of the Onboarding roadmap",
+    { timeout: 10_000 },
+  );
+  await expect(banner.getByTestId('draft-words')).not.toContainText('Someone');
+  await expect(banner.getByRole('button', { name: 'Send for review' })).toHaveCount(0);
+  await expect(banner.getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
   // Not hers: the banner names whose draft it is and its roadmap.
-  await expect(banner.getByTestId("draft-words")).not.toContainText("Your working draft");
-  await expect(banner.getByTestId("draft-words")).toContainText("Avery Stone's working draft of the Onboarding roadmap");
+  await expect(banner.getByTestId('draft-words')).not.toContainText('Your working draft');
+  await expect(banner.getByTestId('draft-words')).toContainText(
+    "Avery Stone's working draft of the Onboarding roadmap",
+  );
 });
 
-test("under a filter, Needs a decision says N here, M in all on one basis, and 1 of N is", async ({ page }) => {
-  await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "roadmap-talk-two-deps"] as const);
+test('under a filter, Needs a decision says N here, M in all on one basis, and 1 of N is', async ({
+  page,
+}) => {
+  await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [
+    MOCK_SCENARIO_KEY,
+    'roadmap-talk-two-deps',
+  ] as const);
   await login(page);
-  await page.goto("/simple/roadmap?goal=grow-retention");
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  await cutKeepingDependents(page, "alert-rules");
-  await expect(strip(page).getByTestId("conflicts-all")).toBeVisible();
-  const button = Number(/· (\d+)/.exec(await page.getByTestId("needs-decision").innerText())![1]);
-  await page.getByTestId("needs-decision").click();
-  const scope = tray(page).getByTestId("tray-scope");
+  await page.goto('/simple/roadmap?goal=grow-retention');
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
+  await cutKeepingDependents(page, 'alert-rules');
+  await expect(strip(page).getByTestId('conflicts-all')).toBeVisible();
+  const button = Number(/· (\d+)/.exec(await page.getByTestId('needs-decision').innerText())![1]);
+  await page.getByTestId('needs-decision').click();
+  const scope = tray(page).getByTestId('tray-scope');
   // The whole count is every roadmap the reader sees, and says so.
   const m = /^(\d+) here, (\d+) in all to decide/.exec(await scope.innerText());
   expect(m).not.toBeNull();
@@ -427,92 +587,137 @@ test("under a filter, Needs a decision says N here, M in all on one basis, and 1
   // qa-nov17: said behind the scope's (i).
   await expect(scope).toContainText("In your roadmaps' working drafts");
   await expect(scope).not.toContainText("this roadmap's working draft");
-  const tiles = await tray(page).getByTestId("tray-counter").locator("b").allInnerTexts();
+  const tiles = await tray(page).getByTestId('tray-counter').locator('b').allInnerTexts();
   // The tiles count what the filters show "of" the whole roadmap's (QA Nov 14 #7): their wholes add up to the "in all"
   // and the button, their own numbers to the "here"; the suggested features in a tile of their own (pre-demo QA S-6).
-  const suggested = await tray(page).getByTestId("tray-suggested").getByTestId("goal-suggestion").count();
-  expect(tileHere(await tray(page).getByTestId("tray-counter").filter({ hasText: "Suggested features" }).locator("b").innerText())).toBe(suggested);
+  const suggested = await tray(page)
+    .getByTestId('tray-suggested')
+    .getByTestId('goal-suggestion')
+    .count();
+  expect(
+    tileHere(
+      await tray(page)
+        .getByTestId('tray-counter')
+        .filter({ hasText: 'Suggested features' })
+        .locator('b')
+        .innerText(),
+    ),
+  ).toBe(suggested);
   expect(tiles.reduce((n, t) => n + tileWhole(t), 0)).toBe(Number(m![2]));
   expect(tiles.reduce((n, t) => n + tileHere(t), 0)).toBe(Number(m![1]));
   expect(button).toBe(Number(m![2]));
   expect(Number(m![1])).toBeLessThan(Number(m![2]));
-  const here = await tray(page).getByTestId("tray-links-here").innerText();
+  const here = await tray(page).getByTestId('tray-links-here').innerText();
   const k = Number(/^(\d+) of/.exec(here.trim())![1]);
-  expect(here).toContain(k === 1 ? " is in these filters" : " are in these filters");
+  expect(here).toContain(k === 1 ? ' is in these filters' : ' are in these filters');
 });
 
-test("the side menu's Roadmap count holds the dates to confirm: it equals Needs a decision", async ({ page }) => {
+test("the side menu's Roadmap count holds the dates to confirm: it equals Needs a decision", async ({
+  page,
+}) => {
   await open(page);
-  await page.getByTestId("needs-decision").click();
+  await page.getByTestId('needs-decision').click();
   // The goals' suggested features arrive after the roadmap; the button counts them once they have, so read it then.
-  await expect(tray(page).getByTestId("tray-suggested").getByTestId("goal-suggestion").first()).toBeVisible();
-  const waiting = Number(/· (\d+)/.exec(await page.getByTestId("needs-decision").innerText())![1]);
-  const dates = Number(await tray(page).getByTestId("tray-counter").filter({ hasText: "Dates to confirm" }).locator("b").innerText());
+  await expect(
+    tray(page).getByTestId('tray-suggested').getByTestId('goal-suggestion').first(),
+  ).toBeVisible();
+  const waiting = Number(/· (\d+)/.exec(await page.getByTestId('needs-decision').innerText())![1]);
+  const dates = Number(
+    await tray(page)
+      .getByTestId('tray-counter')
+      .filter({ hasText: 'Dates to confirm' })
+      .locator('b')
+      .innerText(),
+  );
   // Pre-demo QA S-6: Needs a decision counts the goals' suggested features it lists too, in a
   // tile of their own, so the tiles add up to the button; the side menu's Roadmap count reads
   // the same ones, so it equals the button.
-  const tiles = (await tray(page).getByTestId("tray-counter").locator("b").allInnerTexts()).reduce((n, t) => n + Number(t), 0);
-  await tray(page).getByRole("button", { name: "Close" }).click();
+  const tiles = (await tray(page).getByTestId('tray-counter').locator('b').allInnerTexts()).reduce(
+    (n, t) => n + Number(t),
+    0,
+  );
+  await tray(page).getByRole('button', { name: 'Close' }).click();
   expect(dates).toBeGreaterThan(0);
-  await expect(page.getByTestId("needs-decision")).toContainText(`· ${tiles}`);
+  await expect(page.getByTestId('needs-decision')).toContainText(`· ${tiles}`);
   expect(tiles).toBeGreaterThanOrEqual(waiting);
   await expect.poll(async () => Number(await badge(page).innerText())).toBe(tiles);
-  await expect(badge(page)).toHaveAttribute("aria-label", new RegExp(`${dates} dates? to confirm`));
+  await expect(badge(page)).toHaveAttribute('aria-label', new RegExp(`${dates} dates? to confirm`));
 });
 
 test("the strip's M in all shows only when a filter hides some broken links", async ({ page }) => {
   await open(page);
   // The Weekly alert digest's link fixed, the one left (Welcome video's) is under Faster activation.
-  await strip(page).locator('[data-testid="conflict"][data-item="alert-digest"]').getByRole("button", { name: "Move the dependents" }).click();
+  await strip(page)
+    .locator('[data-testid="conflict"][data-item="alert-digest"]')
+    .getByRole('button', { name: 'Move the dependents' })
+    .click();
   // pre-demo QA S-5: its end past its milestone is a broken link too: accepted as a risk here.
   await expect.poll(() => stripCount(page)).toBe(2);
-  await strip(page).locator('[data-testid="conflict"][data-item="alert-digest"]').getByRole("button", { name: "Accept as risk" }).click();
-  await page.getByLabel("Why it is an accepted risk").fill("Beta can take a late item");
-  await page.getByRole("button", { name: "Save the risk" }).click();
+  await strip(page)
+    .locator('[data-testid="conflict"][data-item="alert-digest"]')
+    .getByRole('button', { name: 'Accept as risk' })
+    .click();
+  await page.getByLabel('Why it is an accepted risk').fill('Beta can take a late item');
+  await page.getByRole('button', { name: 'Save the risk' }).click();
   await expect.poll(() => stripCount(page)).toBe(1);
-  await page.goto("/simple/roadmap?goal=faster-activation");
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await page.goto('/simple/roadmap?goal=faster-activation');
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
   await expect(strip(page).locator('[data-testid="conflict"]')).toHaveCount(1);
   // The filter hides none of them: no "here", no "in all", no Clear filters.
-  await expect(strip(page).getByTestId("conflicts-all")).toHaveCount(0);
-  await expect(strip(page)).not.toContainText("here,");
+  await expect(strip(page).getByTestId('conflicts-all')).toHaveCount(0);
+  await expect(strip(page)).not.toContainText('here,');
 });
 
-test("Needs a decision names this roadmap's draft only when one roadmap is chosen", async ({ page }) => {
+test("Needs a decision names this roadmap's draft only when one roadmap is chosen", async ({
+  page,
+}) => {
   await open(page);
-  await page.getByTestId("needs-decision").click();
-  const scope = tray(page).getByTestId("tray-scope");
+  await page.getByTestId('needs-decision').click();
+  const scope = tray(page).getByTestId('tray-scope');
   await expect(scope).toContainText("In your roadmaps' working drafts");
   await expect(scope).not.toContainText("this roadmap's working draft");
-  await tray(page).getByRole("button", { name: "Close" }).click();
-  await page.getByTestId("filter-roadmap").selectOption({ label: "Alerts roadmap" });
-  await page.getByTestId("needs-decision").click();
+  await tray(page).getByRole('button', { name: 'Close' }).click();
+  await page.getByTestId('filter-roadmap').selectOption({ label: 'Alerts roadmap' });
+  await page.getByTestId('needs-decision').click();
   await expect(scope).toContainText("In this roadmap's working draft");
-  await expect(scope).not.toContainText("your roadmaps");
+  await expect(scope).not.toContainText('your roadmaps');
 });
 
-test("at 390 px the Propose toast covers neither the cut flag's buttons nor the proposed line", async ({ page }) => {
-  await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "roadmap-talk-own-decider"] as const);
-  await login(page, "approver@example.com");
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  await cutKeepingDependents(page, "alert-rules");
+test("at 390 px the Propose toast covers neither the cut flag's buttons nor the proposed line", async ({
+  page,
+}) => {
+  await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [
+    MOCK_SCENARIO_KEY,
+    'roadmap-talk-own-decider',
+  ] as const);
+  await login(page, 'approver@example.com');
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
+  await cutKeepingDependents(page, 'alert-rules');
   const cut = strip(page).locator('[data-testid="conflict"][data-item="alert-rules"]');
-  await expect(cut).toContainText("Cut, but");
+  await expect(cut).toContainText('Cut, but');
   await page.setViewportSize({ width: 390, height: 844 });
   // Read down to the flag: it sits at the foot of the screen, where the message would show.
-  await cut.evaluate((el) => el.scrollIntoView({ block: "end" }));
-  await cut.getByRole("button", { name: /^Propose: remove the dependency/ }).first().click();
-  const toast = page.getByRole("status").filter({ hasText: /^Proposed: remove the dependency/ });
+  await cut.evaluate((el) => el.scrollIntoView({ block: 'end' }));
+  await cut
+    .getByRole('button', { name: /^Propose: remove the dependency/ })
+    .first()
+    .click();
+  const toast = page.getByRole('status').filter({ hasText: /^Proposed: remove the dependency/ });
   await expect(toast).toBeVisible();
-  await expect(cut.getByTestId("fix-proposed").first()).toBeVisible();
+  await expect(cut.getByTestId('fix-proposed').first()).toBeVisible();
   const box = (await toast.boundingBox())!;
   const covered = await cut.locator('[data-testid="fix-proposed"], button').evaluateAll(
     (els, t) =>
       els.flatMap((el) => {
         const r = el.getBoundingClientRect();
-        const over = r.width > 0 && r.left < t.x + t.width && t.x < r.right && r.top < t.y + t.height && t.y < r.bottom;
-        return over ? [(el.textContent ?? "").trim()] : [];
+        const over =
+          r.width > 0 &&
+          r.left < t.x + t.width &&
+          t.x < r.right &&
+          r.top < t.y + t.height &&
+          t.y < r.bottom;
+        return over ? [(el.textContent ?? '').trim()] : [];
       }),
     box,
   );
@@ -526,32 +731,47 @@ test("at 390 px the Propose toast covers neither the cut flag's buttons nor the 
  * fails_when: the decider's Roadmap count or Home leaves it out (it lists only required
  * reviewers); no_claim: the API's own rule (api/tests/test_simple_waiting_list.py).
  */
-test("the decider of a draft another owner sent sees it on the rail and on Home", async ({ page }) => {
-  await open(page, "roadmap-two-drafts");
-  await strip(page).locator('[data-testid="conflict"][data-item="setup-tour"]').getByRole("button", { name: "Bring it back" }).click();
+test('the decider of a draft another owner sent sees it on the rail and on Home', async ({
+  page,
+}) => {
+  await open(page, 'roadmap-two-drafts');
+  await strip(page)
+    .locator('[data-testid="conflict"][data-item="setup-tour"]')
+    .getByRole('button', { name: 'Bring it back' })
+    .click();
   await expect(page.getByText(/Brought back 'In-app tour'/)).toBeVisible();
-  await page.getByTestId("draft-banner").getByRole("button", { name: "Send for review" }).click();
+  await page.getByTestId('draft-banner').getByRole('button', { name: 'Send for review' }).click();
   await expect(page.getByText(/Sent for review/).first()).toBeVisible();
   // Priya Raman decides the Onboarding roadmap, with no required reviewer.
   await signOut(page);
-  await login(page, "approver@example.com");
-  await page.goto("/simple");
+  await login(page, 'approver@example.com');
+  await page.goto('/simple');
   // Home's drafts card holds it, once, with its one action.
-  const row = page.getByTestId("home-draft").filter({ hasText: "Onboarding roadmap" });
+  const row = page.getByTestId('home-draft').filter({ hasText: 'Onboarding roadmap' });
   await expect(row).toHaveCount(1);
-  await expect(row).toContainText("Waiting for your approval");
-  const asks = async () => ((await badge(page).count()) ? Number(/(\d+) changes? or drafts?/.exec((await badge(page).getAttribute("aria-label")) ?? "")?.[1] ?? 0) : 0);
+  await expect(row).toContainText('Waiting for your approval');
+  const asks = async () =>
+    (await badge(page).count())
+      ? Number(
+          /(\d+) changes? or drafts?/.exec(
+            (await badge(page).getAttribute('aria-label')) ?? '',
+          )?.[1] ?? 0,
+        )
+      : 0;
   await expect.poll(asks).toBeGreaterThan(0);
   const before = await asks();
 
   // Approving it from the card drops it from Home and from the rail's count.
-  await row.getByRole("link", { name: "Open draft to approve" }).click();
+  await row.getByRole('link', { name: 'Open draft to approve' }).click();
   await expect(page).toHaveURL(/\/simple\/roadmap\?draft=/);
-  await page.getByTestId("draft-banner").getByRole("button", { name: "Approve", exact: true }).click();
+  await page
+    .getByTestId('draft-banner')
+    .getByRole('button', { name: 'Approve', exact: true })
+    .click();
   await expect(page.getByText(/Approved/).first()).toBeVisible();
   await expect.poll(asks).toBe(before - 1);
-  await page.goto("/simple");
-  await expect(page.getByTestId("home-sentence")).not.toHaveText(/Checking what waits/);
+  await page.goto('/simple');
+  await expect(page.getByTestId('home-sentence')).not.toHaveText(/Checking what waits/);
   await expect(row).toHaveCount(0);
 });
 
@@ -561,21 +781,32 @@ test("the decider of a draft another owner sent sees it on the rail and on Home"
  * fails_when: the toast leaves the decider out (or counts reviewers); no_claim: the API's own
  * rule (api/tests/test_simple_roadmap_decide.py).
  */
-test("a reviewer's approval before the decider's says the draft waits for the decider, by name", async ({ page }) => {
-  await open(page, "roadmap-two-drafts-reviewer");
-  await strip(page).locator('[data-testid="conflict"][data-item="setup-tour"]').getByRole("button", { name: "Bring it back" }).click();
+test("a reviewer's approval before the decider's says the draft waits for the decider, by name", async ({
+  page,
+}) => {
+  await open(page, 'roadmap-two-drafts-reviewer');
+  await strip(page)
+    .locator('[data-testid="conflict"][data-item="setup-tour"]')
+    .getByRole('button', { name: 'Bring it back' })
+    .click();
   await expect(page.getByText(/Brought back 'In-app tour'/)).toBeVisible();
-  await page.getByTestId("draft-banner").getByRole("button", { name: "Send for review" }).click();
+  await page.getByTestId('draft-banner').getByRole('button', { name: 'Send for review' }).click();
   await expect(page.getByText(/Sent for review/).first()).toBeVisible();
   // Theo Brandt reviews the Onboarding roadmap; Priya Raman decides it.
   await signOut(page);
-  await login(page, "commenter@example.com");
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  const banner = page.getByTestId("draft-banner");
-  await expect(banner.getByTestId("draft-words")).toContainText("Avery Stone's working draft of the Onboarding roadmap");
-  await banner.getByRole("button", { name: "Approve", exact: true }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Approved: Onboarding roadmap waits for Priya Raman to decide" })).toBeVisible();
+  await login(page, 'commenter@example.com');
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
+  const banner = page.getByTestId('draft-banner');
+  await expect(banner.getByTestId('draft-words')).toContainText(
+    "Avery Stone's working draft of the Onboarding roadmap",
+  );
+  await banner.getByRole('button', { name: 'Approve', exact: true }).click();
+  await expect(
+    page
+      .getByRole('status')
+      .filter({ hasText: 'Approved: Onboarding roadmap waits for Priya Raman to decide' }),
+  ).toBeVisible();
 });
 
 /**
@@ -586,45 +817,66 @@ test("a reviewer's approval before the decider's says the draft waits for the de
  * fails_when: the message covers the Ask panel or any control, or shows at the foot.
  */
 for (const withAsk of [true, false])
-  test(`the roadmap's top message keeps clear of every control${withAsk ? " and of the Ask panel" : ""}`, async ({ page }) => {
-    await open(page, "roadmap-two-drafts");
-    const ask = page.locator("#simple-ask-panel").filter({ visible: true });
+  test(`the roadmap's top message keeps clear of every control${withAsk ? ' and of the Ask panel' : ''}`, async ({
+    page,
+  }) => {
+    await open(page, 'roadmap-two-drafts');
+    const ask = page.locator('#simple-ask-panel').filter({ visible: true });
     if (withAsk) {
-      await page.getByTestId("simple-ask").click();
+      await page.getByTestId('simple-ask').click();
       await expect(ask).toBeVisible();
     }
-    await strip(page).locator('[data-testid="conflict"][data-item="setup-tour"]').getByRole("button", { name: "Bring it back" }).click();
+    await strip(page)
+      .locator('[data-testid="conflict"][data-item="setup-tour"]')
+      .getByRole('button', { name: 'Bring it back' })
+      .click();
     await expect(page.getByText(/Brought back 'In-app tour'/)).toBeVisible();
-    const banner = page.getByTestId("draft-banner");
-    await banner.getByRole("button", { name: "Send for review" }).click();
-    const toast = page.getByRole("status").filter({ hasText: /^Sent for review/ });
+    const banner = page.getByTestId('draft-banner');
+    await banner.getByRole('button', { name: 'Send for review' }).click();
+    const toast = page.getByRole('status').filter({ hasText: /^Sent for review/ });
     await expect(toast).toBeVisible();
     const view = page.viewportSize()!;
     // Every visible control the message covers, by its words (its own Dismiss aside).
     const covered = () =>
       toast.evaluate((t) => {
         const a = t.getBoundingClientRect();
-        return [...document.querySelectorAll('a[href], button, input, select, textarea, [role="button"], [role="tab"], [role="radio"]')]
+        return [
+          ...document.querySelectorAll(
+            'a[href], button, input, select, textarea, [role="button"], [role="tab"], [role="radio"]',
+          ),
+        ]
           .filter((el) => !t.contains(el))
           .filter((el) => {
             const b = el.getBoundingClientRect();
-            return b.width > 1 && b.height > 1 && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+            return (
+              b.width > 1 &&
+              b.height > 1 &&
+              a.left < b.right &&
+              b.left < a.right &&
+              a.top < b.bottom &&
+              b.top < a.bottom
+            );
           })
-          .map((el) => (el.textContent || el.getAttribute("aria-label") || el.tagName).trim());
+          .map((el) => (el.textContent || el.getAttribute('aria-label') || el.tagName).trim());
       });
     await expect.poll(covered).toEqual([]);
-    await expect(page.getByTestId("format-switch")).toBeVisible();
+    await expect(page.getByTestId('format-switch')).toBeVisible();
     const t = (await toast.boundingBox())!;
     // At the top of the screen, not its foot.
     expect(t.y).toBeLessThan(view.height / 2);
     const overlap = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
-      a.width > 0 && b.width > 0 && a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+      a.width > 0 &&
+      b.width > 0 &&
+      a.x < b.x + b.width &&
+      b.x < a.x + a.width &&
+      a.y < b.y + b.height &&
+      b.y < a.y + a.height;
     if (withAsk) {
       await expect(ask).toBeVisible();
       expect(overlap(t, (await ask.boundingBox())!)).toBe(false);
     }
-    for (const b of await banner.getByRole("button").all()) {
+    for (const b of await banner.getByRole('button').all()) {
       const box = await b.boundingBox();
-      if (box) expect(overlap(t, box), (await b.textContent()) ?? "").toBe(false);
+      if (box) expect(overlap(t, box), (await b.textContent()) ?? '').toBe(false);
     }
   });

@@ -1,9 +1,9 @@
-import { goalFigure } from "@/lib/goal-figure";
-import { goalTree, scoredConfidence } from "@/lib/goal-tree";
-import { goalName } from "@/lib/placeholders";
-import type { EntityOut, Schemas } from "@/lib/api/client";
+import { goalFigure } from '@/lib/goal-figure';
+import { goalTree, scoredConfidence } from '@/lib/goal-tree';
+import { goalName } from '@/lib/placeholders';
+import type { EntityOut, Schemas } from '@/lib/api/client';
 
-type RevisionOut = Schemas["RevisionOut"];
+type RevisionOut = Schemas['RevisionOut'];
 
 /**
  * A goal figure read from its attrs, anchored to the value rather than the first digit:
@@ -34,32 +34,50 @@ const SCALE: Record<string, number> = {
 };
 /** Time units in milliseconds, by the spelling they are written in. */
 const TIME: Record<string, { ms: number; unit: string }> = {
-  ms: { ms: 1, unit: "ms" },
-  s: { ms: 1e3, unit: "s" },
-  sec: { ms: 1e3, unit: "s" },
-  secs: { ms: 1e3, unit: "s" },
-  second: { ms: 1e3, unit: "s" },
-  seconds: { ms: 1e3, unit: "s" },
-  min: { ms: 6e4, unit: "min" },
-  mins: { ms: 6e4, unit: "min" },
-  minute: { ms: 6e4, unit: "min" },
-  minutes: { ms: 6e4, unit: "min" },
-  h: { ms: 3.6e6, unit: "h" },
-  hr: { ms: 3.6e6, unit: "h" },
-  hrs: { ms: 3.6e6, unit: "h" },
-  hour: { ms: 3.6e6, unit: "h" },
-  hours: { ms: 3.6e6, unit: "h" },
-  day: { ms: 8.64e7, unit: "days" },
-  days: { ms: 8.64e7, unit: "days" },
+  ms: { ms: 1, unit: 'ms' },
+  s: { ms: 1e3, unit: 's' },
+  sec: { ms: 1e3, unit: 's' },
+  secs: { ms: 1e3, unit: 's' },
+  second: { ms: 1e3, unit: 's' },
+  seconds: { ms: 1e3, unit: 's' },
+  min: { ms: 6e4, unit: 'min' },
+  mins: { ms: 6e4, unit: 'min' },
+  minute: { ms: 6e4, unit: 'min' },
+  minutes: { ms: 6e4, unit: 'min' },
+  h: { ms: 3.6e6, unit: 'h' },
+  hr: { ms: 3.6e6, unit: 'h' },
+  hrs: { ms: 3.6e6, unit: 'h' },
+  hour: { ms: 3.6e6, unit: 'h' },
+  hours: { ms: 3.6e6, unit: 'h' },
+  day: { ms: 8.64e7, unit: 'days' },
+  days: { ms: 8.64e7, unit: 'days' },
 };
 /** Words after a number that are not its unit: "400 by 2027", "8% or less". */
-const NOT_UNITS = new Set(["by", "in", "on", "at", "to", "from", "for", "and", "or", "of", "per", "within", "before", "after", "less", "more", "fewer"]);
+const NOT_UNITS = new Set([
+  'by',
+  'in',
+  'on',
+  'at',
+  'to',
+  'from',
+  'for',
+  'and',
+  'or',
+  'of',
+  'per',
+  'within',
+  'before',
+  'after',
+  'less',
+  'more',
+  'fewer',
+]);
 
 const NUM = String.raw`\d+(?:\.\d+)?`;
 // [1] currency, [2] number, [3] range currency, [4] range number, [5] scale, [6] what follows.
 const CANDIDATE = new RegExp(
   String.raw`(?:([$€£])\s?)?(${NUM})(?:\s?(?:-|–|to)\s?([$€£])?(${NUM}))?(?:\s?(k|K|M|mn|B|bn|thousand|million|billion)(?![\p{L}\d]))?(\s*(?:%|[\p{L}][\p{L}-]*))?`,
-  "gu",
+  'gu',
 );
 
 type Candidate = Figure & { score: number };
@@ -71,16 +89,16 @@ function candidate(text: string, m: RegExpExecArray): Candidate | null {
   const scale = m[5] ? SCALE[m[5]] : 1;
   const low = Number(m[2]) * scale;
   const high = m[4] != null ? Number(m[4]) * scale : null;
-  const currency = m[1] ?? m[3] ?? "";
-  let unit = "";
-  const after = m[6]?.trim() ?? "";
-  if (after === "%") unit = "%";
+  const currency = m[1] ?? m[3] ?? '';
+  let unit = '';
+  const after = m[6]?.trim() ?? '';
+  if (after === '%') unit = '%';
   else if (after) {
     const word = after.toLowerCase();
     if (TIME[after] || TIME[word]) unit = (TIME[after] ?? TIME[word]).unit;
     else if (!NOT_UNITS.has(word)) unit = word;
   }
-  const marked = currency !== "" || m[5] != null || unit === "%" || TIME[unit] != null;
+  const marked = currency !== '' || m[5] != null || unit === '%' || TIME[unit] != null;
   const year = !marked && !unit && high == null && /^(19|20|21)\d\d$/.test(m[2]);
   return {
     value: low,
@@ -93,22 +111,32 @@ function candidate(text: string, m: RegExpExecArray): Candidate | null {
 }
 
 export function parseFigure(raw: unknown): Figure | null {
-  if (typeof raw === "number") return Number.isFinite(raw) ? { value: raw, unit: "", currency: "", compact: false, range: null } : null;
-  if (typeof raw !== "string") return null;
-  const text = raw.replace(/(\d),(?=\d{3}\b)/g, "$1");
+  if (typeof raw === 'number')
+    return Number.isFinite(raw)
+      ? { value: raw, unit: '', currency: '', compact: false, range: null }
+      : null;
+  if (typeof raw !== 'string') return null;
+  const text = raw.replace(/(\d),(?=\d{3}\b)/g, '$1');
   let best: Candidate | null = null;
   for (const m of text.matchAll(CANDIDATE)) {
     const c = candidate(text, m);
     if (c && (!best || c.score > best.score)) best = c;
   }
   if (!best) return null;
-  return { value: best.value, unit: best.unit, currency: best.currency, compact: best.compact, range: best.range };
+  return {
+    value: best.value,
+    unit: best.unit,
+    currency: best.currency,
+    compact: best.compact,
+    range: best.range,
+  };
 }
 
-export type Direction = { way: "down" | "up"; strict: boolean };
+export type Direction = { way: 'down' | 'up'; strict: boolean };
 
 const DOWN_STRICT = /\b(below|under|less than|fewer than)\b|<(?!=)/i;
-const DOWN = /\b(reduce[sd]?|cut|lower|decrease[sd]?|drop|shrink|at most|no more than|max(imum)?)\b|≤|<=/i;
+const DOWN =
+  /\b(reduce[sd]?|cut|lower|decrease[sd]?|drop|shrink|at most|no more than|max(imum)?)\b|≤|<=/i;
 const UP_STRICT = /\b(above|over|more than|greater than)\b|>(?!=)/i;
 const UP = /\b(raise[sd]?|grow|increase[sd]?|boost|at least|no less than|min(imum)?)\b|≥|>=/i;
 /** Verbs in a goal's title that say which way it goes ("Cut early churn"). */
@@ -117,13 +145,13 @@ const TITLE_UP = /\b(raise|grow|increase|boost)\b/i;
 
 /** The direction the target text says, earliest word first; null for a bare target. */
 export function direction(raw: unknown): Direction | null {
-  if (typeof raw !== "string") return null;
+  if (typeof raw !== 'string') return null;
   const hits = (
     [
-      [DOWN_STRICT, { way: "down", strict: true }],
-      [DOWN, { way: "down", strict: false }],
-      [UP_STRICT, { way: "up", strict: true }],
-      [UP, { way: "up", strict: false }],
+      [DOWN_STRICT, { way: 'down', strict: true }],
+      [DOWN, { way: 'down', strict: false }],
+      [UP_STRICT, { way: 'up', strict: true }],
+      [UP, { way: 'up', strict: false }],
     ] as const
   )
     .map(([re, d]) => ({ at: raw.search(re), d }))
@@ -163,7 +191,7 @@ export type GoalView = {
   /** #345: how many subgoals it has. */
   subgoals: number;
   /** #345: progress 0-1, its own measurement ("own") or rolled up from its subgoals ("subgoals"). */
-  progress: { value: number | null; source: "own" | "subgoals" | null } | null;
+  progress: { value: number | null; source: 'own' | 'subgoals' | null } | null;
 };
 
 /**
@@ -171,18 +199,25 @@ export type GoalView = {
  * goal-money-full (owner, Nov 11: "Short on Home only"): money reads in full ("$50,000") unless
  * `short`, which Home's goals alone ask for ("$50k").
  */
-const CURRENCY_SYMBOL: Record<string, string> = { USD: "$", EUR: "€", GBP: "£" };
+const CURRENCY_SYMBOL: Record<string, string> = { USD: '$', EUR: '€', GBP: '£' };
 function typedFigure(value: unknown, unit: unknown, short: boolean): Figure | null {
-  if (typeof value !== "number" || !Number.isFinite(value) || typeof unit !== "string" || !unit) return null;
+  if (typeof value !== 'number' || !Number.isFinite(value) || typeof unit !== 'string' || !unit)
+    return null;
   // goal-figure-words: a currency stored in any case ("usd", as the goal form stores it).
-  const currency = CURRENCY_SYMBOL[unit.trim().toUpperCase()] ?? "";
-  return { value, unit: currency ? "" : unit, currency, compact: short && !!currency && Math.abs(value) >= 1e3, range: null };
+  const currency = CURRENCY_SYMBOL[unit.trim().toUpperCase()] ?? '';
+  return {
+    value,
+    unit: currency ? '' : unit,
+    currency,
+    compact: short && !!currency && Math.abs(value) >= 1e3,
+    range: null,
+  };
 }
 const COMPARISON_WAY: Record<string, Direction> = {
-  at_least: { way: "up", strict: false },
-  above: { way: "up", strict: true },
-  at_most: { way: "down", strict: false },
-  below: { way: "down", strict: true },
+  at_least: { way: 'up', strict: false },
+  above: { way: 'up', strict: true },
+  at_most: { way: 'down', strict: false },
+  below: { way: 'down', strict: true },
 };
 
 /** A typed figure as written: "45%", "$4,000,000" ("$4M" on Home), "2 min", "400 teams". */
@@ -191,18 +226,24 @@ function typedText(f: Figure): string {
   return goalFigure(f.value, f.currency || f.unit);
 }
 
-const text = (v: unknown) => (v == null || v === "" ? null : String(v));
+const text = (v: unknown) => (v == null || v === '' ? null : String(v));
 
 /**
  * Live goals, in the one goal order, each followed by its subgoals, tagged G1, G1.1, G2… as the Baseline tags them.
  * `short`: typed money in the short form ("$50k"), for Home's goals only (goal-money-full).
  */
-export function goalViews(entities: EntityOut[], numbered: EntityOut[] = entities, { short = false }: { short?: boolean } = {}): GoalView[] {
+export function goalViews(
+  entities: EntityOut[],
+  numbered: EntityOut[] = entities,
+  { short = false }: { short?: boolean } = {},
+): GoalView[] {
   return goalTree(entities, numbered).map(({ goal: g, tag, code, name, parentId, children }) => {
     const a = g.attrs ?? {};
-    const titled = TITLE_DOWN.test(g.title) ? "down" : TITLE_UP.test(g.title) ? "up" : null;
+    const titled = TITLE_DOWN.test(g.title) ? 'down' : TITLE_UP.test(g.title) ? 'up' : null;
     // B5: typed values first; the text parser is the fallback for goals still on `*_text`.
-    const target = COMPARISON_WAY[a.comparison as string] ? typedFigure(a.target, a.unit, short) : null;
+    const target = COMPARISON_WAY[a.comparison as string]
+      ? typedFigure(a.target, a.unit, short)
+      : null;
     const current = typedFigure(a.current, a.unit, short);
     const targetRaw = a.target_text ?? a.target;
     const currentRaw = a.current_text ?? a.current;
@@ -213,12 +254,14 @@ export function goalViews(entities: EntityOut[], numbered: EntityOut[] = entitie
       tag,
       parentId,
       subgoals: children,
-      progress: g.progress ? { value: g.progress.value ?? null, source: g.progress.source ?? null } : null,
+      progress: g.progress
+        ? { value: g.progress.value ?? null, source: g.progress.source ?? null }
+        : null,
       title: goalName(g.title, g.key),
       code,
       name,
-      metric: typeof a.metric === "string" ? a.metric : null,
-      proposed: g.status === "proposed",
+      metric: typeof a.metric === 'string' ? a.metric : null,
+      proposed: g.status === 'proposed',
       confidence: scored == null ? null : Math.round(scored * 100),
       current: current ?? parseFigure(currentRaw),
       currentText: current ? typedText(current) : text(currentRaw),
@@ -229,13 +272,13 @@ export function goalViews(entities: EntityOut[], numbered: EntityOut[] = entitie
         : (direction(targetRaw) ?? (titled ? { way: titled, strict: false } : null)),
       typed: !!target,
       missing: g.goal_check?.missing ?? null,
-      measured: !!current && typeof a.current_as_of === "string",
+      measured: !!current && typeof a.current_as_of === 'string',
     };
   });
 }
 
 /** A noun's one spelling for comparing units: "clinics" and "clinic" match. */
-const noun = (u: string) => (u.length > 3 && u.endsWith("s") ? u.slice(0, -1) : u);
+const noun = (u: string) => (u.length > 3 && u.endsWith('s') ? u.slice(0, -1) : u);
 
 /** Both figures measure the same thing; a bare current number counts in the target's noun or currency. */
 function sameUnit(c: Figure, t: Figure): boolean {
@@ -244,8 +287,8 @@ function sameUnit(c: Figure, t: Figure): boolean {
   const ct = TIME[c.unit];
   const tt = TIME[t.unit];
   if (ct || tt) return !!ct && !!tt;
-  if (c.unit === "%" || t.unit === "%") return c.unit === t.unit;
-  return c.unit === "" || noun(c.unit) === noun(t.unit);
+  if (c.unit === '%' || t.unit === '%') return c.unit === t.unit;
+  return c.unit === '' || noun(c.unit) === noun(t.unit);
 }
 
 /** A figure in a comparable base: time in milliseconds, everything else as is. */
@@ -256,7 +299,7 @@ export type Progress = {
    * met; to go; short (equal to a strict below/above bound); raw (no distance can be given);
    * none (no current value); notarget (a confirmed goal with no typed target to measure against, B5).
    */
-  state: "met" | "togo" | "short" | "raw" | "none" | "notarget";
+  state: 'met' | 'togo' | 'short' | 'raw' | 'none' | 'notarget';
   /** What Home shows under the goal: "5 pts to go", "Target met", "Not below", "" or "No current value yet". */
   text: string;
   /** The distance in the target's unit, when there is one. */
@@ -272,7 +315,11 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
 /** 900000 -> "900k", 1200000 -> "1.2M" when the goal is written that way; else the plain figure. */
 export function amount(n: number, compact: boolean): string {
   if (compact) {
-    for (const [s, v] of [["B", 1e9], ["M", 1e6], ["k", 1e3]] as const) {
+    for (const [s, v] of [
+      ['B', 1e9],
+      ['M', 1e6],
+      ['k', 1e3],
+    ] as const) {
       if (Math.abs(n) >= v) return `${round1(n / v)}${s}`;
     }
   }
@@ -281,7 +328,9 @@ export function amount(n: number, compact: boolean): string {
 
 /** A money amount in full ("$20,000") unless written short ("$900k"); other figures as `amount` writes them ("300k", "1.6"). */
 function money(n: number, currency: string, compact: boolean): string {
-  return currency && !compact ? goalFigure(round1(n), currency) : `${currency}${amount(n, compact)}`;
+  return currency && !compact
+    ? goalFigure(round1(n), currency)
+    : `${currency}${amount(n, compact)}`;
 }
 
 /**
@@ -295,33 +344,52 @@ export function assess(g: GoalView, history?: Point[]): Progress {
   // Decided 2026-10-21, B5 "Vague goals": confirmed, but nothing to measure it against.
   // qa-plan-14: a target written in words ("below 8%") is shown, so the goal never says "No
   // target" beside it: what is missing to the reader is the current value.
-  if (!g.proposed && !g.typed && g.missing?.includes("target") && (!g.currentText || !g.targetText)) {
-    return { state: "notarget", text: g.targetText ? "No current value yet" : "No target" };
+  if (
+    !g.proposed &&
+    !g.typed &&
+    g.missing?.includes('target') &&
+    (!g.currentText || !g.targetText)
+  ) {
+    return { state: 'notarget', text: g.targetText ? 'No current value yet' : 'No target' };
   }
-  if (!g.currentText) return { state: "none", text: "No current value yet" };
+  if (!g.currentText) return { state: 'none', text: 'No current value yet' };
   const c = g.current;
   const t = g.target;
-  if (!c || !t || c.range || !sameUnit(c, t)) return { state: "raw", text: "" };
+  if (!c || !t || c.range || !sameUnit(c, t)) return { state: 'raw', text: '' };
   const first = history?.[0]?.value;
   const [lo, hi] = t.range ?? [t.value, t.value];
   const dir: Direction = g.said ?? {
-    way: first != null && first > hi ? "down" : "up",
+    way: first != null && first > hi ? 'down' : 'up',
     strict: false,
   };
   // A range is met on entering it: the bound the metric reaches first moving the goal's way.
-  const bound = base(t, dir.way === "up" ? lo : hi);
+  const bound = base(t, dir.way === 'up' ? lo : hi);
   const now = base(c);
-  const left = dir.way === "up" ? bound - now : now - bound;
-  if (left === 0 && dir.strict) return { state: "short", text: dir.way === "down" ? "Not below" : "Not above" };
-  if (left <= 0) return { state: "met", text: "Target met" };
+  const left = dir.way === 'up' ? bound - now : now - bound;
+  if (left === 0 && dir.strict)
+    return { state: 'short', text: dir.way === 'down' ? 'Not below' : 'Not above' };
+  if (left <= 0) return { state: 'met', text: 'Target met' };
   const distance = left / (TIME[t.unit]?.ms ?? 1);
-  const unit = t.unit === "%" ? "pts" : t.unit;
+  const unit = t.unit === '%' ? 'pts' : t.unit;
   let shown = money(distance, t.currency || c.currency, t.compact || c.compact);
   // Not met yet, however small the gap: a gap that rounds to 0 is shown to one significant digit.
-  if (Number(shown.replace(/^\D+/, "").replace(/[kMB]$/, "").replace(/,/g, "")) === 0) {
+  if (
+    Number(
+      shown
+        .replace(/^\D+/, '')
+        .replace(/[kMB]$/, '')
+        .replace(/,/g, ''),
+    ) === 0
+  ) {
     shown = `${t.currency || c.currency}${Number(distance.toPrecision(1))}`;
   }
-  return { state: "togo", text: `${shown}${unit ? ` ${unit}` : ""} to go`, distance, unit, amount: shown };
+  return {
+    state: 'togo',
+    text: `${shown}${unit ? ` ${unit}` : ''} to go`,
+    distance,
+    unit,
+    amount: shown,
+  };
 }
 
 export type Point = { at: string; value: number };
@@ -342,7 +410,9 @@ export function historyOf(revisions: RevisionOut[]): Point[] {
     .filter((p): p is Point => p !== null)
     .sort((a, b) => a.at.localeCompare(b.at));
   // Drop repeats: a revision that changed something else carries the same value.
-  const series = points.filter((p, i) => i === 0 || p.value !== points[i - 1].value || i === points.length - 1);
+  const series = points.filter(
+    (p, i) => i === 0 || p.value !== points[i - 1].value || i === points.length - 1,
+  );
   const last = series.at(-1);
   if (!last) return [];
   const from = Date.parse(last.at) - SIX_MONTHS_MS;
@@ -362,10 +432,10 @@ export function measurementPoints(rows: { measured_on: string; value: number }[]
  * "+$300k in 3 months"; points for a percentage, the goal's unit otherwise.
  */
 export function changeText(change: number, f: Figure | null, months: number): string {
-  const sign = change > 0 ? "+" : "−";
-  const n = money(Math.abs(change), f?.currency ?? "", !!f?.compact);
-  const unit = !f ? "" : f.unit === "%" ? "pts" : f.unit;
-  return `${sign}${n}${unit ? ` ${unit}` : ""} in ${months} ${months === 1 ? "month" : "months"}`;
+  const sign = change > 0 ? '+' : '−';
+  const n = money(Math.abs(change), f?.currency ?? '', !!f?.compact);
+  const unit = !f ? '' : f.unit === '%' ? 'pts' : f.unit;
+  return `${sign}${n}${unit ? ` ${unit}` : ''} in ${months} ${months === 1 ? 'month' : 'months'}`;
 }
 
 /** Whole months the series spans, at least one: the months after a change. */
@@ -378,7 +448,7 @@ export function spanMonths(points: Point[]): number {
 /** The current value in its own terms: "38%", "900k", "$3.1M", "$30,000", "260 ms", "236" (a counted noun goes after the target). */
 export function formatFigure(f: Figure): string {
   const n = money(f.value, f.currency, f.compact);
-  if (f.unit === "%") return `${n}%`;
+  if (f.unit === '%') return `${n}%`;
   if (TIME[f.unit]) return `${n} ${f.unit}`;
   return n;
 }

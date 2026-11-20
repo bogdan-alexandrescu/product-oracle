@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import { Link } from "@/lib/nav";
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { Link } from '@/lib/nav';
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 
-import { DocCrumb } from "@/components/DocToolbar";
+import { DocCrumb } from '@/components/DocToolbar';
 import {
   Button,
   Chip,
@@ -19,44 +19,44 @@ import {
   Split,
   useFocusTrap,
   type ChipKind,
-} from "@/components/ds";
-import { ErrorNote, INPUT, LoadError } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { blockedLabel } from "@/lib/blocked";
-import { addDays, todayIn, useCompanyZone, zoneInstant } from "@/lib/dates";
-import { useMe } from "@/lib/me";
-import { OWNER_APPROVES } from "@/lib/owner-kinds";
-import { useRiskPolicy } from "@/lib/risk-policy";
-import { useScreenSubject } from "@/lib/screen-subject";
-import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
-import { sectionHref } from "@/lib/section-link";
-import { formatDate, plural } from "@/lib/format";
+} from '@/components/ds';
+import { ErrorNote, INPUT, LoadError } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { blockedLabel } from '@/lib/blocked';
+import { addDays, todayIn, useCompanyZone, zoneInstant } from '@/lib/dates';
+import { useMe } from '@/lib/me';
+import { OWNER_APPROVES } from '@/lib/owner-kinds';
+import { useRiskPolicy } from '@/lib/risk-policy';
+import { useScreenSubject } from '@/lib/screen-subject';
+import { errorMessage, useAuthRedirect, useQuery } from '@/lib/use-query';
+import { sectionHref } from '@/lib/section-link';
+import { formatDate, plural } from '@/lib/format';
 
-type Readiness = Schemas["ReadinessDashboard"];
-type Item = Schemas["ReadinessItem"];
-type Strategy = Schemas["BlockerStrategy"];
-type Question = Schemas["StakeholderQuestionOut"];
-type DateMark = Schemas["DateMarkOut"];
+type Readiness = Schemas['ReadinessDashboard'];
+type Item = Schemas['ReadinessItem'];
+type Strategy = Schemas['BlockerStrategy'];
+type Question = Schemas['StakeholderQuestionOut'];
+type DateMark = Schemas['DateMarkOut'];
 /** Why the confirm dialog's Publish was refused: the API's 409, a newer version, or an error. */
-type Refusal = { detail: string; blocking: Schemas["PublishBlock"][]; stale?: boolean };
+type Refusal = { detail: string; blocking: Schemas['PublishBlock'][]; stale?: boolean };
 
 /** The blockers lane's hard check (api/oracle/blockers/readiness.py). */
-const BLOCKERS_CHECK = "critical_blockers";
+const BLOCKERS_CHECK = 'critical_blockers';
 const CHECK_KIND: Record<string, string> = {
-  security_policy: "Security or policy",
-  third_party_support: "Third-party",
+  security_policy: 'Security or policy',
+  third_party_support: 'Third-party',
 };
-const PHONE = "(max-width: 600px)";
+const PHONE = '(max-width: 600px)';
 /** A block's kind as the sentence under Blocks counts it (qa4-docs-share-54). */
 const BLOCK_NOUN: Record<string, string> = {
-  "Critical blocker": "critical blocker",
-  "Security or policy": "security or policy problem",
-  "Third-party": "third-party problem",
-  "Failed check": "failed check",
-  "Unconfirmed date": "unconfirmed date",
+  'Critical blocker': 'critical blocker',
+  'Security or policy': 'security or policy problem',
+  'Third-party': 'third-party problem',
+  'Failed check': 'failed check',
+  'Unconfirmed date': 'unconfirmed date',
 };
 /** The kinds whose approve checks the dates the text writes, not the PRD checks (api/oracle/review/publish_gate.py). */
-const DATED_KINDS = new Set(["roadmap", "update"]);
+const DATED_KINDS = new Set(['roadmap', 'update']);
 const DAY = 86_400_000;
 
 /** One reason the API refuses the publish: a gating blocker, or another critical hard check. */
@@ -75,33 +75,48 @@ type Block = {
  * blockers that gate this PRD (B4 reach: GET .../blocker-strategy); when those cannot be
  * read, the check itself is the row.
  */
-function blocksOf(doc: string, n: number, readiness: Readiness, strategy: Schemas["DocumentBlockerStrategy"] | undefined): Block[] {
+function blocksOf(
+  doc: string,
+  n: number,
+  readiness: Readiness,
+  strategy: Schemas['DocumentBlockerStrategy'] | undefined,
+): Block[] {
   const entity = (id: string | undefined) => (id ? `/ground-truth?entity=${id}` : null);
   // qa4-docs-share-52: a blocker's Resolve opens the blocker itself, where Open blocker goes.
   const blocker = (id: string) => `/ground-truth?tab=blockers&blocker=${encodeURIComponent(id)}`;
   const section = (key: string | undefined) => (key ? sectionHref(doc, n, key) : null);
   // The gating blockers first, then the other refusals in the verdict's order.
-  const keys = [...readiness.blocking].sort((a, b) => Number(b === BLOCKERS_CHECK) - Number(a === BLOCKERS_CHECK));
+  const keys = [...readiness.blocking].sort(
+    (a, b) => Number(b === BLOCKERS_CHECK) - Number(a === BLOCKERS_CHECK),
+  );
   return keys.flatMap((key): Block[] => {
     const item = readiness.items.find((i) => i.key === key);
     if (key === BLOCKERS_CHECK) {
-      const gating = strategy?.blockers.filter((s) => s.gate.status === "critical") ?? [];
+      const gating = strategy?.blockers.filter((s) => s.gate.status === 'critical') ?? [];
       if (gating.length > 0) {
         return gating.map((s) => ({
           id: s.blocker.id,
           title: s.blocker.statement,
-          kind: "Critical blocker",
+          kind: 'Critical blocker',
           href: blocker(s.blocker.id),
           blocker: s,
         }));
       }
-      return [{ id: key, title: item?.title ?? "Critical blockers", kind: "Critical blocker", href: entity(item?.evidence_ids[0]), check: item }];
+      return [
+        {
+          id: key,
+          title: item?.title ?? 'Critical blockers',
+          kind: 'Critical blocker',
+          href: entity(item?.evidence_ids[0]),
+          check: item,
+        },
+      ];
     }
     return [
       {
         id: key,
         title: item?.title ?? key,
-        kind: CHECK_KIND[key] ?? "Failed check",
+        kind: CHECK_KIND[key] ?? 'Failed check',
         href: section(item?.section_keys[0]) ?? entity(item?.evidence_ids[0]),
         check: item,
       },
@@ -113,40 +128,45 @@ function blocksOf(doc: string, n: number, readiness: Readiness, strategy: Schema
  * qa-docs-2: a roadmap's (or an update's) approve refuses each date its text writes that no
  * confirmed schedule backs (the version's ``date_marks`` with a label), as the 409 lists them.
  */
-export function dateBlocksOf(marks: DateMark[] | undefined, headings: Map<string, string>): Block[] {
+export function dateBlocksOf(
+  marks: DateMark[] | undefined,
+  headings: Map<string, string>,
+): Block[] {
   return (marks ?? [])
     .filter((m) => m.label)
     .map((m) => {
-      const heading = m.where === "title" ? "the title" : headings.get(m.section_key);
+      const heading = m.where === 'title' ? 'the title' : headings.get(m.section_key);
       return {
         id: `${m.section_key}:${m.text}`,
-        title: `${formatDate(m.date)}${heading ? ` in “${heading}”` : ""}: ${
-          m.status === "withdrawn" ? "its date source was withdrawn" : "not backed by a confirmed schedule"
+        title: `${formatDate(m.date)}${heading ? ` in “${heading}”` : ''}: ${
+          m.status === 'withdrawn'
+            ? 'its date source was withdrawn'
+            : 'not backed by a confirmed schedule'
         }`,
-        kind: "Unconfirmed date",
-        href: "/plan/dates",
+        kind: 'Unconfirmed date',
+        href: '/plan/dates',
       };
     });
 }
 
-const STATUS: Record<Item["status"], { kind: ChipKind; label: string }> = {
-  pass: { kind: "pass", label: "Pass" },
-  warning: { kind: "warn", label: "Warning" },
-  critical: { kind: "crit", label: "Critical" },
-  not_applicable: { kind: "na", label: "N/A" },
+const STATUS: Record<Item['status'], { kind: ChipKind; label: string }> = {
+  pass: { kind: 'pass', label: 'Pass' },
+  warning: { kind: 'warn', label: 'Warning' },
+  critical: { kind: 'crit', label: 'Critical' },
+  not_applicable: { kind: 'na', label: 'N/A' },
 };
 
 /** A hard check fails only when critical (T2); its count is what it found. */
 function hardCount(item: Item): string | null {
   const found = item.evidence_ids.length;
-  if (item.status === "pass" || item.status === "not_applicable" || found === 0) return null;
-  return item.key === BLOCKERS_CHECK ? `${found} open` : `${found} item${found === 1 ? "" : "s"}`;
+  if (item.status === 'pass' || item.status === 'not_applicable' || found === 0) return null;
+  return item.key === BLOCKERS_CHECK ? `${found} open` : `${found} item${found === 1 ? '' : 's'}`;
 }
 
 function subscribePhone(onChange: () => void) {
   const mq = window.matchMedia(PHONE);
-  mq.addEventListener("change", onChange);
-  return () => mq.removeEventListener("change", onChange);
+  mq.addEventListener('change', onChange);
+  return () => mq.removeEventListener('change', onChange);
 }
 
 /** True at phone width; false on the server. */
@@ -160,11 +180,11 @@ function useIsPhone(): boolean {
 
 function age(iso: string): string {
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
-  return days < 1 ? "today" : `${days}d`;
+  return days < 1 ? 'today' : `${days}d`;
 }
 
 /** The dated kinds' names, as the page says them (qa4-docs-share-3). */
-const DATED_NOUN: Record<string, string> = { roadmap: "Roadmap", update: "Update" };
+const DATED_NOUN: Record<string, string> = { roadmap: 'Roadmap', update: 'Update' };
 
 /**
  * What publishing does on main: POST .../approve stamps the version, the document and the
@@ -173,9 +193,24 @@ const DATED_NOUN: Record<string, string> = { roadmap: "Roadmap", update: "Update
 function onPublishLines(n: number, kind?: string) {
   const noun = kind ? DATED_NOUN[kind] : undefined;
   // build-review (QV4 a): one Publish step approves the version and makes it ready to share.
-  if (noun === "Roadmap") return [`Version v${n} approved`, `${noun} status set to Approved`, "Approval recorded in the audit log", `v${n} ready to share as a link`];
-  if (noun) return [`Version v${n} approved`, `${noun} status set to Approved`, "Approval recorded in the audit log"];
-  return [`Version v${n} approved with its evidence`, "PRD status set to Approved", "Approval recorded in the audit log"];
+  if (noun === 'Roadmap')
+    return [
+      `Version v${n} approved`,
+      `${noun} status set to Approved`,
+      'Approval recorded in the audit log',
+      `v${n} ready to share as a link`,
+    ];
+  if (noun)
+    return [
+      `Version v${n} approved`,
+      `${noun} status set to Approved`,
+      'Approval recorded in the audit log',
+    ];
+  return [
+    `Version v${n} approved with its evidence`,
+    'PRD status set to Approved',
+    'Approval recorded in the audit log',
+  ];
 }
 
 function OnPublish({ n, kind }: { n: number; kind?: string }) {
@@ -197,7 +232,7 @@ function useCanAcceptRisk(): boolean {
   const policy = useRiskPolicy();
   // POST accept-risk; for a blocker that gates publishing the handler asks for the
   // company's acceptance role too (its per-item role, owner): an approver passes when it is theirs.
-  return can("accept_blocker_risk", policy.role !== "owner");
+  return can('accept_blocker_risk', policy.role !== 'owner');
 }
 
 /** Accept a blocker's risk: the company's acceptance role (B4, owners by default); hidden from anyone else. */
@@ -205,7 +240,7 @@ function AcceptRisk({ blocker, onDone }: { blocker: Strategy; onDone: (message: 
   const policy = useRiskPolicy();
   const onAuth = useAuthRedirect();
   const [open, setOpen] = useState(false);
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState('');
   const zone = useCompanyZone();
   const today = todayIn(zone);
   // Thirty days out, inside the company's limit (a day short of it); null until edited.
@@ -222,17 +257,22 @@ function AcceptRisk({ blocker, onDone }: { blocker: Strategy; onDone: (message: 
     setError(null);
     try {
       await unwrap(
-        api.POST("/v1/blockers/{blocker_id}/accept-risk", {
+        api.POST('/v1/blockers/{blocker_id}/accept-risk', {
           params: { path: { blocker_id: blocker.blocker.id } },
           // 09:00 on the chosen day in the Company time zone, kept inside the company's limit from now.
           body: {
             reason: reason.trim(),
-            review_at: new Date(Math.min(Date.parse(zoneInstant(review, "09:00", zone)), Date.now() + policy.maxDays * DAY - 60_000)).toISOString(),
+            review_at: new Date(
+              Math.min(
+                Date.parse(zoneInstant(review, '09:00', zone)),
+                Date.now() + policy.maxDays * DAY - 60_000,
+              ),
+            ).toISOString(),
           },
         }),
       );
       setOpen(false);
-      onDone("Risk accepted.");
+      onDone('Risk accepted.');
     } catch (e) {
       if (!onAuth(e)) setError(errorMessage(e));
     } finally {
@@ -258,7 +298,13 @@ function AcceptRisk({ blocker, onDone }: { blocker: Strategy; onDone: (message: 
     >
       <label className="flex flex-col gap-1 text-[13px] font-semibold text-text2">
         Reason
-        <input className={INPUT} value={reason} onChange={(e) => setReason(e.target.value)} required maxLength={4000} />
+        <input
+          className={INPUT}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          required
+          maxLength={4000}
+        />
       </label>
       <label className="flex flex-col gap-1 text-[13px] font-semibold text-text2">
         Review by
@@ -278,7 +324,7 @@ function AcceptRisk({ blocker, onDone }: { blocker: Strategy; onDone: (message: 
       </label>
       <div className="flex flex-wrap gap-2">
         <Button type="submit" variant="solid" disabled={busy || !reason.trim()}>
-          {busy ? "Accepting…" : "Accept risk"}
+          {busy ? 'Accepting…' : 'Accept risk'}
         </Button>
         <Button variant="ghost" onClick={() => setOpen(false)}>
           Cancel
@@ -340,10 +386,14 @@ function BlockInspector({
       {block.blocker && (
         <InspectorSection label="Blocker strategy">
           <div className="flex flex-wrap items-center gap-2">
-            <LinkButton href={`/ground-truth?tab=blockers&blocker=${encodeURIComponent(block.blocker.blocker.id)}`}>
+            <LinkButton
+              href={`/ground-truth?tab=blockers&blocker=${encodeURIComponent(block.blocker.blocker.id)}`}
+            >
               Open blocker
             </LinkButton>
-            <span className="text-sm text-text2">Status, options, feasibility scope and experiments</span>
+            <span className="text-sm text-text2">
+              Status, options, feasibility scope and experiments
+            </span>
           </div>
         </InspectorSection>
       )}
@@ -363,7 +413,7 @@ function BlockInspector({
 
 function ReadyInspector({ n, published, kind }: { n: number; published: boolean; kind?: string }) {
   // qa-docs-62: once published, the panel says what publishing did, in the past.
-  const label = published ? "When it was published" : "On publish";
+  const label = published ? 'When it was published' : 'On publish';
   return (
     <Inspector testId="publish-inspector" label={label} eyebrow={label}>
       <InspectorSection>
@@ -373,11 +423,24 @@ function ReadyInspector({ n, published, kind }: { n: number; published: boolean;
   );
 }
 
-function SubHead({ title, count, muted = false, children }: { title: string; count: ReactNode; muted?: boolean; children?: ReactNode }) {
+function SubHead({
+  title,
+  count,
+  muted = false,
+  children,
+}: {
+  title: string;
+  count: ReactNode;
+  muted?: boolean;
+  children?: ReactNode;
+}) {
   return (
     <div className="flex min-h-12 flex-wrap items-center gap-2.5 border-t border-line px-4 py-2 max-[600px]:px-3">
       <h2 className="font-display text-lg leading-6 font-bold tracking-heading">{title}</h2>
-      <span data-testid="subhead-count" className={`tnum font-display text-lg leading-6 font-bold tracking-heading ${muted ? "text-text2" : "text-accent-ink"}`}>
+      <span
+        data-testid="subhead-count"
+        className={`tnum font-display text-lg leading-6 font-bold tracking-heading ${muted ? 'text-text2' : 'text-accent-ink'}`}
+      >
         {count}
       </span>
       {children}
@@ -386,7 +449,17 @@ function SubHead({ title, count, muted = false, children }: { title: string; cou
 }
 
 /** One block: icon, title, kind chip, Resolve (D-1: only for whoever may publish). Click selects it. */
-function BlockRow({ block, selected, canResolve, onSelect }: { block: Block; selected: boolean; canResolve: boolean; onSelect: () => void }) {
+function BlockRow({
+  block,
+  selected,
+  canResolve,
+  onSelect,
+}: {
+  block: Block;
+  selected: boolean;
+  canResolve: boolean;
+  onSelect: () => void;
+}) {
   return (
     <div
       data-testid="block-row"
@@ -394,7 +467,7 @@ function BlockRow({ block, selected, canResolve, onSelect }: { block: Block; sel
       aria-current={selected || undefined}
       onClick={onSelect}
       className={`grid min-h-[44px] cursor-pointer grid-cols-[22px_minmax(0,1fr)_170px_96px] items-center gap-x-2 border-t border-line px-4 hover:bg-surface2 max-[600px]:grid-cols-[22px_minmax(0,1fr)_auto] max-[600px]:gap-y-1.5 max-[600px]:px-3 max-[600px]:py-2.5 ${
-        selected ? "bg-accent-soft shadow-[inset_4px_0_0_var(--accent)] hover:bg-accent-soft" : ""
+        selected ? 'bg-accent-soft shadow-[inset_4px_0_0_var(--accent)] hover:bg-accent-soft' : ''
       }`}
     >
       <Icon name="alert" size={16} className="text-crit" />
@@ -415,7 +488,11 @@ function BlockRow({ block, selected, canResolve, onSelect }: { block: Block; sel
       </span>
       <span className="text-right max-[600px]:col-start-3 max-[600px]:row-start-2">
         {block.href && canResolve && (
-          <LinkButton href={block.href} variant={selected ? "solid" : "secondary"} onClick={(e) => e.stopPropagation()}>
+          <LinkButton
+            href={block.href}
+            variant={selected ? 'solid' : 'secondary'}
+            onClick={(e) => e.stopPropagation()}
+          >
             Resolve
           </LinkButton>
         )}
@@ -425,8 +502,8 @@ function BlockRow({ block, selected, canResolve, onSelect }: { block: Block; sel
 }
 
 function HardRow({ item }: { item: Item }) {
-  const fail = item.status === "critical";
-  const chip = fail ? { kind: "crit" as const, label: "Fail" } : STATUS[item.status];
+  const fail = item.status === 'critical';
+  const chip = fail ? { kind: 'crit' as const, label: 'Fail' } : STATUS[item.status];
   const count = hardCount(item);
   return (
     <li
@@ -437,12 +514,16 @@ function HardRow({ item }: { item: Item }) {
       // qa-docs-61: the status pill at the row's right end, as on the advisory rows.
       className="grid min-h-[44px] grid-cols-[22px_minmax(0,1fr)_auto_auto] items-center gap-x-2 border-t border-line px-4 max-[600px]:px-3"
     >
-      {item.status === "not_applicable" ? (
+      {item.status === 'not_applicable' ? (
         <span aria-hidden="true" data-testid="hard-na" className="text-center text-text2">
           –
         </span>
       ) : (
-        <Icon name={fail ? "x" : "check"} size={16} className={fail ? "text-crit" : item.status === "pass" ? "text-pass" : "text-text2"} />
+        <Icon
+          name={fail ? 'x' : 'check'}
+          size={16}
+          className={fail ? 'text-crit' : item.status === 'pass' ? 'text-pass' : 'text-text2'}
+        />
       )}
       <span className="min-w-0 py-2 font-medium break-words">{item.title}</span>
       <span className="tnum text-right text-text2" data-testid="hard-count">
@@ -484,15 +565,18 @@ function ReviewRow({ reviewed, total, href }: { reviewed: number; total: number;
       data-testid="review-row"
       className="grid min-h-[44px] grid-cols-[22px_minmax(0,1fr)_auto] items-center gap-x-2 border-t border-line px-4 max-[600px]:px-3"
     >
-      <Icon name={all ? "check" : "alert"} size={16} className={all ? "text-pass" : "text-warn"} />
+      <Icon name={all ? 'check' : 'alert'} size={16} className={all ? 'text-pass' : 'text-warn'} />
       <span className="min-w-0 py-2 break-words">
-        <span className="font-medium">Sections reviewed</span>{" "}
-        <Link href={href} className="text-sm font-medium whitespace-nowrap text-accent-ink hover:underline">
+        <span className="font-medium">Sections reviewed</span>{' '}
+        <Link
+          href={href}
+          className="text-sm font-medium whitespace-nowrap text-accent-ink hover:underline"
+        >
           Review sections
         </Link>
       </span>
       <span className="justify-self-end" data-testid="review-count">
-        <Chip kind={all ? "pass" : "warn"}>
+        <Chip kind={all ? 'pass' : 'warn'}>
           {reviewed} of {total}
         </Chip>
       </span>
@@ -504,18 +588,37 @@ function ReviewRow({ reviewed, total, href }: { reviewed: number; total: number;
  * walk-docs-priorities 10: accepted changes staged for the next draft are not in this version;
  * Publish says so, so nobody publishes thinking an accepted change is in it.
  */
-function StagedSection({ staged, n }: { staged: Schemas["StagedChanges"]; n: number }) {
+function StagedSection({ staged, n }: { staged: Schemas['StagedChanges']; n: number }) {
   const rows = [
-    ...staged.items.map((i) => ({ id: i.suggestion_id, heading: i.section_heading, what: i.feedback_summary || i.text, who: i.accepted_by_name, verb: "Accepted" })),
-    ...(staged.next_draft_changes ?? []).map((c) => ({ id: c.id, heading: c.section_heading, what: c.instruction, who: c.staged_by_name, verb: "Staged" })),
-    ...staged.agent_items.map((a) => ({ id: a.feedback_id, heading: "General", what: a.summary, who: a.staged_by_name, verb: "Staged" })),
+    ...staged.items.map((i) => ({
+      id: i.suggestion_id,
+      heading: i.section_heading,
+      what: i.feedback_summary || i.text,
+      who: i.accepted_by_name,
+      verb: 'Accepted',
+    })),
+    ...(staged.next_draft_changes ?? []).map((c) => ({
+      id: c.id,
+      heading: c.section_heading,
+      what: c.instruction,
+      who: c.staged_by_name,
+      verb: 'Staged',
+    })),
+    ...staged.agent_items.map((a) => ({
+      id: a.feedback_id,
+      heading: 'General',
+      what: a.summary,
+      who: a.staged_by_name,
+      verb: 'Staged',
+    })),
   ];
   if (!rows.length) return null;
   return (
     <section aria-label="Staged for the next draft" data-testid="publish-staged">
       <SubHead title="Staged for the next draft" count={rows.length} muted>
         <span data-testid="staged-note" className="text-sm text-text2">
-          Not in version {n}: {rows.length === 1 ? "it goes" : "they go"} into draft {staged.next_version}
+          Not in version {n}: {rows.length === 1 ? 'it goes' : 'they go'} into draft{' '}
+          {staged.next_version}
         </span>
       </SubHead>
       <ul>
@@ -529,7 +632,12 @@ function StagedSection({ staged, n }: { staged: Schemas["StagedChanges"]; n: num
             <span className="min-w-0 py-2 break-words">
               <span className="font-medium">{r.heading}</span>
               {r.what ? <>: {r.what}</> : null}
-              {r.who ? <span className="text-sm text-text2"> · {r.verb} by {r.who}</span> : null}
+              {r.who ? (
+                <span className="text-sm text-text2">
+                  {' '}
+                  · {r.verb} by {r.who}
+                </span>
+              ) : null}
             </span>
           </li>
         ))}
@@ -540,7 +648,7 @@ function StagedSection({ staged, n }: { staged: Schemas["StagedChanges"]; n: num
 
 /** "20 of 20 sections are not reviewed": the one count the headline, the checklist and the dialog use. */
 export function unreviewedText(unreviewed: number, total: number): string {
-  return `${unreviewed} of ${plural(total, "section")} ${unreviewed === 1 ? "is" : "are"} not reviewed`;
+  return `${unreviewed} of ${plural(total, 'section')} ${unreviewed === 1 ? 'is' : 'are'} not reviewed`;
 }
 
 /** Publish (B1): blocks, hard checks and advisory on the left, the selected block right. */
@@ -548,36 +656,47 @@ export function PublishView({ doc }: { doc: string }) {
   const { can } = useMe();
   const onAuth = useAuthRedirect();
   const phone = useIsPhone();
-  const docQ = useQuery(`doc|${doc}`, () => unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } } })));
+  const docQ = useQuery(`doc|${doc}`, () =>
+    unwrap(api.GET('/v1/documents/{doc}', { params: { path: { doc } } })),
+  );
   const d = docQ.data;
   const n = d?.latest_version ?? null;
   // G7 3.3: the panel is about this document (its latest version).
-  useScreenSubject(d && n != null ? { kind: "document", subject: { document_id: d.id, version: n } } : null, d?.title);
+  useScreenSubject(
+    d && n != null ? { kind: 'document', subject: { document_id: d.id, version: n } } : null,
+    d?.title,
+  );
   const readinessQ = useQuery(`readiness|${doc}|${n}`, () =>
     n == null
       ? Promise.resolve(undefined)
-      : unwrap(api.GET("/v1/documents/{doc}/versions/{n}/readiness", { params: { path: { doc, n }, query: { purpose: "publish" } } })),
+      : unwrap(
+          api.GET('/v1/documents/{doc}/versions/{n}/readiness', {
+            params: { path: { doc, n }, query: { purpose: 'publish' } },
+          }),
+        ),
   );
   // #254: the confirm names how many sections are not reviewed.
   // #1586: a failed read says so (below the header), never "every section reviewed" or "no blocks".
   const versionQ = useQuery(`version|${doc}|${n}`, () =>
-    n == null ? Promise.resolve(undefined) : unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc, n } } })),
+    n == null
+      ? Promise.resolve(undefined)
+      : unwrap(api.GET('/v1/documents/{doc}/versions/{n}', { params: { path: { doc, n } } })),
   );
   const sections = versionQ.data?.sections ?? [];
   const unreviewed = sections.filter((s) => !s.verdict).length;
   // Without the strategy the blocks fall back to the verdict's own rows; a failed read says so.
   const strategyQ = useQuery(`blocker-strategy|${doc}`, () =>
-    unwrap(api.GET("/v1/documents/{doc}/blocker-strategy", { params: { path: { doc } } })),
+    unwrap(api.GET('/v1/documents/{doc}/blocker-strategy', { params: { path: { doc } } })),
   );
   const stagedQ = useQuery(`staged|${doc}`, () =>
-    unwrap(api.GET("/v1/documents/{doc}/staged-changes", { params: { path: { doc } } })),
+    unwrap(api.GET('/v1/documents/{doc}/staged-changes', { params: { path: { doc } } })),
   );
   const questionsQ = useQuery(`questions|${d?.id}`, async () => {
     if (!d) return undefined;
     const query = { document_id: d.id };
     const [gaps, questions] = await Promise.all([
-      unwrap(api.GET("/v1/gaps", { params: { query } })),
-      unwrap(api.GET("/v1/questions", { params: { query } })),
+      unwrap(api.GET('/v1/gaps', { params: { query } })),
+      unwrap(api.GET('/v1/questions', { params: { query } })),
     ]);
     return { gaps, questions };
   });
@@ -597,9 +716,11 @@ export function PublishView({ doc }: { doc: string }) {
   const approved = n != null && d?.approved_version === n;
   // build-review (QV4 a): a roadmap's Publish approves it and publishes it for sharing in one
   // step, so it is published once its version is shared as a link's publication too.
-  const sharable = d?.kind === "roadmap";
+  const sharable = d?.kind === 'roadmap';
   const pubsQ = useQuery(`publications|${doc}|${sharable}`, () =>
-    sharable ? unwrap(api.GET("/v1/documents/{doc}/publications", { params: { path: { doc } } })) : Promise.resolve(undefined),
+    sharable
+      ? unwrap(api.GET('/v1/documents/{doc}/publications', { params: { path: { doc } } }))
+      : Promise.resolve(undefined),
   );
   const published = approved && (!sharable || !!pubsQ.data?.some((p) => p.version_number === n));
   // A published version has nothing left to block it: no blocks, even for a roadmap's dates.
@@ -614,14 +735,14 @@ export function PublishView({ doc }: { doc: string }) {
   const selected = blocks.find((b) => b.id === picked) ?? blocks[0] ?? null;
   // #370: Publish is POST .../approve; anyone who may not call it never sees the button. A
   // vision, strategy or update is an owner's (its per-item role); any other kind an approver's.
-  const canPublish = can("approve_version", d != null && !OWNER_APPROVES[d.kind]);
+  const canPublish = can('approve_version', d != null && !OWNER_APPROVES[d.kind]);
   // qa4-docs-share-3: the readiness checks are a PRD's; a roadmap's (or an update's) approve
   // asks only for its dates, so the page shows that check instead of the PRD's.
   const hard = dated ? [] : (readiness?.items.filter((i) => i.hard) ?? []);
   const advisory = dated ? [] : (readiness?.items.filter((i) => !i.hard) ?? []);
-  const failing = hard.filter((i) => i.status === "critical").length;
-  const tally = (s: Item["status"]) => advisory.filter((i) => i.status === s).length;
-  const hardNa = hard.filter((i) => i.status === "not_applicable").length;
+  const failing = hard.filter((i) => i.status === 'critical').length;
+  const tally = (s: Item['status']) => advisory.filter((i) => i.status === s).length;
+  const hardNa = hard.filter((i) => i.status === 'not_applicable').length;
   // qa4-docs-share-20: the heading counts the hard checks that apply; n/a ones have their own chip.
   const hardApply = hard.length - hardNa;
   const half = Math.ceil(advisory.length / 2);
@@ -629,8 +750,13 @@ export function PublishView({ doc }: { doc: string }) {
   const questionFor = (block: Block): Question | undefined => {
     const data = questionsQ.data;
     if (!data || !block.blocker) return undefined;
-    const gapIds = new Set(data.gaps.filter((g) => g.entity_ids.includes(block.blocker!.blocker.id)).map((g) => g.id));
-    return data.questions.find((q) => q.gap_id != null && gapIds.has(q.gap_id) && !["answered", "withdrawn"].includes(q.status));
+    const gapIds = new Set(
+      data.gaps.filter((g) => g.entity_ids.includes(block.blocker!.blocker.id)).map((g) => g.id),
+    );
+    return data.questions.find(
+      (q) =>
+        q.gap_id != null && gapIds.has(q.gap_id) && !['answered', 'withdrawn'].includes(q.status),
+    );
   };
 
   const reloadReadiness = readinessQ.reload;
@@ -648,7 +774,7 @@ export function PublishView({ doc }: { doc: string }) {
   useFocusTrap(dialogRef, confirming, closeConfirm);
   // A refusal disables Publish; keep focus inside the dialog, on the way out.
   useEffect(() => {
-    if (refusal) dialogRef.current?.querySelector<HTMLElement>("[data-dialog-cancel]")?.focus();
+    if (refusal) dialogRef.current?.querySelector<HTMLElement>('[data-dialog-cancel]')?.focus();
   }, [refusal]);
 
   async function publish() {
@@ -657,15 +783,23 @@ export function PublishView({ doc }: { doc: string }) {
     setRefusal(null);
     try {
       // C5: only the latest version is published; one that landed since this page loaded wins.
-      const fresh = await unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } }, cache: "no-store" }));
+      const fresh = await unwrap(
+        api.GET('/v1/documents/{doc}', { params: { path: { doc } }, cache: 'no-store' }),
+      );
       if (fresh.latest_version !== n) {
-        setRefusal({ detail: `v${fresh.latest_version} exists, reload`, blocking: [], stale: true });
+        setRefusal({
+          detail: `v${fresh.latest_version} exists, reload`,
+          blocking: [],
+          stale: true,
+        });
         return;
       }
       // The API runs the publish checks itself and answers 409 naming the blocks.
       if (!approved) {
-        const res = await api.POST("/v1/documents/{doc}/versions/{n}/approve", { params: { path: { doc, n } } });
-        if (res.response.status === 409 && res.error && "blocking" in res.error) {
+        const res = await api.POST('/v1/documents/{doc}/versions/{n}/approve', {
+          params: { path: { doc, n } },
+        });
+        if (res.response.status === 409 && res.error && 'blocking' in res.error) {
           setRefusal(res.error);
           void reloadReadiness();
           void reloadStrategy();
@@ -675,15 +809,27 @@ export function PublishView({ doc }: { doc: string }) {
       }
       // build-review (QV4 a): the same step publishes a roadmap's version for sharing.
       if (sharable) {
-        const check = await unwrap(api.GET("/v1/documents/{doc}/versions/{n}/publish-check", { params: { path: { doc, n } } }));
-        const left = check.blockers.filter((b) => b.code !== "already_published");
+        const check = await unwrap(
+          api.GET('/v1/documents/{doc}/versions/{n}/publish-check', {
+            params: { path: { doc, n } },
+          }),
+        );
+        const left = check.blockers.filter((b) => b.code !== 'already_published');
         if (left.length > 0) {
-          setRefusal({ detail: `Approved, but not ready to share: ${left.map((b) => b.message).join("; ")}`, blocking: [] });
+          setRefusal({
+            detail: `Approved, but not ready to share: ${left.map((b) => b.message).join('; ')}`,
+            blocking: [],
+          });
           void docQ.reload();
           return;
         }
         if (check.can_publish) {
-          await unwrap(api.POST("/v1/documents/{doc}/versions/{n}/publish", { params: { path: { doc, n } }, body: { content_hash: check.content_hash } }));
+          await unwrap(
+            api.POST('/v1/documents/{doc}/versions/{n}/publish', {
+              params: { path: { doc, n } },
+              body: { content_hash: check.content_hash },
+            }),
+          );
         }
         void pubsQ.reload();
       }
@@ -708,38 +854,49 @@ export function PublishView({ doc }: { doc: string }) {
   // Enabled only when the API's verdict refuses nothing; never a count made here.
   const checking = !readiness || (dated && !versionQ.data);
   const reason = checking
-    ? "Checking"
+    ? 'Checking'
     : (dated ? blocks.length > 0 : readiness.blocked)
-      ? plural(blocks.length, "block")
+      ? plural(blocks.length, 'block')
       : null;
   // qa4-docs-share-54: what holds the publish, in words on the page, not only in a tooltip.
   const blockCounts = new Map<string, number>();
   for (const b of blocks) blockCounts.set(b.kind, (blockCounts.get(b.kind) ?? 0) + 1);
-  const blocksWhy = [...blockCounts].map(([kind, count]) => plural(count, BLOCK_NOUN[kind] ?? "failed check")).join(", ");
+  const blocksWhy = [...blockCounts]
+    .map(([kind, count]) => plural(count, BLOCK_NOUN[kind] ?? 'failed check'))
+    .join(', ');
   // qa-docs-3: publishable, but say what is still open (the confirm dialog says the same).
-  const critical = tally("critical");
+  const critical = tally('critical');
   const caveats = [
     // qa-docs-4: the same count as the dialog and the Section review row.
     unreviewed > 0 ? unreviewedText(unreviewed, sections.length) : null,
-    critical > 0 ? `${plural(critical, "advisory check")} ${critical === 1 ? "is" : "are"} critical` : null,
+    critical > 0
+      ? `${plural(critical, 'advisory check')} ${critical === 1 ? 'is' : 'are'} critical`
+      : null,
   ].filter((x): x is string => !!x);
   // qa-docs-23: who may publish, from can(): a vision, strategy or update is an owner's.
-  const whoPublishes = d && OWNER_APPROVES[d.kind] ? "Only an owner can publish" : "Only an approver or owner can publish";
+  const whoPublishes =
+    d && OWNER_APPROVES[d.kind]
+      ? 'Only an owner can publish'
+      : 'Only an approver or owner can publish';
   // qa-docs-62: the header's chip says "Published v2"; the headline says when, not that again.
   const approvedAt = versionQ.data?.approved_at;
   // #1586: what could not be read is never drawn as "every section reviewed" or "not published".
-  const unchecked = versionQ.error ? "the sections" : sharable && pubsQ.error ? "the publications" : null;
+  const unchecked = versionQ.error
+    ? 'the sections'
+    : sharable && pubsQ.error
+      ? 'the publications'
+      : null;
   const headline = unchecked
     ? `Could not check ${unchecked}`
     : published
-    ? approvedAt
-      ? `Published on ${formatDate(approvedAt)}`
-      : "Published"
-    : !canPublish
-      ? `${whoPublishes} v${n}`
-      : caveats.length > 0
-        ? `Publishable, but ${caveats.join(" and ")}`
-        : `Ready to publish v${n}`;
+      ? approvedAt
+        ? `Published on ${formatDate(approvedAt)}`
+        : 'Published'
+      : !canPublish
+        ? `${whoPublishes} v${n}`
+        : caveats.length > 0
+          ? `Publishable, but ${caveats.join(' and ')}`
+          : `Ready to publish v${n}`;
   const action =
     n == null ? null : published ? (
       <Chip kind="pass" className="h-10 px-4 text-[15px]" data-testid="published-chip">
@@ -750,9 +907,9 @@ export function PublishView({ doc }: { doc: string }) {
       <>
         <Button
           variant="primary"
-          icon={reason ? "lock" : "check"}
+          icon={reason ? 'lock' : 'check'}
           disabled={!!reason}
-          aria-describedby={reason ? "publish-reason" : undefined}
+          aria-describedby={reason ? 'publish-reason' : undefined}
           title={reason ?? undefined}
           data-testid="publish-button"
           onClick={() => setConfirming(true)}
@@ -769,7 +926,7 @@ export function PublishView({ doc }: { doc: string }) {
 
   const blocksChip = !checking && (
     <span id="publish-blocks" className="inline-flex">
-      <Chip kind={blocks.length ? "crit" : "pass"} data-testid="blocks-chip">
+      <Chip kind={blocks.length ? 'crit' : 'pass'} data-testid="blocks-chip">
         {blockedLabel(blocks.length > 0, blocks.length)}
       </Chip>
     </span>
@@ -777,7 +934,15 @@ export function PublishView({ doc }: { doc: string }) {
 
   const inspector =
     n == null || !readiness ? undefined : selected ? (
-      <BlockInspector key={selected.id} block={selected} question={questionFor(selected)} n={n} kind={d?.kind} canPublish={canPublish} onChanged={changed} />
+      <BlockInspector
+        key={selected.id}
+        block={selected}
+        question={questionFor(selected)}
+        n={n}
+        kind={d?.kind}
+        canPublish={canPublish}
+        onChanged={changed}
+      />
     ) : !published && !canPublish ? undefined : (
       <ReadyInspector n={n} published={published} kind={d?.kind} />
     );
@@ -792,26 +957,61 @@ export function PublishView({ doc }: { doc: string }) {
         title="Publish"
         // B-23: the phone bar reads "Publish" alone; the crumb already names the document.
         phoneSuffix={false}
-        suffix={d ? `${d.title}${n != null ? ` v${n}` : ""}` : undefined}
+        suffix={d ? `${d.title}${n != null ? ` v${n}` : ''}` : undefined}
         status={sharable && published ? undefined : blocksChip}
         action={action}
       />
       {docQ.error && <ErrorNote>{docQ.error}</ErrorNote>}
       {readinessQ.error && <ErrorNote>{readinessQ.error}</ErrorNote>}
-      {versionQ.error && <LoadError what="the sections" error={versionQ.error} onRetry={() => void versionQ.reload()} />}
-      {pubsQ.error && <LoadError what="the publications" error={pubsQ.error} onRetry={() => void pubsQ.reload()} />}
-      {strategyQ.error && <LoadError what="the blocker plan" error={strategyQ.error} onRetry={() => void strategyQ.reload()} />}
-      {stagedQ.error && <LoadError what="the staged changes" error={stagedQ.error} onRetry={() => void stagedQ.reload()} />}
-      {questionsQ.error && <LoadError what="the open questions" error={questionsQ.error} onRetry={() => void questionsQ.reload()} />}
+      {versionQ.error && (
+        <LoadError
+          what="the sections"
+          error={versionQ.error}
+          onRetry={() => void versionQ.reload()}
+        />
+      )}
+      {pubsQ.error && (
+        <LoadError
+          what="the publications"
+          error={pubsQ.error}
+          onRetry={() => void pubsQ.reload()}
+        />
+      )}
+      {strategyQ.error && (
+        <LoadError
+          what="the blocker plan"
+          error={strategyQ.error}
+          onRetry={() => void strategyQ.reload()}
+        />
+      )}
+      {stagedQ.error && (
+        <LoadError
+          what="the staged changes"
+          error={stagedQ.error}
+          onRetry={() => void stagedQ.reload()}
+        />
+      )}
+      {questionsQ.error && (
+        <LoadError
+          what="the open questions"
+          error={questionsQ.error}
+          onRetry={() => void questionsQ.reload()}
+        />
+      )}
       {notice && <Notice tone="pass">{notice}</Notice>}
       {sharable && n != null && d && (
         // build-review (QV4 a): one line says what Publish does, and once published, Share a link.
-        <div data-testid="publish-share-note" className="mb-3 flex flex-wrap items-center gap-3 rounded-button bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink">
+        <div
+          data-testid="publish-share-note"
+          className="mb-3 flex flex-wrap items-center gap-3 rounded-button bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink"
+        >
           <span className="min-w-0 flex-1">
-            {published ? `v${n} is published. You can share it as a link now.` : `Publish v${n} approves it and makes it ready to share, in one step.`}
+            {published
+              ? `v${n} is published. You can share it as a link now.`
+              : `Publish v${n} approves it and makes it ready to share, in one step.`}
           </span>
           {published && (
-            <LinkButton variant="primary" href={`/documents/${doc}?share=${d.audience ?? "team"}`}>
+            <LinkButton variant="primary" href={`/documents/${doc}?share=${d.audience ?? 'team'}`}>
               Share a link
             </LinkButton>
           )}
@@ -825,7 +1025,10 @@ export function PublishView({ doc }: { doc: string }) {
         <Split inspector={phone && selected ? undefined : inspector}>
           <Panel testId="publish-readiness" className="overflow-hidden">
             {!canPublish && !published && blocks.length > 0 && (
-              <p data-testid="publish-role" className="flex min-h-12 items-center gap-2.5 border-b border-line px-4 font-medium text-text2 max-[600px]:px-3">
+              <p
+                data-testid="publish-role"
+                className="flex min-h-12 items-center gap-2.5 border-b border-line px-4 font-medium text-text2 max-[600px]:px-3"
+              >
                 <Icon name="lock" size={16} className="flex-none" />
                 {whoPublishes} v{n}
               </p>
@@ -833,16 +1036,27 @@ export function PublishView({ doc }: { doc: string }) {
             {blocks.length > 0 ? (
               <section aria-label="Blocks">
                 <div className="flex min-h-12 flex-wrap items-center gap-2.5 px-4 py-2 max-[600px]:px-3">
-                  <h2 className="font-display text-lg leading-6 font-bold tracking-heading">Blocks</h2>
-                  <span className="tnum font-display text-lg leading-6 font-bold tracking-heading text-accent-ink">{blocks.length}</span>
+                  <h2 className="font-display text-lg leading-6 font-bold tracking-heading">
+                    Blocks
+                  </h2>
+                  <span className="tnum font-display text-lg leading-6 font-bold tracking-heading text-accent-ink">
+                    {blocks.length}
+                  </span>
                   <span data-testid="blocks-why" className="min-w-0 text-sm text-text2">
                     Publishing waits for {blocksWhy}
                   </span>
                 </div>
                 {blocks.map((b) => (
                   <div key={b.id}>
-                    <BlockRow block={b} selected={b.id === selected?.id} canResolve={canPublish} onSelect={() => setPicked(b.id)} />
-                    {phone && b.id === selected?.id && inspector && <div className="border-t border-line p-2">{inspector}</div>}
+                    <BlockRow
+                      block={b}
+                      selected={b.id === selected?.id}
+                      canResolve={canPublish}
+                      onSelect={() => setPicked(b.id)}
+                    />
+                    {phone && b.id === selected?.id && inspector && (
+                      <div className="border-t border-line p-2">{inspector}</div>
+                    )}
                   </div>
                 ))}
               </section>
@@ -852,9 +1066,17 @@ export function PublishView({ doc }: { doc: string }) {
                 className="flex min-h-12 items-center gap-2.5 px-4 py-2 font-display text-lg font-bold tracking-heading max-[600px]:px-3"
               >
                 <Icon
-                  name={unchecked ? "alert" : !published && !canPublish ? "lock" : !published && caveats.length > 0 ? "alert" : "check"}
+                  name={
+                    unchecked
+                      ? 'alert'
+                      : !published && !canPublish
+                        ? 'lock'
+                        : !published && caveats.length > 0
+                          ? 'alert'
+                          : 'check'
+                  }
                   size={20}
-                  className={`flex-none ${unchecked ? "text-warn" : !published && !canPublish ? "text-text2" : !published && caveats.length > 0 ? "text-warn" : "text-pass"}`}
+                  className={`flex-none ${unchecked ? 'text-warn' : !published && !canPublish ? 'text-text2' : !published && caveats.length > 0 ? 'text-warn' : 'text-pass'}`}
                 />
                 <span className="min-w-0">{headline}</span>
               </p>
@@ -862,10 +1084,19 @@ export function PublishView({ doc }: { doc: string }) {
 
             {sections.length > 0 && (
               <section aria-label="Section review">
-                <SubHead title="Section review" count={`${sections.length - unreviewed}/${sections.length}`}>
-                  <span className="text-sm text-text2">Sections, not checks: publishing does not wait for them</span>
+                <SubHead
+                  title="Section review"
+                  count={`${sections.length - unreviewed}/${sections.length}`}
+                >
+                  <span className="text-sm text-text2">
+                    Sections, not checks: publishing does not wait for them
+                  </span>
                 </SubHead>
-                <ReviewRow reviewed={sections.length - unreviewed} total={sections.length} href={`/documents/${doc}/v/${n}`} />
+                <ReviewRow
+                  reviewed={sections.length - unreviewed}
+                  total={sections.length}
+                  href={`/documents/${doc}/v/${n}`}
+                />
               </section>
             )}
 
@@ -875,14 +1106,24 @@ export function PublishView({ doc }: { doc: string }) {
                 <ul>
                   <li
                     data-testid="dates-check"
-                    data-status={blocks.length ? "critical" : "pass"}
+                    data-status={blocks.length ? 'critical' : 'pass'}
                     className="grid min-h-[44px] grid-cols-[22px_minmax(0,1fr)_auto_auto] items-center gap-x-2 border-t border-line px-4 max-[600px]:px-3"
                   >
-                    <Icon name={blocks.length ? "x" : "check"} size={16} className={blocks.length ? "text-crit" : "text-pass"} />
-                    <span className="min-w-0 py-2 font-medium break-words">Dates backed by a confirmed schedule</span>
-                    <span className="tnum text-right text-text2">{blocks.length ? plural(blocks.length, "date") : null}</span>
+                    <Icon
+                      name={blocks.length ? 'x' : 'check'}
+                      size={16}
+                      className={blocks.length ? 'text-crit' : 'text-pass'}
+                    />
+                    <span className="min-w-0 py-2 font-medium break-words">
+                      Dates backed by a confirmed schedule
+                    </span>
+                    <span className="tnum text-right text-text2">
+                      {blocks.length ? plural(blocks.length, 'date') : null}
+                    </span>
                     <span className="justify-self-end">
-                      <Chip kind={blocks.length ? "crit" : "pass"}>{blocks.length ? "Fail" : "Pass"}</Chip>
+                      <Chip kind={blocks.length ? 'crit' : 'pass'}>
+                        {blocks.length ? 'Fail' : 'Pass'}
+                      </Chip>
                     </span>
                   </li>
                 </ul>
@@ -890,45 +1131,56 @@ export function PublishView({ doc }: { doc: string }) {
             )}
 
             {!dated && (
-            <section aria-label="Hard checks">
-              <SubHead title="Hard checks" count={hardApply} muted={hardApply === 0}>
-                {failing > 0 && <Chip kind="crit">{failing} fail</Chip>}
-                {/* qa-docs-29: hard and advisory n/a add up to Quality's "All checks" n/a. */}
-                {hardNa > 0 && <Chip kind="na">{hardNa} n/a</Chip>}
-              </SubHead>
-              <ul>
-                {hard.map((i) => (
-                  <HardRow key={i.key} item={i} />
-                ))}
-              </ul>
-            </section>
+              <section aria-label="Hard checks">
+                <SubHead title="Hard checks" count={hardApply} muted={hardApply === 0}>
+                  {failing > 0 && <Chip kind="crit">{failing} fail</Chip>}
+                  {/* qa-docs-29: hard and advisory n/a add up to Quality's "All checks" n/a. */}
+                  {hardNa > 0 && <Chip kind="na">{hardNa} n/a</Chip>}
+                </SubHead>
+                <ul>
+                  {hard.map((i) => (
+                    <HardRow key={i.key} item={i} />
+                  ))}
+                </ul>
+              </section>
             )}
 
             {!dated && (
-            <section aria-label="Advisory">
-              <SubHead title="Advisory" count={advisory.length}>
-                {tally("pass") > 0 && <Chip kind="pass">{tally("pass")} pass</Chip>}
-                {tally("warning") > 0 && <Chip kind="warn">{tally("warning")} warning</Chip>}
-                {tally("critical") > 0 && <Chip kind="crit">{tally("critical")} critical</Chip>}
-                {tally("not_applicable") > 0 && <Chip kind="na">{tally("not_applicable")} n/a</Chip>}
-                <Link href={`/documents/${doc}/v/${n}/quality`} className="text-sm font-medium text-accent-ink hover:underline">
-                  Open quality
-                </Link>
-                {/* qa4-docs-share-55: a critical here is advice; only a hard check blocks. */}
-                <span data-testid="advisory-note" className="text-sm text-text2">
-                  Advice only: these never block publishing
-                </span>
-              </SubHead>
-              <div className="grid grid-cols-2 max-[700px]:grid-cols-1" data-testid="advisory-columns">
-                {[advisory.slice(0, half), advisory.slice(half)].map((col, c) => (
-                  <ul key={c} className={c === 0 ? "border-r border-line max-[700px]:border-r-0" : ""}>
-                    {col.map((i, k) => (
-                      <AdvisoryRow key={i.key} item={i} index={c * half + k + 1} />
-                    ))}
-                  </ul>
-                ))}
-              </div>
-            </section>
+              <section aria-label="Advisory">
+                <SubHead title="Advisory" count={advisory.length}>
+                  {tally('pass') > 0 && <Chip kind="pass">{tally('pass')} pass</Chip>}
+                  {tally('warning') > 0 && <Chip kind="warn">{tally('warning')} warning</Chip>}
+                  {tally('critical') > 0 && <Chip kind="crit">{tally('critical')} critical</Chip>}
+                  {tally('not_applicable') > 0 && (
+                    <Chip kind="na">{tally('not_applicable')} n/a</Chip>
+                  )}
+                  <Link
+                    href={`/documents/${doc}/v/${n}/quality`}
+                    className="text-sm font-medium text-accent-ink hover:underline"
+                  >
+                    Open quality
+                  </Link>
+                  {/* qa4-docs-share-55: a critical here is advice; only a hard check blocks. */}
+                  <span data-testid="advisory-note" className="text-sm text-text2">
+                    Advice only: these never block publishing
+                  </span>
+                </SubHead>
+                <div
+                  className="grid grid-cols-2 max-[700px]:grid-cols-1"
+                  data-testid="advisory-columns"
+                >
+                  {[advisory.slice(0, half), advisory.slice(half)].map((col, c) => (
+                    <ul
+                      key={c}
+                      className={c === 0 ? 'border-r border-line max-[700px]:border-r-0' : ''}
+                    >
+                      {col.map((i, k) => (
+                        <AdvisoryRow key={i.key} item={i} index={c * half + k + 1} />
+                      ))}
+                    </ul>
+                  ))}
+                </div>
+              </section>
             )}
 
             {stagedQ.data && n != null && <StagedSection staged={stagedQ.data} n={n} />}
@@ -937,7 +1189,10 @@ export function PublishView({ doc }: { doc: string }) {
       )}
 
       {confirming && n != null && (
-        <div data-backdrop="" className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4">
+        <div
+          data-backdrop=""
+          className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4"
+        >
           <div
             ref={dialogRef}
             role="dialog"
@@ -947,28 +1202,40 @@ export function PublishView({ doc }: { doc: string }) {
             className="w-full max-w-md min-w-0 rounded-inspector border border-line bg-surface text-text shadow-tip"
           >
             <div className="flex min-h-14 items-center border-b border-line px-5 max-[600px]:px-4">
-              <h2 id="publish-confirm-title" className="font-display text-lg font-bold tracking-heading">
+              <h2
+                id="publish-confirm-title"
+                className="font-display text-lg font-bold tracking-heading"
+              >
                 Publish v{n}?
               </h2>
             </div>
             <div className="px-5 py-3.5 max-[600px]:px-4">
               {(versionQ.error || unreviewed > 0) && (
                 <p data-testid="unreviewed-sections" className="mb-2 font-semibold text-warn">
-                  {versionQ.error ? "Could not check the sections" : unreviewedText(unreviewed, sections.length)}
+                  {versionQ.error
+                    ? 'Could not check the sections'
+                    : unreviewedText(unreviewed, sections.length)}
                 </p>
               )}
               <OnPublish n={n} kind={d?.kind} />
             </div>
             {refusal && (
-              <div id="publish-refusal" role="alert" data-testid="publish-refusal" className="border-t border-line bg-crit-bg px-5 py-3 text-crit max-[600px]:px-4">
+              <div
+                id="publish-refusal"
+                role="alert"
+                data-testid="publish-refusal"
+                className="border-t border-line bg-crit-bg px-5 py-3 text-crit max-[600px]:px-4"
+              >
                 <p className="flex items-start gap-2 font-semibold">
                   <Icon name="alert" size={16} className="mt-0.5 flex-none" />
-                  <span className="min-w-0">{refusal.blocking.length > 0 ? "Not published" : refusal.detail}</span>
+                  <span className="min-w-0">
+                    {refusal.blocking.length > 0 ? 'Not published' : refusal.detail}
+                  </span>
                 </p>
                 {refusal.blocking.length > 0 && (
                   <>
                     <p className="mt-1 pl-6">
-                      {refusal.blocking.length} block{refusal.blocking.length === 1 ? "" : "s"}
+                      {refusal.blocking.length} block{refusal.blocking.length === 1 ? '' : 's'}
                     </p>
                     <ul className="mt-1 flex flex-col gap-1 pl-6">
                       {refusal.blocking.map((b) => (
@@ -992,13 +1259,13 @@ export function PublishView({ doc }: { doc: string }) {
               ) : (
                 <Button
                   variant="primary"
-                  icon={refusal ? "lock" : "check"}
+                  icon={refusal ? 'lock' : 'check'}
                   disabled={busy || !!refusal}
-                  aria-describedby={refusal ? "publish-refusal" : undefined}
+                  aria-describedby={refusal ? 'publish-refusal' : undefined}
                   onClick={publish}
                   data-autofocus
                 >
-                  {busy ? "Publishing…" : "Publish"}
+                  {busy ? 'Publishing…' : 'Publish'}
                 </Button>
               )}
             </div>

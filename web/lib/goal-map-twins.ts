@@ -5,24 +5,37 @@
  * the same goal ("Join only within the same goal", Nov 11): a PRD milestone of another goal stays its own card.
  * `also` gives each kept card the twin's name when it differs (its (i)).
  */
-import type { Schemas } from "@/lib/api/client";
-import type { GoalMap } from "@/lib/api/mock/goal-map";
+import type { Schemas } from '@/lib/api/client';
+import type { GoalMap } from '@/lib/api/mock/goal-map';
 
-type Read = Pick<Schemas["SimpleGoalMilestone"], "id" | "roadmap_code" | "prd" | "name" | "goal_id">;
+type Read = Pick<
+  Schemas['SimpleGoalMilestone'],
+  'id' | 'roadmap_code' | 'prd' | 'name' | 'goal_id'
+>;
 
-export function joinTwins(map: GoalMap, read: Read[] | undefined): { map: GoalMap; also: Map<string, string> } {
+export function joinTwins(
+  map: GoalMap,
+  read: Read[] | undefined,
+): { map: GoalMap; also: Map<string, string> } {
   const also = new Map<string, string>();
   const of = new Map((read ?? []).map((m) => [m.id, m]));
   // Each code's goal's own milestones on the map (no PRD), then each PRD milestone sharing its code and goal (or of none).
   const own = new Map<string, { id: string; goal: string | null }[]>();
   for (const m of map.milestones) {
     const r = of.get(m.id);
-    if (r?.roadmap_code && !r.prd) own.set(r.roadmap_code, [...(own.get(r.roadmap_code) ?? []), { id: m.id, goal: r.goal_id ?? null }]);
+    if (r?.roadmap_code && !r.prd)
+      own.set(r.roadmap_code, [
+        ...(own.get(r.roadmap_code) ?? []),
+        { id: m.id, goal: r.goal_id ?? null },
+      ]);
   }
   const to = new Map<string, string>();
   for (const m of map.milestones) {
     const r = of.get(m.id);
-    const keep = r?.prd && r.roadmap_code ? own.get(r.roadmap_code)?.find((o) => !r.goal_id || o.goal === r.goal_id)?.id : undefined;
+    const keep =
+      r?.prd && r.roadmap_code
+        ? own.get(r.roadmap_code)?.find((o) => !r.goal_id || o.goal === r.goal_id)?.id
+        : undefined;
     if (!keep || keep === m.id) continue;
     to.set(m.id, keep);
     const kept = map.milestones.find((x) => x.id === keep)!;
@@ -34,13 +47,17 @@ export function joinTwins(map: GoalMap, read: Read[] | undefined): { map: GoalMa
   return {
     map: {
       ...map,
-      milestones: map.milestones.filter((m) => !to.has(m.id)).map((m) => ({ ...m, depends: once(m.depends).filter((d) => d !== m.id) })),
+      milestones: map.milestones
+        .filter((m) => !to.has(m.id))
+        .map((m) => ({ ...m, depends: once(m.depends).filter((d) => d !== m.id) })),
       features: map.features.map((f) => ({
         ...f,
         milestones: once(f.milestones),
-        links: f.links.map((l) => ({ ...l, milestone: at(l.milestone) })).filter((l, i, all) => all.findIndex((x) => x.milestone === l.milestone) === i),
+        links: f.links
+          .map((l) => ({ ...l, milestone: at(l.milestone) }))
+          .filter((l, i, all) => all.findIndex((x) => x.milestone === l.milestone) === i),
       })),
-      gaps: map.gaps.filter((g) => !to.has(g.milestone ?? "")),
+      gaps: map.gaps.filter((g) => !to.has(g.milestone ?? '')),
     },
     also,
   };

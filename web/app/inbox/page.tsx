@@ -1,55 +1,82 @@
-"use client";
+'use client';
 
-import { Link, usePathname, useSearchParams } from "@/lib/nav";
-import { Suspense, useEffect, useState, type ReactNode } from "react";
+import { Link, usePathname, useSearchParams } from '@/lib/nav';
+import { Suspense, useEffect, useState, type ReactNode } from 'react';
 
-import { Chip, Empty, InfoTip, Page, PageHeader, Panel } from "@/components/ds";
-import { TabBar } from "@/components/review/parts";
-import { ErrorNote, LoadError, Loading } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { errorMessage, useQuery } from "@/lib/use-query";
-import { asNeedKind, invalidateWaiting, loadInbox, loadMyQuestions, markInboxSeen, NEED_KINDS, needKind, waitingChanged } from "@/lib/waiting";
+import { Chip, Empty, InfoTip, Page, PageHeader, Panel } from '@/components/ds';
+import { TabBar } from '@/components/review/parts';
+import { ErrorNote, LoadError, Loading } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { errorMessage, useQuery } from '@/lib/use-query';
+import {
+  asNeedKind,
+  invalidateWaiting,
+  loadInbox,
+  loadMyQuestions,
+  markInboxSeen,
+  NEED_KINDS,
+  needKind,
+  waitingChanged,
+} from '@/lib/waiting';
 
-import { useAccessRequestRows } from "./_access";
-import { useActed } from "./_actions";
-import { allNeeds, NeedTable, SOURCE_COLUMNS, sourceNeeds, STATE_TABS, useFixedHere, usePerms, waitingCount, waitingNeeds, type InboxState, type NeedGroup } from "./_needs";
-import { useQuestionRows } from "./_questions";
-import { BrokenLinks } from "./_broken";
-import { minutesRows } from "./_minutes";
-import { approvalRows, dateSuggestionRows, goalSuggestionRows, proposalRows, trackSuggestionRows } from "./_proposals";
-import { useReminderRows } from "./_reminders";
-import { useWebhookRows } from "./_webhooks";
+import { useAccessRequestRows } from './_access';
+import { useActed } from './_actions';
+import {
+  allNeeds,
+  NeedTable,
+  SOURCE_COLUMNS,
+  sourceNeeds,
+  STATE_TABS,
+  useFixedHere,
+  usePerms,
+  waitingCount,
+  waitingNeeds,
+  type InboxState,
+  type NeedGroup,
+} from './_needs';
+import { useQuestionRows } from './_questions';
+import { BrokenLinks } from './_broken';
+import { minutesRows } from './_minutes';
+import {
+  approvalRows,
+  dateSuggestionRows,
+  goalSuggestionRows,
+  proposalRows,
+  trackSuggestionRows,
+} from './_proposals';
+import { useReminderRows } from './_reminders';
+import { useWebhookRows } from './_webhooks';
 
-type Source = Schemas["SourceOut"];
+type Source = Schemas['SourceOut'];
 
 /** qa-company-42: what a row's action did, said in the banner (by the action's key). */
 const ACTED: [prefix: string, message: string][] = [
   // A question's proposal is decided outright; the rest go into the working draft.
-  ["proposal-accept-question-", "Accepted: the question is decided"],
-  ["proposal-decline-question-", "Declined: the question stays open"],
+  ['proposal-accept-question-', 'Accepted: the question is decided'],
+  ['proposal-decline-question-', 'Declined: the question stays open'],
   // A feature ask on no roadmap is filed in Requests, or not filed.
-  ["proposal-accept-ask-", "Accepted: it is filed in Requests"],
-  ["proposal-decline-ask-", "Declined: it is not filed"],
-  ["proposal-accept-", "Accepted: it is in your working draft"],
-  ["proposal-decline-", "Declined: the item is left as it was"],
-  ["report-retry-", "Posting the report again"],
-  ["report-dismiss-", "Dismissed"],
-  ["ritual-retry-", "Preparing it again"],
-  ["open-answer-", ""],
-  ["open-", ""],
-  ["approve-", "Approved: run started"],
-  ["resume-", "Run resumed"],
-  ["cancel-", "Run cancelled"],
-  ["retry-", "Trying again"],
-  ["lookup-", "Looking for the run again"],
-  ["import-", "Trying the import again"],
-  ["stop-", "Stopped cancelling"],
-  ["again-", "Cancelling again"],
-  ["dismiss-", "Dismissed"],
-  ["reaffirm-", "Reaffirmed for 90 more days"],
-  ["verify-", "Dates verified"],
-  ["undo-", "Undone"],
-  ["reopen-", "Reopened"],
+  ['proposal-accept-ask-', 'Accepted: it is filed in Requests'],
+  ['proposal-decline-ask-', 'Declined: it is not filed'],
+  ['proposal-accept-', 'Accepted: it is in your working draft'],
+  ['proposal-decline-', 'Declined: the item is left as it was'],
+  ['report-retry-', 'Posting the report again'],
+  ['report-dismiss-', 'Dismissed'],
+  ['ritual-retry-', 'Preparing it again'],
+  ['open-answer-', ''],
+  ['open-', ''],
+  ['approve-', 'Approved: run started'],
+  ['resume-', 'Run resumed'],
+  ['cancel-', 'Run cancelled'],
+  ['retry-', 'Trying again'],
+  ['lookup-', 'Looking for the run again'],
+  ['import-', 'Trying the import again'],
+  ['stop-', 'Stopped cancelling'],
+  ['again-', 'Cancelling again'],
+  ['dismiss-', 'Dismissed'],
+  ['reaffirm-', 'Reaffirmed for 90 more days'],
+  ['verify-', 'Dates verified'],
+  ['undo-', 'Undone'],
+  ['reopen-', 'Reopened'],
 ];
 
 function actedMessage(key: string): string | null {
@@ -66,19 +93,19 @@ export default function InboxPage() {
 
 function Inbox() {
   // QA pass D-2: ?kind= (Home's Needs you chips) shows that kind only.
-  const kindParam = asNeedKind(useSearchParams().get("kind"));
+  const kindParam = asNeedKind(useSearchParams().get('kind'));
   // S-7: /inbox or Simple's /simple/inbox: "Show all" stays on the same page.
   const path = usePathname();
   const kind = NEED_KINDS.find((k) => k.id === kindParam);
-  const q = useQuery("inbox", loadInbox);
+  const q = useQuery('inbox', loadInbox);
   // Questions asked of me (I3): their own group, counted with the rest as the rail badge counts.
-  const questionsQ = useQuery("inbox|questions", loadMyQuestions);
+  const questionsQ = useQuery('inbox|questions', loadMyQuestions);
   // My sources needing an edit before they sync again (a failure here only hides the group).
-  const sourcesQ = useQuery("inbox|sources", () => unwrap(api.GET("/v1/sources")));
+  const sourcesQ = useQuery('inbox|sources', () => unwrap(api.GET('/v1/sources')));
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // C1e: my previous visit, read once on arrival; what was new then stays New for this visit.
-  const arrivalQ = useQuery("inbox|arrival", () => loadInbox().then((d) => d.last_seen_at ?? null));
+  const arrivalQ = useQuery('inbox|arrival', () => loadInbox().then((d) => d.last_seen_at ?? null));
   const arrived = !arrivalQ.loading && !arrivalQ.error;
   useEffect(() => {
     // After the first render with the arrival's states: this visit becomes my last one.
@@ -126,7 +153,30 @@ function Inbox() {
   const counted = (questionsQ.data !== undefined || !!questionsQ.error) && webhooks.rows !== null;
   // counts-wait review: a part whose read failed: the count says it is not the whole.
   const partial = !!questionsQ.error || !!webhooks.error;
-  const rows = inbox ? [...allNeeds(inbox, asked.rows, busy, act, seenBefore, onActed, false, fixed, requests.rows, perms), ...(webhooks.rows ?? []), ...reminderRows, ...proposalRows(inbox.simple_proposals ?? [], busy, act, seenBefore), ...approvalRows(inbox.simple_approvals ?? [], seenBefore), ...dateSuggestionRows(inbox.simple_date_suggestions ?? [], seenBefore), ...goalSuggestionRows(inbox.simple_goal_suggestions ?? [], seenBefore), ...trackSuggestionRows(inbox.simple_track_suggestions ?? [], busy, act, seenBefore), ...minutesRows(inbox.simple_minutes ?? [])] : null;
+  const rows = inbox
+    ? [
+        ...allNeeds(
+          inbox,
+          asked.rows,
+          busy,
+          act,
+          seenBefore,
+          onActed,
+          false,
+          fixed,
+          requests.rows,
+          perms,
+        ),
+        ...(webhooks.rows ?? []),
+        ...reminderRows,
+        ...proposalRows(inbox.simple_proposals ?? [], busy, act, seenBefore),
+        ...approvalRows(inbox.simple_approvals ?? [], seenBefore),
+        ...dateSuggestionRows(inbox.simple_date_suggestions ?? [], seenBefore),
+        ...goalSuggestionRows(inbox.simple_goal_suggestions ?? [], seenBefore),
+        ...trackSuggestionRows(inbox.simple_track_suggestions ?? [], busy, act, seenBefore),
+        ...minutesRows(inbox.simple_minutes ?? []),
+      ]
+    : null;
   const kindRows = rows && kind ? rows.filter((r) => needKind(r.group) === kind.id) : rows;
   // Under ?kind= the header counts that kind only, as Home's chip did.
   const waiting = kindRows && counted ? waitingNeeds(kindRows).length : undefined;
@@ -137,7 +187,7 @@ function Inbox() {
         title="Inbox"
         status={
           // simple-home-qa-nov12 #18: Simple's Inbox says its count once, in Needs you.
-          !path.startsWith("/simple") &&
+          !path.startsWith('/simple') &&
           waiting != null &&
           waiting > 0 && (
             <Chip kind="acc">
@@ -148,7 +198,13 @@ function Inbox() {
       />
       {/* qa4-shell-3: a plain sentence and Try again, as on every list. */}
       {q.error && <LoadError what="your inbox" error={q.error} onRetry={() => void q.reload()} />}
-      {webhooks.error && <LoadError what="your webhook notices" error={webhooks.error} onRetry={() => void webhooks.reload()} />}
+      {webhooks.error && (
+        <LoadError
+          what="your webhook notices"
+          error={webhooks.error}
+          onRetry={() => void webhooks.reload()}
+        />
+      )}
       {!q.error && !rows && <Loading />}
       {error && (
         <div className="mb-3">
@@ -156,7 +212,10 @@ function Inbox() {
         </div>
       )}
       {kind && (
-        <p data-testid="inbox-kind" className="mb-3 flex flex-wrap items-center gap-x-2.5 text-[15px] text-text2">
+        <p
+          data-testid="inbox-kind"
+          className="mb-3 flex flex-wrap items-center gap-x-2.5 text-[15px] text-text2"
+        >
           <span>
             Showing <b className="font-semibold text-text">{kind.label}</b>
           </span>
@@ -170,19 +229,26 @@ function Inbox() {
           // qa-company-17: Next keeps this page while I am elsewhere and shows it again, its
           // reads run again; each visit's own arrival starts the tabs afresh (a tab picked on the
           // last visit does not hold an emptied New open).
-          key={`${arrived ? (arrivalQ.data ?? "first") : "arriving"}|${kind?.id ?? "all"}`}
+          key={`${arrived ? (arrivalQ.data ?? 'first') : 'arriving'}|${kind?.id ?? 'all'}`}
           rows={kindRows}
-          waiting={waiting ?? 0} counted={counted} partial={partial} questionsError={questionsQ.error} notice={notice} onTabChange={() => {
+          waiting={waiting ?? 0}
+          counted={counted}
+          partial={partial}
+          questionsError={questionsQ.error}
+          notice={notice}
+          onTabChange={() => {
             asked.moveSettled();
           }}
         />
       )}
       {asked.sheet}
       {/* simple-home-qa-nov14: the broken links Home sends here, fixed in place; hidden under ?kind= until Show all. */}
-      {!kind && path.startsWith("/simple") && <BrokenLinks />}
+      {!kind && path.startsWith('/simple') && <BrokenLinks />}
       {/* Owner 2026-11-10: every role sees its sources that need attention; only one that can edit a source gets Edit. */}
       {/* Sources to fix are no kind of Home's: hidden under ?kind= until Show all. */}
-      {!kind && sourcesQ.data && perms.ready && <SourcesNeedingAttention sources={sourcesQ.data} mayEdit={perms.can("update_source")} />}
+      {!kind && sourcesQ.data && perms.ready && (
+        <SourcesNeedingAttention sources={sourcesQ.data} mayEdit={perms.can('update_source')} />
+      )}
     </Page>
   );
 }
@@ -197,7 +263,12 @@ function SourcesNeedingAttention({ sources, mayEdit }: { sources: Source[]; mayE
   return (
     <div className="mt-3">
       <Panel title="Sources that need attention" count={rows.length}>
-        <NeedTable title="Sources that need attention" testId="inbox-sources" rows={rows} columns={SOURCE_COLUMNS} />
+        <NeedTable
+          title="Sources that need attention"
+          testId="inbox-sources"
+          rows={rows}
+          columns={SOURCE_COLUMNS}
+        />
       </Panel>
     </div>
   );
@@ -208,61 +279,62 @@ function SourcesNeedingAttention({ sources, mayEdit }: { sources: Source[]; mayE
  * above the group, for one that is not something to act on.
  */
 const GROUPS: { id: NeedGroup; title: string; heading?: ReactNode }[] = [
-  { id: "checkpoints", title: "Checkpoints" },
-  { id: "tracks", title: "Track health" },
+  { id: 'checkpoints', title: 'Checkpoints' },
+  { id: 'tracks', title: 'Track health' },
   {
-    id: "deliveries",
-    title: "Decision not delivered yet",
+    id: 'deliveries',
+    title: 'Decision not delivered yet',
     heading: (
       <>
         Decision not delivered yet
         <InfoTip label="decisions not delivered yet" align="start">
-          These decisions are recorded and final: nobody needs to decide again. SwarmCloud has not taken them yet, so Oracle sends
-          each again on every tick until it does.
+          These decisions are recorded and final: nobody needs to decide again. SwarmCloud has not
+          taken them yet, so Oracle sends each again on every tick until it does.
         </InfoTip>
       </>
     ),
   },
-  { id: "discussions", title: "Discussions" },
-  { id: "approvals", title: "Cost approvals" },
-  { id: "roadmap-approvals", title: "Roadmap approvals" },
-  { id: "overruns", title: "Paused on overrun" },
-  { id: "lookups", title: "Stuck runs" },
-  { id: "imports", title: "Couldn't import" },
-  { id: "revoke-failures", title: "Couldn't revoke access" },
-  { id: "access-failures", title: "Access to Oracle not changed" },
-  { id: "share-revocations", title: "Share links revoked" },
-  { id: "access-requests", title: "Access requests" },
-  { id: "report-failures", title: "Report not posted to Slack" },
-  { id: "reports", title: "Reports" },
-  { id: "strategy", title: "Strategy drift" },
-  { id: "dates", title: "Dates to verify" },
-  { id: "launches", title: "Launches" },
-  { id: "requests", title: "Requests" },
-  { id: "rituals", title: "Rituals" },
-  { id: "intake-reads", title: "Oracle couldn't read" },
-  { id: "metrics", title: "Metrics" },
-  { id: "outcomes", title: "Outcomes" },
-  { id: "webhooks", title: "Webhooks" },
-  { id: "reminders", title: "Review reminders" },
-  { id: "proposals", title: "Proposals and suggestions" },
-  { id: "minutes", title: "Meeting minutes" },
-  { id: "oracle-actions", title: "Oracle did" },
-  { id: "feedback", title: "Feedback" },
-  { id: "decisions", title: "Decisions" },
-  { id: "questions", title: "Questions" },
-  { id: "revising", title: "Sent back by Oracle" },
-  { id: "searches", title: "Looking for earlier submissions" },
-  { id: "shipped", title: "Shipped", heading: "Shipped: what you asked for" },
+  { id: 'discussions', title: 'Discussions' },
+  { id: 'approvals', title: 'Cost approvals' },
+  { id: 'roadmap-approvals', title: 'Roadmap approvals' },
+  { id: 'overruns', title: 'Paused on overrun' },
+  { id: 'lookups', title: 'Stuck runs' },
+  { id: 'imports', title: "Couldn't import" },
+  { id: 'revoke-failures', title: "Couldn't revoke access" },
+  { id: 'access-failures', title: 'Access to Oracle not changed' },
+  { id: 'share-revocations', title: 'Share links revoked' },
+  { id: 'access-requests', title: 'Access requests' },
+  { id: 'report-failures', title: 'Report not posted to Slack' },
+  { id: 'reports', title: 'Reports' },
+  { id: 'strategy', title: 'Strategy drift' },
+  { id: 'dates', title: 'Dates to verify' },
+  { id: 'launches', title: 'Launches' },
+  { id: 'requests', title: 'Requests' },
+  { id: 'rituals', title: 'Rituals' },
+  { id: 'intake-reads', title: "Oracle couldn't read" },
+  { id: 'metrics', title: 'Metrics' },
+  { id: 'outcomes', title: 'Outcomes' },
+  { id: 'webhooks', title: 'Webhooks' },
+  { id: 'reminders', title: 'Review reminders' },
+  { id: 'proposals', title: 'Proposals and suggestions' },
+  { id: 'minutes', title: 'Meeting minutes' },
+  { id: 'oracle-actions', title: 'Oracle did' },
+  { id: 'feedback', title: 'Feedback' },
+  { id: 'decisions', title: 'Decisions' },
+  { id: 'questions', title: 'Questions' },
+  { id: 'revising', title: 'Sent back by Oracle' },
+  { id: 'searches', title: 'Looking for earlier submissions' },
+  { id: 'shipped', title: 'Shipped', heading: 'Shipped: what you asked for' },
   // qa-company-4: items only another role acts on: shown, never counted as waiting on me.
   {
-    id: "fyi",
-    title: "For your information",
+    id: 'fyi',
+    title: 'For your information',
     heading: (
       <>
         For your information
         <InfoTip label="for your information" align="start">
-          Someone with another role decides these. They are here so you know; they are not waiting on you.
+          Someone with another role decides these. They are here so you know; they are not waiting
+          on you.
         </InfoTip>
       </>
     ),
@@ -294,14 +366,18 @@ function InboxTabs({
   /** The tab changed: what was settled in place moves on. */
   onTabChange: () => void;
 }) {
-  const count = (st: InboxState) => rows.filter((r) => r.counted && r.state === st).reduce((n, r) => n + (r.size ?? 1), 0);
+  const count = (st: InboxState) =>
+    rows.filter((r) => r.counted && r.state === st).reduce((n, r) => n + (r.size ?? 1), 0);
   // qa-company-2: the Inbox opens on the tab that holds what waits: New when it has items,
   // else Seen (what I have seen and not handled yet), so "11 waiting" never opens on "Nothing new".
-  const [chosen, setTab] = useState<InboxState>(() => (count("new") === 0 && count("open") > 0 ? "open" : "new"));
+  const [chosen, setTab] = useState<InboxState>(() =>
+    count('new') === 0 && count('open') > 0 ? 'open' : 'new',
+  );
   // Until the person picks a tab on this visit, the rule holds as the rows load: New that
   // empties into Seen shows Seen.
   const [picked, setPicked] = useState(false);
-  const tab: InboxState = !picked && chosen === "new" && count("new") === 0 && count("open") > 0 ? "open" : chosen;
+  const tab: InboxState =
+    !picked && chosen === 'new' && count('new') === 0 && count('open') > 0 ? 'open' : chosen;
   const pick = (t: InboxState) => {
     setPicked(true);
     setTab(t);
@@ -311,10 +387,14 @@ function InboxTabs({
   const label = STATE_TABS.find((t) => t.id === tab)!.label;
   // qa-company-16: the heading and its count follow the tab: New and Seen are what needs me
   // (the rail badge's count); Staged, Declined and Done are named, with their own counts.
-  const live = tab === "new" || tab === "open";
+  const live = tab === 'new' || tab === 'open';
   const total = live ? waitingCount(rows) : count(tab);
   return (
-    <Panel title={live ? "Needs you" : label} count={!counted ? undefined : partial ? <Partial words={String(total)} partial /> : total} testId="inbox-needs">
+    <Panel
+      title={live ? 'Needs you' : label}
+      count={!counted ? undefined : partial ? <Partial words={String(total)} partial /> : total}
+      testId="inbox-needs"
+    >
       {/* qa-company-47: on a phone the five tabs keep one line: smaller tabs, no "0" counts. */}
       <div
         className="px-4 pt-1 max-[600px]:overflow-x-auto max-[600px]:px-2 max-[600px]:[&_[role=tab]]:px-1.5 max-[600px]:[&_[role=tablist]]:flex-nowrap"
@@ -326,7 +406,12 @@ function InboxTabs({
           tabs={STATE_TABS.map((t) => {
             const n = (counted && count(t.id)) || null;
             // counts-failed-part: a partial count carries the mark in its name and tooltip.
-            return { id: t.id, label: t.label, count: n, countLabel: partial && n ? partialWords(String(n)) : undefined };
+            return {
+              id: t.id,
+              label: t.label,
+              count: n,
+              countLabel: partial && n ? partialWords(String(n)) : undefined,
+            };
           })}
           value={tab}
           onChange={pick}
@@ -342,15 +427,19 @@ function InboxTabs({
         {shown.length === 0 ? (
           <Empty testId="inbox-tab-empty">
             {/* qa-company-43: New empties once seen; say where the waiting items went. */}
-            {tab === "new" ? (
-              count("open") > 0 ? (
+            {tab === 'new' ? (
+              count('open') > 0 ? (
                 <>
-                  Nothing new since your last visit · {count("open")} still waiting in{" "}
-                  <button type="button" className="font-semibold text-accent-ink underline" onClick={() => pick("open")}>
+                  Nothing new since your last visit · {count('open')} still waiting in{' '}
+                  <button
+                    type="button"
+                    className="font-semibold text-accent-ink underline"
+                    onClick={() => pick('open')}
+                  >
                     Seen
-                  </button>{" "}
+                  </button>{' '}
                 </>
-              ) : count("staged") + count("declined") + count("done") === 0 ? (
+              ) : count('staged') + count('declined') + count('done') === 0 ? (
                 // qa-shell-9: an empty Inbox says what will arrive, not only that nothing is here.
                 // F-7: the sentence about what arrives is in the (i), not on the page.
                 <>Nothing needs you yet </>
@@ -360,16 +449,22 @@ function InboxTabs({
             ) : (
               <>Nothing {label.toLowerCase()} </>
             )}
-            {tab === "new" && (
+            {tab === 'new' && (
               <InfoTip label="the inbox" align="start">
-                Checkpoints that need a decision, cost approvals, feedback to review, the questions asked of you and, for owners,
-                the weekly alignment report land here.
+                Checkpoints that need a decision, cost approvals, feedback to review, the questions
+                asked of you and, for owners, the weekly alignment report land here.
               </InfoTip>
             )}
           </Empty>
         ) : (
           GROUPS.map((g) => (
-            <NeedTable key={g.id} title={g.title} heading={g.heading} testId={`inbox-${g.id}`} rows={shown.filter((r) => r.group === g.id)} />
+            <NeedTable
+              key={g.id}
+              title={g.title}
+              heading={g.heading}
+              testId={`inbox-${g.id}`}
+              rows={shown.filter((r) => r.group === g.id)}
+            />
           ))
         )}
       </div>

@@ -1,17 +1,21 @@
-import type { ReactNode } from "react";
+import type { ReactNode } from 'react';
 
-import { LinkButton } from "./Button";
-import { Icon, type IconName } from "./Icon";
-import { PageInfo } from "./page-info";
-import { PageTabs, SectionTitle } from "./PageTabs";
-import { ClosableSplit, type PanelClose } from "./panel-close";
+import { LinkButton } from './Button';
+import { Icon, type IconName } from './Icon';
+import { PageInfo } from './page-info';
+import { PageTabs, SectionTitle } from './PageTabs';
+import { ClosableSplit, type PanelClose } from './panel-close';
 
 /**
  * The page under the shell's top bar. Every screen uses it, so the title, status and
  * primary action sit in the same place everywhere (I3 rule 3).
  */
-export function Page({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <div className={`min-w-0 px-6 pb-6 max-[600px]:px-2.5 max-[600px]:pb-24 ${className}`}>{children}</div>;
+export function Page({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return (
+    <div className={`min-w-0 px-6 pb-6 max-[600px]:px-2.5 max-[600px]:pb-24 ${className}`}>
+      {children}
+    </div>
+  );
 }
 
 /**
@@ -75,25 +79,37 @@ export function PageHeader({
       className="flex min-h-16 flex-wrap items-center gap-x-3 gap-y-2 py-3 max-[600px]:min-h-0 max-[600px]:py-3"
     >
       {back && (
-        <div data-page-back className={`flex min-h-6 items-center text-sm text-text2 ${backInline ? "flex-none" : "basis-full"}`}>
+        <div
+          data-page-back
+          className={`flex min-h-6 items-center text-sm text-text2 ${backInline ? 'flex-none' : 'basis-full'}`}
+        >
           {back}
         </div>
       )}
       <h1
-        data-phone-title={phoneTitle ? "" : undefined}
-        data-phone-plain={phoneSuffix ? undefined : ""}
+        data-phone-title={phoneTitle ? '' : undefined}
+        data-phone-plain={phoneSuffix ? undefined : ''}
         className={`min-w-0 font-display text-[28px] leading-8 font-bold tracking-heading ${
-          phoneTitle ? "break-words max-[600px]:text-[22px] max-[600px]:leading-7" : "max-[600px]:sr-only"
+          phoneTitle
+            ? 'break-words max-[600px]:text-[22px] max-[600px]:leading-7'
+            : 'max-[600px]:sr-only'
         }`}
       >
         {/* qa-shell-20: under a section's tabs the H1 is the section's name (SectionTitle). */}
         <SectionTitle>{title}</SectionTitle>
-        {suffix && <span data-title-suffix className="ml-1.5 align-baseline font-display text-lg font-semibold tracking-normal text-text2">{suffix}</span>}
+        {suffix && (
+          <span
+            data-title-suffix
+            className="ml-1.5 align-baseline font-display text-lg font-semibold tracking-normal text-text2"
+          >
+            {suffix}
+          </span>
+        )}
       </h1>
       {info && <PageInfo info={info} />}
       <div
-        className={`flex min-w-0 flex-auto flex-wrap items-center gap-2 ${status ? "" : "max-[600px]:hidden"} ${
-          statusBelow ? "min-[601px]:order-last min-[601px]:basis-full" : ""
+        className={`flex min-w-0 flex-auto flex-wrap items-center gap-2 ${status ? '' : 'max-[600px]:hidden'} ${
+          statusBelow ? 'min-[601px]:order-last min-[601px]:basis-full' : ''
         }`}
       >
         {status}
@@ -101,7 +117,7 @@ export function PageHeader({
       {action && (
         <div
           data-page-action
-          className={`ml-auto flex max-w-full flex-none flex-wrap items-center justify-end gap-2 ${phoneActionStart ? "max-[600px]:ml-0 max-[600px]:justify-start" : ""}`}
+          className={`ml-auto flex max-w-full flex-none flex-wrap items-center justify-end gap-2 ${phoneActionStart ? 'max-[600px]:ml-0 max-[600px]:justify-start' : ''}`}
         >
           {action}
         </div>
@@ -136,9 +152,13 @@ export function Split({
   // in later (its data loaded), or goes when the pick is cleared, must not remount them, or a
   // box being typed in loses focus and a row its place. ClosableSplit lays out both.
   const cols = byRoom
-    ? "grid-cols-1 @min-[920px]:grid-cols-[minmax(0,1fr)_380px]"
-    : `grid-cols-[minmax(0,1fr)_380px] max-[1100px]:grid-cols-1 ${wide ? "max-[1320px]:grid-cols-1" : ""}`;
-  const sticky = byRoom ? "xl:@min-[920px]:sticky xl:@min-[920px]:top-4" : wide ? "min-[1321px]:sticky min-[1321px]:top-4" : "xl:sticky xl:top-4";
+    ? 'grid-cols-1 @min-[920px]:grid-cols-[minmax(0,1fr)_380px]'
+    : `grid-cols-[minmax(0,1fr)_380px] max-[1100px]:grid-cols-1 ${wide ? 'max-[1320px]:grid-cols-1' : ''}`;
+  const sticky = byRoom
+    ? 'xl:@min-[920px]:sticky xl:@min-[920px]:top-4'
+    : wide
+      ? 'min-[1321px]:sticky min-[1321px]:top-4'
+      : 'xl:sticky xl:top-4';
   return (
     <ClosableSplit inspector={inspector} cols={cols} sticky={sticky} byRoom={byRoom} panel={panel}>
       {children}
@@ -152,11 +172,11 @@ export function Panel({
   count,
   tools,
   children,
-  className = "",
+  className = '',
   testId,
-  as: As = "section",
-  bodyClassName = "",
-  toolsClassName = "",
+  as: As = 'section',
+  bodyClassName = '',
+  toolsClassName = '',
   busy,
 }: {
   title?: ReactNode;
@@ -166,7 +186,7 @@ export function Panel({
   children?: ReactNode;
   className?: string;
   testId?: string;
-  as?: "section" | "div";
+  as?: 'section' | 'div';
   bodyClassName?: string;
   /** Classes on the head's tools group (e.g. "max-[600px]:contents" to let them join the head's line). */
   toolsClassName?: string;
@@ -176,20 +196,27 @@ export function Panel({
   return (
     <As
       data-testid={testId}
-      aria-label={typeof title === "string" ? title : undefined}
+      aria-label={typeof title === 'string' ? title : undefined}
       aria-busy={busy}
       className={`min-w-0 rounded-panel border border-line bg-surface shadow-panel ${className}`}
     >
       {(title || tools) && (
         <div className="flex min-h-12 flex-wrap items-center gap-2.5 border-b border-line px-4 py-2">
-          {title && <h2 className="font-display text-lg leading-6 font-bold tracking-heading">{title}</h2>}
+          {title && (
+            <h2 className="font-display text-lg leading-6 font-bold tracking-heading">{title}</h2>
+          )}
           {count != null && (
-            <span data-testid="panel-count" className="tnum font-display tracking-heading text-lg leading-6 font-bold text-accent-ink">
+            <span
+              data-testid="panel-count"
+              className="tnum font-display tracking-heading text-lg leading-6 font-bold text-accent-ink"
+            >
               {count}
             </span>
           )}
           <span className="flex-1" />
-          {tools && <div className={`flex flex-wrap items-center gap-2 ${toolsClassName}`}>{tools}</div>}
+          {tools && (
+            <div className={`flex flex-wrap items-center gap-2 ${toolsClassName}`}>{tools}</div>
+          )}
         </div>
       )}
       <div className={bodyClassName}>{children}</div>
@@ -206,7 +233,7 @@ export function Panel({
  */
 export function NotFoundPanel({
   title,
-  icon = "search",
+  icon = 'search',
   testId,
   back,
   children,
@@ -229,18 +256,32 @@ export function NotFoundPanel({
   const body = (
     <>
       <PageHeader title={title} back={back} />
-      <Panel testId={testId} bodyClassName="flex flex-col items-center gap-3 px-4 pt-10 pb-8 text-center">
-        <span aria-hidden className="grid size-12 place-items-center rounded-full bg-accent-soft text-accent-ink">
+      <Panel
+        testId={testId}
+        bodyClassName="flex flex-col items-center gap-3 px-4 pt-10 pb-8 text-center"
+      >
+        <span
+          aria-hidden
+          className="grid size-12 place-items-center rounded-full bg-accent-soft text-accent-ink"
+        >
           <Icon name={icon} size={24} />
         </span>
-        <div data-testid="not-found-text" className="flex max-w-prose flex-col gap-1 text-[15px] text-text2">
+        <div
+          data-testid="not-found-text"
+          className="flex max-w-prose flex-col gap-1 text-[15px] text-text2"
+        >
           {children}
         </div>
         {(actions || home) && (
           <div className="mt-1 flex flex-wrap justify-center gap-2">
             {actions}
             {home && (
-              <LinkButton href="/" variant={actions ? "secondary" : "primary"} icon="home" className="h-10">
+              <LinkButton
+                href="/"
+                variant={actions ? 'secondary' : 'primary'}
+                icon="home"
+                className="h-10"
+              >
                 Go to Home
               </LinkButton>
             )}
@@ -259,7 +300,13 @@ export function NotFoundPanel({
  */
 export function PageSkeleton({ bare = false }: { bare?: boolean }) {
   const shapes = (
-    <div role="status" aria-label="Loading" aria-busy="true" data-testid="page-skeleton" className="flex flex-col gap-4">
+    <div
+      role="status"
+      aria-label="Loading"
+      aria-busy="true"
+      data-testid="page-skeleton"
+      className="flex flex-col gap-4"
+    >
       <div className="flex min-h-16 items-center py-3">
         <span className="block h-8 w-56 max-w-full animate-pulse rounded bg-surface2 max-[600px]:h-6" />
       </div>
@@ -271,20 +318,42 @@ export function PageSkeleton({ bare = false }: { bare?: boolean }) {
 }
 
 /** A small caps-like label ("Goal", "Sources"): 13 px, text2. */
-export function Label({ children, className = "", id }: { children: ReactNode; className?: string; id?: string }) {
+export function Label({
+  children,
+  className = '',
+  id,
+}: {
+  children: ReactNode;
+  className?: string;
+  id?: string;
+}) {
   return (
-    <span id={id} className={`text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2 ${className}`}>
+    <span
+      id={id}
+      className={`text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2 ${className}`}
+    >
       {children}
     </span>
   );
 }
 
 /** Empty state: the title of what will appear, nothing more (rule 1); `icon` draws it above. */
-export function Empty({ children, testId, icon }: { children: ReactNode; testId?: string; icon?: IconName }) {
+export function Empty({
+  children,
+  testId,
+  icon,
+}: {
+  children: ReactNode;
+  testId?: string;
+  icon?: IconName;
+}) {
   if (icon) {
     return (
       <div data-testid={testId} className="flex flex-col items-center gap-3 px-4 py-12 text-center">
-        <span aria-hidden className="grid size-12 place-items-center rounded-full bg-accent-soft text-accent-ink">
+        <span
+          aria-hidden
+          className="grid size-12 place-items-center rounded-full bg-accent-soft text-accent-ink"
+        >
           <Icon name={icon} size={24} />
         </span>
         <p className="text-[15px] font-semibold text-text2">{children}</p>
@@ -300,25 +369,25 @@ export function Empty({ children, testId, icon }: { children: ReactNode; testId?
 
 /** Notices: an error, a warning, or a one-line result of an action; with `action`, the buttons sit at its end. */
 export function Notice({
-  tone = "info",
+  tone = 'info',
   action,
   testId,
   children,
 }: {
-  tone?: "info" | "error" | "pass" | "warn";
+  tone?: 'info' | 'error' | 'pass' | 'warn';
   action?: ReactNode;
   testId?: string;
   children: ReactNode;
 }) {
   const cls =
-    tone === "error"
-      ? "bg-crit-bg text-crit"
-      : tone === "pass"
-        ? "bg-pass-bg text-pass"
-        : tone === "warn"
-          ? "bg-warn-bg text-warn"
-          : "bg-accent-soft text-accent-ink";
-  const role = tone === "error" ? "alert" : "status";
+    tone === 'error'
+      ? 'bg-crit-bg text-crit'
+      : tone === 'pass'
+        ? 'bg-pass-bg text-pass'
+        : tone === 'warn'
+          ? 'bg-warn-bg text-warn'
+          : 'bg-accent-soft text-accent-ink';
+  const role = tone === 'error' ? 'alert' : 'status';
   if (action) {
     return (
       <div
@@ -332,7 +401,11 @@ export function Notice({
     );
   }
   return (
-    <p role={role} data-testid={testId} className={`rounded-button px-3 py-2 text-sm font-medium ${cls}`}>
+    <p
+      role={role}
+      data-testid={testId}
+      className={`rounded-button px-3 py-2 text-sm font-medium ${cls}`}
+    >
       {children}
     </p>
   );

@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect, useState } from 'react';
 
-import { Button, InfoTip, Sheet } from "@/components/ds";
-import { api, ApiError, unwrap } from "@/lib/api/client";
-import { useMe } from "@/lib/me";
-import { useQuery } from "@/lib/use-query";
+import { Button, InfoTip, Sheet } from '@/components/ds';
+import { api, ApiError, unwrap } from '@/lib/api/client';
+import { useMe } from '@/lib/me';
+import { useQuery } from '@/lib/use-query';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -43,7 +43,9 @@ export function RunReviewBar({
     `run-review|${doc}|${n}|${refreshKey}`,
     async () => {
       try {
-        return await unwrap(api.GET("/v1/documents/{doc}/versions/{n}/run-review", { params: { path: { doc, n } } }));
+        return await unwrap(
+          api.GET('/v1/documents/{doc}/versions/{n}/run-review', { params: { path: { doc, n } } }),
+        );
       } catch (e) {
         if (e instanceof ApiError && e.status === 404) return null;
         throw e;
@@ -58,11 +60,11 @@ export function RunReviewBar({
   }, [liveTick]);
   const [confirming, setConfirming] = useState(false);
   const [sending, setSending] = useState(false);
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const r = q.data;
-  const open = r?.status === "pending";
+  const open = r?.status === 'pending';
   useEffect(() => {
     onOpen?.(open);
   }, [open, onOpen]);
@@ -71,34 +73,43 @@ export function RunReviewBar({
   const { total, reviewed } = r.sections;
   const unreviewed = total - reviewed;
   // #370: the API answers whether this person decides this stop (its role, flow and decider).
-  const deciding = r.status === "pending" && r.can_decide && can("decide_checkpoint", r.can_decide);
-  const hours = r.wait.state === "open" && r.wait.seconds_left != null ? Math.max(1, Math.round(r.wait.seconds_left / 3600)) : null;
+  const deciding = r.status === 'pending' && r.can_decide && can('decide_checkpoint', r.can_decide);
+  const hours =
+    r.wait.state === 'open' && r.wait.seconds_left != null
+      ? Math.max(1, Math.round(r.wait.seconds_left / 3600))
+      : null;
 
-  async function decide(decision: "approved" | "changes_requested", text?: string) {
+  async function decide(decision: 'approved' | 'changes_requested', text?: string) {
     if (!r) return;
     setSaving(true);
     setError(null);
     try {
       await unwrap(
-        api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/decide", {
+        api.POST('/v1/runs/{run_id}/checkpoints/{checkpoint_id}/decide', {
           params: { path: { run_id: r.run_id, checkpoint_id: r.checkpoint_id } },
           body: { decision, note: text?.trim() || null },
         }),
       );
       setConfirming(false);
       setSending(false);
-      setNote("");
+      setNote('');
       await q.reload();
       onDecided();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not decide.");
+      setError(e instanceof Error ? e.message : 'Could not decide.');
     } finally {
       setSaving(false);
     }
   }
 
   const state =
-    r.status === "approved" ? "Approved" : r.status === "changes_requested" ? "Sent back to agents" : r.status === "pending" ? null : r.status.replace("_", " ");
+    r.status === 'approved'
+      ? 'Approved'
+      : r.status === 'changes_requested'
+        ? 'Sent back to agents'
+        : r.status === 'pending'
+          ? null
+          : r.status.replace('_', ' ');
 
   return (
     <section
@@ -118,13 +129,13 @@ export function RunReviewBar({
           The review of draft v{n} by the {r.flow_title} run, decided here.
           {approvedAs
             ? ` The ${approvedAs} was approved separately; this review only ends the run's stop.`
-            : " It does not approve the version."}
+            : ' It does not approve the version.'}
         </InfoTip>
       </div>
-      {r.status === "pending" && !deciding && (
+      {r.status === 'pending' && !deciding && (
         <span className="text-text2">
           {!r.decider_name
-            ? "An approver decides"
+            ? 'An approver decides'
             : total > 0 && r.sections.approved === total
               ? `Every section is approved · waits for ${r.decider_name}, the designated decider`
               : `${r.decider_name} decides (designated decider)`}
@@ -135,20 +146,36 @@ export function RunReviewBar({
           <Button variant="ghost" icon="back" onClick={() => setSending(true)}>
             Send back to agents
           </Button>
-          <Button variant="primary" icon="check" disabled={saving} onClick={() => (unreviewed > 0 ? setConfirming(true) : decide("approved"))}>
+          <Button
+            variant="primary"
+            icon="check"
+            disabled={saving}
+            onClick={() => (unreviewed > 0 ? setConfirming(true) : decide('approved'))}
+          >
             Approve draft
           </Button>
         </div>
       )}
       {deciding && confirming && (
-        <div className="flex basis-full flex-wrap items-center justify-end gap-2" role="group" aria-label="Confirm Approve draft">
+        <div
+          className="flex basis-full flex-wrap items-center justify-end gap-2"
+          role="group"
+          aria-label="Confirm Approve draft"
+        >
           <span className="min-w-0 flex-1 font-semibold text-text">
-            {plural(unreviewed, "section")} {unreviewed === 1 ? "isn't" : "aren't"} reviewed yet. The run&apos;s review ends; they stay open for review and the next draft.
+            {plural(unreviewed, 'section')} {unreviewed === 1 ? "isn't" : "aren't"} reviewed yet.
+            The run&apos;s review ends; they stay open for review and the next draft.
           </span>
           <Button variant="ghost" onClick={() => setConfirming(false)}>
             Cancel
           </Button>
-          <Button variant="primary" icon="check" disabled={saving} onClick={() => decide("approved")} autoFocus>
+          <Button
+            variant="primary"
+            icon="check"
+            disabled={saving}
+            onClick={() => decide('approved')}
+            autoFocus
+          >
             Approve draft
           </Button>
         </div>
@@ -158,13 +185,21 @@ export function RunReviewBar({
           {error}
         </p>
       )}
-      <Sheet open={sending} title="Send back to agents" onClose={() => setSending(false)} testId="send-back-sheet">
+      <Sheet
+        open={sending}
+        title="Send back to agents"
+        onClose={() => setSending(false)}
+        testId="send-back-sheet"
+      >
         <div className="flex flex-col gap-3 p-4 text-sm">
           <p data-testid="send-back-counts" className="font-medium text-text">
-            {plural(r.feedback.open, "open feedback item")} · {plural(r.feedback.staged, "staged change")} · {plural(r.feedback.verdicts, "section")} with
-            Request changes or Reject
+            {plural(r.feedback.open, 'open feedback item')} ·{' '}
+            {plural(r.feedback.staged, 'staged change')} · {plural(r.feedback.verdicts, 'section')}{' '}
+            with Request changes or Reject
           </p>
-          <p className="text-text2">The agents write the next draft from these; approved sections stay as they are.</p>
+          <p className="text-text2">
+            The agents write the next draft from these; approved sections stay as they are.
+          </p>
           <label className="flex flex-col gap-1 font-medium text-text">
             Note to the agents (optional)
             <textarea
@@ -183,7 +218,11 @@ export function RunReviewBar({
             <Button variant="ghost" onClick={() => setSending(false)}>
               Cancel
             </Button>
-            <Button variant="primary" disabled={saving} onClick={() => decide("changes_requested", note)}>
+            <Button
+              variant="primary"
+              disabled={saving}
+              onClick={() => decide('changes_requested', note)}
+            >
               Send back
             </Button>
           </div>

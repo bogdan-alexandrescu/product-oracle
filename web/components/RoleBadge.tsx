@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { Chip } from "@/components/ds/Chip";
-import { useMe, type Operation } from "@/lib/me";
+import { Chip } from '@/components/ds/Chip';
+import { useMe, type Operation } from '@/lib/me';
 
 /**
  * qa-docs-22: one role marker with the same words on every Documents page. Only a role that
@@ -11,18 +11,27 @@ import { useMe, type Operation } from "@/lib/me";
  */
 export function RoleBadge({ also = [] }: { also?: { op: Operation; words: string }[] }) {
   const { can, capsReady } = useMe();
-  if (!capsReady || can("review_section")) return null;
-  if (!can("create_comment")) {
+  if (!capsReady || can('review_section')) return null;
+  if (!can('create_comment')) {
     return (
-      <Chip kind="na" data-testid="view-only" title="Your role in this company sets what you can do here">
+      <Chip
+        kind="na"
+        data-testid="view-only"
+        title="Your role in this company sets what you can do here"
+      >
         View only
       </Chip>
     );
   }
-  const does = ["comment", ...also.filter((a) => can(a.op)).map((a) => a.words)];
-  const list = does.length > 1 ? `${does.slice(0, -1).join(", ")} and ${does[does.length - 1]}` : does[0];
+  const does = ['comment', ...also.filter((a) => can(a.op)).map((a) => a.words)];
+  const list =
+    does.length > 1 ? `${does.slice(0, -1).join(', ')} and ${does[does.length - 1]}` : does[0];
   return (
-    <Chip kind="na" data-testid="role-badge" title="Your role in this company sets what you can do here">
+    <Chip
+      kind="na"
+      data-testid="role-badge"
+      title="Your role in this company sets what you can do here"
+    >
       Commenter: can {list}
     </Chip>
   );

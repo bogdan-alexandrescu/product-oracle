@@ -1,6 +1,6 @@
-import { Suspense } from "react";
+import { Suspense } from 'react';
 
-import { ConnectionsSettings } from "./ConnectionsSettings";
+import { ConnectionsSettings } from './ConnectionsSettings';
 
 export default function ConnectionsPage() {
   return (

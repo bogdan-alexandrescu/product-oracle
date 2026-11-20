@@ -3,16 +3,16 @@
  * few judgement calls of the mock company, and a checkpoint record for every run stop the
  * runs mock has decided (as the API records them on decide, one per checkpoint).
  */
-import type { Schemas } from "@/lib/api/client";
+import type { Schemas } from '@/lib/api/client';
 
-import { mockSetting } from "./connections";
-import { newCompany } from "./ids";
-import { reply } from "./typed";
+import { mockSetting } from './connections';
+import { newCompany } from './ids';
+import { reply } from './typed';
 
-type DecisionOut = Schemas["DecisionOut"];
-type Summary = Schemas["DecisionSummary"];
-type Option = Schemas["DecisionOption"];
-type Role = "viewer" | "commenter" | "approver" | "owner";
+type DecisionOut = Schemas['DecisionOut'];
+type Summary = Schemas['DecisionSummary'];
+type Option = Schemas['DecisionOption'];
+type Role = 'viewer' | 'commenter' | 'approver' | 'owner';
 type Member = { id: string; email: string; role: Role; status?: string };
 type RunLike = {
   id: string;
@@ -20,12 +20,39 @@ type RunLike = {
   flow_title: string;
   document_slug: string | null;
   created_by: string | null;
-  checkpoints: { id: string; kind: string; status: string; note: string | null; decided_by: string | null; decided_at: string | null; segment_seq: number | null }[];
+  checkpoints: {
+    id: string;
+    kind: string;
+    status: string;
+    note: string | null;
+    decided_by: string | null;
+    decided_at: string | null;
+    segment_seq: number | null;
+  }[];
   segments: { seq: number; name: string }[];
 };
 
 /** A stored decision: the API's record without what is derived on the way out. */
-type Row = Omit<DecisionOut, "state" | "ref" | "outcome_status" | "outcome_check_due" | "entities" | "evidence" | "approver_email" | "decided_by_email" | "withdrawn_by_email" | "reviews" | "revisit_id" | "superseded_by_id" | "can_edit" | "can_decide" | "can_withdraw" | "can_review" | "can_reassign"> & {
+type Row = Omit<
+  DecisionOut,
+  | 'state'
+  | 'ref'
+  | 'outcome_status'
+  | 'outcome_check_due'
+  | 'entities'
+  | 'evidence'
+  | 'approver_email'
+  | 'decided_by_email'
+  | 'withdrawn_by_email'
+  | 'reviews'
+  | 'revisit_id'
+  | 'superseded_by_id'
+  | 'can_edit'
+  | 'can_decide'
+  | 'can_withdraw'
+  | 'can_review'
+  | 'can_reassign'
+> & {
   /** edit-decisions: deleted from Simple's decision sheet (in Settings › Trash): hidden everywhere until restored. */
   trashed?: boolean;
   /** edit-decisions: its last edit from Simple's decision sheet (the sheet's "edited by"). */
@@ -33,7 +60,7 @@ type Row = Omit<DecisionOut, "state" | "ref" | "outcome_status" | "outcome_check
 };
 /** A decision-log row, as Simple's decision sheet reads and writes it (one decisions table in the API). */
 export type DecisionLogRow = Row;
-type ReviewRow = Schemas["DecisionReviewOut"] & { decision_id: string };
+type ReviewRow = Schemas['DecisionReviewOut'] & { decision_id: string };
 
 export interface DecisionsDb {
   decisions: Row[];
@@ -58,26 +85,37 @@ export interface DecisionsContext {
   /** edit-decisions: the numbers Simple's decisions page holds (one decisions table, one number sequence in the API). */
   otherNumbers?: () => number[];
   /** A baseline item, for entity_ids (absent: unknown, or hidden from the reader). */
-  entity?: (id: string) => Schemas["DecisionEntityRef"] | null;
+  entity?: (id: string) => Schemas['DecisionEntityRef'] | null;
   /** A baseline evidence row, for evidence_ids (absent: unknown, or on an item hidden from the reader). */
-  evidence?: (id: string) => Schemas["DecisionEvidenceRef"] | null;
+  evidence?: (id: string) => Schemas['DecisionEvidenceRef'] | null;
   /** H3: an outcome record's status now. */
-  outcomeStatus?: (id: string) => Schemas["DecisionOut"]["outcome_status"];
+  outcomeStatus?: (id: string) => Schemas['DecisionOut']['outcome_status'];
   /** H3: a tracking outcome record with a proposed assessment (the Outcomes tab's "Check due"). */
   outcomeCheckDue?: (id: string) => boolean;
   /** decisions-reversed-or-trashed: the kind of a document in Trash the subjects name ("roadmap"), or null. */
-  trashedAbout?: (subjects: Row["subjects"]) => string | null;
+  trashedAbout?: (subjects: Row['subjects']) => string | null;
   /** H3: deciding with a prediction creates its outcome record (tracking); returns its id. */
-  addOutcome?: (d: { title: string; goal_id: string; prediction: Record<string, unknown>; evidence_ids: string[]; owner_id: string }) => string;
+  addOutcome?: (d: {
+    title: string;
+    goal_id: string;
+    prediction: Record<string, unknown>;
+    evidence_ids: string[];
+    owner_id: string;
+  }) => string;
   /**
    * H11 Decide reversible calls, read per request: its level and limits, who set it, and the
    * "Oracle did" row Oracle leaves when it decides (the API's decide_within_limits).
    */
   autonomy?: {
-    level: () => "observe" | "draft" | "recommend" | "act";
+    level: () => 'observe' | 'draft' | 'recommend' | 'act';
     limits: () => { origins?: string[]; max_cost_usd?: number } | null;
     setBy: () => string;
-    acted: (a: { summary: string; subject: Record<string, unknown>; undo: { method: string; path: string; body: unknown }; notify: string[] }) => void;
+    acted: (a: {
+      summary: string;
+      subject: Record<string, unknown>;
+      undo: { method: string; path: string; body: unknown };
+      notify: string[];
+    }) => void;
   };
 }
 
@@ -85,27 +123,38 @@ const REVIEW_DAYS = 90;
 const MAX_REVIEW_DAYS = 365;
 const SHOWN_DAYS = 7;
 const CHECKPOINT_LOCKED = "A checkpoint record is not edited; it records the run's decision";
-const DECIDED_LOCKED = "Decided decisions are not edited. Revisit it instead.";
-const CAPTURED = ["version_approval", "assumption", "blocker", "pushback_override", "priority_override", "checkpoint", "request_decline"];
+const DECIDED_LOCKED = 'Decided decisions are not edited. Revisit it instead.';
+const CAPTURED = [
+  'version_approval',
+  'assumption',
+  'blocker',
+  'pushback_override',
+  'priority_override',
+  'checkpoint',
+  'request_decline',
+];
 const STOP_LABELS: Record<string, string> = {
-  baseline_confirm: "Ground Truth confirm",
-  feature_set: "Feature set",
-  priority_order: "Priority order",
-  prd_review: "PRD review",
-  eng_review: "Engineering check",
-  eng_dates: "Engineering dates",
-  roadmap_items: "Roadmap items",
-  roadmap_review: "Roadmap review",
-  update_review: "Update review",
-  pricing_review: "Pricing memo review",
+  baseline_confirm: 'Ground Truth confirm',
+  feature_set: 'Feature set',
+  priority_order: 'Priority order',
+  prd_review: 'PRD review',
+  eng_review: 'Engineering check',
+  eng_dates: 'Engineering dates',
+  roadmap_items: 'Roadmap items',
+  roadmap_review: 'Roadmap review',
+  update_review: 'Update review',
+  pricing_review: 'Pricing memo review',
 };
 /** The API's fallback for a stop with no label: "update_review" reads "Update review". */
-const stopLabel = (kind: string) => kind.charAt(0).toUpperCase() + kind.slice(1).replace(/_/g, " ");
-const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
+const stopLabel = (kind: string) => kind.charAt(0).toUpperCase() + kind.slice(1).replace(/_/g, ' ');
+const RANK: Role[] = ['viewer', 'commenter', 'approver', 'owner'];
 const atLeast = (role: Role, min: Role) => RANK.indexOf(role) >= RANK.indexOf(min);
 
 function json(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  });
 }
 const fail = (status: number, detail: string) => json(status, { detail });
 
@@ -118,25 +167,41 @@ export function day(days = 0): string {
 }
 
 const ref = (n: number) => `D-${n}`;
-const classOf = (d: Pick<Row, "origin">) => (d.origin === "checkpoint" ? "checkpoint" : "judgement");
+const classOf = (d: Pick<Row, 'origin'>) =>
+  d.origin === 'checkpoint' ? 'checkpoint' : 'judgement';
 
-function stateOf(d: Row): DecisionOut["state"] {
-  if (d.status === "decided" && classOf(d) === "judgement" && d.review_at && d.review_at <= day()) return "review_due";
+function stateOf(d: Row): DecisionOut['state'] {
+  if (d.status === 'decided' && classOf(d) === 'judgement' && d.review_at && d.review_at <= day())
+    return 'review_due';
   return d.status;
 }
 
 function option(key: string, label: string, extra: Partial<Option> = {}): Option {
-  return { key, label, summary: null, pros: [], cons: [], evidence_ids: [], cost_if_wrong: null, recommended: false, ...extra };
+  return {
+    key,
+    label,
+    summary: null,
+    pros: [],
+    cons: [],
+    evidence_ids: [],
+    cost_if_wrong: null,
+    recommended: false,
+    ...extra,
+  };
 }
 
-function blank(ctx: DecisionsContext, db: DecisionsDb, fields: Partial<Row> & Pick<Row, "title" | "approver_id" | "origin">): Row {
+function blank(
+  ctx: DecisionsContext,
+  db: DecisionsDb,
+  fields: Partial<Row> & Pick<Row, 'title' | 'approver_id' | 'origin'>,
+): Row {
   const at = fields.created_at ?? ctx.now();
   return {
     id: ctx.uuid(),
     number: Math.max(0, ...db.decisions.map((d) => d.number), ...(ctx.otherNumbers?.() ?? [])) + 1,
-    status: "proposed",
+    status: 'proposed',
     class: classOf(fields),
-    reversibility: "reversible",
+    reversibility: 'reversible',
     chosen_option: null,
     decided_at: null,
     review_at: null,
@@ -149,9 +214,12 @@ function blank(ctx: DecisionsContext, db: DecisionsDb, fields: Partial<Row> & Pi
     rationale: null,
     // As capture.capture: a call a person made is driven by them; Oracle drives its own.
     driver:
-      fields.status === "decided" && fields.decided_actor === "user" && fields.origin !== "oracle" && fields.origin !== "autonomy"
+      fields.status === 'decided' &&
+      fields.decided_actor === 'user' &&
+      fields.origin !== 'oracle' &&
+      fields.origin !== 'autonomy'
         ? `user:${fields.decided_by ?? fields.approver_id}`
-        : "oracle",
+        : 'oracle',
     contributor_ids: [],
     informed_ids: [],
     evidence_ids: [],
@@ -178,104 +246,120 @@ export function seedDecisions(ctx: DecisionsContext): DecisionsDb {
   if (newCompany()) return { decisions: [], reviews: [] };
   const db: DecisionsDb = { decisions: [], reviews: [] };
   const by = (email: string) => ctx.members.find((m) => m.email === email)!.id;
-  const owner = by("admin@example.com");
-  const approver = by("approver@example.com");
-  const commenter = by("commenter@example.com");
-  const add = (fields: Partial<Row> & Pick<Row, "title" | "approver_id" | "origin">) => {
+  const owner = by('admin@example.com');
+  const approver = by('approver@example.com');
+  const commenter = by('commenter@example.com');
+  const add = (fields: Partial<Row> & Pick<Row, 'title' | 'approver_id' | 'origin'>) => {
     const row = blank(ctx, db, fields);
     db.decisions.push(row);
     return row;
   };
   const longAgo = (days: number) => `${day(-days)}T09:00:00Z`;
   add({
-    title: "Publish Annual billing PRD v2",
-    origin: "version_approval",
+    title: 'Publish Annual billing PRD v2',
+    origin: 'version_approval',
     approver_id: owner,
-    status: "decided",
-    options: [option("publish", "Publish"), option("keep_in_review", "Keep in review")],
-    chosen_option: "publish",
-    rationale: "Approved version 2 of Annual billing PRD",
-    context: "Readiness at approval: 9 passed, 1 warned",
+    status: 'decided',
+    options: [option('publish', 'Publish'), option('keep_in_review', 'Keep in review')],
+    chosen_option: 'publish',
+    rationale: 'Approved version 2 of Annual billing PRD',
+    context: 'Readiness at approval: 9 passed, 1 warned',
     expected_outcome: "See the document's success metrics",
     decided_by: owner,
-    decided_actor: "user",
+    decided_actor: 'user',
     decided_at: longAgo(40),
     created_at: longAgo(40),
     review_at: day(50),
-    source: { kind: "document_version", id: ctx.uuid() },
-    subjects: [{ kind: "document", id: ctx.uuid(), ref: "annual-billing" }],
+    source: { kind: 'document_version', id: ctx.uuid() },
+    subjects: [{ kind: 'document', id: ctx.uuid(), ref: 'annual-billing' }],
   });
   add({
-    title: "Accept the partner API quota risk for launch",
-    origin: "assumption",
+    title: 'Accept the partner API quota risk for launch',
+    origin: 'assumption',
     approver_id: owner,
-    status: "decided",
-    options: [option("accept_risk", "Accept the risk"), option("validate", "Validate it first")],
-    chosen_option: "accept_risk",
-    rationale: "Batching keeps peak calls under the published quota; we watch the 429 rate.",
-    expected_outcome: "No launch-week sync failures from the quota",
+    status: 'decided',
+    options: [option('accept_risk', 'Accept the risk'), option('validate', 'Validate it first')],
+    chosen_option: 'accept_risk',
+    rationale: 'Batching keeps peak calls under the published quota; we watch the 429 rate.',
+    expected_outcome: 'No launch-week sync failures from the quota',
     decided_by: owner,
-    decided_actor: "user",
+    decided_actor: 'user',
     decided_at: longAgo(30),
     created_at: longAgo(30),
     review_at: day(60),
-    source: { kind: "assumption_decision", id: ctx.uuid() },
+    source: { kind: 'assumption_decision', id: ctx.uuid() },
   });
   add({
     title: "Keep the reviewer's call over Oracle's pushback on Team onboarding PRD",
-    origin: "pushback_override",
+    origin: 'pushback_override',
     approver_id: owner,
-    status: "decided",
-    options: [option("keep_reviewers_call", "Keep the reviewer's call"), option("take_oracles_advice", "Take Oracle's advice", { recommended: true })],
-    chosen_option: "keep_reviewers_call",
-    rationale: "Support load from the checklist is too high for the first release.",
-    context: "Oracle pushed back: the checklist is the strongest activation lever the evidence shows.",
+    status: 'decided',
+    options: [
+      option('keep_reviewers_call', "Keep the reviewer's call"),
+      option('take_oracles_advice', "Take Oracle's advice", { recommended: true }),
+    ],
+    chosen_option: 'keep_reviewers_call',
+    rationale: 'Support load from the checklist is too high for the first release.',
+    context:
+      'Oracle pushed back: the checklist is the strongest activation lever the evidence shows.',
     decided_by: owner,
-    decided_actor: "user",
+    decided_actor: 'user',
     decided_at: longAgo(20),
     created_at: longAgo(20),
     review_at: day(70),
-    source: { kind: "llm_suggestion", id: ctx.uuid() },
+    source: { kind: 'llm_suggestion', id: ctx.uuid() },
   });
   add({
-    title: "Price the team plan per seat",
-    origin: "manual",
+    title: 'Price the team plan per seat',
+    origin: 'manual',
     driver: `user:${commenter}`,
     created_by: commenter,
     approver_id: approver,
-    status: "decided",
-    question: "Per seat or per company?",
+    status: 'decided',
+    question: 'Per seat or per company?',
     options: [
-      option("per-seat", "Per seat", { pros: ["Grows with the team"], cons: ["Harder to forecast"], cost_if_wrong: "A quarter of churned small teams" }),
-      option("per-company", "Per company", { pros: ["One number"], cons: ["Large teams underpay"], cost_if_wrong: "Revenue left on the table" }),
+      option('per-seat', 'Per seat', {
+        pros: ['Grows with the team'],
+        cons: ['Harder to forecast'],
+        cost_if_wrong: 'A quarter of churned small teams',
+      }),
+      option('per-company', 'Per company', {
+        pros: ['One number'],
+        cons: ['Large teams underpay'],
+        cost_if_wrong: 'Revenue left on the table',
+      }),
     ],
-    chosen_option: "per-seat",
-    rationale: "Matches how buyers budget and how competitors price.",
-    expected_outcome: "Team plan revenue per account up 15% in a quarter",
+    chosen_option: 'per-seat',
+    rationale: 'Matches how buyers budget and how competitors price.',
+    expected_outcome: 'Team plan revenue per account up 15% in a quarter',
     decided_by: approver,
-    decided_actor: "user",
+    decided_actor: 'user',
     decided_at: longAgo(92),
     created_at: longAgo(95),
     // Its review date has come: the approver's Inbox shows "Review due".
     review_at: day(-2),
   });
   add({
-    title: "Ship usage caps before anomaly detection",
-    origin: "manual",
+    title: 'Ship usage caps before anomaly detection',
+    origin: 'manual',
     driver: `user:${commenter}`,
     created_by: commenter,
     approver_id: approver,
-    question: "Do caps wait for detection?",
-    context: "Finance asks for caps; detection adds early warning only.",
+    question: 'Do caps wait for detection?',
+    context: 'Finance asks for caps; detection adds early warning only.',
     options: [
-      option("caps-first", "Caps first", {
-        summary: "Caps read plan thresholds only",
-        pros: ["One sprint"],
-        cons: ["No early warning"],
-        cost_if_wrong: "A month of noisy alerts",
+      option('caps-first', 'Caps first', {
+        summary: 'Caps read plan thresholds only',
+        pros: ['One sprint'],
+        cons: ['No early warning'],
+        cost_if_wrong: 'A month of noisy alerts',
         recommended: true,
       }),
-      option("together", "Ship together", { summary: "Wait for detection", cons: ["Six more weeks"], cost_if_wrong: "Late for the quarter's goal" }),
+      option('together', 'Ship together', {
+        summary: 'Wait for detection',
+        cons: ['Six more weeks'],
+        cost_if_wrong: "Late for the quarter's goal",
+      }),
     ],
     contributor_ids: [commenter],
     informed_ids: [owner],
@@ -286,21 +370,21 @@ export function seedDecisions(ctx: DecisionsContext): DecisionsDb {
 
 /** The "large" company's long log: `count` newer judgement calls the owner decided long ago, none due. */
 export function enlargeDecisions(ctx: DecisionsContext, db: DecisionsDb, count: number) {
-  const owner = ctx.members.find((m) => m.email === "admin@example.com")!.id;
+  const owner = ctx.members.find((m) => m.email === 'admin@example.com')!.id;
   for (let i = 1; i <= count; i++) {
     db.decisions.push(
       blank(ctx, db, {
         title: `Release train call ${i}`,
-        origin: "manual",
+        origin: 'manual',
         driver: `user:${owner}`,
         created_by: owner,
         approver_id: owner,
-        status: "decided",
-        options: [option("ship", "Ship"), option("hold", "Hold")],
-        chosen_option: "ship",
+        status: 'decided',
+        options: [option('ship', 'Ship'), option('hold', 'Hold')],
+        chosen_option: 'ship',
         rationale: "Ready on the train's date.",
         decided_by: owner,
-        decided_actor: "user",
+        decided_actor: 'user',
         decided_at: `${day(-60)}T09:00:00Z`,
         created_at: `${day(-61)}T09:00:00Z`,
         review_at: day(120),
@@ -317,32 +401,41 @@ export function enlargeDecisions(ctx: DecisionsContext, db: DecisionsDb, count: 
  * checkpoint, as the API records them; a skipped or pending stop has none.
  */
 export function syncCheckpointRecords(ctx: DecisionsContext, db: DecisionsDb) {
-  const known = new Set(db.decisions.filter((d) => d.source?.kind === "checkpoint").map((d) => d.source!.id));
+  const known = new Set(
+    db.decisions.filter((d) => d.source?.kind === 'checkpoint').map((d) => d.source!.id),
+  );
   const stops = ctx.runs
-    .flatMap((r) => r.checkpoints.filter((c) => (c.status === "approved" || c.status === "changes_requested") && !known.has(c.id)).map((c) => ({ r, c })))
-    .sort((a, b) => (a.c.decided_at ?? "").localeCompare(b.c.decided_at ?? ""));
+    .flatMap((r) =>
+      r.checkpoints
+        .filter(
+          (c) => (c.status === 'approved' || c.status === 'changes_requested') && !known.has(c.id),
+        )
+        .map((c) => ({ r, c })),
+    )
+    .sort((a, b) => (a.c.decided_at ?? '').localeCompare(b.c.decided_at ?? ''));
   for (const { r, c } of stops) {
-    const approve = c.status === "approved";
-    const name = (r.document_slug && ctx.documentTitle(r.document_slug)) ?? r.document_slug ?? r.flow_title;
+    const approve = c.status === 'approved';
+    const name =
+      (r.document_slug && ctx.documentTitle(r.document_slug)) ?? r.document_slug ?? r.flow_title;
     const segment = r.segments.find((s) => s.seq === c.segment_seq)?.name ?? null;
     const approver = c.decided_by ?? r.created_by ?? ctx.me.id;
     db.decisions.push(
       blank(ctx, db, {
-        title: `${approve ? "Approve" : "Send back"} ${STOP_LABELS[c.kind] ?? stopLabel(c.kind)} · ${name} run`,
-        origin: "checkpoint",
+        title: `${approve ? 'Approve' : 'Send back'} ${STOP_LABELS[c.kind] ?? stopLabel(c.kind)} · ${name} run`,
+        origin: 'checkpoint',
         approver_id: approver,
-        status: "decided",
-        options: [option("approve", "Approve"), option("request_changes", "Send back")],
-        chosen_option: approve ? "approve" : "request_changes",
-        rationale: c.note || (approve ? "Approved with no note" : "Sent back with no note"),
+        status: 'decided',
+        options: [option('approve', 'Approve'), option('request_changes', 'Send back')],
+        chosen_option: approve ? 'approve' : 'request_changes',
+        rationale: c.note || (approve ? 'Approved with no note' : 'Sent back with no note'),
         decided_by: c.decided_by,
-        decided_actor: "user",
-        decided_via: "oracle",
+        decided_actor: 'user',
+        decided_via: 'oracle',
         decided_at: c.decided_at ?? ctx.now(),
         created_at: c.decided_at ?? ctx.now(),
         run_id: r.id,
-        source: { kind: "checkpoint", id: c.id, checkpoint_kind: c.kind, segment },
-        subjects: [{ kind: "run", id: r.id, ref: `run:${r.id}`, checkpoint_kind: c.kind, segment }],
+        source: { kind: 'checkpoint', id: c.id, checkpoint_kind: c.kind, segment },
+        subjects: [{ kind: 'run', id: r.id, ref: `run:${r.id}`, checkpoint_kind: c.kind, segment }],
       }),
     );
   }
@@ -354,37 +447,65 @@ export function syncCheckpointRecords(ctx: DecisionsContext, db: DecisionsDb) {
  * person who reopened; Keep the no is a reaffirmed review.
  */
 export function requestDecisions(ctx: DecisionsContext, db: () => DecisionsDb) {
-  const review = (id: string, verdict: "reaffirmed" | "reversed", note: string) => {
+  const review = (id: string, verdict: 'reaffirmed' | 'reversed', note: string) => {
     const d = db().decisions.find((x) => x.id === id);
     if (!d) return;
-    if (verdict === "reversed") d.status = "reversed";
+    if (verdict === 'reversed') d.status = 'reversed';
     else d.review_at = day(REVIEW_DAYS);
     d.updated_at = ctx.now();
     db().reviews.push({
-      id: ctx.uuid(), decision_id: d.id, verdict, note, outcome_status: null, next_review_at: verdict === "reaffirmed" ? d.review_at : null,
-      revisit_id: null, reviewed_by: ctx.me.id, reviewed_by_email: ctx.me.email, created_at: ctx.now(),
+      id: ctx.uuid(),
+      decision_id: d.id,
+      verdict,
+      note,
+      outcome_status: null,
+      next_review_at: verdict === 'reaffirmed' ? d.review_at : null,
+      revisit_id: null,
+      reviewed_by: ctx.me.id,
+      reviewed_by_email: ctx.me.email,
+      created_at: ctx.now(),
     });
   };
   return {
-    capture: (input: { title: string; question: string; rationale: string; entity_ids: string[]; request_id: string; request_title: string }) => {
+    capture: (input: {
+      title: string;
+      question: string;
+      rationale: string;
+      entity_ids: string[];
+      request_id: string;
+      request_title: string;
+    }) => {
       const log = db();
       const row = blank(ctx, log, {
-        title: input.title, question: input.question, origin: "request_decline", approver_id: ctx.me.id, status: "decided",
-        options: [option("say_no", "Say no"), option("keep_open", "Keep it open")], chosen_option: "say_no",
-        rationale: input.rationale, decided_by: ctx.me.id, decided_actor: "user", decided_at: ctx.now(), review_at: day(REVIEW_DAYS),
-        driver: `user:${ctx.me.id}`, created_by: ctx.me.id, entity_ids: input.entity_ids,
-        source: { kind: "product_request", id: input.request_id } as Row["source"],
-        subjects: [{ kind: "request", id: input.request_id, ref: input.request_title }],
+        title: input.title,
+        question: input.question,
+        origin: 'request_decline',
+        approver_id: ctx.me.id,
+        status: 'decided',
+        options: [option('say_no', 'Say no'), option('keep_open', 'Keep it open')],
+        chosen_option: 'say_no',
+        rationale: input.rationale,
+        decided_by: ctx.me.id,
+        decided_actor: 'user',
+        decided_at: ctx.now(),
+        review_at: day(REVIEW_DAYS),
+        driver: `user:${ctx.me.id}`,
+        created_by: ctx.me.id,
+        entity_ids: input.entity_ids,
+        source: { kind: 'product_request', id: input.request_id } as Row['source'],
+        subjects: [{ kind: 'request', id: input.request_id, ref: input.request_title }],
       });
       log.decisions.push(row);
       return { id: row.id, number: row.number };
     },
     get: (id: string) => {
       const d = db().decisions.find((x) => x.id === id);
-      return d ? { number: d.number, title: d.title, status: d.status, approver_id: d.approver_id } : null;
+      return d
+        ? { number: d.number, title: d.title, status: d.status, approver_id: d.approver_id }
+        : null;
     },
-    reverse: (id: string, note: string) => review(id, "reversed", note),
-    reaffirm: (id: string, note: string) => review(id, "reaffirmed", note),
+    reverse: (id: string, note: string) => review(id, 'reversed', note),
+    reaffirm: (id: string, note: string) => review(id, 'reaffirmed', note),
   };
 }
 
@@ -418,17 +539,19 @@ function summaryOf(ctx: DecisionsContext, d: Row): Summary {
 /** As oracle.decisions.standing.trash_label: Company > Decisions' mark. */
 function trashNote(kind: string | null): string | null {
   if (!kind) return null;
-  return `Made about ${kind === "roadmap" ? "a roadmap" : "a document"} now in Trash`;
+  return `Made about ${kind === 'roadmap' ? 'a roadmap' : 'a document'} now in Trash`;
 }
 
 function outOf(ctx: DecisionsContext, db: DecisionsDb, d: Row): DecisionOut {
   const me = ctx.me;
   const approver = me.id === d.approver_id;
-  const owner = me.role === "owner";
+  const owner = me.role === 'owner';
   const editor = approver || owner || me.id === d.created_by;
-  const checkpoint = classOf(d) === "checkpoint";
-  const proposed = d.status === "proposed";
-  const revisit = db.decisions.filter((x) => x.supersedes_id === d.id && (x.status === "proposed" || x.status === "decided")).pop();
+  const checkpoint = classOf(d) === 'checkpoint';
+  const proposed = d.status === 'proposed';
+  const revisit = db.decisions
+    .filter((x) => x.supersedes_id === d.id && (x.status === 'proposed' || x.status === 'decided'))
+    .pop();
   return {
     ...d,
     ...summaryOf(ctx, d),
@@ -441,8 +564,8 @@ function outOf(ctx: DecisionsContext, db: DecisionsDb, d: Row): DecisionOut {
     entities: d.entity_ids.flatMap((id) => ctx.entity?.(id) ?? []),
     evidence: d.evidence_ids.flatMap((id) => ctx.evidence?.(id) ?? []),
     withdrawn_by_email: emailOf(ctx, d.withdrawn_by),
-    revisit_id: revisit && d.status === "decided" ? revisit.id : null,
-    superseded_by_id: revisit && d.status === "superseded" ? revisit.id : null,
+    revisit_id: revisit && d.status === 'decided' ? revisit.id : null,
+    superseded_by_id: revisit && d.status === 'superseded' ? revisit.id : null,
     reviews: db.reviews
       .filter((r) => r.decision_id === d.id)
       .map((r) => ({
@@ -456,11 +579,13 @@ function outOf(ctx: DecisionsContext, db: DecisionsDb, d: Row): DecisionOut {
         reviewed_by_email: emailOf(ctx, r.reviewed_by),
         created_at: r.created_at,
       })),
-    can_edit: !checkpoint && ((proposed && editor) || (d.status === "decided" && CAPTURED.includes(d.origin) && approver)),
+    can_edit:
+      !checkpoint &&
+      ((proposed && editor) || (d.status === 'decided' && CAPTURED.includes(d.origin) && approver)),
     can_decide: !checkpoint && proposed && approver,
     can_withdraw: !checkpoint && proposed && editor,
-    can_review: !checkpoint && d.status === "decided" && approver,
-    can_reassign: !checkpoint && (proposed || d.status === "decided") && owner,
+    can_review: !checkpoint && d.status === 'decided' && approver,
+    can_reassign: !checkpoint && (proposed || d.status === 'decided') && owner,
   };
 }
 
@@ -480,11 +605,18 @@ export function logReadable(ctx: DecisionsContext, d: Row): boolean {
 function unreadable(ctx: DecisionsContext, d: Row): boolean {
   const run = d.run_id ? ctx.runs.find((r) => r.id === d.run_id) : undefined;
   if (run?.document_slug && ctx.hiddenDocument(run.document_slug)) return true;
-  if ((d.source?.kind === "document_version" || d.source?.kind === "pricing_memo_version") && ctx.hiddenDocument(d.source.id)) return true;
+  if (
+    (d.source?.kind === 'document_version' || d.source?.kind === 'pricing_memo_version') &&
+    ctx.hiddenDocument(d.source.id)
+  )
+    return true;
   // H9: the context's own rule (a pricing decision is hidden from commenters and viewers).
   if (ctx.visible && !ctx.visible(d)) return true;
   return d.subjects.some(
-    (s) => (s.kind === "document" || s.kind === "document_version") && (ctx.hiddenDocument(String(s.id)) || (typeof s.ref === "string" && ctx.hiddenDocument(s.ref.split("@")[0]))),
+    (s) =>
+      (s.kind === 'document' || s.kind === 'document_version') &&
+      (ctx.hiddenDocument(String(s.id)) ||
+        (typeof s.ref === 'string' && ctx.hiddenDocument(s.ref.split('@')[0]))),
   );
 }
 
@@ -498,17 +630,20 @@ function find(ctx: DecisionsContext, db: DecisionsDb, key: string): Row | undefi
 }
 
 function checkReviewAt(value: string): string | null {
-  if (value < day()) return "The review date cannot be in the past";
+  if (value < day()) return 'The review date cannot be in the past';
   if (value > day(MAX_REVIEW_DAYS)) return `The review date is at most ${MAX_REVIEW_DAYS} days out`;
   return null;
 }
 
 /** As the API's _check_ids: every id names a row (422 otherwise); duplicates dropped. */
-function unknownIds(ctx: DecisionsContext, b: { evidence_ids?: string[] | null; entity_ids?: string[] | null }): string | null {
+function unknownIds(
+  ctx: DecisionsContext,
+  b: { evidence_ids?: string[] | null; entity_ids?: string[] | null },
+): string | null {
   const ev = (b.evidence_ids ?? []).filter((id) => !ctx.evidence?.(id));
-  if (ev.length) return `unknown evidence_ids: ${ev.join(", ")}`;
+  if (ev.length) return `unknown evidence_ids: ${ev.join(', ')}`;
   const en = (b.entity_ids ?? []).filter((id) => !ctx.entity?.(id));
-  if (en.length) return `unknown entity_ids: ${en.join(", ")}`;
+  if (en.length) return `unknown entity_ids: ${en.join(', ')}`;
   return null;
 }
 const unique = (ids: string[] | null | undefined) => [...new Set(ids ?? [])];
@@ -517,16 +652,21 @@ const unique = (ids: string[] | null | undefined) => [...new Set(ids ?? [])];
  * As the API's _keep_unseen: an edit's list is what was sent, then the stored ids the editor
  * does not resolve (gone since, or hidden from them); a sent id already stored is not checked.
  */
-function keepUnseen(sent: string[], stored: string[], known: (id: string) => boolean, what: string): string[] | string {
+function keepUnseen(
+  sent: string[],
+  stored: string[],
+  known: (id: string) => boolean,
+  what: string,
+): string[] | string {
   const ids = unique(sent);
   const missing = ids.filter((id) => !known(id) && !stored.includes(id));
-  if (missing.length) return `unknown ${what}: ${missing.join(", ")}`;
+  if (missing.length) return `unknown ${what}: ${missing.join(', ')}`;
   return [...ids, ...stored.filter((id) => !known(id) && !ids.includes(id))];
 }
 
 function activeApprover(ctx: DecisionsContext, id: string): Member | undefined {
   const m = ctx.members.find((x) => x.id === id);
-  return m && m.status !== "disabled" && atLeast(m.role, "approver") ? m : undefined;
+  return m && m.status !== 'disabled' && atLeast(m.role, 'approver') ? m : undefined;
 }
 
 /**
@@ -536,15 +676,34 @@ function activeApprover(ctx: DecisionsContext, id: string): Member | undefined {
 export function logMeetingDecision(
   ctx: DecisionsContext,
   db: DecisionsDb,
-  d: { id: string; number?: number; title: string; at: string; approver_id: string; subjects: Row["subjects"]; chosen: string; meeting_title: string },
+  d: {
+    id: string;
+    number?: number;
+    title: string;
+    at: string;
+    approver_id: string;
+    subjects: Row['subjects'];
+    chosen: string;
+    meeting_title: string;
+  },
 ): void {
   if (db.decisions.some((x) => x.id === d.id)) return;
   const row = blank(ctx, db, {
-    title: d.title, origin: "meeting", approver_id: d.approver_id, status: "decided",
-    options: [option(d.chosen, d.title)], chosen_option: d.chosen,
-    rationale: `Decided in ${d.meeting_title}`, context: `Decided in the review meeting ${d.meeting_title}`,
-    decided_by: d.approver_id, decided_actor: "user", decided_at: d.at, created_by: d.approver_id, created_at: d.at,
-    source: { kind: "simple_meeting_decision", id: ctx.uuid() } as Row["source"], subjects: d.subjects,
+    title: d.title,
+    origin: 'meeting',
+    approver_id: d.approver_id,
+    status: 'decided',
+    options: [option(d.chosen, d.title)],
+    chosen_option: d.chosen,
+    rationale: `Decided in ${d.meeting_title}`,
+    context: `Decided in the review meeting ${d.meeting_title}`,
+    decided_by: d.approver_id,
+    decided_actor: 'user',
+    decided_at: d.at,
+    created_by: d.approver_id,
+    created_at: d.at,
+    source: { kind: 'simple_meeting_decision', id: ctx.uuid() } as Row['source'],
+    subjects: d.subjects,
   });
   // The meeting's own id and number (one decisions table in the API).
   db.decisions.push({ ...row, id: d.id, number: d.number ?? row.number });
@@ -557,15 +716,38 @@ export function logMeetingDecision(
 export function sheetDecisionOut(
   ctx: DecisionsContext,
   db: DecisionsDb,
-  d: { id: string; number: number; title: string; origin: string; status: Row["status"]; approver_id: string; at: string; subjects: Row["subjects"]; chosen?: string; ask?: string | null; context?: string | null; review_at?: string | null; created_by?: string | null },
+  d: {
+    id: string;
+    number: number;
+    title: string;
+    origin: string;
+    status: Row['status'];
+    approver_id: string;
+    at: string;
+    subjects: Row['subjects'];
+    chosen?: string;
+    ask?: string | null;
+    context?: string | null;
+    review_at?: string | null;
+    created_by?: string | null;
+  },
 ): DecisionOut {
-  const decided = d.status === "decided";
+  const decided = d.status === 'decided';
   const row = blank(ctx, db, {
-    title: d.title, origin: d.origin as Row["origin"], approver_id: d.approver_id, status: d.status,
-    question: d.ask ?? null, context: d.context ?? null, review_at: d.review_at ?? null, subjects: d.subjects,
-    chosen_option: decided ? (d.chosen ?? "decided") : null, decided_at: decided ? d.at : null,
-    decided_by: decided ? d.approver_id : null, decided_actor: decided ? "user" : null,
-    created_by: d.created_by ?? null, created_at: d.at,
+    title: d.title,
+    origin: d.origin as Row['origin'],
+    approver_id: d.approver_id,
+    status: d.status,
+    question: d.ask ?? null,
+    context: d.context ?? null,
+    review_at: d.review_at ?? null,
+    subjects: d.subjects,
+    chosen_option: decided ? (d.chosen ?? 'decided') : null,
+    decided_at: decided ? d.at : null,
+    decided_by: decided ? d.approver_id : null,
+    decided_actor: decided ? 'user' : null,
+    created_by: d.created_by ?? null,
+    created_at: d.at,
   });
   return outOf(ctx, db, { ...row, id: d.id, number: d.number });
 }
@@ -577,26 +759,44 @@ export function sheetDecisionOut(
 export function proposePricing(
   ctx: DecisionsContext,
   db: DecisionsDb,
-  memo: { versionId: string; documentId: string; version: number; slug: string; question: string; context: string; options: { id: string; title: string; summary: string; recommended: boolean; reversibility: string }[] },
+  memo: {
+    versionId: string;
+    documentId: string;
+    version: number;
+    slug: string;
+    question: string;
+    context: string;
+    options: {
+      id: string;
+      title: string;
+      summary: string;
+      recommended: boolean;
+      reversibility: string;
+    }[];
+  },
   pricingOwner: string,
 ): { row: DecisionOut; created: boolean } {
-  const had = db.decisions.find((d) => d.origin === "pricing" && d.source?.id === memo.versionId);
+  const had = db.decisions.find((d) => d.origin === 'pricing' && d.source?.id === memo.versionId);
   if (had) return { row: outOf(ctx, db, had), created: false };
   const recommended = memo.options.find((o) => o.recommended);
   const row = blank(ctx, db, {
     title: `Price: ${memo.question}`.slice(0, 200),
     question: memo.question,
     context: memo.context.slice(0, 4000) || null,
-    options: memo.options.map((o) => option(o.id, o.title, { summary: o.summary || null, recommended: o.recommended })),
+    options: memo.options.map((o) =>
+      option(o.id, o.title, { summary: o.summary || null, recommended: o.recommended }),
+    ),
     approver_id: pricingOwner,
-    reversibility: recommended?.reversibility === "reversible" ? "reversible" : "irreversible",
-    informed_ids: ctx.members.filter((x) => (x.role === "owner" || x.role === "approver") && x.status !== "disabled").map((x) => x.id),
+    reversibility: recommended?.reversibility === 'reversible' ? 'reversible' : 'irreversible',
+    informed_ids: ctx.members
+      .filter((x) => (x.role === 'owner' || x.role === 'approver') && x.status !== 'disabled')
+      .map((x) => x.id),
     subjects: [
-      { kind: "document", id: memo.documentId, ref: memo.slug },
-      { kind: "document_version", id: memo.versionId, ref: `${memo.slug} v${memo.version}` },
+      { kind: 'document', id: memo.documentId, ref: memo.slug },
+      { kind: 'document_version', id: memo.versionId, ref: `${memo.slug} v${memo.version}` },
     ],
-    origin: "pricing",
-    source: { kind: "pricing_memo_version", id: memo.versionId },
+    origin: 'pricing',
+    source: { kind: 'pricing_memo_version', id: memo.versionId },
     driver: `user:${ctx.me.id}`,
     created_by: ctx.me.id,
   });
@@ -605,65 +805,99 @@ export function proposePricing(
 }
 
 /** A decided pricing decision, for the pricing scenario's earlier memo. */
-export function decidePricing(ctx: DecisionsContext, db: DecisionsDb, number: number, key: string, rationale: string, expected: string, at: string) {
+export function decidePricing(
+  ctx: DecisionsContext,
+  db: DecisionsDb,
+  number: number,
+  key: string,
+  rationale: string,
+  expected: string,
+  at: string,
+) {
   const d = db.decisions.find((x) => x.number === number);
   if (!d) return;
-  Object.assign(d, { status: "decided", chosen_option: key, rationale, expected_outcome: expected, decided_at: at, decided_by: d.approver_id, decided_actor: "user", review_at: day(90), updated_at: at });
+  Object.assign(d, {
+    status: 'decided',
+    chosen_option: key,
+    rationale,
+    expected_outcome: expected,
+    decided_at: at,
+    decided_by: d.approver_id,
+    decided_actor: 'user',
+    review_at: day(90),
+    updated_at: at,
+  });
 }
 
 /** /v1/decisions…; null for other routes. */
-export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
-  if (p[1] !== "decisions") return null;
+export async function routeDecisions(
+  ctx: DecisionsContext,
+  db: DecisionsDb,
+  req: Request,
+  p: string[],
+  q: URLSearchParams,
+): Promise<Response | null> {
+  if (p[1] !== 'decisions') return null;
   syncCheckpointRecords(ctx, db);
   const m = req.method;
-  const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
+  const body = async <T>() => JSON.parse((await req.text()) || 'null') as T;
   const me = ctx.me;
 
-  if (!p[2] && m === "GET") {
+  if (!p[2] && m === 'GET') {
     let rows = visible(ctx, db);
-    const cls = q.get("class");
-    if (cls === "judgement" || cls === "checkpoint") rows = rows.filter((d) => classOf(d) === cls);
-    const status = q.get("status");
-    if (status === "review_due") rows = rows.filter((d) => stateOf(d) === "review_due");
-    else if (status === "open") rows = rows.filter((d) => d.status === "proposed" || stateOf(d) === "review_due");
+    const cls = q.get('class');
+    if (cls === 'judgement' || cls === 'checkpoint') rows = rows.filter((d) => classOf(d) === cls);
+    const status = q.get('status');
+    if (status === 'review_due') rows = rows.filter((d) => stateOf(d) === 'review_due');
+    else if (status === 'open')
+      rows = rows.filter((d) => d.status === 'proposed' || stateOf(d) === 'review_due');
     else if (status) rows = rows.filter((d) => d.status === status);
-    const approver = q.get("approver");
-    if (approver) rows = rows.filter((d) => d.approver_id === (approver === "me" ? me.id : approver));
-    if (q.get("due") === "true") rows = rows.filter((d) => stateOf(d) === "review_due");
-    else if (q.get("due") === "false") rows = rows.filter((d) => stateOf(d) !== "review_due");
-    const origin = q.get("origin");
-    if (origin) rows = rows.filter((d) => origin.split(",").includes(d.origin));
-    const chosen = q.get("chosen");
+    const approver = q.get('approver');
+    if (approver)
+      rows = rows.filter((d) => d.approver_id === (approver === 'me' ? me.id : approver));
+    if (q.get('due') === 'true') rows = rows.filter((d) => stateOf(d) === 'review_due');
+    else if (q.get('due') === 'false') rows = rows.filter((d) => stateOf(d) !== 'review_due');
+    const origin = q.get('origin');
+    if (origin) rows = rows.filter((d) => origin.split(',').includes(d.origin));
+    const chosen = q.get('chosen');
     if (chosen) rows = rows.filter((d) => d.chosen_option === chosen);
-    const run = q.get("run_id");
+    const run = q.get('run_id');
     if (run) rows = rows.filter((d) => d.run_id === run);
-    const kind = q.get("subject_kind");
-    const sid = q.get("subject_id");
-    if (kind || sid) rows = rows.filter((d) => d.subjects.some((s) => (!kind || s.kind === kind) && (!sid || s.id === sid)));
-    const text = q.get("q")?.trim().toLowerCase();
+    const kind = q.get('subject_kind');
+    const sid = q.get('subject_id');
+    if (kind || sid)
+      rows = rows.filter((d) =>
+        d.subjects.some((s) => (!kind || s.kind === kind) && (!sid || s.id === sid)),
+      );
+    const text = q.get('q')?.trim().toLowerCase();
     if (text) {
       rows = rows.filter(
-        (d) => [d.title, d.question, d.rationale].some((x) => x?.toLowerCase().includes(text)) || ref(d.number).toLowerCase() === text || String(d.number) === text,
+        (d) =>
+          [d.title, d.question, d.rationale].some((x) => x?.toLowerCase().includes(text)) ||
+          ref(d.number).toLowerCase() === text ||
+          String(d.number) === text,
       );
     }
     rows.sort((a, b) => b.number - a.number);
-    const offset = Number(q.get("offset") ?? 0);
-    const limit = Number(q.get("limit") ?? 50);
+    const offset = Number(q.get('offset') ?? 0);
+    const limit = Number(q.get('limit') ?? 50);
     return reply(
-      "/v1/decisions",
-      "get",
+      '/v1/decisions',
+      'get',
       rows.slice(offset, offset + limit).map((d) => summaryOf(ctx, d)),
     );
   }
 
-  if (!p[2] && m === "POST") {
-    if (!atLeast(me.role, "commenter")) return fail(403, "Requires the commenter role");
-    const b = await body<Schemas["DecisionCreate"]>();
-    if (!b.title?.trim() || b.title.length > 200) return fail(422, "title: 1-200 characters");
+  if (!p[2] && m === 'POST') {
+    if (!atLeast(me.role, 'commenter')) return fail(403, 'Requires the commenter role');
+    const b = await body<Schemas['DecisionCreate']>();
+    if (!b.title?.trim() || b.title.length > 200) return fail(422, 'title: 1-200 characters');
     const options = b.options ?? [];
-    if (options.length > 6) return fail(422, "options: List should have at most 6 items");
-    if (new Set(options.map((o) => o.key)).size !== options.length) return fail(422, "option keys must be unique");
-    if (!activeApprover(ctx, b.approver_id)) return fail(422, "The approver must be an active member with the approver role or above");
+    if (options.length > 6) return fail(422, 'options: List should have at most 6 items');
+    if (new Set(options.map((o) => o.key)).size !== options.length)
+      return fail(422, 'option keys must be unique');
+    if (!activeApprover(ctx, b.approver_id))
+      return fail(422, 'The approver must be an active member with the approver role or above');
     const unknown = unknownIds(ctx, b);
     if (unknown) return fail(422, unknown);
     const row = blank(ctx, db, {
@@ -672,53 +906,71 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
       context: b.context?.trim() || null,
       options: options.map((o) => option(o.key, o.label, { ...o, recommended: false })),
       approver_id: b.approver_id,
-      reversibility: b.reversibility ?? "reversible",
+      reversibility: b.reversibility ?? 'reversible',
       contributor_ids: b.contributor_ids ?? [],
       informed_ids: b.informed_ids ?? [],
       evidence_ids: unique(b.evidence_ids),
       entity_ids: unique(b.entity_ids),
       subjects: b.subjects ?? [],
-      origin: "manual",
+      origin: 'manual',
       driver: `user:${me.id}`,
       created_by: me.id,
     });
     db.decisions.push(row);
-    return reply("/v1/decisions", "post", outOf(ctx, db, row), 201);
+    return reply('/v1/decisions', 'post', outOf(ctx, db, row), 201);
   }
 
-  if (p[2] === "people" && m === "GET") {
+  if (p[2] === 'people' && m === 'GET') {
     return reply(
-      "/v1/decisions/people",
-      "get",
-      ctx.members.filter((x) => x.status !== "disabled").map((x) => ({ id: x.id, email: x.email, role: x.role })),
+      '/v1/decisions/people',
+      'get',
+      ctx.members
+        .filter((x) => x.status !== 'disabled')
+        .map((x) => ({ id: x.id, email: x.email, role: x.role })),
     );
   }
 
   const d = p[2] ? find(ctx, db, p[2]) : undefined;
   if (!d) return fail(404, `decision ${p[2]} not found`);
   const action = p[3];
-  if (!action && m === "GET") return reply("/v1/decisions/{decision}", "get", outOf(ctx, db, d));
-  const checkpoint = classOf(d) === "checkpoint";
+  if (!action && m === 'GET') return reply('/v1/decisions/{decision}', 'get', outOf(ctx, db, d));
+  const checkpoint = classOf(d) === 'checkpoint';
   const touch = () => Object.assign(d, { lock_version: d.lock_version + 1, updated_at: ctx.now() });
-  const name = emailOf(ctx, d.approver_id) ?? "its approver";
+  const name = emailOf(ctx, d.approver_id) ?? 'its approver';
 
-  if (!action && m === "PATCH") {
-    if (!atLeast(me.role, "commenter")) return fail(403, "Requires the commenter role");
+  if (!action && m === 'PATCH') {
+    if (!atLeast(me.role, 'commenter')) return fail(403, 'Requires the commenter role');
     if (checkpoint) return fail(409, CHECKPOINT_LOCKED);
-    const b = await body<Schemas["DecisionPatch"]>();
-    if (d.status === "decided") return fail(409, DECIDED_LOCKED);
-    if (d.status !== "proposed") return fail(409, `${ref(d.number)} is ${d.status}; it is not edited`);
-    if (!(me.id === d.approver_id || me.id === d.created_by || me.role === "owner")) return fail(403, "Only its creator, its approver or an owner edits a proposal");
-    if (b.lock_version !== d.lock_version) return fail(409, "Someone else changed this since you loaded it; reload and try again");
+    const b = await body<Schemas['DecisionPatch']>();
+    if (d.status === 'decided') return fail(409, DECIDED_LOCKED);
+    if (d.status !== 'proposed')
+      return fail(409, `${ref(d.number)} is ${d.status}; it is not edited`);
+    if (!(me.id === d.approver_id || me.id === d.created_by || me.role === 'owner'))
+      return fail(403, 'Only its creator, its approver or an owner edits a proposal');
+    if (b.lock_version !== d.lock_version)
+      return fail(409, 'Someone else changed this since you loaded it; reload and try again');
     if (b.review_at) {
       const bad = checkReviewAt(b.review_at);
       if (bad) return fail(422, bad);
     }
-    const evidenceIds = b.evidence_ids ? keepUnseen(b.evidence_ids, d.evidence_ids, (id) => !!ctx.evidence?.(id), "evidence_ids") : null;
-    if (typeof evidenceIds === "string") return fail(422, evidenceIds);
-    const entityIds = b.entity_ids ? keepUnseen(b.entity_ids, d.entity_ids, (id) => !!ctx.entity?.(id), "entity_ids") : null;
-    if (typeof entityIds === "string") return fail(422, entityIds);
-    for (const k of ["title", "question", "context", "options", "reversibility", "contributor_ids", "informed_ids", "subjects"] as const) {
+    const evidenceIds = b.evidence_ids
+      ? keepUnseen(b.evidence_ids, d.evidence_ids, (id) => !!ctx.evidence?.(id), 'evidence_ids')
+      : null;
+    if (typeof evidenceIds === 'string') return fail(422, evidenceIds);
+    const entityIds = b.entity_ids
+      ? keepUnseen(b.entity_ids, d.entity_ids, (id) => !!ctx.entity?.(id), 'entity_ids')
+      : null;
+    if (typeof entityIds === 'string') return fail(422, entityIds);
+    for (const k of [
+      'title',
+      'question',
+      'context',
+      'options',
+      'reversibility',
+      'contributor_ids',
+      'informed_ids',
+      'subjects',
+    ] as const) {
       if (b[k] !== undefined && b[k] !== null) Object.assign(d, { [k]: b[k] });
     }
     if (evidenceIds) d.evidence_ids = evidenceIds;
@@ -728,31 +980,35 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
     if (b.review_at !== undefined) d.review_at = b.review_at ?? null;
     if (b.prediction !== undefined) d.prediction = b.prediction ?? null;
     touch();
-    return reply("/v1/decisions/{decision}", "patch", outOf(ctx, db, d));
+    return reply('/v1/decisions/{decision}', 'patch', outOf(ctx, db, d));
   }
 
-  if (action === "decide" && m === "POST") {
+  if (action === 'decide' && m === 'POST') {
     if (checkpoint) return fail(409, CHECKPOINT_LOCKED);
-    if (d.status !== "proposed") return fail(409, `${ref(d.number)} is ${d.status}; only a proposal is decided`);
+    if (d.status !== 'proposed')
+      return fail(409, `${ref(d.number)} is ${d.status}; only a proposal is decided`);
     if (me.id !== d.approver_id) return fail(403, `Only ${name} decides ${ref(d.number)}`);
-    const b = await body<Schemas["DecideIn"]>();
-    if (d.options.length < 2) return fail(422, "Add at least two options to decide");
-    if (!d.options.some((o) => o.key === b.option_key)) return fail(422, `'${b.option_key}' is not one of the options`);
-    if (!b.rationale?.trim()) return fail(422, "Say why (rationale)");
-    if (!b.expected_outcome?.trim()) return fail(422, "Say what should happen if it is right (expected_outcome)");
+    const b = await body<Schemas['DecideIn']>();
+    if (d.options.length < 2) return fail(422, 'Add at least two options to decide');
+    if (!d.options.some((o) => o.key === b.option_key))
+      return fail(422, `'${b.option_key}' is not one of the options`);
+    if (!b.rationale?.trim()) return fail(422, 'Say why (rationale)');
+    if (!b.expected_outcome?.trim())
+      return fail(422, 'Say what should happen if it is right (expected_outcome)');
     const reversibility = b.reversibility ?? d.reversibility;
-    if (reversibility === "irreversible") {
-      const role = (mockSetting("decision_irreversible_role") as Role | undefined) ?? "owner";
-      if (!atLeast(me.role, role)) return fail(403, `Only an ${role} can decide a hard-to-reverse decision`);
+    if (reversibility === 'irreversible') {
+      const role = (mockSetting('decision_irreversible_role') as Role | undefined) ?? 'owner';
+      if (!atLeast(me.role, role))
+        return fail(403, `Only an ${role} can decide a hard-to-reverse decision`);
     }
     const kept = d.review_at && d.review_at >= day() ? d.review_at : null;
     const review = b.review_at ?? kept ?? day(REVIEW_DAYS);
     const bad = checkReviewAt(review);
     if (bad) return fail(422, bad);
     const prediction = b.prediction ?? d.prediction ?? null;
-    const goal = prediction ? String(prediction.goal_id ?? "") : "";
+    const goal = prediction ? String(prediction.goal_id ?? '') : '';
     Object.assign(d, {
-      status: "decided",
+      status: 'decided',
       chosen_option: b.option_key,
       rationale: b.rationale.trim(),
       expected_outcome: b.expected_outcome.trim(),
@@ -764,53 +1020,59 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
         ? (ctx.addOutcome?.({
             title: d.title,
             goal_id: goal,
-            prediction: Object.fromEntries(Object.entries(prediction).filter(([k]) => k !== "goal_id")),
+            prediction: Object.fromEntries(
+              Object.entries(prediction).filter(([k]) => k !== 'goal_id'),
+            ),
             evidence_ids: d.evidence_ids,
             owner_id: d.approver_id,
           }) ?? ctx.uuid())
         : null,
       decided_by: me.id,
-      decided_actor: "user",
+      decided_actor: 'user',
       decided_at: ctx.now(),
       entity_id: ctx.uuid(),
     });
     if (d.supersedes_id) {
       const original = db.decisions.find((x) => x.id === d.supersedes_id);
-      if (original?.status === "decided") original.status = "superseded";
+      if (original?.status === 'decided') original.status = 'superseded';
     }
     touch();
-    return reply("/v1/decisions/{decision}/decide", "post", outOf(ctx, db, d));
+    return reply('/v1/decisions/{decision}/decide', 'post', outOf(ctx, db, d));
   }
 
-  if (action === "reassign" && m === "POST") {
-    if (me.role !== "owner") return fail(403, "Requires the owner role");
+  if (action === 'reassign' && m === 'POST') {
+    if (me.role !== 'owner') return fail(403, 'Requires the owner role');
     if (checkpoint) return fail(409, CHECKPOINT_LOCKED);
-    const b = await body<Schemas["ReassignIn"]>();
-    if (!activeApprover(ctx, b.approver_id)) return fail(422, "The approver must be an active member with the approver role or above");
+    const b = await body<Schemas['ReassignIn']>();
+    if (!activeApprover(ctx, b.approver_id))
+      return fail(422, 'The approver must be an active member with the approver role or above');
     d.approver_id = b.approver_id;
     touch();
-    return reply("/v1/decisions/{decision}/reassign", "post", outOf(ctx, db, d));
+    return reply('/v1/decisions/{decision}/reassign', 'post', outOf(ctx, db, d));
   }
 
-  if (action === "withdraw" && m === "POST") {
-    if (!atLeast(me.role, "commenter")) return fail(403, "Requires the commenter role");
+  if (action === 'withdraw' && m === 'POST') {
+    if (!atLeast(me.role, 'commenter')) return fail(403, 'Requires the commenter role');
     if (checkpoint) return fail(409, CHECKPOINT_LOCKED);
-    if (d.status !== "proposed") return fail(409, `${ref(d.number)} is ${d.status}; only a proposal is withdrawn`);
-    if (!(me.id === d.approver_id || me.id === d.created_by || me.role === "owner")) return fail(403, "Only its creator, its approver or an owner withdraws it");
-    d.status = "withdrawn";
+    if (d.status !== 'proposed')
+      return fail(409, `${ref(d.number)} is ${d.status}; only a proposal is withdrawn`);
+    if (!(me.id === d.approver_id || me.id === d.created_by || me.role === 'owner'))
+      return fail(403, 'Only its creator, its approver or an owner withdraws it');
+    d.status = 'withdrawn';
     d.withdrawn_at = ctx.now();
     d.withdrawn_by = me.id;
-    d.withdrawn_reason = (await body<Schemas["WithdrawIn"]>()).reason.trim();
+    d.withdrawn_reason = (await body<Schemas['WithdrawIn']>()).reason.trim();
     touch();
-    return reply("/v1/decisions/{decision}/withdraw", "post", outOf(ctx, db, d));
+    return reply('/v1/decisions/{decision}/withdraw', 'post', outOf(ctx, db, d));
   }
 
-  if (action === "reviews" && m === "POST") {
+  if (action === 'reviews' && m === 'POST') {
     if (checkpoint) return fail(409, CHECKPOINT_LOCKED);
-    if (d.status !== "decided") return fail(409, `${ref(d.number)} is ${d.status}; only a decided one is reviewed`);
+    if (d.status !== 'decided')
+      return fail(409, `${ref(d.number)} is ${d.status}; only a decided one is reviewed`);
     if (me.id !== d.approver_id) return fail(403, `Only ${name} reviews ${ref(d.number)}`);
-    const b = await body<Schemas["ReviewIn"]>();
-    if (!b.note?.trim()) return fail(422, "say what the review found (note)");
+    const b = await body<Schemas['ReviewIn']>();
+    if (!b.note?.trim()) return fail(422, 'say what the review found (note)');
     const row: ReviewRow = {
       id: ctx.uuid(),
       decision_id: d.id,
@@ -823,20 +1085,20 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
       reviewed_by_email: me.email,
       created_at: ctx.now(),
     };
-    if (b.verdict === "reaffirmed") {
+    if (b.verdict === 'reaffirmed') {
       const next = b.next_review_at ?? day(REVIEW_DAYS);
       const bad = checkReviewAt(next);
       if (bad) return fail(422, bad);
       d.review_at = next;
       row.next_review_at = next;
-    } else if (b.verdict === "revisit") {
-      const open = db.decisions.find((x) => x.supersedes_id === d.id && x.status === "proposed");
+    } else if (b.verdict === 'revisit') {
+      const open = db.decisions.find((x) => x.supersedes_id === d.id && x.status === 'proposed');
       if (open) return fail(409, `${ref(d.number)} is already being revisited`);
       const copy = blank(ctx, db, {
         ...d,
         id: undefined,
         number: undefined,
-        status: "proposed",
+        status: 'proposed',
         chosen_option: null,
         rationale: null,
         decided_at: null,
@@ -848,7 +1110,7 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
         outcome_id: null,
         entity_id: null,
         source: null,
-        origin: "manual",
+        origin: 'manual',
         driver: `user:${me.id}`,
         created_by: me.id,
         created_at: ctx.now(),
@@ -856,59 +1118,86 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
         lock_version: 1,
         supersedes_id: d.id,
         options: d.options.map((o) => ({ ...o, recommended: false })),
-      } as Partial<Row> & Pick<Row, "title" | "approver_id" | "origin">);
+      } as Partial<Row> & Pick<Row, 'title' | 'approver_id' | 'origin'>);
       copy.id = ctx.uuid();
       copy.number = Math.max(...db.decisions.map((x) => x.number)) + 1;
       db.decisions.push(copy);
       row.revisit_id = copy.id;
     } else {
-      d.status = "reversed";
+      d.status = 'reversed';
     }
     db.reviews.push(row);
     touch();
-    return reply("/v1/decisions/{decision}/reviews", "post", outOf(ctx, db, d));
+    return reply('/v1/decisions/{decision}/reviews', 'post', outOf(ctx, db, d));
   }
 
-  if (action === "options-job" && m === "POST") {
-    if (!atLeast(me.role, "approver")) return fail(403, "Requires the approver role");
+  if (action === 'options-job' && m === 'POST') {
+    if (!atLeast(me.role, 'approver')) return fail(403, 'Requires the approver role');
     if (checkpoint) return fail(409, CHECKPOINT_LOCKED);
-    if (d.status !== "proposed") return fail(409, `${ref(d.number)} is ${d.status}; options are for a proposal`);
+    if (d.status !== 'proposed')
+      return fail(409, `${ref(d.number)} is ${d.status}; options are for a proposal`);
     // The click-and-wait job, answered at once by the mock: two options, one recommended.
     const at = ctx.now();
     const taken = new Set(d.options.map((o) => o.key));
     const mk = (key: string, o: Option) => (taken.has(key) ? null : o);
     const added = [
-      mk("smallest-step", option("smallest-step", "Take the smallest reversible step", { summary: "Ship the narrow version first and measure", pros: ["Cheap to undo"], cons: ["Slower to the full outcome"], cost_if_wrong: "A few weeks", recommended: true })),
-      mk("full-scope", option("full-scope", "Commit to the full scope", { summary: "Build everything in one release", pros: ["One launch"], cons: ["Hard to undo"], cost_if_wrong: "A quarter of work" })),
+      mk(
+        'smallest-step',
+        option('smallest-step', 'Take the smallest reversible step', {
+          summary: 'Ship the narrow version first and measure',
+          pros: ['Cheap to undo'],
+          cons: ['Slower to the full outcome'],
+          cost_if_wrong: 'A few weeks',
+          recommended: true,
+        }),
+      ),
+      mk(
+        'full-scope',
+        option('full-scope', 'Commit to the full scope', {
+          summary: 'Build everything in one release',
+          pros: ['One launch'],
+          cons: ['Hard to undo'],
+          cost_if_wrong: 'A quarter of work',
+        }),
+      ),
     ].filter((o): o is Option => !!o);
     // H11 Decide reversible calls at Observe or Draft: options with evidence, no default.
-    const level = ctx.autonomy?.level() ?? "recommend";
-    const offered = level === "observe" || level === "draft" ? added.map((o) => ({ ...o, recommended: false })) : added;
+    const level = ctx.autonomy?.level() ?? 'recommend';
+    const offered =
+      level === 'observe' || level === 'draft'
+        ? added.map((o) => ({ ...o, recommended: false }))
+        : added;
     d.options = [...d.options.map((o) => ({ ...o, recommended: false })), ...offered].slice(0, 6);
     const decided = decideWithinLimits(ctx, d);
     touch();
-    const job: Schemas["LlmJobOut"] = {
+    const job: Schemas['LlmJobOut'] = {
       id: ctx.uuid(),
-      kind: "decision_options",
+      kind: 'decision_options',
       document_id: null,
       intake_id: null,
       decision_id: d.id,
-      status: "succeeded",
+      status: 'succeeded',
       input: { decision: d.number },
-      output: { options: offered.map((o) => o.key), recommended: offered.find((o) => o.recommended)?.key ?? null, decided_by_oracle: decided },
+      output: {
+        options: offered.map((o) => o.key),
+        recommended: offered.find((o) => o.recommended)?.key ?? null,
+        decided_by_oracle: decided,
+      },
       attempts: 1,
       created_at: at,
       started_at: at,
       finished_at: at,
     };
-    return reply("/v1/decisions/{decision}/options-job", "post", job, 201);
+    return reply('/v1/decisions/{decision}/options-job', 'post', job, 201);
   }
-  return fail(404, "Route not found");
+  return fail(404, 'Route not found');
 }
 
 /** The highest dollar amount an option's cost of being wrong states, 0 with none (as the API's stated_cost). */
 function statedCost(o: Option): number {
-  const amounts = [...(o.cost_if_wrong ?? "").matchAll(/(?:\$|\bUSD\s?)\s?(\d[\d,]*(?:\.\d+)?)/gi)].map((m) => Number(m[1].replace(/,/g, "")));
+  const amounts = [
+    ...(o.cost_if_wrong ?? '').matchAll(/(?:\$|\bUSD\s?)\s?(\d[\d,]*(?:\.\d+)?)/gi),
+  ].map((m) => Number(m[1].replace(/,/g, '')));
   return Math.max(0, ...amounts);
 }
 
@@ -920,70 +1209,116 @@ function statedCost(o: Option): number {
  */
 function decideWithinLimits(ctx: DecisionsContext, d: Row): boolean {
   const a = ctx.autonomy;
-  if (!a || a.level() !== "act") return false;
-  if (d.status !== "proposed" || d.origin === "checkpoint" || d.reversibility !== "reversible" || d.supersedes_id) return false;
-  if (d.subjects.some((s) => (s.kind === "document" || s.kind === "document_version") && ctx.hiddenDocument(String(s.id)))) return false;
+  if (!a || a.level() !== 'act') return false;
+  if (
+    d.status !== 'proposed' ||
+    d.origin === 'checkpoint' ||
+    d.reversibility !== 'reversible' ||
+    d.supersedes_id
+  )
+    return false;
+  if (
+    d.subjects.some(
+      (s) =>
+        (s.kind === 'document' || s.kind === 'document_version') &&
+        ctx.hiddenDocument(String(s.id)),
+    )
+  )
+    return false;
   const limits = a.limits();
   const pick = d.options.find((o) => o.recommended);
   if (!limits || !pick || d.options.length < 2) return false;
   if (!(limits.origins ?? []).includes(d.origin)) return false;
   if (statedCost(pick) > (limits.max_cost_usd ?? 0)) return false;
-  const why = (pick.summary || pick.label || "").trim();
+  const why = (pick.summary || pick.label || '').trim();
   const kept = d.review_at && d.review_at >= day() ? d.review_at : null;
   Object.assign(d, {
-    status: "decided",
+    status: 'decided',
     chosen_option: pick.key,
-    rationale: `Decided by Oracle within limits set by ${a.setBy()}. It recommended ${pick.label || pick.key}${why ? `: ${why}` : "."}`,
+    rationale: `Decided by Oracle within limits set by ${a.setBy()}. It recommended ${pick.label || pick.key}${why ? `: ${why}` : '.'}`,
     expected_outcome: d.expected_outcome || why || pick.label || pick.key,
     review_at: kept ?? day(REVIEW_DAYS),
     decided_by: null,
-    decided_actor: "oracle",
+    decided_actor: 'oracle',
     decided_at: ctx.now(),
     entity_id: ctx.uuid(),
   });
   a.acted({
     summary: `Decided ${ref(d.number)}: ${pick.label || pick.key}`,
-    subject: { kind: "decision", key: d.id, href: `/company/decisions?d=${d.number}` },
-    undo: { method: "POST", path: `/v1/decisions/${d.id}/reviews`, body: { verdict: "revisit", note: "Handed Oracle's decision back from the Inbox" } },
+    subject: { kind: 'decision', key: d.id, href: `/company/decisions?d=${d.number}` },
+    undo: {
+      method: 'POST',
+      path: `/v1/decisions/${d.id}/reviews`,
+      body: { verdict: 'revisit', note: "Handed Oracle's decision back from the Inbox" },
+    },
     notify: [d.approver_id],
   });
   return true;
 }
 
 /** The decision rows of my Inbox, as GET /v1/inbox serves them (checkpoint records add none). */
-export function decisionInbox(ctx: DecisionsContext, db: DecisionsDb, seen: string | null): Schemas["InboxDecision"][] {
+export function decisionInbox(
+  ctx: DecisionsContext,
+  db: DecisionsDb,
+  seen: string | null,
+): Schemas['InboxDecision'][] {
   syncCheckpointRecords(ctx, db);
   const me = ctx.me.id;
   const since = new Date(Date.now() - SHOWN_DAYS * 86_400_000).toISOString();
-  const fresh = (at: string) => (seen === null || at > seen ? "new" : "open");
-  const judgement = visible(ctx, db).filter((d) => classOf(d) === "judgement");
-  const revisited = new Set(judgement.filter((d) => d.status === "proposed" && d.supersedes_id).map((d) => d.supersedes_id));
-  const rows: Schemas["InboxDecision"][] = [];
-  const row = (d: Row, reason: Schemas["InboxDecision"]["reason"], state: Schemas["InboxDecision"]["state"], counts: boolean, at: string) =>
-    rows.push({ id: d.id, number: d.number, ref: ref(d.number), title: d.title, reason, review_at: d.review_at, since: at, state, counts });
-  for (const d of judgement.filter((x) => x.approver_id === me && x.status === "proposed")) row(d, "needs_decision", fresh(d.created_at), true, d.created_at);
-  for (const d of judgement.filter((x) => x.approver_id === me && stateOf(x) === "review_due" && !revisited.has(x.id))) {
+  const fresh = (at: string) => (seen === null || at > seen ? 'new' : 'open');
+  const judgement = visible(ctx, db).filter((d) => classOf(d) === 'judgement');
+  const revisited = new Set(
+    judgement.filter((d) => d.status === 'proposed' && d.supersedes_id).map((d) => d.supersedes_id),
+  );
+  const rows: Schemas['InboxDecision'][] = [];
+  const row = (
+    d: Row,
+    reason: Schemas['InboxDecision']['reason'],
+    state: Schemas['InboxDecision']['state'],
+    counts: boolean,
+    at: string,
+  ) =>
+    rows.push({
+      id: d.id,
+      number: d.number,
+      ref: ref(d.number),
+      title: d.title,
+      reason,
+      review_at: d.review_at,
+      since: at,
+      state,
+      counts,
+    });
+  for (const d of judgement.filter((x) => x.approver_id === me && x.status === 'proposed'))
+    row(d, 'needs_decision', fresh(d.created_at), true, d.created_at);
+  for (const d of judgement.filter(
+    (x) => x.approver_id === me && stateOf(x) === 'review_due' && !revisited.has(x.id),
+  )) {
     const at = `${d.review_at}T00:00:00Z`;
-    row(d, "review_due", fresh(at), true, at);
+    row(d, 'review_due', fresh(at), true, at);
   }
   const shown = new Set(rows.map((r) => r.id));
-  for (const r of [...db.reviews].reverse().filter((x) => x.reviewed_by === me && x.created_at >= since)) {
+  for (const r of [...db.reviews]
+    .reverse()
+    .filter((x) => x.reviewed_by === me && x.created_at >= since)) {
     const d = judgement.find((x) => x.id === r.decision_id);
     if (d && !shown.has(d.id)) {
       shown.add(d.id);
-      row(d, "review_due", "done", false, r.created_at);
+      row(d, 'review_due', 'done', false, r.created_at);
     }
   }
-  for (const d of judgement.filter((x) => x.decided_by === me && (x.decided_at ?? "") >= since)) {
+  for (const d of judgement.filter((x) => x.decided_by === me && (x.decided_at ?? '') >= since)) {
     if (!shown.has(d.id)) {
       shown.add(d.id);
-      row(d, "needs_decision", "done", false, d.decided_at!);
+      row(d, 'needs_decision', 'done', false, d.decided_at!);
     }
   }
-  for (const d of judgement.filter((x) => x.status === "decided" && (x.decided_at ?? "") >= since && x.informed_ids.includes(me))) {
+  for (const d of judgement.filter(
+    (x) => x.status === 'decided' && (x.decided_at ?? '') >= since && x.informed_ids.includes(me),
+  )) {
     if (!shown.has(d.id)) {
       shown.add(d.id);
-      row(d, "informed", fresh(d.decided_at!), false, d.decided_at!);
+      row(d, 'informed', fresh(d.decided_at!), false, d.decided_at!);
     }
   }
   return rows;

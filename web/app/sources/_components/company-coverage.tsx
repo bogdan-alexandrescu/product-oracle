@@ -1,31 +1,43 @@
-"use client";
+'use client';
 
-import { useState } from "react";
+import { useState } from 'react';
 
-import { Chip, DataTable, InfoTip, Inspector, InspectorSection, type Column } from "@/components/ds";
-import type { Schemas } from "@/lib/api/client";
-import { formatCount, formatPercent, plural } from "@/lib/format";
+import {
+  Chip,
+  DataTable,
+  InfoTip,
+  Inspector,
+  InspectorSection,
+  type Column,
+} from '@/components/ds';
+import type { Schemas } from '@/lib/api/client';
+import { formatCount, formatPercent, plural } from '@/lib/format';
 
-import { KIND_LABEL } from "./confidence";
-import { FreshnessBar, FreshShare, NONE, NoSources, Synced } from "./coverage";
+import { KIND_LABEL } from './confidence';
+import { FreshnessBar, FreshShare, NONE, NoSources, Synced } from './coverage';
 
-export type CompanyCoverage = Schemas["CompanyCoverage"];
-type MemberCoverage = Schemas["CompanyMemberCoverage"];
-type KindCoverage = Schemas["CompanyKindCoverage"];
+export type CompanyCoverage = Schemas['CompanyCoverage'];
+type MemberCoverage = Schemas['CompanyMemberCoverage'];
+type KindCoverage = Schemas['CompanyKindCoverage'];
 
 /** One table row: a member's sources of one kind, or (kind null) a member with none. */
-export type CompanyRow = { member: MemberCoverage["member"]; kind: KindCoverage | null };
+export type CompanyRow = { member: MemberCoverage['member']; kind: KindCoverage | null };
 
-const ROLE_LABEL: Record<string, string> = { owner: "Owner", approver: "Approver", commenter: "Commenter", viewer: "Viewer" };
+const ROLE_LABEL: Record<string, string> = {
+  owner: 'Owner',
+  approver: 'Approver',
+  commenter: 'Commenter',
+  viewer: 'Viewer',
+};
 
-export const memberName = (m: MemberCoverage["member"]) => m.name ?? m.email;
-export const companyRowKey = (r: CompanyRow) => `${r.member.id}:${r.kind?.kind ?? "none"}`;
+export const memberName = (m: MemberCoverage['member']) => m.name ?? m.email;
+export const companyRowKey = (r: CompanyRow) => `${r.member.id}:${r.kind?.kind ?? 'none'}`;
 
 /**
  * A member's name with their email secondary; the email alone when there is no name (F-55:
  * the API/mock may send none, so this derives nothing fake).
  */
-function MemberLabel({ member }: { member: MemberCoverage["member"] }) {
+function MemberLabel({ member }: { member: MemberCoverage['member'] }) {
   if (!member.name) return <span className="min-w-0 truncate">{member.email}</span>;
   return (
     <span className="flex min-w-0 flex-col">
@@ -44,7 +56,9 @@ function staleMember(m: MemberCoverage): boolean {
 
 export function companyRows(data: CompanyCoverage | undefined): CompanyRow[] {
   return (data?.members ?? []).flatMap((m): CompanyRow[] =>
-    m.kinds.length ? m.kinds.map((kind) => ({ member: m.member, kind })) : [{ member: m.member, kind: null }],
+    m.kinds.length
+      ? m.kinds.map((kind) => ({ member: m.member, kind }))
+      : [{ member: m.member, kind: null }],
   );
 }
 
@@ -52,14 +66,14 @@ export function companyRows(data: CompanyCoverage | undefined): CompanyRow[] {
 export function CountsOnlyTip() {
   return (
     <InfoTip label="Company" align="end">
-      Counts only. You see how many sources each member connected and how fresh they are, never their sources&apos; names
-      or what they hold.
+      Counts only. You see how many sources each member connected and how fresh they are, never
+      their sources&apos; names or what they hold.
     </InfoTip>
   );
 }
 
 /** Which members a filter chip keeps; pressing the same one again, or All, clears it. */
-type MemberFilter = "with-source" | "without-source" | "stale" | null;
+type MemberFilter = 'with-source' | 'without-source' | 'stale' | null;
 
 /** Company: per member and source kind, grouped by member. */
 export function CompanyTable({
@@ -74,24 +88,25 @@ export function CompanyTable({
   onSelect: (key: string) => void;
 }) {
   const [filter, setFilter] = useState<MemberFilter>(null);
-  if (data && data.members_with_sources === 0) return <NoSources>No member has connected a source yet</NoSources>;
+  if (data && data.members_with_sources === 0)
+    return <NoSources>No member has connected a source yet</NoSources>;
   const staleIds = new Set((data?.members ?? []).filter(staleMember).map((m) => m.member.id));
   const stale = staleIds.size;
   const without = data ? data.members_total - data.members_with_sources : 0;
   const allRows = data ? companyRows(data) : undefined;
   const rows =
     allRows &&
-    (filter === "with-source"
+    (filter === 'with-source'
       ? allRows.filter((r) => r.kind !== null)
-      : filter === "without-source"
+      : filter === 'without-source'
         ? allRows.filter((r) => r.kind === null)
-        : filter === "stale"
+        : filter === 'stale'
           ? allRows.filter((r) => staleIds.has(r.member.id))
           : allRows);
   const columns: Column<CompanyRow>[] = [
     {
-      key: "kind",
-      header: "Member",
+      key: 'kind',
+      header: 'Member',
       cell: (r) => (
         <span data-testid="company-kind">
           <Chip kind="acc">{r.kind ? KIND_LABEL[r.kind.kind] : NONE}</Chip>
@@ -99,12 +114,12 @@ export function CompanyTable({
       ),
     },
     {
-      key: "sources",
-      header: "Sources",
-      width: "84px",
-      align: "right",
-      phone: "meta",
-      phoneLabel: "Sources",
+      key: 'sources',
+      header: 'Sources',
+      width: '84px',
+      align: 'right',
+      phone: 'meta',
+      phoneLabel: 'Sources',
       cell: (r) => (
         <span className="tnum" data-testid="company-sources">
           {r.kind?.sources ?? 0}
@@ -112,10 +127,10 @@ export function CompanyTable({
       ),
     },
     {
-      key: "items",
-      header: "Items",
-      width: "84px",
-      align: "right",
+      key: 'items',
+      header: 'Items',
+      width: '84px',
+      align: 'right',
       hideOnPhone: true,
       cell: (r) => (
         <span className="tnum" data-testid="company-items">
@@ -124,18 +139,19 @@ export function CompanyTable({
       ),
     },
     {
-      key: "fresh",
-      header: "Fresh",
-      width: "96px",
-      align: "right",
-      phone: "action",
-      cell: (r) => (r.kind ? <FreshShare freshness={r.kind.freshness} testId="company-fresh" /> : null),
+      key: 'fresh',
+      header: 'Fresh',
+      width: '96px',
+      align: 'right',
+      phone: 'action',
+      cell: (r) =>
+        r.kind ? <FreshShare freshness={r.kind.freshness} testId="company-fresh" /> : null,
     },
     {
-      key: "synced",
-      header: "Last sync",
-      width: "96px",
-      align: "right",
+      key: 'synced',
+      header: 'Last sync',
+      width: '96px',
+      align: 'right',
       hideOnPhone: true,
       cell: (r) => <Synced at={r.kind?.last_synced_at} testId="company-synced" />,
     },
@@ -145,21 +161,29 @@ export function CompanyTable({
     <>
       <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2.5 max-[600px]:px-3">
         {data && (
-          <button type="button" aria-pressed={filter === "with-source"} onClick={() => toggle("with-source")}>
+          <button
+            type="button"
+            aria-pressed={filter === 'with-source'}
+            onClick={() => toggle('with-source')}
+          >
             <Chip kind="acc" data-testid="company-members-chip">
-              {data.members_with_sources} of {plural(data.members_total, "member")} have a source
+              {data.members_with_sources} of {plural(data.members_total, 'member')} have a source
             </Chip>
           </button>
         )}
         {without > 0 && (
-          <button type="button" aria-pressed={filter === "without-source"} onClick={() => toggle("without-source")}>
+          <button
+            type="button"
+            aria-pressed={filter === 'without-source'}
+            onClick={() => toggle('without-source')}
+          >
             <Chip kind="na" data-testid="company-without-chip">
               {without} without a source
             </Chip>
           </button>
         )}
         {stale > 0 && (
-          <button type="button" aria-pressed={filter === "stale"} onClick={() => toggle("stale")}>
+          <button type="button" aria-pressed={filter === 'stale'} onClick={() => toggle('stale')}>
             <Chip kind="warn" data-testid="company-stale-chip">
               {stale} with stale sources
             </Chip>
@@ -189,7 +213,13 @@ export function CompanyTable({
             {r.kind === null && <Chip kind="na">No sources</Chip>}
           </span>
         )}
-        empty={filter === "without-source" ? "Every member has a source" : filter === "stale" ? "No stale sources" : undefined}
+        empty={
+          filter === 'without-source'
+            ? 'Every member has a source'
+            : filter === 'stale'
+              ? 'No stale sources'
+              : undefined
+        }
       />
     </>
   );
@@ -206,10 +236,10 @@ export function CompanyInspector({ row }: { row: CompanyRow & { kind: KindCovera
       title={`${memberName(row.member)} · ${KIND_LABEL[k.kind]}`}
       statColumns={2}
       stats={[
-        { label: "Sources", value: k.sources },
-        { label: "Items", value: formatCount(k.items) },
-        { label: "Fresh", value: k.items ? formatPercent(k.freshness.fresh / k.items) : NONE },
-        { label: "Last sync", figure: <Synced at={k.last_synced_at} /> },
+        { label: 'Sources', value: k.sources },
+        { label: 'Items', value: formatCount(k.items) },
+        { label: 'Fresh', value: k.items ? formatPercent(k.freshness.fresh / k.items) : NONE },
+        { label: 'Last sync', figure: <Synced at={k.last_synced_at} /> },
       ]}
     >
       <InspectorSection label="Freshness">

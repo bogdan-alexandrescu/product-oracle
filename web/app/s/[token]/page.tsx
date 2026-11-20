@@ -1,17 +1,17 @@
-import type { Metadata } from "next";
-import { Suspense } from "react";
+import type { Metadata } from 'next';
+import { Suspense } from 'react';
 
-import { SharedRoadmap } from "@/components/share/SharedRoadmap";
-import type { RouteProps } from "@/lib/route-props";
+import { SharedRoadmap } from '@/components/share/SharedRoadmap';
+import type { RouteProps } from '@/lib/route-props';
 
 export const metadata: Metadata = {
-  title: "Shared roadmap",
+  title: 'Shared roadmap',
   // A private link: never indexed, never sent on as a referrer.
   robots: { index: false, follow: false },
-  referrer: "no-referrer",
+  referrer: 'no-referrer',
 };
 
-async function Shared({ params }: { params: RouteProps<{ token: string }>["params"] }) {
+async function Shared({ params }: { params: RouteProps<{ token: string }>['params'] }) {
   const { token } = await params;
   return <SharedRoadmap token={token} />;
 }

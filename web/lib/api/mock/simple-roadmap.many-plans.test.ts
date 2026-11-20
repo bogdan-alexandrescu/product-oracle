@@ -1,5 +1,5 @@
-import { GOALS, knowManyPlans, seedSimpleMany, seedSimpleRoadmap } from "./simple-roadmap";
-import { expect, test } from "vitest";
+import { GOALS, knowManyPlans, seedSimpleMany, seedSimpleRoadmap } from './simple-roadmap';
+import { expect, test } from 'vitest';
 
 /**
  * dod-perf review: the mock's 500-item scenario ("simple-500") adds its 12 roadmaps, 8 goals and
@@ -16,14 +16,14 @@ test("the 500-item plans leave the mock's goals when another scenario's data loa
   // simple-roadmap-many-plans-mock (see the card).
   const own = Object.keys(GOALS);
   seedSimpleMany();
-  expect(GOALS["win-teams"]).toBe("Win larger teams");
+  expect(GOALS['win-teams']).toBe('Win larger teams');
   knowManyPlans(seedSimpleRoadmap());
-  expect(GOALS["win-teams"]).toBeUndefined();
+  expect(GOALS['win-teams']).toBeUndefined();
   expect(Object.keys(GOALS).sort()).toEqual([...own].sort());
   knowManyPlans(undefined);
   expect(Object.keys(GOALS).sort()).toEqual([...own].sort());
   seedSimpleMany();
-  expect(GOALS["win-teams"]).toBe("Win larger teams");
+  expect(GOALS['win-teams']).toBe('Win larger teams');
   knowManyPlans(undefined);
-  expect(GOALS["win-teams"]).toBeUndefined();
+  expect(GOALS['win-teams']).toBeUndefined();
 });

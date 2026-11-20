@@ -1,6 +1,6 @@
-import { MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /*
  * counts-wait-for-every-part: a count a page adds up from several reads shows no number until
@@ -15,18 +15,20 @@ import { expect, test, type Page } from "./test";
 test.use({ viewport: { width: 1440, height: 900 } });
 
 /** Slows `path`'s read by 2.5 s and records every text the `selectors` show, in order ("waiting": each "N waiting" on the page). */
-async function watch(page: Page, path: string, selectors: string[] | "waiting") {
+async function watch(page: Page, path: string, selectors: string[] | 'waiting') {
   await page.addInitScript(
     ([slow, msKey, p, sels]) => {
       localStorage.setItem(slow, p);
-      localStorage.setItem(msKey, "2500");
+      localStorage.setItem(msKey, '2500');
       const seen: string[] = [];
       (window as unknown as { seen: string[] }).seen = seen;
       new MutationObserver(() => {
         const s =
-          sels === "waiting"
-            ? (document.body?.textContent?.match(/\d+ waiting/g) ?? []).join(" | ")
-            : (sels as string[]).map((sel) => document.querySelector(sel)?.textContent?.trim() || "-").join(" | ");
+          sels === 'waiting'
+            ? (document.body?.textContent?.match(/\d+ waiting/g) ?? []).join(' | ')
+            : (sels as string[])
+                .map((sel) => document.querySelector(sel)?.textContent?.trim() || '-')
+                .join(' | ');
         if (seen[seen.length - 1] !== s) seen.push(s);
       }).observe(document, { subtree: true, childList: true, characterData: true });
     },
@@ -37,12 +39,18 @@ async function watch(page: Page, path: string, selectors: string[] | "waiting") 
 /** Every number painted in each recorded text, per selector. */
 async function numbersSeen(page: Page, at: number): Promise<string[]> {
   const seen = await page.evaluate(() => (window as unknown as { seen: string[] }).seen);
-  return [...new Set(seen.map((s) => /\d+/.exec(s.split(" | ")[at])?.[0]).filter((n): n is string => !!n))];
+  return [
+    ...new Set(
+      seen.map((s) => /\d+/.exec(s.split(' | ')[at])?.[0]).filter((n): n is string => !!n),
+    ),
+  ];
 }
 
-for (const where of ["/inbox", "/home"] as const) {
-  test(`${where}: N waiting shows one number, none until the questions asked of me are read`, async ({ page }) => {
-    await watch(page, "/v1/inbox/questions", "waiting");
+for (const where of ['/inbox', '/home'] as const) {
+  test(`${where}: N waiting shows one number, none until the questions asked of me are read`, async ({
+    page,
+  }) => {
+    await watch(page, '/v1/inbox/questions', 'waiting');
     await login(page);
     await page.goto(where);
     const waiting = page.getByText(/^\d+ waiting$/);
@@ -53,18 +61,22 @@ for (const where of ["/inbox", "/home"] as const) {
     await expect(waiting).toBeVisible({ timeout: 15_000 });
     const n = /^(\d+)/.exec(await waiting.innerText())![1];
     const seen = await page.evaluate(() => (window as unknown as { seen: string[] }).seen);
-    const said = [...new Set(seen.flatMap((s) => [...s.matchAll(/(\d+) waiting/g)].map((m) => m[1])))];
+    const said = [
+      ...new Set(seen.flatMap((s) => [...s.matchAll(/(\d+) waiting/g)].map((m) => m[1]))),
+    ];
     expect(said).toEqual([n]);
   });
 }
 
-test("Decisions: Waiting for you shows one number, none until what waits on me is read", async ({ page }) => {
-  await watch(page, "/v1/simple/decisions/waiting", ['[data-testid="questions-mine-count"]']);
+test('Decisions: Waiting for you shows one number, none until what waits on me is read', async ({
+  page,
+}) => {
+  await watch(page, '/v1/simple/decisions/waiting', ['[data-testid="questions-mine-count"]']);
   await login(page);
-  await page.goto("/simple/decisions");
-  const card = page.getByTestId("questions-mine");
+  await page.goto('/simple/decisions');
+  const card = page.getByTestId('questions-mine');
   await expect(card).toBeVisible();
-  const count = page.getByTestId("questions-mine-count");
+  const count = page.getByTestId('questions-mine-count');
   // While the list is on its way, the card names no number.
   await page.waitForTimeout(1_000);
   await expect(count).toHaveCount(0);

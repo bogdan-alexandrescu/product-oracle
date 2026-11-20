@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from 'vitest';
 
 /*
  * stream-discussion-path (lib/stream): when a reply is done, the shared reads of its own discussion are dropped,
@@ -12,14 +12,15 @@ import { expect, test } from "vitest";
  * leaves the answer shared before the reply in place.
  */
 
-const ORIGIN = "http://app.example.com";
-const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
+const ORIGIN = 'http://app.example.com';
+const json = (body: unknown) =>
+  new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
 const settle = () => new Promise((ok) => setTimeout(ok, 0));
 
 async function setup() {
   (globalThis as { window?: unknown }).window ??= new EventTarget();
-  const { sharedReads, forgetReads, forgetReadsOf } = await import("./api/shared-reads");
-  const { discussionPath } = await import("./stream");
+  const { sharedReads, forgetReads, forgetReadsOf } = await import('./api/shared-reads');
+  const { discussionPath } = await import('./stream');
   forgetReads();
   let calls = 0;
   const read = sharedReads(async () => {
@@ -30,12 +31,12 @@ async function setup() {
 }
 
 for (const [name, stream] of [
-  ["relative", "/v1/discussions/example-d1/messages/example-m1/stream"],
-  ["absolute", `${ORIGIN}/v1/discussions/example-d1/messages/example-m1/stream?from=0`],
+  ['relative', '/v1/discussions/example-d1/messages/example-m1/stream'],
+  ['absolute', `${ORIGIN}/v1/discussions/example-d1/messages/example-m1/stream?from=0`],
 ] as const) {
-  test(`a reply done on ${name === "absolute" ? "an" : "a"} ${name} stream URL drops its discussion's shared reads`, async () => {
+  test(`a reply done on ${name === 'absolute' ? 'an' : 'a'} ${name} stream URL drops its discussion's shared reads`, async () => {
     const { read, forgetReadsOf, discussionPath, calls } = await setup();
-    expect(discussionPath(stream)).toBe("/v1/discussions/example-d1");
+    expect(discussionPath(stream)).toBe('/v1/discussions/example-d1');
     const discussion = `${ORIGIN}/v1/discussions/example-d1`;
     await (await read(new Request(discussion))).json();
     await settle();

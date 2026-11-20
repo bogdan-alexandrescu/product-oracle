@@ -1,11 +1,11 @@
-import type { Schemas } from "@/lib/api/client";
+import type { Schemas } from '@/lib/api/client';
 
 /**
  * One roadmap item as the shared items table and inspector show it (E2). The Items tab maps
  * the API's RoadmapItemOut here (`toItemRow`); D1 Items review maps its file items to the
  * same shape.
  */
-export type Horizon = "now" | "next" | "later";
+export type Horizon = 'now' | 'next' | 'later';
 
 export type ItemRow = {
   key: string;
@@ -26,9 +26,9 @@ export type ItemRow = {
   confidence: string | number | null;
   depends_on: string[];
   prd: { label: string; href: string } | null;
-  freshness?: Schemas["RoadmapItemOut"]["freshness"];
+  freshness?: Schemas['RoadmapItemOut']['freshness'];
   stale_reasons?: string[];
-  engineering?: Schemas["TrackerRecordRef"][];
+  engineering?: Schemas['TrackerRecordRef'][];
   /** E3: an item the compared version had and this one dropped (a muted, struck row). */
   ghost?: boolean;
   /** D1: a handled row's text is muted; a dropped item's title is struck through. */
@@ -42,20 +42,24 @@ export type ItemRow = {
 };
 
 export const HORIZONS: { value: Horizon; label: string }[] = [
-  { value: "now", label: "Now" },
-  { value: "next", label: "Next" },
-  { value: "later", label: "Later" },
+  { value: 'now', label: 'Now' },
+  { value: 'next', label: 'Next' },
+  { value: 'later', label: 'Later' },
 ];
 
 export const horizonLabel = (h: string) => HORIZONS.find((x) => x.value === h)?.label ?? h;
 
-const text = (v: unknown): string | null => (typeof v === "string" && v ? v : typeof v === "number" ? String(v) : null);
+const text = (v: unknown): string | null =>
+  typeof v === 'string' && v ? v : typeof v === 'number' ? String(v) : null;
 
 /**
  * The API's item as a row. `headings`: the PRD version's section headings by key, for the
  * PRD column's "§ heading" (the key stands in when the heading is unknown).
  */
-export function toItemRow(item: Schemas["RoadmapItemOut"], headings?: ReadonlyMap<string, string>): ItemRow {
+export function toItemRow(
+  item: Schemas['RoadmapItemOut'],
+  headings?: ReadonlyMap<string, string>,
+): ItemRow {
   const m = item.milestone as Record<string, unknown> | null;
   const key = item.prd.section_key;
   return {
@@ -65,11 +69,21 @@ export function toItemRow(item: Schemas["RoadmapItemOut"], headings?: ReadonlyMa
     outcome: item.outcome,
     horizon: item.horizon,
     milestone: m
-      ? { name: text(m.name), date: text(m.date), refused_date: text(m.refused_date), refused: text(m.refused) }
+      ? {
+          name: text(m.name),
+          date: text(m.date),
+          refused_date: text(m.refused_date),
+          refused: text(m.refused),
+        }
       : null,
     confidence: item.confidence ?? null,
     depends_on: item.depends_on ?? [],
-    prd: item.prd.link ? { label: `§ ${(key && headings?.get(key)) || key || item.prd.document?.title || "PRD"}`, href: item.prd.link } : null,
+    prd: item.prd.link
+      ? {
+          label: `§ ${(key && headings?.get(key)) || key || item.prd.document?.title || 'PRD'}`,
+          href: item.prd.link,
+        }
+      : null,
     freshness: item.freshness,
     stale_reasons: item.stale_reasons,
     engineering: item.engineering,
@@ -79,7 +93,12 @@ export function toItemRow(item: Schemas["RoadmapItemOut"], headings?: ReadonlyMa
 /** A date the API refused or withdrew, a date in its text no confirmed schedule backs, or an item whose PRD trace may be stale. */
 export function needsAttention(row: ItemRow): boolean {
   // A reconciled item was confirmed still valid: nothing left to look at.
-  return !!row.milestone?.refused_date || !!row.unbacked?.length || row.freshness === "potentially_stale" || row.freshness === "under_review";
+  return (
+    !!row.milestone?.refused_date ||
+    !!row.unbacked?.length ||
+    row.freshness === 'potentially_stale' ||
+    row.freshness === 'under_review'
+  );
 }
 
 /**
@@ -101,7 +120,9 @@ export function ownSection(
 ): string | null {
   const byKey = (k: string) => sections.find((s) => s.section_key === k);
   const found =
-    byKey(`${item.horizon}-${item.key}`) ?? byKey(item.key) ?? sections.find((s) => s.heading.trim() === item.title.trim());
+    byKey(`${item.horizon}-${item.key}`) ??
+    byKey(item.key) ??
+    sections.find((s) => s.heading.trim() === item.title.trim());
   return found?.section_key ?? null;
 }
 
@@ -111,7 +132,7 @@ export function ownSection(
  */
 export function withUnbacked<T extends ItemRow>(
   rows: T[],
-  marks: readonly Schemas["DateMarkOut"][] | undefined,
+  marks: readonly Schemas['DateMarkOut'][] | undefined,
   sections: readonly { section_key: string; heading: string }[],
 ): T[] {
   const flagged = (marks ?? []).filter((m) => m.label);
@@ -119,9 +140,15 @@ export function withUnbacked<T extends ItemRow>(
   return rows.map((r) => {
     const key = r.ghost ? null : ownSection(r, sections);
     // The date the API refused on the milestone already shows struck, with its own chip.
-    const mine = key ? flagged.filter((m) => m.section_key === key && m.date !== r.milestone?.refused_date) : [];
+    const mine = key
+      ? flagged.filter((m) => m.section_key === key && m.date !== r.milestone?.refused_date)
+      : [];
     if (mine.length === 0) return r;
-    const days = [...new Map(mine.map((m) => [m.date, { date: m.date, withdrawn: m.status === "withdrawn" }])).values()];
+    const days = [
+      ...new Map(
+        mine.map((m) => [m.date, { date: m.date, withdrawn: m.status === 'withdrawn' }]),
+      ).values(),
+    ];
     return { ...r, unbacked: days };
   });
 }

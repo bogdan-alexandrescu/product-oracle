@@ -1,9 +1,9 @@
-import { Suspense, type ReactNode } from "react";
+import { Suspense, type ReactNode } from 'react';
 
-import { PageTabsProvider } from "@/components/ds";
+import { PageTabsProvider } from '@/components/ds';
 
-import { RequestsStateProvider } from "./_components/RequestsState";
-import { RequestsNav } from "./_nav";
+import { RequestsStateProvider } from './_components/RequestsState';
+import { RequestsNav } from './_nav';
 
 /**
  * Every Requests page: its tabs (All requests, To decide, Themes, Interviews). PageHeader draws

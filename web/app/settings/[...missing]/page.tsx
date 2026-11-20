@@ -1,4 +1,4 @@
-import { notFound } from "@/lib/nav";
+import { notFound } from '@/lib/nav';
 
 /**
  * F-32: a wrong URL under Settings ("/settings/bad") is not-found inside Settings' layout, so the

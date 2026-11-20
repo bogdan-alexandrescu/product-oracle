@@ -1,14 +1,19 @@
-"use client";
+'use client';
 
-import { createContext, useContext, useEffect, useId, useState } from "react";
-import { createPortal } from "react-dom";
+import { createContext, useContext, useEffect, useId, useState } from 'react';
+import { createPortal } from 'react-dom';
 
-import { DateBasisDialog, shortDay, type Basis, type DateRights } from "@/components/DateBasisDialog";
-import { Button } from "@/components/ds";
-import { peopleByIds } from "@/components/PersonPicker";
-import { IGNORE_ATTR } from "@/lib/anchor";
-import { calendarDay } from "@/lib/dates";
-import { api, unwrap, type DateMarkOut } from "@/lib/api/client";
+import {
+  DateBasisDialog,
+  shortDay,
+  type Basis,
+  type DateRights,
+} from '@/components/DateBasisDialog';
+import { Button } from '@/components/ds';
+import { peopleByIds } from '@/components/PersonPicker';
+import { IGNORE_ATTR } from '@/lib/anchor';
+import { calendarDay } from '@/lib/dates';
+import { api, unwrap, type DateMarkOut } from '@/lib/api/client';
 
 /**
  * What a marker needs to act (F3): the roadmap's PRD, its sections' text (for the reference
@@ -23,23 +28,25 @@ export type DateMarkCtx = {
 };
 export const DateMarkContext = createContext<DateMarkCtx | null>(null);
 
-const ignore = { [IGNORE_ATTR]: "" };
+const ignore = { [IGNORE_ATTR]: '' };
 
 /** The reference a date names in its section's text, "Beta by 2026-11-30 (ENG-412 estimate)". */
 export function namedReference(text: string, date: string): string {
   const at = text.indexOf(date);
-  const after = at >= 0 ? text.slice(at + date.length, at + date.length + 80) : "";
-  const key = /^[\s,;:]*\(?\s*([A-Za-z][A-Za-z0-9]*-\d+)/.exec(after) ?? /\b([A-Z][A-Z0-9]*-\d+)\b/.exec(text);
-  return key?.[1] ?? "";
+  const after = at >= 0 ? text.slice(at + date.length, at + date.length + 80) : '';
+  const key =
+    /^[\s,;:]*\(?\s*([A-Za-z][A-Za-z0-9]*-\d+)/.exec(after) ??
+    /\b([A-Z][A-Z0-9]*-\d+)\b/.exec(text);
+  return key?.[1] ?? '';
 }
 
 function title(mark: DateMarkOut): string {
-  return mark.status === "withdrawn"
-    ? `The basis of this date (${mark.bases.join(", ")}) was withdrawn`
-    : "No verified estimate, capacity or commitment of the PRD supports this date";
+  return mark.status === 'withdrawn'
+    ? `The basis of this date (${mark.bases.join(', ')}) was withdrawn`
+    : 'No verified estimate, capacity or commitment of the PRD supports this date';
 }
 
-const YEAR = { month: "short", day: "numeric", year: "numeric" } as const;
+const YEAR = { month: 'short', day: 'numeric', year: 'numeric' } as const;
 
 /**
  * What the popover says of a date with no source: a date that reads two ways (03/04/2027)
@@ -48,10 +55,10 @@ const YEAR = { month: "short", day: "numeric", year: "numeric" } as const;
 export function noSourceWords(mark: DateMarkOut): string {
   const days = mark.days ?? [];
   const missing = mark.missing ?? [];
-  if (days.length < 2) return "No date source backs this date yet.";
-  const all = days.map((d) => calendarDay(d, YEAR)).join(" or ");
+  if (days.length < 2) return 'No date source backs this date yet.';
+  const all = days.map((d) => calendarDay(d, YEAR)).join(' or ');
   const left = missing.length && missing.length < days.length ? missing : days;
-  return `It reads as ${all}, so each needs a date source. ${left.map((d) => calendarDay(d, YEAR)).join(" and ")} ${left.length === 1 ? "has" : "have"} none yet.`;
+  return `It reads as ${all}, so each needs a date source. ${left.map((d) => calendarDay(d, YEAR)).join(' and ')} ${left.length === 1 ? 'has' : 'have'} none yet.`;
 }
 
 /** The marker after a date that rests on no verified basis (not part of the anchored text). */
@@ -66,11 +73,11 @@ export function DateMarker({ mark }: { mark: DateMarkOut }) {
   } | null>(null);
 
   useEffect(() => {
-    if (!open || mark.status !== "withdrawn" || !ctx?.prd) return;
+    if (!open || mark.status !== 'withdrawn' || !ctx?.prd) return;
     let live = true;
     unwrap(
-      api.GET("/v1/schedule-bases", {
-        params: { query: { prd: ctx.prd, status: "withdrawn" } },
+      api.GET('/v1/schedule-bases', {
+        params: { query: { prd: ctx.prd, status: 'withdrawn' } },
       }),
     )
       .then(async (rows) => {
@@ -82,7 +89,7 @@ export function DateMarker({ mark }: { mark: DateMarkOut }) {
         if (live)
           setWithdrawn({
             basis,
-            name: (basis.withdrawn_by && people.get(basis.withdrawn_by)?.name) || "a member",
+            name: (basis.withdrawn_by && people.get(basis.withdrawn_by)?.name) || 'a member',
           });
       })
       .catch(() => undefined);
@@ -138,18 +145,20 @@ export function DateMarker({ mark }: { mark: DateMarkOut }) {
             onClick={(e) => e.stopPropagation()}
           >
             <span className="block">
-              {mark.status === "withdrawn"
+              {mark.status === 'withdrawn'
                 ? withdrawn
                   ? `${withdrawn.basis.reference} was withdrawn by ${withdrawn.name} on ${shortDay(withdrawn.basis.withdrawn_at ?? mark.date)}${
-                      withdrawn.basis.withdrawn_reason ? `: ${withdrawn.basis.withdrawn_reason}` : ""
+                      withdrawn.basis.withdrawn_reason
+                        ? `: ${withdrawn.basis.withdrawn_reason}`
+                        : ''
                     }.`
-                  : `${mark.bases.join(", ")} was withdrawn.`
+                  : `${mark.bases.join(', ')} was withdrawn.`
                 : noSourceWords(mark)}
             </span>
             <span className="mt-2 block">
               {mayRecord ? (
                 <Button variant="solid" onClick={() => setRecording(true)}>
-                  {mark.status === "withdrawn" ? "Add a new date source" : "Add a date source"}
+                  {mark.status === 'withdrawn' ? 'Add a new date source' : 'Add a date source'}
                 </Button>
               ) : (
                 <span className="text-text2">The engineering lead verifies dates</span>

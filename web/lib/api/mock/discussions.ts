@@ -10,20 +10,20 @@
  * commenters suggest and edit, approvers stage, edit and dismiss, viewers only read; a
  * private discussion's Stage needs the reason everyone will see; a stale lock_version is 409.
  */
-import type { Schemas } from "@/lib/api/client";
-import type { ChangeOut, ChangeStatus, ChangeVerb } from "@/lib/api/discussion-changes";
-import { pageNameOnly } from "@/lib/page-context";
-import { stripRawTokens } from "@/lib/raw-tokens";
+import type { Schemas } from '@/lib/api/client';
+import type { ChangeOut, ChangeStatus, ChangeVerb } from '@/lib/api/discussion-changes';
+import { pageNameOnly } from '@/lib/page-context';
+import { stripRawTokens } from '@/lib/raw-tokens';
 
-import { companyDayInWords } from "./connections";
-import { IN_CHAT, IN_CHAT_CODE, type LiveReply } from "./live";
-import { mockName } from "./people";
-import { readableRefusal } from "./refusal";
-import { reply as typedReply } from "./typed";
+import { companyDayInWords } from './connections';
+import { IN_CHAT, IN_CHAT_CODE, type LiveReply } from './live';
+import { mockName } from './people';
+import { readableRefusal } from './refusal';
+import { reply as typedReply } from './typed';
 
-type Role = Schemas["MemberOut"]["role"];
+type Role = Schemas['MemberOut']['role'];
 type Member = { id: string; email: string; role: Role; status?: string | null };
-type Kind = Schemas["DiscussionCreate"]["subject_kind"];
+type Kind = Schemas['DiscussionCreate']['subject_kind'];
 
 export type DiscussionRow = {
   id: string;
@@ -35,13 +35,13 @@ export type DiscussionRow = {
   document_id: string | null;
   run_id: string | null;
   title: string;
-  visibility: "open" | "private";
+  visibility: 'open' | 'private';
   author_only: boolean;
-  status: "open" | "closed";
-  origin: "discuss" | "panel" | "slack";
+  status: 'open' | 'closed';
+  origin: 'discuss' | 'panel' | 'slack';
   started_by: string;
   summary: string | null;
-  summary_status: "none" | "draft" | "confirmed";
+  summary_status: 'none' | 'draft' | 'confirmed';
   summary_shared: boolean;
   last_message_at: string | null;
   lock_version: number;
@@ -50,12 +50,12 @@ export type DiscussionRow = {
   /** G2 (mock only): the intake author's private findings on the subject (G1 §3.4.6). */
   private_findings?: { author: string; count: number; intake_id: string } | null;
   /** G8: its live link to a Slack thread (./slack.ts), or none. */
-  slack?: Schemas["DiscussionSlackOut"] | null;
+  slack?: Schemas['DiscussionSlackOut'] | null;
 };
 type ParticipantRow = {
   discussion_id: string;
   user_id: string;
-  added_via: Schemas["DiscussionParticipantOut"]["added_via"];
+  added_via: Schemas['DiscussionParticipantOut']['added_via'];
   left_at: string | null;
   last_read_at: string | null;
   created_at: string;
@@ -63,7 +63,7 @@ type ParticipantRow = {
 export type MessageRow = {
   id: string;
   discussion_id: string;
-  author_kind: "person" | "oracle" | "system";
+  author_kind: 'person' | 'oracle' | 'system';
   author_id: string | null;
   body: string;
   mentions: string[];
@@ -73,7 +73,7 @@ export type MessageRow = {
   edited_at: string | null;
   deleted_at: string | null;
   // G2 Live replies: an Oracle reply's state.
-  status?: Schemas["DiscussionMessageOut"]["status"];
+  status?: Schemas['DiscussionMessageOut']['status'];
   citations?: Record<string, unknown>[];
   error_reason?: string | null;
   /** The gateway's refusal as stored when the reply failed (replies.produce: str(e)). */
@@ -85,7 +85,7 @@ export type MessageRow = {
   script?: string[];
   script_citations?: Record<string, unknown>[];
   /** Where it was written: "web" unless stored otherwise (G8: a reply in the Slack thread). */
-  via?: Schemas["DiscussionMessageOut"]["via"];
+  via?: Schemas['DiscussionMessageOut']['via'];
   /** G2 §4 Research this: the research run this line started, or whose answer this is. */
   run_id?: string | null;
   /** The mock's research run finishes on the thread's second read after it started (as a ritual summary's). */
@@ -106,7 +106,7 @@ export type ChangeRow = {
   payload: Record<string, unknown>;
   edited_payload: Record<string, unknown> | null;
   rationale: string | null;
-  proposed_by_kind: "oracle" | "person";
+  proposed_by_kind: 'oracle' | 'person';
   proposed_by: string | null;
   suggested_by: string | null;
   status: ChangeStatus;
@@ -127,7 +127,7 @@ type InboxItemRow = {
   id: string;
   user_id: string;
   discussion_id: string;
-  kind: "invited" | "mentioned";
+  kind: 'invited' | 'mentioned';
   message_id: string | null;
   by_user_id: string | null;
   created_at: string;
@@ -144,14 +144,23 @@ export type DiscussionsDb = {
 };
 
 /** A subject as the mock resolves it: its key, label, link and document or run. */
-export type SubjectInfo = { key: string; label: string; url: string; document_id?: string | null; run_id?: string | null };
+export type SubjectInfo = {
+  key: string;
+  label: string;
+  url: string;
+  document_id?: string | null;
+  run_id?: string | null;
+};
 
 export type DiscussionsContext = {
   db: DiscussionsDb;
   members: Member[];
   me: { id: string; role: Role };
   /** The subject's key, label and link; a string is the refusal (status, detail). */
-  resolve: (kind: Kind, subject: Record<string, unknown>) => SubjectInfo | { status: number; detail: string };
+  resolve: (
+    kind: Kind,
+    subject: Record<string, unknown>,
+  ) => SubjectInfo | { status: number; detail: string };
   /** qa-docs-33: a started discussion's first message, for the review's whole-draft feedback (server.ts). */
   reviewFeedback?: (d: DiscussionRow, body: string) => void;
   /** fix3-discuss review: the refusal when the first message is too long to be that feedback; null: fine. */
@@ -167,7 +176,10 @@ export type DiscussionsContext = {
   /** The saved state now (a streaming reply checks for Stop). */
   current?: () => DiscussionsDb;
   /** B6: Oracle's scripted reply to a person's message (a goals interview); null: the canned one. */
-  replyScript?: (d: DiscussionRow, asked: MessageRow) => { pieces: string[]; citations: Record<string, unknown>[] } | null;
+  replyScript?: (
+    d: DiscussionRow,
+    asked: MessageRow,
+  ) => { pieces: string[]; citations: Record<string, unknown>[] } | null;
   /** #710: Oracle's answer that reads the asker's sources live (./live.ts liveReply); `alone`: only the asker is in the private chat. */
   liveReply?: (asked: MessageRow, alone: boolean) => LiveReply | null;
   /** G8 POST/DELETE …/slack on a discussion the caller may read (./slack.ts). */
@@ -181,27 +193,37 @@ export type DiscussionsContext = {
   /** #406: the text of the document version a discussion is on, the section it is on first. */
   documentText?: (d: DiscussionRow) => DocumentSection[];
   /** F3 Date bases' rights for me (leads.date_rights): verify, propose, or none. */
-  dateRights?: () => "verify" | "propose" | null;
+  dateRights?: () => 'verify' | 'propose' | null;
   /** G4: an approver's Stage of a section change on a document's discussion: writes its next_draft_changes row; returns its id. */
   stageNextDraft?: (d: DiscussionRow, c: ChangeRow, reason: string | null) => string;
   /** F3's schedule-basis route (./roadmap.ts POST /v1/schedule-bases): Record writes through it. */
-  recordBasis?: (body: Schemas["ScheduleBasisCreate"]) => Promise<Response>;
+  recordBasis?: (body: Schemas['ScheduleBasisCreate']) => Promise<Response>;
   /** "Section 1. Behaviour is approved and locked" when the document's latest version has the section approved; else null. */
   lockedSection?: (documentId: string, sectionKey: string) => string | null;
   /** B6's one path for a goal version's Propose (./goal-interview.ts proposeVersion): its refusal or pushback, or null when proposed. */
-  proposeGoalMeasure?: (c: ChangeRow, d: DiscussionRow, payload: Record<string, unknown> | null) => Response | null;
+  proposeGoalMeasure?: (
+    c: ChangeRow,
+    d: DiscussionRow,
+    payload: Record<string, unknown> | null,
+  ) => Response | null;
   /** A baseline entity's title (a feature, a requirement) for a change's sentence; null when unknown. */
   entityTitle?: (id: string) => string | null;
   /** G3 Ask: the question asked of a member (the questions mock); its id. */
-  askQuestion?: (q: { asked_to: string; prompt: string; rationale: string | null; category: string; discussion: DiscussionRow }) => string;
+  askQuestion?: (q: {
+    asked_to: string;
+    prompt: string;
+    rationale: string | null;
+    category: string;
+    discussion: DiscussionRow;
+  }) => string;
   /** G3 Propose of a decision: the decision log's POST /v1/decisions (./decisions.ts), as the caller. */
-  proposeDecision?: (body: Schemas["DecisionCreate"]) => Promise<Response>;
+  proposeDecision?: (body: Schemas['DecisionCreate']) => Promise<Response>;
   /** G4: a change's D8 action at a waiting stop (./runs.ts putDiscussionAction): its id and question. */
   stopAction?: (
     at: { run_id: string; checkpoint_id: string },
-    action: Schemas["ActionIn"],
+    action: Schemas['ActionIn'],
     source: { discussion_id: string; change_id: string; from_private: boolean },
-    mode: "stage" | "suggest" | "auto",
+    mode: 'stage' | 'suggest' | 'auto',
   ) => { id: string; question_id: string | null } | Response;
   /** Whether Ask at this stop is its D8 question action (./runs.ts asksAtStop). */
   asksAtStop?: (at: { run_id: string; checkpoint_id: string }) => boolean;
@@ -213,81 +235,160 @@ export type DiscussionsContext = {
 };
 
 /** As oracle.staging.mapping.to_action for the scope kinds, on the stop's row key. */
-function scopeAction(kind: string, p: Record<string, unknown>, key: string): Schemas["ActionIn"] {
-  const s = (v: unknown) => (typeof v === "string" ? v : "");
-  if (kind === "scope_feature") return { item_key: key, kind: "edit", field: "decision", value: p.decision, note: s(p.reason) || null, answers: [] };
-  if (p.op === "add") return { item_key: key, kind: "add", value: { parent: key, text: p.text ?? null, acceptance: null }, answers: [] };
-  if (p.op === "cut") return { item_key: key, kind: "edit", field: "decision", value: "cut", answers: [] };
-  return { item_key: key, kind: "edit", field: "text", value: p.text ?? null, answers: [] };
+function scopeAction(kind: string, p: Record<string, unknown>, key: string): Schemas['ActionIn'] {
+  const s = (v: unknown) => (typeof v === 'string' ? v : '');
+  if (kind === 'scope_feature')
+    return {
+      item_key: key,
+      kind: 'edit',
+      field: 'decision',
+      value: p.decision,
+      note: s(p.reason) || null,
+      answers: [],
+    };
+  if (p.op === 'add')
+    return {
+      item_key: key,
+      kind: 'add',
+      value: { parent: key, text: p.text ?? null, acceptance: null },
+      answers: [],
+    };
+  if (p.op === 'cut')
+    return { item_key: key, kind: 'edit', field: 'decision', value: 'cut', answers: [] };
+  return { item_key: key, kind: 'edit', field: 'text', value: p.text ?? null, answers: [] };
 }
 /** oracle.staging.service: a scope change named in no waiting feature set. */
-export const NO_FEATURE_SET = "No feature set waiting for approval has this feature";
+export const NO_FEATURE_SET = 'No feature set waiting for approval has this feature';
 
 /** A section of the document a discussion is on, as Oracle reads it (markers stripped). */
-export type DocumentSection = { document_id: string; key: string; heading: string; text: string; url: string };
+export type DocumentSection = {
+  document_id: string;
+  key: string;
+  heading: string;
+  text: string;
+  url: string;
+};
 
 /** G2: the gateway's message when no Claude account can take a call (approvers and owners). */
 export const NO_ACCOUNT_MESSAGE =
-  "No Claude account: an owner adds one on Settings > Claude accounts (or sets a fallback setup-token or API key there)";
+  'No Claude account: an owner adds one on Settings > Claude accounts (or sets a fallback setup-token or API key there)';
 /** The mock's canned reply, citing the seed's "Activation" goal. */
-export const CANNED_REPLY = ["Yes, if caps ", "read the plan thresholds only ", "[c:1]. Detection can follow ", "once activation holds; ", "the goal does not depend on it."];
+export const CANNED_REPLY = [
+  'Yes, if caps ',
+  'read the plan thresholds only ',
+  '[c:1]. Detection can follow ',
+  'once activation holds; ',
+  'the goal does not depend on it.',
+];
 
-const withoutView = (subject: Record<string, unknown>) => Object.fromEntries(Object.entries(subject).filter(([k]) => k !== "view"));
+const withoutView = (subject: Record<string, unknown>) =>
+  Object.fromEntries(Object.entries(subject).filter(([k]) => k !== 'view'));
 
 /**
  * ask-page-context: a "This page" question about what the page shows ("these items") is
  * answered from it: the API reads the view in the person's own panel chat. The listed items
  * (lines with their fields after " · "), else the page's first lines, by name.
  */
-export function pageReply(d: Pick<DiscussionRow, "subject" | "origin" | "visibility">, question: string): { pieces: string[]; citations: Record<string, unknown>[] } | null {
+export function pageReply(
+  d: Pick<DiscussionRow, 'subject' | 'origin' | 'visibility'>,
+  question: string,
+): { pieces: string[]; citations: Record<string, unknown>[] } | null {
   const view = d.subject.view as { name?: string; lines?: string[] } | undefined;
-  if (!view?.lines?.length || d.origin !== "panel" || d.visibility !== "private") return null;
+  if (!view?.lines?.length || d.origin !== 'panel' || d.visibility !== 'private') return null;
   if (!/\b(these|this page|on the page|listed)\b/i.test(question)) return null;
-  const items = view.lines.filter((l) => l.includes(" · horizon "));
+  const items = view.lines.filter((l) => l.includes(' · horizon '));
   // A table's row comes as "Column: value · Column: value" (readShownPage): its first value names it.
   const rows = view.lines.filter((l) => /^[^:·]{1,40}: .+ · [^:·]{1,40}: /.test(l));
   const row = (l: string) => {
-    const [first, next] = l.split(" · ");
-    return `${first.replace(/^[^:·]{1,40}: /, "")} (${next})`;
+    const [first, next] = l.split(' · ');
+    return `${first.replace(/^[^:·]{1,40}: /, '')} (${next})`;
   };
-  const names = items.length ? items.slice(0, 4).map((l) => l.split(" · ")[0]) : rows.length ? rows.slice(0, 4).map(row) : view.lines.slice(0, 4);
-  return { pieces: [`On ${view.name ?? "this page"} I can see `, names.join(", "), ". Each can take a date once its milestone has one."], citations: [] };
+  const names = items.length
+    ? items.slice(0, 4).map((l) => l.split(' · ')[0])
+    : rows.length
+      ? rows.slice(0, 4).map(row)
+      : view.lines.slice(0, 4);
+  return {
+    pieces: [
+      `On ${view.name ?? 'this page'} I can see `,
+      names.join(', '),
+      '. Each can take a date once its milestone has one.',
+    ],
+    citations: [],
+  };
 }
 
 /** G2 §4: one discussion_research run, the researcher at quick depth (the API's cost table). */
 export const RESEARCH_USD = 2;
 export const RESEARCH_ANSWER =
-  "Teams on the starter plan asked for caps in the last two check-ins [c:1]. Others cap by seat on their starter plans [c:2]. Nothing Oracle can read says detection has to ship first.";
+  'Teams on the starter plan asked for caps in the last two check-ins [c:1]. Others cap by seat on their starter plans [c:2]. Nothing Oracle can read says detection has to ship first.';
 /** The "research-refused" scenario: the runs refuse the first research start (as a spent budget or one build at a time would). */
-export const RESEARCH_REFUSED_SCENARIO = "research-refused";
+export const RESEARCH_REFUSED_SCENARIO = 'research-refused';
 export const RESEARCH_REFUSED = "The company's monthly run budget is spent.";
 /** What a commenter or a viewer reads of a refused start (the API's research.START_FAILED): approvers read why. */
 export const RESEARCH_START_FAILED = "Oracle couldn't start this research.";
 /** The "research-unsafe-link" scenario: the web page the research cites has an address that is not http(s) (#606 re-review). */
-export const RESEARCH_UNSAFE_LINK_SCENARIO = "research-unsafe-link";
-export const RESEARCH_UNSAFE_LINK = "javascript:alert(document.domain)";
-const CANNED_CITATIONS = [{ n: 1, kind: "entity", ref: "g.activation", title: "Goal: Activation", url: "/ground-truth", confidence: 0.82, low_confidence: false }];
+export const RESEARCH_UNSAFE_LINK_SCENARIO = 'research-unsafe-link';
+export const RESEARCH_UNSAFE_LINK = 'javascript:alert(document.domain)';
+const CANNED_CITATIONS = [
+  {
+    n: 1,
+    kind: 'entity',
+    ref: 'g.activation',
+    title: 'Goal: Activation',
+    url: '/ground-truth',
+    confidence: 0.82,
+    low_confidence: false,
+  },
+];
 /** The web page the mock's research read (read:web): a `web` citation linking to it. */
 const RESEARCH_CITATIONS: Record<string, unknown>[] = [
   ...CANNED_CITATIONS,
-  { n: 2, kind: "web", ref: "w-1", title: "Caps at Example", url: "https://news.example/caps" },
+  { n: 2, kind: 'web', ref: 'w-1', title: 'Caps at Example', url: 'https://news.example/caps' },
 ];
-const STOPWORDS = new Set(["what", "when", "where", "which", "does", "this", "that", "draft", "document", "about", "with", "from", "have", "there", "their", "they"]);
-const words = (text: string) => new Set(text.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 4 && !STOPWORDS.has(w)));
+const STOPWORDS = new Set([
+  'what',
+  'when',
+  'where',
+  'which',
+  'does',
+  'this',
+  'that',
+  'draft',
+  'document',
+  'about',
+  'with',
+  'from',
+  'have',
+  'there',
+  'their',
+  'they',
+]);
+const words = (text: string) =>
+  new Set(
+    text
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w.length >= 4 && !STOPWORDS.has(w)),
+  );
 
 /**
  * #406: the mock's stand-in for the model reading the document. The sentence of the version
  * (the section first, then the rest) that shares the most words with the question, at least
  * two; its citation's marker comes split across two pieces, as a model's often is.
  */
-export function documentReply(question: string, sections: DocumentSection[]): { pieces: string[]; citations: Record<string, unknown>[] } | null {
+export function documentReply(
+  question: string,
+  sections: DocumentSection[],
+): { pieces: string[]; citations: Record<string, unknown>[] } | null {
   const asked = words(question);
   let best: { n: number; sentence: string; score: number } | null = null;
   sections.forEach((sec, i) => {
     for (const sentence of sec.text.split(/\n+|(?<=[.!?])\s+/)) {
-      if (!sentence.trim() || sentence.trim().startsWith("|")) continue;
+      if (!sentence.trim() || sentence.trim().startsWith('|')) continue;
       const score = [...words(sentence)].filter((w) => asked.has(w)).length;
-      if (score >= 2 && (!best || score > best.score)) best = { n: i + 1, sentence: sentence.trim().replace(/[.!?]$/, ""), score };
+      if (score >= 2 && (!best || score > best.score))
+        best = { n: i + 1, sentence: sentence.trim().replace(/[.!?]$/, ''), score };
     }
   });
   if (!best) return null;
@@ -295,8 +396,16 @@ export function documentReply(question: string, sections: DocumentSection[]): { 
   const sec = sections[n - 1];
   const said = sentence[0].toLowerCase() + sentence.slice(1);
   return {
-    pieces: ["The draft says ", `${said} `, "[c:", `${n}]`, ", in ", `“${sec.heading}”.`],
-    citations: [{ n, kind: "section", ref: `${sec.document_id}:${sec.key}`, title: sec.heading, url: sec.url }],
+    pieces: ['The draft says ', `${said} `, '[c:', `${n}]`, ', in ', `“${sec.heading}”.`],
+    citations: [
+      {
+        n,
+        kind: 'section',
+        ref: `${sec.document_id}:${sec.key}`,
+        title: sec.heading,
+        url: sec.url,
+      },
+    ],
   };
 }
 
@@ -304,42 +413,47 @@ export function documentReply(question: string, sections: DocumentSection[]): { 
 const FIRST_MS = 500;
 const DELTA_MS = 150;
 
-export const emptyDiscussions = (): DiscussionsDb => ({ discussions: [], participants: [], messages: [], changes: [] });
+export const emptyDiscussions = (): DiscussionsDb => ({
+  discussions: [],
+  participants: [],
+  messages: [],
+  changes: [],
+});
 
 /** G3: each kind's main action (the registry, G1 §3.3). */
 const KIND_VERB: Record<string, ChangeVerb> = {
-  item_horizon: "Stage",
-  item_outcome: "Stage",
-  section_edit: "Stage",
-  goal_measure: "Propose",
-  entity_edit: "Propose",
-  conflict_pick: "Resolve",
-  answer: "Use as answer",
-  basis_record: "Record",
-  priority_move: "Apply",
-  priority_pin: "Apply",
-  ask_person: "Ask",
-  scope_feature: "Stage",
-  scope_requirement: "Stage",
-  decision: "Propose",
+  item_horizon: 'Stage',
+  item_outcome: 'Stage',
+  section_edit: 'Stage',
+  goal_measure: 'Propose',
+  entity_edit: 'Propose',
+  conflict_pick: 'Resolve',
+  answer: 'Use as answer',
+  basis_record: 'Record',
+  priority_move: 'Apply',
+  priority_pin: 'Apply',
+  ask_person: 'Ask',
+  scope_feature: 'Stage',
+  scope_requirement: 'Stage',
+  decision: 'Propose',
 };
 const VERB_OF_ROUTE: Record<string, ChangeVerb> = {
-  stage: "Stage",
-  propose: "Propose",
-  resolve: "Resolve",
-  answer: "Use as answer",
-  verify: "Record",
-  apply: "Apply",
-  ask: "Ask",
+  stage: 'Stage',
+  propose: 'Propose',
+  resolve: 'Resolve',
+  answer: 'Use as answer',
+  verify: 'Record',
+  apply: 'Apply',
+  ask: 'Ask',
 };
 const VERB_PAST: Record<ChangeVerb, string> = {
-  Stage: "staged",
-  Propose: "proposed",
-  Resolve: "resolved",
-  "Use as answer": "answered",
-  Record: "recorded",
-  Apply: "applied",
-  Ask: "asked",
+  Stage: 'staged',
+  Propose: 'proposed',
+  Resolve: 'resolved',
+  'Use as answer': 'answered',
+  Record: 'recorded',
+  Apply: 'applied',
+  Ask: 'asked',
 };
 /**
  * The kinds each subject offers in the mock, as the API's kinds.available_for does (G1 §3.3):
@@ -347,137 +461,245 @@ const VERB_PAST: Record<ChangeVerb, string> = {
  * checkpoint_item and entity; priority_* on priorities and checkpoint_item; decision on every subject.
  */
 const SUBJECT_KINDS: Record<string, string[]> = {
-  document: ["section_edit", "answer", "scope_feature", "scope_requirement", "decision"],
-  section: ["section_edit", "answer", "ask_person", "decision"],
-  roadmap_item: ["item_horizon", "item_outcome", "basis_record", "decision"],
-  checkpoint: ["item_horizon", "item_outcome", "conflict_pick", "decision"],
-  checkpoint_item: ["item_horizon", "item_outcome", "basis_record", "ask_person", "scope_feature", "scope_requirement", "priority_move", "priority_pin", "decision"],
-  entity: ["goal_measure", "entity_edit", "ask_person", "scope_feature", "scope_requirement", "decision"],
-  conflict: ["conflict_pick", "decision"],
-  question: ["answer", "decision"],
-  intake: ["ask_person", "scope_feature", "scope_requirement", "decision"],
-  gap: ["ask_person", "decision"],
-  priorities: ["priority_move", "priority_pin", "decision"],
-  track: ["decision"],
-  screen: ["decision"],
+  document: ['section_edit', 'answer', 'scope_feature', 'scope_requirement', 'decision'],
+  section: ['section_edit', 'answer', 'ask_person', 'decision'],
+  roadmap_item: ['item_horizon', 'item_outcome', 'basis_record', 'decision'],
+  checkpoint: ['item_horizon', 'item_outcome', 'conflict_pick', 'decision'],
+  checkpoint_item: [
+    'item_horizon',
+    'item_outcome',
+    'basis_record',
+    'ask_person',
+    'scope_feature',
+    'scope_requirement',
+    'priority_move',
+    'priority_pin',
+    'decision',
+  ],
+  entity: [
+    'goal_measure',
+    'entity_edit',
+    'ask_person',
+    'scope_feature',
+    'scope_requirement',
+    'decision',
+  ],
+  conflict: ['conflict_pick', 'decision'],
+  question: ['answer', 'decision'],
+  intake: ['ask_person', 'scope_feature', 'scope_requirement', 'decision'],
+  gap: ['ask_person', 'decision'],
+  priorities: ['priority_move', 'priority_pin', 'decision'],
+  track: ['decision'],
+  screen: ['decision'],
 };
-const TEXT = { type: "string", minLength: 1 };
+const TEXT = { type: 'string', minLength: 1 };
 const KIND_SCHEMA: Record<string, Record<string, unknown>> = {
-  item_horizon: { type: "object", required: ["item_key", "horizon"], properties: { item_key: TEXT, horizon: { enum: ["now", "next", "later"] } } },
-  item_outcome: { type: "object", required: ["item_key", "outcome"], properties: { item_key: TEXT, outcome: TEXT } },
-  section_edit: { type: "object", required: ["section_key", "instruction"], properties: { section_key: TEXT, instruction: TEXT } },
-  goal_measure: { type: "object", required: ["metric", "target"], properties: { metric: TEXT, target: TEXT, horizon: { type: "string" } } },
-  entity_edit: { type: "object", properties: {} },
-  conflict_pick: { type: "object", required: ["claim_index"], properties: { claim_index: { type: "integer", minimum: 0 } } },
-  answer: { type: "object", required: ["body"], properties: { body: TEXT } },
+  item_horizon: {
+    type: 'object',
+    required: ['item_key', 'horizon'],
+    properties: { item_key: TEXT, horizon: { enum: ['now', 'next', 'later'] } },
+  },
+  item_outcome: {
+    type: 'object',
+    required: ['item_key', 'outcome'],
+    properties: { item_key: TEXT, outcome: TEXT },
+  },
+  section_edit: {
+    type: 'object',
+    required: ['section_key', 'instruction'],
+    properties: { section_key: TEXT, instruction: TEXT },
+  },
+  goal_measure: {
+    type: 'object',
+    required: ['metric', 'target'],
+    properties: { metric: TEXT, target: TEXT, horizon: { type: 'string' } },
+  },
+  entity_edit: { type: 'object', properties: {} },
+  conflict_pick: {
+    type: 'object',
+    required: ['claim_index'],
+    properties: { claim_index: { type: 'integer', minimum: 0 } },
+  },
+  answer: { type: 'object', required: ['body'], properties: { body: TEXT } },
   basis_record: {
-    type: "object",
-    required: ["prd_document_id", "kind", "reference", "supports_date"],
-    properties: { prd_document_id: TEXT, kind: { enum: ["estimate", "capacity", "commitment"] }, reference: TEXT, supports_date: { type: "string", format: "date" }, item_key: { type: "string" } },
+    type: 'object',
+    required: ['prd_document_id', 'kind', 'reference', 'supports_date'],
+    properties: {
+      prd_document_id: TEXT,
+      kind: { enum: ['estimate', 'capacity', 'commitment'] },
+      reference: TEXT,
+      supports_date: { type: 'string', format: 'date' },
+      item_key: { type: 'string' },
+    },
   },
   ask_person: {
-    type: "object",
-    required: ["asked_to", "prompt"],
-    properties: { asked_to: { type: "string", format: "uuid" }, prompt: { type: "string", minLength: 1, maxLength: 2000 }, rationale: { type: "string" }, category: { type: "string", default: "general" } },
+    type: 'object',
+    required: ['asked_to', 'prompt'],
+    properties: {
+      asked_to: { type: 'string', format: 'uuid' },
+      prompt: { type: 'string', minLength: 1, maxLength: 2000 },
+      rationale: { type: 'string' },
+      category: { type: 'string', default: 'general' },
+    },
   },
   scope_feature: {
-    type: "object",
-    required: ["feature_id", "decision", "reason"],
-    properties: { feature_id: { type: "string", format: "uuid" }, decision: { enum: ["include", "exclude", "defer"] }, reason: TEXT },
+    type: 'object',
+    required: ['feature_id', 'decision', 'reason'],
+    properties: {
+      feature_id: { type: 'string', format: 'uuid' },
+      decision: { enum: ['include', 'exclude', 'defer'] },
+      reason: TEXT,
+    },
   },
   scope_requirement: {
-    type: "object",
-    required: ["op"],
-    properties: { op: { enum: ["add", "enhance", "cut"] }, requirement_id: { type: "string", format: "uuid" }, feature_id: { type: "string", format: "uuid" }, text: { type: "string" }, goal_id: { type: "string", format: "uuid" } },
+    type: 'object',
+    required: ['op'],
+    properties: {
+      op: { enum: ['add', 'enhance', 'cut'] },
+      requirement_id: { type: 'string', format: 'uuid' },
+      feature_id: { type: 'string', format: 'uuid' },
+      text: { type: 'string' },
+      goal_id: { type: 'string', format: 'uuid' },
+    },
   },
   priority_move: {
-    type: "object",
-    required: ["feature_id", "above_feature_id", "reason"],
-    properties: { feature_id: { type: "string", format: "uuid" }, above_feature_id: { type: "string", format: "uuid" }, reason: TEXT },
+    type: 'object',
+    required: ['feature_id', 'above_feature_id', 'reason'],
+    properties: {
+      feature_id: { type: 'string', format: 'uuid' },
+      above_feature_id: { type: 'string', format: 'uuid' },
+      reason: TEXT,
+    },
   },
   priority_pin: {
-    type: "object",
-    required: ["feature_id", "position", "reason"],
-    properties: { feature_id: { type: "string", format: "uuid" }, position: { type: "integer", minimum: 1 }, reason: TEXT },
+    type: 'object',
+    required: ['feature_id', 'position', 'reason'],
+    properties: {
+      feature_id: { type: 'string', format: 'uuid' },
+      position: { type: 'integer', minimum: 1 },
+      reason: TEXT,
+    },
   },
   decision: {
-    type: "object",
-    required: ["title"],
+    type: 'object',
+    required: ['title'],
     properties: {
-      title: { type: "string", minLength: 1, maxLength: 200 },
-      question: { type: "string", maxLength: 1000 },
-      options: { type: "array", maxItems: 6, items: { type: "object", required: ["key", "label"], properties: { key: TEXT, label: TEXT, summary: { type: "string" } } } },
-      approver_id: { type: "string", format: "uuid" },
-      reversibility: { enum: ["reversible", "irreversible"] },
+      title: { type: 'string', minLength: 1, maxLength: 200 },
+      question: { type: 'string', maxLength: 1000 },
+      options: {
+        type: 'array',
+        maxItems: 6,
+        items: {
+          type: 'object',
+          required: ['key', 'label'],
+          properties: { key: TEXT, label: TEXT, summary: { type: 'string' } },
+        },
+      },
+      approver_id: { type: 'string', format: 'uuid' },
+      reversibility: { enum: ['reversible', 'irreversible'] },
     },
   },
 };
-export const STAGE_WHY_NOT = "Approvers stage changes. You can suggest it.";
-const APPROVERS_ACT = "Approvers take this action. You can suggest it.";
+export const STAGE_WHY_NOT = 'Approvers stage changes. You can suggest it.';
+const APPROVERS_ACT = 'Approvers take this action. You can suggest it.';
 /** Apply (priority_move, priority_pin): the API's words below approver. */
-export const APPLY_WHY_NOT = "Approvers apply this change.";
+export const APPLY_WHY_NOT = 'Approvers apply this change.';
 /** Propose of a decision with no one named to decide it, by someone below approver. */
-const CHOOSE_DECIDER = "Choose who decides it";
+const CHOOSE_DECIDER = 'Choose who decides it';
 /** F3: who has no date rights (oracle.discussions.changes.RECORDERS). */
-export const RECORDERS = "Engineering leads and approvers add date sources";
-const VIEWERS_READ = "Viewers can read discussions but not write in them";
-const STALE = "Someone else changed this since you loaded it; reload and try again";
-const HORIZON_LABEL: Record<string, string> = { now: "Now", next: "Next", later: "Later" };
-const isOpenStatus = (s: ChangeStatus) => s === "proposed" || s === "suggested";
-const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+export const RECORDERS = 'Engineering leads and approvers add date sources';
+const VIEWERS_READ = 'Viewers can read discussions but not write in them';
+const STALE = 'Someone else changed this since you loaded it; reload and try again';
+const HORIZON_LABEL: Record<string, string> = { now: 'Now', next: 'Next', later: 'Later' };
+const isOpenStatus = (s: ChangeStatus) => s === 'proposed' || s === 'suggested';
+const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
 
 /** How a change's sentence names what its payload points at: a baseline entity's title, a member's name. */
-export type LabelNames = { entity?: (id: string) => string | null; member?: (id: string) => string | null };
-const SCOPE_WORD: Record<string, string> = { include: "Include", exclude: "Exclude", defer: "Defer" };
+export type LabelNames = {
+  entity?: (id: string) => string | null;
+  member?: (id: string) => string | null;
+};
+const SCOPE_WORD: Record<string, string> = {
+  include: 'Include',
+  exclude: 'Exclude',
+  defer: 'Defer',
+};
 
 /** A change's plain sentence from its kind and payload. */
-export function changeLabel(kind: string, p: Record<string, unknown>, names: LabelNames = {}): string {
+export function changeLabel(
+  kind: string,
+  p: Record<string, unknown>,
+  names: LabelNames = {},
+): string {
   const clip = (t: string) => (t.length > 100 ? `${t.slice(0, 99)}…` : t);
-  const lower = (t: string) => t.replace(/\.$/, "").replace(/^./, (c) => c.toLowerCase());
-  if (kind === "item_horizon") return `Move ${str(p.item_key)} to ${HORIZON_LABEL[str(p.horizon)] ?? str(p.horizon)}`;
-  if (kind === "item_outcome") return clip(`Set ${str(p.item_key)}'s outcome: ${lower(str(p.outcome))}`);
-  if (kind === "section_edit") return clip(`Edit ${str(p.section_key)}: ${lower(str(p.instruction))}`);
-  if (kind === "goal_measure") return clip(`Measure the goal by ${str(p.metric)}: ${str(p.target)}${str(p.horizon) ? ` by ${str(p.horizon)}` : ""}`);
-  if (kind === "conflict_pick") return `Settle the conflict with claim ${Number(p.claim_index)}`;
-  if (kind === "answer") return clip(`Answer: ${str(p.body)}`);
-  if (kind === "basis_record") return clip(`Add a date source: ${str(p.reference)} supports ${str(p.supports_date)}`);
+  const lower = (t: string) => t.replace(/\.$/, '').replace(/^./, (c) => c.toLowerCase());
+  if (kind === 'item_horizon')
+    return `Move ${str(p.item_key)} to ${HORIZON_LABEL[str(p.horizon)] ?? str(p.horizon)}`;
+  if (kind === 'item_outcome')
+    return clip(`Set ${str(p.item_key)}'s outcome: ${lower(str(p.outcome))}`);
+  if (kind === 'section_edit')
+    return clip(`Edit ${str(p.section_key)}: ${lower(str(p.instruction))}`);
+  if (kind === 'goal_measure')
+    return clip(
+      `Measure the goal by ${str(p.metric)}: ${str(p.target)}${str(p.horizon) ? ` by ${str(p.horizon)}` : ''}`,
+    );
+  if (kind === 'conflict_pick') return `Settle the conflict with claim ${Number(p.claim_index)}`;
+  if (kind === 'answer') return clip(`Answer: ${str(p.body)}`);
+  if (kind === 'basis_record')
+    return clip(`Add a date source: ${str(p.reference)} supports ${str(p.supports_date)}`);
   const entity = (v: unknown) => names.entity?.(str(v)) ?? str(v);
-  if (kind === "ask_person") return clip(`Ask ${names.member?.(str(p.asked_to)) ?? "someone"}: ${str(p.prompt)}`);
-  if (kind === "scope_feature") return clip(`${SCOPE_WORD[str(p.decision)] ?? str(p.decision)} ${entity(p.feature_id)}: ${str(p.reason)}`);
-  if (kind === "scope_requirement") {
-    if (str(p.op) === "cut") return clip(`Cut requirement: ${entity(p.requirement_id)}`);
-    return clip(`${str(p.op) === "add" ? "Add" : "Enhance"} requirement: ${str(p.text)}`);
+  if (kind === 'ask_person')
+    return clip(`Ask ${names.member?.(str(p.asked_to)) ?? 'someone'}: ${str(p.prompt)}`);
+  if (kind === 'scope_feature')
+    return clip(
+      `${SCOPE_WORD[str(p.decision)] ?? str(p.decision)} ${entity(p.feature_id)}: ${str(p.reason)}`,
+    );
+  if (kind === 'scope_requirement') {
+    if (str(p.op) === 'cut') return clip(`Cut requirement: ${entity(p.requirement_id)}`);
+    return clip(`${str(p.op) === 'add' ? 'Add' : 'Enhance'} requirement: ${str(p.text)}`);
   }
-  if (kind === "priority_move") return clip(`Move ${entity(p.feature_id)} above ${entity(p.above_feature_id)}: ${str(p.reason)}`);
-  if (kind === "priority_pin") return clip(`Pin ${entity(p.feature_id)} at #${Number(p.position)}: ${str(p.reason)}`);
-  if (kind === "decision") return clip(`Decide: ${str(p.title)}`);
-  return kind.replace(/_/g, " ");
+  if (kind === 'priority_move')
+    return clip(
+      `Move ${entity(p.feature_id)} above ${entity(p.above_feature_id)}: ${str(p.reason)}`,
+    );
+  if (kind === 'priority_pin')
+    return clip(`Pin ${entity(p.feature_id)} at #${Number(p.position)}: ${str(p.reason)}`);
+  if (kind === 'decision') return clip(`Decide: ${str(p.title)}`);
+  return kind.replace(/_/g, ' ');
 }
 
 /** What a payload lacks for its kind, or null. */
 function incomplete(kind: string, p: Record<string, unknown>): string | null {
-  const INCOMPLETE = "The change is incomplete";
+  const INCOMPLETE = 'The change is incomplete';
   const required = (KIND_SCHEMA[kind]?.required as string[] | undefined) ?? [];
-  const integer = (k: string) => kind === "conflict_pick" || (kind === "priority_pin" && k === "position");
+  const integer = (k: string) =>
+    kind === 'conflict_pick' || (kind === 'priority_pin' && k === 'position');
   if (required.some((k) => (integer(k) ? !Number.isInteger(p[k]) : !str(p[k])))) return INCOMPLETE;
-  if (kind === "priority_pin" && (p.position as number) < 1) return INCOMPLETE;
-  if (kind === "priority_move" && p.feature_id === p.above_feature_id) return INCOMPLETE;
-  if (kind === "ask_person" && str(p.prompt).length > 2000) return INCOMPLETE;
-  if (kind === "scope_feature" && !SCOPE_WORD[str(p.decision)]) return INCOMPLETE;
-  if (kind === "scope_requirement") {
+  if (kind === 'priority_pin' && (p.position as number) < 1) return INCOMPLETE;
+  if (kind === 'priority_move' && p.feature_id === p.above_feature_id) return INCOMPLETE;
+  if (kind === 'ask_person' && str(p.prompt).length > 2000) return INCOMPLETE;
+  if (kind === 'scope_feature' && !SCOPE_WORD[str(p.decision)]) return INCOMPLETE;
+  if (kind === 'scope_requirement') {
     const op = str(p.op);
-    if (op === "add") return str(p.feature_id) && str(p.text) ? null : INCOMPLETE;
-    if (op === "enhance") return str(p.requirement_id) && str(p.text) ? null : INCOMPLETE;
-    if (op === "cut") return str(p.requirement_id) ? null : INCOMPLETE;
+    if (op === 'add') return str(p.feature_id) && str(p.text) ? null : INCOMPLETE;
+    if (op === 'enhance') return str(p.requirement_id) && str(p.text) ? null : INCOMPLETE;
+    if (op === 'cut') return str(p.requirement_id) ? null : INCOMPLETE;
     return INCOMPLETE;
   }
-  if (kind === "decision") {
+  if (kind === 'decision') {
     if (str(p.title).length > 200 || str(p.question).length > 1000) return INCOMPLETE;
     const options = p.options ?? [];
     if (!Array.isArray(options) || options.length > 6) return INCOMPLETE;
-    const keys = options.map((o) => (o && typeof o === "object" ? str((o as Record<string, unknown>).key) : ""));
+    const keys = options.map((o) =>
+      o && typeof o === 'object' ? str((o as Record<string, unknown>).key) : '',
+    );
     if (keys.some((k) => !k) || new Set(keys).size !== keys.length) return INCOMPLETE;
-    if (p.reversibility != null && p.reversibility !== "reversible" && p.reversibility !== "irreversible") return INCOMPLETE;
+    if (
+      p.reversibility != null &&
+      p.reversibility !== 'reversible' &&
+      p.reversibility !== 'irreversible'
+    )
+      return INCOMPLETE;
   }
   return null;
 }
@@ -489,7 +711,14 @@ function incomplete(kind: string, p: Record<string, unknown>): string | null {
  */
 function applyPushback(reason: string): { code: string; message: string }[] {
   const thin = reason.length < 20 || reason.split(/\s+/).filter((w) => /[a-z]/i.test(w)).length < 4;
-  return thin ? [{ code: "reason_thin", message: "The reason does not say what changed. Name the evidence or the goal it serves." }] : [];
+  return thin
+    ? [
+        {
+          code: 'reason_thin',
+          message: 'The reason does not say what changed. Name the evidence or the goal it serves.',
+        },
+      ]
+    : [];
 }
 
 /**
@@ -497,9 +726,19 @@ function applyPushback(reason: string): { code: string; message: string }[] {
  * API drops any other): on a section or document, an edit of the section and one of the
  * solution; on an item, a move to Next.
  */
-function cannedChanges(d: DiscussionRow, from: string, uuid: () => string, at: string): ChangeRow[] {
-  const section = str(d.subject.section_key) || "problem";
-  const row = (kind: string, target: Record<string, unknown>, payload: Record<string, unknown>, rationale: string): ChangeRow => ({
+function cannedChanges(
+  d: DiscussionRow,
+  from: string,
+  uuid: () => string,
+  at: string,
+): ChangeRow[] {
+  const section = str(d.subject.section_key) || 'problem';
+  const row = (
+    kind: string,
+    target: Record<string, unknown>,
+    payload: Record<string, unknown>,
+    rationale: string,
+  ): ChangeRow => ({
     id: uuid(),
     discussion_id: d.id,
     kind,
@@ -508,10 +747,10 @@ function cannedChanges(d: DiscussionRow, from: string, uuid: () => string, at: s
     payload,
     edited_payload: null,
     rationale,
-    proposed_by_kind: "oracle",
+    proposed_by_kind: 'oracle',
     proposed_by: null,
     suggested_by: null,
-    status: "proposed",
+    status: 'proposed',
     pushback: null,
     basis: [],
     result_ref: null,
@@ -523,15 +762,35 @@ function cannedChanges(d: DiscussionRow, from: string, uuid: () => string, at: s
     created_at: at,
   });
   const edit = (key: string, instruction: string, rationale: string) =>
-    row("section_edit", { document_id: d.document_id, version: d.subject.version ?? null, section_key: key }, { section_key: key, instruction }, rationale);
+    row(
+      'section_edit',
+      { document_id: d.document_id, version: d.subject.version ?? null, section_key: key },
+      { section_key: key, instruction },
+      rationale,
+    );
   const offered = SUBJECT_KINDS[d.subject_kind] ?? [];
-  if (offered.includes("section_edit"))
+  if (offered.includes('section_edit'))
     return [
-      edit(section, "Say that detection follows once activation holds.", "The goal does not depend on detection [c:1]."),
-      edit(section === "solution" ? "problem" : "solution", "Read the caps from the plan thresholds.", "Caps can ship on the plan thresholds alone [c:1]."),
+      edit(
+        section,
+        'Say that detection follows once activation holds.',
+        'The goal does not depend on detection [c:1].',
+      ),
+      edit(
+        section === 'solution' ? 'problem' : 'solution',
+        'Read the caps from the plan thresholds.',
+        'Caps can ship on the plan thresholds alone [c:1].',
+      ),
     ];
-  if (offered.includes("item_horizon"))
-    return [row("item_horizon", { document_id: d.document_id, item_key: "usage-caps" }, { item_key: "usage-caps", horizon: "next" }, "Caps can ship on the plan thresholds alone [c:1].")];
+  if (offered.includes('item_horizon'))
+    return [
+      row(
+        'item_horizon',
+        { document_id: d.document_id, item_key: 'usage-caps' },
+        { item_key: 'usage-caps', horizon: 'next' },
+        'Caps can ship on the plan thresholds alone [c:1].',
+      ),
+    ];
   return [];
 }
 
@@ -542,11 +801,11 @@ function addProposals(rows: ChangeRow[], made: ChangeRow[]) {
       if (
         old.discussion_id === c.discussion_id &&
         old.kind === c.kind &&
-        old.proposed_by_kind === "oracle" &&
-        old.status === "proposed" &&
+        old.proposed_by_kind === 'oracle' &&
+        old.status === 'proposed' &&
         JSON.stringify(old.target) === JSON.stringify(c.target)
       ) {
-        old.status = "superseded";
+        old.status = 'superseded';
         old.lock_version += 1;
       }
     rows.push(structuredClone(c));
@@ -562,38 +821,45 @@ export function displayName(email: string): string {
 }
 
 const json = (status: number, body: unknown) =>
-  new Response(status === 204 ? null : JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  new Response(status === 204 ? null : JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  });
 const refuse = (status: number, detail: string) => json(status, { detail });
-
 
 /**
  * The "discussions" scenario: one private discussion the commenter started with the
  * approver on a section of `documentId`, with 3 messages from the 2 of them.
  */
-export function seedDiscussions(ctx: Omit<DiscussionsContext, "me" | "db">, documentId: string, label: string, url: string): DiscussionsDb {
+export function seedDiscussions(
+  ctx: Omit<DiscussionsContext, 'me' | 'db'>,
+  documentId: string,
+  label: string,
+  url: string,
+): DiscussionsDb {
   const db = emptyDiscussions();
   const by = (email: string) => ctx.members.find((m) => m.email === email)!.id;
-  const commenter = by("commenter@example.com");
-  const approver = by("approver@example.com");
+  const commenter = by('commenter@example.com');
+  const approver = by('approver@example.com');
   const id = ctx.uuid();
-  const at = (min: number) => `2026-10-20T09:${String(min).padStart(2, "0")}:00Z`;
+  const at = (min: number) => `2026-10-20T09:${String(min).padStart(2, '0')}:00Z`;
   db.discussions.push({
     id,
-    subject_kind: "section",
-    subject: { document_id: documentId, version: 2, section_key: "problem" },
+    subject_kind: 'section',
+    subject: { document_id: documentId, version: 2, section_key: 'problem' },
     subject_key: `section:${documentId}:problem`,
     subject_label: label,
     subject_url: url,
     document_id: documentId,
     run_id: null,
-    title: "Problem: who owns the admin role?",
-    visibility: "private",
+    title: 'Problem: who owns the admin role?',
+    visibility: 'private',
     author_only: false,
-    status: "open",
-    origin: "discuss",
+    status: 'open',
+    origin: 'discuss',
     started_by: commenter,
     summary: null,
-    summary_status: "none",
+    summary_status: 'none',
     summary_shared: false,
     last_message_at: at(12),
     lock_version: 1,
@@ -601,20 +867,27 @@ export function seedDiscussions(ctx: Omit<DiscussionsContext, "me" | "db">, docu
     updated_at: at(12),
   });
   for (const [user_id, added_via] of [
-    [commenter, "started"],
-    [approver, "added"],
+    [commenter, 'started'],
+    [approver, 'added'],
   ] as const)
-    db.participants.push({ discussion_id: id, user_id, added_via, left_at: null, last_read_at: null, created_at: at(0) });
+    db.participants.push({
+      discussion_id: id,
+      user_id,
+      added_via,
+      left_at: null,
+      last_read_at: null,
+      created_at: at(0),
+    });
   const lines: [string, string][] = [
-    [commenter, "Should the first admin be whoever creates the workspace?"],
-    [approver, "Only if they can hand it over later; otherwise support gets the tickets."],
+    [commenter, 'Should the first admin be whoever creates the workspace?'],
+    [approver, 'Only if they can hand it over later; otherwise support gets the tickets.'],
     [commenter, "Agreed. I'll ask for a handover step in Scope."],
   ];
   lines.forEach(([author, body], i) =>
     db.messages.push({
       id: ctx.uuid(),
       discussion_id: id,
-      author_kind: "person",
+      author_kind: 'person',
       author_id: author,
       body,
       mentions: [],
@@ -634,30 +907,36 @@ export function seedDiscussions(ctx: Omit<DiscussionsContext, "me" | "db">, docu
  * commenter mentions the approver (already in it); Oracle proposed one change and the
  * commenter suggested another, so 2 wait on the approver.
  */
-export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, db: DiscussionsDb, documentId: string, label: string, url: string) {
+export function seedDiscussionInbox(
+  ctx: Omit<DiscussionsContext, 'me' | 'db'>,
+  db: DiscussionsDb,
+  documentId: string,
+  label: string,
+  url: string,
+) {
   const by = (email: string) => ctx.members.find((m) => m.email === email)!.id;
-  const commenter = by("commenter@example.com");
-  const approver = by("approver@example.com");
-  const viewer = by("viewer@example.com");
+  const commenter = by('commenter@example.com');
+  const approver = by('approver@example.com');
+  const viewer = by('viewer@example.com');
   const id = ctx.uuid();
-  const at = (min: number) => `2026-10-21T08:${String(min).padStart(2, "0")}:00Z`;
+  const at = (min: number) => `2026-10-21T08:${String(min).padStart(2, '0')}:00Z`;
   db.discussions.push({
     id,
-    subject_kind: "document",
+    subject_kind: 'document',
     subject: { document_id: documentId, version: 2 },
     subject_key: `document:${documentId}`,
     subject_label: label,
     subject_url: url,
     document_id: documentId,
     run_id: null,
-    title: "F-12 Referral link: keep links for guests?",
-    visibility: "open",
+    title: 'F-12 Referral link: keep links for guests?',
+    visibility: 'open',
     author_only: false,
-    status: "open",
-    origin: "discuss",
+    status: 'open',
+    origin: 'discuss',
     started_by: commenter,
     summary: null,
-    summary_status: "none",
+    summary_status: 'none',
     summary_shared: true,
     last_message_at: at(20),
     lock_version: 1,
@@ -665,22 +944,29 @@ export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, 
     updated_at: at(20),
   });
   for (const [user_id, added_via] of [
-    [commenter, "started"],
-    [viewer, "mention"],
-    [approver, "posted"],
+    [commenter, 'started'],
+    [viewer, 'mention'],
+    [approver, 'posted'],
   ] as const)
-    db.participants.push({ discussion_id: id, user_id, added_via, left_at: null, last_read_at: null, created_at: at(0) });
+    db.participants.push({
+      discussion_id: id,
+      user_id,
+      added_via,
+      left_at: null,
+      last_read_at: null,
+      created_at: at(0),
+    });
   const lines: [string, string, string[]][] = [
-    [commenter, "Lena, guests lose their link today. Should we keep it?", [viewer]],
-    [approver, "Only with a clear expiry.", []],
-    [commenter, "Priya, can guests keep a link for 30 days?", [approver]],
+    [commenter, 'Lena, guests lose their link today. Should we keep it?', [viewer]],
+    [approver, 'Only with a clear expiry.', []],
+    [commenter, 'Priya, can guests keep a link for 30 days?', [approver]],
   ];
   const ids = lines.map(([author, body, mentions], i) => {
     const mid = ctx.uuid();
     db.messages.push({
       id: mid,
       discussion_id: id,
-      author_kind: "person",
+      author_kind: 'person',
       author_id: author,
       body,
       mentions,
@@ -694,13 +980,27 @@ export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, 
   });
   const item = { discussion_id: id, by_user_id: commenter, done_at: null };
   db.inbox = [
-    { ...item, id: ctx.uuid(), user_id: viewer, kind: "invited", message_id: null, created_at: at(0) },
-    { ...item, id: ctx.uuid(), user_id: approver, kind: "mentioned", message_id: ids[2], created_at: at(20) },
+    {
+      ...item,
+      id: ctx.uuid(),
+      user_id: viewer,
+      kind: 'invited',
+      message_id: null,
+      created_at: at(0),
+    },
+    {
+      ...item,
+      id: ctx.uuid(),
+      user_id: approver,
+      kind: 'mentioned',
+      message_id: ids[2],
+      created_at: at(20),
+    },
   ];
   const change = {
     discussion_id: id,
-    kind: "section_edit" as const,
-    target: { section_key: "scope" },
+    kind: 'section_edit' as const,
+    target: { section_key: 'scope' },
     edited_payload: null,
     rationale: null,
     proposed_by: null,
@@ -712,58 +1012,65 @@ export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, 
       ...change,
       id: ctx.uuid(),
       label: "Scope: keep a guest's link for 30 days",
-      payload: { section_key: "scope", instruction: "Keep a guest's link for 30 days." },
-      proposed_by_kind: "oracle",
+      payload: { section_key: 'scope', instruction: "Keep a guest's link for 30 days." },
+      proposed_by_kind: 'oracle',
       suggested_by: null,
-      status: "proposed",
+      status: 'proposed',
     },
     {
       ...change,
       id: ctx.uuid(),
-      label: "Scope: show the expiry on the link",
-      payload: { section_key: "scope", instruction: "Show the expiry on the link." },
-      proposed_by_kind: "oracle",
+      label: 'Scope: show the expiry on the link',
+      payload: { section_key: 'scope', instruction: 'Show the expiry on the link.' },
+      proposed_by_kind: 'oracle',
       suggested_by: commenter,
-      status: "suggested",
+      status: 'suggested',
     },
   ];
   // The approver's goals interview, closed once their pick made the goal measurable: Oracle's
   // other three versions are left proposed, and a closed discussion's changes wait on no one.
   const interview = ctx.uuid();
   const goal = ctx.uuid();
-  const late = "2026-10-21T08:40:00Z";
+  const late = '2026-10-21T08:40:00Z';
   db.discussions.push({
     ...db.discussions.find((x) => x.id === id)!,
     id: interview,
-    subject_kind: "entity",
+    subject_kind: 'entity',
     subject: { entity_id: goal, interview: true },
     subject_key: `entity:${goal}`,
-    subject_label: "Weekly referral links",
-    subject_url: "/ground-truth",
+    subject_label: 'Weekly referral links',
+    subject_url: '/ground-truth',
     document_id: null,
-    title: "Make “Weekly referral links” measurable",
-    status: "closed",
+    title: 'Make “Weekly referral links” measurable',
+    status: 'closed',
     started_by: approver,
     last_message_at: late,
     created_at: late,
     updated_at: late,
   });
-  db.participants.push({ discussion_id: interview, user_id: approver, added_via: "started", left_at: null, last_read_at: null, created_at: late });
+  db.participants.push({
+    discussion_id: interview,
+    user_id: approver,
+    added_via: 'started',
+    left_at: null,
+    last_read_at: null,
+    created_at: late,
+  });
   for (const [n, status] of [
-    [1, "done"],
-    [2, "proposed"],
-    [3, "proposed"],
-    [4, "proposed"],
+    [1, 'done'],
+    [2, 'proposed'],
+    [3, 'proposed'],
+    [4, 'proposed'],
   ] as const)
     db.changes.push({
       ...change,
       id: ctx.uuid(),
       discussion_id: interview,
-      kind: "goal_measure",
+      kind: 'goal_measure',
       label: `Make Weekly referral links measurable: version ${n}`,
-      target: { entity_id: goal, title: "Weekly referral links" },
-      payload: { entity_id: goal, metric: "Weekly referral links", target: 500 * n },
-      proposed_by_kind: "oracle",
+      target: { entity_id: goal, title: 'Weekly referral links' },
+      payload: { entity_id: goal, metric: 'Weekly referral links', target: 500 * n },
+      proposed_by_kind: 'oracle',
       suggested_by: null,
       status,
       created_at: late,
@@ -777,23 +1084,30 @@ export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, 
     id: open,
     subject: { entity_id: checkout, interview: true },
     subject_key: `entity:${checkout}`,
-    subject_label: "Weekly checkout time",
-    title: "Make “Weekly checkout time” measurable",
-    status: "open",
+    subject_label: 'Weekly checkout time',
+    title: 'Make “Weekly checkout time” measurable',
+    status: 'open',
   });
-  db.participants.push({ discussion_id: open, user_id: approver, added_via: "started", left_at: null, last_read_at: null, created_at: late });
+  db.participants.push({
+    discussion_id: open,
+    user_id: approver,
+    added_via: 'started',
+    left_at: null,
+    last_read_at: null,
+    created_at: late,
+  });
   for (const n of [1, 2])
     db.changes.push({
       ...change,
       id: ctx.uuid(),
       discussion_id: open,
-      kind: "goal_measure",
+      kind: 'goal_measure',
       label: `Make Weekly checkout time measurable: version ${n}`,
-      target: { entity_id: checkout, title: "Weekly checkout time" },
-      payload: { entity_id: checkout, metric: "Weekly checkout time", target: 60 * n },
-      proposed_by_kind: "oracle",
+      target: { entity_id: checkout, title: 'Weekly checkout time' },
+      payload: { entity_id: checkout, metric: 'Weekly checkout time', target: 60 * n },
+      proposed_by_kind: 'oracle',
       suggested_by: null,
-      status: "proposed",
+      status: 'proposed',
       created_at: late,
     });
   // An open discussion on the priority order the approver is not in: the commenter's suggested
@@ -802,27 +1116,38 @@ export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, 
   db.discussions.push({
     ...db.discussions.find((x) => x.id === open)!,
     id: order,
-    subject_kind: "priorities",
+    subject_kind: 'priorities',
     subject: {},
-    subject_key: "priorities",
-    subject_label: "Priority order",
-    subject_url: "/priorities",
-    title: "Order: put Public signup first?",
+    subject_key: 'priorities',
+    subject_label: 'Priority order',
+    subject_url: '/priorities',
+    title: 'Order: put Public signup first?',
     started_by: commenter,
   });
-  db.participants.push({ discussion_id: order, user_id: commenter, added_via: "started", left_at: null, last_read_at: null, created_at: late });
+  db.participants.push({
+    discussion_id: order,
+    user_id: commenter,
+    added_via: 'started',
+    left_at: null,
+    last_read_at: null,
+    created_at: late,
+  });
   db.changes.push({
     ...change,
     id: ctx.uuid(),
     discussion_id: order,
-    kind: "priority_move",
-    label: "Move Public signup above Referral link",
+    kind: 'priority_move',
+    label: 'Move Public signup above Referral link',
     target: {},
-    payload: { feature_id: ctx.uuid(), above_feature_id: ctx.uuid(), reason: "Guests leave at sign-up." },
-    proposed_by_kind: "person",
+    payload: {
+      feature_id: ctx.uuid(),
+      above_feature_id: ctx.uuid(),
+      reason: 'Guests leave at sign-up.',
+    },
+    proposed_by_kind: 'person',
     proposed_by: commenter,
     suggested_by: commenter,
-    status: "suggested",
+    status: 'suggested',
     created_at: late,
   });
 }
@@ -831,41 +1156,51 @@ export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, 
  * "discussion-intake": the approver's open discussion on an intake (its page: Before drafting,
  * /intakes/<id>), where Oracle proposes one way to measure its goal; Review changes opens it there.
  */
-export function seedIntakeDiscussion(ctx: Omit<DiscussionsContext, "me" | "db">, intake: { id: string; title: string }): DiscussionsDb {
+export function seedIntakeDiscussion(
+  ctx: Omit<DiscussionsContext, 'me' | 'db'>,
+  intake: { id: string; title: string },
+): DiscussionsDb {
   const db = emptyDiscussions();
-  const approver = ctx.members.find((m) => m.email === "approver@example.com")!.id;
+  const approver = ctx.members.find((m) => m.email === 'approver@example.com')!.id;
   const id = ctx.uuid();
-  const at = "2026-10-21T08:30:00Z";
+  const at = '2026-10-21T08:30:00Z';
   db.discussions.push({
     id,
-    subject_kind: "intake",
+    subject_kind: 'intake',
     subject: { intake_id: intake.id },
     subject_key: `intake:${intake.id}`,
     subject_label: intake.title,
     subject_url: `/intakes/${intake.id}`,
     document_id: null,
     run_id: null,
-    title: "F-07 Bulk import: how do we measure it?",
-    visibility: "open",
+    title: 'F-07 Bulk import: how do we measure it?',
+    visibility: 'open',
     author_only: false,
-    status: "open",
-    origin: "discuss",
+    status: 'open',
+    origin: 'discuss',
     started_by: approver,
     summary: null,
-    summary_status: "none",
+    summary_status: 'none',
     summary_shared: true,
     last_message_at: at,
     lock_version: 1,
     created_at: at,
     updated_at: at,
   });
-  db.participants.push({ discussion_id: id, user_id: approver, added_via: "started", left_at: null, last_read_at: null, created_at: at });
+  db.participants.push({
+    discussion_id: id,
+    user_id: approver,
+    added_via: 'started',
+    left_at: null,
+    last_read_at: null,
+    created_at: at,
+  });
   db.messages.push({
     id: ctx.uuid(),
     discussion_id: id,
-    author_kind: "person",
+    author_kind: 'person',
     author_id: approver,
-    body: "How will we know repeat checkout got faster?",
+    body: 'How will we know repeat checkout got faster?',
     mentions: [],
     mentions_oracle: false,
     reply_to: null,
@@ -876,16 +1211,16 @@ export function seedIntakeDiscussion(ctx: Omit<DiscussionsContext, "me" | "db">,
   db.changes!.push({
     id: ctx.uuid(),
     discussion_id: id,
-    kind: "goal_measure",
-    label: "Measure repeat checkout time in seconds",
-    target: { title: "Repeat checkout time" },
-    payload: { metric: "Repeat checkout time", unit: "seconds", target: 30 },
+    kind: 'goal_measure',
+    label: 'Measure repeat checkout time in seconds',
+    target: { title: 'Repeat checkout time' },
+    payload: { metric: 'Repeat checkout time', unit: 'seconds', target: 30 },
     edited_payload: null,
     rationale: null,
-    proposed_by_kind: "oracle",
+    proposed_by_kind: 'oracle',
     proposed_by: null,
     suggested_by: null,
-    status: "proposed",
+    status: 'proposed',
     lock_version: 1,
     created_at: at,
   });
@@ -893,18 +1228,37 @@ export function seedIntakeDiscussion(ctx: Omit<DiscussionsContext, "me" | "db">,
 }
 
 /** The API's changes.THREAD_PAGES and THREAD_PATH: the pages that open a thread from a link (?discussion=<id>&changes=1). */
-const THREAD_PAGES = ["document", "section", "roadmap_item", "checkpoint", "checkpoint_item", "entity", "conflict", "intake", "gap", "track", "priorities"];
-const THREAD_PATH = /^\/(documents\/[^/?#]+\/v\/\d+(?:\/[^?#]*)?|runs\/[^/?#]+|intakes\/[^/?#]+|ground-truth|briefs\/[^/?#]+|plan|priorities)(?:[?#]|$)/;
+const THREAD_PAGES = [
+  'document',
+  'section',
+  'roadmap_item',
+  'checkpoint',
+  'checkpoint_item',
+  'entity',
+  'conflict',
+  'intake',
+  'gap',
+  'track',
+  'priorities',
+];
+const THREAD_PATH =
+  /^\/(documents\/[^/?#]+\/v\/\d+(?:\/[^?#]*)?|runs\/[^/?#]+|intakes\/[^/?#]+|ground-truth|briefs\/[^/?#]+|plan|priorities)(?:[?#]|$)/;
 /** The API's changes.opens_thread: whether the discussion's page opens its thread (and its changes card) from its link; a deleted subject's (its row is missing, Labels.gone) opens nothing. */
 function opensThread(d: DiscussionRow, gone: (d: DiscussionRow) => boolean): boolean {
   if (gone(d)) return false;
-  if (d.subject_kind === "screen") return THREAD_PATH.test(String((d.subject as { path?: string }).path ?? ""));
+  if (d.subject_kind === 'screen')
+    return THREAD_PATH.test(String((d.subject as { path?: string }).path ?? ''));
   return THREAD_PAGES.includes(d.subject_kind);
 }
 /** The API's changes.waits_on: an open change of an open discussion whose page opens its card; Oracle's proposals wait on its participants, suggestions on every approver of an open one. */
-function waitsOn(d: DiscussionRow, c: ChangeRow, participant: boolean, gone: (d: DiscussionRow) => boolean): boolean {
-  if (d.status !== "open" || !isOpenStatus(c.status) || !opensThread(d, gone)) return false;
-  return participant || (d.visibility === "open" && c.status === "suggested");
+function waitsOn(
+  d: DiscussionRow,
+  c: ChangeRow,
+  participant: boolean,
+  gone: (d: DiscussionRow) => boolean,
+): boolean {
+  if (d.status !== 'open' || !isOpenStatus(c.status) || !opensThread(d, gone)) return false;
+  return participant || (d.visibility === 'open' && c.status === 'suggested');
 }
 
 /**
@@ -920,19 +1274,22 @@ export function discussionInboxRows(
   me: { id: string; role: Role },
   seen: string | null,
   gone: (d: DiscussionRow) => boolean = () => false,
-): Schemas["InboxDiscussionItem"][] {
+): Schemas['InboxDiscussionItem'][] {
   const name = (id: string | null) => {
     const m = id ? members.find((x) => x.id === id) : undefined;
     return m ? displayName(m.email) : null;
   };
-  const active = (d: DiscussionRow) => db.participants.filter((x) => x.discussion_id === d.id && !x.left_at);
-  const fresh = (at: string) => (seen === null || at > seen ? "new" : "open") as "new" | "open";
+  const active = (d: DiscussionRow) =>
+    db.participants.filter((x) => x.discussion_id === d.id && !x.left_at);
+  const fresh = (at: string) => (seen === null || at > seen ? 'new' : 'open') as 'new' | 'open';
   const link = (d: DiscussionRow) => {
-    const [path, ...anchor] = d.subject_url.split("#");
-    return `${path}${path.includes("?") ? "&" : "?"}discussion=${d.id}${anchor.length ? `#${anchor.join("#")}` : ""}`;
+    const [path, ...anchor] = d.subject_url.split('#');
+    return `${path}${path.includes('?') ? '&' : '?'}discussion=${d.id}${anchor.length ? `#${anchor.join('#')}` : ''}`;
   };
   const base = (d: DiscussionRow) => {
-    const names = active(d).map((p) => name(p.user_id)).filter((n): n is string => !!n);
+    const names = active(d)
+      .map((p) => name(p.user_id))
+      .filter((n): n is string => !!n);
     return {
       discussion_id: d.id,
       title: d.title,
@@ -941,11 +1298,12 @@ export function discussionInboxRows(
       subject_url: link(d),
       people: names.slice(0, 3),
       people_more: Math.max(names.length - 3, 0),
-      can_write: atLeast(me.role, "commenter"),
+      can_write: atLeast(me.role, 'commenter'),
     };
   };
-  const readable = (d: DiscussionRow) => d.visibility === "open" || active(d).some((p) => p.user_id === me.id);
-  const out: Schemas["InboxDiscussionItem"][] = [];
+  const readable = (d: DiscussionRow) =>
+    d.visibility === 'open' || active(d).some((p) => p.user_id === me.id);
+  const out: Schemas['InboxDiscussionItem'][] = [];
   for (const r of db.inbox ?? []) {
     const d = db.discussions.find((x) => x.id === r.discussion_id);
     if (r.user_id !== me.id || !d || !readable(d)) continue;
@@ -953,23 +1311,37 @@ export function discussionInboxRows(
     const by = name(r.by_user_id);
     out.push({
       ...base(d),
-      id: `${r.kind === "invited" ? "inv" : "men"}_${r.id}`,
+      id: `${r.kind === 'invited' ? 'inv' : 'men'}_${r.id}`,
       kind: r.kind,
       by: r.by_user_id && by ? { user_id: r.by_user_id, name: by } : null,
       excerpt: msg ? msg.body.slice(0, 140) : null,
       count: null,
       at: r.created_at,
-      state: r.done_at ? "done" : fresh(r.created_at),
+      state: r.done_at ? 'done' : fresh(r.created_at),
     });
   }
-  if (atLeast(me.role, "approver")) {
+  if (atLeast(me.role, 'approver')) {
     for (const d of db.discussions) {
       if (!readable(d)) continue;
       const inIt = active(d).some((p) => p.user_id === me.id);
-      const waiting = (db.changes ?? []).filter((c) => c.discussion_id === d.id && waitsOn(d, c, inIt, gone));
+      const waiting = (db.changes ?? []).filter(
+        (c) => c.discussion_id === d.id && waitsOn(d, c, inIt, gone),
+      );
       if (!waiting.length) continue;
-      const at = waiting.map((c) => c.created_at).sort().at(-1)!;
-      out.push({ ...base(d), id: `chg_${d.id}`, kind: "changes_proposed", by: null, excerpt: null, count: waiting.length, at, state: fresh(at) });
+      const at = waiting
+        .map((c) => c.created_at)
+        .sort()
+        .at(-1)!;
+      out.push({
+        ...base(d),
+        id: `chg_${d.id}`,
+        kind: 'changes_proposed',
+        by: null,
+        excerpt: null,
+        count: waiting.length,
+        at,
+        state: fresh(at),
+      });
     }
   }
   return out.sort((a, b) => b.at.localeCompare(a.at));
@@ -980,50 +1352,107 @@ export function discussionInboxRows(
  * whose Oracle reply failed for want of a Claude account, and one on the Problem whose
  * intake has 2 of the commenter's private findings.
  */
-export function seedDiscussionReplies(ctx: Omit<DiscussionsContext, "me" | "db">, documentId: string, label: string, url: string): DiscussionsDb {
+export function seedDiscussionReplies(
+  ctx: Omit<DiscussionsContext, 'me' | 'db'>,
+  documentId: string,
+  label: string,
+  url: string,
+): DiscussionsDb {
   const db = seedDiscussions(ctx, documentId, label, url);
-  const commenter = ctx.members.find((m) => m.email === "commenter@example.com")!.id;
+  const commenter = ctx.members.find((m) => m.email === 'commenter@example.com')!.id;
   const base = db.discussions[0];
-  const at = "2026-10-21T10:00:00Z";
-  const open = { visibility: "open" as const, summary_shared: true, created_at: at, updated_at: at };
-  const failed: DiscussionRow = { ...base, ...open, id: ctx.uuid(), title: "Caps: ship without detection?", last_message_at: at };
+  const at = '2026-10-21T10:00:00Z';
+  const open = {
+    visibility: 'open' as const,
+    summary_shared: true,
+    created_at: at,
+    updated_at: at,
+  };
+  const failed: DiscussionRow = {
+    ...base,
+    ...open,
+    id: ctx.uuid(),
+    title: 'Caps: ship without detection?',
+    last_message_at: at,
+  };
   const notice: DiscussionRow = {
     ...base,
     ...open,
     id: ctx.uuid(),
-    title: "F-07 Bulk import: what the intake found",
+    title: 'F-07 Bulk import: what the intake found',
     last_message_at: null,
     private_findings: { author: commenter, count: 2, intake_id: ctx.uuid() },
   };
   db.discussions.push(failed, notice);
   for (const d of [failed, notice])
-    db.participants.push({ discussion_id: d.id, user_id: commenter, added_via: "started", left_at: null, last_read_at: null, created_at: at });
+    db.participants.push({
+      discussion_id: d.id,
+      user_id: commenter,
+      added_via: 'started',
+      left_at: null,
+      last_read_at: null,
+      created_at: at,
+    });
   const asked = ctx.uuid();
-  const row = { discussion_id: failed.id, mentions: [], mentions_oracle: false, created_at: at, edited_at: null, deleted_at: null };
+  const row = {
+    discussion_id: failed.id,
+    mentions: [],
+    mentions_oracle: false,
+    created_at: at,
+    edited_at: null,
+    deleted_at: null,
+  };
   db.messages.push(
-    { ...row, id: asked, author_kind: "person", author_id: commenter, body: "Can caps ship without detection?", reply_to: null },
-    { ...row, id: ctx.uuid(), author_kind: "oracle", author_id: null, body: "", reply_to: asked, status: "failed", error_reason: "no_account" },
+    {
+      ...row,
+      id: asked,
+      author_kind: 'person',
+      author_id: commenter,
+      body: 'Can caps ship without detection?',
+      reply_to: null,
+    },
+    {
+      ...row,
+      id: ctx.uuid(),
+      author_kind: 'oracle',
+      author_id: null,
+      body: '',
+      reply_to: asked,
+      status: 'failed',
+      error_reason: 'no_account',
+    },
   );
   return db;
 }
 
-export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
-  if (p[1] !== "discussions" && p[1] !== "discussion-changes") return null;
+export async function routeDiscussions(
+  ctx: DiscussionsContext,
+  req: Request,
+  p: string[],
+  q: URLSearchParams,
+): Promise<Response | null> {
+  if (p[1] !== 'discussions' && p[1] !== 'discussion-changes') return null;
   const { db, me } = ctx;
   const m = req.method;
-  const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
+  const body = async <T>() => JSON.parse((await req.text()) || 'null') as T;
   const member = (id: string) => ctx.members.find((x) => x.id === id);
   const parts = (d: DiscussionRow) => db.participants.filter((x) => x.discussion_id === d.id);
   const active = (d: DiscussionRow) => parts(d).filter((x) => !x.left_at);
   const isIn = (d: DiscussionRow, user = me.id) => active(d).some((x) => x.user_id === user);
   const starter = (d: DiscussionRow) => d.started_by === me.id;
-  const readable = (d: DiscussionRow) => d.visibility === "open" || isIn(d);
-  const counted = (d: DiscussionRow) => db.messages.filter((x) => x.discussion_id === d.id && !x.deleted_at && x.author_kind !== "system");
+  const readable = (d: DiscussionRow) => d.visibility === 'open' || isIn(d);
+  const counted = (d: DiscussionRow) =>
+    db.messages.filter(
+      (x) => x.discussion_id === d.id && !x.deleted_at && x.author_kind !== 'system',
+    );
   const exposure = (d: DiscussionRow) => {
     const rows = counted(d);
-    return { messages: rows.length, people: new Set(rows.filter((x) => x.author_kind === "person").map((x) => x.author_id)).size };
+    return {
+      messages: rows.length,
+      people: new Set(rows.filter((x) => x.author_kind === 'person').map((x) => x.author_id)).size,
+    };
   };
-  const ref = (id: string) => ({ user_id: id, name: displayName(member(id)?.email ?? "someone") });
+  const ref = (id: string) => ({ user_id: id, name: displayName(member(id)?.email ?? 'someone') });
   // A change's sentence names features, requirements and people, as the API's does.
   const names: LabelNames = {
     entity: (id) => ctx.entityTitle?.(id) ?? null,
@@ -1032,42 +1461,44 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       return x ? displayName(x.email) : null;
     },
   };
-  const writes = (x?: Member) => !!x && x.status !== "disabled" && atLeast(x.role, "commenter");
+  const writes = (x?: Member) => !!x && x.status !== 'disabled' && atLeast(x.role, 'commenter');
   const touch = (d: DiscussionRow) => {
     d.lock_version += 1;
     d.updated_at = ctx.now();
   };
 
   const lockedOf = (c: ChangeRow, d: DiscussionRow) => {
-    if (c.kind !== "section_edit") return null;
+    if (c.kind !== 'section_edit') return null;
     const doc = str(c.target.document_id) || d.document_id;
     const key = str((c.edited_payload ?? c.payload).section_key) || str(c.target.section_key);
     return doc && key ? (ctx.lockedSection?.(doc, key) ?? null) : null;
   };
-  const changesOf = (d: DiscussionRow) => (db.changes ?? []).filter((c) => c.discussion_id === d.id);
+  const changesOf = (d: DiscussionRow) =>
+    (db.changes ?? []).filter((c) => c.discussion_id === d.id);
   /** G3: a change as this reader sees it: the kind's action, what else they may do, and whether Stage asks for a reason. */
   const changeOut = (c: ChangeRow, d: DiscussionRow): ChangeOut => {
-    const verb = KIND_VERB[c.kind] ?? "Stage";
+    const verb = KIND_VERB[c.kind] ?? 'Stage';
     const open = isOpenStatus(c.status);
-    const writer = atLeast(me.role, "commenter") && readable(d) && d.status === "open";
-    const anyWriter = verb === "Propose" || verb === "Ask";
+    const writer = atLeast(me.role, 'commenter') && readable(d) && d.status === 'open';
+    const anyWriter = verb === 'Propose' || verb === 'Ask';
     // Record: F3's date rights decide, not the role (as the API's action_for).
-    const records = verb === "Record" ? !!ctx.dateRights?.() : null;
+    const records = verb === 'Record' ? !!ctx.dateRights?.() : null;
     // AUD-1: a section approved since the change was proposed is never staged (the API's why_not).
     const locked = open ? lockedOf(c, d) : null;
-    const allowed = writer && open && !locked && (records ?? (anyWriter || atLeast(me.role, "approver")));
+    const allowed =
+      writer && open && !locked && (records ?? (anyWriter || atLeast(me.role, 'approver')));
     const whyNot =
       allowed || !open
         ? null
-        : d.status !== "open"
-          ? "This discussion is closed"
+        : d.status !== 'open'
+          ? 'This discussion is closed'
           : locked
             ? locked
-            : verb === "Record"
+            : verb === 'Record'
               ? RECORDERS
-              : verb === "Stage"
+              : verb === 'Stage'
                 ? STAGE_WHY_NOT
-                : verb === "Apply"
+                : verb === 'Apply'
                   ? APPLY_WHY_NOT
                   : APPROVERS_ACT;
     return {
@@ -1084,15 +1515,15 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       suggested_by: c.suggested_by ? ref(c.suggested_by) : null,
       status: c.status,
       open,
-      action: atLeast(me.role, "commenter") ? { verb, allowed, why_not: whyNot } : null,
+      action: atLeast(me.role, 'commenter') ? { verb, allowed, why_not: whyNot } : null,
       can: {
-        suggest: writer && c.status === "proposed" && !allowed,
+        suggest: writer && c.status === 'proposed' && !allowed,
         edit: writer && open,
-        withdraw: writer && c.status === "suggested" && c.suggested_by === me.id,
-        dismiss: writer && open && atLeast(me.role, "approver"),
+        withdraw: writer && c.status === 'suggested' && c.suggested_by === me.id,
+        dismiss: writer && open && atLeast(me.role, 'approver'),
       },
       pushback: c.pushback ?? null,
-      needs_reason: open && verb === "Stage" && d.visibility === "private",
+      needs_reason: open && verb === 'Stage' && d.visibility === 'private',
       basis: c.basis ?? [],
       result_ref: c.result_ref ?? null,
       decision_note: c.decision_note ?? null,
@@ -1101,7 +1532,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     };
   };
 
-  const summary = (d: DiscussionRow): Schemas["DiscussionSummary"] => {
+  const summary = (d: DiscussionRow): Schemas['DiscussionSummary'] => {
     const s = member(d.started_by);
     const mine = active(d).find((x) => x.user_id === me.id);
     return {
@@ -1115,29 +1546,34 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       author_only: d.author_only,
       status: d.status,
       origin: d.origin,
-      started_by: { ...ref(d.started_by), role: s?.role ?? "viewer" },
-      started_on_version: typeof d.subject.version === "number" ? d.subject.version : null,
+      started_by: { ...ref(d.started_by), role: s?.role ?? 'viewer' },
+      started_on_version: typeof d.subject.version === 'number' ? d.subject.version : null,
       message_count: counted(d).length,
       last_message_at: d.last_message_at,
       summary: d.summary,
       summary_status: d.summary_status,
       summary_shared: d.summary_shared,
       changes: {
-        proposed: changesOf(d).filter((c) => c.status === "proposed").length,
-        suggested: changesOf(d).filter((c) => c.status === "suggested").length,
-        staged: changesOf(d).filter((c) => c.status === "staged").length,
+        proposed: changesOf(d).filter((c) => c.status === 'proposed').length,
+        suggested: changesOf(d).filter((c) => c.status === 'suggested').length,
+        staged: changesOf(d).filter((c) => c.status === 'staged').length,
       },
       me: {
         participant: !!mine,
-        can_write: readable(d) && atLeast(me.role, "commenter"),
-        unread: mine ? counted(d).filter((x) => x.author_id !== me.id && (!mine.last_read_at || x.created_at > mine.last_read_at)).length : 0,
+        can_write: readable(d) && atLeast(me.role, 'commenter'),
+        unread: mine
+          ? counted(d).filter(
+              (x) =>
+                x.author_id !== me.id && (!mine.last_read_at || x.created_at > mine.last_read_at),
+            ).length
+          : 0,
       },
       lock_version: d.lock_version,
       created_at: d.created_at,
       updated_at: d.updated_at,
     };
   };
-  const out = (d: DiscussionRow): Schemas["DiscussionOut"] => {
+  const out = (d: DiscussionRow): Schemas['DiscussionOut'] => {
     const s = summary(d);
     return {
       ...s,
@@ -1145,93 +1581,148 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       subject: withoutView(d.subject),
       participants: active(d).map((x) => {
         const who = member(x.user_id);
-        return { ...ref(x.user_id), role: who?.role ?? "viewer", can_write: writes(who), added_via: x.added_via };
+        return {
+          ...ref(x.user_id),
+          role: who?.role ?? 'viewer',
+          can_write: writes(who),
+          added_via: x.added_via,
+        };
       }),
       me: {
         ...s.me,
         can_manage: starter(d) && readable(d),
         can_research: canResearch(d),
         research_usd: canResearch(d) ? RESEARCH_USD : null,
-        ...(d.private_findings?.author === me.id ? { private_findings: { count: d.private_findings.count, intake_id: d.private_findings.intake_id } } : {}),
+        ...(d.private_findings?.author === me.id
+          ? {
+              private_findings: {
+                count: d.private_findings.count,
+                intake_id: d.private_findings.intake_id,
+              },
+            }
+          : {}),
       },
-      exposure: d.visibility === "private" && starter(d) ? exposure(d) : null,
+      exposure: d.visibility === 'private' && starter(d) ? exposure(d) : null,
       slack: d.slack ?? null,
     };
   };
   /** Who may post in it (the API's access.can_write): commenters and up who read it. */
-  const canWrite = (d: DiscussionRow) => readable(d) && atLeast(me.role, "commenter");
+  const canWrite = (d: DiscussionRow) => readable(d) && atLeast(me.role, 'commenter');
   /** G2 §4: an approver or owner who can write in it, while it is open (as the API's research.can_research). */
-  const canResearch = (d: DiscussionRow) => d.status === "open" && canWrite(d) && atLeast(me.role, "approver");
+  const canResearch = (d: DiscussionRow) =>
+    d.status === 'open' && canWrite(d) && atLeast(me.role, 'approver');
   /** A research run's state: done once its answer is in, failed when it could not start (with why), else running. */
-  const researchOf = (x: MessageRow): Schemas["MessageResearch"] | null =>
+  const researchOf = (x: MessageRow): Schemas['MessageResearch'] | null =>
     x.run_id
       ? x.research_error
-        ? { run_id: x.run_id, status: "failed", error: atLeast(me.role, "approver") ? x.research_error : RESEARCH_START_FAILED }
-        : { run_id: x.run_id, status: db.messages.some((y) => y.run_id === x.run_id && y.author_kind === "oracle") ? "done" : "running", error: null }
+        ? {
+            run_id: x.run_id,
+            status: 'failed',
+            error: atLeast(me.role, 'approver') ? x.research_error : RESEARCH_START_FAILED,
+          }
+        : {
+            run_id: x.run_id,
+            status: db.messages.some((y) => y.run_id === x.run_id && y.author_kind === 'oracle')
+              ? 'done'
+              : 'running',
+            error: null,
+          }
       : null;
-  const messageOut = (x: MessageRow): Schemas["DiscussionMessageOut"] => ({
+  const messageOut = (x: MessageRow): Schemas['DiscussionMessageOut'] => ({
     id: x.id,
     discussion_id: x.discussion_id,
     author_kind: x.author_kind,
-    author: x.author_kind === "person" && x.author_id ? ref(x.author_id) : null,
-    via: x.via ?? "web",
-    body: x.deleted_at ? "" : x.body,
+    author: x.author_kind === 'person' && x.author_id ? ref(x.author_id) : null,
+    via: x.via ?? 'web',
+    body: x.deleted_at ? '' : x.body,
     mentions: x.deleted_at ? [] : x.mentions.map(ref),
     mentions_oracle: x.mentions_oracle,
     reply_to: x.reply_to,
-    status: x.status ?? "complete",
-    citations: x.author_kind === "system" ? [] : (x.citations ?? []),
+    status: x.status ?? 'complete',
+    citations: x.author_kind === 'system' ? [] : (x.citations ?? []),
     created_at: x.created_at,
     edited_at: x.edited_at,
     deleted: !!x.deleted_at,
     error_reason: x.error_reason ?? null,
     // As replies.error_copy: an approver reads the stored refusal as it was then, in the company's zone (#644 re-review).
-    error: x.status === "failed" ? (x.error_reason === "no_account" && atLeast(me.role, "approver") ? (readableRefusal(x.error ?? ctx.refusal?.(), true) ?? NO_ACCOUNT_MESSAGE) : "Oracle can't reply right now.") : null,
+    error:
+      x.status === 'failed'
+        ? x.error_reason === 'no_account' && atLeast(me.role, 'approver')
+          ? (readableRefusal(x.error ?? ctx.refusal?.(), true) ?? NO_ACCOUNT_MESSAGE)
+          : "Oracle can't reply right now."
+        : null,
     pushback: x.pushback ?? null,
     usage: null,
     research: researchOf(x),
   });
-  const add = (d: DiscussionRow, user_id: string, added_via: ParticipantRow["added_via"]) => {
+  const add = (d: DiscussionRow, user_id: string, added_via: ParticipantRow['added_via']) => {
     const row = parts(d).find((x) => x.user_id === user_id);
     if (row && !row.left_at) return false;
     if (row) Object.assign(row, { left_at: null, added_via });
-    else db.participants.push({ discussion_id: d.id, user_id, added_via, left_at: null, last_read_at: null, created_at: ctx.now() });
+    else
+      db.participants.push({
+        discussion_id: d.id,
+        user_id,
+        added_via,
+        left_at: null,
+        last_read_at: null,
+        created_at: ctx.now(),
+      });
     return true;
   };
   /** #710 (service.refuse_if_live): a chat holding live reads lets nobody in; Share as discussion instead. */
   const refuseIfLive = (d: DiscussionRow): Response | null =>
-    db.messages.some((x) => x.discussion_id === d.id && x.live_reads) ? json(409, { detail: { code: IN_CHAT_CODE, message: IN_CHAT } }) : null;
-  const notMember = (ids: string[]) => ids.find((id) => !member(id) || member(id)!.status === "disabled");
+    db.messages.some((x) => x.discussion_id === d.id && x.live_reads)
+      ? json(409, { detail: { code: IN_CHAT_CODE, message: IN_CHAT } })
+      : null;
+  const notMember = (ids: string[]) =>
+    ids.find((id) => !member(id) || member(id)!.status === 'disabled');
   /** Bring in the people not in it yet, as the caller may; a refusal, or null. */
-  const bringIn = (d: DiscussionRow, ids: string[], via: ParticipantRow["added_via"]): Response | null => {
+  const bringIn = (
+    d: DiscussionRow,
+    ids: string[],
+    via: ParticipantRow['added_via'],
+  ): Response | null => {
     const stranger = notMember(ids);
     if (stranger) return refuse(422, `${stranger} is not a member of this company`);
     const fresh = [...new Set(ids)].filter((id) => !isIn(d, id));
     if (!fresh.length) return null;
     const live = refuseIfLive(d);
     if (live) return live;
-    if (d.origin === "panel") return refuse(422, "Share a panel chat with Share as discussion");
-    if (d.author_only) return refuse(422, "Share this finding at Summary or above to add people");
-    if (d.visibility === "private" && !(starter(d) && isIn(d))) return refuse(422, "Only the starter can add people to a private discussion");
-    if (d.visibility === "open" && !atLeast(me.role, "commenter")) return refuse(403, "Viewers can read discussions but not write in them");
+    if (d.origin === 'panel') return refuse(422, 'Share a panel chat with Share as discussion');
+    if (d.author_only) return refuse(422, 'Share this finding at Summary or above to add people');
+    if (d.visibility === 'private' && !(starter(d) && isIn(d)))
+      return refuse(422, 'Only the starter can add people to a private discussion');
+    if (d.visibility === 'open' && !atLeast(me.role, 'commenter'))
+      return refuse(403, 'Viewers can read discussions but not write in them');
     for (const id of fresh) add(d, id, via);
     return null;
   };
-  const push = (d: DiscussionRow, x: Omit<MessageRow, "id" | "discussion_id" | "created_at" | "edited_at" | "deleted_at">) => {
-    const row: MessageRow = { ...x, id: ctx.uuid(), discussion_id: d.id, created_at: ctx.now(), edited_at: null, deleted_at: null };
+  const push = (
+    d: DiscussionRow,
+    x: Omit<MessageRow, 'id' | 'discussion_id' | 'created_at' | 'edited_at' | 'deleted_at'>,
+  ) => {
+    const row: MessageRow = {
+      ...x,
+      id: ctx.uuid(),
+      discussion_id: d.id,
+      created_at: ctx.now(),
+      edited_at: null,
+      deleted_at: null,
+    };
     db.messages.push(row);
     d.last_message_at = row.created_at;
     return row;
   };
-  const post = (d: DiscussionRow, input: Schemas["DiscussionMessageIn"]): Response | MessageRow => {
-    if (input.body.length > 8000) return refuse(422, "A message can be at most 8,000 characters");
-    if (!input.body.trim()) return refuse(422, "A message needs some text");
+  const post = (d: DiscussionRow, input: Schemas['DiscussionMessageIn']): Response | MessageRow => {
+    if (input.body.length > 8000) return refuse(422, 'A message can be at most 8,000 characters');
+    if (!input.body.trim()) return refuse(422, 'A message needs some text');
     const mentions = [...new Set(input.mentions ?? [])];
-    const refused = bringIn(d, mentions, "mention");
+    const refused = bringIn(d, mentions, 'mention');
     if (refused) return refused;
-    if (d.visibility === "open") add(d, me.id, "posted");
+    if (d.visibility === 'open') add(d, me.id, 'posted');
     const row = push(d, {
-      author_kind: "person",
+      author_kind: 'person',
       author_id: me.id,
       body: input.body,
       mentions,
@@ -1249,31 +1740,45 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
   const peopleIn = (d: DiscussionRow) =>
     new Set([
       ...active(d).map((y) => y.user_id),
-      ...db.messages.filter((y) => y.discussion_id === d.id && y.author_kind === "person" && y.author_id).map((y) => y.author_id!),
+      ...db.messages
+        .filter((y) => y.discussion_id === d.id && y.author_kind === 'person' && y.author_id)
+        .map((y) => y.author_id!),
     ]);
-  const postWithReply = async (d: DiscussionRow, input: Schemas["DiscussionMessageIn"]): Promise<Response> => {
+  const postWithReply = async (
+    d: DiscussionRow,
+    input: Schemas['DiscussionMessageIn'],
+  ): Promise<Response> => {
     const row = post(d, input);
     if (row instanceof Response) return row;
     const message = messageOut(row);
     const people = peopleIn(d);
-    const alone = d.visibility === "private" && people.size === 1 && people.has(me.id);
-    const script = wantsReply(d, row) ? (ctx.replyScript?.(d, row) ?? ctx.liveReply?.(row, alone) ?? null) : null;
+    const alone = d.visibility === 'private' && people.size === 1 && people.has(me.id);
+    const script = wantsReply(d, row)
+      ? (ctx.replyScript?.(d, row) ?? ctx.liveReply?.(row, alone) ?? null)
+      : null;
     const reply = wantsReply(d, row)
       ? push(d, {
-          author_kind: "oracle",
+          author_kind: 'oracle',
           author_id: null,
-          body: "",
+          body: '',
           mentions: [],
           mentions_oracle: false,
           reply_to: row.id,
-          status: "pending",
+          status: 'pending',
           citations: [],
           ...(script ? { script: script.pieces, script_citations: script.citations } : {}),
-          ...(script && "reads" in script && typeof script.reads === "number" && script.reads > 0 ? { live_reads: script.reads } : {}),
+          ...(script && 'reads' in script && typeof script.reads === 'number' && script.reads > 0
+            ? { live_reads: script.reads }
+            : {}),
         })
       : null;
     if (reply) proposeFromPanel(d, row, reply.id);
-    return typedReply("/v1/discussions/{discussion_id}/messages", "post", { message, reply: reply ? messageOut(reply) : null }, 201);
+    return typedReply(
+      '/v1/discussions/{discussion_id}/messages',
+      'post',
+      { message, reply: reply ? messageOut(reply) : null },
+      201,
+    );
   };
   /**
    * G3 in the panel (mock): asked to rewrite or change a section, Oracle proposes a section_edit on it; asked on
@@ -1282,23 +1787,26 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
    */
   const proposeFromPanel = (d: DiscussionRow, x: MessageRow, from: string) => {
     const line = x.body.trim().slice(0, 2000);
-    const section = d.subject_kind === "section" && /\b(rewrite|change)\b/i.test(x.body);
-    if (!section && !(d.subject_kind !== "section" && /\brecord a decision\b/i.test(x.body))) return;
+    const section = d.subject_kind === 'section' && /\b(rewrite|change)\b/i.test(x.body);
+    if (!section && !(d.subject_kind !== 'section' && /\brecord a decision\b/i.test(x.body)))
+      return;
     const section_key = String(d.subject.section_key);
     const payload = section ? { section_key, instruction: line } : { title: line.slice(0, 200) };
     (db.changes ??= []).push({
       id: ctx.uuid(),
       discussion_id: d.id,
-      kind: section ? "section_edit" : "decision",
-      label: section ? `Change ${section_key}: ${line}` : changeLabel("decision", payload),
-      target: section ? { document_id: d.subject.document_id, version: d.subject.version, section_key } : {},
+      kind: section ? 'section_edit' : 'decision',
+      label: section ? `Change ${section_key}: ${line}` : changeLabel('decision', payload),
+      target: section
+        ? { document_id: d.subject.document_id, version: d.subject.version, section_key }
+        : {},
       payload,
       edited_payload: null,
       rationale: null,
-      proposed_by_kind: "oracle",
+      proposed_by_kind: 'oracle',
       proposed_by: null,
       suggested_by: null,
-      status: "proposed",
+      status: 'proposed',
       pushback: null,
       basis: [],
       result_ref: null,
@@ -1313,14 +1821,27 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
   /** GET …/stream: the canned answer in 5 deltas, then citations and done; Stop ends it. */
   const streamReply = (x: MessageRow): Response => {
     const enc = new TextEncoder();
-    const event = (name: string, data: unknown) => enc.encode(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`);
+    const event = (name: string, data: unknown) =>
+      enc.encode(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`);
     const final = (r: MessageRow) =>
-      r.status === "failed" ? event("error", { reason: r.error_reason ?? "failed", message: messageOut(r).error, retry: true }) : event("done", messageOut(r));
-    const runs = x.status === "pending";
-    if (runs) x.status = "streaming";
+      r.status === 'failed'
+        ? event('error', {
+            reason: r.error_reason ?? 'failed',
+            message: messageOut(r).error,
+            retry: true,
+          })
+        : event('done', messageOut(r));
+    const runs = x.status === 'pending';
+    if (runs) x.status = 'streaming';
     const id = x.id;
     const now = () => (ctx.current?.() ?? db).messages.find((y) => y.id === id) ?? x;
-    const write = (change: Partial<MessageRow>) => ctx.persist?.((saved) => Object.assign(saved.messages.find((y) => y.id === id)!, change));
+    const write = (change: Partial<MessageRow>) =>
+      ctx.persist?.((saved) =>
+        Object.assign(
+          saved.messages.find((y) => y.id === id)!,
+          change,
+        ),
+      );
     const body = new ReadableStream<Uint8Array>({
       async start(controller) {
         if (!runs) {
@@ -1328,10 +1849,11 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
           let sent = 0;
           for (;;) {
             const r = now();
-            if (r.body.length > sent) controller.enqueue(event("delta", { text: r.body.slice(sent) }));
+            if (r.body.length > sent)
+              controller.enqueue(event('delta', { text: r.body.slice(sent) }));
             sent = r.body.length;
-            if (r.status !== "pending" && r.status !== "streaming") {
-              if (r.citations?.length) controller.enqueue(event("citations", r.citations));
+            if (r.status !== 'pending' && r.status !== 'streaming') {
+              if (r.citations?.length) controller.enqueue(event('citations', r.citations));
               controller.enqueue(final(r));
               break;
             }
@@ -1342,188 +1864,330 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
         }
         // #406: Oracle reads the document the discussion is on; else the canned answer.
         const d = db.discussions.find((y) => y.id === x.discussion_id);
-        const asked = [...db.messages].reverse().find((y) => y.discussion_id === x.discussion_id && y.author_kind === "person");
-        const read = d && asked ? (documentReply(asked.body, ctx.documentText?.(d) ?? []) ?? pageReply(d, asked.body)) : null;
+        const asked = [...db.messages]
+          .reverse()
+          .find((y) => y.discussion_id === x.discussion_id && y.author_kind === 'person');
+        const read =
+          d && asked
+            ? (documentReply(asked.body, ctx.documentText?.(d) ?? []) ?? pageReply(d, asked.body))
+            : null;
         // B6: a goals interview's scripted reply comes first.
         const pieces = x.script ?? read?.pieces ?? CANNED_REPLY;
-        const citations = x.script ? (x.script_citations ?? []) : (read?.citations ?? CANNED_CITATIONS);
-        let text = "";
+        const citations = x.script
+          ? (x.script_citations ?? [])
+          : (read?.citations ?? CANNED_CITATIONS);
+        let text = '';
         let cited = 0;
         for (const [i, piece] of pieces.entries()) {
           await new Promise((ok) => setTimeout(ok, i === 0 ? FIRST_MS : DELTA_MS));
           if (now().cancel_requested) {
-            await write({ status: "cancelled", body: text, cancel_requested: false });
-            controller.enqueue(event("done", messageOut({ ...x, status: "cancelled", body: text })));
+            await write({ status: 'cancelled', body: text, cancel_requested: false });
+            controller.enqueue(
+              event('done', messageOut({ ...x, status: 'cancelled', body: text })),
+            );
             controller.close();
             return;
           }
           text += piece;
-          controller.enqueue(event("delta", { text: piece }));
+          controller.enqueue(event('delta', { text: piece }));
           // As the API: a citation is sent as soon as its marker is complete.
-          const used = citations.filter((c) => text.includes(c.kind === "live" ? `[${String(c.ref)}]` : `[c:${c.n}]`));
+          const used = citations.filter((c) =>
+            text.includes(c.kind === 'live' ? `[${String(c.ref)}]` : `[c:${c.n}]`),
+          );
           if (used.length > cited) {
             cited = used.length;
-            controller.enqueue(event("citations", used));
+            controller.enqueue(event('citations', used));
           }
           await write({ body: text });
         }
-        await write({ status: "complete", body: text, citations });
-        controller.enqueue(event("citations", citations));
+        await write({ status: 'complete', body: text, citations });
+        controller.enqueue(event('citations', citations));
         // G3: the reply's changes, stored as it ends and sent before done, only when it made some (replies._changes_of).
         // A panel chat's change comes from G7's stub above (proposeFromPanel), not the canned two.
-        if (d && d.origin !== "panel") {
+        if (d && d.origin !== 'panel') {
           const made = cannedChanges(d, id, ctx.uuid, ctx.now());
           if (ctx.persist) await ctx.persist((saved) => addProposals((saved.changes ??= []), made));
           else addProposals((db.changes ??= []), made);
-          if (made.length) controller.enqueue(event("changes", made.map((c) => changeOut(c, d))));
+          if (made.length)
+            controller.enqueue(
+              event(
+                'changes',
+                made.map((c) => changeOut(c, d)),
+              ),
+            );
         } else if (d) {
-          const made = ((ctx.current?.() ?? db).changes ?? []).filter((c) => c.from_message_id === id);
-          if (made.length) controller.enqueue(event("changes", made.map((c) => changeOut(c, d))));
+          const made = ((ctx.current?.() ?? db).changes ?? []).filter(
+            (c) => c.from_message_id === id,
+          );
+          if (made.length)
+            controller.enqueue(
+              event(
+                'changes',
+                made.map((c) => changeOut(c, d)),
+              ),
+            );
         }
-        controller.enqueue(event("done", messageOut({ ...x, status: "complete", body: text, citations })));
+        controller.enqueue(
+          event('done', messageOut({ ...x, status: 'complete', body: text, citations })),
+        );
         controller.close();
       },
     });
-    return new Response(body, { status: 200, headers: { "content-type": "text/event-stream", "cache-control": "no-cache", "x-accel-buffering": "no" } });
+    return new Response(body, {
+      status: 200,
+      headers: {
+        'content-type': 'text/event-stream',
+        'cache-control': 'no-cache',
+        'x-accel-buffering': 'no',
+      },
+    });
   };
 
   // G3: /v1/discussion-changes/{id}[/{action}]
-  if (p[1] === "discussion-changes") {
+  if (p[1] === 'discussion-changes') {
     const c = (db.changes ?? []).find((x) => x.id === p[2]);
     const d = c && db.discussions.find((x) => x.id === c.discussion_id);
-    if (!c || !d || (d.author_only && !isIn(d))) return refuse(404, "Change not found");
-    if (!readable(d)) return refuse(403, "This discussion is private");
-    const step = m === "PATCH" && !p[3] ? "edit" : m === "POST" && p[3] && !p[4] ? p[3] : null;
+    if (!c || !d || (d.author_only && !isIn(d))) return refuse(404, 'Change not found');
+    if (!readable(d)) return refuse(403, 'This discussion is private');
+    const step = m === 'PATCH' && !p[3] ? 'edit' : m === 'POST' && p[3] && !p[4] ? p[3] : null;
     if (!step) return null;
     const input = (await body<Record<string, unknown>>()) ?? {};
-    if (!atLeast(me.role, "commenter")) return refuse(403, VIEWERS_READ);
+    if (!atLeast(me.role, 'commenter')) return refuse(403, VIEWERS_READ);
     const verb = VERB_OF_ROUTE[step];
     if (verb) {
-      if (KIND_VERB[c.kind] !== verb) return refuse(422, "This change does not take this action");
-      if (verb === "Record") {
+      if (KIND_VERB[c.kind] !== verb) return refuse(422, 'This change does not take this action');
+      if (verb === 'Record') {
         if (!ctx.dateRights?.()) return refuse(403, RECORDERS);
-      } else if (verb !== "Propose" && verb !== "Ask" && !atLeast(me.role, "approver"))
-        return refuse(403, verb === "Stage" ? STAGE_WHY_NOT : verb === "Apply" ? APPLY_WHY_NOT : APPROVERS_ACT);
-    } else if (step === "dismiss" && !atLeast(me.role, "approver")) return refuse(403, "Approvers dismiss changes");
-    else if (!["edit", "suggest", "withdraw", "dismiss"].includes(step)) return null;
-    if (d.status === "closed") return refuse(409, "This discussion is closed");
+      } else if (verb !== 'Propose' && verb !== 'Ask' && !atLeast(me.role, 'approver'))
+        return refuse(
+          403,
+          verb === 'Stage' ? STAGE_WHY_NOT : verb === 'Apply' ? APPLY_WHY_NOT : APPROVERS_ACT,
+        );
+    } else if (step === 'dismiss' && !atLeast(me.role, 'approver'))
+      return refuse(403, 'Approvers dismiss changes');
+    else if (!['edit', 'suggest', 'withdraw', 'dismiss'].includes(step)) return null;
+    if (d.status === 'closed') return refuse(409, 'This discussion is closed');
     if (input.lock_version !== c.lock_version) return refuse(409, STALE);
-    if (!isOpenStatus(c.status)) return refuse(409, "This change was already handled");
-    const name = displayName(member(me.id)?.email ?? "someone");
-    const line = (said: string) => push(d, { author_kind: "system", author_id: null, body: said, mentions: [], mentions_oracle: false, reply_to: null });
-    if (step === "suggest") {
-      if (c.status !== "proposed") return refuse(409, "This change is already suggested");
-      Object.assign(c, { status: "suggested", suggested_by: me.id });
+    if (!isOpenStatus(c.status)) return refuse(409, 'This change was already handled');
+    const name = displayName(member(me.id)?.email ?? 'someone');
+    const line = (said: string) =>
+      push(d, {
+        author_kind: 'system',
+        author_id: null,
+        body: said,
+        mentions: [],
+        mentions_oracle: false,
+        reply_to: null,
+      });
+    if (step === 'suggest') {
+      if (c.status !== 'proposed') return refuse(409, 'This change is already suggested');
+      Object.assign(c, { status: 'suggested', suggested_by: me.id });
       c.lock_version += 1;
-      return typedReply("/v1/discussion-changes/{change_id}/suggest", "post", { change: changeOut(c, d), result: null }, 200);
-    } else if (step === "edit") {
+      return typedReply(
+        '/v1/discussion-changes/{change_id}/suggest',
+        'post',
+        { change: changeOut(c, d), result: null },
+        200,
+      );
+    } else if (step === 'edit') {
       const payload = input.payload;
-      if (!payload || typeof payload !== "object" || Array.isArray(payload)) return refuse(422, "The change is incomplete");
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload))
+        return refuse(422, 'The change is incomplete');
       const gap = incomplete(c.kind, payload as Record<string, unknown>);
       if (gap) return refuse(422, gap);
       c.edited_payload = payload as Record<string, unknown>;
       c.label = changeLabel(c.kind, c.edited_payload, names);
-      if (typeof input.rationale === "string") c.rationale = input.rationale.trim() || null;
+      if (typeof input.rationale === 'string') c.rationale = input.rationale.trim() || null;
       // A commenter's edit becomes their suggestion; an approver's keeps the status.
-      if (!atLeast(me.role, "approver")) Object.assign(c, { status: "suggested", suggested_by: me.id });
+      if (!atLeast(me.role, 'approver'))
+        Object.assign(c, { status: 'suggested', suggested_by: me.id });
       c.lock_version += 1;
-      return typedReply("/v1/discussion-changes/{change_id}", "patch", { change: changeOut(c, d), result: null }, 200);
-    } else if (step === "withdraw") {
-      if (c.status !== "suggested" || c.suggested_by !== me.id) return refuse(403, "Only the person who suggested it can withdraw it");
-      Object.assign(c, { status: c.proposed_by_kind === "oracle" ? "proposed" : "dismissed", suggested_by: null });
+      return typedReply(
+        '/v1/discussion-changes/{change_id}',
+        'patch',
+        { change: changeOut(c, d), result: null },
+        200,
+      );
+    } else if (step === 'withdraw') {
+      if (c.status !== 'suggested' || c.suggested_by !== me.id)
+        return refuse(403, 'Only the person who suggested it can withdraw it');
+      Object.assign(c, {
+        status: c.proposed_by_kind === 'oracle' ? 'proposed' : 'dismissed',
+        suggested_by: null,
+      });
       c.lock_version += 1;
-      return typedReply("/v1/discussion-changes/{change_id}/withdraw", "post", { change: changeOut(c, d), result: null }, 200);
-    } else if (step === "dismiss") {
-      Object.assign(c, { status: "dismissed", decision_note: str(input.note) || null });
+      return typedReply(
+        '/v1/discussion-changes/{change_id}/withdraw',
+        'post',
+        { change: changeOut(c, d), result: null },
+        200,
+      );
+    } else if (step === 'dismiss') {
+      Object.assign(c, { status: 'dismissed', decision_note: str(input.note) || null });
       c.lock_version += 1;
-      return typedReply("/v1/discussion-changes/{change_id}/dismiss", "post", { change: changeOut(c, d), result: null }, 200);
-    } else if (verb === "Stage") {
+      return typedReply(
+        '/v1/discussion-changes/{change_id}/dismiss',
+        'post',
+        { change: changeOut(c, d), result: null },
+        200,
+      );
+    } else if (verb === 'Stage') {
       const locked = lockedOf(c, d);
       if (locked) return refuse(422, locked);
-      if (c.pushback && !str(input.override_reason)) return refuse(422, "Oracle pushed back on this. Give a reason to stage it anyway.");
-      if (d.visibility === "private" && !str(input.reason)) return refuse(422, "Write the reason everyone will see");
-      let ref = { kind: c.target.run_id ? "checkpoint_action" : "next_draft_change", id: ctx.uuid() };
-      if (c.kind === "scope_feature" || c.kind === "scope_requirement") {
+      if (c.pushback && !str(input.override_reason))
+        return refuse(422, 'Oracle pushed back on this. Give a reason to stage it anyway.');
+      if (d.visibility === 'private' && !str(input.reason))
+        return refuse(422, 'Write the reason everyone will see');
+      let ref = {
+        kind: c.target.run_id ? 'checkpoint_action' : 'next_draft_change',
+        id: ctx.uuid(),
+      };
+      if (c.kind === 'scope_feature' || c.kind === 'scope_requirement') {
         // As the API: the waiting feature-set stop holding the feature, wherever the discussion is; 409 when none.
         const p = c.edited_payload ?? c.payload;
         const named = str(p.feature_id) || str(p.requirement_id) || null;
         const sub = d.subject as { checkpoint_id?: string; item_key?: string };
-        if (!named && d.subject_kind !== "checkpoint_item") return refuse(422, "Name the feature the requirement belongs to");
-        const stop = ctx.scopeStop?.(named, { run_id: d.run_id, checkpoint_id: sub.checkpoint_id ?? null, item_key: sub.item_key ?? null }) ?? null;
+        if (!named && d.subject_kind !== 'checkpoint_item')
+          return refuse(422, 'Name the feature the requirement belongs to');
+        const stop =
+          ctx.scopeStop?.(named, {
+            run_id: d.run_id,
+            checkpoint_id: sub.checkpoint_id ?? null,
+            item_key: sub.item_key ?? null,
+          }) ?? null;
         if (!stop) return refuse(409, NO_FEATURE_SET);
         const action = scopeAction(c.kind, p, stop.item_key);
         const why = str(input.reason) || str(input.override_reason);
         if (why) action.note = why;
-        const put = ctx.stopAction?.(stop, action, { discussion_id: d.id, change_id: c.id, from_private: d.visibility === "private" }, "stage");
+        const put = ctx.stopAction?.(
+          stop,
+          action,
+          { discussion_id: d.id, change_id: c.id, from_private: d.visibility === 'private' },
+          'stage',
+        );
         if (put instanceof Response) return put;
-        ref = { kind: "checkpoint_action", id: put?.id ?? ctx.uuid() };
+        ref = { kind: 'checkpoint_action', id: put?.id ?? ctx.uuid() };
       }
       Object.assign(c, {
-        status: "staged",
+        status: 'staged',
         override_reason: str(input.override_reason) || null,
-        reason: d.visibility === "private" ? str(input.reason) : null,
+        reason: d.visibility === 'private' ? str(input.reason) : null,
         result_ref:
-          ref.kind === "next_draft_change"
-            ? { kind: "next_draft_change", id: (d.document_id && ctx.stageNextDraft?.(d, c, str(input.reason) || null)) || ref.id }
+          ref.kind === 'next_draft_change'
+            ? {
+                kind: 'next_draft_change',
+                id:
+                  (d.document_id && ctx.stageNextDraft?.(d, c, str(input.reason) || null)) ||
+                  ref.id,
+              }
             : ref,
       });
       line(`${name} staged: ${c.label}`);
       c.lock_version += 1;
-      return typedReply("/v1/discussion-changes/{change_id}/stage", "post", { change: changeOut(c, d), result: null }, 200);
-    } else if (verb === "Record") {
+      return typedReply(
+        '/v1/discussion-changes/{change_id}/stage',
+        'post',
+        { change: changeOut(c, d), result: null },
+        200,
+      );
+    } else if (verb === 'Record') {
       // F3's own write: verified for a lead or an owner (an approver while no lead is named), proposed otherwise.
-      if (!ctx.recordBasis) return refuse(422, "A basis_record change is not used this way");
+      if (!ctx.recordBasis) return refuse(422, 'A basis_record change is not used this way');
       const p = c.edited_payload ?? c.payload;
       const res = await ctx.recordBasis({
-        kind: p.kind as Schemas["ScheduleBasisCreate"]["kind"], reference: str(p.reference), supports_date: str(p.supports_date),
-        prd: str(p.prd_document_id), item_key: str(p.item_key) || null, detail: str(p.detail) || null,
+        kind: p.kind as Schemas['ScheduleBasisCreate']['kind'],
+        reference: str(p.reference),
+        supports_date: str(p.supports_date),
+        prd: str(p.prd_document_id),
+        item_key: str(p.item_key) || null,
+        detail: str(p.detail) || null,
       });
       if (res.status !== 201) return res;
       const basis = (await res.json()) as { id: string; status: string };
-      Object.assign(c, { status: "done", result_ref: { basis_id: basis.id } });
+      Object.assign(c, { status: 'done', result_ref: { basis_id: basis.id } });
       line(`${name} ${VERB_PAST[verb]}: ${c.label}`);
       c.lock_version += 1;
-      return typedReply("/v1/discussion-changes/{change_id}/verify", "post", { change: changeOut(c, d), result: { basis_id: basis.id, status: basis.status } }, 200);
-    } else if (verb === "Propose" && c.kind === "goal_measure" && ctx.proposeGoalMeasure) {
+      return typedReply(
+        '/v1/discussion-changes/{change_id}/verify',
+        'post',
+        { change: changeOut(c, d), result: { basis_id: basis.id, status: basis.status } },
+        200,
+      );
+    } else if (verb === 'Propose' && c.kind === 'goal_measure' && ctx.proposeGoalMeasure) {
       // A goal version takes B6's path: B5's checks (422) and Oracle's pushback once (409).
-      const edit = input.payload && typeof input.payload === "object" && !Array.isArray(input.payload) ? (input.payload as Record<string, unknown>) : null;
+      const edit =
+        input.payload && typeof input.payload === 'object' && !Array.isArray(input.payload)
+          ? (input.payload as Record<string, unknown>)
+          : null;
       const refused = ctx.proposeGoalMeasure(c, d, edit);
       if (refused) return refused;
       line(`${name} ${VERB_PAST[verb]}: ${c.label}`);
       c.lock_version += 1;
-      return typedReply("/v1/discussion-changes/{change_id}/propose", "post", { change: changeOut(c, d), result: { proposal_id: c.result_ref?.proposal_id, status: "open" } }, 200);
-    } else if (verb === "Ask") {
+      return typedReply(
+        '/v1/discussion-changes/{change_id}/propose',
+        'post',
+        {
+          change: changeOut(c, d),
+          result: { proposal_id: c.result_ref?.proposal_id, status: 'open' },
+        },
+        200,
+      );
+    } else if (verb === 'Ask') {
       // A question asked of that person (their Inbox), from this discussion.
       // As the API: on a checkpoint item whose stop waits and takes questions, the item's D8 question action (G4).
       const p = c.edited_payload ?? c.payload;
       const sub = d.subject as { checkpoint_id?: string; item_key?: string };
-      const at = d.subject_kind === "checkpoint_item" && d.run_id && sub.checkpoint_id ? { run_id: d.run_id, checkpoint_id: sub.checkpoint_id } : null;
+      const at =
+        d.subject_kind === 'checkpoint_item' && d.run_id && sub.checkpoint_id
+          ? { run_id: d.run_id, checkpoint_id: sub.checkpoint_id }
+          : null;
       let result: { question_id: string; action_id?: string };
       if (at && ctx.stopAction && ctx.asksAtStop?.(at)) {
-        const action = { item_key: str(sub.item_key), kind: "question", value: { asked_to: str(p.asked_to), text: str(p.prompt) }, answers: [] } as Schemas["ActionIn"];
-        const put = ctx.stopAction(at, action, { discussion_id: d.id, change_id: c.id, from_private: d.visibility === "private" }, "auto");
+        const action = {
+          item_key: str(sub.item_key),
+          kind: 'question',
+          value: { asked_to: str(p.asked_to), text: str(p.prompt) },
+          answers: [],
+        } as Schemas['ActionIn'];
+        const put = ctx.stopAction(
+          at,
+          action,
+          { discussion_id: d.id, change_id: c.id, from_private: d.visibility === 'private' },
+          'auto',
+        );
         if (put instanceof Response) return put;
         result = { question_id: put.question_id ?? ctx.uuid(), action_id: put.id };
       } else {
         const question_id =
-          ctx.askQuestion?.({ asked_to: str(p.asked_to), prompt: str(p.prompt), rationale: str(p.rationale) || null, category: str(p.category) || "general", discussion: d }) ?? ctx.uuid();
+          ctx.askQuestion?.({
+            asked_to: str(p.asked_to),
+            prompt: str(p.prompt),
+            rationale: str(p.rationale) || null,
+            category: str(p.category) || 'general',
+            discussion: d,
+          }) ?? ctx.uuid();
         result = { question_id };
       }
-      Object.assign(c, { status: "done", result_ref: result });
+      Object.assign(c, { status: 'done', result_ref: result });
       line(`${name} asked: ${c.label}`);
       c.lock_version += 1;
-      return typedReply("/v1/discussion-changes/{change_id}/ask", "post", { change: changeOut(c, d), result }, 200);
-    } else if (verb === "Apply") {
+      return typedReply(
+        '/v1/discussion-changes/{change_id}/ask',
+        'post',
+        { change: changeOut(c, d), result },
+        200,
+      );
+    } else if (verb === 'Apply') {
       const p = c.edited_payload ?? c.payload;
       const reason = str(input.reason) || str(p.reason);
-      if (reason.length > 500) return refuse(422, "Keep the reason under 500 characters");
+      if (reason.length > 500) return refuse(422, 'Keep the reason under 500 characters');
       if (input.confirm === true) {
-        if (!str(input.reason)) return refuse(422, "Say why you apply it anyway");
+        if (!str(input.reason)) return refuse(422, 'Say why you apply it anyway');
       } else {
         const pushback = applyPushback(reason);
         if (pushback.length)
           return json(409, {
-            detail: "Oracle pushed back on this. Give a reason to apply it anyway.",
+            detail: 'Oracle pushed back on this. Give a reason to apply it anyway.',
             pushback,
             reason_check: { ok: false, reason },
             preview_rank: null,
@@ -1531,100 +2195,154 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
           });
       }
       const override_id = ctx.uuid();
-      Object.assign(c, { status: "done", override_reason: input.confirm === true ? reason : null, result_ref: { override_id } });
+      Object.assign(c, {
+        status: 'done',
+        override_reason: input.confirm === true ? reason : null,
+        result_ref: { override_id },
+      });
       line(`${name} applied: ${c.label}`);
       c.lock_version += 1;
-      return typedReply("/v1/discussion-changes/{change_id}/apply", "post", { change: changeOut(c, d), result: { override_id } }, 200);
-    } else if (verb === "Propose" && c.kind === "decision") {
+      return typedReply(
+        '/v1/discussion-changes/{change_id}/apply',
+        'post',
+        { change: changeOut(c, d), result: { override_id } },
+        200,
+      );
+    } else if (verb === 'Propose' && c.kind === 'decision') {
       // A proposed decision in the decision log, about this discussion.
       const p = c.edited_payload ?? c.payload;
-      const approver_id = str(p.approver_id) || (atLeast(me.role, "approver") ? me.id : "");
+      const approver_id = str(p.approver_id) || (atLeast(me.role, 'approver') ? me.id : '');
       if (!approver_id) return refuse(422, CHOOSE_DECIDER);
-      if (!ctx.proposeDecision) return refuse(422, "A decision change is not used this way");
-      const options = (Array.isArray(p.options) ? p.options : []) as { key: string; label: string; summary?: string | null }[];
+      if (!ctx.proposeDecision) return refuse(422, 'A decision change is not used this way');
+      const options = (Array.isArray(p.options) ? p.options : []) as {
+        key: string;
+        label: string;
+        summary?: string | null;
+      }[];
       const res = await ctx.proposeDecision({
         title: str(p.title),
         question: str(p.question) || null,
         options: options.map((o) => ({ key: o.key, label: o.label, summary: o.summary ?? null })),
         approver_id,
-        reversibility: p.reversibility === "irreversible" ? "irreversible" : "reversible",
-        subjects: [{ kind: "discussion", id: d.id, ref: d.title }],
-      } as unknown as Schemas["DecisionCreate"]);
+        reversibility: p.reversibility === 'irreversible' ? 'irreversible' : 'reversible',
+        subjects: [{ kind: 'discussion', id: d.id, ref: d.title }],
+      } as unknown as Schemas['DecisionCreate']);
       if (res.status !== 201) return res;
       const made = (await res.json()) as { id: string; number: number };
       const result = { decision_id: made.id, number: `D-${made.number}` };
-      Object.assign(c, { status: "done", result_ref: result });
+      Object.assign(c, { status: 'done', result_ref: result });
       line(`${name} proposed: ${c.label}`);
       c.lock_version += 1;
-      return typedReply("/v1/discussion-changes/{change_id}/propose", "post", { change: changeOut(c, d), result }, 200);
+      return typedReply(
+        '/v1/discussion-changes/{change_id}/propose',
+        'post',
+        { change: changeOut(c, d), result },
+        200,
+      );
     } else if (verb) {
       // The generic fallback: Resolve, "Use as answer", or Propose on a kind with no special path above (entity_edit).
-      Object.assign(c, { status: "done", result_ref: { id: ctx.uuid() } });
+      Object.assign(c, { status: 'done', result_ref: { id: ctx.uuid() } });
       line(`${name} ${VERB_PAST[verb]}: ${c.label}`);
       c.lock_version += 1;
-      if (step === "resolve") return typedReply("/v1/discussion-changes/{change_id}/resolve", "post", { change: changeOut(c, d), result: null }, 200);
-      if (step === "answer") return typedReply("/v1/discussion-changes/{change_id}/answer", "post", { change: changeOut(c, d), result: null }, 200);
-      return typedReply("/v1/discussion-changes/{change_id}/propose", "post", { change: changeOut(c, d), result: null }, 200);
+      if (step === 'resolve')
+        return typedReply(
+          '/v1/discussion-changes/{change_id}/resolve',
+          'post',
+          { change: changeOut(c, d), result: null },
+          200,
+        );
+      if (step === 'answer')
+        return typedReply(
+          '/v1/discussion-changes/{change_id}/answer',
+          'post',
+          { change: changeOut(c, d), result: null },
+          200,
+        );
+      return typedReply(
+        '/v1/discussion-changes/{change_id}/propose',
+        'post',
+        { change: changeOut(c, d), result: null },
+        200,
+      );
     }
     return null;
   }
 
   // GET/POST /v1/discussions
   if (!p[2]) {
-    if (m === "GET") {
-      const named = q.get("subject_key") || q.get("document_id") || q.get("run_id");
-      const mine = q.get("mine") === "true";
+    if (m === 'GET') {
+      const named = q.get('subject_key') || q.get('document_id') || q.get('run_id');
+      const mine = q.get('mine') === 'true';
       const rows = db.discussions
-        .filter((d) => !q.get("subject_key") || d.subject_key === q.get("subject_key"))
-        .filter((d) => !q.get("document_id") || d.document_id === q.get("document_id"))
-        .filter((d) => !q.get("run_id") || d.run_id === q.get("run_id"))
-        .filter((d) => !q.get("status") || d.status === q.get("status"))
+        .filter((d) => !q.get('subject_key') || d.subject_key === q.get('subject_key'))
+        .filter((d) => !q.get('document_id') || d.document_id === q.get('document_id'))
+        .filter((d) => !q.get('run_id') || d.run_id === q.get('run_id'))
+        .filter((d) => !q.get('status') || d.status === q.get('status'))
         .filter((d) => !mine || isIn(d))
-        .filter((d) => !q.get("origin") || d.origin === q.get("origin"))
+        .filter((d) => !q.get('origin') || d.origin === q.get('origin'))
         .filter((d) => !(d.author_only && !isIn(d)))
-        .sort((a, b) => (b.last_message_at ?? b.created_at).localeCompare(a.last_message_at ?? a.created_at));
-      const items = rows.flatMap<Schemas["DiscussionSummary"] | Schemas["HiddenDiscussion"]>((d) =>
+        .sort((a, b) =>
+          (b.last_message_at ?? b.created_at).localeCompare(a.last_message_at ?? a.created_at),
+        );
+      const items = rows.flatMap<Schemas['DiscussionSummary'] | Schemas['HiddenDiscussion']>((d) =>
         readable(d)
           ? [summary(d)]
           : named && !mine
-            ? [{ id: d.id, visibility: "private" as const, hidden: true as const, summary: d.summary_shared ? d.summary : null }]
+            ? [
+                {
+                  id: d.id,
+                  visibility: 'private' as const,
+                  hidden: true as const,
+                  summary: d.summary_shared ? d.summary : null,
+                },
+              ]
             : [],
       );
-      return typedReply("/v1/discussions", "get", { items: items.slice(0, Number(q.get("limit") ?? 50)), next: null }, 200);
+      return typedReply(
+        '/v1/discussions',
+        'get',
+        { items: items.slice(0, Number(q.get('limit') ?? 50)), next: null },
+        200,
+      );
     }
-    if (m === "POST") {
-      if (!atLeast(me.role, "commenter")) return refuse(403, "Requires the commenter role");
-      const input = await body<Schemas["DiscussionCreate"]>();
+    if (m === 'POST') {
+      if (!atLeast(me.role, 'commenter')) return refuse(403, 'Requires the commenter role');
+      const input = await body<Schemas['DiscussionCreate']>();
       const info = ctx.resolve(input.subject_kind, input.subject ?? {});
-      if ("status" in info) return refuse(info.status, info.detail);
+      if ('status' in info) return refuse(info.status, info.detail);
       const picked = [...new Set(input.participants ?? [])].filter((id) => id !== me.id);
       const stranger = notMember(picked);
       if (stranger) return refuse(422, `${stranger} is not a member of this company`);
       // G7 "Panel chats": only you, until shared.
-      const panel = input.origin === "panel";
-      if (panel && (picked.length || input.message?.mentions?.length)) return refuse(422, "A panel chat is just you and Oracle");
-      const visibility = panel ? "private" : (input.visibility ?? "open");
+      const panel = input.origin === 'panel';
+      if (panel && (picked.length || input.message?.mentions?.length))
+        return refuse(422, 'A panel chat is just you and Oracle');
+      const visibility = panel ? 'private' : (input.visibility ?? 'open');
       const at = ctx.now();
       const d: DiscussionRow = {
         id: ctx.uuid(),
         subject_kind: input.subject_kind,
         // ask-page-context: what the page showed stays in the person's own panel chat (as the API).
         // AUD-9: a person's own page is its name only, whatever the client sends (as the API).
-        subject: panel && !(input.subject_kind === "screen" && pageNameOnly(String(input.subject?.path ?? ""))) ? (input.subject ?? {}) : withoutView(input.subject ?? {}),
+        subject:
+          panel &&
+          !(input.subject_kind === 'screen' && pageNameOnly(String(input.subject?.path ?? '')))
+            ? (input.subject ?? {})
+            : withoutView(input.subject ?? {}),
         subject_key: info.key,
         subject_label: info.label,
         subject_url: info.url,
         document_id: info.document_id ?? null,
         run_id: info.run_id ?? null,
-        title: (input.title ?? "").trim() || info.label.slice(0, 200),
+        title: (input.title ?? '').trim() || info.label.slice(0, 200),
         visibility,
         author_only: false,
-        status: "open",
-        origin: panel ? "panel" : "discuss",
+        status: 'open',
+        origin: panel ? 'panel' : 'discuss',
         started_by: me.id,
         summary: null,
-        summary_status: "none",
-        summary_shared: visibility === "open",
+        summary_status: 'none',
+        summary_shared: visibility === 'open',
         last_message_at: null,
         lock_version: 1,
         created_at: at,
@@ -1633,97 +2351,115 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       const tooLong = input.message ? ctx.reviewFeedbackRefusal?.(d, input.message.body) : null;
       if (tooLong) return refuse(422, tooLong);
       db.discussions.push(d);
-      add(d, me.id, "started");
-      for (const id of picked) add(d, id, visibility === "private" ? "added" : "mention");
-      let reply: Schemas["DiscussionMessageOut"] | null = null;
+      add(d, me.id, 'started');
+      for (const id of picked) add(d, id, visibility === 'private' ? 'added' : 'mention');
+      let reply: Schemas['DiscussionMessageOut'] | null = null;
       if (input.message) {
         const res = await postWithReply(d, input.message);
         if (!res.ok) return res;
-        reply = ((await res.json()) as Schemas["DiscussionMessagePosted"]).reply ?? null;
+        reply = ((await res.json()) as Schemas['DiscussionMessagePosted']).reply ?? null;
         ctx.reviewFeedback?.(d, input.message.body);
       }
-      return typedReply("/v1/discussions", "post", { ...out(d), reply }, 201);
+      return typedReply('/v1/discussions', 'post', { ...out(d), reply }, 201);
     }
     return null;
   }
 
   const d = db.discussions.find((x) => x.id === p[2]);
-  if (!d || (d.author_only && !isIn(d))) return refuse(404, "Discussion not found");
-  if (!readable(d)) return refuse(403, "This discussion is private");
-  const closed = () => d.status === "closed";
+  if (!d || (d.author_only && !isIn(d))) return refuse(404, 'Discussion not found');
+  if (!readable(d)) return refuse(403, 'This discussion is private');
+  const closed = () => d.status === 'closed';
 
   if (!p[3]) {
-    if (m === "GET") return typedReply("/v1/discussions/{discussion_id}", "get", out(d), 200);
-    if (m !== "PATCH") return null;
-    const patch = await body<Schemas["DiscussionPatch"]>();
-    if (patch.lock_version !== d.lock_version) return refuse(409, "Someone else changed this since you loaded it; reload and try again");
+    if (m === 'GET') return typedReply('/v1/discussions/{discussion_id}', 'get', out(d), 200);
+    if (m !== 'PATCH') return null;
+    const patch = await body<Schemas['DiscussionPatch']>();
+    if (patch.lock_version !== d.lock_version)
+      return refuse(409, 'Someone else changed this since you loaded it; reload and try again');
     if (patch.status && patch.status !== d.status) {
-      if (!(starter(d) || atLeast(me.role, "approver"))) return refuse(403, "Only the starter or an approver can close or reopen it");
+      if (!(starter(d) || atLeast(me.role, 'approver')))
+        return refuse(403, 'Only the starter or an approver can close or reopen it');
       d.status = patch.status;
     }
-    const manages = patch.title != null || patch.summary !== undefined || patch.summary_shared != null;
-    if ((manages || (patch.visibility && patch.visibility !== d.visibility)) && closed()) return refuse(409, "This discussion is closed");
-    if (patch.visibility === "open" && d.visibility === "private") {
-      if (!starter(d)) return refuse(403, "Only the starter can make a private discussion open");
+    const manages =
+      patch.title != null || patch.summary !== undefined || patch.summary_shared != null;
+    if ((manages || (patch.visibility && patch.visibility !== d.visibility)) && closed())
+      return refuse(409, 'This discussion is closed');
+    if (patch.visibility === 'open' && d.visibility === 'private') {
+      if (!starter(d)) return refuse(403, 'Only the starter can make a private discussion open');
       const live = refuseIfLive(d);
       if (live) return live;
-      if (d.author_only) return refuse(422, "Share this finding at Summary or above first");
-      if (d.origin === "panel") return refuse(422, "Share a panel chat with Share as discussion");
+      if (d.author_only) return refuse(422, 'Share this finding at Summary or above first');
+      if (d.origin === 'panel') return refuse(422, 'Share a panel chat with Share as discussion');
       const now = exposure(d);
-      if (!patch.exposes || patch.exposes.messages !== now.messages || patch.exposes.people !== now.people)
-        return json(409, { detail: "Confirm what this exposes", ...now });
-      d.visibility = "open";
+      if (
+        !patch.exposes ||
+        patch.exposes.messages !== now.messages ||
+        patch.exposes.people !== now.people
+      )
+        return json(409, { detail: 'Confirm what this exposes', ...now });
+      d.visibility = 'open';
       push(d, {
-        author_kind: "system",
+        author_kind: 'system',
         author_id: null,
         body: `${displayName(member(me.id)!.email)} made this discussion open on ${companyDayInWords(ctx.now())}`,
         mentions: [],
         mentions_oracle: false,
         reply_to: null,
       });
-    } else if (patch.visibility === "private" && d.visibility === "open") {
-      if (!starter(d)) return refuse(403, "Only the starter can make a discussion private");
-      const writers = new Set(db.messages.filter((x) => x.discussion_id === d.id).map((x) => x.author_id));
-      for (const x of active(d)) if (x.added_via === "followed" && !writers.has(x.user_id)) x.left_at = ctx.now();
-      d.visibility = "private";
+    } else if (patch.visibility === 'private' && d.visibility === 'open') {
+      if (!starter(d)) return refuse(403, 'Only the starter can make a discussion private');
+      const writers = new Set(
+        db.messages.filter((x) => x.discussion_id === d.id).map((x) => x.author_id),
+      );
+      for (const x of active(d))
+        if (x.added_via === 'followed' && !writers.has(x.user_id)) x.left_at = ctx.now();
+      d.visibility = 'private';
       d.summary_shared = false;
       ctx.feedbackWithdrawn?.(d);
       // G8: a private discussion never mirrors; the thread gets its closing line, without the link.
       d.slack = null;
     }
-    if (manages && !starter(d)) return refuse(403, "Only the starter can change this");
+    if (manages && !starter(d)) return refuse(403, 'Only the starter can change this');
     if (patch.title) d.title = patch.title.trim().slice(0, 200) || d.title;
     if (patch.summary !== undefined) {
-      const text = (patch.summary ?? "").trim();
-      if (text.length > 1200) return refuse(422, "A summary can be at most 1,200 characters");
+      const text = (patch.summary ?? '').trim();
+      if (text.length > 1200) return refuse(422, 'A summary can be at most 1,200 characters');
       d.summary = text || null;
-      d.summary_status = text ? "confirmed" : "none";
+      d.summary_status = text ? 'confirmed' : 'none';
     }
     if (patch.summary_shared != null) d.summary_shared = patch.summary_shared;
     touch(d);
-    return typedReply("/v1/discussions/{discussion_id}", "patch", out(d), 200);
+    return typedReply('/v1/discussions/{discussion_id}', 'patch', out(d), 200);
   }
 
   const writer = () => {
-    if (!atLeast(me.role, "commenter")) return refuse(403, "Viewers can read discussions but not write in them");
-    if (closed()) return refuse(409, "This discussion is closed");
+    if (!atLeast(me.role, 'commenter'))
+      return refuse(403, 'Viewers can read discussions but not write in them');
+    if (closed()) return refuse(409, 'This discussion is closed');
     return null;
   };
 
-  if (p[3] === "research" && m === "POST") {
+  if (p[3] === 'research' && m === 'POST') {
     const refused = writer();
     if (refused) return refused;
-    if (!atLeast(me.role, "approver")) return refuse(403, "Approvers and owners start research");
-    const { message_id } = await body<Schemas["ResearchIn"]>();
-    const asked = db.messages.find((x) => x.id === message_id && x.discussion_id === d.id && !x.deleted_at);
-    if (!asked) return refuse(404, "Message not found");
-    if (asked.author_kind !== "person") return refuse(422, "Only a person's message can be researched");
-    const lines = db.messages.filter((x) => x.reply_to === asked.id && x.author_kind === "system" && x.run_id);
-    if (lines.some((x) => researchOf(x)?.status === "running")) return refuse(409, "Oracle is already researching this");
+    if (!atLeast(me.role, 'approver')) return refuse(403, 'Approvers and owners start research');
+    const { message_id } = await body<Schemas['ResearchIn']>();
+    const asked = db.messages.find(
+      (x) => x.id === message_id && x.discussion_id === d.id && !x.deleted_at,
+    );
+    if (!asked) return refuse(404, 'Message not found');
+    if (asked.author_kind !== 'person')
+      return refuse(422, "Only a person's message can be researched");
+    const lines = db.messages.filter(
+      (x) => x.reply_to === asked.id && x.author_kind === 'system' && x.run_id,
+    );
+    if (lines.some((x) => researchOf(x)?.status === 'running'))
+      return refuse(409, 'Oracle is already researching this');
     // The runs refuse the first start in the "research-refused" scenario: the line says why, and the next ask starts.
     const refusal = lines.some((x) => x.research_error) ? null : (ctx.researchRefusal?.() ?? null);
     const line = push(d, {
-      author_kind: "system",
+      author_kind: 'system',
       author_id: null,
       body: `${displayName(member(me.id)!.email)} asked Oracle to research this`,
       mentions: [],
@@ -1733,140 +2469,211 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       research_reads: 0,
       ...(refusal ? { research_error: refusal } : {}),
     });
-    return typedReply("/v1/discussions/{discussion_id}/research", "post", messageOut(line), 201);
+    return typedReply('/v1/discussions/{discussion_id}/research', 'post', messageOut(line), 201);
   }
 
-  if (p[3] === "messages") {
-    if (!p[4] && m === "GET") {
+  if (p[3] === 'messages') {
+    if (!p[4] && m === 'GET') {
       // The mock's research run answers on the thread's second read after it started.
-      for (const x of db.messages.filter((y) => y.discussion_id === d.id && y.author_kind === "system" && y.run_id)) {
-        if (researchOf(x)?.status !== "running" || (x.research_reads = (x.research_reads ?? 0) + 1) < 2) continue;
+      for (const x of db.messages.filter(
+        (y) => y.discussion_id === d.id && y.author_kind === 'system' && y.run_id,
+      )) {
+        if (
+          researchOf(x)?.status !== 'running' ||
+          (x.research_reads = (x.research_reads ?? 0) + 1) < 2
+        )
+          continue;
         push(d, {
-          author_kind: "oracle",
+          author_kind: 'oracle',
           author_id: null,
           body: RESEARCH_ANSWER,
           mentions: [],
           mentions_oracle: false,
           reply_to: x.reply_to,
-          status: "complete",
-          citations: RESEARCH_CITATIONS.map((c) => (c.kind === "web" && ctx.researchLink?.() ? { ...c, url: ctx.researchLink() } : c)),
+          status: 'complete',
+          citations: RESEARCH_CITATIONS.map((c) =>
+            c.kind === 'web' && ctx.researchLink?.() ? { ...c, url: ctx.researchLink() } : c,
+          ),
           run_id: x.run_id,
         });
       }
-      const rows = db.messages.filter((x) => x.discussion_id === d.id).sort((a, b) => a.created_at.localeCompare(b.created_at));
-      return typedReply("/v1/discussions/{discussion_id}/messages", "get", { items: rows.map(messageOut), has_more: false }, 200);
+      const rows = db.messages
+        .filter((x) => x.discussion_id === d.id)
+        .sort((a, b) => a.created_at.localeCompare(b.created_at));
+      return typedReply(
+        '/v1/discussions/{discussion_id}/messages',
+        'get',
+        { items: rows.map(messageOut), has_more: false },
+        200,
+      );
     }
-    if (!p[4] && m === "POST") return writer() ?? postWithReply(d, await body<Schemas["DiscussionMessageIn"]>());
+    if (!p[4] && m === 'POST')
+      return writer() ?? postWithReply(d, await body<Schemas['DiscussionMessageIn']>());
     const row = db.messages.find((x) => x.id === p[4] && x.discussion_id === d.id && !x.deleted_at);
-    if (!row) return refuse(404, "Message not found");
-    if (row.author_kind === "oracle" && p[5]) {
-      if (p[5] === "stream" && m === "GET") return streamReply(row);
+    if (!row) return refuse(404, 'Message not found');
+    if (row.author_kind === 'oracle' && p[5]) {
+      if (p[5] === 'stream' && m === 'GET') return streamReply(row);
       const asked = db.messages.find((x) => x.id === row.reply_to);
-      if (!(asked?.author_id === me.id || atLeast(me.role, "approver"))) return refuse(403, "Only the person who asked, or an approver, can");
-      if (p[5] === "cancel" && m === "POST") {
-        if (row.status === "pending") row.status = "cancelled";
-        else if (row.status === "streaming") row.cancel_requested = true;
-        return typedReply("/v1/discussions/{discussion_id}/messages/{reply_id}/cancel", "post", messageOut(row), 200);
+      if (!(asked?.author_id === me.id || atLeast(me.role, 'approver')))
+        return refuse(403, 'Only the person who asked, or an approver, can');
+      if (p[5] === 'cancel' && m === 'POST') {
+        if (row.status === 'pending') row.status = 'cancelled';
+        else if (row.status === 'streaming') row.cancel_requested = true;
+        return typedReply(
+          '/v1/discussions/{discussion_id}/messages/{reply_id}/cancel',
+          'post',
+          messageOut(row),
+          200,
+        );
       }
-      if (p[5] === "retry" && m === "POST") {
-        if (row.status !== "failed" && row.status !== "cancelled") return refuse(409, "Only a failed or stopped reply can be retried");
-        Object.assign(row, { status: "pending", body: "", citations: [], error_reason: null, error: null, cancel_requested: false });
-        return typedReply("/v1/discussions/{discussion_id}/messages/{reply_id}/retry", "post", messageOut(row), 200);
+      if (p[5] === 'retry' && m === 'POST') {
+        if (row.status !== 'failed' && row.status !== 'cancelled')
+          return refuse(409, 'Only a failed or stopped reply can be retried');
+        Object.assign(row, {
+          status: 'pending',
+          body: '',
+          citations: [],
+          error_reason: null,
+          error: null,
+          cancel_requested: false,
+        });
+        return typedReply(
+          '/v1/discussions/{discussion_id}/messages/{reply_id}/retry',
+          'post',
+          messageOut(row),
+          200,
+        );
       }
       return null;
     }
     const refused = writer();
     if (refused) return refused;
-    if (row.author_kind !== "person" || row.author_id !== me.id) return refuse(403, "Only its author can change a message");
+    if (row.author_kind !== 'person' || row.author_id !== me.id)
+      return refuse(403, 'Only its author can change a message');
     // As the API's _is_first: the thread's first person's message (its whole-draft feedback).
-    const isFirst = (x: MessageRow) => db.messages.find((y) => y.discussion_id === d.id && y.author_kind === "person")?.id === x.id;
-    if (m === "PATCH") {
-      const { body: text } = await body<Schemas["DiscussionMessageEdit"]>();
-      if (text.length > 8000) return refuse(422, "A message can be at most 8,000 characters");
+    const isFirst = (x: MessageRow) =>
+      db.messages.find((y) => y.discussion_id === d.id && y.author_kind === 'person')?.id === x.id;
+    if (m === 'PATCH') {
+      const { body: text } = await body<Schemas['DiscussionMessageEdit']>();
+      if (text.length > 8000) return refuse(422, 'A message can be at most 8,000 characters');
       if (isFirst(row)) {
         const tooLong = ctx.feedbackEdited?.(d, text);
         if (tooLong) return refuse(422, tooLong);
       }
       Object.assign(row, { body: text, edited_at: ctx.now() });
-      return typedReply("/v1/discussions/{discussion_id}/messages/{message_id}", "patch", messageOut(row), 200);
+      return typedReply(
+        '/v1/discussions/{discussion_id}/messages/{message_id}',
+        'patch',
+        messageOut(row),
+        200,
+      );
     }
-    if (m === "DELETE") {
+    if (m === 'DELETE') {
       if (isFirst(row)) ctx.feedbackWithdrawn?.(d);
-      Object.assign(row, { body: "", deleted_at: ctx.now() });
-      return typedReply("/v1/discussions/{discussion_id}/messages/{message_id}", "delete", undefined, 204);
+      Object.assign(row, { body: '', deleted_at: ctx.now() });
+      return typedReply(
+        '/v1/discussions/{discussion_id}/messages/{message_id}',
+        'delete',
+        undefined,
+        204,
+      );
     }
     return null;
   }
 
-  if (p[3] === "participants") {
-    if (m === "POST" && !p[4]) {
-      if (closed()) return refuse(409, "This discussion is closed");
-      const { user_ids } = await body<Schemas["DiscussionParticipantsIn"]>();
-      if (user_ids.length === 1 && user_ids[0] === me.id && d.visibility === "open") {
+  if (p[3] === 'participants') {
+    if (m === 'POST' && !p[4]) {
+      if (closed()) return refuse(409, 'This discussion is closed');
+      const { user_ids } = await body<Schemas['DiscussionParticipantsIn']>();
+      if (user_ids.length === 1 && user_ids[0] === me.id && d.visibility === 'open') {
         const live = isIn(d) ? null : refuseIfLive(d);
         if (live) return live;
-        add(d, me.id, "followed");
-      }
-      else {
+        add(d, me.id, 'followed');
+      } else {
         const refused = bringIn(
           d,
           user_ids.filter((id) => id !== me.id),
-          "added",
+          'added',
         );
         if (refused) return refused;
       }
-      return typedReply("/v1/discussions/{discussion_id}/participants", "post", out(d).participants, 200);
+      return typedReply(
+        '/v1/discussions/{discussion_id}/participants',
+        'post',
+        out(d).participants,
+        200,
+      );
     }
-    if (m === "DELETE" && p[4]) {
+    if (m === 'DELETE' && p[4]) {
       const target = p[4];
       if (target === me.id) {
-        if (d.visibility === "private" && starter(d) && !closed())
-          return refuse(422, "The starter cannot leave a private discussion while it is open");
-      } else if (!(d.visibility === "private" && starter(d))) {
-        return refuse(403, "Only the starter can remove people from a private discussion");
+        if (d.visibility === 'private' && starter(d) && !closed())
+          return refuse(422, 'The starter cannot leave a private discussion while it is open');
+      } else if (!(d.visibility === 'private' && starter(d))) {
+        return refuse(403, 'Only the starter can remove people from a private discussion');
       }
       const row = active(d).find((x) => x.user_id === target);
       if (row) row.left_at = ctx.now();
-      return typedReply("/v1/discussions/{discussion_id}/participants/{user_id}", "delete", undefined, 204);
+      return typedReply(
+        '/v1/discussions/{discussion_id}/participants/{user_id}',
+        'delete',
+        undefined,
+        204,
+      );
     }
     return null;
   }
 
-  if (p[3] === "read" && m === "POST") {
-    const { message_id } = await body<Schemas["DiscussionReadIn"]>();
+  if (p[3] === 'read' && m === 'POST') {
+    const { message_id } = await body<Schemas['DiscussionReadIn']>();
     const row = db.messages.find((x) => x.id === message_id);
     const mine = active(d).find((x) => x.user_id === me.id);
-    if (row && mine && (!mine.last_read_at || mine.last_read_at < row.created_at)) mine.last_read_at = row.created_at;
+    if (row && mine && (!mine.last_read_at || mine.last_read_at < row.created_at))
+      mine.last_read_at = row.created_at;
     // G6: the invitation and the mentions read past are done.
     if (row)
       for (const item of db.inbox ?? []) {
-        const at = item.message_id ? db.messages.find((x) => x.id === item.message_id)?.created_at : null;
-        if (item.user_id === me.id && item.discussion_id === d.id && !item.done_at && (item.kind === "invited" || (at && at <= row.created_at)))
+        const at = item.message_id
+          ? db.messages.find((x) => x.id === item.message_id)?.created_at
+          : null;
+        if (
+          item.user_id === me.id &&
+          item.discussion_id === d.id &&
+          !item.done_at &&
+          (item.kind === 'invited' || (at && at <= row.created_at))
+        )
           item.done_at = ctx.now();
       }
-    return typedReply("/v1/discussions/{discussion_id}/read", "post", undefined, 204);
+    return typedReply('/v1/discussions/{discussion_id}/read', 'post', undefined, 204);
   }
-  if (p[3] === "changes" && !p[4]) {
-    if (m === "GET") {
-      const rows = changesOf(d).filter((c) => !q.get("status") || c.status === q.get("status"));
+  if (p[3] === 'changes' && !p[4]) {
+    if (m === 'GET') {
+      const rows = changesOf(d).filter((c) => !q.get('status') || c.status === q.get('status'));
       return typedReply(
-        "/v1/discussions/{discussion_id}/changes",
-        "get",
+        '/v1/discussions/{discussion_id}/changes',
+        'get',
         rows.sort((a, b) => a.created_at.localeCompare(b.created_at)).map((c) => changeOut(c, d)),
         200,
       );
     }
-    if (m !== "POST") return null;
+    if (m !== 'POST') return null;
     const refused = writer();
     if (refused) return refused;
-    const input = (await body<{ kind?: string; target?: Record<string, unknown>; payload?: Record<string, unknown>; rationale?: string | null }>()) ?? {};
-    const kind = input.kind ?? "";
-    if (!(SUBJECT_KINDS[d.subject_kind] ?? []).includes(kind)) return refuse(422, "This kind of change is not available here");
-    const payload = input.payload && typeof input.payload === "object" ? input.payload : {};
+    const input =
+      (await body<{
+        kind?: string;
+        target?: Record<string, unknown>;
+        payload?: Record<string, unknown>;
+        rationale?: string | null;
+      }>()) ?? {};
+    const kind = input.kind ?? '';
+    if (!(SUBJECT_KINDS[d.subject_kind] ?? []).includes(kind))
+      return refuse(422, 'This kind of change is not available here');
+    const payload = input.payload && typeof input.payload === 'object' ? input.payload : {};
     const gap = incomplete(kind, payload);
     if (gap) return refuse(422, gap);
     // A commenter's change is their suggestion; an approver's is proposed, ready to stage.
-    const approver = atLeast(me.role, "approver");
+    const approver = atLeast(me.role, 'approver');
     const c: ChangeRow = {
       id: ctx.uuid(),
       discussion_id: d.id,
@@ -1876,10 +2683,10 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       payload,
       edited_payload: null,
       rationale: str(input.rationale) || null,
-      proposed_by_kind: "person",
+      proposed_by_kind: 'person',
       proposed_by: me.id,
       suggested_by: approver ? null : me.id,
-      status: approver ? "proposed" : "suggested",
+      status: approver ? 'proposed' : 'suggested',
       pushback: null,
       basis: [],
       result_ref: null,
@@ -1891,53 +2698,67 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       created_at: ctx.now(),
     };
     (db.changes ??= []).push(c);
-    return typedReply("/v1/discussions/{discussion_id}/changes", "post", { change: changeOut(c, d), result: null }, 201);
-  }
-  if (p[3] === "change-kinds" && m === "GET")
     return typedReply(
-      "/v1/discussions/{discussion_id}/change-kinds",
-      "get",
-      (SUBJECT_KINDS[d.subject_kind] ?? []).map((kind) => ({ kind, verb: KIND_VERB[kind], schema: KIND_SCHEMA[kind] ?? { type: "object" } })),
+      '/v1/discussions/{discussion_id}/changes',
+      'post',
+      { change: changeOut(c, d), result: null },
+      201,
+    );
+  }
+  if (p[3] === 'change-kinds' && m === 'GET')
+    return typedReply(
+      '/v1/discussions/{discussion_id}/change-kinds',
+      'get',
+      (SUBJECT_KINDS[d.subject_kind] ?? []).map((kind) => ({
+        kind,
+        verb: KIND_VERB[kind],
+        schema: KIND_SCHEMA[kind] ?? { type: 'object' },
+      })),
       200,
     );
-  if (p[3] === "summary" && m === "POST") {
+  if (p[3] === 'summary' && m === 'POST') {
     const refused = writer();
     if (refused) return refused;
     const input = (await body<{ replace?: boolean }>()) ?? {};
-    if (d.summary_status === "confirmed" && !(starter(d) && input.replace))
-      return refuse(409, "The starter confirmed this summary. They can ask Oracle for a new draft.");
+    if (d.summary_status === 'confirmed' && !(starter(d) && input.replace))
+      return refuse(
+        409,
+        'The starter confirmed this summary. They can ask Oracle for a new draft.',
+      );
     const rows = changesOf(d);
-    const decided = rows.filter((c) => c.status === "staged" || c.status === "done").map((c) => c.label);
+    const decided = rows
+      .filter((c) => c.status === 'staged' || c.status === 'done')
+      .map((c) => c.label);
     const open = rows.filter((c) => isOpenStatus(c.status)).map((c) => c.label);
     d.summary = [
-      `Decided: ${decided.length ? decided.join("; ") : "nothing yet"}.`,
-      `Open: ${open.length ? open.join("; ") : "no open questions"}.`,
+      `Decided: ${decided.length ? decided.join('; ') : 'nothing yet'}.`,
+      `Open: ${open.length ? open.join('; ') : 'no open questions'}.`,
       `Context: the team discussed ${d.subject_label}.`,
     ]
-      .join("\n")
+      .join('\n')
       .slice(0, 1200);
-    d.summary_status = "draft";
+    d.summary_status = 'draft';
     touch(d);
-    return typedReply("/v1/discussions/{discussion_id}/summary", "post", out(d), 200);
+    return typedReply('/v1/discussions/{discussion_id}/summary', 'post', out(d), 200);
   }
   // G7 Share as discussion: a new open discussion on the chat's subject from its edited summary.
-  if (p[3] === "share" && m === "POST") {
-    if (d.origin !== "panel") return refuse(422, "Only a panel chat is shared as a discussion");
-    if (!starter(d)) return refuse(403, "Only the person who started this chat can share it");
-    const input = await body<Schemas["DiscussionShareIn"]>();
+  if (p[3] === 'share' && m === 'POST') {
+    if (d.origin !== 'panel') return refuse(422, 'Only a panel chat is shared as a discussion');
+    if (!starter(d)) return refuse(403, 'Only the person who started this chat can share it');
+    const input = await body<Schemas['DiscussionShareIn']>();
     // As the API: Oracle's raw citation tokens are no words in the first message (ask-phone QA row 1).
     const first = stripRawTokens(input.first_message).trim();
-    if (!first) return refuse(422, "A message needs some text");
+    if (!first) return refuse(422, 'A message needs some text');
     const at = ctx.now();
     const shared: DiscussionRow = {
       ...d,
       subject: withoutView(d.subject),
       id: ctx.uuid(),
-      title: (input.title ?? "").trim() || d.subject_label.slice(0, 200),
-      visibility: "open",
-      origin: "discuss",
+      title: (input.title ?? '').trim() || d.subject_label.slice(0, 200),
+      visibility: 'open',
+      origin: 'discuss',
       summary: null,
-      summary_status: "none",
+      summary_status: 'none',
       summary_shared: true,
       last_message_at: null,
       lock_version: 1,
@@ -1945,20 +2766,42 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       updated_at: at,
     };
     db.discussions.push(shared);
-    add(shared, me.id, "started");
-    push(shared, { author_kind: "person", author_id: me.id, body: first, mentions: [], mentions_oracle: false, reply_to: null });
+    add(shared, me.id, 'started');
+    push(shared, {
+      author_kind: 'person',
+      author_id: me.id,
+      body: first,
+      mentions: [],
+      mentions_oracle: false,
+      reply_to: null,
+    });
     // As the API: the chat's open changes, of whatever kind, are copied as suggested by the sharer.
-    for (const c of changesOf(d).filter((x) => x.status === "proposed" || x.status === "suggested" || x.status === "staged"))
-      db.changes!.push({ ...c, id: ctx.uuid(), discussion_id: shared.id, status: "suggested", suggested_by: me.id, from_message_id: null, decision_note: null, override_reason: null, reason: null, result_ref: null, lock_version: 1, created_at: at });
-    return typedReply("/v1/discussions/{discussion_id}/share", "post", out(shared), 201);
+    for (const c of changesOf(d).filter(
+      (x) => x.status === 'proposed' || x.status === 'suggested' || x.status === 'staged',
+    ))
+      db.changes!.push({
+        ...c,
+        id: ctx.uuid(),
+        discussion_id: shared.id,
+        status: 'suggested',
+        suggested_by: me.id,
+        from_message_id: null,
+        decision_note: null,
+        override_reason: null,
+        reason: null,
+        result_ref: null,
+        lock_version: 1,
+        created_at: at,
+      });
+    return typedReply('/v1/discussions/{discussion_id}/share', 'post', out(shared), 201);
   }
-  if (p[3] === "slack" && !p[4] && ctx.slack) return ctx.slack(d, req);
+  if (p[3] === 'slack' && !p[4] && ctx.slack) return ctx.slack(d, req);
   return null;
 }
 
 /** G5 "run-discussions": the discussion links a run's agents are given open these. */
-export const RUN_DISCUSSION_OPEN = "d15c0000-0000-4000-8000-0000000000a1";
-export const RUN_DISCUSSION_PRIVATE = "d15c0000-0000-4000-8000-0000000000a2";
+export const RUN_DISCUSSION_OPEN = 'd15c0000-0000-4000-8000-0000000000a1';
+export const RUN_DISCUSSION_PRIVATE = 'd15c0000-0000-4000-8000-0000000000a2';
 
 /**
  * The "run-discussions" scenario (G5): on the feature-set run's checkpoint, an open discussion
@@ -1966,18 +2809,34 @@ export const RUN_DISCUSSION_PRIVATE = "d15c0000-0000-4000-8000-0000000000a2";
  * owner on bulk-import (the commenter is not in it), one message each.
  */
 export function seedRunDiscussions(
-  ctx: Omit<DiscussionsContext, "me" | "db">,
-  run: { id: string; label: string; checkpoint_id: string; checkpoint_kind: string; name?: (key: string) => string },
+  ctx: Omit<DiscussionsContext, 'me' | 'db'>,
+  run: {
+    id: string;
+    label: string;
+    checkpoint_id: string;
+    checkpoint_kind: string;
+    name?: (key: string) => string;
+  },
 ): DiscussionsDb {
   const db = emptyDiscussions();
   const by = (email: string) => ctx.members.find((m) => m.email === email)!.id;
-  const approver = by("approver@example.com");
-  const owner = ctx.members.find((m) => m.role === "owner")!.id;
-  const at = "2026-10-21T09:00:00Z";
-  const row = (id: string, item: string, title: string, visibility: "open" | "private"): DiscussionRow => ({
+  const approver = by('approver@example.com');
+  const owner = ctx.members.find((m) => m.role === 'owner')!.id;
+  const at = '2026-10-21T09:00:00Z';
+  const row = (
+    id: string,
+    item: string,
+    title: string,
+    visibility: 'open' | 'private',
+  ): DiscussionRow => ({
     id,
-    subject_kind: "checkpoint_item",
-    subject: { run_id: run.id, checkpoint_id: run.checkpoint_id, checkpoint_kind: run.checkpoint_kind, item_key: item },
+    subject_kind: 'checkpoint_item',
+    subject: {
+      run_id: run.id,
+      checkpoint_id: run.checkpoint_id,
+      checkpoint_kind: run.checkpoint_kind,
+      item_key: item,
+    },
     subject_key: `run_item:${run.id}:${run.checkpoint_kind}:${item}`,
     subject_label: `${run.label} · ${run.name?.(item) ?? item}`,
     subject_url: `/runs/${run.id}`,
@@ -1986,33 +2845,64 @@ export function seedRunDiscussions(
     title,
     visibility,
     author_only: false,
-    status: "open",
-    origin: "discuss",
+    status: 'open',
+    origin: 'discuss',
     started_by: approver,
     summary: null,
-    summary_status: "none",
-    summary_shared: visibility === "open",
+    summary_status: 'none',
+    summary_shared: visibility === 'open',
     last_message_at: at,
     lock_version: 1,
     created_at: at,
     updated_at: at,
   });
-  const open = row(RUN_DISCUSSION_OPEN, "bulk-address-edit", "Bulk edit: keep it without the export?", "open");
-  const hidden = row(RUN_DISCUSSION_PRIVATE, "bulk-import", "Bulk import: who pays for storage?", "private");
+  const open = row(
+    RUN_DISCUSSION_OPEN,
+    'bulk-address-edit',
+    'Bulk edit: keep it without the export?',
+    'open',
+  );
+  const hidden = row(
+    RUN_DISCUSSION_PRIVATE,
+    'bulk-import',
+    'Bulk import: who pays for storage?',
+    'private',
+  );
   db.discussions.push(open, hidden);
   db.participants.push(
-    { discussion_id: open.id, user_id: approver, added_via: "started", left_at: null, last_read_at: null, created_at: at },
-    { discussion_id: hidden.id, user_id: approver, added_via: "started", left_at: null, last_read_at: null, created_at: at },
-    { discussion_id: hidden.id, user_id: owner, added_via: "added", left_at: null, last_read_at: null, created_at: at },
+    {
+      discussion_id: open.id,
+      user_id: approver,
+      added_via: 'started',
+      left_at: null,
+      last_read_at: null,
+      created_at: at,
+    },
+    {
+      discussion_id: hidden.id,
+      user_id: approver,
+      added_via: 'started',
+      left_at: null,
+      last_read_at: null,
+      created_at: at,
+    },
+    {
+      discussion_id: hidden.id,
+      user_id: owner,
+      added_via: 'added',
+      left_at: null,
+      last_read_at: null,
+      created_at: at,
+    },
   );
   for (const [d, body] of [
-    [open, "Can bulk edit ship before the export does?"],
-    [hidden, "Storage costs are still open with finance."],
+    [open, 'Can bulk edit ship before the export does?'],
+    [hidden, 'Storage costs are still open with finance.'],
   ] as const)
     db.messages.push({
       id: ctx.uuid(),
       discussion_id: d.id,
-      author_kind: "person",
+      author_kind: 'person',
       author_id: approver,
       body,
       mentions: [],
@@ -2026,60 +2916,112 @@ export function seedRunDiscussions(
 }
 
 /** G3 "discussion-record": the open discussion on a PRD's roadmap item where Oracle proposed recording a date basis. */
-export const DISCUSSION_RECORD = "d15c0000-0000-4000-8000-0000000000b1";
+export const DISCUSSION_RECORD = 'd15c0000-0000-4000-8000-0000000000b1';
 
 /**
  * The "discussion-record" scenario (G3 Record with F3 Date bases): the approver's open
  * discussion on the PRD's public-signup item, Oracle's reply, and the basis_record change it
  * proposed (a team estimate that supports 2026-12-15).
  */
-export function seedDiscussionRecord(ctx: Omit<DiscussionsContext, "me" | "db">, prd: { id: string; title: string; slug: string; name?: (key: string) => string }, version: number): DiscussionsDb {
+export function seedDiscussionRecord(
+  ctx: Omit<DiscussionsContext, 'me' | 'db'>,
+  prd: { id: string; title: string; slug: string; name?: (key: string) => string },
+  version: number,
+): DiscussionsDb {
   const db = emptyDiscussions();
-  const approver = ctx.members.find((m) => m.email === "approver@example.com")!.id;
-  const at = "2026-10-22T10:00:00Z";
-  const item = "public-signup";
+  const approver = ctx.members.find((m) => m.email === 'approver@example.com')!.id;
+  const at = '2026-10-22T10:00:00Z';
+  const item = 'public-signup';
   db.discussions.push({
     id: DISCUSSION_RECORD,
-    subject_kind: "roadmap_item",
+    subject_kind: 'roadmap_item',
     subject: { document_id: prd.id, version, item_key: item },
     subject_key: `roadmap_item:${prd.id}:${item}`,
     subject_label: `${prd.title} · ${prd.name?.(item) ?? item}`,
     subject_url: `/documents/${prd.slug}/v/${version}/items`,
     document_id: prd.id,
     run_id: null,
-    title: "Public signup: what date can we hold?",
-    visibility: "open",
+    title: 'Public signup: what date can we hold?',
+    visibility: 'open',
     author_only: false,
-    status: "open",
-    origin: "discuss",
+    status: 'open',
+    origin: 'discuss',
     started_by: approver,
     summary: null,
-    summary_status: "none",
+    summary_status: 'none',
     summary_shared: true,
     last_message_at: at,
     lock_version: 1,
     created_at: at,
     updated_at: at,
   });
-  db.participants.push({ discussion_id: DISCUSSION_RECORD, user_id: approver, added_via: "started", left_at: null, last_read_at: null, created_at: at });
+  db.participants.push({
+    discussion_id: DISCUSSION_RECORD,
+    user_id: approver,
+    added_via: 'started',
+    left_at: null,
+    last_read_at: null,
+    created_at: at,
+  });
   const asked = ctx.uuid();
   const reply = ctx.uuid();
-  const row = { discussion_id: DISCUSSION_RECORD, mentions: [], created_at: at, edited_at: null, deleted_at: null };
+  const row = {
+    discussion_id: DISCUSSION_RECORD,
+    mentions: [],
+    created_at: at,
+    edited_at: null,
+    deleted_at: null,
+  };
   db.messages.push(
-    { ...row, id: asked, author_kind: "person", author_id: approver, body: "@Oracle the team estimated mid-December. Can we hold that date?", mentions_oracle: true, reply_to: null },
-    { ...row, id: reply, author_kind: "oracle", author_id: null, body: "The team's estimate supports December 15; record it as the date's basis.", mentions_oracle: false, reply_to: asked, status: "complete" },
+    {
+      ...row,
+      id: asked,
+      author_kind: 'person',
+      author_id: approver,
+      body: '@Oracle the team estimated mid-December. Can we hold that date?',
+      mentions_oracle: true,
+      reply_to: null,
+    },
+    {
+      ...row,
+      id: reply,
+      author_kind: 'oracle',
+      author_id: null,
+      body: "The team's estimate supports December 15; record it as the date's basis.",
+      mentions_oracle: false,
+      reply_to: asked,
+      status: 'complete',
+    },
   );
-  const payload = { prd_document_id: prd.id, kind: "estimate", reference: "Team estimate", supports_date: "2026-12-15", item_key: item };
+  const payload = {
+    prd_document_id: prd.id,
+    kind: 'estimate',
+    reference: 'Team estimate',
+    supports_date: '2026-12-15',
+    item_key: item,
+  };
   db.changes!.push({
-    id: ctx.uuid(), discussion_id: DISCUSSION_RECORD, kind: "basis_record", label: changeLabel("basis_record", payload), target: {}, payload,
-    edited_payload: null, rationale: "The team estimated the item for mid-December.", proposed_by_kind: "oracle", proposed_by: null,
-    suggested_by: null, status: "proposed", from_message_id: reply, lock_version: 1, created_at: at,
+    id: ctx.uuid(),
+    discussion_id: DISCUSSION_RECORD,
+    kind: 'basis_record',
+    label: changeLabel('basis_record', payload),
+    target: {},
+    payload,
+    edited_payload: null,
+    rationale: 'The team estimated the item for mid-December.',
+    proposed_by_kind: 'oracle',
+    proposed_by: null,
+    suggested_by: null,
+    status: 'proposed',
+    from_message_id: reply,
+    lock_version: 1,
+    created_at: at,
   });
   return db;
 }
 
 /** G3 "discussion-change-kinds": the open discussion on the feature-set stop's referral-link item. */
-export const DISCUSSION_CHANGE_KINDS = "d15c0000-0000-4000-8000-0000000000c1";
+export const DISCUSSION_CHANGE_KINDS = 'd15c0000-0000-4000-8000-0000000000c1';
 
 /**
  * The "discussion-change-kinds" scenario (G3's ask_person, priority_move and decision): on the
@@ -2089,57 +3031,95 @@ export const DISCUSSION_CHANGE_KINDS = "d15c0000-0000-4000-8000-0000000000c1";
  * decision on links for guests.
  */
 export function seedDiscussionChangeKinds(
-  ctx: Omit<DiscussionsContext, "me" | "db">,
-  run: { id: string; label: string; checkpoint_id: string; checkpoint_kind: string; name?: (key: string) => string },
+  ctx: Omit<DiscussionsContext, 'me' | 'db'>,
+  run: {
+    id: string;
+    label: string;
+    checkpoint_id: string;
+    checkpoint_kind: string;
+    name?: (key: string) => string;
+  },
   features: { moved: { id: string; title: string }; above: { id: string; title: string } },
 ): DiscussionsDb {
   const db = emptyDiscussions();
-  const approver = ctx.members.find((m) => m.email === "approver@example.com")!.id;
-  const at = "2026-10-22T11:00:00Z";
-  const item = "referral-link";
+  const approver = ctx.members.find((m) => m.email === 'approver@example.com')!.id;
+  const at = '2026-10-22T11:00:00Z';
+  const item = 'referral-link';
   const id = DISCUSSION_CHANGE_KINDS;
   db.discussions.push({
     id,
-    subject_kind: "checkpoint_item",
-    subject: { run_id: run.id, checkpoint_id: run.checkpoint_id, checkpoint_kind: run.checkpoint_kind, item_key: item },
+    subject_kind: 'checkpoint_item',
+    subject: {
+      run_id: run.id,
+      checkpoint_id: run.checkpoint_id,
+      checkpoint_kind: run.checkpoint_kind,
+      item_key: item,
+    },
     subject_key: `run_item:${run.id}:${run.checkpoint_kind}:${item}`,
     subject_label: `${run.label} · ${run.name?.(item) ?? item}`,
     subject_url: `/runs/${run.id}`,
     document_id: null,
     run_id: run.id,
-    title: "Referral link: ahead of the setup checklist?",
-    visibility: "open",
+    title: 'Referral link: ahead of the setup checklist?',
+    visibility: 'open',
     author_only: false,
-    status: "open",
-    origin: "discuss",
+    status: 'open',
+    origin: 'discuss',
     started_by: approver,
     summary: null,
-    summary_status: "none",
+    summary_status: 'none',
     summary_shared: true,
     last_message_at: at,
     lock_version: 1,
     created_at: at,
     updated_at: at,
   });
-  db.participants.push({ discussion_id: id, user_id: approver, added_via: "started", left_at: null, last_read_at: null, created_at: at });
+  db.participants.push({
+    discussion_id: id,
+    user_id: approver,
+    added_via: 'started',
+    left_at: null,
+    last_read_at: null,
+    created_at: at,
+  });
   const asked = ctx.uuid();
   const reply = ctx.uuid();
-  const msg = { discussion_id: id, mentions: [], created_at: at, edited_at: null, deleted_at: null };
+  const msg = {
+    discussion_id: id,
+    mentions: [],
+    created_at: at,
+    edited_at: null,
+    deleted_at: null,
+  };
   db.messages.push(
-    { ...msg, id: asked, author_kind: "person", author_id: approver, body: "@Oracle should the referral link go before the setup checklist?", mentions_oracle: true, reply_to: null },
+    {
+      ...msg,
+      id: asked,
+      author_kind: 'person',
+      author_id: approver,
+      body: '@Oracle should the referral link go before the setup checklist?',
+      mentions_oracle: true,
+      reply_to: null,
+    },
     {
       ...msg,
       id: reply,
-      author_kind: "oracle",
+      author_kind: 'oracle',
       author_id: null,
-      body: "Moving the referral link up is possible; ask who owns link expiry, and decide whether guests get a link.",
+      body: 'Moving the referral link up is possible; ask who owns link expiry, and decide whether guests get a link.',
       mentions_oracle: false,
       reply_to: asked,
-      status: "complete",
+      status: 'complete',
     },
   );
-  const titles: Record<string, string> = { [features.moved.id]: features.moved.title, [features.above.id]: features.above.title };
-  const names: LabelNames = { entity: (x) => titles[x] ?? null, member: (x) => (x === approver ? "Priya Raman" : null) };
+  const titles: Record<string, string> = {
+    [features.moved.id]: features.moved.title,
+    [features.above.id]: features.above.title,
+  };
+  const names: LabelNames = {
+    entity: (x) => titles[x] ?? null,
+    member: (x) => (x === approver ? 'Priya Raman' : null),
+  };
   const row = (kind: string, payload: Record<string, unknown>, rationale: string): ChangeRow => ({
     id: ctx.uuid(),
     discussion_id: id,
@@ -2149,30 +3129,38 @@ export function seedDiscussionChangeKinds(
     payload,
     edited_payload: null,
     rationale,
-    proposed_by_kind: "oracle",
+    proposed_by_kind: 'oracle',
     proposed_by: null,
     suggested_by: null,
-    status: "proposed",
+    status: 'proposed',
     from_message_id: reply,
     lock_version: 1,
     created_at: at,
   });
   db.changes!.push(
-    row("priority_move", { feature_id: features.moved.id, above_feature_id: features.above.id, reason: "Gut feeling" }, "The approver asked whether the referral link should go first."),
-    row("ask_person", { asked_to: approver, prompt: "How long should a referral link last?", category: "general" }, "Nobody has said how long a link is kept."),
     row(
-      "decision",
+      'priority_move',
+      { feature_id: features.moved.id, above_feature_id: features.above.id, reason: 'Gut feeling' },
+      'The approver asked whether the referral link should go first.',
+    ),
+    row(
+      'ask_person',
+      { asked_to: approver, prompt: 'How long should a referral link last?', category: 'general' },
+      'Nobody has said how long a link is kept.',
+    ),
+    row(
+      'decision',
       {
-        title: "Referral links for guests?",
-        question: "Do guests get a link without an account?",
+        title: 'Referral links for guests?',
+        question: 'Do guests get a link without an account?',
         options: [
-          { key: "o1", label: "Keep for 30 days" },
-          { key: "o2", label: "Members only" },
+          { key: 'o1', label: 'Keep for 30 days' },
+          { key: 'o2', label: 'Members only' },
         ],
         approver_id: approver,
-        reversibility: "reversible",
+        reversibility: 'reversible',
       },
-      "Guest links change what the referral link costs to build.",
+      'Guest links change what the referral link costs to build.',
     ),
   );
   return db;

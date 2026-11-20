@@ -1,8 +1,8 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { changeWords } from "../lib/simple-home";
-import { THEME_KEY } from "../lib/theme";
-import { login, openRoadmapItem } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { changeWords } from '../lib/simple-home';
+import { THEME_KEY } from '../lib/theme';
+import { login, openRoadmapItem } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /*
  * fix5-cut-dependents (qa-simple-roadmap-24, the owner's pick of 2026-10-30): a cut card on an
@@ -28,20 +28,20 @@ import { expect, test, type Locator, type Page } from "./test";
 
 const DESKTOP = { viewport: { width: 1440, height: 900 } };
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
-const BOTH = "Cut it and its dependents";
-const KEEP = "Cut it, keep the dependents";
+const BOTH = 'Cut it and its dependents';
+const KEEP = 'Cut it, keep the dependents';
 
-async function open(page: Page, email?: string, scenario = "roadmap-talk") {
+async function open(page: Page, email?: string, scenario = 'roadmap-talk') {
   await page.context().addInitScript(
     ([key, themeKey, scenario]) => {
       localStorage.setItem(key, scenario);
-      localStorage.setItem(themeKey, "light");
+      localStorage.setItem(themeKey, 'light');
     },
     [MOCK_SCENARIO_KEY, THEME_KEY, scenario] as const,
   );
   await login(page, email);
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
 }
 
 const phone = (page: Page) => (page.viewportSize()?.width ?? 1440) <= 640;
@@ -49,114 +49,136 @@ const phone = (page: Page) => (page.viewportSize()?.width ?? 1440) <= 640;
 /** The item's card from its Timeline bar: the side panel on a desktop, the sheet on a phone. */
 async function openTalk(page: Page, key: string): Promise<Locator> {
   await openRoadmapItem(page, key);
-  const card = page.getByTestId("floating-card");
+  const card = page.getByTestId('floating-card');
   await expect(card).toBeVisible();
   if (phone(page)) {
     // A phone's sheet: the Talk to Oracle tab.
-    await card.getByRole("tab", { name: "Talk to Oracle" }).click();
-    await expect(card.getByRole("tab", { name: "Talk to Oracle" })).toHaveAttribute("aria-selected", "true");
+    await card.getByRole('tab', { name: 'Talk to Oracle' }).click();
+    await expect(card.getByRole('tab', { name: 'Talk to Oracle' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
   } else {
-    await card.getByRole("button", { name: "Talk to Oracle" }).click();
-    await expect(card).toHaveAttribute("data-talk", "true");
+    await card.getByRole('button', { name: 'Talk to Oracle' }).click();
+    await expect(card).toHaveAttribute('data-talk', 'true');
   }
-  return card.getByTestId("item-talk");
+  return card.getByTestId('item-talk');
 }
 
 async function say(box: Locator, text: string) {
-  await box.getByRole("textbox", { name: "Message Oracle" }).fill(text);
-  await box.getByRole("button", { name: "Send" }).click();
+  await box.getByRole('textbox', { name: 'Message Oracle' }).fill(text);
+  await box.getByRole('button', { name: 'Send' }).click();
 }
 
 /** The Timeline's rows (a desktop's chart, a phone's list): whether each item's name is struck (cut). */
 async function struck(page: Page, keys: string[], cut: boolean) {
   for (const key of keys) {
-    const name = page.locator(`[data-testid="timeline-row"][data-item="${key}"]`).first().locator('[style*="line-through"]');
+    const name = page
+      .locator(`[data-testid="timeline-row"][data-item="${key}"]`)
+      .first()
+      .locator('[style*="line-through"]');
     await expect(name).toHaveCount(cut ? 1 : 0);
   }
 }
 
 test("Home's words for a cut with its dependents name every item it cut", () => {
-  const c = { op: "cut_with_dependents", after: {}, target: { item_id: "x", titles: ["Alert rules engine", "Weekly alert digest", "Mobile alert push"] } };
-  expect(changeWords(c as never, { title: "Alert rules engine" })).toBe("Cut with its dependents: Alert rules engine, Weekly alert digest and Mobile alert push");
+  const c = {
+    op: 'cut_with_dependents',
+    after: {},
+    target: {
+      item_id: 'x',
+      titles: ['Alert rules engine', 'Weekly alert digest', 'Mobile alert push'],
+    },
+  };
+  expect(changeWords(c as never, { title: 'Alert rules engine' })).toBe(
+    'Cut with its dependents: Alert rules engine, Weekly alert digest and Mobile alert push',
+  );
 });
 
 for (const [where, use] of [
-  ["desktop", DESKTOP],
-  ["phone", PHONE],
+  ['desktop', DESKTOP],
+  ['phone', PHONE],
 ] as const) {
   test.describe(where, () => {
     test.use(use);
 
-    test(`cut it and its dependents: one change, named in the change list, undone as one (${where})`, async ({ page }) => {
+    test(`cut it and its dependents: one change, named in the change list, undone as one (${where})`, async ({
+      page,
+    }) => {
       await open(page);
-      const talk = await openTalk(page, "alert-rules");
-      await say(talk, "cut it");
-      const cut = talk.getByTestId("chat-card").filter({ hasText: "Cut Alert rules engine" });
-      await expect(cut.getByRole("button", { name: KEEP })).toBeEnabled();
-      const both = cut.getByRole("button", { name: BOTH, exact: true });
+      const talk = await openTalk(page, 'alert-rules');
+      await say(talk, 'cut it');
+      const cut = talk.getByTestId('chat-card').filter({ hasText: 'Cut Alert rules engine' });
+      await expect(cut.getByRole('button', { name: KEEP })).toBeEnabled();
+      const both = cut.getByRole('button', { name: BOTH, exact: true });
       await expect(both).toBeEnabled();
       // Neither long label is cut short (the row is a 2-column grid with them).
-      for (const b of [both, cut.getByRole("button", { name: KEEP })]) expect(await b.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+      for (const b of [both, cut.getByRole('button', { name: KEEP })])
+        expect(await b.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
       await both.click();
-      await expect(cut).toHaveAttribute("data-status", "applied");
-      await expect(cut.getByTestId("chat-card-summary")).toContainText("Weekly alert digest");
-      await expect(cut.getByTestId("chat-card-summary")).toContainText("Mobile alert push");
-      await page.keyboard.press("Escape");
-      await expect(page.getByTestId("floating-card")).toHaveCount(0);
+      await expect(cut).toHaveAttribute('data-status', 'applied');
+      await expect(cut.getByTestId('chat-card-summary')).toContainText('Weekly alert digest');
+      await expect(cut.getByTestId('chat-card-summary')).toContainText('Mobile alert push');
+      await page.keyboard.press('Escape');
+      await expect(page.getByTestId('floating-card')).toHaveCount(0);
       // The Timeline's rows, struck through (a desktop's chart and a phone's list alike).
-      await struck(page, ["alert-rules", "alert-digest", "alert-mobile"], true);
-      await struck(page, ["alert-export"], false);
+      await struck(page, ['alert-rules', 'alert-digest', 'alert-mobile'], true);
+      await struck(page, ['alert-export'], false);
 
-      const banner = page.getByTestId("draft-banner");
-      await expect(banner.getByTestId("draft-count")).toHaveText("1");
-      await banner.getByRole("button", { name: "See changes" }).click();
-      const rows = banner.getByTestId("draft-changes").getByRole("listitem");
+      const banner = page.getByTestId('draft-banner');
+      await expect(banner.getByTestId('draft-count')).toHaveText('1');
+      await banner.getByRole('button', { name: 'See changes' }).click();
+      const rows = banner.getByTestId('draft-changes').getByRole('listitem');
       await expect(rows).toHaveCount(1);
-      await expect(rows.first()).toContainText("Cut Alert rules engine and its dependents");
-      await expect(rows.first()).toContainText("Weekly alert digest");
-      await expect(rows.first()).toContainText("Mobile alert push");
+      await expect(rows.first()).toContainText('Cut Alert rules engine and its dependents');
+      await expect(rows.first()).toContainText('Weekly alert digest');
+      await expect(rows.first()).toContainText('Mobile alert push');
 
-      await banner.getByRole("button", { name: "Undo" }).click();
-      await expect(page.getByTestId("draft-changes").getByText("Cut Alert rules engine and its dependents")).toHaveCount(0);
-      await struck(page, ["alert-rules", "alert-digest", "alert-mobile"], false);
+      await banner.getByRole('button', { name: 'Undo' }).click();
+      await expect(
+        page.getByTestId('draft-changes').getByText('Cut Alert rules engine and its dependents'),
+      ).toHaveCount(0);
+      await struck(page, ['alert-rules', 'alert-digest', 'alert-mobile'], false);
     });
 
     test(`an item no one depends on has only its Apply (${where})`, async ({ page }) => {
       await open(page);
-      const talk = await openTalk(page, "setup-import");
-      await say(talk, "cut it");
-      const cut = talk.getByTestId("chat-card").filter({ hasText: "Cut Sample data import" });
-      await expect(cut.getByRole("button", { name: "Apply", exact: true })).toBeVisible();
-      await expect(cut.getByRole("button", { name: BOTH })).toHaveCount(0);
-      await expect(cut.getByRole("button", { name: KEEP })).toHaveCount(0);
+      const talk = await openTalk(page, 'setup-import');
+      await say(talk, 'cut it');
+      const cut = talk.getByTestId('chat-card').filter({ hasText: 'Cut Sample data import' });
+      await expect(cut.getByRole('button', { name: 'Apply', exact: true })).toBeVisible();
+      await expect(cut.getByRole('button', { name: BOTH })).toHaveCount(0);
+      await expect(cut.getByRole('button', { name: KEEP })).toHaveCount(0);
     });
 
     test(`a commenter proposes it (${where})`, async ({ page }) => {
-      await open(page, "commenter@example.com");
-      const talk = await openTalk(page, "alert-rules");
-      await say(talk, "cut it");
-      const cut = talk.getByTestId("chat-card").filter({ hasText: "Cut Alert rules engine" });
-      await cut.getByRole("button", { name: `Propose: ${BOTH.toLowerCase()}` }).click();
-      await expect(cut).toHaveAttribute("data-status", "proposed");
-      await page.keyboard.press("Escape");
+      await open(page, 'commenter@example.com');
+      const talk = await openTalk(page, 'alert-rules');
+      await say(talk, 'cut it');
+      const cut = talk.getByTestId('chat-card').filter({ hasText: 'Cut Alert rules engine' });
+      await cut.getByRole('button', { name: `Propose: ${BOTH.toLowerCase()}` }).click();
+      await expect(cut).toHaveAttribute('data-status', 'proposed');
+      await page.keyboard.press('Escape');
       // A proposal writes nothing: no working draft, no cut row.
-      await expect(page.getByTestId("draft-banner")).toHaveCount(0);
-      await struck(page, ["alert-digest"], false);
+      await expect(page.getByTestId('draft-banner')).toHaveCount(0);
+      await struck(page, ['alert-digest'], false);
     });
 
-    test(`deciding the item but not its dependents, the cut with them is a proposal (${where})`, async ({ page }) => {
-      await open(page, "approver@example.com", "roadmap-talk-own-decider");
-      const talk = await openTalk(page, "alert-rules");
-      await say(talk, "cut it");
-      const cut = talk.getByTestId("chat-card").filter({ hasText: "Cut Alert rules engine" });
+    test(`deciding the item but not its dependents, the cut with them is a proposal (${where})`, async ({
+      page,
+    }) => {
+      await open(page, 'approver@example.com', 'roadmap-talk-own-decider');
+      const talk = await openTalk(page, 'alert-rules');
+      await say(talk, 'cut it');
+      const cut = talk.getByTestId('chat-card').filter({ hasText: 'Cut Alert rules engine' });
       // The plain cut is theirs; the dependents' cut goes to whoever decides them all.
-      await expect(cut.getByRole("button", { name: KEEP, exact: true })).toBeEnabled();
-      await expect(cut.getByRole("button", { name: BOTH, exact: true })).toHaveCount(0);
-      await cut.getByRole("button", { name: `Propose: ${BOTH.toLowerCase()}` }).click();
-      await expect(cut).toHaveAttribute("data-status", "proposed");
-      await page.keyboard.press("Escape");
-      await expect(page.getByTestId("draft-banner")).toHaveCount(0);
-      await struck(page, ["alert-rules", "alert-digest"], false);
+      await expect(cut.getByRole('button', { name: KEEP, exact: true })).toBeEnabled();
+      await expect(cut.getByRole('button', { name: BOTH, exact: true })).toHaveCount(0);
+      await cut.getByRole('button', { name: `Propose: ${BOTH.toLowerCase()}` }).click();
+      await expect(cut).toHaveAttribute('data-status', 'proposed');
+      await page.keyboard.press('Escape');
+      await expect(page.getByTestId('draft-banner')).toHaveCount(0);
+      await struck(page, ['alert-rules', 'alert-digest'], false);
     });
   });
 }

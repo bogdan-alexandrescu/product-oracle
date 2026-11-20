@@ -1,19 +1,19 @@
-"use client";
+'use client';
 
-import { Link } from "@/lib/nav";
-import { useState } from "react";
+import { Link } from '@/lib/nav';
+import { useState } from 'react';
 
-import { Button, Chip, DataTable, InfoTip, Panel, type Column } from "@/components/ds";
-import { ErrorNote } from "@/components/ui";
-import { api, unwrap } from "@/lib/api/client";
-import { useCompanyZone } from "@/lib/dates";
-import { formatDate, zoneName } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { useQuery } from "@/lib/use-query";
+import { Button, Chip, DataTable, InfoTip, Panel, type Column } from '@/components/ds';
+import { ErrorNote } from '@/components/ui';
+import { api, unwrap } from '@/lib/api/client';
+import { useCompanyZone } from '@/lib/dates';
+import { formatDate, zoneName } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { useQuery } from '@/lib/use-query';
 
-import { CompanyEmpty } from "../../_empty";
-import { MEMOS_KEY, MEMO_STATE, type Memo } from "./lib";
-import { NewPricingMemo } from "./NewPricingMemo";
+import { CompanyEmpty } from '../../_empty';
+import { MEMOS_KEY, MEMO_STATE, type Memo } from './lib';
+import { NewPricingMemo } from './NewPricingMemo';
 
 /**
  * Company › Market › Pricing (H9): the pricing memos, newest first, each with its state and
@@ -23,27 +23,36 @@ import { NewPricingMemo } from "./NewPricingMemo";
 export function Pricing() {
   const { can } = useMe();
   const zone = useCompanyZone();
-  const mayCreate = can("start_draft", true) && can("create_run", true);
-  const q = useQuery(MEMOS_KEY, () => unwrap(api.GET("/v1/pricing-memos")));
+  const mayCreate = can('start_draft', true) && can('create_run', true);
+  const q = useQuery(MEMOS_KEY, () => unwrap(api.GET('/v1/pricing-memos')));
   const [creating, setCreating] = useState(false);
 
   const columns: Column<Memo>[] = [
     {
-      key: "memo",
-      header: "Memo",
-      phone: "title",
+      key: 'memo',
+      header: 'Memo',
+      phone: 'title',
       cell: (m) => (
-        <Link href={`/documents/${m.slug}`} className="truncate font-medium text-text hover:underline" data-testid="memo-title">
+        <Link
+          href={`/documents/${m.slug}`}
+          className="truncate font-medium text-text hover:underline"
+          data-testid="memo-title"
+        >
           {m.title}
         </Link>
       ),
     },
-    { key: "question", header: "Question", phone: "hide", cell: (m) => <span className="text-sm text-text2">{m.question ?? "—"}</span> },
     {
-      key: "state",
-      header: "State",
-      width: "112px",
-      phone: "meta",
+      key: 'question',
+      header: 'Question',
+      phone: 'hide',
+      cell: (m) => <span className="text-sm text-text2">{m.question ?? '—'}</span>,
+    },
+    {
+      key: 'state',
+      header: 'State',
+      width: '112px',
+      phone: 'meta',
       cell: (m) => (
         <span data-testid="memo-state" className="inline-flex">
           <Chip kind={MEMO_STATE[m.state].kind} dot>
@@ -53,21 +62,33 @@ export function Pricing() {
       ),
     },
     {
-      key: "decision",
-      header: "Decision",
-      width: "240px",
-      phone: "hide",
+      key: 'decision',
+      header: 'Decision',
+      width: '240px',
+      phone: 'hide',
       cell: (m) =>
         m.decision ? (
-          <Link href={`/company/decisions?d=${m.decision.number}`} className="text-sm hover:underline" data-testid="memo-decision">
+          <Link
+            href={`/company/decisions?d=${m.decision.number}`}
+            className="text-sm hover:underline"
+            data-testid="memo-decision"
+          >
             <span className="font-semibold">D-{m.decision.number}</span> {m.decision.title}
-            {m.decision.chosen_label && <span className="text-text2"> · {m.decision.chosen_label}</span>}
+            {m.decision.chosen_label && (
+              <span className="text-text2"> · {m.decision.chosen_label}</span>
+            )}
           </Link>
         ) : (
           <span className="text-sm text-text2">—</span>
         ),
     },
-    { key: "updated", header: `Updated, ${zoneName(zone)}`, width: "264px", phone: "hide", cell: (m) => <span className="tnum text-sm">{formatDate(m.updated_at)}</span> },
+    {
+      key: 'updated',
+      header: `Updated, ${zoneName(zone)}`,
+      width: '264px',
+      phone: 'hide',
+      cell: (m) => <span className="tnum text-sm">{formatDate(m.updated_at)}</span>,
+    },
   ];
 
   return (
@@ -79,8 +100,9 @@ export function Pricing() {
         tools={
           <div className="flex items-center gap-2">
             <InfoTip label="pricing memos" align="end">
-              A pricing memo sets out one pricing question, two to four options, the evidence and a research plan. It is input: the pricing owner
-              decides the price in the decision log. Owners and approvers see memos.
+              A pricing memo sets out one pricing question, two to four options, the evidence and a
+              research plan. It is input: the pricing owner decides the price in the decision log.
+              Owners and approvers see memos.
             </InfoTip>
             {/* qa-company-20: an empty list shows its own button instead. */}
             {mayCreate && !(q.data && q.data.length === 0) && (
@@ -97,8 +119,9 @@ export function Pricing() {
             title="No pricing memos yet"
             tip={
               <>
-                A memo sets out one pricing question, two to four options and the evidence for each, before the pricing owner decides the price.
-                {mayCreate && " Start one when a pricing question comes up."}
+                A memo sets out one pricing question, two to four options and the evidence for each,
+                before the pricing owner decides the price.
+                {mayCreate && ' Start one when a pricing question comes up.'}
               </>
             }
             action={
@@ -109,7 +132,7 @@ export function Pricing() {
               ) : undefined
             }
           >
-            {!mayCreate && "Owners and approvers write them."}
+            {!mayCreate && 'Owners and approvers write them.'}
           </CompanyEmpty>
         ) : (
           <DataTable
@@ -119,7 +142,7 @@ export function Pricing() {
             rows={q.data}
             loading={q.loading}
             rowKey={(m) => m.slug}
-            rowProps={(m) => ({ "data-testid": "memo-row", "data-slug": m.slug })}
+            rowProps={(m) => ({ 'data-testid': 'memo-row', 'data-slug': m.slug })}
           />
         )}
       </Panel>

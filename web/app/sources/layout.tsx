@@ -1,8 +1,8 @@
-import { Suspense, type ReactNode } from "react";
+import { Suspense, type ReactNode } from 'react';
 
-import { PageTabsProvider } from "@/components/ds";
+import { PageTabsProvider } from '@/components/ds';
 
-import { SettingsNav } from "../settings/_nav";
+import { SettingsNav } from '../settings/_nav';
 
 /** Evidence search lives under Settings › Sources: the rail shows Settings, the tabs Sources. */
 export default function SourcesLayout({ children }: { children: ReactNode }) {

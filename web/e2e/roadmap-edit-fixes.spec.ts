@@ -1,6 +1,6 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login, openRoadmapItem } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login, openRoadmapItem } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /*
  * roadmap-edit-fixes (Nov 5): what applying many roadmap changes through Simple's feature panel
@@ -22,169 +22,203 @@ import { expect, test, type Locator, type Page } from "./test";
  *   changed by Oracle and Oracle's outcome shows.
  */
 
-const ROADMAP = "/simple/roadmap";
-const panel = (page: Page) => page.getByTestId("floating-card");
+const ROADMAP = '/simple/roadmap';
+const panel = (page: Page) => page.getByTestId('floating-card');
 
 /** Clicks `l` once it is scrolled to the middle (on a phone the tab bar covers the bottom). */
 async function tap(l: Locator) {
-  await l.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await l.evaluate((el) => el.scrollIntoView({ block: 'center' }));
   await l.click();
 }
 
 async function open(page: Page, key: string) {
   await page.goto(ROADMAP);
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
   await openRoadmapItem(page, key);
   await expect(panel(page)).toBeVisible();
 }
 
 for (const phone of [false, true]) {
-  const where = phone ? "phone" : "desktop";
+  const where = phone ? 'phone' : 'desktop';
   test.describe(where, () => {
     test.beforeEach(async ({ page }) => {
-      await page.setViewportSize(phone ? { width: 390, height: 844 } : { width: 1440, height: 900 });
+      await page.setViewportSize(
+        phone ? { width: 390, height: 844 } : { width: 1440, height: 900 },
+      );
       await page.context().addInitScript(
         ([key, value]) => {
-          if (!sessionStorage.getItem("roadmap-edit-fixes")) {
-            localStorage.removeItem("po-mock-db-v2");
-            sessionStorage.setItem("roadmap-edit-fixes", "1");
+          if (!sessionStorage.getItem('roadmap-edit-fixes')) {
+            localStorage.removeItem('po-mock-db-v2');
+            sessionStorage.setItem('roadmap-edit-fixes', '1');
           }
           localStorage.setItem(key, value);
         },
-        [MOCK_SCENARIO_KEY, "roadmap-edit-fixes"] as const,
+        [MOCK_SCENARIO_KEY, 'roadmap-edit-fixes'] as const,
       );
     });
 
     test(`removing a dependency on another PRD's feature sticks (${where})`, async ({ page }) => {
       await login(page);
-      await open(page, "setup-checklist");
-      const deps = panel(page).getByTestId("card-depends");
-      await expect(deps.getByTestId("card-depends-row")).toHaveCount(1);
-      await expect(deps).toContainText("Alert rules engine");
-      await tap(panel(page).getByRole("button", { name: "Remove Alert rules engine from what it depends on" }));
-      await expect(page.getByRole("status").filter({ hasText: "Dependency removed" })).toBeVisible();
-      await expect(deps).toContainText("Nothing");
+      await open(page, 'setup-checklist');
+      const deps = panel(page).getByTestId('card-depends');
+      await expect(deps.getByTestId('card-depends-row')).toHaveCount(1);
+      await expect(deps).toContainText('Alert rules engine');
+      await tap(
+        panel(page).getByRole('button', {
+          name: 'Remove Alert rules engine from what it depends on',
+        }),
+      );
+      await expect(
+        page.getByRole('status').filter({ hasText: 'Dependency removed' }),
+      ).toBeVisible();
+      await expect(deps).toContainText('Nothing');
       await page.reload();
-      await open(page, "setup-checklist");
-      await expect(panel(page).getByTestId("card-depends")).toContainText("Nothing");
-      await expect(panel(page).getByTestId("card-depends-row")).toHaveCount(0);
+      await open(page, 'setup-checklist');
+      await expect(panel(page).getByTestId('card-depends')).toContainText('Nothing');
+      await expect(panel(page).getByTestId('card-depends-row')).toHaveCount(0);
     });
 
     test(`a rename keeps the item's code (${where})`, async ({ page }) => {
       await login(page);
-      await open(page, "setup-video");
-      const name = panel(page).getByTestId("card-name");
-      await expect(name.locator(".simple-code")).toHaveText("F-07");
-      await expect(name.locator("h2")).toHaveText(/^Welcome video/);
-      await tap(panel(page).getByRole("button", { name: "More actions" }));
-      await tap(page.getByRole("menuitem", { name: "Rename" }));
-      await expect(panel(page).getByLabel("Name")).toHaveValue("Welcome video");
-      await panel(page).getByLabel("Name").fill("Welcome film");
-      await tap(panel(page).getByRole("button", { name: "Save" }));
-      await expect(name.locator("h2")).toHaveText(/^Welcome film/);
-      await expect(name.locator(".simple-code")).toHaveText("F-07");
+      await open(page, 'setup-video');
+      const name = panel(page).getByTestId('card-name');
+      await expect(name.locator('.simple-code')).toHaveText('F-07');
+      await expect(name.locator('h2')).toHaveText(/^Welcome video/);
+      await tap(panel(page).getByRole('button', { name: 'More actions' }));
+      await tap(page.getByRole('menuitem', { name: 'Rename' }));
+      await expect(panel(page).getByLabel('Name')).toHaveValue('Welcome video');
+      await panel(page).getByLabel('Name').fill('Welcome film');
+      await tap(panel(page).getByRole('button', { name: 'Save' }));
+      await expect(name.locator('h2')).toHaveText(/^Welcome film/);
+      await expect(name.locator('.simple-code')).toHaveText('F-07');
       await page.reload();
-      await open(page, "setup-video");
-      await expect(panel(page).getByTestId("card-name").locator(".simple-code")).toHaveText("F-07");
-      await expect(panel(page).getByTestId("card-name").locator("h2")).toHaveText(/^Welcome film/);
+      await open(page, 'setup-video');
+      await expect(panel(page).getByTestId('card-name').locator('.simple-code')).toHaveText('F-07');
+      await expect(panel(page).getByTestId('card-name').locator('h2')).toHaveText(/^Welcome film/);
     });
 
-    for (const who of ["owner", "approver"] as const) {
-      test(`a dependency that would close a loop cannot be added, as the ${who} (${where})`, async ({ page }) => {
-        await login(page, who === "owner" ? undefined : "approver@example.com");
+    for (const who of ['owner', 'approver'] as const) {
+      test(`a dependency that would close a loop cannot be added, as the ${who} (${where})`, async ({
+        page,
+      }) => {
+        await login(page, who === 'owner' ? undefined : 'approver@example.com');
         // Weekly alert digest already depends on Alert rules engine.
-        await open(page, "alert-rules");
-        await tap(panel(page).getByRole("button", { name: "Add a dependency" }));
-        const pick = panel(page).getByLabel("Feature it depends on");
+        await open(page, 'alert-rules');
+        await tap(panel(page).getByRole('button', { name: 'Add a dependency' }));
+        const pick = panel(page).getByLabel('Feature it depends on');
         // The loop-making choice is offered but cannot be picked, and says why.
-        const digest = pick.locator("option").filter({ hasText: "Weekly alert digest" });
+        const digest = pick.locator('option').filter({ hasText: 'Weekly alert digest' });
         await expect(digest).toHaveCount(1);
         await expect(digest).toBeDisabled();
-        await expect(digest).toContainText("it would make a loop");
+        await expect(digest).toContainText('it would make a loop');
         // The search for another PRD's feature does not offer it as a choice either.
-        await panel(page).getByLabel("Or a feature from another PRD").fill("F-79");
-        await expect(panel(page).getByTestId("card-depends-search").getByRole("button", { name: /Weekly alert digest/, disabled: false })).toHaveCount(0);
-        await expect(panel(page).getByRole("button", { name: "Save" })).toBeDisabled();
-        await tap(panel(page).getByRole("button", { name: "Cancel" }));
-        await expect(panel(page).getByTestId("card-depends")).toContainText("Nothing");
+        await panel(page).getByLabel('Or a feature from another PRD').fill('F-79');
+        await expect(
+          panel(page)
+            .getByTestId('card-depends-search')
+            .getByRole('button', { name: /Weekly alert digest/, disabled: false }),
+        ).toHaveCount(0);
+        await expect(panel(page).getByRole('button', { name: 'Save' })).toBeDisabled();
+        await tap(panel(page).getByRole('button', { name: 'Cancel' }));
+        await expect(panel(page).getByTestId('card-depends')).toContainText('Nothing');
         await page.reload();
-        await open(page, "alert-rules");
-        await expect(panel(page).getByTestId("card-depends")).toContainText("Nothing");
+        await open(page, 'alert-rules');
+        await expect(panel(page).getByTestId('card-depends')).toContainText('Nothing');
       });
     }
 
-    test(`Oracle's dependency ideas for a new item are suggestions, and a person's outcome stays (${where})`, async ({ page }) => {
+    test(`Oracle's dependency ideas for a new item are suggestions, and a person's outcome stays (${where})`, async ({
+      page,
+    }) => {
       await login(page);
       await page.goto(ROADMAP);
-      await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+      await expect(page.getByTestId('simple-roadmap')).toBeVisible();
       if (phone) {
-        await page.getByTestId("quick-add-open").click();
-        const sheet = page.getByRole("dialog", { name: "Add an item" });
-        await sheet.getByLabel("Title").fill("Snooze an alert");
-        await sheet.getByLabel("Roadmap").selectOption({ label: "Alerts roadmap" });
-        await sheet.getByRole("button", { name: "Add", exact: true }).click();
+        await page.getByTestId('quick-add-open').click();
+        const sheet = page.getByRole('dialog', { name: 'Add an item' });
+        await sheet.getByLabel('Title').fill('Snooze an alert');
+        await sheet.getByLabel('Roadmap').selectOption({ label: 'Alerts roadmap' });
+        await sheet.getByRole('button', { name: 'Add', exact: true }).click();
         await expect(sheet).toBeHidden();
       } else {
-        await page.getByLabel("Add an item").fill("Snooze an alert");
-        await page.getByTestId("quick-add-roadmap").selectOption({ label: "Alerts roadmap" });
-        await page.getByLabel("Add an item").press("Enter");
+        await page.getByLabel('Add an item').fill('Snooze an alert');
+        await page.getByTestId('quick-add-roadmap').selectOption({ label: 'Alerts roadmap' });
+        await page.getByLabel('Add an item').press('Enter');
       }
-      await expect(page.getByRole("status").filter({ hasText: "Added Snooze an alert as a draft" })).toBeVisible();
+      await expect(
+        page.getByRole('status').filter({ hasText: 'Added Snooze an alert as a draft' }),
+      ).toBeVisible();
       // The added item opens its panel.
       const card = panel(page);
       await expect(card).toBeVisible();
-      await expect(card.getByTestId("item-drafting")).toHaveText("Oracle is drafting…");
+      await expect(card.getByTestId('item-drafting')).toHaveText('Oracle is drafting…');
       // While Oracle drafts, the person sets the goal and types the outcome.
-      await tap(card.getByRole("button", { name: "Change the goal" }));
-      const pick = card.getByTestId("card-goal-edit").getByLabel("Goal");
-      const grow = (await pick.locator("option").allTextContents()).find((t) => t.startsWith("Grow retention"));
+      await tap(card.getByRole('button', { name: 'Change the goal' }));
+      const pick = card.getByTestId('card-goal-edit').getByLabel('Goal');
+      const grow = (await pick.locator('option').allTextContents()).find((t) =>
+        t.startsWith('Grow retention'),
+      );
       expect(grow).toBeTruthy();
       await pick.selectOption({ label: grow! });
-      await tap(card.getByTestId("card-goal-edit").getByRole("button", { name: "Save" }));
-      await expect(card.getByTestId("card-goal")).toContainText("Grow retention");
-      await tap(card.getByRole("button", { name: "Change the outcome" }));
-      await card.getByTestId("card-outcome-edit").getByLabel("Outcome").fill("Admins pause one noisy alert for a day");
-      await tap(card.getByTestId("card-outcome-edit").getByRole("button", { name: "Save" }));
-      await expect(card.getByTestId("card-outcome")).toContainText("Admins pause one noisy alert for a day");
-      await expect(card.getByTestId("item-drafting")).toHaveCount(0, { timeout: 10_000 });
+      await tap(card.getByTestId('card-goal-edit').getByRole('button', { name: 'Save' }));
+      await expect(card.getByTestId('card-goal')).toContainText('Grow retention');
+      await tap(card.getByRole('button', { name: 'Change the outcome' }));
+      await card
+        .getByTestId('card-outcome-edit')
+        .getByLabel('Outcome')
+        .fill('Admins pause one noisy alert for a day');
+      await tap(card.getByTestId('card-outcome-edit').getByRole('button', { name: 'Save' }));
+      await expect(card.getByTestId('card-outcome')).toContainText(
+        'Admins pause one noisy alert for a day',
+      );
+      await expect(card.getByTestId('item-drafting')).toHaveCount(0, { timeout: 10_000 });
       // Oracle's draft leaves what the person set.
-      await expect(card.getByTestId("card-outcome")).toContainText("Admins pause one noisy alert for a day");
-      await expect(card.getByTestId("card-goal")).toContainText("Grow retention");
+      await expect(card.getByTestId('card-outcome')).toContainText(
+        'Admins pause one noisy alert for a day',
+      );
+      await expect(card.getByTestId('card-goal')).toContainText('Grow retention');
       // Oracle's idea is a suggestion: nothing is added until the person adds it.
-      await expect(card.getByTestId("card-depends")).toContainText("Nothing");
-      const idea = card.getByTestId("card-depends-idea");
+      await expect(card.getByTestId('card-depends')).toContainText('Nothing');
+      const idea = card.getByTestId('card-depends-idea');
       await expect(idea).toHaveCount(1);
-      await expect(idea).toContainText("Oracle suggests");
-      await tap(idea.getByRole("button", { name: /^Add / }));
-      await expect(card.getByTestId("card-depends-row")).toHaveCount(1);
-      await expect(card.getByTestId("card-depends-idea")).toHaveCount(0);
+      await expect(idea).toContainText('Oracle suggests');
+      await tap(idea.getByRole('button', { name: /^Add / }));
+      await expect(card.getByTestId('card-depends-row')).toHaveCount(1);
+      await expect(card.getByTestId('card-depends-idea')).toHaveCount(0);
     });
 
-    test(`a person's outcome stays when Oracle's draft lands before they save (${where})`, async ({ page }) => {
+    test(`a person's outcome stays when Oracle's draft lands before they save (${where})`, async ({
+      page,
+    }) => {
       await login(page);
       await page.goto(ROADMAP);
-      await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+      await expect(page.getByTestId('simple-roadmap')).toBeVisible();
       if (phone) {
-        await page.getByTestId("quick-add-open").click();
-        const sheet = page.getByRole("dialog", { name: "Add an item" });
-        await sheet.getByLabel("Title").fill("Snooze an alert");
-        await sheet.getByLabel("Roadmap").selectOption({ label: "Alerts roadmap" });
-        await sheet.getByRole("button", { name: "Add", exact: true }).click();
+        await page.getByTestId('quick-add-open').click();
+        const sheet = page.getByRole('dialog', { name: 'Add an item' });
+        await sheet.getByLabel('Title').fill('Snooze an alert');
+        await sheet.getByLabel('Roadmap').selectOption({ label: 'Alerts roadmap' });
+        await sheet.getByRole('button', { name: 'Add', exact: true }).click();
         await expect(sheet).toBeHidden();
       } else {
-        await page.getByLabel("Add an item").fill("Snooze an alert");
-        await page.getByTestId("quick-add-roadmap").selectOption({ label: "Alerts roadmap" });
-        await page.getByLabel("Add an item").press("Enter");
+        await page.getByLabel('Add an item').fill('Snooze an alert');
+        await page.getByTestId('quick-add-roadmap').selectOption({ label: 'Alerts roadmap' });
+        await page.getByLabel('Add an item').press('Enter');
       }
       const card = panel(page);
-      await expect(card.getByTestId("item-drafting")).toHaveText("Oracle is drafting…");
-      await tap(card.getByRole("button", { name: "Change the outcome" }));
-      await card.getByTestId("card-outcome-edit").getByLabel("Outcome").fill("Admins pause one noisy alert for a day");
+      await expect(card.getByTestId('item-drafting')).toHaveText('Oracle is drafting…');
+      await tap(card.getByRole('button', { name: 'Change the outcome' }));
+      await card
+        .getByTestId('card-outcome-edit')
+        .getByLabel('Outcome')
+        .fill('Admins pause one noisy alert for a day');
       // Oracle's draft is done before the person saves, and the page has not read it yet.
       await page.clock.setSystemTime((await page.evaluate(() => Date.now())) + 5_000);
-      await tap(card.getByTestId("card-outcome-edit").getByRole("button", { name: "Save" }));
-      await expect(card.getByTestId("item-drafting")).toHaveCount(0, { timeout: 10_000 });
-      await expect(card.getByTestId("card-outcome")).toContainText("Admins pause one noisy alert for a day");
+      await tap(card.getByTestId('card-outcome-edit').getByRole('button', { name: 'Save' }));
+      await expect(card.getByTestId('item-drafting')).toHaveCount(0, { timeout: 10_000 });
+      await expect(card.getByTestId('card-outcome')).toContainText(
+        'Admins pause one noisy alert for a day',
+      );
     });
   });
 }

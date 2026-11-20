@@ -1,4 +1,4 @@
-import { LinkButton, NotFoundPanel } from "@/components/ds";
+import { LinkButton, NotFoundPanel } from '@/components/ds';
 
 /** What a document the API does not have says (404), without its slug (qa-shell-1). */
 export const DOC_MISSING = "This document doesn't exist or was deleted.";

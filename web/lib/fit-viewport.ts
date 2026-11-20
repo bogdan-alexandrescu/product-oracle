@@ -1,15 +1,21 @@
-"use client";
+'use client';
 
-import { useEffect, useLayoutEffect, useState, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useState, type RefObject } from 'react';
 
 /** The room a floating panel keeps from the viewport's edges. */
 export const FIT_MARGIN = 16;
 /** Marks a fitted panel's scrolling body (below its header with the title and close). */
-export const FIT_BODY = "data-fit-body";
+export const FIT_BODY = 'data-fit-body';
 
 // PageDown / PageUp move the body by most of its height; End / Home to its foot / head.
-const STEPS: Record<string, number> = { PageDown: 0.9, PageUp: -0.9, End: Infinity, Home: -Infinity };
-const TYPING = 'input, textarea, select, [contenteditable="true"], [role="listbox"], [role="menu"], [role="combobox"]';
+const STEPS: Record<string, number> = {
+  PageDown: 0.9,
+  PageUp: -0.9,
+  End: Infinity,
+  Home: -Infinity,
+};
+const TYPING =
+  'input, textarea, select, [contenteditable="true"], [role="listbox"], [role="menu"], [role="combobox"]';
 
 /**
  * BGD (Nov 10): a floating panel always fits the viewport. An absolute panel (`top` in its
@@ -22,7 +28,12 @@ const TYPING = 'input, textarea, select, [contenteditable="true"], [role="listbo
  */
 export function useFitViewport(
   ref: RefObject<HTMLElement | null>,
-  { on = true, top, anchor, follow = false }: { on?: boolean; top?: number; anchor?: () => Element | null; follow?: boolean },
+  {
+    on = true,
+    top,
+    anchor,
+    follow = false,
+  }: { on?: boolean; top?: number; anchor?: () => Element | null; follow?: boolean },
 ): { top?: number; maxHeight?: number } {
   const [fit, setFit] = useState<{ top?: number; maxHeight?: number }>({});
   useLayoutEffect(() => {
@@ -34,7 +45,8 @@ export function useFitViewport(
       const vh = window.innerHeight;
       const room = vh - 2 * FIT_MARGIN;
       // The panel's whole height were it never capped: its header and its body's full content.
-      const whole = body === el ? el.scrollHeight : el.offsetHeight - body.clientHeight + body.scrollHeight;
+      const whole =
+        body === el ? el.scrollHeight : el.offsetHeight - body.clientHeight + body.scrollHeight;
       const h = Math.min(whole, room);
       const r = el.getBoundingClientRect();
       if (top == null) {
@@ -46,7 +58,10 @@ export function useFitViewport(
       let at = edge + top;
       if (at + h > vh - FIT_MARGIN) {
         const bar = anchor?.()?.getBoundingClientRect();
-        at = bar && bar.top - 6 - h >= FIT_MARGIN ? bar.top - 6 - h : Math.max(FIT_MARGIN, vh - FIT_MARGIN - h);
+        at =
+          bar && bar.top - 6 - h >= FIT_MARGIN
+            ? bar.top - 6 - h
+            : Math.max(FIT_MARGIN, vh - FIT_MARGIN - h);
       }
       const next = Math.round(at - edge);
       setFit((f) => (f.top === next && f.maxHeight === room ? f : { top: next, maxHeight: room }));
@@ -57,13 +72,13 @@ export function useFitViewport(
     seen.observe(el);
     const grows = new MutationObserver(measure);
     grows.observe(el, { childList: true, subtree: true });
-    window.addEventListener("resize", measure);
-    if (follow) window.addEventListener("scroll", measure, { capture: true, passive: true });
+    window.addEventListener('resize', measure);
+    if (follow) window.addEventListener('scroll', measure, { capture: true, passive: true });
     return () => {
       seen.disconnect();
       grows.disconnect();
-      window.removeEventListener("resize", measure);
-      window.removeEventListener("scroll", measure, { capture: true });
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('scroll', measure, { capture: true });
     };
   }, [ref, on, top, anchor, follow]);
   useScrollInside(ref, on);
@@ -82,26 +97,32 @@ export function useScrollInside(ref: RefObject<HTMLElement | null>, on = true) {
     // The wheel over the header scrolls the body, not the page behind.
     const onWheel = (e: WheelEvent) => {
       const body = bodyOf();
-      if (body === el || body.contains(e.target as Node) || body.scrollHeight <= body.clientHeight) return;
+      if (body === el || body.contains(e.target as Node) || body.scrollHeight <= body.clientHeight)
+        return;
       body.scrollTop += e.deltaY;
       e.preventDefault();
     };
     const onKey = (e: KeyboardEvent) => {
       const step = STEPS[e.key];
-      if (step == null || e.defaultPrevented || (e.target as Element | null)?.closest?.(TYPING)) return;
+      if (step == null || e.defaultPrevented || (e.target as Element | null)?.closest?.(TYPING))
+        return;
       const body = bodyOf();
-      body.scrollTop = Number.isFinite(step) ? body.scrollTop + step * body.clientHeight : step > 0 ? body.scrollHeight : 0;
+      body.scrollTop = Number.isFinite(step)
+        ? body.scrollTop + step * body.clientHeight
+        : step > 0
+          ? body.scrollHeight
+          : 0;
       e.preventDefault();
     };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    el.addEventListener("keydown", onKey);
+    el.addEventListener('wheel', onWheel, { passive: false });
+    el.addEventListener('keydown', onKey);
     return () => {
-      el.removeEventListener("wheel", onWheel);
-      el.removeEventListener("keydown", onKey);
+      el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('keydown', onKey);
     };
   }, [ref, on]);
 }
 
 /** A fixed panel pinned 16 px from the viewport's top, with no ref to fit: its height capped to
  * the viewport less the margins, scrolling inside (the milestone panel). */
-export const FIT_FIXED = "max-h-[calc(100dvh-32px)] overflow-y-auto overscroll-contain";
+export const FIT_FIXED = 'max-h-[calc(100dvh-32px)] overflow-y-auto overscroll-contain';

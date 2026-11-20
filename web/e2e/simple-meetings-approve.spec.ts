@@ -1,6 +1,6 @@
-import { MINUTES_LATER_MS, MOCK_MEETINGS_KEY } from "../lib/api/mock/simple-meetings";
-import { joinMeeting, login } from "./helpers";
-import { expect, test, type BrowserContext, type Page } from "./test";
+import { MINUTES_LATER_MS, MOCK_MEETINGS_KEY } from '../lib/api/mock/simple-meetings';
+import { joinMeeting, login } from './helpers';
+import { expect, test, type BrowserContext, type Page } from './test';
 
 /**
  * Simple S8 (#723), two production findings after train W, driven through the UI on the
@@ -45,144 +45,204 @@ import { expect, test, type BrowserContext, type Page } from "./test";
  */
 
 async function flags(context: BrowserContext, value: string) {
-  await context.addInitScript(([key, v]) => localStorage.setItem(key, v), [MOCK_MEETINGS_KEY, value] as const);
+  await context.addInitScript(([key, v]) => localStorage.setItem(key, v), [
+    MOCK_MEETINGS_KEY,
+    value,
+  ] as const);
 }
 
 /**
  * `attendee`: the one ticked besides the presenter (qa-simple-decide-35); never the reviewer a test needs absent.
  * `join`: Priya Raman, the PRD's invited reviewer, presses Join (walkc-meeting-r2 review: only joined attendees are present).
  */
-async function startWithAnEdit(page: Page, absent?: string, attendee = "Theo Brandt", join = false) {
+async function startWithAnEdit(
+  page: Page,
+  absent?: string,
+  attendee = 'Theo Brandt',
+  join = false,
+) {
   await login(page);
-  await page.goto("/simple/prds/guided-setup");
-  await page.getByRole("button", { name: "Start a review meeting" }).click();
+  await page.goto('/simple/prds/guided-setup');
+  await page.getByRole('button', { name: 'Start a review meeting' }).click();
   // qa-simple-decide-35: a review needs one attendee besides the presenter.
-  await page.getByRole("dialog", { name: "Start a review" }).getByRole("checkbox", { name: attendee }).check();
-  await page.getByRole("dialog", { name: "Start a review" }).getByRole("button", { name: "Start", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
+  await page
+    .getByRole('dialog', { name: 'Start a review' })
+    .getByRole('checkbox', { name: attendee })
+    .check();
+  await page
+    .getByRole('dialog', { name: 'Start a review' })
+    .getByRole('button', { name: 'Start', exact: true })
+    .click();
+  await expect(page.getByRole('heading', { name: 'Review: Guided setup' })).toBeVisible();
   if (join) {
-    await joinMeeting(page, "approver@example.com");
-    await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
+    await joinMeeting(page, 'approver@example.com');
+    await expect(page.getByRole('heading', { name: 'Review: Guided setup' })).toBeVisible();
   }
   if (absent) {
     // qa-simple-decide-29: on a phone the attendees fold into one row.
-    if (await page.getByTestId("meeting-people-toggle").isVisible()) await page.getByTestId("meeting-people-toggle").click();
-    await page.getByRole("button", { name: `Mark ${absent} away` }).click();
-    await expect(page.getByRole("button", { name: `Mark ${absent} here` })).toBeVisible();
+    if (await page.getByTestId('meeting-people-toggle').isVisible())
+      await page.getByTestId('meeting-people-toggle').click();
+    await page.getByRole('button', { name: `Mark ${absent} away` }).click();
+    await expect(page.getByRole('button', { name: `Mark ${absent} here` })).toBeVisible();
   }
-  await expect(page.getByTestId("meeting-screen").getByTestId("one-pager")).toContainText("Version 3");
-  await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
-  await page.getByLabel("New wording for").fill("A checklist that names the next step");
-  await page.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByRole("status", { name: "Working draft" })).toContainText("1 change");
-  await page.getByRole("button", { name: /^Approve and publish one-pager edits/ }).click();
-  await page.getByRole("alertdialog").getByRole("button", { name: "Approve and publish" }).click();
+  await expect(page.getByTestId('meeting-screen').getByTestId('one-pager')).toContainText(
+    'Version 3',
+  );
+  await page.getByRole('button', { name: 'Edit “A setup checklist that shows' }).click();
+  await page.getByLabel('New wording for').fill('A checklist that names the next step');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('status', { name: 'Working draft' })).toContainText('1 change');
+  await page.getByRole('button', { name: /^Approve and publish one-pager edits/ }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Approve and publish' }).click();
 }
 
 async function onePagerOutside(page: Page) {
-  await page.goto("/simple/prds/guided-setup");
-  const pager = page.getByTestId("one-pager");
+  await page.goto('/simple/prds/guided-setup');
+  const pager = page.getByTestId('one-pager');
   await expect(pager).toBeVisible();
   return pager;
 }
 
 async function endOne(page: Page) {
   await login(page);
-  await page.goto("/simple/meetings");
-  await page.getByRole("button", { name: "Start review" }).first().click();
-  const sheet = page.getByRole("dialog", { name: "Start a review" });
-  await sheet.getByLabel("PRD").selectOption({ label: "Guided setup" });
-  await sheet.getByRole("button", { name: "Start", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
-  await page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "2 Roadmap" }).click();
-  await page.getByRole("button", { name: "Move Setup checklist to Next" }).click();
-  await expect(page.getByRole("region", { name: "Decisions in this meeting" })).toContainText("Moved Setup checklist");
-  await page.getByRole("button", { name: "End meeting" }).click();
-  await page.getByRole("alertdialog").getByRole("button", { name: "End meeting" }).click();
-  await expect(page.getByTestId("end-screen")).toBeVisible();
+  await page.goto('/simple/meetings');
+  await page.getByRole('button', { name: 'Start review' }).first().click();
+  const sheet = page.getByRole('dialog', { name: 'Start a review' });
+  await sheet.getByLabel('PRD').selectOption({ label: 'Guided setup' });
+  await sheet.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Review: Guided setup' })).toBeVisible();
+  await page
+    .getByRole('navigation', { name: 'Steps' })
+    .getByRole('button', { name: '2 Roadmap' })
+    .click();
+  await page.getByRole('button', { name: 'Move Setup checklist to Next' }).click();
+  await expect(page.getByRole('region', { name: 'Decisions in this meeting' })).toContainText(
+    'Moved Setup checklist',
+  );
+  await page.getByRole('button', { name: 'End meeting' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'End meeting' }).click();
+  await expect(page.getByTestId('end-screen')).toBeVisible();
 }
 
-const minutesRegion = (page: Page) => page.getByRole("region", { name: "Minutes" });
+const minutesRegion = (page: Page) => page.getByRole('region', { name: 'Minutes' });
 
 for (const phone of [false, true]) {
-  for (const scheme of ["light", "dark"] as const) {
-    test.describe(`${phone ? "phone" : "desktop"} · ${scheme}`, () => {
-      test.use({ viewport: phone ? { width: 390, height: 844 } : { width: 1366, height: 820 }, colorScheme: scheme });
-
-      test("Approve on a PRD with no required reviewer publishes: the banner, the decision and the one-pager agree", async ({ page, context }) => {
-        await flags(context, "no-reviewers");
-        await startWithAnEdit(page);
-        await expect(page.getByTestId("approved-banner")).toHaveText("Approved in Review: Guided setup · published");
-        await expect(page.getByRole("region", { name: "Decisions in this meeting" })).toContainText("Approved Guided setup (published)");
-        const pager = await onePagerOutside(page);
-        await expect(pager).toContainText("Version 4");
-        await expect(pager).toContainText("A checklist that names the next step");
-        await expect(page.getByRole("status", { name: "Working draft" })).toHaveCount(0);
+  for (const scheme of ['light', 'dark'] as const) {
+    test.describe(`${phone ? 'phone' : 'desktop'} · ${scheme}`, () => {
+      test.use({
+        viewport: phone ? { width: 390, height: 844 } : { width: 1366, height: 820 },
+        colorScheme: scheme,
       });
 
-      test("Approve with the required reviewer absent says what it waits on, and the one-pager stays published", async ({ page }) => {
-        await startWithAnEdit(page, "Priya Raman");
-        const banner = page.getByTestId("approved-banner");
-        await expect(banner).toHaveText("Approved in Review: Guided setup · not yet published: Waiting on Priya Raman's approval");
-        await expect(banner).not.toContainText("· published");
-        await expect(page.getByRole("region", { name: "Decisions in this meeting" })).toContainText("Approved Guided setup (not yet published: Waiting on Priya Raman's approval)");
-        await expect(page.getByRole("region", { name: "Decisions in this meeting" })).not.toContainText("(published)");
+      test('Approve on a PRD with no required reviewer publishes: the banner, the decision and the one-pager agree', async ({
+        page,
+        context,
+      }) => {
+        await flags(context, 'no-reviewers');
+        await startWithAnEdit(page);
+        await expect(page.getByTestId('approved-banner')).toHaveText(
+          'Approved in Review: Guided setup · published',
+        );
+        await expect(page.getByRole('region', { name: 'Decisions in this meeting' })).toContainText(
+          'Approved Guided setup (published)',
+        );
         const pager = await onePagerOutside(page);
-        await expect(pager).toContainText("Version 3");
-        await expect(pager).not.toContainText("Version 4");
-        await expect(page.getByRole("status", { name: "Working draft" })).toContainText(
+        await expect(pager).toContainText('Version 4');
+        await expect(pager).toContainText('A checklist that names the next step');
+        await expect(page.getByRole('status', { name: 'Working draft' })).toHaveCount(0);
+      });
+
+      test('Approve with the required reviewer absent says what it waits on, and the one-pager stays published', async ({
+        page,
+      }) => {
+        await startWithAnEdit(page, 'Priya Raman');
+        const banner = page.getByTestId('approved-banner');
+        await expect(banner).toHaveText(
+          "Approved in Review: Guided setup · not yet published: Waiting on Priya Raman's approval",
+        );
+        await expect(banner).not.toContainText('· published');
+        await expect(page.getByRole('region', { name: 'Decisions in this meeting' })).toContainText(
+          "Approved Guided setup (not yet published: Waiting on Priya Raman's approval)",
+        );
+        await expect(
+          page.getByRole('region', { name: 'Decisions in this meeting' }),
+        ).not.toContainText('(published)');
+        const pager = await onePagerOutside(page);
+        await expect(pager).toContainText('Version 3');
+        await expect(pager).not.toContainText('Version 4');
+        await expect(page.getByRole('status', { name: 'Working draft' })).toContainText(
           "Approved in Review: Guided setup · not yet published: Waiting on Priya Raman's approval",
         );
       });
 
-      test("Approve with a required section's reviewer absent waits on that person", async ({ page, context }) => {
-        await flags(context, "section-reviewer");
+      test("Approve with a required section's reviewer absent waits on that person", async ({
+        page,
+        context,
+      }) => {
+        await flags(context, 'section-reviewer');
         // Theo Brandt, the section's reviewer, is not in the meeting; Priya Raman (the PRD's reviewer) is, and has joined.
-        await startWithAnEdit(page, undefined, "Priya Raman", true);
-        await expect(page.getByTestId("approved-banner")).toHaveText(
+        await startWithAnEdit(page, undefined, 'Priya Raman', true);
+        await expect(page.getByTestId('approved-banner')).toHaveText(
           "Approved in Review: Guided setup · not yet published: Waiting on Theo Brandt's approval",
         );
-        await expect(page.getByRole("region", { name: "Decisions in this meeting" })).toContainText("Approved Guided setup (not yet published: Waiting on Theo Brandt's approval)");
+        await expect(page.getByRole('region', { name: 'Decisions in this meeting' })).toContainText(
+          "Approved Guided setup (not yet published: Waiting on Theo Brandt's approval)",
+        );
         const pager = await onePagerOutside(page);
-        await expect(pager).toContainText("Version 3");
-        await expect(page.getByRole("status", { name: "Working draft" })).toContainText(
+        await expect(pager).toContainText('Version 3');
+        await expect(page.getByRole('status', { name: 'Working draft' })).toContainText(
           "Approved in Review: Guided setup · not yet published: Waiting on Theo Brandt's approval",
         );
       });
 
-      test("Approve held by a required section with nobody to approve it says so on the one-pager", async ({ page, context }) => {
-        await flags(context, "section-needs-reviewer");
-        await startWithAnEdit(page, undefined, "Theo Brandt", true);
-        await expect(page.getByTestId("approved-banner")).toHaveText(
-          "Approved in Review: Guided setup · not yet published: Sections What we will build need a reviewer",
+      test('Approve held by a required section with nobody to approve it says so on the one-pager', async ({
+        page,
+        context,
+      }) => {
+        await flags(context, 'section-needs-reviewer');
+        await startWithAnEdit(page, undefined, 'Theo Brandt', true);
+        await expect(page.getByTestId('approved-banner')).toHaveText(
+          'Approved in Review: Guided setup · not yet published: Sections What we will build need a reviewer',
         );
         const pager = await onePagerOutside(page);
-        await expect(pager).toContainText("Version 3");
-        await expect(page.getByRole("status", { name: "Working draft" })).toContainText(
-          "Approved in Review: Guided setup · not yet published: Sections What we will build need a reviewer",
+        await expect(pager).toContainText('Version 3');
+        await expect(page.getByRole('status', { name: 'Working draft' })).toContainText(
+          'Approved in Review: Guided setup · not yet published: Sections What we will build need a reviewer',
         );
       });
 
-      test("The end screen shows Oracle's minutes when the job answers later, without a reload", async ({ page, context }) => {
-        await flags(context, "minutes-later");
+      test("The end screen shows Oracle's minutes when the job answers later, without a reload", async ({
+        page,
+        context,
+      }) => {
+        await flags(context, 'minutes-later');
         await endOne(page);
         const minutes = minutesRegion(page);
-        await expect(minutes.getByText("Drafting…")).toBeVisible();
+        await expect(minutes.getByText('Drafting…')).toBeVisible();
         await page.clock.runFor(MINUTES_LATER_MS + 4_000);
-        await expect(minutes.getByText("Drafting…")).toHaveCount(0);
-        await expect(minutes.getByLabel("Summary")).toHaveValue("Oracle's minutes of Review: Guided setup: 1 decisions taken.");
-        await expect(page.getByRole("region", { name: "Delivery" }).getByRole("button", { name: "Send" })).toBeEnabled();
+        await expect(minutes.getByText('Drafting…')).toHaveCount(0);
+        await expect(minutes.getByLabel('Summary')).toHaveValue(
+          "Oracle's minutes of Review: Guided setup: 1 decisions taken.",
+        );
+        await expect(
+          page.getByRole('region', { name: 'Delivery' }).getByRole('button', { name: 'Send' }),
+        ).toBeEnabled();
       });
 
-      test("The end screen turns to the failed state with Draft again when the job fails later, without a reload", async ({ page, context }) => {
-        await flags(context, "minutes-later-failed");
+      test('The end screen turns to the failed state with Draft again when the job fails later, without a reload', async ({
+        page,
+        context,
+      }) => {
+        await flags(context, 'minutes-later-failed');
         await endOne(page);
         const minutes = minutesRegion(page);
-        await expect(minutes.getByText("Drafting…")).toBeVisible();
+        await expect(minutes.getByText('Drafting…')).toBeVisible();
         await page.clock.runFor(MINUTES_LATER_MS + 4_000);
-        await expect(minutes.getByText("Drafting…")).toHaveCount(0);
-        await expect(minutes.getByTestId("minutes-failed")).toContainText("Oracle could not draft the minutes");
-        await expect(minutes.getByRole("button", { name: "Draft again" })).toBeVisible();
+        await expect(minutes.getByText('Drafting…')).toHaveCount(0);
+        await expect(minutes.getByTestId('minutes-failed')).toContainText(
+          'Oracle could not draft the minutes',
+        );
+        await expect(minutes.getByRole('button', { name: 'Draft again' })).toBeVisible();
       });
     });
   }

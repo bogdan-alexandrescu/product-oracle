@@ -1,38 +1,43 @@
-"use client";
+'use client';
 
-import { useRouter, useSearchParams } from "@/lib/nav";
-import { Suspense, useMemo, useState, useSyncExternalStore } from "react";
+import { useRouter, useSearchParams } from '@/lib/nav';
+import { Suspense, useMemo, useState, useSyncExternalStore } from 'react';
 
-import { Button, Empty, Notice, Page, Panel, Sheet, Split } from "@/components/ds";
-import { startPrdHref } from "@/components/RequestsBehind";
-import { ErrorNote, INPUT_INLINE, LoadError, Loading } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { plural } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { useQuery } from "@/lib/use-query";
+import { Button, Empty, Notice, Page, Panel, Sheet, Split } from '@/components/ds';
+import { startPrdHref } from '@/components/RequestsBehind';
+import { ErrorNote, INPUT_INLINE, LoadError, Loading } from '@/components/ui';
+import { api, unwrap, type Schemas } from '@/lib/api/client';
+import { plural } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { useQuery } from '@/lib/use-query';
 
-import { FoundInSources } from "./FoundInSources";
-import { RequestInspector } from "./RequestInspector";
-import { RequestList, STATE } from "./RequestList";
-import { RequestsHeader } from "./RequestsHeader";
-import { NO_FILTERS, useRequestsState } from "./RequestsState";
-import { Themes } from "./Themes";
-import { useTriage } from "./Triage";
+import { FoundInSources } from './FoundInSources';
+import { RequestInspector } from './RequestInspector';
+import { RequestList, STATE } from './RequestList';
+import { RequestsHeader } from './RequestsHeader';
+import { NO_FILTERS, useRequestsState } from './RequestsState';
+import { Themes } from './Themes';
+import { useTriage } from './Triage';
 
 /** Which Requests tab: every request (the queue), those nobody has decided yet, or the themes. */
-export type RequestsView = "all" | "new" | "themes";
+export type RequestsView = 'all' | 'new' | 'themes';
 
 /** A filter's control: its natural width beside the others, full width and 44 px high on a phone (qa-work-39). */
 const FILTER = `${INPUT_INLINE} max-w-full max-[600px]:min-h-11 max-[600px]:w-full`;
 
 // RQ-1: under 1100 px the Split puts the inspector after the whole list, so a tap there opens it as a sheet.
-const NARROW = "(width < 1100px)";
+const NARROW = '(width < 1100px)';
 const onNarrow = (change: () => void) => {
   const mq = window.matchMedia(NARROW);
-  mq.addEventListener("change", change);
-  return () => mq.removeEventListener("change", change);
+  mq.addEventListener('change', change);
+  return () => mq.removeEventListener('change', change);
 };
-const useNarrow = () => useSyncExternalStore(onNarrow, () => window.matchMedia(NARROW).matches, () => false);
+const useNarrow = () =>
+  useSyncExternalStore(
+    onNarrow,
+    () => window.matchMedia(NARROW).matches,
+    () => false,
+  );
 
 /**
  * Requests (C1): the All requests, To decide and Themes tabs, one screen under the shared
@@ -57,32 +62,44 @@ export function RequestsScreen({ view }: { view: RequestsView }) {
 }
 
 function Requests({ view }: { view: RequestsView }) {
-  const wanted = useSearchParams().get("request");
+  const wanted = useSearchParams().get('request');
   const { can, capsReady, capsError } = useMe();
   const triage = useTriage();
   const run = triage.data;
   // Oracle's finds in your sources (All requests): read here, so the page waits for them (qa4-work-13).
-  const findable = view === "all" && can("list_request_candidates");
-  const found = useQuery<Schemas["CandidateOut"][]>(
-    `request-candidates:${findable}:${run?.run_id ?? ""}:${run?.active ?? false}`,
-    () => (findable ? unwrap(api.GET("/v1/request-candidates", { params: { query: { status: "open" } } })) : Promise.resolve([])),
+  const findable = view === 'all' && can('list_request_candidates');
+  const found = useQuery<Schemas['CandidateOut'][]>(
+    `request-candidates:${findable}:${run?.run_id ?? ''}:${run?.active ?? false}`,
+    () =>
+      findable
+        ? unwrap(api.GET('/v1/request-candidates', { params: { query: { status: 'open' } } }))
+        : Promise.resolve([]),
     { keepPrevious: true },
   );
-  const requests = useQuery("requests", () => unwrap(api.GET("/v1/requests", { params: { query: { limit: 200 } } })));
+  const requests = useQuery('requests', () =>
+    unwrap(api.GET('/v1/requests', { params: { query: { limit: 200 } } })),
+  );
   // To decide's own list: the API's New requests, not the queue's first 200 filtered here.
   const undecided = useQuery(`requests:new:${view}`, () =>
-    view === "new" ? unwrap(api.GET("/v1/requests", { params: { query: { state: "new", limit: 200 } } })) : Promise.resolve(null),
+    view === 'new'
+      ? unwrap(api.GET('/v1/requests', { params: { query: { state: 'new', limit: 200 } } }))
+      : Promise.resolve(null),
   );
-  const listed = view === "new" ? undecided : requests;
-  const goals = useQuery("request-goals", () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })));
-  const goalTitles = useMemo(() => new Map((goals.data ?? []).map((g) => [g.id, g.title])), [goals.data]);
+  const listed = view === 'new' ? undecided : requests;
+  const goals = useQuery('request-goals', () =>
+    unwrap(api.GET('/v1/baseline/entities', { params: { query: { type: 'goal' } } })),
+  );
+  const goalTitles = useMemo(
+    () => new Map((goals.data ?? []).map((g) => [g.id, g.title])),
+    [goals.data],
+  );
   const { themes, filters, setFilters, chosen, setChosen, picked, setPicked } = useRequestsState();
   const { goal, theme, search } = filters;
   // State and Replies to send are All requests' filters only: To decide does not show them.
-  const state = view === "all" ? filters.state : "";
+  const state = view === 'all' ? filters.state : '';
   // qa-work-40: Replies to send is for those who can send them, not viewers.
-  const canReply = can("update_request_reply", true);
-  const toSend = view === "all" && canReply && filters.toSend;
+  const canReply = can('update_request_reply', true);
+  const toSend = view === 'all' && canReply && filters.toSend;
   // A request picked by hand stays picked across the tabs; a new ?request= (the Inbox's Open) wins.
   const selected = picked && picked.under === wanted ? picked.id : wanted;
   const setSelected = (id: string | null) => setPicked(id ? { id, under: wanted } : null);
@@ -100,21 +117,32 @@ function Requests({ view }: { view: RequestsView }) {
     setSelected(id);
   };
   const router = useRouter();
-  const canStart = can("create_intake", true);
-  const filed = (request: Schemas["RequestOut"]) => {
+  const canStart = can('create_intake', true);
+  const filed = (request: Schemas['RequestOut']) => {
     // Clear the filters so the filed request shows, selected.
     setFilters(NO_FILTERS);
     // On Themes, the filed request opens on All requests.
-    if (view === "themes") return router.push(`/requests?request=${encodeURIComponent(request.id)}`);
-    requests.setData((list) => list && { ...list, items: [request, ...list.items], total: list.total + 1 });
-    undecided.setData((list) => list && { ...list, items: [request, ...list.items], total: list.total + 1 });
+    if (view === 'themes')
+      return router.push(`/requests?request=${encodeURIComponent(request.id)}`);
+    requests.setData(
+      (list) => list && { ...list, items: [request, ...list.items], total: list.total + 1 },
+    );
+    undecided.setData(
+      (list) => list && { ...list, items: [request, ...list.items], total: list.total + 1 },
+    );
     pick(request.id);
   };
-  const changed = (request: Schemas["RequestOut"]) => {
-    requests.setData((list) => list && { ...list, items: list.items.map((r) => (r.id === request.id ? request : r)) });
-    undecided.setData((list) => list && { ...list, items: list.items.map((r) => (r.id === request.id ? request : r)) });
+  const changed = (request: Schemas['RequestOut']) => {
+    requests.setData(
+      (list) =>
+        list && { ...list, items: list.items.map((r) => (r.id === request.id ? request : r)) },
+    );
+    undecided.setData(
+      (list) =>
+        list && { ...list, items: list.items.map((r) => (r.id === request.id ? request : r)) },
+    );
     // A merge into a declined request changes that one too (its replies, asked again).
-    if (request.state === "merged") {
+    if (request.state === 'merged') {
       void requests.reload();
       void undecided.reload();
     }
@@ -128,14 +156,21 @@ function Requests({ view }: { view: RequestsView }) {
     void undecided.reload();
     themes.reload();
   };
-  const themeChanged = (t: Schemas["RequestThemeOut"]) =>
-    themes.setData((list) => (list?.some((x) => x.id === t.id) ? list.map((x) => (x.id === t.id ? t : x)) : [...(list ?? []), t]));
+  const themeChanged = (t: Schemas['RequestThemeOut']) =>
+    themes.setData((list) =>
+      list?.some((x) => x.id === t.id)
+        ? list.map((x) => (x.id === t.id ? t : x))
+        : [...(list ?? []), t],
+    );
   const loaded = listed.data?.items ?? [];
   // To decide: the requests nobody has decided yet; one decided here stays in view while open.
-  const all = view === "new" ? loaded.filter((r) => r.state === "new" || r.id === selected) : loaded;
+  const all =
+    view === 'new' ? loaded.filter((r) => r.state === 'new' || r.id === selected) : loaded;
   // The inspector's other requests (merge targets, Oracle's duplicate): the queue's and To decide's.
   const context = useMemo(() => {
-    const extra = (undecided.data?.items ?? []).filter((r) => !requests.data?.items.some((x) => x.id === r.id));
+    const extra = (undecided.data?.items ?? []).filter(
+      (r) => !requests.data?.items.some((x) => x.id === r.id),
+    );
     return [...(requests.data?.items ?? []), ...extra];
   }, [requests.data, undecided.data]);
   const text = search.trim().toLowerCase();
@@ -144,8 +179,10 @@ function Requests({ view }: { view: RequestsView }) {
       (!state || r.state === state) &&
       (!goal || r.goal_ids.includes(goal)) &&
       (!theme || r.theme?.id === theme) &&
-      (!toSend || (r.state === "disqualified" && r.replies.open > 0)) &&
-      (!text || r.title.toLowerCase().includes(text) || (r.body ?? "").toLowerCase().includes(text)),
+      (!toSend || (r.state === 'disqualified' && r.replies.open > 0)) &&
+      (!text ||
+        r.title.toLowerCase().includes(text) ||
+        (r.body ?? '').toLowerCase().includes(text)),
   );
   const current = all.find((r) => r.id === selected);
   const liveThemes = (themes.data ?? []).filter((t) => !t.archived);
@@ -154,14 +191,16 @@ function Requests({ view }: { view: RequestsView }) {
   const onlySearch = !!text && !state && !goal && !theme && !toSend;
   const clear = (
     <Button variant="secondary" onClick={() => setFilters(NO_FILTERS)}>
-      {onlySearch ? "Clear search" : "Clear filters"}
+      {onlySearch ? 'Clear search' : 'Clear filters'}
     </Button>
   );
   const inspector = current && (
     <div className="flex min-w-0 flex-col gap-2">
       {hidden && (
         <Notice testId="request-hidden" action={clear}>
-          {onlySearch ? "Your search hides this request from the list." : "Your filters hide this request from the list."}
+          {onlySearch
+            ? 'Your search hides this request from the list.'
+            : 'Your filters hide this request from the list.'}
         </Notice>
       )}
       <RequestInspector
@@ -199,7 +238,7 @@ function Requests({ view }: { view: RequestsView }) {
       ) : (
         <div className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
           {findable && <FoundInSources found={found} onFiled={filed} />}
-          {view === "themes" ? (
+          {view === 'themes' ? (
             <Panel title="Themes" count={themes.data ? liveThemes.length : undefined}>
               {themes.error && (
                 <div className="px-4 pt-3">
@@ -215,19 +254,31 @@ function Requests({ view }: { view: RequestsView }) {
             </Panel>
           ) : listed.error && !listed.data ? (
             // Visual QA X-1: a list that never loaded shows the notice alone, not a half-drawn page.
-            <LoadError what="the requests" error={listed.error} onRetry={() => void Promise.all([requests.reload(), undecided.reload()])} />
+            <LoadError
+              what="the requests"
+              error={listed.error}
+              onRetry={() => void Promise.all([requests.reload(), undecided.reload()])}
+            />
           ) : (
-            <Split
-              inspector={!narrow && inspector}
-            >
+            <Split inspector={!narrow && inspector}>
               <Panel
-                title={view === "new" ? "To decide" : "All requests"}
-                count={listed.data ? (shown.length === all.length ? all.length : `${shown.length} of ${all.length}`) : undefined}
-                testId={view === "new" ? "new-requests" : "all-requests"}
+                title={view === 'new' ? 'To decide' : 'All requests'}
+                count={
+                  listed.data
+                    ? shown.length === all.length
+                      ? all.length
+                      : `${shown.length} of ${all.length}`
+                    : undefined
+                }
+                testId={view === 'new' ? 'new-requests' : 'all-requests'}
               >
                 {listed.error && (
                   <div className="px-4 pt-3">
-                    <LoadError what="the requests" error={listed.error} onRetry={() => void Promise.all([requests.reload(), undecided.reload()])} />
+                    <LoadError
+                      what="the requests"
+                      error={listed.error}
+                      onRetry={() => void Promise.all([requests.reload(), undecided.reload()])}
+                    />
                   </div>
                 )}
                 {all.length > 0 && (
@@ -243,8 +294,13 @@ function Requests({ view }: { view: RequestsView }) {
                       value={search}
                       onChange={(e) => setFilters({ search: e.target.value })}
                     />
-                    {view === "all" && (
-                      <select aria-label="State" className={FILTER} value={state} onChange={(e) => setFilters({ state: e.target.value })}>
+                    {view === 'all' && (
+                      <select
+                        aria-label="State"
+                        className={FILTER}
+                        value={state}
+                        onChange={(e) => setFilters({ state: e.target.value })}
+                      >
                         <option value="">Any state</option>
                         {(Object.keys(STATE) as (keyof typeof STATE)[]).map((s) => (
                           <option key={s} value={s}>
@@ -253,7 +309,12 @@ function Requests({ view }: { view: RequestsView }) {
                         ))}
                       </select>
                     )}
-                    <select aria-label="Goal" className={FILTER} value={goal} onChange={(e) => setFilters({ goal: e.target.value })}>
+                    <select
+                      aria-label="Goal"
+                      className={FILTER}
+                      value={goal}
+                      onChange={(e) => setFilters({ goal: e.target.value })}
+                    >
                       <option value="">Any goal</option>
                       {[...goalTitles].map(([id, title]) => (
                         <option key={id} value={id}>
@@ -261,18 +322,30 @@ function Requests({ view }: { view: RequestsView }) {
                         </option>
                       ))}
                     </select>
-                    <select aria-label="Theme" className={FILTER} value={theme} onChange={(e) => setFilters({ theme: e.target.value })}>
+                    <select
+                      aria-label="Theme"
+                      className={FILTER}
+                      value={theme}
+                      onChange={(e) => setFilters({ theme: e.target.value })}
+                    >
                       <option value="">Any theme</option>
                       {/* Archived themes too (last, marked): their requests can still be found. */}
-                      {[...liveThemes, ...(themes.data ?? []).filter((t) => t.archived)].map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.archived ? `${t.title} (archived)` : t.title}
-                        </option>
-                      ))}
+                      {[...liveThemes, ...(themes.data ?? []).filter((t) => t.archived)].map(
+                        (t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.archived ? `${t.title} (archived)` : t.title}
+                          </option>
+                        ),
+                      )}
                     </select>
-                    {view === "all" && canReply && (
+                    {view === 'all' && canReply && (
                       <label className="flex min-h-9 items-center gap-2 text-sm font-semibold text-text2 max-[600px]:min-h-11">
-                        <input type="checkbox" className="max-[600px]:size-5" checked={toSend} onChange={(e) => setFilters({ toSend: e.target.checked })} />
+                        <input
+                          type="checkbox"
+                          className="max-[600px]:size-5"
+                          checked={toSend}
+                          onChange={(e) => setFilters({ toSend: e.target.checked })}
+                        />
                         Replies to send
                       </label>
                     )}
@@ -280,8 +353,15 @@ function Requests({ view }: { view: RequestsView }) {
                 )}
                 {listed.data &&
                   (all.length > 0 && shown.length === 0 ? (
-                    <div data-testid="requests-no-match" className="flex flex-col items-center gap-3 px-4 py-8 text-center">
-                      <p className="text-[15px] text-text2">{onlySearch ? "No requests match your search" : "No requests match your filters"}</p>
+                    <div
+                      data-testid="requests-no-match"
+                      className="flex flex-col items-center gap-3 px-4 py-8 text-center"
+                    >
+                      <p className="text-[15px] text-text2">
+                        {onlySearch
+                          ? 'No requests match your search'
+                          : 'No requests match your filters'}
+                      </p>
                       {clear}
                     </div>
                   ) : (
@@ -290,31 +370,41 @@ function Requests({ view }: { view: RequestsView }) {
                       goalTitles={goalTitles}
                       selected={selected}
                       onSelect={pick}
-                      chosen={view === "all" && canStart ? chosen : undefined}
+                      chosen={view === 'all' && canStart ? chosen : undefined}
                       onChoose={setChosen}
                       empty={
-                        view === "new" && loaded.length > 0 ? (
+                        view === 'new' && loaded.length > 0 ? (
                           <Empty testId="requests-empty">Every request has been decided</Empty>
                         ) : (
                           // qa-shell-10: the header's New request is the one button; this says to use it.
                           <Empty icon="requests" testId="requests-empty">
-                            {can("create_request", true) ? "No requests yet. Add one with New request." : "No requests yet. They appear here once someone files one."}
+                            {can('create_request', true)
+                              ? 'No requests yet. Add one with New request.'
+                              : 'No requests yet. They appear here once someone files one.'}
                           </Empty>
                         )
                       }
                     />
                   ))}
-                {view === "all" && chosen.length > 0 && (
+                {view === 'all' && chosen.length > 0 && (
                   // qa-work-8: the bar stays at the bottom of the screen, wherever the ticked row is
                   // (above the phone's bottom bar).
                   <div
                     data-testid="start-prd-bar"
                     className="sticky bottom-0 z-20 flex flex-wrap items-center gap-2 rounded-b-panel border-t border-line bg-surface px-4 py-3 shadow-tip max-[600px]:bottom-[68px] max-[600px]:px-3"
                   >
-                    <Button variant="primary" className="max-[600px]:h-11" onClick={() => router.push(startPrdHref(chosen))}>
-                      {`Start a PRD from ${plural(chosen.length, "request")}`}
+                    <Button
+                      variant="primary"
+                      className="max-[600px]:h-11"
+                      onClick={() => router.push(startPrdHref(chosen))}
+                    >
+                      {`Start a PRD from ${plural(chosen.length, 'request')}`}
                     </Button>
-                    <Button variant="ghost" className="max-[600px]:h-11" onClick={() => setChosen([])}>
+                    <Button
+                      variant="ghost"
+                      className="max-[600px]:h-11"
+                      onClick={() => setChosen([])}
+                    >
                       Clear
                     </Button>
                   </div>
@@ -322,8 +412,14 @@ function Requests({ view }: { view: RequestsView }) {
               </Panel>
             </Split>
           )}
-          {narrow && current && view !== "themes" && (
-            <Sheet open={open === current.id} title="Request" onClose={() => setOpen(null)} full testId="request-sheet">
+          {narrow && current && view !== 'themes' && (
+            <Sheet
+              open={open === current.id}
+              title="Request"
+              onClose={() => setOpen(null)}
+              full
+              testId="request-sheet"
+            >
               <div className="p-2">{inspector}</div>
             </Sheet>
           )}

@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { Link, usePathname, useSearchParams } from "@/lib/nav";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Link, usePathname, useSearchParams } from '@/lib/nav';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import {
   Chip,
@@ -22,13 +22,13 @@ import {
   useChangeDestination,
   ViewOnly,
   type Column,
-} from "@/components/ds";
-import { DocCrumb } from "@/components/DocToolbar";
-import { api, unwrap } from "@/lib/api/client";
-import { shownDay } from "@/lib/dates";
-import { formatDate, formatPercent, plural } from "@/lib/format";
-import { useMe } from "@/lib/me";
-import { useQuery } from "@/lib/use-query";
+} from '@/components/ds';
+import { DocCrumb } from '@/components/DocToolbar';
+import { api, unwrap } from '@/lib/api/client';
+import { shownDay } from '@/lib/dates';
+import { formatDate, formatPercent, plural } from '@/lib/format';
+import { useMe } from '@/lib/me';
+import { useQuery } from '@/lib/use-query';
 
 import {
   CATEGORY,
@@ -47,21 +47,39 @@ import {
   type Output,
   type Report,
   type Upstream,
-} from "./_lib";
-import { NamesContext, fromSlug, parseFrom, subjectWords, useNames, useNamesOf, type SubjectWords } from "./_names";
-import { PlanSteps, type RowResult } from "./_steps";
+} from './_lib';
+import {
+  NamesContext,
+  fromSlug,
+  parseFrom,
+  subjectWords,
+  useNames,
+  useNamesOf,
+  type SubjectWords,
+} from './_names';
+import { PlanSteps, type RowResult } from './_steps';
 
-type View = "lineage" | "table";
-const PHONE = "(max-width: 600px)";
+type View = 'lineage' | 'table';
+const PHONE = '(max-width: 600px)';
 
 function load(source: ImpactSource): Promise<Report> {
-  if (source.kind === "version") {
-    return unwrap(api.GET("/v1/documents/{doc}/versions/{n}/impact", { params: { path: { doc: source.doc, n: source.n } } }));
+  if (source.kind === 'version') {
+    return unwrap(
+      api.GET('/v1/documents/{doc}/versions/{n}/impact', {
+        params: { path: { doc: source.doc, n: source.n } },
+      }),
+    );
   }
-  if (source.kind === "entity") {
-    return unwrap(api.GET("/v1/baseline/entities/{entity_id}/impact", { params: { path: { entity_id: source.id } } }));
+  if (source.kind === 'entity') {
+    return unwrap(
+      api.GET('/v1/baseline/entities/{entity_id}/impact', {
+        params: { path: { entity_id: source.id } },
+      }),
+    );
   }
-  return unwrap(api.GET("/v1/trace/changes/{change_id}/impact", { params: { path: { change_id: source.id } } }));
+  return unwrap(
+    api.GET('/v1/trace/changes/{change_id}/impact', { params: { path: { change_id: source.id } } }),
+  );
 }
 
 function usePhone(): boolean {
@@ -70,8 +88,8 @@ function usePhone(): boolean {
     const mq = window.matchMedia(PHONE);
     const on = () => setPhone(mq.matches);
     on();
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
   }, []);
   return phone;
 }
@@ -84,9 +102,12 @@ function usePhone(): boolean {
  */
 export function ImpactExplorer({ source }: { source: ImpactSource }) {
   const { can } = useMe();
-  const key = source.kind === "version" ? `impact|v|${source.doc}|${source.n}` : `impact|${source.kind}|${source.id}`;
+  const key =
+    source.kind === 'version'
+      ? `impact|v|${source.doc}|${source.n}`
+      : `impact|${source.kind}|${source.id}`;
   const q = useQuery(key, () => load(source), { keepPrevious: true });
-  const [view, setView] = useState<View>("lineage");
+  const [view, setView] = useState<View>('lineage');
   const [picked, setPicked] = useState<string | null>(null);
   const [sheet, setSheet] = useState(false);
   const [results, setResults] = useState<Record<string, RowResult>>({});
@@ -109,38 +130,55 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
   // qa-plan-12: a recorded change opened from a PRD version's Impact ("Recorded change" carries
   // ?from=) leads back there, and the rail stays on PRDs; opened any other way, it leads back to
   // what the change is about.
-  const fromParam = useSearchParams().get("from");
-  const names = useNames(report, source.kind === "change" ? fromSlug(fromParam) : null);
+  const fromParam = useSearchParams().get('from');
+  const names = useNames(report, source.kind === 'change' ? fromSlug(fromParam) : null);
   const subject = report ? subjectWords(report, names) : null;
   const from = parseFrom(fromParam, names);
   // qa-plan-59: every Impact page leads back to what it is about (the version, Baseline or
   // Sources); a version's by its breadcrumb (below).
   const backTo =
-    source.kind === "entity" ? { href: "/ground-truth", label: "Ground Truth" } : source.kind === "change" ? (from ?? subject?.back) : undefined;
+    source.kind === 'entity'
+      ? { href: '/ground-truth', label: 'Ground Truth' }
+      : source.kind === 'change'
+        ? (from ?? subject?.back)
+        : undefined;
   // qa-plan-59 / review: the rail highlights by what a recorded change's impact is about (a
   // PRD version, Baseline, Sources), once the report has said so; nothing it can't place.
-  useChangeDestination(source.kind === "change" ? source.id : undefined, source.kind === "change" ? backTo?.href : undefined);
+  useChangeDestination(
+    source.kind === 'change' ? source.id : undefined,
+    source.kind === 'change' ? backTo?.href : undefined,
+  );
   // qa-docs-58: a version's Impact has the header of its other sub-pages (Quality): the
   // documents list and the document by name. Baseline's and a recorded change's lead back
   // to what they are about (qa-plan-59).
-  const docQ = useQuery(source.kind === "version" ? `doc|${source.doc}` : "doc|none", () =>
-    source.kind === "version" ? unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc: source.doc } } })) : Promise.resolve(null),
+  const docQ = useQuery(source.kind === 'version' ? `doc|${source.doc}` : 'doc|none', () =>
+    source.kind === 'version'
+      ? unwrap(api.GET('/v1/documents/{doc}', { params: { path: { doc: source.doc } } }))
+      : Promise.resolve(null),
   );
   const back =
-    source.kind === "version" ? (
+    source.kind === 'version' ? (
       <DocCrumb doc={docQ.data ?? undefined} withTitle />
     ) : backTo ? (
-      <Link href={backTo.href} data-testid="impact-back" className="inline-flex min-h-6 items-center rounded-sm hover:text-text hover:underline">
+      <Link
+        href={backTo.href}
+        data-testid="impact-back"
+        className="inline-flex min-h-6 items-center rounded-sm hover:text-text hover:underline"
+      >
         ‹ {backTo.label}
       </Link>
     ) : undefined;
   const counts = report ? countFreshness(report.affected) : null;
   const status = report && (
     <>
-      {!can("act_on_staleness") && <ViewOnly />}
+      {!can('act_on_staleness') && <ViewOnly />}
       {/* qa-docs-25, qa-plan-52: a preview says so in the line under the header, in words; no lone badge. */}
       {!report.preview && (
-        <Chip kind="line" data-testid="impact-mode" title="A recorded change: these outputs were marked as it says.">
+        <Chip
+          kind="line"
+          data-testid="impact-mode"
+          title="A recorded change: these outputs were marked as it says."
+        >
           Recorded
         </Chip>
       )}
@@ -156,135 +194,166 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
               {counts!.potentially_stale} potentially stale
             </Chip>
           )}
-      {!report.preview && counts!.under_review > 0 && <Chip kind="na">{counts!.under_review} under review</Chip>}
+      {!report.preview && counts!.under_review > 0 && (
+        <Chip kind="na">{counts!.under_review} under review</Chip>
+      )}
     </>
   );
   // qa-plan-61: one sentence, "Impact: Setup checklist", not the title and a suffix run together.
   // qa4-plan-45: a back link that names the version ("‹ Impact of Annual billing PRD v2")
   // leaves it out of the title: "Impact: Success metrics section edited".
   const named = !!subject?.where && !!backTo?.label.endsWith(subject.where);
-  const title = subject ? `Impact: ${named ? subject.short : subject.title}` : "Impact";
+  const title = subject ? `Impact: ${named ? subject.short : subject.title}` : 'Impact';
 
   return (
     <NamesContext.Provider value={names}>
-    <Page>
-      <PageHeader
-        title={title}
-        back={back}
-        // qa-plan-11: Baseline's back link (‹, like the Plan crumb) sits on the title row, so the
-        // title does not move down; a change's longer crumb and a version's keep their own line
-        // above the title (qa4-plan-45).
-        backInline={source.kind === "entity"}
-        // qa-plan-62: on a phone the top bar cuts a long title; the page's H1 says it in full.
-        phoneTitle
-        status={status}
-        action={
-          report && report.affected.length > 0 ? (
-            <SegmentedControl<View>
-              label="View"
-              value={view}
-              onChange={setView}
-              items={[
-                { value: "lineage", label: "Lineage" },
-                { value: "table", label: "Table" },
-              ]}
-            />
-          ) : undefined
-        }
-      />
-      {q.error && !report ? (
-        <Notice tone="error" action={source.kind === "version" ? <LinkButton href={`/documents/${source.doc}`}>Back to the document</LinkButton> : undefined}>
-          {q.error}
-        </Notice>
-      ) : !report ? (
-        <LoadingBoard />
-      ) : (
-        <div className="flex flex-col gap-4 max-[600px]:gap-3">
-          {/* The intro explains the lines and columns: only when there are some (qa-docs-58). */}
-          {report.affected.length > 0 && <Notice>{intro(report, source, subject!)}</Notice>}
-          {report.truncated && (
-            <Notice tone="warn">Lineage cut off at the walk limit (depth 8, 2000 nodes or 500 roots). Some outputs may be missing.</Notice>
-          )}
-          {q.error && <Notice tone="error">{q.error}</Notice>}
-          {report.affected.length === 0 ? (
-            <Panel>
-              <Empty icon="check" testId="impact-empty">
-                {/* qa-docs-54: a readable measure, not one line across the page. */}
-                <span data-testid="impact-empty-text" className="mx-auto block max-w-[70ch]">
-                  {source.kind === "version"
-                    ? `No outputs depend on what v${source.n} changed. Nothing to regenerate. When a roadmap, spec or other output is built from this version, Impact shows what a new version would change for it.`
-                    : source.kind === "entity"
-                      ? // qa-plan-47: say why, and when it will show something, as a version's does.
-                        "No outputs depend on this item yet. Nothing to regenerate. When a roadmap, spec or other output is built from it, Impact shows what a change to it would reach."
-                      : "This change reached no outputs. Nothing to regenerate."}
-                </span>
-              </Empty>
-            </Panel>
-          ) : view === "lineage" ? (
-            // On a phone the plan and the inspector give way to the sheet (both mockups), so an
-            // output's steps are drawn once; the CSS hides them before the media query answers.
-            <Split
-              inspector={
-                !phone && (
-                  <div className="max-[600px]:hidden">
-                    <PlanSidebar report={report} source={source} selected={selected} onPick={pick} rowProps={rowProps} />
-                  </div>
-                )
-              }
-            >
-              <Lineage report={report} source={source} subject={subject!} selected={selected} onPick={pick} />
-              <AffectedList report={report} selected={selected} onPick={pick} />
-            </Split>
-          ) : (
-            <Split
-              inspector={
-                selected &&
-                !phone && (
-                  <div className="max-[600px]:hidden">
-                    <OutputInspector report={report} {...rowProps(selected)} />
-                  </div>
-                )
-              }
-            >
-              <OutputTable report={report} selected={selected} onPick={pick} />
-              <PlanList report={report} />
-              {report.affected_entities.length > 0 && <EntitiesPanel report={report} />}
-            </Split>
-          )}
-        </div>
-      )}
-      {report && selected && (
-        <Sheet open={sheet && phone} title={outputTitle(selected)} onClose={() => setSheet(false)}>
-          <OutputDetail report={report} {...rowProps(selected)} />
-        </Sheet>
-      )}
-    </Page>
+      <Page>
+        <PageHeader
+          title={title}
+          back={back}
+          // qa-plan-11: Baseline's back link (‹, like the Plan crumb) sits on the title row, so the
+          // title does not move down; a change's longer crumb and a version's keep their own line
+          // above the title (qa4-plan-45).
+          backInline={source.kind === 'entity'}
+          // qa-plan-62: on a phone the top bar cuts a long title; the page's H1 says it in full.
+          phoneTitle
+          status={status}
+          action={
+            report && report.affected.length > 0 ? (
+              <SegmentedControl<View>
+                label="View"
+                value={view}
+                onChange={setView}
+                items={[
+                  { value: 'lineage', label: 'Lineage' },
+                  { value: 'table', label: 'Table' },
+                ]}
+              />
+            ) : undefined
+          }
+        />
+        {q.error && !report ? (
+          <Notice
+            tone="error"
+            action={
+              source.kind === 'version' ? (
+                <LinkButton href={`/documents/${source.doc}`}>Back to the document</LinkButton>
+              ) : undefined
+            }
+          >
+            {q.error}
+          </Notice>
+        ) : !report ? (
+          <LoadingBoard />
+        ) : (
+          <div className="flex flex-col gap-4 max-[600px]:gap-3">
+            {/* The intro explains the lines and columns: only when there are some (qa-docs-58). */}
+            {report.affected.length > 0 && <Notice>{intro(report, source, subject!)}</Notice>}
+            {report.truncated && (
+              <Notice tone="warn">
+                Lineage cut off at the walk limit (depth 8, 2000 nodes or 500 roots). Some outputs
+                may be missing.
+              </Notice>
+            )}
+            {q.error && <Notice tone="error">{q.error}</Notice>}
+            {report.affected.length === 0 ? (
+              <Panel>
+                <Empty icon="check" testId="impact-empty">
+                  {/* qa-docs-54: a readable measure, not one line across the page. */}
+                  <span data-testid="impact-empty-text" className="mx-auto block max-w-[70ch]">
+                    {source.kind === 'version'
+                      ? `No outputs depend on what v${source.n} changed. Nothing to regenerate. When a roadmap, spec or other output is built from this version, Impact shows what a new version would change for it.`
+                      : source.kind === 'entity'
+                        ? // qa-plan-47: say why, and when it will show something, as a version's does.
+                          'No outputs depend on this item yet. Nothing to regenerate. When a roadmap, spec or other output is built from it, Impact shows what a change to it would reach.'
+                        : 'This change reached no outputs. Nothing to regenerate.'}
+                  </span>
+                </Empty>
+              </Panel>
+            ) : view === 'lineage' ? (
+              // On a phone the plan and the inspector give way to the sheet (both mockups), so an
+              // output's steps are drawn once; the CSS hides them before the media query answers.
+              <Split
+                inspector={
+                  !phone && (
+                    <div className="max-[600px]:hidden">
+                      <PlanSidebar
+                        report={report}
+                        source={source}
+                        selected={selected}
+                        onPick={pick}
+                        rowProps={rowProps}
+                      />
+                    </div>
+                  )
+                }
+              >
+                <Lineage
+                  report={report}
+                  source={source}
+                  subject={subject!}
+                  selected={selected}
+                  onPick={pick}
+                />
+                <AffectedList report={report} selected={selected} onPick={pick} />
+              </Split>
+            ) : (
+              <Split
+                inspector={
+                  selected &&
+                  !phone && (
+                    <div className="max-[600px]:hidden">
+                      <OutputInspector report={report} {...rowProps(selected)} />
+                    </div>
+                  )
+                }
+              >
+                <OutputTable report={report} selected={selected} onPick={pick} />
+                <PlanList report={report} />
+                {report.affected_entities.length > 0 && <EntitiesPanel report={report} />}
+              </Split>
+            )}
+          </div>
+        )}
+        {report && selected && (
+          <Sheet
+            open={sheet && phone}
+            title={outputTitle(selected)}
+            onClose={() => setSheet(false)}
+          >
+            <OutputDetail report={report} {...rowProps(selected)} />
+          </Sheet>
+        )}
+      </Page>
     </NamesContext.Provider>
   );
 }
 
 function countFreshness(affected: Output[]) {
   const c = { potentially_stale: 0, under_review: 0 };
-  for (const o of affected) if (o.freshness === "potentially_stale" || o.freshness === "under_review") c[o.freshness] += 1;
+  for (const o of affected)
+    if (o.freshness === 'potentially_stale' || o.freshness === 'under_review') c[o.freshness] += 1;
   return c;
 }
 
 function intro(report: Report, source: ImpactSource, subject: SubjectWords): ReactNode {
-  if (!report.preview) return "Recorded: this change marked these outputs Potentially stale.";
-  if (source.kind === "entity") return `What if ${report.subject.title ?? subject.title} changed? Preview only; nothing is marked stale.`;
-  const n = source.kind === "version" ? source.n : null;
+  if (!report.preview) return 'Recorded: this change marked these outputs Potentially stale.';
+  if (source.kind === 'entity')
+    return `What if ${report.subject.title ?? subject.title} changed? Preview only; nothing is marked stale.`;
+  const n = source.kind === 'version' ? source.n : null;
   // qa4-docs-9: the preview marks nothing, but an output an earlier change already marked
   // stale shows as such here; say so rather than "nothing has been marked stale".
-  const already = report.affected.filter((o) => o.freshness === "potentially_stale").length;
+  const already = report.affected.filter((o) => o.freshness === 'potentially_stale').length;
   const lead = already
-    ? `Preview: ${n ? `v${n}` : "this change"} marks nothing stale. ${already === 1 ? "1 output was" : `${already} outputs were`} already marked stale by an earlier change.`
-    : "Preview: nothing has been marked stale.";
+    ? `Preview: ${n ? `v${n}` : 'this change'} marks nothing stale. ${already === 1 ? '1 output was' : `${already} outputs were`} already marked stale by an earlier change.`
+    : 'Preview: nothing has been marked stale.';
   // #1590: how to read the board sits behind the (i).
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5">
       <span>{lead}</span>
       <InfoTip label="the lines and columns" align="start" testId="impact-intro-tip">
-        The lines show what each output was built from in earlier versions{n ? `; v${n} changed the sections in the middle column` : ""}.
+        The lines show what each output was built from in earlier versions
+        {n ? `; v${n} changed the sections in the middle column` : ''}.
       </InfoTip>
     </span>
   );
@@ -319,7 +388,16 @@ const NODE = 64;
 /** Column edges in percent of the graph's width: subject, upstreams, outputs. */
 const COL = { subject: [0, 22], upstream: [30, 62], output: [70, 100] } as const;
 
-type OutNode = { key: string; label: string; sub: string; freshness: Output["freshness"]; ups: Set<string>; output?: Output; category?: Output["category"]; count?: number };
+type OutNode = {
+  key: string;
+  label: string;
+  sub: string;
+  freshness: Output['freshness'];
+  ups: Set<string>;
+  output?: Output;
+  category?: Output['category'];
+  count?: number;
+};
 
 function Lineage({
   report,
@@ -335,7 +413,7 @@ function Lineage({
   onPick: (o: Output) => void;
 }) {
   const names = useNamesOf();
-  const [openCategory, setOpenCategory] = useState<Output["category"] | null>(null);
+  const [openCategory, setOpenCategory] = useState<Output['category'] | null>(null);
   const upstreamsOf = (o: Output) => upstreamsOfIn(o, names);
   const ups = (() => {
     const m = new Map<string, Upstream & { builtOn?: string }>();
@@ -347,15 +425,31 @@ function Lineage({
         // version's, as the subject says. The version the outputs were built on is said apart.
         const v = subject.version;
         const up = d.upstream;
-        if (source.kind === "change" && v && up.document_slug === v.slug && u.kind === "section") {
-          const built = up.version_number != null && up.version_number !== v.n ? `Outputs were built on v${up.version_number}` : undefined;
+        if (source.kind === 'change' && v && up.document_slug === v.slug && u.kind === 'section') {
+          const built =
+            up.version_number != null && up.version_number !== v.n
+              ? `Outputs were built on v${up.version_number}`
+              : undefined;
           m.set(u.key, { ...u, sub: `Section of ${names.doc(v.slug)} v${v.n}`, builtOn: built });
-        } else if (source.kind === "version" && u.kind === "section" && up.document_slug === source.doc && up.section_key) {
+        } else if (
+          source.kind === 'version' &&
+          u.kind === 'section' &&
+          up.document_slug === source.doc &&
+          up.section_key
+        ) {
           // qa4-docs-44: on a version's Impact the middle column is what that version changed:
           // "7. Success metrics", "Section changed in v2"; the version the outputs were built on
           // is said on hover.
-          const built = up.version_number != null && up.version_number !== source.n ? `Outputs were built on v${up.version_number}` : undefined;
-          m.set(u.key, { ...u, label: names.heading(up.section_key, source.doc, source.n), sub: `Section changed in v${source.n}`, builtOn: built });
+          const built =
+            up.version_number != null && up.version_number !== source.n
+              ? `Outputs were built on v${up.version_number}`
+              : undefined;
+          m.set(u.key, {
+            ...u,
+            label: names.heading(up.section_key, source.doc, source.n),
+            sub: `Section changed in v${source.n}`,
+            builtOn: built,
+          });
         } else m.set(u.key, u);
       }
     }
@@ -365,17 +459,29 @@ function Lineage({
   // from all its outputs' upstreams); choosing one shows just that category's outputs.
   const grouped = report.affected.length > GROUP_AT;
   const nodes: OutNode[] = useMemo(() => {
-    const shown = grouped && openCategory ? report.affected.filter((o) => o.category === openCategory) : report.affected;
+    const shown =
+      grouped && openCategory
+        ? report.affected.filter((o) => o.category === openCategory)
+        : report.affected;
     if (grouped && !openCategory) {
-      const by = new Map<Output["category"], Output[]>();
+      const by = new Map<Output['category'], Output[]>();
       for (const o of report.affected) by.set(o.category, [...(by.get(o.category) ?? []), o]);
       return [...by.entries()].map(([c, os]) => ({
-        key: `c:${c}`, label: new Set(os.map(kindOf)).size === 1 ? kindOf(os[0]) : CATEGORY[c], sub: `${os.length} outputs`, category: c, count: os.length,
-        freshness: stalest(os.map((o) => o.freshness)), ups: new Set(os.flatMap((o) => upstreamsOfIn(o, names).map((u) => u.key))),
+        key: `c:${c}`,
+        label: new Set(os.map(kindOf)).size === 1 ? kindOf(os[0]) : CATEGORY[c],
+        sub: `${os.length} outputs`,
+        category: c,
+        count: os.length,
+        freshness: stalest(os.map((o) => o.freshness)),
+        ups: new Set(os.flatMap((o) => upstreamsOfIn(o, names).map((u) => u.key))),
       }));
     }
     return shown.map((o) => ({
-      key: keyOf(o), label: outputTitle(o), sub: statusLabel(o.status), freshness: o.freshness, output: o,
+      key: keyOf(o),
+      label: outputTitle(o),
+      sub: statusLabel(o.status),
+      freshness: o.freshness,
+      output: o,
       ups: new Set(upstreamsOfIn(o, names).map((u) => u.key)),
     }));
   }, [report, grouped, openCategory, names]);
@@ -399,16 +505,32 @@ function Lineage({
       tools={
         <>
           {grouped && openCategory && (
-            <button type="button" onClick={() => setOpenCategory(null)} className="text-sm font-medium text-accent-ink hover:underline">
+            <button
+              type="button"
+              onClick={() => setOpenCategory(null)}
+              className="text-sm font-medium text-accent-ink hover:underline"
+            >
               All categories
             </button>
           )}
-          <span className="flex items-center gap-3 text-[13px] text-text2" data-testid="lineage-legend">
-            <span className="flex items-center gap-1.5"><i aria-hidden className="h-0.5 w-4 bg-line-strong" />depends on</span>
-            <span className="flex items-center gap-1.5"><i aria-hidden className="h-0.5 w-4 bg-accent" />selected path</span>
+          <span
+            className="flex items-center gap-3 text-[13px] text-text2"
+            data-testid="lineage-legend"
+          >
+            <span className="flex items-center gap-1.5">
+              <i aria-hidden className="h-0.5 w-4 bg-line-strong" />
+              depends on
+            </span>
+            <span className="flex items-center gap-1.5">
+              <i aria-hidden className="h-0.5 w-4 bg-accent" />
+              selected path
+            </span>
             {/* Only what the diagram draws (qa4-plan-46). */}
             {shownUps.some((u) => u.deleted) && (
-              <span className="flex items-center gap-1.5"><i aria-hidden className="h-0 w-4 border-t-2 border-dashed border-crit" />deleted upstream</span>
+              <span className="flex items-center gap-1.5">
+                <i aria-hidden className="h-0 w-4 border-t-2 border-dashed border-crit" />
+                deleted upstream
+              </span>
             )}
           </span>
         </>
@@ -417,13 +539,24 @@ function Lineage({
       <div className="grid grid-cols-[22fr_8fr_32fr_8fr_30fr] px-4 pt-3 text-[13px] font-semibold text-text2">
         <span>Subject</span>
         <span />
-        <span>{source.kind === "change" ? "What it reached" : "Changed sections & Ground Truth items"}</span>
+        <span>
+          {source.kind === 'change' ? 'What it reached' : 'Changed sections & Ground Truth items'}
+        </span>
         <span />
-        <span>{grouped && !openCategory ? `Outputs by category · past ${GROUP_AT}` : "Affected outputs · stalest first"}</span>
+        <span>
+          {grouped && !openCategory
+            ? `Outputs by category · past ${GROUP_AT}`
+            : 'Affected outputs · stalest first'}
+        </span>
       </div>
       <div className="overflow-x-auto p-4 pt-2">
         <div className="relative min-w-[640px]" style={{ height }}>
-          <svg aria-hidden className="absolute inset-0 h-full w-full" viewBox={`0 0 100 ${height}`} preserveAspectRatio="none">
+          <svg
+            aria-hidden
+            className="absolute inset-0 h-full w-full"
+            viewBox={`0 0 100 ${height}`}
+            preserveAspectRatio="none"
+          >
             {shownUps.map((u) => {
               const on = path.has(u.key);
               return (
@@ -433,39 +566,59 @@ function Lineage({
                   fill="none"
                   vectorEffect="non-scaling-stroke"
                   strokeWidth={on ? 2.5 : 1.5}
-                  strokeDasharray={u.deleted ? "5 4" : undefined}
-                  className={u.deleted ? "stroke-crit" : on ? "stroke-accent" : "stroke-line-strong"}
+                  strokeDasharray={u.deleted ? '5 4' : undefined}
+                  className={
+                    u.deleted ? 'stroke-crit' : on ? 'stroke-accent' : 'stroke-line-strong'
+                  }
                 />
               );
             })}
             {nodes.flatMap((n, i) =>
-              [...n.ups].filter((k) => upY.has(k)).map((k) => {
-                const u = shownUps.find((x) => x.key === k)!;
-                const on = selected != null && n.output != null && keyOf(n.output) === keyOf(selected);
-                return (
-                  <path
-                    key={`o-${n.key}-${k}`}
-                    d={edge(COL.upstream[1], upY.get(k)!, COL.output[0], y(i, nodes.length))}
-                    fill="none"
-                    vectorEffect="non-scaling-stroke"
-                    strokeWidth={on ? 2.5 : 1.5}
-                    strokeDasharray={u.deleted ? "5 4" : undefined}
-                    className={u.deleted ? "stroke-crit" : on ? "stroke-accent" : "stroke-line-strong"}
-                  />
-                );
-              }),
+              [...n.ups]
+                .filter((k) => upY.has(k))
+                .map((k) => {
+                  const u = shownUps.find((x) => x.key === k)!;
+                  const on =
+                    selected != null && n.output != null && keyOf(n.output) === keyOf(selected);
+                  return (
+                    <path
+                      key={`o-${n.key}-${k}`}
+                      d={edge(COL.upstream[1], upY.get(k)!, COL.output[0], y(i, nodes.length))}
+                      fill="none"
+                      vectorEffect="non-scaling-stroke"
+                      strokeWidth={on ? 2.5 : 1.5}
+                      strokeDasharray={u.deleted ? '5 4' : undefined}
+                      className={
+                        u.deleted ? 'stroke-crit' : on ? 'stroke-accent' : 'stroke-line-strong'
+                      }
+                    />
+                  );
+                }),
             )}
           </svg>
-          <SubjectNode report={report} subject={subject} style={{ left: `${COL.subject[0]}%`, width: `${COL.subject[1] - COL.subject[0]}%`, top: subjectY }} />
+          <SubjectNode
+            report={report}
+            subject={subject}
+            style={{
+              left: `${COL.subject[0]}%`,
+              width: `${COL.subject[1] - COL.subject[0]}%`,
+              top: subjectY,
+            }}
+          />
           {shownUps.map((u, i) => (
             <div
               key={u.key}
               data-testid="lineage-upstream"
-              data-on-path={path.has(u.key) ? "true" : "false"}
-              className={`absolute flex flex-col justify-center rounded-button border bg-surface px-3 ${u.entityId && !u.deleted ? "py-1" : "py-1.5"} ${
-                u.deleted ? "border-crit" : path.has(u.key) ? "border-accent" : "border-line"
+              data-on-path={path.has(u.key) ? 'true' : 'false'}
+              className={`absolute flex flex-col justify-center rounded-button border bg-surface px-3 ${u.entityId && !u.deleted ? 'py-1' : 'py-1.5'} ${
+                u.deleted ? 'border-crit' : path.has(u.key) ? 'border-accent' : 'border-line'
               }`}
-              style={{ left: `${COL.upstream[0]}%`, width: `${COL.upstream[1] - COL.upstream[0]}%`, top: y(i, shownUps.length) - NODE / 2, height: NODE }}
+              style={{
+                left: `${COL.upstream[0]}%`,
+                width: `${COL.upstream[1] - COL.upstream[0]}%`,
+                top: y(i, shownUps.length) - NODE / 2,
+                height: NODE,
+              }}
             >
               <span className="truncate text-sm font-semibold" title={u.label}>
                 {u.label}
@@ -475,10 +628,17 @@ function Lineage({
                 {u.deleted && <Chip kind="crit">Deleted</Chip>}
                 {(() => {
                   // A deleted item: its kind and when it went, never its baseline key (qa-plan-10).
-                  const sub = u.deleted && u.deletedAt ? `${u.typeLabel ?? "Removed"} · ${formatDate(u.deletedAt)}` : u.sub;
+                  const sub =
+                    u.deleted && u.deletedAt
+                      ? `${u.typeLabel ?? 'Removed'} · ${formatDate(u.deletedAt)}`
+                      : u.sub;
                   const built = u.builtOn;
                   return (
-                    <span className="truncate" data-testid="lineage-upstream-sub" title={built ? `${sub}. ${built}.` : sub}>
+                    <span
+                      className="truncate"
+                      data-testid="lineage-upstream-sub"
+                      title={built ? `${sub}. ${built}.` : sub}
+                    >
                       {sub}
                     </span>
                   );
@@ -497,10 +657,18 @@ function Lineage({
           ))}
           {nodes.map((n, i) => {
             const on = selected != null && n.output != null && keyOf(n.output) === keyOf(selected);
-            const style = { left: `${COL.output[0]}%`, width: `${COL.output[1] - COL.output[0]}%`, top: y(i, nodes.length) - NODE / 2, height: NODE };
+            const style = {
+              left: `${COL.output[0]}%`,
+              width: `${COL.output[1] - COL.output[0]}%`,
+              top: y(i, nodes.length) - NODE / 2,
+              height: NODE,
+            };
             const inner = (
               <>
-                <span aria-hidden className={`w-1 flex-none self-stretch rounded-full ${BAR[n.freshness]}`} />
+                <span
+                  aria-hidden
+                  className={`w-1 flex-none self-stretch rounded-full ${BAR[n.freshness]}`}
+                />
                 <span className="flex min-w-0 flex-1 flex-col text-left">
                   <span className="truncate text-sm font-semibold" title={n.label}>
                     {n.label}
@@ -521,7 +689,7 @@ function Lineage({
                 data-testid="lineage-output"
                 aria-pressed={on}
                 onClick={() => onPick(n.output!)}
-                className={`absolute flex items-center gap-2.5 rounded-button border bg-surface px-2.5 hover:bg-surface2 ${on ? "border-accent ring-2 ring-accent/30" : "border-line"}`}
+                className={`absolute flex items-center gap-2.5 rounded-button border bg-surface px-2.5 hover:bg-surface2 ${on ? 'border-accent ring-2 ring-accent/30' : 'border-line'}`}
                 style={style}
               >
                 {inner}
@@ -545,17 +713,17 @@ function Lineage({
   );
 }
 
-const BAR: Record<Output["freshness"], string> = {
-  fresh: "bg-pass",
-  reconciled: "bg-pass",
-  potentially_stale: "bg-warn",
-  under_review: "bg-na",
+const BAR: Record<Output['freshness'], string> = {
+  fresh: 'bg-pass',
+  reconciled: 'bg-pass',
+  potentially_stale: 'bg-warn',
+  under_review: 'bg-na',
 };
 
 /** The subject in words (qa-plan-10): "Annual billing PRD v2 › Success metrics section edited". */
 function subjectSub(report: Report): string | null {
   const c = report.change;
-  return c ? `Recorded ${formatDate(c.created_at)}` : report.preview ? "Preview" : null;
+  return c ? `Recorded ${formatDate(c.created_at)}` : report.preview ? 'Preview' : null;
 }
 
 /** The subject node's height, roughly, at the narrowest graph (640 px: ~16 characters a line). */
@@ -569,7 +737,15 @@ function subjectHeight(report: Report, subject: SubjectWords): number {
  * qa-plan-11: it grows to fit its title and date (centred on the subject's row), never clipping a
  * word or running the title into the date.
  */
-function SubjectNode({ report, subject, style }: { report: Report; subject: SubjectWords; style: React.CSSProperties }) {
+function SubjectNode({
+  report,
+  subject,
+  style,
+}: {
+  report: Report;
+  subject: SubjectWords;
+  style: React.CSSProperties;
+}) {
   const sub = subjectSub(report);
   return (
     <div
@@ -578,31 +754,50 @@ function SubjectNode({ report, subject, style }: { report: Report; subject: Subj
       className="absolute flex -translate-y-1/2 flex-col justify-center gap-0.5 rounded-button border border-accent bg-accent-soft px-3 py-1.5 text-accent-ink"
       style={{ ...style, minHeight: NODE }}
     >
-      <span className="text-sm leading-5 font-semibold [overflow-wrap:break-word]">{subject.title}</span>
+      <span className="text-sm leading-5 font-semibold [overflow-wrap:break-word]">
+        {subject.title}
+      </span>
       {sub && <span className="text-[13px] leading-4">{sub}</span>}
     </div>
   );
 }
 
 /** B's grouped list, instead of the graph on a phone only: outputs by what they were built from. */
-function AffectedList({ report, selected, onPick }: { report: Report; selected: Output | null; onPick: (o: Output) => void }) {
+function AffectedList({
+  report,
+  selected,
+  onPick,
+}: {
+  report: Report;
+  selected: Output | null;
+  onPick: (o: Output) => void;
+}) {
   const names = useNamesOf();
   const groups = new Map<string, Output[]>();
   for (const o of report.affected) {
-    const label = `From ${upstreamsOfIn(o, names).map((u) => u.short).join(", ") || "the subject"}`;
+    const label = `From ${
+      upstreamsOfIn(o, names)
+        .map((u) => u.short)
+        .join(', ') || 'the subject'
+    }`;
     groups.set(label, [...(groups.get(label) ?? []), o]);
   }
   return (
     <Panel title="Affected outputs" count={report.affected.length} className="min-[601px]:hidden">
       {/* qa-plan-60: on a phone the plan opens per output; say so, and how big it is. */}
-      <p data-testid="impact-phone-hint" className="border-b border-line px-4 py-2 text-sm text-text2">
+      <p
+        data-testid="impact-phone-hint"
+        className="border-b border-line px-4 py-2 text-sm text-text2"
+      >
         {report.plan.length > 0
-          ? `The regeneration plan has ${plural(report.plan.length, "proposal", "proposals")}. Tap an output to see its proposal and act on it.`
-          : "Nothing to propose: the affected outputs are superseded or rejected. Tap an output to see why."}
+          ? `The regeneration plan has ${plural(report.plan.length, 'proposal', 'proposals')}. Tap an output to see its proposal and act on it.`
+          : 'Nothing to propose: the affected outputs are superseded or rejected. Tap an output to see why.'}
       </p>
       {[...groups.entries()].map(([label, os]) => (
         <div key={label} className="border-b border-line last:border-b-0">
-          <div className="bg-surface2 px-4 py-1.5 text-[13px] font-semibold text-text2">{label}</div>
+          <div className="bg-surface2 px-4 py-1.5 text-[13px] font-semibold text-text2">
+            {label}
+          </div>
           {os.map((o) => {
             const on = selected != null && keyOf(o) === keyOf(selected);
             return (
@@ -611,11 +806,11 @@ function AffectedList({ report, selected, onPick }: { report: Report; selected: 
                 type="button"
                 aria-pressed={on}
                 onClick={() => onPick(o)}
-                className={`flex min-h-11 w-full items-center gap-2 border-t border-line px-4 py-2 text-left first:border-t-0 hover:bg-surface2 ${on ? "bg-accent-soft" : ""}`}
+                className={`flex min-h-11 w-full items-center gap-2 border-t border-line px-4 py-2 text-left first:border-t-0 hover:bg-surface2 ${on ? 'bg-accent-soft' : ''}`}
               >
                 <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
                   {outputTitle(o)}
-                  {o.status === "superseded" || o.status === "rejected" ? ` · ${o.status}` : ""}
+                  {o.status === 'superseded' || o.status === 'rejected' ? ` · ${o.status}` : ''}
                 </span>
                 <Chip kind={FRESH[o.freshness].kind}>{FRESH[o.freshness].label}</Chip>
               </button>
@@ -644,7 +839,7 @@ function notInPlan(report: Report): Output[] {
 /** #1590: "Propose a new version of…" (regenerate, non-roadmap) sits behind the (i); the
  * roadmap-run and review proposals' own words stay visible as they are. */
 function HowText({ text }: { text: string }) {
-  if (text.startsWith("Propose a new version of")) {
+  if (text.startsWith('Propose a new version of')) {
     return (
       <InfoTip label="the proposal" align="start" testId="propose-version-tip">
         {text}
@@ -673,8 +868,14 @@ function PlanSidebar({
     <Inspector
       label="Regeneration plan"
       eyebrow="Regeneration plan"
-      title={`${report.plan.length} ${report.plan.length === 1 ? "proposal" : "proposals"}`}
-      action={source.kind === "version" ? <LinkButton variant="hero" href={`/documents/${source.doc}/v/${source.n}`}>Open v{source.n}</LinkButton> : undefined}
+      title={`${report.plan.length} ${report.plan.length === 1 ? 'proposal' : 'proposals'}`}
+      action={
+        source.kind === 'version' ? (
+          <LinkButton variant="hero" href={`/documents/${source.doc}/v/${source.n}`}>
+            Open v{source.n}
+          </LinkButton>
+        ) : undefined
+      }
       chips={
         <>
           <Chip hero>Approved versions are kept</Chip>
@@ -682,15 +883,20 @@ function PlanSidebar({
         </>
       }
       stats={[
-        { label: "Affected", value: report.counts.total ?? report.affected.length, testId: "plan-stat-affected" },
-        { label: "In plan", value: report.plan.length, testId: "plan-stat-in-plan" },
-        { label: "Approved", value: report.counts.approved ?? 0, testId: "plan-stat-approved" },
+        {
+          label: 'Affected',
+          value: report.counts.total ?? report.affected.length,
+          testId: 'plan-stat-affected',
+        },
+        { label: 'In plan', value: report.plan.length, testId: 'plan-stat-in-plan' },
+        { label: 'Approved', value: report.counts.approved ?? 0, testId: 'plan-stat-approved' },
       ]}
     >
       {report.plan.length === 0 && (
         <InspectorSection>
           <p className="text-sm text-text2">
-            {report.affected.length} {report.affected.length === 1 ? "output is" : "outputs are"} affected, but superseded or rejected, so there is nothing to propose.
+            {report.affected.length} {report.affected.length === 1 ? 'output is' : 'outputs are'}{' '}
+            affected, but superseded or rejected, so there is nothing to propose.
           </p>
         </InspectorSection>
       )}
@@ -699,10 +905,23 @@ function PlanSidebar({
           const o = byKey.get(keyOf(p));
           const open = o != null && selected != null && keyOf(o) === keyOf(selected);
           return (
-            <li key={keyOf(p)} data-testid="plan-row" className="border-b border-line px-5 py-3 max-[600px]:px-4">
-              <button type="button" aria-expanded={open} onClick={() => o && onPick(o)} className="flex w-full items-start gap-2.5 text-left">
-                <span className="tnum grid size-6 flex-none place-items-center rounded-full bg-accent-soft text-[13px] font-bold text-accent-ink">{i + 1}</span>
-                <span className="min-w-0 flex-1 font-semibold [overflow-wrap:anywhere]">{o ? outputTitle(o) : p.title}</span>
+            <li
+              key={keyOf(p)}
+              data-testid="plan-row"
+              className="border-b border-line px-5 py-3 max-[600px]:px-4"
+            >
+              <button
+                type="button"
+                aria-expanded={open}
+                onClick={() => o && onPick(o)}
+                className="flex w-full items-start gap-2.5 text-left"
+              >
+                <span className="tnum grid size-6 flex-none place-items-center rounded-full bg-accent-soft text-[13px] font-bold text-accent-ink">
+                  {i + 1}
+                </span>
+                <span className="min-w-0 flex-1 font-semibold [overflow-wrap:anywhere]">
+                  {o ? outputTitle(o) : p.title}
+                </span>
                 <PlanChip action={p.action} />
               </button>
               <div className="mt-1.5 flex flex-wrap items-center gap-1.5 pl-8">
@@ -721,7 +940,11 @@ function PlanSidebar({
               ) : (
                 <p
                   className="mt-1 line-clamp-2 pl-8 text-sm text-text2"
-                  title={names.words(p.how).startsWith("Propose a new version of") ? undefined : names.words(p.how)}
+                  title={
+                    names.words(p.how).startsWith('Propose a new version of')
+                      ? undefined
+                      : names.words(p.how)
+                  }
                 >
                   {/* #1590: the propose-a-new-version sentence sits behind the (i). */}
                   <HowText text={names.words(p.how)} />
@@ -731,13 +954,21 @@ function PlanSidebar({
           );
         })}
         {notInPlan(report).map((o) => (
-          <li key={keyOf(o)} data-testid="plan-not-in-plan" className="border-b border-line px-5 py-3 last:border-b-0 max-[600px]:px-4">
+          <li
+            key={keyOf(o)}
+            data-testid="plan-not-in-plan"
+            className="border-b border-line px-5 py-3 last:border-b-0 max-[600px]:px-4"
+          >
             <div className="flex items-start gap-2.5">
               <span className="grid size-6 flex-none place-items-center text-text2">–</span>
-              <span className="min-w-0 flex-1 font-semibold [overflow-wrap:anywhere]">{outputTitle(o)}</span>
+              <span className="min-w-0 flex-1 font-semibold [overflow-wrap:anywhere]">
+                {outputTitle(o)}
+              </span>
               <Chip kind="na">No proposal</Chip>
             </div>
-            <p className="mt-1 pl-8 text-sm text-text2">{statusLabel(o.status)}, so it is not in the plan.</p>
+            <p className="mt-1 pl-8 text-sm text-text2">
+              {statusLabel(o.status)}, so it is not in the plan.
+            </p>
           </li>
         ))}
       </ol>
@@ -749,7 +980,7 @@ function PlanSidebar({
 function PlanChip({ action }: { action: string }) {
   return (
     <Chip kind="line" data-testid="plan-action">
-      {action === "review" ? "Plan: review" : "Plan: regenerate"}
+      {action === 'review' ? 'Plan: review' : 'Plan: regenerate'}
     </Chip>
   );
 }
@@ -785,27 +1016,38 @@ function ProposalBody({ proposal }: { proposal: NonNullable<ReturnType<typeof pr
 // --- A: table + inspector ---------------------------------------------------------------
 
 /** Mockup A's filter chips over the table. */
-type Filter = "all" | "stale" | "approved";
+type Filter = 'all' | 'stale' | 'approved';
 const FILTER: Record<Filter, (o: Output) => boolean> = {
   all: () => true,
-  stale: (o) => o.freshness === "potentially_stale",
+  stale: (o) => o.freshness === 'potentially_stale',
   approved: (o) => o.approved,
 };
 
-function OutputTable({ report, selected, onPick }: { report: Report; selected: Output | null; onPick: (o: Output) => void }) {
+function OutputTable({
+  report,
+  selected,
+  onPick,
+}: {
+  report: Report;
+  selected: Output | null;
+  onPick: (o: Output) => void;
+}) {
   const names = useNamesOf();
   const columns: Column<Output>[] = [
     {
-      key: "output",
-      header: "Output",
-      phone: "title",
+      key: 'output',
+      header: 'Output',
+      phone: 'title',
       cell: (o) => (
         <span className="flex min-w-0 flex-col">
           <span className="truncate font-medium" title={outputTitle(o)}>
             {outputTitle(o)}
           </span>
           {(() => {
-            const why = o.status === "superseded" || o.status === "rejected" ? `${statusLabel(o.status)} · no proposal` : names.words(o.reasons?.[0] ?? "");
+            const why =
+              o.status === 'superseded' || o.status === 'rejected'
+                ? `${statusLabel(o.status)} · no proposal`
+                : names.words(o.reasons?.[0] ?? '');
             return (
               <span className="truncate text-[13px] text-text2" title={why}>
                 {why}
@@ -815,19 +1057,28 @@ function OutputTable({ report, selected, onPick }: { report: Report; selected: O
         </span>
       ),
     },
-    { key: "freshness", header: "Freshness", width: "160px", cell: (o) => <Chip kind={FRESH[o.freshness].kind} dot>{FRESH[o.freshness].label}</Chip> },
-    { key: "approval", header: "Approval", width: "120px", cell: (o) => statusLabel(o.status) },
     {
-      key: "plan",
-      header: "Plan",
-      width: "110px",
+      key: 'freshness',
+      header: 'Freshness',
+      width: '160px',
+      cell: (o) => (
+        <Chip kind={FRESH[o.freshness].kind} dot>
+          {FRESH[o.freshness].label}
+        </Chip>
+      ),
+    },
+    { key: 'approval', header: 'Approval', width: '120px', cell: (o) => statusLabel(o.status) },
+    {
+      key: 'plan',
+      header: 'Plan',
+      width: '110px',
       cell: (o) => {
         const p = proposalOf(report, o);
-        return p ? (p.action === "review" ? "Review" : "Regenerate") : "—";
+        return p ? (p.action === 'review' ? 'Review' : 'Regenerate') : '—';
       },
     },
   ];
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilter] = useState<Filter>('all');
   const shown = report.affected.filter((o) => FILTER[filter](o));
   const rows = [...shown].sort((a, b) => a.category.localeCompare(b.category));
   return (
@@ -840,9 +1091,17 @@ function OutputTable({ report, selected, onPick }: { report: Report; selected: O
           value={filter}
           onChange={setFilter}
           items={[
-            { value: "all", label: "All", count: report.affected.length },
-            { value: "stale", label: "Potentially stale", count: report.affected.filter(FILTER.stale).length },
-            { value: "approved", label: "Approved", count: report.affected.filter(FILTER.approved).length },
+            { value: 'all', label: 'All', count: report.affected.length },
+            {
+              value: 'stale',
+              label: 'Potentially stale',
+              count: report.affected.filter(FILTER.stale).length,
+            },
+            {
+              value: 'approved',
+              label: 'Approved',
+              count: report.affected.filter(FILTER.approved).length,
+            },
           ]}
         />
       }
@@ -859,7 +1118,7 @@ function OutputTable({ report, selected, onPick }: { report: Report; selected: O
           // qa-plan-41: the group says the kind its outputs' titles say ("User flow"), or the category for a mix.
           const of = rows.filter((o) => o.category === g);
           const kinds = new Set(of.map(kindOf));
-          const name = kinds.size === 1 ? [...kinds][0] : (CATEGORY[g as Output["category"]] ?? g);
+          const name = kinds.size === 1 ? [...kinds][0] : (CATEGORY[g as Output['category']] ?? g);
           return `${name} · ${of.length}`;
         }}
       />
@@ -871,23 +1130,39 @@ function PlanList({ report }: { report: Report }) {
   const names = useNamesOf();
   const byKey = new Map(report.affected.map((o) => [keyOf(o), o]));
   return (
-    <Panel title="Regeneration plan" count={report.plan.length} tools={<span className="text-sm text-text2">Act on each row; nothing runs the whole plan at once</span>}>
+    <Panel
+      title="Regeneration plan"
+      count={report.plan.length}
+      tools={
+        <span className="text-sm text-text2">
+          Act on each row; nothing runs the whole plan at once
+        </span>
+      }
+    >
       <ol>
         {report.plan.map((p, i) => {
           const o = byKey.get(keyOf(p));
           return (
             <li key={keyOf(p)} className="flex gap-3 border-b border-line px-4 py-3">
-              <span className="tnum grid size-6 flex-none place-items-center rounded-full bg-accent-soft text-[13px] font-bold text-accent-ink">{i + 1}</span>
+              <span className="tnum grid size-6 flex-none place-items-center rounded-full bg-accent-soft text-[13px] font-bold text-accent-ink">
+                {i + 1}
+              </span>
               <div className="flex min-w-0 flex-1 flex-col gap-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-semibold [overflow-wrap:anywhere]">{o ? outputTitle(o) : p.title}</span>
+                  <span className="font-semibold [overflow-wrap:anywhere]">
+                    {o ? outputTitle(o) : p.title}
+                  </span>
                   <PlanChip action={p.action} />
                   {p.section_keys.map((k) => (
                     <Chip key={k} kind="line">
                       {names.section(k)}
                     </Chip>
                   ))}
-                  {p.entity_ids.length > 0 && <span className="text-[13px] text-text2">{p.entity_ids.length} Ground Truth item{p.entity_ids.length === 1 ? "" : "s"}</span>}
+                  {p.entity_ids.length > 0 && (
+                    <span className="text-[13px] text-text2">
+                      {p.entity_ids.length} Ground Truth item{p.entity_ids.length === 1 ? '' : 's'}
+                    </span>
+                  )}
                 </div>
                 <p className="text-sm text-text2">
                   {/* #1590: the propose-a-new-version sentence sits behind the (i). */}
@@ -919,12 +1194,17 @@ function EntitiesPanel({ report }: { report: Report }) {
     <Panel title="Ground Truth items reached" count={report.affected_entities.length}>
       <ul>
         {report.affected_entities.map((e) => (
-          <li key={e.id} className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2.5 text-sm last:border-b-0">
+          <li
+            key={e.id}
+            className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2.5 text-sm last:border-b-0"
+          >
             <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{e.title}</span>
             <span className="text-text2">
-              {statusLabel(e.type)} · {e.status.replaceAll("_", " ")}
+              {statusLabel(e.type)} · {e.status.replaceAll('_', ' ')}
             </span>
-            {e.confidence != null && <span className="tnum">{formatPercent(e.confidence)} confidence</span>}
+            {e.confidence != null && (
+              <span className="tnum">{formatPercent(e.confidence)} confidence</span>
+            )}
             {e.locked && <Chip kind="line">Locked</Chip>}
           </li>
         ))}
@@ -933,10 +1213,17 @@ function EntitiesPanel({ report }: { report: Report }) {
   );
 }
 
-function OutputInspector({ report, output, ...steps }: { report: Report; output: Output } & ReturnType<RowPropsOf>) {
+function OutputInspector({
+  report,
+  output,
+  ...steps
+}: { report: Report; output: Output } & ReturnType<RowPropsOf>) {
   const deps = output.dependencies ?? [];
-  const stale = deps.filter((d) => d.freshness !== "fresh").length;
-  const since = deps.map((d) => d.stale_since).filter((x): x is string => Boolean(x)).sort()[0];
+  const stale = deps.filter((d) => d.freshness !== 'fresh').length;
+  const since = deps
+    .map((d) => d.stale_since)
+    .filter((x): x is string => Boolean(x))
+    .sort()[0];
   return (
     <Inspector
       label={outputTitle(output)}
@@ -944,14 +1231,19 @@ function OutputInspector({ report, output, ...steps }: { report: Report; output:
       title={outputTitle(output)}
       chips={
         <>
-          <Chip hero kind={FRESH[output.freshness].kind}>{FRESH[output.freshness].label}</Chip>
+          <Chip hero kind={FRESH[output.freshness].kind}>
+            {FRESH[output.freshness].label}
+          </Chip>
           <Chip hero>{statusLabel(output.status)}</Chip>
           {output.approved && <Chip hero>Keeps the approved version</Chip>}
         </>
       }
       stats={[
-        { label: "Dependencies stale", value: stale, of: deps.length },
-        { label: "Stale since", value: since ? shownDay(since, { month: "short", day: "numeric" }) : "—" },
+        { label: 'Dependencies stale', value: stale, of: deps.length },
+        {
+          label: 'Stale since',
+          value: since ? shownDay(since, { month: 'short', day: 'numeric' }) : '—',
+        },
       ]}
     >
       <OutputSections report={report} output={output} {...steps} />
@@ -960,7 +1252,11 @@ function OutputInspector({ report, output, ...steps }: { report: Report; output:
 }
 
 /** The inspector's (and the phone sheet's) sections: why, built from, proposal, the stages. */
-function OutputSections({ report, output, ...steps }: { report: Report; output: Output } & ReturnType<RowPropsOf>) {
+function OutputSections({
+  report,
+  output,
+  ...steps
+}: { report: Report; output: Output } & ReturnType<RowPropsOf>) {
   const names = useNamesOf();
   // qa-plan-12: the change's page leads back here.
   const here = usePathname();
@@ -991,17 +1287,22 @@ function OutputSections({ report, output, ...steps }: { report: Report; output: 
                   {u.deleted && u.deletedAt && <span>Removed {formatDate(u.deletedAt)}</span>}
                   {d.stale_since && <span>Stale since {formatDate(d.stale_since)}</span>}
                   {d.reconciled_at && <span>Reconciled {formatDate(d.reconciled_at)}</span>}
-                  {d.upstream.composition_revision != null && !d.stale_since && <span>Composition revision {d.upstream.composition_revision}</span>}
+                  {d.upstream.composition_revision != null && !d.stale_since && (
+                    <span>Composition revision {d.upstream.composition_revision}</span>
+                  )}
                   {d.caused_by_change_id && (
                     <Link
-                      href={`/impact/changes/${d.caused_by_change_id}${here ? `?from=${encodeURIComponent(here)}` : ""}`}
+                      href={`/impact/changes/${d.caused_by_change_id}${here ? `?from=${encodeURIComponent(here)}` : ''}`}
                       className="font-medium text-accent-ink hover:underline"
                     >
                       Recorded change
                     </Link>
                   )}
                   {u.entityId && !u.deleted && (
-                    <Link href={`/impact/entities/${u.entityId}`} className="font-medium text-accent-ink hover:underline">
+                    <Link
+                      href={`/impact/entities/${u.entityId}`}
+                      className="font-medium text-accent-ink hover:underline"
+                    >
                       What if {u.label} changed?
                     </Link>
                   )}
@@ -1019,7 +1320,9 @@ function OutputSections({ report, output, ...steps }: { report: Report; output: 
             <HowText text={names.words(proposal.how)} />
           </p>
         ) : (
-          <p className="text-sm text-text2">{statusLabel(output.status)}, so it is not in the plan.</p>
+          <p className="text-sm text-text2">
+            {statusLabel(output.status)}, so it is not in the plan.
+          </p>
         )}
       </InspectorSection>
       {proposal && (
@@ -1032,12 +1335,18 @@ function OutputSections({ report, output, ...steps }: { report: Report; output: 
 }
 
 /** The phone sheet: an output's chips, then the inspector's sections. */
-function OutputDetail({ report, output, ...steps }: { report: Report; output: Output } & ReturnType<RowPropsOf>) {
+function OutputDetail({
+  report,
+  output,
+  ...steps
+}: { report: Report; output: Output } & ReturnType<RowPropsOf>) {
   const proposal = proposalOf(report, output);
   return (
     <div>
       <div className="flex flex-wrap gap-1.5 border-b border-line px-4 py-3">
-        <Chip kind={FRESH[output.freshness].kind} dot>{FRESH[output.freshness].label}</Chip>
+        <Chip kind={FRESH[output.freshness].kind} dot>
+          {FRESH[output.freshness].label}
+        </Chip>
         <Chip kind="line">{statusLabel(output.status)}</Chip>
         {proposal && <PlanChip action={proposal.action} />}
       </div>

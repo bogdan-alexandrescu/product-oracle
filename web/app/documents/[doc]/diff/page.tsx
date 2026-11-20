@@ -1,8 +1,8 @@
-import { Suspense } from "react";
+import { Suspense } from 'react';
 
-import { DiffView } from "@/components/DiffView";
-import type { RouteProps } from "@/lib/route-props";
-import { PageSkeleton } from "@/components/ds";
+import { DiffView } from '@/components/DiffView';
+import type { RouteProps } from '@/lib/route-props';
+import { PageSkeleton } from '@/components/ds';
 
 type Props = RouteProps<{ doc: string }>;
 
@@ -11,7 +11,7 @@ function num(v: string | string[] | undefined): number | undefined {
   return Number.isInteger(n) && n > 0 ? n : undefined;
 }
 
-async function Diff({ params, searchParams }: Pick<Props, "params" | "searchParams">) {
+async function Diff({ params, searchParams }: Pick<Props, 'params' | 'searchParams'>) {
   const [{ doc }, q] = await Promise.all([params, searchParams]);
   return <DiffView doc={doc} from={num(q.from)} to={num(q.to)} />;
 }

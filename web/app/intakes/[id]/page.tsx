@@ -1,11 +1,11 @@
-import { Suspense } from "react";
+import { Suspense } from 'react';
 
-import type { RouteProps } from "@/lib/route-props";
+import type { RouteProps } from '@/lib/route-props';
 
-import { BeforeDrafting } from "./_shell";
-import { PageSkeleton } from "@/components/ds";
+import { BeforeDrafting } from './_shell';
+import { PageSkeleton } from '@/components/ds';
 
-async function Shell({ params }: { params: RouteProps<{ id: string }>["params"] }) {
+async function Shell({ params }: { params: RouteProps<{ id: string }>['params'] }) {
   const { id } = await params;
   // Keyed by the brief: a kept page never shows the previous brief's counts under this one (walk-brief).
   return <BeforeDrafting key={id} id={id} />;

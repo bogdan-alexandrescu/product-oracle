@@ -1,7 +1,7 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { THEME_KEY } from "../lib/theme";
-import { ADMIN, login, openRoadmapItem } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { THEME_KEY } from '../lib/theme';
+import { ADMIN, login, openRoadmapItem } from './helpers';
+import { expect, test, type Locator, type Page } from './test';
 
 /*
  * The roadmap-gantt lane (BGD's picks D and B, 2026-10-28): the roadmap's Timeline and Gantt
@@ -18,22 +18,24 @@ import { expect, test, type Locator, type Page } from "./test";
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 const DESKTOP = { viewport: { width: 1366, height: 820 } };
 
-const slice = (page: Page, code: string): Locator => page.locator(`g[data-testid="slice-bar"][data-code="${code}"]`);
-const lane = (page: Page, title: string): Locator => page.getByTestId("chart-group").filter({ hasText: title });
+const slice = (page: Page, code: string): Locator =>
+  page.locator(`g[data-testid="slice-bar"][data-code="${code}"]`);
+const lane = (page: Page, title: string): Locator =>
+  page.getByTestId('chart-group').filter({ hasText: title });
 
-async function open(page: Page, scheme: "light" | "dark", email = ADMIN.email) {
+async function open(page: Page, scheme: 'light' | 'dark', email = ADMIN.email) {
   await page.context().addInitScript(
     ([key, value, themeKey, theme]) => {
       localStorage.setItem(key, value);
       localStorage.setItem(themeKey, theme);
     },
-    [MOCK_SCENARIO_KEY, "simple-plan", THEME_KEY, scheme] as const,
+    [MOCK_SCENARIO_KEY, 'simple-plan', THEME_KEY, scheme] as const,
   );
   await page.emulateMedia({ colorScheme: scheme });
   await login(page, email);
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  await expect(page.getByTestId("simple-chart")).toBeVisible();
+  await page.goto('/simple/roadmap');
+  await expect(page.getByTestId('simple-roadmap')).toBeVisible();
+  await expect(page.getByTestId('simple-chart')).toBeVisible();
 }
 
 /**
@@ -41,10 +43,14 @@ async function open(page: Page, scheme: "light" | "dark", email = ADMIN.email) {
  * slices live on the Gantt): the bars drawn between the lane's header and the next one's.
  */
 async function itemsIn(page: Page, title: string): Promise<string[]> {
-  const header = page.getByTestId("chart-group").filter({ has: page.locator("span", { hasText: new RegExp(`^${title}$`) }) });
+  const header = page
+    .getByTestId('chart-group')
+    .filter({ has: page.locator('span', { hasText: new RegExp(`^${title}$`) }) });
   await expect(header, `a lane "${title}"`).toHaveCount(1);
   const top = (await header.boundingBox())!.y;
-  const tops = await page.locator('[data-testid="chart-group"], [data-testid="below-the-line"]').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().top));
+  const tops = await page
+    .locator('[data-testid="chart-group"], [data-testid="below-the-line"]')
+    .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().top));
   const next = Math.min(...tops.filter((t) => t > top + 1), Number.POSITIVE_INFINITY);
   return page.locator('g[data-testid="bar"]').evaluateAll(
     (els, [from, to]) =>
@@ -54,7 +60,7 @@ async function itemsIn(page: Page, title: string): Promise<string[]> {
           const mid = r.top + r.height / 2;
           return mid > from && mid < to;
         })
-        .map((e) => e.getAttribute("data-item") ?? ""),
+        .map((e) => e.getAttribute('data-item') ?? ''),
     [top, next] as const,
   );
 }
@@ -64,34 +70,40 @@ async function itemsIn(page: Page, title: string): Promise<string[]> {
  * a header naming the track first): the rows after its header, up to the next one.
  */
 async function timelineLane(page: Page, title: string): Promise<string[]> {
-  return page.locator('[data-testid="timeline-lane"], [data-testid="timeline-row"]').evaluateAll((els, t) => {
-    const named = (e: Element) => (e.textContent ?? "").startsWith(t) && !/^[\p{L}\p{N}]/u.test((e.textContent ?? "").slice(t.length));
-    const at = els.findIndex((e) => e.getAttribute("data-testid") === "timeline-lane" && named(e));
-    if (at < 0) return [];
-    const out: string[] = [];
-    for (const e of els.slice(at + 1)) {
-      if (e.getAttribute("data-testid") === "timeline-lane") break;
-      out.push(e.getAttribute("data-item") ?? "");
-    }
-    return out;
-  }, title);
+  return page
+    .locator('[data-testid="timeline-lane"], [data-testid="timeline-row"]')
+    .evaluateAll((els, t) => {
+      const named = (e: Element) =>
+        (e.textContent ?? '').startsWith(t) &&
+        !/^[\p{L}\p{N}]/u.test((e.textContent ?? '').slice(t.length));
+      const at = els.findIndex(
+        (e) => e.getAttribute('data-testid') === 'timeline-lane' && named(e),
+      );
+      if (at < 0) return [];
+      const out: string[] = [];
+      for (const e of els.slice(at + 1)) {
+        if (e.getAttribute('data-testid') === 'timeline-lane') break;
+        out.push(e.getAttribute('data-item') ?? '');
+      }
+      return out;
+    }, title);
 }
 
 /** The row (y) and the span (x) a slice's bar takes on screen. */
 async function boxOf(l: Locator) {
-  const b = (await l.locator("rect[data-slice-body]").boundingBox())!;
+  const b = (await l.locator('rect[data-slice-body]').boundingBox())!;
   return { x: b.x, right: b.x + b.width, mid: b.y + b.height / 2 };
 }
 
 for (const phone of [false, true]) {
-  for (const scheme of ["light", "dark"] as const) {
-    const where = `${phone ? "phone" : "desktop"}, ${scheme}`;
+  for (const scheme of ['light', 'dark'] as const) {
+    const where = `${phone ? 'phone' : 'desktop'}, ${scheme}`;
     test.describe(where, () => {
       test.use({ ...(phone ? PHONE : DESKTOP), colorScheme: scheme });
 
       // build-roadmap (8ba0ac46): the slices, diamonds and grey weeks are the Gantt's; the new
       // Timeline draws one bar per item (its own test below).
-      for (const format of ["gantt"] as const) {
+      for (const format of ['gantt'] as const) {
         /**
          * Card gantt-slices: protects = Team invites (F-05) is drawn as two bars on ONE row,
          * F-05a inside M1 (9 Nov - 27 Nov) and F-05b inside M2 (30 Nov - 11 Dec); on the
@@ -105,36 +117,44 @@ for (const phone of [false, true]) {
          * missing, or the no-work week is not grey; no_claim = pixel colours, the label's
          * exact cut-off width, the API's placement rules (api pytest).
          */
-        test(`${format}: a two-slice feature on one row, the milestone diamonds and the no-work week (${where})`, async ({ page }) => {
+        test(`${format}: a two-slice feature on one row, the milestone diamonds and the no-work week (${where})`, async ({
+          page,
+        }) => {
           await open(page, scheme);
           await page.getByTestId(`format-${format}`).click();
-          await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", format);
-          const a = slice(page, "F-05a");
-          const b = slice(page, "F-05b");
-          await expect(a).toHaveAttribute("data-start", "2026-11-09");
-          await expect(a).toHaveAttribute("data-end", "2026-11-27");
-          await expect(a).toHaveAttribute("data-milestone", "M1");
-          await expect(b).toHaveAttribute("data-start", "2026-11-30");
-          await expect(b).toHaveAttribute("data-end", "2026-12-11");
-          await expect(b).toHaveAttribute("data-milestone", "M2");
+          await expect(page.getByTestId('simple-chart')).toHaveAttribute('data-format', format);
+          const a = slice(page, 'F-05a');
+          const b = slice(page, 'F-05b');
+          await expect(a).toHaveAttribute('data-start', '2026-11-09');
+          await expect(a).toHaveAttribute('data-end', '2026-11-27');
+          await expect(a).toHaveAttribute('data-milestone', 'M1');
+          await expect(b).toHaveAttribute('data-start', '2026-11-30');
+          await expect(b).toHaveAttribute('data-end', '2026-12-11');
+          await expect(b).toHaveAttribute('data-milestone', 'M2');
           // roadmap-milestones D: the Gantt draws every slice in the accent, with no connector.
-          expect(await a.getAttribute("data-colour")).toBe(await b.getAttribute("data-colour"));
+          expect(await a.getAttribute('data-colour')).toBe(await b.getAttribute('data-colour'));
           await a.scrollIntoViewIfNeeded();
           const [ba, bb] = [await boxOf(a), await boxOf(b)];
-          expect(Math.abs(ba.mid - bb.mid), "both slices on the same row").toBeLessThan(1);
+          expect(Math.abs(ba.mid - bb.mid), 'both slices on the same row').toBeLessThan(1);
           expect(ba.right).toBeLessThanOrEqual(bb.x + 1);
-          await expect(page.locator('[data-testid="slice-connector"][data-feature="F-05"]')).toHaveCount(0);
+          await expect(
+            page.locator('[data-testid="slice-connector"][data-feature="F-05"]'),
+          ).toHaveCount(0);
 
-          const ends = page.getByTestId("milestone-end");
+          const ends = page.getByTestId('milestone-end');
           await expect(ends).toHaveCount(3);
-          await expect(ends.nth(0)).toHaveAttribute("data-date", "2026-11-27");
-          await expect(ends.nth(0)).toHaveAccessibleName(/M1 Prove it ends 27 Nov|M1 Prove it ends Nov 27/);
+          await expect(ends.nth(0)).toHaveAttribute('data-date', '2026-11-27');
+          await expect(ends.nth(0)).toHaveAccessibleName(
+            /M1 Prove it ends 27 Nov|M1 Prove it ends Nov 27/,
+          );
           await expect(ends.nth(1)).toHaveAccessibleName(/M2 Scale volume/);
           await expect(ends.nth(2)).toHaveAccessibleName(/M3 Open to all/);
-          await expect(ends.nth(0).locator('line[data-testid="milestone-end-line"]')).toHaveAttribute("stroke-dasharray", /\d/);
-          await expect(page.getByTestId("no-work")).toHaveCount(1);
-          await expect(page.getByTestId("no-work")).toHaveAttribute("data-start", "2026-12-28");
-          await expect(page.getByTestId("today-line")).toBeAttached();
+          await expect(
+            ends.nth(0).locator('line[data-testid="milestone-end-line"]'),
+          ).toHaveAttribute('stroke-dasharray', /\d/);
+          await expect(page.getByTestId('no-work')).toHaveCount(1);
+          await expect(page.getByTestId('no-work')).toHaveAttribute('data-start', '2026-12-28');
+          await expect(page.getByTestId('today-line')).toBeAttached();
         });
       }
 
@@ -145,14 +165,16 @@ for (const phone of [false, true]) {
          * the Guided setup track's band, no longer a Growth goal lane); fails_when = its slices become rows
          * of their own; no_claim = the slices' dates and colours (the Gantt test above, the card).
          */
-        test(`timeline: a two-slice feature is one item on one row (${where})`, async ({ page }) => {
+        test(`timeline: a two-slice feature is one item on one row (${where})`, async ({
+          page,
+        }) => {
           // build-roadmap (8ba0ac46), the owner's picked Timeline (mk-qa4-roadmap QR1 A): one row
           // and one bar per item, its slices listed in its card (below) and drawn on the Gantt.
           await open(page, scheme);
           const row = page.locator('[data-testid="timeline-row"][data-item="plan-f-05"]');
           await expect(row).toHaveCount(1);
-          await expect(row.getByTestId("timeline-bar")).toHaveCount(1);
-          expect(await timelineLane(page, "Guided setup track")).toContain("plan-f-05");
+          await expect(row.getByTestId('timeline-bar')).toHaveCount(1);
+          expect(await timelineLane(page, 'Guided setup track')).toContain('plan-f-05');
         });
 
         /**
@@ -169,54 +191,69 @@ for (const phone of [false, true]) {
          * count; No track and Below the line keep their counts), so the stacking is read in the
          * Guided setup track's band and the goal lanes on the Gantt's Group by Goal.
          */
-        test(`goal lanes stack parallel work, and Group by Milestone (${where})`, async ({ page }) => {
+        test(`goal lanes stack parallel work, and Group by Milestone (${where})`, async ({
+          page,
+        }) => {
           await open(page, scheme);
           // The Timeline's bands are headers over a row per item, so work that runs at the same
           // time sits on rows of its own.
-          const guided = page.getByTestId("timeline-lane").filter({ hasText: /^Guided setup track/ });
+          const guided = page
+            .getByTestId('timeline-lane')
+            .filter({ hasText: /^Guided setup track/ });
           await expect(guided).toHaveCount(1);
-          const inGuided = await timelineLane(page, "Guided setup track");
-          expect(inGuided).toContain("plan-f-08");
-          expect(inGuided).toContain("plan-f-12");
-          const usage = page.locator('[data-testid="timeline-row"][data-item="plan-f-08"] [data-testid="timeline-bar"]');
-          const referral = page.locator('[data-testid="timeline-row"][data-item="plan-f-12"] [data-testid="timeline-bar"]');
+          const inGuided = await timelineLane(page, 'Guided setup track');
+          expect(inGuided).toContain('plan-f-08');
+          expect(inGuided).toContain('plan-f-12');
+          const usage = page.locator(
+            '[data-testid="timeline-row"][data-item="plan-f-08"] [data-testid="timeline-bar"]',
+          );
+          const referral = page.locator(
+            '[data-testid="timeline-row"][data-item="plan-f-12"] [data-testid="timeline-bar"]',
+          );
           await usage.scrollIntoViewIfNeeded();
           const [u, r] = [(await usage.boundingBox())!, (await referral.boundingBox())!];
-          expect(Math.abs(u.y - r.y), "two rows").toBeGreaterThan(10);
-          expect(u.x < r.x + r.width && r.x < u.x + u.width, "they overlap in time").toBe(true);
+          expect(Math.abs(u.y - r.y), 'two rows').toBeGreaterThan(10);
+          expect(u.x < r.x + r.width && r.x < u.x + u.width, 'they overlap in time').toBe(true);
           // Every band header says what it is: a track's its name and health, No track just its name, Below the line its count.
-          const heads = page.getByTestId("timeline-lane");
+          const heads = page.getByTestId('timeline-lane');
           const n = await heads.count();
           expect(n).toBeGreaterThan(1);
           for (let k = 0; k < n; k++) {
             const h = heads.nth(k);
-            if (await h.getByTestId("track-head").count()) await expect(h).toContainText(/(On track|Needs a look)$/);
+            if (await h.getByTestId('track-head').count())
+              await expect(h).toContainText(/(On track|Needs a look)$/);
             else await expect(h).toHaveText(/^(No track\s*|Below the line · \d+ items?)$/);
           }
 
           // Group by is the Gantt's (the Timeline always draws track bands); its Goal lanes hold
           // the plan's features under Growth (its 4 items), not under "No goal". A desktop
           // Gantt's goal header names the goal and its measure (D), so the 4 are its bars.
-          await page.getByTestId("format-gantt").click();
-          await page.getByTestId("group-goal").click();
-          await expect(lane(page, "Growth")).toHaveCount(1);
-          const inGrowth = await itemsIn(page, "Growth");
+          await page.getByTestId('format-gantt').click();
+          await page.getByTestId('group-goal').click();
+          await expect(lane(page, 'Growth')).toHaveCount(1);
+          const inGrowth = await itemsIn(page, 'Growth');
           expect(inGrowth).toHaveLength(4);
-          expect(inGrowth).toContain("plan-f-08");
-          expect(inGrowth).toContain("plan-f-12");
-          if (await page.getByTestId("chart-group").filter({ hasText: /^No goal/ }).count()) {
-            const none = await itemsIn(page, "No goal");
-            for (const id of ["plan-f-05", "plan-f-08", "plan-f-12"]) expect(none).not.toContain(id);
+          expect(inGrowth).toContain('plan-f-08');
+          expect(inGrowth).toContain('plan-f-12');
+          if (
+            await page
+              .getByTestId('chart-group')
+              .filter({ hasText: /^No goal/ })
+              .count()
+          ) {
+            const none = await itemsIn(page, 'No goal');
+            for (const id of ['plan-f-05', 'plan-f-08', 'plan-f-12'])
+              expect(none).not.toContain(id);
           }
 
-          await page.getByTestId("group-milestone").click();
-          const m1 = lane(page, "M1 Prove it");
+          await page.getByTestId('group-milestone').click();
+          const m1 = lane(page, 'M1 Prove it');
           await expect(m1).toHaveCount(1);
-          await expect(lane(page, "M2 Scale volume")).toHaveCount(1);
-          await expect(lane(page, "M3 Open to all")).toHaveCount(1);
-          await expect(slice(page, "F-05b")).toBeAttached();
-          expect(await itemsIn(page, "M1 Prove it")).toContain("plan-f-05");
-          expect(await itemsIn(page, "M2 Scale volume")).not.toContain("plan-f-05");
+          await expect(lane(page, 'M2 Scale volume')).toHaveCount(1);
+          await expect(lane(page, 'M3 Open to all')).toHaveCount(1);
+          await expect(slice(page, 'F-05b')).toBeAttached();
+          expect(await itemsIn(page, 'M1 Prove it')).toContain('plan-f-05');
+          expect(await itemsIn(page, 'M2 Scale volume')).not.toContain('plan-f-05');
         });
       }
 
@@ -231,26 +268,26 @@ for (const phone of [false, true]) {
       test(`the item card lists its slices (${where})`, async ({ page }) => {
         await open(page, scheme);
         // build-roadmap (8ba0ac46): an item opens from its Timeline row (a phone's list by quarter).
-        await openRoadmapItem(page, "plan-f-05");
-        const card = page.getByTestId("floating-card");
+        await openRoadmapItem(page, 'plan-f-05');
+        const card = page.getByTestId('floating-card');
         await expect(card).toBeVisible();
-        await expect(card.getByTestId("card-milestone")).toHaveText("M1 Prove it, M2 Scale volume");
-        const rows = card.getByTestId("card-slice");
+        await expect(card.getByTestId('card-milestone')).toHaveText('M1 Prove it, M2 Scale volume');
+        const rows = card.getByTestId('card-slice');
         await expect(rows).toHaveCount(2);
         // qa4-simple-roadmap-32: the slice by its name, no feature code.
-        await expect(rows.nth(0)).toContainText("Team invites, part 1 of 2");
-        await expect(rows.nth(0)).not.toContainText("F-05a");
-        await expect(rows.nth(0)).toContainText("M1 Prove it");
+        await expect(rows.nth(0)).toContainText('Team invites, part 1 of 2');
+        await expect(rows.nth(0)).not.toContainText('F-05a');
+        await expect(rows.nth(0)).toContainText('M1 Prove it');
         await expect(rows.nth(0)).toContainText(/9 Nov – 27 Nov|Nov 9 – Nov 27/);
-        await expect(rows.nth(0)).toContainText("3 engineer-weeks");
-        await expect(rows.nth(1)).toContainText("Team invites");
-        await expect(rows.nth(1)).toContainText("M2 Scale volume");
-        await expect(rows.nth(1)).toContainText("2 engineer-weeks");
-        await card.getByRole("button", { name: "Close" }).click();
+        await expect(rows.nth(0)).toContainText('3 engineer-weeks');
+        await expect(rows.nth(1)).toContainText('Team invites');
+        await expect(rows.nth(1)).toContainText('M2 Scale volume');
+        await expect(rows.nth(1)).toContainText('2 engineer-weeks');
+        await card.getByRole('button', { name: 'Close' }).click();
 
-        await openRoadmapItem(page, "plan-f-10");
-        await expect(page.getByTestId("card-slice")).toHaveCount(1);
-        await expect(page.getByTestId("card-slice")).toContainText("PM-owned");
+        await openRoadmapItem(page, 'plan-f-10');
+        await expect(page.getByTestId('card-slice')).toHaveCount(1);
+        await expect(page.getByTestId('card-slice')).toContainText('PM-owned');
       });
 
       /**
@@ -264,25 +301,33 @@ for (const phone of [false, true]) {
        * or months after its milestone, or the row stays after Accept; no_claim = how the API
        * stores the suggestions (api pytest), dismissing.
        */
-      test(`dates to confirm: one row with its slices, each inside its milestone (${where})`, async ({ page }) => {
+      test(`dates to confirm: one row with its slices, each inside its milestone (${where})`, async ({
+        page,
+      }) => {
         await open(page, scheme);
-        await page.getByTestId("needs-decision").click();
-        const tray = page.getByTestId("decision-tray");
-        const row = tray.getByTestId("tray-date").filter({ hasText: "Self-serve checkout:" });
+        await page.getByTestId('needs-decision').click();
+        const tray = page.getByTestId('decision-tray');
+        const row = tray.getByTestId('tray-date').filter({ hasText: 'Self-serve checkout:' });
         await expect(row).toHaveCount(1);
-        await expect(row.locator("span").first()).toHaveText(/^F-11 Self-serve checkout: No dates yet · estimated Dec 14 – Jan 22, 2027 · Oracle suggests Dec 14, 2026 – Jan 22, 2027$/);
-        const parts = row.getByTestId("tray-date-slice");
+        await expect(row.locator('span').first()).toHaveText(
+          /^F-11 Self-serve checkout: No dates yet · estimated Dec 14 – Jan 22, 2027 · Oracle suggests Dec 14, 2026 – Jan 22, 2027$/,
+        );
+        const parts = row.getByTestId('tray-date-slice');
         await expect(parts).toHaveCount(2);
-        await expect(parts.nth(0)).toHaveAttribute("data-slice", "F-11a");
-        await expect(parts.nth(0)).toHaveText(/^F-11a (Dec 14 – Dec 25|14 Dec – 25 Dec) · M2 Scale volume$/);
-        await expect(parts.nth(1)).toHaveAttribute("data-slice", "F-11b");
-        await expect(parts.nth(1)).toHaveText(/^F-11b (Jan 4 – Jan 22|4 Jan – 22 Jan) · M3 Open to all$/);
-        await row.getByRole("button", { name: "Accept" }).click();
+        await expect(parts.nth(0)).toHaveAttribute('data-slice', 'F-11a');
+        await expect(parts.nth(0)).toHaveText(
+          /^F-11a (Dec 14 – Dec 25|14 Dec – 25 Dec) · M2 Scale volume$/,
+        );
+        await expect(parts.nth(1)).toHaveAttribute('data-slice', 'F-11b');
+        await expect(parts.nth(1)).toHaveText(
+          /^F-11b (Jan 4 – Jan 22|4 Jan – 22 Jan) · M3 Open to all$/,
+        );
+        await row.getByRole('button', { name: 'Accept' }).click();
         await expect(row).toHaveCount(0);
-        await tray.getByRole("button", { name: "Close" }).click();
-        await openRoadmapItem(page, "plan-f-11");
+        await tray.getByRole('button', { name: 'Close' }).click();
+        await openRoadmapItem(page, 'plan-f-11');
         // build-roadmap (8ba0ac46): the card's dates carry the year when it is not this one.
-        await expect(page.getByTestId("card-dates")).toContainText("Dec 14, 2026 – Jan 22, 2027");
+        await expect(page.getByTestId('card-dates')).toContainText('Dec 14, 2026 – Jan 22, 2027');
       });
 
       if (phone) {
@@ -293,22 +338,28 @@ for (const phone of [false, true]) {
          * fails_when = the page itself scrolls sideways, the names scroll away, or M1's start
          * is off screen; no_claim = the exact scroll offset.
          */
-        test(`phone: weeks scroll with names pinned, the current milestone in view (${where})`, async ({ page }) => {
+        test(`phone: weeks scroll with names pinned, the current milestone in view (${where})`, async ({
+          page,
+        }) => {
           await open(page, scheme);
-          await page.getByTestId("format-gantt").click();
-          const scroller = page.getByTestId("chart-scroll");
-          await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-weeks", "true");
-          await expect.poll(async () => scroller.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+          await page.getByTestId('format-gantt').click();
+          const scroller = page.getByTestId('chart-scroll');
+          await expect(page.getByTestId('simple-chart')).toHaveAttribute('data-weeks', 'true');
+          await expect
+            .poll(async () => scroller.evaluate((el) => el.scrollLeft))
+            .toBeGreaterThan(0);
           const sv = (await scroller.boundingBox())!;
-          const a = await boxOf(slice(page, "F-05a"));
+          const a = await boxOf(slice(page, 'F-05a'));
           expect(a.x).toBeGreaterThanOrEqual(sv.x - 1);
           expect(a.x).toBeLessThan(sv.x + sv.width);
-          const name = page.getByTestId("chart-labels").getByText("Team invites");
+          const name = page.getByTestId('chart-labels').getByText('Team invites');
           await name.scrollIntoViewIfNeeded();
           const before = (await name.boundingBox())!;
           const left0 = await scroller.evaluate((el) => el.scrollLeft);
           await scroller.evaluate((el) => el.scrollBy({ left: 400 }));
-          await expect.poll(async () => scroller.evaluate((el) => el.scrollLeft)).toBeGreaterThan(left0);
+          await expect
+            .poll(async () => scroller.evaluate((el) => el.scrollLeft))
+            .toBeGreaterThan(left0);
           // The weeks moved; the name stayed where it was, on the left.
           const after = (await name.boundingBox())!;
           expect(Math.abs(after.x - before.x)).toBeLessThan(1);

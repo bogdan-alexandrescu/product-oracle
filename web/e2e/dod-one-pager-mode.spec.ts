@@ -1,6 +1,6 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { ADMIN, login, signOut } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { ADMIN, login, signOut } from './helpers';
+import { expect, test, type Page } from './test';
 
 /*
  * Simple's Definition of Done, item 4 (docs/simple-dod-actions-plan.md): the one-pager's and the
@@ -11,24 +11,30 @@ import { expect, test, type Page } from "./test";
 
 const DESKTOP = { viewport: { width: 1440, height: 900 } };
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
-const URL = "/simple/one-pagers/guided-setup";
+const URL = '/simple/one-pagers/guided-setup';
 
 const isPhone = (page: Page) => (page.viewportSize()?.width ?? 1440) <= 640;
 const line = (page: Page, id: string) => page.locator(`[data-line="${id}"]`);
-const notes = (page: Page) => page.getByRole("note").filter({ visible: true });
+const notes = (page: Page) => page.getByRole('note').filter({ visible: true });
 
 async function openOnePager(page: Page, email?: string, scenario?: string) {
-  if (scenario) await page.context().addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, scenario] as const);
+  if (scenario)
+    await page
+      .context()
+      .addInitScript(([k, v]) => localStorage.setItem(k, v), [
+        MOCK_SCENARIO_KEY,
+        scenario,
+      ] as const);
   await login(page, email);
   await page.goto(URL);
-  await expect(page.getByTestId("one-pager")).toBeVisible();
+  await expect(page.getByTestId('one-pager')).toBeVisible();
 }
 
 /** Signs out from the desktop rail's account menu (a phone widens for it, then narrows back). */
 async function switchPerson(page: Page, email: string) {
   const size = page.viewportSize()!;
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/home");
+  await page.goto('/home');
   await signOut(page);
   await login(page, email);
   await page.setViewportSize(size);
@@ -36,21 +42,24 @@ async function switchPerson(page: Page, email: string) {
 
 /** Signs in from a bare /login, so the role's default (or the saved choice) decides where it lands. */
 async function signIn(page: Page, email: string) {
-  await page.goto("/login");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(ADMIN.password);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.goto('/login');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(ADMIN.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).not.toHaveURL(/\/login/);
 }
 
 /** The mode switch on a phone: Simple's More drawer, or Detailed's More sheet. */
-async function phoneSwitch(page: Page, to: "Simple" | "Detailed") {
-  if (to === "Detailed") {
-    await page.getByTestId("simple-tab-bar").getByRole("button", { name: "More" }).click();
-    await page.getByRole("dialog", { name: "More" }).getByRole("radio", { name: "Detailed" }).click();
+async function phoneSwitch(page: Page, to: 'Simple' | 'Detailed') {
+  if (to === 'Detailed') {
+    await page.getByTestId('simple-tab-bar').getByRole('button', { name: 'More' }).click();
+    await page
+      .getByRole('dialog', { name: 'More' })
+      .getByRole('radio', { name: 'Detailed' })
+      .click();
   } else {
-    await page.getByTestId("tab-more").click();
-    await page.getByTestId("mode-simple-sheet").click();
+    await page.getByTestId('tab-more').click();
+    await page.getByTestId('mode-simple-sheet').click();
   }
 }
 
@@ -60,13 +69,20 @@ async function phoneSwitch(page: Page, to: "Simple" | "Detailed") {
  * in the mock, where the API would already have it.
  */
 const savedMode = (page: Page, email: string) =>
-  expect.poll(() => page.evaluate((e) => JSON.parse(localStorage.getItem("po-mock-db-v2") ?? "{}").preferences?.[e]?.experience ?? null, email));
+  expect.poll(() =>
+    page.evaluate(
+      (e) =>
+        JSON.parse(localStorage.getItem('po-mock-db-v2') ?? '{}').preferences?.[e]?.experience ??
+        null,
+      email,
+    ),
+  );
 
-const path = (p: string) => new RegExp(`localhost:\\d+${p.replace(/\//g, "\\/")}$`);
+const path = (p: string) => new RegExp(`localhost:\\d+${p.replace(/\//g, '\\/')}$`);
 
 for (const [where, use] of [
-  ["desktop", DESKTOP],
-  ["phone", PHONE],
+  ['desktop', DESKTOP],
+  ['phone', PHONE],
 ] as const) {
   test.describe(where, () => {
     test.use(use);
@@ -77,16 +93,20 @@ for (const [where, use] of [
      * the section); fails_when = the decider is only offered a proposal, or the line stays
      * published; no_claim = the API's patching of the sections (pytest).
      */
-    test(`the PRD's decider edits a line into the working draft, as its section's change (${where})`, async ({ page }) => {
-      await openOnePager(page, "dana.decider@example.com", "simple-deciders");
-      await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
-      await page.getByLabel("New wording for").fill("A setup checklist with the next two steps");
-      await page.getByRole("button", { name: "Save", exact: true }).click();
-      await expect(line(page, "bets-1")).toHaveAttribute("data-state", "edited");
-      await expect(line(page, "bets-1")).toContainText("A setup checklist with the next two steps");
-      const note = notes(page).filter({ hasText: "You changed “A setup checklist" });
-      await note.getByRole("button", { name: "See before/after" }).click();
-      await expect(note.getByLabel("Before and after")).not.toContainText("In “What we will build”");  // qa4-simple-prd-18: the line's before/after once, no repeat box
+    test(`the PRD's decider edits a line into the working draft, as its section's change (${where})`, async ({
+      page,
+    }) => {
+      await openOnePager(page, 'dana.decider@example.com', 'simple-deciders');
+      await page.getByRole('button', { name: 'Edit “A setup checklist that shows' }).click();
+      await page.getByLabel('New wording for').fill('A setup checklist with the next two steps');
+      await page.getByRole('button', { name: 'Save', exact: true }).click();
+      await expect(line(page, 'bets-1')).toHaveAttribute('data-state', 'edited');
+      await expect(line(page, 'bets-1')).toContainText('A setup checklist with the next two steps');
+      const note = notes(page).filter({ hasText: 'You changed “A setup checklist' });
+      await note.getByRole('button', { name: 'See before/after' }).click();
+      await expect(note.getByLabel('Before and after')).not.toContainText(
+        'In “What we will build”',
+      ); // qa4-simple-prd-18: the line's before/after once, no repeat box
     });
 
     /*
@@ -96,22 +116,26 @@ for (const [where, use] of [
      * commenter's (simple-one-pager.spec).
      */
     test(`an approver's line edit is a proposal the owner accepts (${where})`, async ({ page }) => {
-      await openOnePager(page, "approver@example.com");
-      await expect(page.getByRole("button", { name: /^Edit “A setup checklist/ })).toHaveCount(0);
-      await page.getByRole("button", { name: "Propose wording for “A setup checklist that shows" }).click();
-      await page.getByLabel("New wording for").fill("A setup checklist with the next two steps");
-      await page.getByRole("button", { name: "Propose", exact: true }).click();
-      await expect(line(page, "bets-1")).toHaveAttribute("data-state", "proposal");
-      const mine = notes(page).filter({ hasText: "You proposed new wording for “A setup checklist" });
+      await openOnePager(page, 'approver@example.com');
+      await expect(page.getByRole('button', { name: /^Edit “A setup checklist/ })).toHaveCount(0);
+      await page
+        .getByRole('button', { name: 'Propose wording for “A setup checklist that shows' })
+        .click();
+      await page.getByLabel('New wording for').fill('A setup checklist with the next two steps');
+      await page.getByRole('button', { name: 'Propose', exact: true }).click();
+      await expect(line(page, 'bets-1')).toHaveAttribute('data-state', 'proposal');
+      const mine = notes(page).filter({
+        hasText: 'You proposed new wording for “A setup checklist',
+      });
       await expect(mine).toBeVisible();
-      await expect(mine.getByRole("button", { name: "Accept" })).toHaveCount(0);
+      await expect(mine.getByRole('button', { name: 'Accept' })).toHaveCount(0);
 
       await switchPerson(page, ADMIN.email);
       await page.goto(URL);
-      const theirs = notes(page).filter({ hasText: "proposed new wording for “A setup checklist" });
-      await theirs.getByRole("button", { name: "Accept" }).click();
-      await expect(line(page, "bets-1")).toHaveAttribute("data-state", "edited");
-      await expect(line(page, "bets-1")).toContainText("A setup checklist with the next two steps");
+      const theirs = notes(page).filter({ hasText: 'proposed new wording for “A setup checklist' });
+      await theirs.getByRole('button', { name: 'Accept' }).click();
+      await expect(line(page, 'bets-1')).toHaveAttribute('data-state', 'edited');
+      await expect(line(page, 'bets-1')).toContainText('A setup checklist with the next two steps');
     });
 
     /*
@@ -120,16 +144,16 @@ for (const [where, use] of [
      * toast for a commenter; no_claim = the PDF's pages (simple-prd-timeline.spec).
      */
     test(`a commenter exports the one-pager as a PDF (${where})`, async ({ page }) => {
-      await openOnePager(page, "commenter@example.com");
-      const download = page.waitForEvent("download");
-      await page.getByRole("button", { name: "Export PDF" }).click();
-      expect((await download).suggestedFilename()).toBe("Guided setup v3 one-pager.pdf");
-      await expect(page.getByText("PDF downloaded")).toBeVisible();
+      await openOnePager(page, 'commenter@example.com');
+      const download = page.waitForEvent('download');
+      await page.getByRole('button', { name: 'Export PDF' }).click();
+      expect((await download).suggestedFilename()).toBe('Guided setup v3 one-pager.pdf');
+      await expect(page.getByText('PDF downloaded')).toBeVisible();
     });
   });
 }
 
-test.describe("phone mode switch", () => {
+test.describe('phone mode switch', () => {
   test.use(PHONE);
 
   /*
@@ -138,15 +162,19 @@ test.describe("phone mode switch", () => {
    * the other mode on a phone; no_claim = the desktop (simple-mode.spec).
    */
   for (const [email, home] of [
-    ["viewer@example.com", "/simple"],
-    ["commenter@example.com", "/simple"],
-    ["approver@example.com", "/home"],
-    [ADMIN.email, "/home"],
+    ['viewer@example.com', '/simple'],
+    ['commenter@example.com', '/simple'],
+    ['approver@example.com', '/home'],
+    [ADMIN.email, '/home'],
   ] as const)
-    test(`with no saved mode, ${email.split("@")[0]} lands on ${home} on a phone`, async ({ page }) => {
+    test(`with no saved mode, ${email.split('@')[0]} lands on ${home} on a phone`, async ({
+      page,
+    }) => {
       await signIn(page, email);
       await expect(page).toHaveURL(path(home));
-      await expect(page.locator(`[data-mode="${home === "/simple" ? "simple" : "detailed"}"]`)).toHaveCount(1);
+      await expect(
+        page.locator(`[data-mode="${home === '/simple' ? 'simple' : 'detailed'}"]`),
+      ).toHaveCount(1);
     });
 
   /*
@@ -154,17 +182,19 @@ test.describe("phone mode switch", () => {
    * matching page both ways for the roadmap (Plan) and Priorities; fails_when = it lands on the
    * other mode's home or the wrong page; no_claim = the other pairs (simple-mode.spec, desktop).
    */
-  test("the phone's switch lands on the matching roadmap and priorities pages, both ways", async ({ page }) => {
+  test("the phone's switch lands on the matching roadmap and priorities pages, both ways", async ({
+    page,
+  }) => {
     await signIn(page, ADMIN.email);
     for (const [simple, detailed] of [
-      ["/simple/roadmap", "/plan"],
-      ["/simple/priorities", "/priorities"],
+      ['/simple/roadmap', '/plan'],
+      ['/simple/priorities', '/priorities'],
     ] as const) {
       await page.goto(detailed);
-      await phoneSwitch(page, "Simple");
+      await phoneSwitch(page, 'Simple');
       await expect(page).toHaveURL(path(simple));
       await expect(page.locator('[data-mode="simple"]')).toHaveCount(1);
-      await phoneSwitch(page, "Detailed");
+      await phoneSwitch(page, 'Detailed');
       await expect(page).toHaveURL(path(detailed));
       await expect(page.locator('[data-mode="detailed"]')).toHaveCount(1);
     }
@@ -176,22 +206,24 @@ test.describe("phone mode switch", () => {
    * role's default wins after a reload or a sign-in; no_claim = the server's preference store
    * (the API's tests).
    */
-  test("a commenter's choice of Detailed on a phone is remembered across a reload and the next sign-in", async ({ page }) => {
-    await signIn(page, "commenter@example.com");
-    await expect(page).toHaveURL(path("/simple"));
-    await phoneSwitch(page, "Detailed");
-    await expect(page).toHaveURL(path("/home"));
-    await savedMode(page, "commenter@example.com").toBe("detailed");
+  test("a commenter's choice of Detailed on a phone is remembered across a reload and the next sign-in", async ({
+    page,
+  }) => {
+    await signIn(page, 'commenter@example.com');
+    await expect(page).toHaveURL(path('/simple'));
+    await phoneSwitch(page, 'Detailed');
+    await expect(page).toHaveURL(path('/home'));
+    await savedMode(page, 'commenter@example.com').toBe('detailed');
     await page.reload();
-    await expect(page).toHaveURL(path("/home"));
-    await page.goto("/");
-    await expect(page).toHaveURL(path("/home"));
+    await expect(page).toHaveURL(path('/home'));
+    await page.goto('/');
+    await expect(page).toHaveURL(path('/home'));
     const size = page.viewportSize()!;
     await page.setViewportSize({ width: 1440, height: 900 });
     await signOut(page);
     await page.setViewportSize(size);
-    await signIn(page, "commenter@example.com");
-    await expect(page).toHaveURL(path("/home"));
+    await signIn(page, 'commenter@example.com');
+    await expect(page).toHaveURL(path('/home'));
     expect(isPhone(page)).toBe(true);
   });
 });

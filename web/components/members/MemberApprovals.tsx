@@ -1,22 +1,22 @@
-"use client";
+'use client';
 
-import { Link } from "@/lib/nav";
-import { useEffect, useState } from "react";
+import { Link } from '@/lib/nav';
+import { useEffect, useState } from 'react';
 
-import { Notice } from "@/components/ds";
-import type { Schemas } from "@/lib/api/client";
-import { membersApi } from "@/lib/api/members-types";
-import { formatDay } from "@/lib/format";
-import { errorMessage } from "@/lib/use-query";
+import { Notice } from '@/components/ds';
+import type { Schemas } from '@/lib/api/client';
+import { membersApi } from '@/lib/api/members-types';
+import { formatDay } from '@/lib/format';
+import { errorMessage } from '@/lib/use-query';
 
-type Approval = Schemas["TokenApprovalOut"];
+type Approval = Schemas['TokenApprovalOut'];
 
 /**
  * A5 (#203 part 3): a member's live section verdicts and version approvals (GET
  * /v1/members/{id}/approvals), each linking to its document: what the inspector's Holds
  * counts and what a removal's "Lapses for good" ends. `kind` keeps one of the two.
  */
-export function MemberApprovals({ memberId, kind }: { memberId: string; kind?: Approval["kind"] }) {
+export function MemberApprovals({ memberId, kind }: { memberId: string; kind?: Approval['kind'] }) {
   const [rows, setRows] = useState<Approval[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -35,15 +35,23 @@ export function MemberApprovals({ memberId, kind }: { memberId: string; kind?: A
   return (
     <ul data-testid="member-approvals" aria-label="Approvals" className="flex flex-col text-[15px]">
       {shown.map((a) => (
-        <li key={`${a.kind}:${a.document}:${a.version}:${a.section_key ?? ""}`} className="flex flex-wrap items-baseline gap-x-1.5 border-t border-line py-1.5 first:border-t-0">
-          <span>{a.kind === "section" ? "Section approval" : "Version approval"}</span>
+        <li
+          key={`${a.kind}:${a.document}:${a.version}:${a.section_key ?? ''}`}
+          className="flex flex-wrap items-baseline gap-x-1.5 border-t border-line py-1.5 first:border-t-0"
+        >
+          <span>{a.kind === 'section' ? 'Section approval' : 'Version approval'}</span>
           <span className="text-text2">·</span>
           {/* pass-f F-16: the document's and the section's names, never the slug or the key. */}
-          <Link href={`/documents/${a.document}`} className="font-semibold text-accent-ink hover:underline">
+          <Link
+            href={`/documents/${a.document}`}
+            className="font-semibold text-accent-ink hover:underline"
+          >
             {a.document_title ?? a.document} v{a.version}
           </Link>
-          {a.section_key && <span className="text-text2">{a.section_title ?? "A section"}</span>}
-          {a.approved_at && <span className="text-[13px] text-text2">{formatDay(a.approved_at)}</span>}
+          {a.section_key && <span className="text-text2">{a.section_title ?? 'A section'}</span>}
+          {a.approved_at && (
+            <span className="text-[13px] text-text2">{formatDay(a.approved_at)}</span>
+          )}
         </li>
       ))}
       {shown.length === 0 && <li className="text-text2">None</li>}

@@ -1,8 +1,8 @@
-import { Suspense, type ReactNode } from "react";
+import { Suspense, type ReactNode } from 'react';
 
-import { PageTabsProvider } from "@/components/ds";
+import { PageTabsProvider } from '@/components/ds';
 
-import { PlanNav } from "./_nav";
+import { PlanNav } from './_nav';
 
 /**
  * Every Plan tab: the page title, Plan's tab strip under it, then the tab's content.

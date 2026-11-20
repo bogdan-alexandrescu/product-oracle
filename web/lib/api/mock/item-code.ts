@@ -2,7 +2,7 @@
 
 /** The PRD's own code of a section an item came from ("f-06" -> "F-06"); null when the key is no code (service.py). */
 export function prdCode(section: string | null | undefined): string | null {
-  const m = /^([a-z]{1,3})-(\d+)$/i.exec((section ?? "").trim());
+  const m = /^([a-z]{1,3})-(\d+)$/i.exec((section ?? '').trim());
   return m ? `${m[1].toUpperCase()}-${m[2]}` : null;
 }
 
@@ -16,18 +16,27 @@ export function codedTitle(title: string, code: string | null): [string | null, 
 
 /** oracle.roadmap.codes.shown: the code a person sees on an item: its Ground Truth feature's
  * (``featureCode``), else its PRD section's, else the one its title leads with. */
-export function shownCode(item: CodedItem, featureCode: (id: string) => string | null | undefined): string | null {
+export function shownCode(
+  item: CodedItem,
+  featureCode: (id: string) => string | null | undefined,
+): string | null {
   return codedTitle(item.title, ownCode(item, featureCode))[0];
 }
 
 /** oracle.roadmap.codes.named: an item as a person reads it, the code it shows then its name ("F-31 Shipping step"). */
-export function shownName(item: CodedItem, featureCode: (id: string) => string | null | undefined): string {
+export function shownName(
+  item: CodedItem,
+  featureCode: (id: string) => string | null | undefined,
+): string {
   const [code, name] = codedTitle(item.title, ownCode(item, featureCode));
   return code ? `${code} ${name}` : name;
 }
 
 /** QA goal map codes (goal_map.build): an item's name as the roadmap reads it, without a leading code of its own. */
-export function shownTitle(item: CodedItem, featureCode: (id: string) => string | null | undefined): string {
+export function shownTitle(
+  item: CodedItem,
+  featureCode: (id: string) => string | null | undefined,
+): string {
   return codedTitle(item.title, ownCode(item, featureCode))[1];
 }
 

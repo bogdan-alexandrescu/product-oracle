@@ -11,17 +11,18 @@
 //
 // A name lib/nav.ts does not export fails the run before any file is written: add it there
 // first. The last line is the verdict: "NAV-CODEMOD: OK ..." or "NAV-CODEMOD: FAIL ...".
-import { readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { join, relative, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { join, relative, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const NAV_MODULE = "@/lib/nav";
-const NAV_FILE = join("lib", "nav.ts");
-const SKIP_DIRS = new Set(["node_modules", "test-results", "playwright-report", "out", "build"]);
+const NAV_MODULE = '@/lib/nav';
+const NAV_FILE = join('lib', 'nav.ts');
+const SKIP_DIRS = new Set(['node_modules', 'test-results', 'playwright-report', 'out', 'build']);
 const SOURCE = /\.(ts|tsx|js|jsx|mjs|cjs|mts|cts)$/;
 
 // One import declaration from next/link or next/navigation, with its line break.
-const NEXT_IMPORT = /^import\s+(type\s+)?([^;'"]*?)\s+from\s+(["'])next\/(link|navigation)\3;?[ \t]*(\r?\n)?/gm;
+const NEXT_IMPORT =
+  /^import\s+(type\s+)?([^;'"]*?)\s+from\s+(["'])next\/(link|navigation)\3;?[ \t]*(\r?\n)?/gm;
 // The named import from @/lib/nav a file already has, if any.
 const NAV_IMPORT = /^import\s+\{([^}]*)\}\s+from\s+(["'])@\/lib\/nav\2;?/m;
 
@@ -31,8 +32,11 @@ class CodemodError extends Error {}
 export function navExports(navSource) {
   const names = new Set();
   for (const m of navSource.matchAll(/export\s+(?:type\s+)?\{([^}]*)\}/g)) {
-    for (const part of m[1].split(",")) {
-      const name = part.trim().split(/\s+as\s+/).pop();
+    for (const part of m[1].split(',')) {
+      const name = part
+        .trim()
+        .split(/\s+as\s+/)
+        .pop();
       if (name) names.add(name);
     }
   }
@@ -41,12 +45,12 @@ export function navExports(navSource) {
 
 function parseNamed(list, typeOnly) {
   return list
-    .split(",")
+    .split(',')
     .map((s) => s.trim())
     .filter(Boolean)
     .map((s) => {
       const type = typeOnly || /^type\s/.test(s);
-      const [imported, local = imported] = s.replace(/^type\s+/, "").split(/\s+as\s+/);
+      const [imported, local = imported] = s.replace(/^type\s+/, '').split(/\s+as\s+/);
       return { imported: imported.trim(), local: local.trim(), type };
     });
 }
@@ -54,11 +58,12 @@ function parseNamed(list, typeOnly) {
 /** The specifiers of one import clause, as imports from @/lib/nav. */
 function specifiersOf(clause, typeOnly, module, file) {
   const m = clause.trim().match(/^(?:([\w$]+)\s*,?\s*)?(?:\{([^}]*)\})?$/);
-  if (!m) throw new CodemodError(`${file}: cannot read the import of next/${module}: ${clause.trim()}`);
+  if (!m)
+    throw new CodemodError(`${file}: cannot read the import of next/${module}: ${clause.trim()}`);
   const specs = [];
   if (m[1]) {
-    if (module !== "link") throw new CodemodError(`${file}: next/${module} has no default export`);
-    specs.push({ imported: "Link", local: m[1], type: typeOnly });
+    if (module !== 'link') throw new CodemodError(`${file}: next/${module} has no default export`);
+    specs.push({ imported: 'Link', local: m[1], type: typeOnly });
   }
   if (m[2]) specs.push(...parseNamed(m[2], typeOnly));
   return specs;
@@ -86,18 +91,21 @@ function sortedUnique(specs) {
  * The file's text with its next/link and next/navigation imports re-pointed to @/lib/nav,
  * merged into the file's own @/lib/nav import when it has one. Unchanged text needs nothing.
  */
-export function transform(source, file = "<source>", exported = null) {
+export function transform(source, file = '<source>', exported = null) {
   const found = [...source.matchAll(NEXT_IMPORT)];
   if (found.length === 0) return source;
   const specs = [];
   for (const m of found) specs.push(...specifiersOf(m[2], Boolean(m[1]), m[4], file));
   if (exported) {
     const missing = specs.filter((s) => !exported.has(s.imported)).map((s) => s.imported);
-    if (missing.length) throw new CodemodError(`${file}: lib/nav.ts does not export ${[...new Set(missing)].join(", ")}`);
+    if (missing.length)
+      throw new CodemodError(
+        `${file}: lib/nav.ts does not export ${[...new Set(missing)].join(', ')}`,
+      );
   }
   const quote = found[0][3];
   let first = -1;
-  let out = "";
+  let out = '';
   let last = 0;
   for (const m of found) {
     out += source.slice(last, m.index);
@@ -109,20 +117,22 @@ export function transform(source, file = "<source>", exported = null) {
   const existing = out.match(NAV_IMPORT);
   if (existing) {
     const merged = sortedUnique([...parseNamed(existing[1], false), ...specs]);
-    const statement = `import { ${merged.map(render).join(", ")} } from ${existing[2]}${NAV_MODULE}${existing[2]};`;
-    return out.slice(0, existing.index) + statement + out.slice(existing.index + existing[0].length);
+    const statement = `import { ${merged.map(render).join(', ')} } from ${existing[2]}${NAV_MODULE}${existing[2]};`;
+    return (
+      out.slice(0, existing.index) + statement + out.slice(existing.index + existing[0].length)
+    );
   }
-  const eol = found[0][5] ?? "\n";
-  const statement = `import { ${sortedUnique(specs).map(render).join(", ")} } from ${quote}${NAV_MODULE}${quote};${eol}`;
+  const eol = found[0][5] ?? '\n';
+  const statement = `import { ${sortedUnique(specs).map(render).join(', ')} } from ${quote}${NAV_MODULE}${quote};${eol}`;
   return out.slice(0, first) + statement + out.slice(first);
 }
 
 function* sourceFiles(dir) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (entry.isDirectory()) {
-      if (SKIP_DIRS.has(entry.name) || entry.name.startsWith(".")) continue;
+      if (SKIP_DIRS.has(entry.name) || entry.name.startsWith('.')) continue;
       yield* sourceFiles(join(dir, entry.name));
-    } else if (entry.isFile() && SOURCE.test(entry.name) && !entry.name.endsWith(".d.ts")) {
+    } else if (entry.isFile() && SOURCE.test(entry.name) && !entry.name.endsWith('.d.ts')) {
       yield join(dir, entry.name);
     }
   }
@@ -130,12 +140,12 @@ function* sourceFiles(dir) {
 
 /** Plan every rewrite under root; nothing is written until every file has been read. */
 export function plan(root) {
-  const exported = navExports(readFileSync(join(root, NAV_FILE), "utf8"));
+  const exported = navExports(readFileSync(join(root, NAV_FILE), 'utf8'));
   const changes = [];
   for (const path of sourceFiles(root)) {
-    const file = relative(root, path).split(sep).join("/");
-    if (file === NAV_FILE.split(sep).join("/")) continue;
-    const before = readFileSync(path, "utf8");
+    const file = relative(root, path).split(sep).join('/');
+    if (file === NAV_FILE.split(sep).join('/')) continue;
+    const before = readFileSync(path, 'utf8');
     const after = transform(before, file, exported);
     if (after !== before) changes.push({ path, file, after });
   }
@@ -143,9 +153,9 @@ export function plan(root) {
 }
 
 function main(argv) {
-  const check = argv.includes("--check");
-  const rootArg = argv.find((a) => !a.startsWith("--"));
-  const root = resolve(rootArg ?? join(fileURLToPath(new URL(".", import.meta.url)), ".."));
+  const check = argv.includes('--check');
+  const rootArg = argv.find((a) => !a.startsWith('--'));
+  const root = resolve(rootArg ?? join(fileURLToPath(new URL('.', import.meta.url)), '..'));
   let changes;
   try {
     changes = plan(root);
@@ -159,7 +169,7 @@ function main(argv) {
     console.log(
       changes.length
         ? `NAV-CODEMOD: FAIL ${changes.length} file(s) still import next/link or next/navigation`
-        : "NAV-CODEMOD: OK nothing to change",
+        : 'NAV-CODEMOD: OK nothing to change',
     );
     return changes.length ? 1 : 0;
   }

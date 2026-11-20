@@ -1,56 +1,63 @@
-import { Chip, Ring, type ChipKind } from "@/components/ds";
-import { LockIcon } from "@/components/ui";
-import type { EntityOut, GraphOut, NodeStatus } from "@/lib/api/client";
-import { named, namedText } from "@/lib/codes";
-import { formatDate, formatPercent } from "@/lib/format";
-import { goalTree, scoredConfidence } from "@/lib/goal-tree";
+import { Chip, Ring, type ChipKind } from '@/components/ds';
+import { LockIcon } from '@/components/ui';
+import type { EntityOut, GraphOut, NodeStatus } from '@/lib/api/client';
+import { named, namedText } from '@/lib/codes';
+import { formatDate, formatPercent } from '@/lib/format';
+import { goalTree, scoredConfidence } from '@/lib/goal-tree';
 
 /** Default `low` threshold of the confidence settings; the trace report carries the company's. */
 export const DEFAULT_LOW = 0.4;
 
 /** What Accept does to the item (owner, 2026-10-25): it stays locked until a person unlocks it. */
-export const ACCEPT_LOCKS = "Accept applies the change and the item is then locked against Oracle's changes until a person unlocks it.";
+export const ACCEPT_LOCKS =
+  "Accept applies the change and the item is then locked against Oracle's changes until a person unlocks it.";
 
 const SOURCE_KIND_LABEL: Record<string, string> = {
-  slack: "Slack",
-  notion: "Notion",
-  google_docs: "Google Docs",
-  gdocs: "Google Docs",
-  github: "GitHub",
-  "github:issue": "GitHub issue",
-  "github:pull_request": "GitHub pull request",
-  "github:release": "GitHub release",
-  "github:readme": "GitHub readme",
-  "github:file": "GitHub file",
-  "github:milestone": "GitHub milestone",
-  linear: "Linear",
-  jira: "Jira",
-  fireflies: "Meeting notes",
-  upload: "Upload",
-  manual: "Manual",
-  web: "Web",
-  code: "Code",
-  tracker: "Tracker",
-  docs: "Docs",
-  meeting: "Meeting",
-  chat: "Chat",
+  slack: 'Slack',
+  notion: 'Notion',
+  google_docs: 'Google Docs',
+  gdocs: 'Google Docs',
+  github: 'GitHub',
+  'github:issue': 'GitHub issue',
+  'github:pull_request': 'GitHub pull request',
+  'github:release': 'GitHub release',
+  'github:readme': 'GitHub readme',
+  'github:file': 'GitHub file',
+  'github:milestone': 'GitHub milestone',
+  linear: 'Linear',
+  jira: 'Jira',
+  fireflies: 'Meeting notes',
+  upload: 'Upload',
+  manual: 'Manual',
+  web: 'Web',
+  code: 'Code',
+  tracker: 'Tracker',
+  docs: 'Docs',
+  meeting: 'Meeting',
+  chat: 'Chat',
 };
 
 export function sourceKindLabel(kind: string | null | undefined): string {
-  if (!kind) return "Unknown source";
-  return SOURCE_KIND_LABEL[kind] ?? SOURCE_KIND_LABEL[kind.split(":")[0]] ?? kind;
+  if (!kind) return 'Unknown source';
+  return SOURCE_KIND_LABEL[kind] ?? SOURCE_KIND_LABEL[kind.split(':')[0]] ?? kind;
 }
 
-export function confidenceTone(value: number, low = DEFAULT_LOW): "green" | "amber" | "red" {
-  if (value >= 0.7) return "green";
-  if (value >= low) return "amber";
-  return "red";
+export function confidenceTone(value: number, low = DEFAULT_LOW): 'green' | 'amber' | 'red' {
+  if (value >= 0.7) return 'green';
+  if (value >= low) return 'amber';
+  return 'red';
 }
 
-const RING_TONE = { green: "accent", amber: "warn", red: "crit" } as const;
+const RING_TONE = { green: 'accent', amber: 'warn', red: 'crit' } as const;
 
 /** Confidence as a number chip (evidence, claims, link previews): "78%". */
-export function ConfidenceBadge({ value, low = DEFAULT_LOW }: { value: number | null | undefined; low?: number }) {
+export function ConfidenceBadge({
+  value,
+  low = DEFAULT_LOW,
+}: {
+  value: number | null | undefined;
+  low?: number;
+}) {
   if (value == null) {
     return (
       <Chip kind="na" title="Not scored yet">
@@ -61,7 +68,10 @@ export function ConfidenceBadge({ value, low = DEFAULT_LOW }: { value: number | 
   const tone = confidenceTone(value, low);
   // Out of 100, as the rings read (never "0.78" on one screen and "78" on the next).
   return (
-    <Chip kind={tone === "green" ? "pass" : tone === "amber" ? "warn" : "crit"} title={`Confidence ${formatPercent(value)}`}>
+    <Chip
+      kind={tone === 'green' ? 'pass' : tone === 'amber' ? 'warn' : 'crit'}
+      title={`Confidence ${formatPercent(value)}`}
+    >
       <span data-testid="confidence" data-tone={tone}>
         {formatPercent(value)}
       </span>
@@ -74,7 +84,7 @@ export function ConfidenceRing({
   value,
   low = DEFAULT_LOW,
   size = 34,
-  what = "Confidence",
+  what = 'Confidence',
   evidence,
 }: {
   value: number | null | undefined;
@@ -93,34 +103,43 @@ export function ConfidenceRing({
   // The ring's number is a percentage: its name and tooltip say so (prod-7).
   const words =
     evidence === 0
-      ? "Not scored: no evidence yet"
+      ? 'Not scored: no evidence yet'
       : scored == null
-        ? "Not scored yet"
+        ? 'Not scored yet'
         : `${what} ${formatPercent(scored)}`;
   const tip =
     scored != null && evidence != null && evidence > 0
-      ? `${words}, from ${evidence} evidence ${evidence === 1 ? "item" : "items"}`
+      ? `${words}, from ${evidence} evidence ${evidence === 1 ? 'item' : 'items'}`
       : words;
   return (
-    <span data-testid="confidence" data-tone={tone} className="inline-flex align-middle" title={tip}>
+    <span
+      data-testid="confidence"
+      data-tone={tone}
+      className="inline-flex align-middle"
+      title={tip}
+    >
       <Ring
         label={words}
         value={scored == null ? null : scored * 100}
         size={size}
         stroke={size >= 40 ? 5 : 4}
-        tone={tone ? RING_TONE[tone] : "accent"}
+        tone={tone ? RING_TONE[tone] : 'accent'}
       />
     </span>
   );
 }
 
 export const NODE_STATUS_LABEL: Record<NodeStatus, string> = {
-  proposed: "Proposed",
-  confirmed: "Confirmed",
-  rejected: "Rejected",
+  proposed: 'Proposed',
+  confirmed: 'Confirmed',
+  rejected: 'Rejected',
 };
 
-const NODE_STATUS_KIND: Record<NodeStatus, ChipKind> = { proposed: "warn", confirmed: "pass", rejected: "crit" };
+const NODE_STATUS_KIND: Record<NodeStatus, ChipKind> = {
+  proposed: 'warn',
+  confirmed: 'pass',
+  rejected: 'crit',
+};
 
 export function NodeStatusBadge({ status, hero = false }: { status: NodeStatus; hero?: boolean }) {
   return (
@@ -132,10 +151,15 @@ export function NodeStatusBadge({ status, hero = false }: { status: NodeStatus; 
 
 /** A feature's delivery state (attrs.status) in sentence case, as goal states are: "in_progress" -> "In progress". */
 export function DeliveryChip({ value, hero = false }: { value: unknown; hero?: boolean }) {
-  if (value == null || value === "") return null;
-  const v = formatValue(value).replace(/_/g, " ").toLowerCase();
+  if (value == null || value === '') return null;
+  const v = formatValue(value).replace(/_/g, ' ').toLowerCase();
   const text = v.charAt(0).toUpperCase() + v.slice(1);
-  const kind: ChipKind = v === "shipped" || v === "done" ? "pass" : v === "in progress" || v === "in build" ? "acc" : "na";
+  const kind: ChipKind =
+    v === 'shipped' || v === 'done'
+      ? 'pass'
+      : v === 'in progress' || v === 'in build'
+        ? 'acc'
+        : 'na';
   return (
     <Chip kind={kind} hero={hero}>
       {text}
@@ -144,9 +168,13 @@ export function DeliveryChip({ value, hero = false }: { value: unknown; hero?: b
 }
 
 /** #396 (#505): who locked it in person words (you, their name), never a raw id. */
-function lockTitle(entity: Pick<EntityOut, "locked_by" | "locked_at">, meId?: string | null, name?: string) {
-  const who = entity.locked_by && entity.locked_by === meId ? "you" : (name ?? "a person");
-  const when = entity.locked_at ? ` on ${formatDate(entity.locked_at)}` : "";
+function lockTitle(
+  entity: Pick<EntityOut, 'locked_by' | 'locked_at'>,
+  meId?: string | null,
+  name?: string,
+) {
+  const who = entity.locked_by && entity.locked_by === meId ? 'you' : (name ?? 'a person');
+  const when = entity.locked_at ? ` on ${formatDate(entity.locked_at)}` : '';
   return `Locked by ${who}${when}: agents can only propose changes`;
 }
 
@@ -157,7 +185,7 @@ export function LockBadge({
   name,
   hero = false,
 }: {
-  entity: Pick<EntityOut, "locked" | "locked_by" | "locked_at">;
+  entity: Pick<EntityOut, 'locked' | 'locked_by' | 'locked_at'>;
   meId?: string | null;
   /** The locker's display name, when the screen has read it. */
   name?: string;
@@ -173,7 +201,13 @@ export function LockBadge({
 }
 
 /** Lock as an icon only, for one-line table rows; its name is "Locked". */
-export function LockMark({ entity, meId }: { entity: Pick<EntityOut, "locked" | "locked_by" | "locked_at">; meId?: string | null }) {
+export function LockMark({
+  entity,
+  meId,
+}: {
+  entity: Pick<EntityOut, 'locked' | 'locked_by' | 'locked_at'>;
+  meId?: string | null;
+}) {
   if (!entity.locked) return null;
   return (
     <span title={lockTitle(entity, meId)} className="inline-flex flex-none items-center text-text2">
@@ -184,16 +218,16 @@ export function LockMark({ entity, meId }: { entity: Pick<EntityOut, "locked" | 
 }
 
 export const FLAG_LABEL: Record<string, string> = {
-  serves_no_goal: "Serves no goal",
-  no_evidence: "No evidence",
-  low_confidence: "Low confidence",
+  serves_no_goal: 'Serves no goal',
+  no_evidence: 'No evidence',
+  low_confidence: 'Low confidence',
 };
 
 export function FlagBadges({ flags }: { flags: string[] }) {
   return (
     <>
       {flags.map((f) => (
-        <Chip key={f} kind={f === "serves_no_goal" ? "crit" : "warn"}>
+        <Chip key={f} kind={f === 'serves_no_goal' ? 'crit' : 'warn'}>
           <span data-testid="flag">{FLAG_LABEL[f] ?? f}</span>
         </Chip>
       ))}
@@ -203,70 +237,86 @@ export function FlagBadges({ flags }: { flags: string[] }) {
 
 /** A value from attrs or a claim, as short text. */
 export function formatValue(value: unknown): string {
-  if (value == null || value === "") return "—";
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (value == null || value === '') return '—';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
   return JSON.stringify(value);
 }
 
 /** A field's name in words, as describe.py names it in proposal titles. */
 const FIELD_WORDS: Record<string, string> = {
-  body: "description",
-  current: "current value",
-  contribution: "strength",
-  target_text: "target (as written)",
-  horizon_text: "horizon (as written)",
+  body: 'description',
+  current: 'current value',
+  contribution: 'strength',
+  target_text: 'target (as written)',
+  horizon_text: 'horizon (as written)',
 };
 
 /** "attrs.status" -> "delivery status" (a feature's) or "status"; "body" -> "description"; "_" as spaces. */
 export function fieldLabel(field: string, entityType?: string | null): string {
-  const bare = field.replace(/^attrs\./, "");
-  if (bare === "status" && entityType === "feature") return "delivery status";
-  return FIELD_WORDS[bare] ?? bare.replaceAll("_", " ");
+  const bare = field.replace(/^attrs\./, '');
+  if (bare === 'status' && entityType === 'feature') return 'delivery status';
+  return FIELD_WORDS[bare] ?? bare.replaceAll('_', ' ');
 }
 
 /** A field name to start a line or a chip with: "Delivery status". */
 export const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 /** Fields whose values are a fixed set of states, shown capitalized ("in_progress" -> "In progress"). */
-const STATE_FIELDS = new Set(["status"]);
-const STRENGTHS = ["none", "weak", "medium", "strong"];
+const STATE_FIELDS = new Set(['status']);
+const STRENGTHS = ['none', 'weak', 'medium', 'strong'];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** A field's value in words: states capitalized, strengths named, items by their title, never JSON. */
 export function valueWords(field: string, value: unknown, graph?: GraphOut): string {
-  const bare = field.replace(/^attrs\./, "");
-  if (value == null || value === "") return "—";
-  if (bare === "contribution" && typeof value === "number" && Number.isInteger(value) && value >= 0 && value < STRENGTHS.length)
+  const bare = field.replace(/^attrs\./, '');
+  if (value == null || value === '') return '—';
+  if (
+    bare === 'contribution' &&
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value < STRENGTHS.length
+  )
     return capitalize(STRENGTHS[value]);
-  if (typeof value === "boolean") return value ? "Yes" : "No";
-  if (typeof value === "number") return String(value);
-  if (Array.isArray(value)) return value.map((v) => valueWords("", v, graph)).join(", ");
-  if (typeof value === "object") return "a new value";
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (typeof value === 'number') return String(value);
+  if (Array.isArray(value)) return value.map((v) => valueWords('', v, graph)).join(', ');
+  if (typeof value === 'object') return 'a new value';
   const text = String(value);
-  if (UUID.test(text.trim())) return graph?.entities.find((e) => e.id === text.trim().toLowerCase())?.title ?? "an item that was removed";
-  if (STATE_FIELDS.has(bare) && /^[a-z][a-z0-9_]*$/.test(text)) return capitalize(text.replaceAll("_", " "));
-  if (/^[a-z0-9]+(?:_[a-z0-9]+)+$/.test(text)) return text.replaceAll("_", " ");
+  if (UUID.test(text.trim()))
+    return (
+      graph?.entities.find((e) => e.id === text.trim().toLowerCase())?.title ??
+      'an item that was removed'
+    );
+  if (STATE_FIELDS.has(bare) && /^[a-z][a-z0-9_]*$/.test(text))
+    return capitalize(text.replaceAll('_', ' '));
+  if (/^[a-z0-9]+(?:_[a-z0-9]+)+$/.test(text)) return text.replaceAll('_', ' ');
   return text;
 }
 
 export function titleOf(graph: GraphOut | undefined, id: string | null | undefined): string {
-  if (!id) return "—";
-  return graph?.entities.find((e) => e.id === id)?.title ?? "Unknown item";
+  if (!id) return '—';
+  return graph?.entities.find((e) => e.id === id)?.title ?? 'Unknown item';
 }
 
 /** An item's title, a feature's with its Ground Truth code before it ("F-12 Referral link"). */
 export function codedTitleOf(graph: GraphOut | undefined, id: string | null | undefined): string {
   const e = id ? graph?.entities.find((x) => x.id === id) : undefined;
-  return e?.type === "feature" ? namedText(named(e.title, e.key)) : titleOf(graph, id);
+  return e?.type === 'feature' ? namedText(named(e.title, e.key)) : titleOf(graph, id);
 }
 
 /** What a conflict or proposal is about: an entity's title, or "A → B" for an edge. */
-export function targetTitle(graph: GraphOut | undefined, entityId?: string | null, edgeId?: string | null): string {
+export function targetTitle(
+  graph: GraphOut | undefined,
+  entityId?: string | null,
+  edgeId?: string | null,
+): string {
   if (entityId) return codedTitleOf(graph, entityId);
   const edge = edgeId ? graph?.edges.find((e) => e.id === edgeId) : undefined;
-  if (edge) return `${codedTitleOf(graph, edge.src_id)} → ${codedTitleOf(graph, edge.dst_id)} (${edge.type.replace("_", " ")})`;
-  return "—";
+  if (edge)
+    return `${codedTitleOf(graph, edge.src_id)} → ${codedTitleOf(graph, edge.dst_id)} (${edge.type.replace('_', ' ')})`;
+  return '—';
 }
 
 /** Live goals as a tree, in the one goal order (lib/goal-order.ts), each followed by its subgoals (#345): the order
@@ -292,19 +342,29 @@ export function contributionOf(attrs: Record<string, unknown> | undefined): numb
 }
 
 /** Three small bars, `value` of them filled: a link's contribution 0-3. */
-export function ContributionPips({ value, proposed = false }: { value: number; proposed?: boolean }) {
+export function ContributionPips({
+  value,
+  proposed = false,
+}: {
+  value: number;
+  proposed?: boolean;
+}) {
   return (
     <span
       role="img"
-      aria-label={`Contribution ${value} of 3${proposed ? ", proposed" : ""}`}
-      title={`Contribution ${value}/3${proposed ? " · proposed" : ""}`}
+      aria-label={`Contribution ${value} of 3${proposed ? ', proposed' : ''}`}
+      title={`Contribution ${value}/3${proposed ? ' · proposed' : ''}`}
       className="inline-flex items-end gap-[3px] align-middle"
     >
       {[1, 2, 3].map((i) => (
         <span
           key={i}
           className={`block w-[7px] rounded-[2px] ${
-            i <= value ? (proposed ? "bg-warn" : "bg-accent") : "bg-surface2 shadow-[inset_0_0_0_1px_var(--line)]"
+            i <= value
+              ? proposed
+                ? 'bg-warn'
+                : 'bg-accent'
+              : 'bg-surface2 shadow-[inset_0_0_0_1px_var(--line)]'
           }`}
           style={{ height: 8 + i * 4 }}
         />
@@ -318,6 +378,6 @@ export function ContributionPips({ value, proposed = false }: { value: number; p
  * its labels (KpiStrip sets its columns inline, hence the important overrides).
  */
 export const KPI_PHONE =
-  "max-[600px]:[&>dl]:grid-cols-2! max-[600px]:[&>dl>div:nth-child(2n)]:border-r-0 max-[600px]:[&>dl>div:nth-child(n+3)]:border-t " +
+  'max-[600px]:[&>dl]:grid-cols-2! max-[600px]:[&>dl>div:nth-child(2n)]:border-r-0 max-[600px]:[&>dl>div:nth-child(n+3)]:border-t ' +
   // A label and its (i) wrap to their full height, never clipped by the label's line (qa-plan-27).
-  "max-[600px]:[&>dl>div>dt]:flex-wrap max-[600px]:[&>dl>div>dt]:overflow-visible max-[600px]:[&>dl>div>dt]:whitespace-normal";
+  'max-[600px]:[&>dl>div>dt]:flex-wrap max-[600px]:[&>dl>div>dt]:overflow-visible max-[600px]:[&>dl>div>dt]:whitespace-normal';

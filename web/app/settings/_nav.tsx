@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import { Link, usePathname, useRouter, useSearchParams } from "@/lib/nav";
+import { Link, usePathname, useRouter, useSearchParams } from '@/lib/nav';
 
-import { SELECT_FIELD } from "@/app/settings/_components/fields";
-import { LinkButton, ScrollStrip } from "@/components/ds";
-import { DETAILED_HOME, SIMPLE_HOME } from "@/lib/experience-paths";
-import { settingsTabOf, useSettingsTabs } from "@/lib/settings-tabs";
+import { SELECT_FIELD } from '@/app/settings/_components/fields';
+import { LinkButton, ScrollStrip } from '@/components/ds';
+import { DETAILED_HOME, SIMPLE_HOME } from '@/lib/experience-paths';
+import { settingsTabOf, useSettingsTabs } from '@/lib/settings-tabs';
 
 /**
  * Where a setup step's "Back to Home" goes (qa-onboarding-34), by the page's ?from: Detailed
@@ -14,8 +14,8 @@ import { settingsTabOf, useSettingsTabs } from "@/lib/settings-tabs";
  * from. Null when the page was not opened from a setup step.
  */
 export function setupReturn(from: string | null | undefined): string | null {
-  if (from === "setup") return DETAILED_HOME;
-  if (from === "simple-setup") return SIMPLE_HOME;
+  if (from === 'setup') return DETAILED_HOME;
+  if (from === 'simple-setup') return SIMPLE_HOME;
   return null;
 }
 
@@ -31,13 +31,13 @@ export function setupReturn(from: string | null | undefined): string | null {
  */
 export function SettingsNav() {
   const pathname = usePathname();
-  const backHome = setupReturn(useSearchParams().get("from"));
+  const backHome = setupReturn(useSearchParams().get('from'));
   const router = useRouter();
   const { tabs } = useSettingsTabs();
   const isOn = (href: string) =>
     pathname === href ||
     pathname.startsWith(`${href}/`) ||
-    (href === "/settings/sources" && (pathname === "/sources" || pathname.startsWith("/sources/")));
+    (href === '/settings/sources' && (pathname === '/sources' || pathname.startsWith('/sources/')));
   const current = tabs.find((it) => isOn(it.href));
   // Visual QA ST-6: a page the role has no tab for (Analytics for a viewer) still names itself.
   const outside = current ? undefined : settingsTabOf(pathname);
@@ -50,13 +50,16 @@ export function SettingsNav() {
       <div className="hidden flex-col items-start gap-1.5 max-[600px]:flex">
         {/* The label does not wrap the select: its options' words would join its name. */}
         <div className="flex w-full min-w-0 items-center gap-2">
-          <label htmlFor="settings-nav-select" className="flex-none text-[13px] font-semibold text-text2">
+          <label
+            htmlFor="settings-nav-select"
+            className="flex-none text-[13px] font-semibold text-text2"
+          >
             Settings page
           </label>
           <select
             id="settings-nav-select"
             data-testid="settings-nav-select"
-            value={current?.href ?? outside?.href ?? ""}
+            value={current?.href ?? outside?.href ?? ''}
             onChange={(e) => e.target.value && router.push(e.target.value)}
             className={SELECT_FIELD}
           >
@@ -70,12 +73,22 @@ export function SettingsNav() {
           </select>
         </div>
         {backHome && (
-          <LinkButton href={backHome} variant="ghost" icon="home" className="flex-none" data-testid="nav-back-home-phone">
+          <LinkButton
+            href={backHome}
+            variant="ghost"
+            icon="home"
+            className="flex-none"
+            data-testid="nav-back-home-phone"
+          >
             Back to Home
           </LinkButton>
         )}
       </div>
-      <ScrollStrip itemsName="tabs" className="min-h-9 max-[600px]:hidden" stripClassName="items-center gap-1 lg:flex-wrap lg:gap-0.5">
+      <ScrollStrip
+        itemsName="tabs"
+        className="min-h-9 max-[600px]:hidden"
+        stripClassName="items-center gap-1 lg:flex-wrap lg:gap-0.5"
+      >
         {tabs.map((it) => {
           const on = isOn(it.href);
           return (
@@ -83,9 +96,9 @@ export function SettingsNav() {
               key={it.href}
               href={it.href}
               data-testid={it.testId}
-              aria-current={on ? "page" : undefined}
+              aria-current={on ? 'page' : undefined}
               className={`flex h-8 flex-none items-center rounded-lg px-3 text-[15px] font-medium whitespace-nowrap lg:px-2 lg:text-[14px] ${
-                on ? "bg-accent text-on-accent" : "text-text hover:bg-surface2"
+                on ? 'bg-accent text-on-accent' : 'text-text hover:bg-surface2'
               }`}
             >
               {it.label}
@@ -93,7 +106,13 @@ export function SettingsNav() {
           );
         })}
         {backHome && (
-          <LinkButton href={backHome} variant="ghost" icon="home" className="ml-auto flex-none" data-testid="nav-back-home">
+          <LinkButton
+            href={backHome}
+            variant="ghost"
+            icon="home"
+            className="ml-auto flex-none"
+            data-testid="nav-back-home"
+          >
             Back to Home
           </LinkButton>
         )}

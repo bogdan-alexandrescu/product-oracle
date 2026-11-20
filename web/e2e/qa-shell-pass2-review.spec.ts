@@ -1,7 +1,7 @@
-import { expect, test, type Locator, type Page } from "./test";
+import { expect, test, type Locator, type Page } from './test';
 
-import { MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from "../lib/api/mock/server";
-import { ADMIN, login } from "./helpers";
+import { MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from '../lib/api/mock/server';
+import { ADMIN, login } from './helpers';
 
 /*
  * The review of the shell's QA pass 2: Home's inspector shows its stat and blocker words whole,
@@ -28,49 +28,65 @@ async function holdCall(page: Page, call: string, ms: number) {
 }
 
 for (const [name, size] of [
-  ["desktop", OWNER_WINDOW],
-  ["phone", PHONE],
+  ['desktop', OWNER_WINDOW],
+  ['phone', PHONE],
 ] as const) {
-  test(`qa-shell-17 (${name}): Home's inspector's Approved stat and its blockers are not cut`, async ({ page }) => {
+  test(`qa-shell-17 (${name}): Home's inspector's Approved stat and its blockers are not cut`, async ({
+    page,
+  }) => {
     await page.setViewportSize(size);
     await login(page);
     // qa-company-32: on a phone the PRD panel opens on a tap of its In flight row.
-    if (name === "phone") await page.getByTestId("home-in-flight-table").getByTestId("flight-row").filter({ hasText: "Annual billing" }).first().click();
-    const inspector = page.getByTestId("home-inspector");
-    await expect(inspector.getByRole("heading", { name: "Annual billing PRD" })).toBeVisible();
-    const label = inspector.getByTestId("stat-sections").locator("dt");
+    if (name === 'phone')
+      await page
+        .getByTestId('home-in-flight-table')
+        .getByTestId('flight-row')
+        .filter({ hasText: 'Annual billing' })
+        .first()
+        .click();
+    const inspector = page.getByTestId('home-inspector');
+    await expect(inspector.getByRole('heading', { name: 'Annual billing PRD' })).toBeVisible();
+    const label = inspector.getByTestId('stat-sections').locator('dt');
     // qa-company-26 names it "Approved" (the stat's room cut "Sections approved").
-    await expect(label).toHaveText("Approved");
-    expect(await cut(label.locator("span").first())).toBe(false);
-    const blockers = inspector.getByTestId("inspector-blocker");
+    await expect(label).toHaveText('Approved');
+    expect(await cut(label.locator('span').first())).toBe(false);
+    const blockers = inspector.getByTestId('inspector-blocker');
     await expect(blockers.first()).toBeVisible();
     await expect(
       blockers.filter({
-        hasText: "The address lookup service allows 100 requests",
+        hasText: 'The address lookup service allows 100 requests',
       }),
     ).toHaveCount(1);
     for (const row of await blockers.all()) {
       // Neither the row nor anything holding it cuts the words.
-      expect(await row.evaluate((el) => [el, el.parentElement!].some((e) => e.scrollWidth > e.clientWidth + 1))).toBe(false);
-      expect(await cut(row.locator("span").last())).toBe(false);
+      expect(
+        await row.evaluate((el) =>
+          [el, el.parentElement!].some((e) => e.scrollWidth > e.clientWidth + 1),
+        ),
+      ).toBe(false);
+      expect(await cut(row.locator('span').last())).toBe(false);
     }
   });
 }
 
-test.describe("on a short window", () => {
+test.describe('on a short window', () => {
   test.use({ viewport: { width: 1366, height: 600 } });
-  test("UserMenu: the account menu follows its avatar when the rail scrolls while it is open", async ({ page }) => {
+  test('UserMenu: the account menu follows its avatar when the rail scrolls while it is open', async ({
+    page,
+  }) => {
     await login(page);
-    const rail = page.getByTestId("app-nav");
-    const avatar = page.getByTestId("user-menu");
+    const rail = page.getByTestId('app-nav');
+    const avatar = page.getByTestId('user-menu');
     await avatar.scrollIntoViewIfNeeded();
     await avatar.click();
-    const menu = page.getByRole("dialog", { name: "Account" });
+    const menu = page.getByRole('dialog', { name: 'Account' });
     await expect(menu).toBeInViewport({ ratio: 1 });
     const railBox = await rail.boundingBox();
     await page.mouse.move(railBox!.x + 44, railBox!.y + 300);
     await page.mouse.wheel(0, -40);
-    await expect.poll(() => rail.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop)).toBeGreaterThan(5);
+    await expect
+      .poll(() => rail.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop))
+      .toBeGreaterThan(5);
     await expect(menu).toBeVisible();
     // Its foot level with the avatar's (kept on screen), not where the avatar was.
     await expect
@@ -83,47 +99,53 @@ test.describe("on a short window", () => {
   });
 });
 
-test("LoginForm: a session check that never answers still gives the form", async ({ page }) => {
-  await page.goto("/login");
-  await holdCall(page, "GET /v1/auth/access", 600_000);
+test('LoginForm: a session check that never answers still gives the form', async ({ page }) => {
+  await page.goto('/login');
+  await holdCall(page, 'GET /v1/auth/access', 600_000);
   await page.reload();
-  await expect(page.getByTestId("login-checking")).toBeVisible();
+  await expect(page.getByTestId('login-checking')).toBeVisible();
   await page.clock.fastForward(11_000);
-  await expect(page.getByLabel("Email")).toBeVisible();
-  await page.getByLabel("Email").fill(ADMIN.email);
-  await page.getByLabel("Password").fill(ADMIN.password);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByLabel('Email')).toBeVisible();
+  await page.getByLabel('Email').fill(ADMIN.email);
+  await page.getByLabel('Password').fill(ADMIN.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).not.toHaveURL(/\/login/);
 });
 
-test.describe("LoginForm without JavaScript", () => {
+test.describe('LoginForm without JavaScript', () => {
   test.use({ javaScriptEnabled: false });
-  test("says sign-in needs JavaScript instead of a blank card", async ({ page }) => {
-    await page.goto("/login");
+  test('says sign-in needs JavaScript instead of a blank card', async ({ page }) => {
+    await page.goto('/login');
     // Playwright's text locators skip <noscript>; the page's own words show it.
-    await expect.poll(() => page.evaluate(() => document.body.innerText)).toContain("Signing in needs JavaScript.");
+    await expect
+      .poll(() => page.evaluate(() => document.body.innerText))
+      .toContain('Signing in needs JavaScript.');
   });
 });
 
-test("ModeSwitch: an arrow key moves focus within the switch; Enter opens the other mode", async ({ page }) => {
+test('ModeSwitch: an arrow key moves focus within the switch; Enter opens the other mode', async ({
+  page,
+}) => {
   await login(page);
-  const mode = page.getByRole("radiogroup", { name: "Mode" }).filter({ visible: true });
-  await mode.getByRole("radio", { name: "Detailed" }).focus();
-  await page.keyboard.press("ArrowUp");
-  await expect(mode.getByRole("radio", { name: "Simple" })).toBeFocused();
+  const mode = page.getByRole('radiogroup', { name: 'Mode' }).filter({ visible: true });
+  await mode.getByRole('radio', { name: 'Detailed' }).focus();
+  await page.keyboard.press('ArrowUp');
+  await expect(mode.getByRole('radio', { name: 'Simple' })).toBeFocused();
   await expect(page).toHaveURL(/\/home$/);
-  await page.keyboard.press("ArrowDown");
-  await expect(mode.getByRole("radio", { name: "Detailed" })).toBeFocused();
-  await page.keyboard.press("ArrowUp");
-  await page.keyboard.press("Enter");
+  await page.keyboard.press('ArrowDown');
+  await expect(mode.getByRole('radio', { name: 'Detailed' })).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/simple$/);
 });
 
-test("Inbox badge: the rail never scrolls sideways and the badge stays inside it", async ({ page }) => {
+test('Inbox badge: the rail never scrolls sideways and the badge stays inside it', async ({
+  page,
+}) => {
   await login(page);
-  const rail = page.getByTestId("app-nav");
-  expect(await rail.evaluate((el) => getComputedStyle(el).overflowX)).toBe("hidden");
-  const badge = rail.getByTestId("nav-inbox-badge");
+  const rail = page.getByTestId('app-nav');
+  expect(await rail.evaluate((el) => getComputedStyle(el).overflowX)).toBe('hidden');
+  const badge = rail.getByTestId('nav-inbox-badge');
   await expect(badge).toBeVisible();
   const r = await rail.boundingBox();
   const b = await badge.boundingBox();

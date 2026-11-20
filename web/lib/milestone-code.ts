@@ -13,39 +13,61 @@ export function trackWords(m: { name: string; roadmap_code?: string | null }): s
 }
 
 /** A PRD milestone's key date ("M1 Prove it") read with the milestone's roadmap code, when the roadmap lists it. */
-export function keyDateWords(k: { name: string; date: string; prd?: { id: string } | null }, goalMilestones: readonly { code: string; roadmap_code?: string | null; prd?: { id: string } | null }[]): string {
+export function keyDateWords(
+  k: { name: string; date: string; prd?: { id: string } | null },
+  goalMilestones: readonly {
+    code: string;
+    roadmap_code?: string | null;
+    prd?: { id: string } | null;
+  }[],
+): string {
   if (!k.prd) return k.name;
   const own = CODE.exec(k.name.trim())?.[1].toUpperCase();
-  const m = own ? goalMilestones.find((g) => g.prd?.id === k.prd!.id && g.code.toUpperCase() === own) : undefined;
+  const m = own
+    ? goalMilestones.find((g) => g.prd?.id === k.prd!.id && g.code.toUpperCase() === own)
+    : undefined;
   return m ? trackWords({ name: k.name, roadmap_code: m.roadmap_code }) : k.name;
 }
 
 type Named = { name: string; roadmap_code?: string | null };
-const rest = (name: string) => (CODE.exec(name.trim())?.[2] ?? name).trim().split(/\s+/).filter(Boolean).join(" ");
+const rest = (name: string) =>
+  (CODE.exec(name.trim())?.[2] ?? name).trim().split(/\s+/).filter(Boolean).join(' ');
 
 /**
  * Join whenever names match (the owner, Nov 9): the milestones of one roadmap code are one
  * milestone (the API joins them); it shows the longer name (more words, then more letters; a
  * track's own on a tie) and lists each other name once ("Also: M1 Measured"), so no name is hidden.
  */
-export function joinedNames(goals: readonly Named[], tracks: readonly Named[]): Map<string, { name: string; also: string[] }> {
+export function joinedNames(
+  goals: readonly Named[],
+  tracks: readonly Named[],
+): Map<string, { name: string; also: string[] }> {
   const by = new Map<string, string[]>();
   for (const m of [...tracks, ...goals]) {
-    const n = m.roadmap_code ? rest(m.name) : "";
+    const n = m.roadmap_code ? rest(m.name) : '';
     if (m.roadmap_code && n) by.set(m.roadmap_code, [...(by.get(m.roadmap_code) ?? []), n]);
   }
-  const size = (n: string) => n.split(" ").length * 1e4 + n.length;
+  const size = (n: string) => n.split(' ').length * 1e4 + n.length;
   return new Map(
     [...by].map(([code, names]) => {
       const name = names.reduce((a, b) => (size(b) > size(a) ? b : a));
-      const also = [...new Map(names.filter((n) => n.toLowerCase() !== name.toLowerCase()).map((n) => [n.toLowerCase(), `${code} ${n}`])).values()];
+      const also = [
+        ...new Map(
+          names
+            .filter((n) => n.toLowerCase() !== name.toLowerCase())
+            .map((n) => [n.toLowerCase(), `${code} ${n}`]),
+        ).values(),
+      ];
       return [code, { name, also }];
     }),
   );
 }
 
 /** A milestone's words by its roadmap code and the joined milestone's name ("M1 Measured and mapped"). */
-export function joinedWords(m: Named, joined: Map<string, { name: string; also: string[] }>): string {
+export function joinedWords(
+  m: Named,
+  joined: Map<string, { name: string; also: string[] }>,
+): string {
   const j = m.roadmap_code ? joined.get(m.roadmap_code) : undefined;
   return j && m.roadmap_code ? `${m.roadmap_code} ${j.name}` : trackWords(m);
 }

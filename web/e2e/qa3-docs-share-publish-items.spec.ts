@@ -1,7 +1,7 @@
-import { expect, test, type Locator, type Page } from "./test";
+import { expect, test, type Locator, type Page } from './test';
 
-import { login, sectionStrip } from "./helpers";
-import { contrast } from "./contrast-helpers";
+import { login, sectionStrip } from './helpers';
+import { contrast } from './contrast-helpers';
 
 // QA pass 3, docs lane: the Publish page (Referral link v2: a PRD with a brief, no section
 // reviewed; Visit reminders v1: ready to publish), the version page's review counts (Saved
@@ -9,34 +9,38 @@ import { contrast } from "./contrast-helpers";
 // tab (default scenario: Behaviour's text writes GA Dec 15, 2026, whose schedule basis ENG-413
 // was withdrawn, so Approve version is blocked; v1 has no earlier version).
 
-const CARTS = "referral-link";
-const CARTS_V2 = "/documents/referral-link/v/2";
-const TECH_BRIEF_V1 = "/documents/annual-billing-early-yearly-price-spec/v/1";
-const ITEMS = "/documents/usage-alerts-roadmap/v/1/items";
+const CARTS = 'referral-link';
+const CARTS_V2 = '/documents/referral-link/v/2';
+const TECH_BRIEF_V1 = '/documents/annual-billing-early-yearly-price-spec/v/1';
+const ITEMS = '/documents/usage-alerts-roadmap/v/1/items';
 
 const visible = (page: Page, testId: string) => page.getByTestId(testId).filter({ visible: true });
-const rows = (page: Page) => visible(page, "roadmap-item-row");
+const rows = (page: Page) => visible(page, 'roadmap-item-row');
 const attention = (page: Page) =>
-  visible(page, "items-filter").getByRole("button", { name: /^Needs attention/ });
+  visible(page, 'items-filter').getByRole('button', { name: /^Needs attention/ });
 
 async function openPublish(page: Page, slug: string) {
   await login(page);
   await page.goto(`/documents/${slug}/publish`);
-  await expect(page.getByTestId("publish-readiness")).toBeVisible();
-  await expect(page.getByTestId("hard-check").first()).toBeVisible();
+  await expect(page.getByTestId('publish-readiness')).toBeVisible();
+  await expect(page.getByTestId('hard-check').first()).toBeVisible();
 }
 
 async function box(l: Locator) {
   const b = await l.boundingBox();
-  expect(b, "element has a box").not.toBeNull();
+  expect(b, 'element has a box').not.toBeNull();
   return b!;
 }
 
 /** WCAG contrast of an element's text on the first opaque background behind it. */
 /** "N of M" from the outline's progress line, "N/M" from the Review panel's Reviewed stat. */
 async function counts(page: Page) {
-  const outline = await sectionStrip(page).getByTestId("review-progress").innerText();
-  const stat = await page.getByTestId("review-panel").filter({ visible: true }).getByTestId("stat-reviewed").innerText();
+  const outline = await sectionStrip(page).getByTestId('review-progress').innerText();
+  const stat = await page
+    .getByTestId('review-panel')
+    .filter({ visible: true })
+    .getByTestId('stat-reviewed')
+    .innerText();
   const o = outline.match(/(\d+) of (\d+)/);
   const s = stat.match(/(\d+)\s*\/\s*(\d+)/);
   expect(o, outline).not.toBeNull();
@@ -45,77 +49,97 @@ async function counts(page: Page) {
 }
 
 for (const viewport of [
-  { name: "desktop", width: 1440, height: 900 },
-  { name: "phone", width: 390, height: 844 },
+  { name: 'desktop', width: 1440, height: 900 },
+  { name: 'phone', width: 390, height: 844 },
 ]) {
   test.describe(viewport.name, () => {
     test.use({ viewport: { width: viewport.width, height: viewport.height } });
 
-    test("qa-docs-4: the headline, the Section review row and the dialog give one review count, apart from the checks", async ({
+    test('qa-docs-4: the headline, the Section review row and the dialog give one review count, apart from the checks', async ({
       page,
     }) => {
       await openPublish(page, CARTS);
-      const headline = page.getByTestId("publish-ready");
-      await expect(headline).toHaveText(/^Publishable, but (\d+) of (\d+) sections are not reviewed/);
+      const headline = page.getByTestId('publish-ready');
+      await expect(headline).toHaveText(
+        /^Publishable, but (\d+) of (\d+) sections are not reviewed/,
+      );
       const [, unreviewed, total] = (await headline.innerText()).match(/(\d+) of (\d+) sections/)!;
       // The checklist shows the section review as its own row, by the same numbers.
-      const review = page.getByRole("region", { name: "Section review" });
+      const review = page.getByRole('region', { name: 'Section review' });
       await expect(review).toBeVisible();
-      await expect(review.getByTestId("review-count")).toHaveText(`${Number(total) - Number(unreviewed)} of ${total}`);
-      await expect(review).toContainText("not checks");
-      await page.getByTestId("publish-button").click();
-      const dialog = page.getByRole("dialog", { name: "Publish v2?" });
-      await expect(dialog.getByTestId("unreviewed-sections")).toHaveText(`${unreviewed} of ${total} sections are not reviewed`);
+      await expect(review.getByTestId('review-count')).toHaveText(
+        `${Number(total) - Number(unreviewed)} of ${total}`,
+      );
+      await expect(review).toContainText('not checks');
+      await page.getByTestId('publish-button').click();
+      const dialog = page.getByRole('dialog', { name: 'Publish v2?' });
+      await expect(dialog.getByTestId('unreviewed-sections')).toHaveText(
+        `${unreviewed} of ${total} sections are not reviewed`,
+      );
     });
 
-    test("qa-docs-61: every status pill sits at the row's right end, hard checks as advisory ones", async ({ page }) => {
+    test("qa-docs-61: every status pill sits at the row's right end, hard checks as advisory ones", async ({
+      page,
+    }) => {
       await openPublish(page, CARTS);
-      const advisoryChip = page.getByTestId("advisory").last().locator("[data-kind]").last();
+      const advisoryChip = page.getByTestId('advisory').last().locator('[data-kind]').last();
       const right = (await box(advisoryChip)).x + (await box(advisoryChip)).width;
-      const hard = page.getByTestId("hard-status");
+      const hard = page.getByTestId('hard-status');
       const n = await hard.count();
       expect(n).toBeGreaterThan(0);
       for (let i = 0; i < n; i++) {
-        const chip = hard.nth(i).locator("[data-kind]");
+        const chip = hard.nth(i).locator('[data-kind]');
         const b = await box(chip);
         expect(Math.abs(b.x + b.width - right), `hard check ${i + 1}`).toBeLessThanOrEqual(2);
       }
     });
 
-    test("qa-docs-62: after publishing, 'Published v1' is said once and the side panel speaks in the past", async ({ page }) => {
-      await openPublish(page, "visit-reminders");
-      await page.getByTestId("publish-button").click();
-      await page.getByRole("dialog", { name: "Publish v1?" }).getByRole("button", { name: "Publish", exact: true }).click();
-      await expect(page.getByTestId("published-chip")).toHaveText("Published v1");
-      await expect(page.getByTestId("publish-ready")).toHaveText(/^Published on [A-Z][a-z]{2} \d{1,2}, \d{4}$/);
+    test("qa-docs-62: after publishing, 'Published v1' is said once and the side panel speaks in the past", async ({
+      page,
+    }) => {
+      await openPublish(page, 'visit-reminders');
+      await page.getByTestId('publish-button').click();
+      await page
+        .getByRole('dialog', { name: 'Publish v1?' })
+        .getByRole('button', { name: 'Publish', exact: true })
+        .click();
+      await expect(page.getByTestId('published-chip')).toHaveText('Published v1');
+      await expect(page.getByTestId('publish-ready')).toHaveText(
+        /^Published on [A-Z][a-z]{2} \d{1,2}, \d{4}$/,
+      );
       await expect(page.getByText(/Published v1/)).toHaveCount(1);
-      if (viewport.name === "desktop") {
-        const side = page.getByTestId("publish-inspector");
-        await expect(side).toContainText("When it was published");
-        await expect(side).not.toContainText("On publish");
+      if (viewport.name === 'desktop') {
+        const side = page.getByTestId('publish-inspector');
+        await expect(side).toContainText('When it was published');
+        await expect(side).not.toContainText('On publish');
       }
     });
 
-    test("qa-docs-66: the blocked Approve says it in plain words with a fix; v1 says it has no earlier version", async ({
+    test('qa-docs-66: the blocked Approve says it in plain words with a fix; v1 says it has no earlier version', async ({
       page,
     }) => {
       await login(page);
       await page.goto(ITEMS);
-      const blocked = visible(page, "approve-blocked");
-      await expect(blocked).toContainText("Dec 15, 2026 (its schedule was withdrawn)");
-      await expect(blocked).toContainText("Confirm a schedule for it, or take it out in a new draft.");
+      const blocked = visible(page, 'approve-blocked');
+      await expect(blocked).toContainText('Dec 15, 2026 (its schedule was withdrawn)');
+      await expect(blocked).toContainText(
+        'Confirm a schedule for it, or take it out in a new draft.',
+      );
       await expect(blocked).not.toContainText(/record a basis|import a draft|\(date withdrawn\)/i);
-      await expect(blocked.getByRole("link", { name: "Open Plan › Dates" })).toHaveAttribute("href", "/plan/dates");
+      await expect(blocked.getByRole('link', { name: 'Open Plan › Dates' })).toHaveAttribute(
+        'href',
+        '/plan/dates',
+      );
       // Nothing to compare v1 with: no selected, disabled "Previous version".
-      await expect(visible(page, "compare-none")).toHaveText("No earlier version");
-      await expect(page.getByTestId("compare-previous")).toHaveCount(0);
+      await expect(visible(page, 'compare-none')).toHaveText('No earlier version');
+      await expect(page.getByTestId('compare-previous')).toHaveCount(0);
       await expect(rows(page).first()).toBeVisible();
-      if (viewport.name === "phone") {
+      if (viewport.name === 'phone') {
         // Aligned: the header's actions and the reason start where the page's content does.
-        const left = (await box(visible(page, "items-summary"))).x;
-        const discuss = visible(page, "doc-discuss");
+        const left = (await box(visible(page, 'items-summary'))).x;
+        const discuss = visible(page, 'doc-discuss');
         expect(Math.abs((await box(discuss)).x - left)).toBeLessThanOrEqual(2);
-        const reason = page.locator("#approve-blocked-reason").filter({ visible: true });
+        const reason = page.locator('#approve-blocked-reason').filter({ visible: true });
         expect(Math.abs((await box(reason)).x - left)).toBeLessThanOrEqual(2);
         // Labelled fields: each row's milestone says it is the milestone, "—" included.
         const n = await rows(page).count();
@@ -128,69 +152,80 @@ for (const viewport of [
   });
 }
 
-test.describe("desktop", () => {
+test.describe('desktop', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
   for (const url of [CARTS_V2, TECH_BRIEF_V1]) {
-    test(`qa-docs-5: the outline and the Review panel count the same sections (${url})`, async ({ page }) => {
+    test(`qa-docs-5: the outline and the Review panel count the same sections (${url})`, async ({
+      page,
+    }) => {
       await login(page);
       await page.goto(url);
-      const stat = page.getByTestId("review-panel").filter({ visible: true }).getByTestId("stat-reviewed");
+      const stat = page
+        .getByTestId('review-panel')
+        .filter({ visible: true })
+        .getByTestId('stat-reviewed');
       await expect(stat).toBeVisible();
       // PT1 a: Referral link reads as a PRD, with no outline rail to cross-check the panel
       // against; the panel is the one count there.
-      if (await page.getByTestId("prd-contents").filter({ visible: true }).count()) {
-        await expect(stat).toContainText("Reviewed");
+      if (await page.getByTestId('prd-contents').filter({ visible: true }).count()) {
+        await expect(stat).toContainText('Reviewed');
         return;
       }
-      await expect(sectionStrip(page).getByTestId("review-progress")).toBeVisible();
+      await expect(sectionStrip(page).getByTestId('review-progress')).toBeVisible();
       const c = await counts(page);
       expect(c.stat, `${c.statText} vs ${c.outlineText}`).toEqual(c.outline);
       // Each says what it counts.
-      if (c.outlineText.includes("brief sections")) expect(c.statText).toContain("brief sections");
+      if (c.outlineText.includes('brief sections')) expect(c.statText).toContain('brief sections');
     });
   }
 
-  test("qa-docs-6: the item with the unconfirmed date is flagged in the table and counted under Needs attention", async ({
+  test('qa-docs-6: the item with the unconfirmed date is flagged in the table and counted under Needs attention', async ({
     page,
   }) => {
     await login(page);
     await page.goto(ITEMS);
-    await expect(visible(page, "approve-blocked")).toContainText("Dec 15, 2026");
-    const flagged = visible(page, "unbacked-date");
+    await expect(visible(page, 'approve-blocked')).toContainText('Dec 15, 2026');
+    const flagged = visible(page, 'unbacked-date');
     await expect(flagged).toHaveCount(1);
-    await expect(flagged).toContainText("Dec 15, 2026");
-    await expect(flagged).toContainText("Unconfirmed");
-    await expect(flagged).not.toContainText("2026-12-15");
-    await expect(attention(page)).toHaveText("Needs attention1");
+    await expect(flagged).toContainText('Dec 15, 2026');
+    await expect(flagged).toContainText('Unconfirmed');
+    await expect(flagged).not.toContainText('2026-12-15');
+    await expect(attention(page)).toHaveText('Needs attention1');
     await attention(page).click();
     await expect(rows(page)).toHaveCount(1);
-    await expect(rows(page).first().getByTestId("unbacked-date")).toBeVisible();
+    await expect(rows(page).first().getByTestId('unbacked-date')).toBeVisible();
     // The fix sits next to the warning.
-    await expect(visible(page, "approve-blocked").getByTestId("approve-blocked-fix")).toHaveAttribute("href", "/plan/dates");
+    await expect(
+      visible(page, 'approve-blocked').getByTestId('approve-blocked-fix'),
+    ).toHaveAttribute('href', '/plan/dates');
   });
 
-  test("qa-docs-6: the Unconfirmed flag reads in dark mode", async ({ page }) => {
-    await page.emulateMedia({ colorScheme: "dark" });
+  test('qa-docs-6: the Unconfirmed flag reads in dark mode', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' });
     await login(page);
     await page.goto(ITEMS);
-    const chip = visible(page, "unbacked-date").locator("[data-kind]");
-    await expect(chip).toHaveText("Unconfirmed");
+    const chip = visible(page, 'unbacked-date').locator('[data-kind]');
+    await expect(chip).toHaveText('Unconfirmed');
     expect(await contrast(chip)).toBeGreaterThanOrEqual(4.5);
   });
 
-  test("qa-docs-7: Discuss sits beside Approve version, with the header's other actions", async ({ page }) => {
+  test("qa-docs-7: Discuss sits beside Approve version, with the header's other actions", async ({
+    page,
+  }) => {
     await login(page);
     await page.goto(ITEMS);
-    const discuss = await box(visible(page, "doc-discuss"));
-    const approve = await box(visible(page, "approve-blocked").getByRole("button", { name: "Approve version" }));
+    const discuss = await box(visible(page, 'doc-discuss'));
+    const approve = await box(
+      visible(page, 'approve-blocked').getByRole('button', { name: 'Approve version' }),
+    );
     expect(Math.abs(discuss.y - approve.y)).toBeLessThanOrEqual(2);
     // Next to it (the header's 8 px gap), not floating mid-header.
     const gap = approve.x - (discuss.x + discuss.width);
     expect(gap).toBeGreaterThanOrEqual(0);
     expect(gap).toBeLessThanOrEqual(16);
     // The group is on the right of the header.
-    const header = await box(page.getByTestId("doc-header"));
+    const header = await box(page.getByTestId('doc-header'));
     expect(header.x + header.width - (approve.x + approve.width)).toBeLessThanOrEqual(4);
   });
 });

@@ -1,29 +1,31 @@
-"use client";
+'use client';
 
-import { Link, useRouter } from "@/lib/nav";
-import { useState, type FormEvent } from "react";
+import { Link, useRouter } from '@/lib/nav';
+import { useState, type FormEvent } from 'react';
 
-import { keyFromName, ProblemList } from "@/components/TemplateBodyEditor";
-import { ThemePreview } from "@/components/ThemePreview";
-import { KEY_RE } from "@/app/settings/_components/KeyField";
-import { GrowingTextarea } from "@/app/settings/_components/GrowingTextarea";
-import { Field, INPUT, SELECT } from "@/app/settings/_components/fields";
-import { FormActions } from "@/app/settings/_components/FormActions";
-import { Button, InfoTip, Notice, PageHeader, Panel } from "@/components/ds";
-import { Loading } from "@/components/ui";
-import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
-import { ProblemsError, unwrapProblems, type Problem } from "@/lib/api/problems";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import { keyFromName, ProblemList } from '@/components/TemplateBodyEditor';
+import { ThemePreview } from '@/components/ThemePreview';
+import { KEY_RE } from '@/app/settings/_components/KeyField';
+import { GrowingTextarea } from '@/app/settings/_components/GrowingTextarea';
+import { Field, INPUT, SELECT } from '@/app/settings/_components/fields';
+import { FormActions } from '@/app/settings/_components/FormActions';
+import { Button, InfoTip, Notice, PageHeader, Panel } from '@/components/ds';
+import { Loading } from '@/components/ui';
+import { ApiError, api, unwrap, type Schemas } from '@/lib/api/client';
+import { ProblemsError, unwrapProblems, type Problem } from '@/lib/api/problems';
+import { errorMessage, useQuery } from '@/lib/use-query';
 
-type ThemeKind = Schemas["ThemeOut"]["kind"];
+type ThemeKind = Schemas['ThemeOut']['kind'];
 
 /** New theme: a name (its key made from it, F-76), starting from a copy of an existing theme; then the editor. */
 export default function NewThemePage() {
   const router = useRouter();
-  const themes = useQuery("themes|all", () => unwrap(api.GET("/v1/themes", { params: { query: { include_archived: true } } })));
-  const [name, setName] = useState("");
-  const [kind, setKind] = useState<ThemeKind>("prd");
-  const [description, setDescription] = useState("");
+  const themes = useQuery('themes|all', () =>
+    unwrap(api.GET('/v1/themes', { params: { query: { include_archived: true } } })),
+  );
+  const [name, setName] = useState('');
+  const [kind, setKind] = useState<ThemeKind>('prd');
+  const [description, setDescription] = useState('');
   const [from, setFrom] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,16 +34,16 @@ export default function NewThemePage() {
   // A key that is taken: said under the name.
   const [keyError, setKeyError] = useState<string | null>(null);
   const [problems, setProblems] = useState<Problem[]>([]);
-  const base = themes.data?.find((t) => t.key === (from ?? "clean-document")) ?? themes.data?.[0];
+  const base = themes.data?.find((t) => t.key === (from ?? 'clean-document')) ?? themes.data?.[0];
   // qa-settings-28: why Create is disabled, said next to it.
   const reason = busy
     ? null
     : !name.trim() || !key
-      ? "Enter a name to create the theme."
+      ? 'Enter a name to create the theme.'
       : !KEY_RE.test(key)
-        ? "Make the name at least two letters or digits long."
+        ? 'Make the name at least two letters or digits long.'
         : !base
-          ? "Loading the themes to start from…"
+          ? 'Loading the themes to start from…'
           : null;
 
   async function create(e: FormEvent) {
@@ -53,7 +55,7 @@ export default function NewThemePage() {
     setProblems([]);
     try {
       const t = await unwrapProblems(
-        api.POST("/v1/themes", {
+        api.POST('/v1/themes', {
           body: {
             key,
             name: name.trim(),
@@ -79,7 +81,10 @@ export default function NewThemePage() {
     <>
       <PageHeader
         back={
-          <Link href="/settings/themes" className="inline-flex items-center hover:text-text hover:underline max-[600px]:min-h-11">
+          <Link
+            href="/settings/themes"
+            className="inline-flex items-center hover:text-text hover:underline max-[600px]:min-h-11"
+          >
             ← Themes
           </Link>
         }
@@ -109,7 +114,7 @@ export default function NewThemePage() {
                       Key: <b className="font-semibold text-text">{key}</b>
                     </>
                   ) : (
-                    "Key: —"
+                    'Key: —'
                   )}
                 </span>
                 <InfoTip label="the key" align="start">
@@ -117,19 +122,30 @@ export default function NewThemePage() {
                 </InfoTip>
               </span>
               {keyError && (
-                <p role="alert" className="-mt-1 text-sm font-medium text-crit" data-testid="theme-key-error">
+                <p
+                  role="alert"
+                  className="-mt-1 text-sm font-medium text-crit"
+                  data-testid="theme-key-error"
+                >
                   {keyError}
                 </p>
               )}
               <Field label="For">
-                <select className={`${SELECT} h-9 w-full`} value={kind} onChange={(e) => setKind(e.target.value as ThemeKind)}>
+                <select
+                  className={`${SELECT} h-9 w-full`}
+                  value={kind}
+                  onChange={(e) => setKind(e.target.value as ThemeKind)}
+                >
                   <option value="prd">PRD</option>
                   <option value="roadmap">Roadmap</option>
                   <option value="any">Any document</option>
                 </select>
               </Field>
               <Field label="Description">
-                <GrowingTextarea value={description} onChange={(e) => setDescription(e.target.value)} />
+                <GrowingTextarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
               </Field>
               <Field
                 label="Start from"
@@ -146,7 +162,7 @@ export default function NewThemePage() {
                   <select
                     id="theme-from"
                     className={`${SELECT} h-9 w-full`}
-                    value={base?.key ?? ""}
+                    value={base?.key ?? ''}
                     onChange={(e) => setFrom(e.target.value)}
                   >
                     {themes.data?.map((t) => (
@@ -163,9 +179,9 @@ export default function NewThemePage() {
                   variant="primary"
                   icon="plus"
                   disabled={busy || !base || !KEY_RE.test(key) || !name.trim()}
-                  aria-describedby={reason ? "create-theme-reason" : undefined}
+                  aria-describedby={reason ? 'create-theme-reason' : undefined}
                 >
-                  {busy ? "Creating…" : "Create theme"}
+                  {busy ? 'Creating…' : 'Create theme'}
                 </Button>
               </FormActions>
             </form>
@@ -175,7 +191,11 @@ export default function NewThemePage() {
         </div>
         <Panel title="Preview" bodyClassName="p-4 max-[600px]:p-3">
           {base ? (
-            <ThemePreview tokens={base.tokens} css={base.css} kind={kind === "roadmap" ? "roadmap" : "prd"} />
+            <ThemePreview
+              tokens={base.tokens}
+              css={base.css}
+              kind={kind === 'roadmap' ? 'roadmap' : 'prd'}
+            />
           ) : (
             <Loading />
           )}

@@ -1,7 +1,7 @@
-import { DECISION_NOTES_SCENARIO } from "../lib/api/mock/decision-notes";
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { DECISION_NOTES_SCENARIO } from '../lib/api/mock/decision-notes';
+import { MOCK_SCENARIO_KEY } from '../lib/api/mock/server';
+import { login } from './helpers';
+import { expect, test, type Page } from './test';
 
 /**
  * decisions-reversed-or-trashed banner (owner's pick: "Draft banner now"), on the mock's
@@ -18,60 +18,75 @@ import { expect, test, type Page } from "./test";
 
 // The note carries the reversal's day (the mock reversed it the day before MOCK_NOW, Oct 22).
 const NOTE =
-  "Decision 12 Cut bulk export from the first release was reversed on Oct 21; the next draft no longer relies on it. Why: Customers asked for exports back.";
+  'Decision 12 Cut bulk export from the first release was reversed on Oct 21; the next draft no longer relies on it. Why: Customers asked for exports back.';
 const LEFT_OUT =
-  "Left out, no longer standing: Decision 12 Cut bulk export from the first release (reversed); Decision 9 Ship alerts by email only (about a roadmap now in Trash).";
+  'Left out, no longer standing: Decision 12 Cut bulk export from the first release (reversed); Decision 9 Ship alerts by email only (about a roadmap now in Trash).';
 const DESKTOP = { width: 1366, height: 820 };
 
 async function start(page: Page) {
-  await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, DECISION_NOTES_SCENARIO] as const);
+  await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [
+    MOCK_SCENARIO_KEY,
+    DECISION_NOTES_SCENARIO,
+  ] as const);
   await login(page);
 }
 
 /** Notes and the left-out line read in plain words and link to their decisions. */
-async function reads(page: Page, banner: ReturnType<Page["getByTestId"]>) {
-  const note = banner.getByTestId("decision-note");
+async function reads(page: Page, banner: ReturnType<Page['getByTestId']>) {
+  const note = banner.getByTestId('decision-note');
   await expect(note).toHaveText(NOTE);
-  await expect(note.getByRole("link", { name: "Decision 12 Cut bulk export from the first release" })).toHaveAttribute("href", "/company/decisions?d=12");
-  const line = page.getByTestId("left-out-line");
+  await expect(
+    note.getByRole('link', { name: 'Decision 12 Cut bulk export from the first release' }),
+  ).toHaveAttribute('href', '/company/decisions?d=12');
+  const line = page.getByTestId('left-out-line');
   await expect(line).toHaveText(LEFT_OUT);
-  await expect(line.getByRole("link", { name: "Decision 12 Cut bulk export from the first release" })).toHaveAttribute("href", "/company/decisions?d=12");
-  await expect(line.getByRole("link", { name: "Decision 9 Ship alerts by email only" })).toHaveAttribute("href", "/company/decisions?d=9");
+  await expect(
+    line.getByRole('link', { name: 'Decision 12 Cut bulk export from the first release' }),
+  ).toHaveAttribute('href', '/company/decisions?d=12');
+  await expect(
+    line.getByRole('link', { name: 'Decision 9 Ship alerts by email only' }),
+  ).toHaveAttribute('href', '/company/decisions?d=9');
   await expect(page.getByText(/\bD-\d+\b/)).toHaveCount(0);
 }
 
 for (const phone of [false, true]) {
-  for (const scheme of ["light", "dark"] as const) {
-    test.describe(`${phone ? "phone" : "desktop"} · ${scheme}`, () => {
+  for (const scheme of ['light', 'dark'] as const) {
+    test.describe(`${phone ? 'phone' : 'desktop'} · ${scheme}`, () => {
       test.use({ viewport: phone ? { width: 390, height: 844 } : DESKTOP, colorScheme: scheme });
 
-      test("the one-pager's draft banner names the reversed decision and what was left out", async ({ page }) => {
+      test("the one-pager's draft banner names the reversed decision and what was left out", async ({
+        page,
+      }) => {
         await start(page);
-        await page.goto("/simple/prds/guided-setup");
-        await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
-        await page.getByLabel("New wording for").fill("A setup checklist with the next two steps");
-        await page.getByRole("button", { name: "Save" }).click();
-        const banner = page.getByRole("status", { name: "Working draft" });
-        await expect(banner).toContainText("1 change");
+        await page.goto('/simple/prds/guided-setup');
+        await page.getByRole('button', { name: 'Edit “A setup checklist that shows' }).click();
+        await page.getByLabel('New wording for').fill('A setup checklist with the next two steps');
+        await page.getByRole('button', { name: 'Save' }).click();
+        const banner = page.getByRole('status', { name: 'Working draft' });
+        await expect(banner).toContainText('1 change');
         await reads(page, banner);
-        await banner.getByRole("link", { name: "Decision 12 Cut bulk export from the first release" }).click();
+        await banner
+          .getByRole('link', { name: 'Decision 12 Cut bulk export from the first release' })
+          .click();
         await expect(page).toHaveURL(/\/company\/decisions\?d=12$/);
       });
 
-      test("the roadmap's draft banner names the reversed decision and what was left out", async ({ page }) => {
+      test("the roadmap's draft banner names the reversed decision and what was left out", async ({
+        page,
+      }) => {
         await start(page);
         // A bar moves by keys on a desktop's Gantt; the phone then reads the same draft.
         if (phone) await page.setViewportSize(DESKTOP);
-        await page.goto("/simple/roadmap");
-        await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-        await expect(page.getByTestId("left-out-line")).toHaveText(LEFT_OUT);
-        await page.getByTestId("format-gantt").click();
+        await page.goto('/simple/roadmap');
+        await expect(page.getByTestId('simple-roadmap')).toBeVisible();
+        await expect(page.getByTestId('left-out-line')).toHaveText(LEFT_OUT);
+        await page.getByTestId('format-gantt').click();
         const bar = page.locator('g[data-testid="bar"][data-item="alert-export"]');
         await bar.focus();
-        await page.keyboard.press("ArrowRight");
-        await page.getByTestId("format-switch").getByTestId("format-timeline").focus();
-        const banner = page.getByTestId("draft-banner");
-        await expect(banner.getByTestId("draft-count")).toHaveText("1");
+        await page.keyboard.press('ArrowRight');
+        await page.getByTestId('format-switch').getByTestId('format-timeline').focus();
+        const banner = page.getByTestId('draft-banner');
+        await expect(banner.getByTestId('draft-count')).toHaveText('1');
         if (phone) {
           await page.setViewportSize({ width: 390, height: 844 });
           await page.reload();

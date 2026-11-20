@@ -1,8 +1,8 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next';
 
 // The browser talks to the API through this app (same origin), so the session
 // cookie needs no CORS. Resolved at build time in production builds.
-const apiUrl = process.env.API_INTERNAL_URL ?? "http://localhost:8000";
+const apiUrl = process.env.API_INTERNAL_URL ?? 'http://localhost:8000';
 
 /**
  * Settings > Sources opens Google's Drive picker (lib/google-picker.ts). The page is
@@ -19,38 +19,41 @@ const apiUrl = process.env.API_INTERNAL_URL ?? "http://localhost:8000";
  * which inherit this policy; theme CSS may use no URL but data:) use them.
  */
 const NOTION_ICONS = [
-  "https://notion.so",
-  "https://*.notion.so",
-  "https://notion.site",
-  "https://*.notion.site",
-  "https://notion-static.com",
-  "https://*.notion-static.com",
-  "https://prod-files-secure.s3.us-west-2.amazonaws.com",
-].join(" ");
-const DEV = process.env.NODE_ENV !== "production";
+  'https://notion.so',
+  'https://*.notion.so',
+  'https://notion.site',
+  'https://*.notion.site',
+  'https://notion-static.com',
+  'https://*.notion-static.com',
+  'https://prod-files-secure.s3.us-west-2.amazonaws.com',
+].join(' ');
+const DEV = process.env.NODE_ENV !== 'production';
 const APP_CSP = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${DEV ? " 'unsafe-eval'" : ""} https://apis.google.com https://accounts.google.com/gsi/`,
+  `script-src 'self' 'unsafe-inline'${DEV ? " 'unsafe-eval'" : ''} https://apis.google.com https://accounts.google.com/gsi/`,
   "style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style",
   `img-src 'self' data: ${NOTION_ICONS}`,
   "font-src 'self' data:",
   "frame-src 'self' https://docs.google.com https://accounts.google.com/gsi/",
-  `connect-src 'self'${DEV ? " ws:" : ""} https://accounts.google.com/gsi/`,
+  `connect-src 'self'${DEV ? ' ws:' : ''} https://accounts.google.com/gsi/`,
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'self'",
-].join("; ");
+].join('; ');
 
 const nextConfig: NextConfig = {
   // The Playwright suites build into their own directories (.next-mock, .next-e2e) and
   // serve them with `next start`; the default build (Docker image) is standalone.
-  distDir: process.env.NEXT_DIST_DIR || ".next",
-  output: process.env.NEXT_DIST_DIR ? undefined : "standalone",
+  distDir: process.env.NEXT_DIST_DIR || '.next',
+  output: process.env.NEXT_DIST_DIR ? undefined : 'standalone',
   cacheComponents: true,
   // Simple (#723) behind ORACLE_SIMPLE_MODE, off by default; on in the mock build, whose
   // specs drive Simple's screens (app/simple/_flag.ts).
-  env: { ORACLE_SIMPLE_MODE: process.env.ORACLE_SIMPLE_MODE ?? (process.env.NEXT_PUBLIC_API_MOCKS === "1" ? "1" : "") },
+  env: {
+    ORACLE_SIMPLE_MODE:
+      process.env.ORACLE_SIMPLE_MODE ?? (process.env.NEXT_PUBLIC_API_MOCKS === '1' ? '1' : ''),
+  },
   partialPrefetching: true,
   experimental: {
     // brief-answers: the /v1 proxy waits as long as a call may take. Next's default (30 s)
@@ -60,32 +63,32 @@ const nextConfig: NextConfig = {
   },
   turbopack: {
     rules: {
-      "*.css": {
-        loaders: ["@tailwindcss/turbopack"],
-        as: "*.css",
+      '*.css': {
+        loaders: ['@tailwindcss/turbopack'],
+        as: '*.css',
       },
     },
   },
   async headers() {
-    return [{ source: "/:path*", headers: [{ key: "Content-Security-Policy", value: APP_CSP }] }];
+    return [{ source: '/:path*', headers: [{ key: 'Content-Security-Policy', value: APP_CSP }] }];
   },
   // c7 Plan rename: the Roadmap page became Plan; old links and bookmarks keep working (308).
   async redirects() {
     return [
-      { source: "/roadmap", destination: "/plan", permanent: true },
+      { source: '/roadmap', destination: '/plan', permanent: true },
       // Baseline became the Ground Truth (Nov 4): old links, their sub-paths and queries land there (308).
-      { source: "/baseline", destination: "/ground-truth", permanent: true },
-      { source: "/baseline/:path*", destination: "/ground-truth/:path*", permanent: true },
+      { source: '/baseline', destination: '/ground-truth', permanent: true },
+      { source: '/baseline/:path*', destination: '/ground-truth/:path*', permanent: true },
       // qa-simple-prd-12: a PRD's one-pager has one address (the rail, the links and the mode switch know it).
-      { source: "/simple/prds/:doc", destination: "/simple/one-pagers/:doc", permanent: false },
+      { source: '/simple/prds/:doc', destination: '/simple/one-pagers/:doc', permanent: false },
     ];
   },
   async rewrites() {
     return [
-      { source: "/v1/:path*", destination: `${apiUrl}/v1/:path*` },
-      { source: "/healthz", destination: `${apiUrl}/healthz` },
+      { source: '/v1/:path*', destination: `${apiUrl}/v1/:path*` },
+      { source: '/healthz', destination: `${apiUrl}/healthz` },
       // O5 lane 4: the company's logos, served to members by the API.
-      { source: "/uploads/:path*", destination: `${apiUrl}/uploads/:path*` },
+      { source: '/uploads/:path*', destination: `${apiUrl}/uploads/:path*` },
     ];
   },
 };

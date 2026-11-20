@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import { useRouter } from "@/lib/nav";
-import { useEffect } from "react";
+import { useRouter } from '@/lib/nav';
+import { useEffect } from 'react';
 
-import { Loading } from "@/components/ui";
-import { useMe } from "@/lib/me";
+import { Loading } from '@/components/ui';
+import { useMe } from '@/lib/me';
 
-import { visibleTabs } from "./_nav";
+import { visibleTabs } from './_nav';
 
 /**
  * /company opens the first tab the member may see (Strategy). It draws no title of its own
