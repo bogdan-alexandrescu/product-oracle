@@ -1,4 +1,5 @@
-import { MOCK_SCENARIO_KEY, REPLACED_PRD_SCENARIO } from "../lib/api/mock/server";
+import { REPLACED_PRD_SCENARIO } from "../lib/api/mock/replaced-prd";
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login, openRoadmapItem } from "./helpers";
 import { expect, test, type Page } from "./test";
 
@@ -143,4 +144,43 @@ test("New PRD: approved PRDs that could not be read say so, never only None: a n
   await expect(failed).toContainText("Could not load the approved PRDs.");
   await expect(failedReplaces.getByLabel("Approved PRD it replaces").locator("option", { hasText: "Usage alerts PRD" })).toHaveCount(0);
   await reason(page, failed);
+});
+
+test.describe("Roadmap: Needs a decision", () => {
+  const tray = (page: Page) => page.getByTestId("decision-tray");
+
+  test("proposals that could not be read say so in the tray and leave the count out, never None waiting", async ({ page }) => {
+    await login(page);
+    await page.goto("/simple/roadmap");
+    await expect(page.getByTestId("needs-decision")).toHaveText(/Needs a decision · \d+/);
+    await page.getByTestId("needs-decision").click();
+    await expect(tray(page).locator("#review-proposals")).toBeVisible();
+    await expect(tray(page).locator("#review-proposals").getByTestId("load-error")).toHaveCount(0);
+
+    await failGets(page, "/v1/simple/changes");
+    await page.reload();
+    await expect(page.getByTestId("needs-decision")).toHaveText("Needs a decision");
+    await expect(page.getByTestId("needs-decision")).not.toHaveAttribute("aria-busy", "true");
+    await page.getByTestId("needs-decision").click();
+    const part = tray(page).locator("#review-proposals");
+    await expect(part.getByTestId("load-error")).toContainText("Could not load the proposals.");
+    await expect(part.getByText("None waiting.")).toHaveCount(0);
+    await reason(page, part.getByTestId("load-error"));
+  });
+
+  test("suggested features that could not be read say so in the tray, never None waiting", async ({ page }) => {
+    await login(page);
+    await page.goto("/simple/roadmap");
+    await page.getByTestId("needs-decision").click();
+    await expect(tray(page).getByTestId("tray-suggested")).toBeVisible();
+    await expect(tray(page).getByTestId("tray-suggested").getByTestId("load-error")).toHaveCount(0);
+
+    await failGets(page, "/v1/simple/goal-suggestions");
+    await page.reload();
+    await page.getByTestId("needs-decision").click();
+    const part = tray(page).getByTestId("tray-suggested");
+    await expect(part.getByTestId("load-error")).toContainText("Could not load the suggested features.");
+    await expect(part.getByText("None waiting.")).toHaveCount(0);
+    await reason(page, part.getByTestId("load-error"));
+  });
 });
