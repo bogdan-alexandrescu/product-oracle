@@ -178,7 +178,7 @@ export function FeaturePanel({
       item={item}
       items={new Map(items.map((i) => [i.id, i]))}
       proposals={(proposals.data ?? []).filter((c) => c.target.item_id === item.id)}
-      proposalsFailed={proposals.error ? { error: proposals.error, retry: () => void proposals.reload() } : null}
+      proposalsFailed={proposals.error && !proposals.data ? { error: proposals.error, retry: () => void proposals.reload() } : null}
       phone={phone}
       style={phone ? { height: "52dvh" } : { position: "relative", left: 0, top: 0, width: "100%", border: 0, boxShadow: "none" }}
       act={act}

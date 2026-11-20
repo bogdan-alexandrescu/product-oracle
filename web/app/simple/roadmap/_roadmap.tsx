@@ -1621,7 +1621,7 @@ export function SimpleRoadmap() {
   // A feature ask on no roadmap is decided in its Inbox row only (it is filed in Requests, on no
   // roadmap): no roadmap's Needs a decision lists or counts it.
   const allProposals = (proposals.data ?? []).filter((c) => !(c.op === "add_feature_ask" && !c.document_id));
-  const proposalsFailed = proposals.error ? { error: proposals.error, retry: () => void proposals.reload() } : null;
+  const proposalsFailed = proposals.error && !proposals.data ? { error: proposals.error, retry: () => void proposals.reload() } : null;
   const decides = can("accept_simple_change") || data.items.some((i) => i.can_decide);
   // #13: viewers and commenters never start a review (the PRD's own decider or an owner
   // does, per_item "owner" on start_simple_meeting); gate the button here too, not only
@@ -1645,7 +1645,7 @@ export function SimpleRoadmap() {
   const read = (q: { data?: unknown; error: string | null }) => q.data !== undefined || !!q.error;
   const waitingRead = read(proposals) && read(suggestions) && (!anyFilter || read(wholeLinks));
   // #1586: a part that could not be read leaves the number out (the tray says why), never counts it as none.
-  const waitingFailed = !!proposals.error || (!!suggestions.error && !suggestions.data) || (anyFilter && !!wholeLinks.error && !wholeLinks.data);
+  const waitingFailed = !!proposalsFailed || (!!suggestions.error && !suggestions.data) || (anyFilter && !!wholeLinks.error && !wholeLinks.data);
   const qList = quarters(data.windows.now.start, data.windows.later.end);
   // qa-shell-8: a new company's roadmap has nothing on it (no item, milestone or key date, and
   // no filter narrowing it): one line on what shows here and the next step, no empty chart and
