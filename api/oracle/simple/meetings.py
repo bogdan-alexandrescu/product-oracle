@@ -53,8 +53,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit, company_time
 from oracle.auth.models import User
 from oracle.authz import has_role
-from oracle.baseline.goal_order import sort_goals
-from oracle.decisions.models import Decision
 from oracle.docs.models import Document
 from oracle.docs.parser import DraftError as ImportRejected
 from oracle.docs.prd_order import sort_prds
@@ -133,11 +131,15 @@ from oracle.simple.meetings_decisions import (
     _STEP_WORDS,  # noqa: F401
     _STOP_WORDS,  # noqa: F401
     _approved_words,  # noqa: F401
+    _decisions_page,  # noqa: F401
     _meeting_option_title,  # noqa: F401
     _row,  # noqa: F401
     _run_groups,  # noqa: F401
     _run_name,  # noqa: F401
     decided_flows,  # noqa: F401
+    decided_in,  # noqa: F401
+    decided_refs,  # noqa: F401
+    decisions_page,  # noqa: F401
     inbox_rows,  # noqa: F401
     left_out_entry,  # noqa: F401
     titles_by_session,  # noqa: F401
@@ -176,18 +178,13 @@ from oracle.simple.models import (
 )
 from oracle.simple.schemas import (
     SimpleActionItemOut,
-    SimpleDecidedRef,
-    SimpleDecisionsOut,
     SimpleDelivery,
     SimpleDocRef,
     SimpleEmailDelivery,
-    SimpleFilterOption,
     SimpleMeetingBrief,
     SimpleMeetingCan,
     SimpleMeetingDecision,
-    SimpleMeetingGroup,
     SimpleMeetingOut,
-    SimpleMeetingRef,
     SimpleMeetingRulesIn,
     SimpleMeetingsOut,
     SimpleMinutes,
@@ -1542,272 +1539,6 @@ async def delivery_out(db: AsyncSession, m: SimpleMeeting) -> SimpleDelivery | N
             else int(d.get("email_sent") or 0),
         }  # fmt: skip
     )
-
-
-# --------------------------------------------------------------------------- titles
-
-
-async def decided_in(
-    db: AsyncSession, subjects: list[dict], left: list | None = None
-) -> dict[tuple[str, str, str | None], list[SimpleDecidedRef]]:
-    """The decided decisions naming each subject ``(kind, id, ref)``, newest first, with
-    who decided, when and the meeting's minutes (decided_refs). Those no longer standing
-    are left out and, given ``left``, added to it (standing.LeftOut) for the sources."""
-    out: dict[tuple[str, str, str | None], list[Decision]] = {}
-    if not subjects:
-        return out
-    wanted = {(s["kind"], s["id"], s.get("ref")) for s in subjects}
-    from oracle.decisions import standing
-
-    # Lapsed ones (reversed, withdrawn, replaced) are read too, so standing.split names them
-    # in the left-out line; only decided ones are kept.
-    # roadmap-speed: the decisions naming one of the subjects' kinds, matched here by kind and
-    # id (what ``subjects @> [{kind, id}]`` matches), then read whole: one OR arm per subject
-    # (a roadmap names every item of every version) cost more than the read.
-    pairs = {(k, i) for k, i, _ in wanted}
-    naming = [
-        did
-        for did, subs in await db.execute(
-            select(Decision.id, Decision.subjects)
-            .where(Decision.status.in_(("decided", *standing.LAPSED)))
-            .where(or_(*[Decision.subjects.contains([{"kind": k}]) for k in {k for k, _ in pairs}]))
-        )
-        if isinstance(subs, list)
-        and any(
-            isinstance(s, dict)
-            and isinstance(s.get("kind"), str)
-            and isinstance(s.get("id"), str)
-            and (s["kind"], s["id"]) in pairs
-            for s in subs
-        )
-    ]
-    rows = (
-        await db.scalars(
-            select(Decision).where(Decision.id.in_(naming)).order_by(Decision.number.desc())
-        )
-        if naming
-        else []
-    )
-
-    # None about something in Trash (decisions-reversed-or-trashed).
-    kept, gone = await standing.split(db, list(rows))
-    if left is not None:
-        left.extend(x for x in gone if all(y.decision.id != x.decision.id for y in left))
-    for d in kept:
-        for s in d.subjects or []:
-            for key in (
-                (s.get("kind"), s.get("id"), s.get("ref")),
-                (s.get("kind"), s.get("id"), None),
-            ):
-                if key in wanted:
-                    lst = out.setdefault(key, [])  # type: ignore[arg-type]
-                    if all(x.id != d.id for x in lst):
-                        lst.append(d)  # type: ignore[arg-type]
-    decisions = {d.id: d for lst in out.values() for d in lst}  # type: ignore[union-attr]
-    refs = await decided_refs(db, list(decisions.values()))  # type: ignore[arg-type]
-    return {k: [refs[d.id] for d in lst] for k, lst in out.items()}
-
-
-async def decided_refs(db: AsyncSession, ds: list[Decision]) -> dict[uuid.UUID, SimpleDecidedRef]:
-    """walkc-roadmap-tasks: each decision with who decided it, when, and the meeting (and
-    its minutes' page, /simple/meetings/<id>) it was taken in, if any."""
-    if not ds:
-        return {}
-    links = {
-        row.decision_id: (row, m)
-        for row, m in (
-            await db.execute(
-                select(MeetingDecisionRow, SimpleMeeting)
-                .join(SimpleMeeting, SimpleMeeting.id == MeetingDecisionRow.meeting_id)
-                .where(MeetingDecisionRow.decision_id.in_([d.id for d in ds]))
-            )
-        ).all()
-    }
-    names = await _names(db, {i for d in ds if (i := d.decided_by or d.approver_id)})
-    out: dict[uuid.UUID, SimpleDecidedRef] = {}
-    for d in ds:
-        row, m = links.get(d.id, (None, None))
-        who = d.decided_by or d.approver_id
-        out[d.id] = SimpleDecidedRef(
-            id=d.id,
-            number=d.number,
-            title=d.title,
-            decided_by=_ref(who, names) if who else None,
-            decided_at=d.decided_at or (row.at if row else None),
-            meeting=SimpleMeetingRef(id=m.id, title=m.title) if m else None,
-            minutes_url=f"/simple/meetings/{m.id}" if m else None,
-        )
-    return out
-
-
-# --------------------------------------------------------------------------- the page
-
-
-async def decisions_page(
-    db: AsyncSession,
-    principal: Any,
-    prd: str | None = None,
-    goal: str | None = None,
-    meeting: uuid.UUID | None = None,
-) -> SimpleDecisionsOut:
-    """Direction B "By meeting": each meeting's decisions under it, beside its minutes,
-    newest first; then the decisions taken outside meetings. Filters: a PRD (slug or id),
-    a goal (key or id), a meeting."""
-
-    ms = list(await db.scalars(select(SimpleMeeting).order_by(SimpleMeeting.started_at.desc())))
-    docs = {d.id: d for d in await db.scalars(
-        select(Document).where(Document.kind == "prd", Document.deleted_at.is_(None)))}  # fmt: skip
-    readable = {i for i, d in docs.items() if await _readable(db, principal, d)}
-    # simple-replaced-prds: a replaced PRD leaves the PRD filter and its open questions; its
-    # past meetings, their decisions and its decided questions stay as history.
-    from oracle.roadmap import company
-
-    replaced = readable & await company.replaced_prd_ids(db)
-    ms = [m for m in ms if m.prd_document_id in readable]
-    await _settle(db, ms)
-    from oracle.simple import questions as prd_questions
-
-    # The PRDs' questions read first: a decided one belongs with the decisions below
-    # (read-speed: all PRDs' in three statements, not three each).
-    await prd_questions.ensure_all(db, [docs[i] for i in readable])
-    from oracle.simple import drafts
-
-    # read-speed: the rest writes nothing, so the members, documents and tracks its parts
-    # read are read once (drafts.one_read), as the roadmap read does.
-    with drafts.one_read():
-        return await _decisions_page(
-            db, principal, prd, goal, meeting, ms, docs, readable, replaced
-        )
-
-
-async def _decisions_page(
-    db: AsyncSession,
-    principal: Any,
-    prd: str | None,
-    goal: str | None,
-    meeting: uuid.UUID | None,
-    ms: list[SimpleMeeting],
-    docs: dict[uuid.UUID, Document],
-    readable: set[uuid.UUID],
-    replaced: set[uuid.UUID],
-) -> SimpleDecisionsOut:
-    from oracle.simple import service
-
-    read = await service.load(db)
-    goals = {e.goal.id: e.goal for e in read.entries if e.goal is not None}
-    prd_doc = None
-    if prd:
-        prd_doc = next((d for d in docs.values() if prd in (str(d.id), d.slug)), None)
-        if prd_doc is None or prd_doc.id not in readable or prd_doc.id in replaced:
-            raise MeetingError(404, "No such PRD")
-    goal_ent = None
-    if goal:
-        goal_ent = next((g for g in goals.values() if goal in (str(g.id), g.key)), None)
-        if goal_ent is None:
-            raise MeetingError(404, "No such goal")
-    # Subject ids each filter matches.
-    match: set[str] | None = None
-    if prd_doc is not None or goal_ent is not None:
-        entries = [
-            e for e in read.entries
-            if (prd_doc is None or (e.prd is not None and e.prd.id == prd_doc.id))
-            and (goal_ent is None or (e.goal is not None and e.goal.id == goal_ent.id))
-        ]  # fmt: skip
-        match = {str(e.row.id) for e in entries}
-        if prd_doc is not None:
-            match.add(str(prd_doc.id))
-            all_items, _ = await _prd_items(db, prd_doc)
-            if goal_ent is None:
-                match |= {str(i) for i in all_items}
-        if goal_ent is not None:
-            match.add(str(goal_ent.id))
-
-    def keep(d: Decision) -> bool:
-        return match is None or any(str(s.get("id")) in match for s in d.subjects or [])
-
-    links = await _decisions(db, [m.id for m in ms])
-    in_meetings = {d.id for lst in links.values() for _, d in lst}
-    shown_ms = [m for m in ms if meeting is None or m.id == meeting]
-    if prd_doc is not None:
-        shown_ms = [m for m in shown_ms if m.prd_document_id == prd_doc.id
-                    or any(keep(d) for _, d in links[m.id])]  # fmt: skip
-    elif match is not None:
-        shown_ms = [m for m in shown_ms if any(keep(d) for _, d in links[m.id])]
-    others: list[Decision] = []
-    if meeting is None:
-        # A PRD's open question is listed as a question (Waiting for you), not here.
-        q = select(Decision).where(Decision.origin != "meeting", PRODUCT, or_(
-            Decision.origin != "prd", Decision.status == "decided"))  # fmt: skip
-        if in_meetings:
-            q = q.where(Decision.id.not_in(in_meetings))
-        if match is not None:
-            # The filter before the limit: an older matching decision is not crowded out.
-            q = q.where(or_(*[Decision.subjects.contains([{"id": i}]) for i in match]))
-        q = q.order_by(Decision.number.desc()).limit(200)
-        others = [d for d in await db.scalars(q) if keep(d)]
-    from oracle.simple import decision_sheet
-
-    edited = await decision_sheet.edits(
-        db, {d.id for lst in links.values() for _, d in lst} | {d.id for d in others}
-    )
-    names = await _names(db, {d.approver_id for lst in links.values() for _, d in lst}
-                         | {d.approver_id for d in others} | _note_authors(shown_ms)
-                         | {by for _, by in edited.values()})  # fmt: skip
-    flows = await decided_flows(db, [x for m in shown_ms for x in links[m.id]])
-    # The PRDs this reader reads, by id: a decided question's row names its PRD.
-    prds = {str(i): docs[i].title for i in readable}
-    groups = []
-    for b, m in zip(await briefs(db, shown_ms), shown_ms, strict=True):
-        minutes = SimpleMinutes.model_validate(m.minutes) if m.minutes else None
-        # A PRD's own meeting shows all its decisions; otherwise those the filter names.
-        whole = prd_doc is not None and goal_ent is None and m.prd_document_id == prd_doc.id
-        groups.append(SimpleMeetingGroup(
-            meeting=b,
-            minutes=await _named(db, minutes) if minutes else None,
-            decisions=[_row(d, names, principal, edited, prds).model_copy(
-                           update={"flow": flows.get(d.id)})
-                       for _, d in links[m.id] if whole or keep(d)],
-            notes=[n for n in await _notes_out(db, m, names) if n.kind in ("note", "comment")],
-            delivery=await delivery_out(db, m) if m.minutes_state == "sent" else None,
-            can_retry_delivery=m.minutes_state == "sent" and may_retry(principal, m),
-        ))  # fmt: skip
-    # An open decision a shown meeting's minutes name as an open question ("D-12: ...")
-    # is listed there, not again outside meetings; once decided it is listed here.
-    named = {int(g.group(1)) for m in shown_ms
-             for q in (m.minutes or {}).get("open_questions") or []
-             if (g := _OPEN_DECISION.match(str(q)))}  # fmt: skip
-    others = [d for d in others if d.status == "decided" or d.number not in named]
-    from oracle.simple import questions
-
-    # The questions follow the filters too: the PRD's, the goal's PRDs', the meeting's.
-    qdocs = {prd_doc.id} if prd_doc is not None else set(readable)
-    if goal_ent is not None:
-        qdocs &= {
-            e.prd.id
-            for e in read.entries
-            if e.prd is not None and e.goal is not None and e.goal.id == goal_ent.id
-        }
-    only = {d.id for _, d in links.get(meeting, [])} if meeting is not None else None
-    run_groups = (
-        []
-        if meeting is not None or goal_ent is not None
-        else await _run_groups(db, principal, {i: docs[i] for i in qdocs})
-    )
-    return SimpleDecisionsOut(
-        **await questions.page_fields(db, principal, qdocs, only, replaced),
-        meetings=groups,
-        other=[_row(d, names, principal, edited, prds) for d in others],
-        # prd-order: the PRD filter lists the PRDs in the company PRD order.
-        prds=[SimpleFilterOption(id=d.slug, title=d.title)
-              for d in await sort_prds(db, docs.values())
-              if d.id in readable and d.id not in replaced],
-        # goal-order: the Goal filter lists the goals in the one goal order.
-        goals=[SimpleFilterOption(id=g.key, title=g.title)
-               for g in sort_goals(goals.values())],
-        meeting_options=[SimpleFilterOption(id=str(m.id), title=_meeting_option_title(m))
-                         for m in ms],  # fmt: skip
-        runs=run_groups,
-    )  # fmt: skip
 
 
 async def _named(db: AsyncSession, minutes: SimpleMinutes) -> SimpleMinutes:
