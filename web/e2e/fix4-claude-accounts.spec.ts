@@ -93,7 +93,10 @@ test("qa-settings-20: an account that needs a sign-in cannot be made available, 
   const pane = detail(page);
   await expect(pane.getByRole("heading", { name: "old-laptop" })).toBeVisible();
   await expect(pane.getByRole("button", { name: "Make available", exact: true })).toBeDisabled();
-  await expect(pane.getByText("It can be made available once someone signs in to it again", { exact: false })).toBeVisible();
+  await pane.getByTestId("claude-account-signin-tip").filter({ visible: true }).first().click();
+  await expect(
+    page.getByRole("tooltip").filter({ hasText: "It can be made available once someone signs in to it again", visible: true }),
+  ).toBeVisible();
   // An account with a working sign-in still can.
   await row(page, "work").getByRole("button").click();
   await expect(pane.getByRole("heading", { name: "work" })).toBeVisible();

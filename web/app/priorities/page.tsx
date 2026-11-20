@@ -821,7 +821,16 @@ function Snapshots({
       {q.loading && !q.data && <p className="px-4 py-3 text-text2">Loading…</p>}
       {q.data && q.data.length === 0 && (
         <p data-testid="snapshots-empty" className="px-4 py-6 text-center text-text2">
-          {save ? "No snapshots yet. Save one above to keep this order and compare it later." : "No snapshots yet."}
+          No snapshots yet.
+          {save && (
+            <>
+              {" "}
+              {/* #1590: why to save a snapshot sits behind the (i). */}
+              <InfoTip label="saving a snapshot" align="start" testId="priorities-save-tip">
+                Save one above to keep this order and compare it later.
+              </InfoTip>
+            </>
+          )}
         </p>
       )}
       {list && list.length > 0 && (

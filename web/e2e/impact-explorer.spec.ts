@@ -45,7 +45,11 @@ test("impact: an owner sees the lineage, picks an output and settles it, then pr
   await expect(graph.getByTestId("lineage-output").filter({ hasText: "Checkout flow" })).toHaveAttribute("aria-pressed", "true");
   await expect(graph.getByTestId("lineage-upstream").filter({ hasText: "Scope" })).toHaveAttribute("data-on-path", "true");
   const flow = row(page, "Checkout flow");
-  await expect(flow.getByTestId("plan-how")).toContainText("Propose a new version of this user flow covering only the “Scope” section");
+  await flow.getByTestId("propose-version-tip").filter({ visible: true }).first().click();
+  await expect(
+    page.getByRole("tooltip").filter({ hasText: "Propose a new version of this user flow covering only the “Scope” section", visible: true }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(flow.getByText("1 · Settle staleness")).toBeVisible();
 
   await flow.getByRole("button", { name: "Accept regeneration" }).click();

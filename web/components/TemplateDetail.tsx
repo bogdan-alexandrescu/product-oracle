@@ -225,24 +225,22 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
   const dirty = body !== latest.body;
   const shownTitles = sectionTitles(shown.body);
   // qa-settings-28: why the main action is disabled, said next to it.
+  const saveUnchanged = busy === null && body === latest.body;
   const saveReason =
-    busy !== null
+    busy !== null || saveUnchanged
       ? null
-      : body === latest.body
-        ? "Change the template to save a new version."
-        : live.pending || !check
-          ? "Checking the template…"
-          : !check.valid
-            ? "Fix the problems above to save."
-            : null;
-  const detailsReason =
-    busy !== null
-      ? null
-      : !detailsChanged
-        ? "Change the name or description to save them."
-        : !nameValue.trim()
-          ? "A template needs a name."
+      : live.pending || !check
+        ? "Checking the template…"
+        : !check.valid
+          ? "Fix the problems above to save."
           : null;
+  const detailsUnchanged = busy === null && !detailsChanged;
+  const detailsReason =
+    busy !== null || detailsUnchanged
+      ? null
+      : !nameValue.trim()
+        ? "A template needs a name."
+        : null;
 
   const inspector = (
     // qa-settings-27: each fact once. The name, kind and version are the page's header; the
@@ -265,6 +263,12 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
               >
                 {busy === "details" ? "Saving…" : "Save details"}
               </Button>
+              {detailsUnchanged && (
+                // #1590: why Save details is disabled sits behind the (i).
+                <InfoTip label="Save details" align="start" testId="template-meta-save-tip">
+                  Change the name or description to save them.
+                </InfoTip>
+              )}
             </FormActions>
           </div>
         </InspectorSection>
@@ -365,6 +369,12 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
               >
                 {busy === "version" ? "Saving…" : "Save as new version"}
               </Button>
+              {saveUnchanged && (
+                // #1590: why Save as new version is disabled sits behind the (i).
+                <InfoTip label="Save as new version" align="start" testId="template-save-tip">
+                  Change the template to save a new version.
+                </InfoTip>
+              )}
               {dirty && (
                 <Button
                   variant="ghost"

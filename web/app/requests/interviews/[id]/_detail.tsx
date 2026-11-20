@@ -242,7 +242,14 @@ export function InterviewDetail({ id }: { id: string }) {
             </div>
           ) : (
             <Empty testId="interview-snapshot-empty">
-              {finished ? "Oracle is writing the snapshot" : `Oracle writes a snapshot here once ${name} finishes the interview.`}
+              {finished ? (
+                "Oracle is writing the snapshot"
+              ) : (
+                // #1590: when the snapshot appears sits behind the (i).
+                <InfoTip label="the snapshot" align="start" testId="interview-snapshot-tip">
+                  {`Oracle writes a snapshot here once ${name} finishes the interview.`}
+                </InfoTip>
+              )}
             </Empty>
           )}
         </Panel>
@@ -264,9 +271,14 @@ export function InterviewDetail({ id }: { id: string }) {
             </ul>
           ) : (
             <Empty testId="interview-requests-empty">
-              {finished
-                ? `Oracle found no requests in what ${name} said.`
-                : `The requests ${name} makes show here, to decide, once they finish the interview.`}
+              {finished ? (
+                `Oracle found no requests in what ${name} said.`
+              ) : (
+                // #1590: when the requests show sits behind the (i).
+                <InfoTip label="the requests" align="start" testId="interview-requests-tip">
+                  {`The requests ${name} makes show here, to decide, once they finish the interview.`}
+                </InfoTip>
+              )}
             </Empty>
           )}
         </Panel>

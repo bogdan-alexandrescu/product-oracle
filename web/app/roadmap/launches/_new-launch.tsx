@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { Button, Chip, Dialog } from "@/components/ds";
+import { Button, Chip, Dialog, InfoTip } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { docLabel } from "@/lib/labels";
@@ -173,7 +173,10 @@ export function NoRoadmapReason({ track, testId = "new-launch-blocked" }: { trac
     );
   return (
     <p className="text-sm text-text2" data-testid={testId}>
-      {track.title} has no approved roadmap yet, and a launch groups items of an approved roadmap.{" "}
+      {/* #1590: why there's no roadmap to launch from sits behind the (i); the way forward stays visible. */}
+      <InfoTip label="why there's no roadmap yet" align="start" testId="launches-empty-tip">
+        {track.title} has no approved roadmap yet, and a launch groups items of an approved roadmap.
+      </InfoTip>{" "}
       {track.roadmap ? (
         <>
           Approve{" "}

@@ -1395,7 +1395,13 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
               )}
             </label>
             <label className="block">
-              <span className="mb-1.5 block text-[15px] font-semibold text-text">What problem does it solve?</span>
+              <span className="mb-1.5 flex items-center gap-1 text-[15px] font-semibold text-text">
+                What problem does it solve?
+                {/* #1590: how much to write sits behind the (i). */}
+                <InfoTip label="the brief" align="start" testId="brief-length-tip" id={`${id}-problem-hint`}>
+                  {`A couple of sentences is enough (at least ${PROBLEM_MIN} characters).`}
+                </InfoTip>
+              </span>
               <textarea
                 className={`${INPUT} h-auto min-h-24 py-2`}
                 rows={4}
@@ -1404,13 +1410,15 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
                 onChange={(e) => setProblem(e.target.value)}
                 ref={problemRef}
                 placeholder="Returning buyers retype their address at every checkout…"
-                aria-describedby={`${id}-problem-hint`}
+                aria-describedby={problemError ? `${id}-problem-error` : `${id}-problem-hint`}
                 aria-invalid={problemError ? true : undefined}
                 required
               />
-              <span id={`${id}-problem-hint`} className={`mt-1 block text-sm ${problemError ? "text-crit" : "text-text2"}`}>
-                {problemError ?? `A couple of sentences is enough (at least ${PROBLEM_MIN} characters).`}
-              </span>
+              {problemError && (
+                <span id={`${id}-problem-error`} className="mt-1 block text-sm text-crit">
+                  {problemError}
+                </span>
+              )}
             </label>
           </Panel>
 

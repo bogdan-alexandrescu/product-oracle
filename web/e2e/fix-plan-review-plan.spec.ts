@@ -105,7 +105,11 @@ test("latest report: waits for capabilities before saying who can generate one",
   await expect(none).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Generate now" })).toHaveCount(0);
   // Once capabilities land, the owner's own words and button show.
-  await expect(none).toContainText("You can generate one now for the week so far.", { timeout: 10000 });
+  await expect(none).toContainText("No report yet.", { timeout: 10000 });
+  await none.getByTestId("reports-empty-tip").filter({ visible: true }).first().click();
+  await expect(
+    page.getByRole("tooltip").filter({ hasText: "You can generate one now for the week so far.", visible: true }),
+  ).toBeVisible();
   await expect(none.getByRole("button", { name: "Generate now" })).toBeVisible();
 });
 

@@ -193,9 +193,10 @@ export function TeamCapacityPanel({ canChange }: { canChange: boolean }) {
                   Save
                 </Button>
                 {!saved && !changed && (
-                  <span data-testid="team-capacity-save-reason" className="text-sm text-text2">
+                  // #1590: why Save is disabled sits behind the (i).
+                  <InfoTip label="Save" align="start" testId="company-save-tip">
                     Change the size or focus to save it.
-                  </span>
+                  </InfoTip>
                 )}
                 {saved && (
                   <span role="status" className="text-sm font-semibold text-pass" data-testid="team-capacity-saved">

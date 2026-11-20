@@ -211,8 +211,10 @@ test.describe("phone", () => {
     await page.goto("/settings/notifications");
     const schedule = page.getByTestId("report-schedule");
     await expect(page.getByRole("button", { name: "Connect Oracle to Slack" })).toBeVisible();
-    await expect(schedule.getByTestId("report-where")).toContainText("Inbox only until Slack is connected.");
-    await expect(schedule.getByTestId("report-where")).not.toContainText("Slack channel");
+    await schedule.getByTestId("weekly-report-tip").filter({ visible: true }).first().click();
+    const reportWhere = page.getByRole("tooltip").filter({ hasText: "Inbox only until Slack is connected.", visible: true });
+    await expect(reportWhere).toBeVisible();
+    await expect(reportWhere).not.toContainText("Slack channel");
     const row = schedule.getByTestId("report-enabled");
     const box = (await row.boundingBox())!;
     expect(box.height).toBeGreaterThanOrEqual(44);

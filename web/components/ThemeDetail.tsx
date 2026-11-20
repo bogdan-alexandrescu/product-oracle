@@ -436,19 +436,31 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
                     const malformed = fieldProblem("invalid_font", f.label);
                     return (
                       <div key={f.name} className="flex min-w-0 flex-col gap-1.5">
-                        <label
-                          htmlFor={`font-${f.name}`}
-                          className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2"
-                        >
-                          {f.label}
-                        </label>
+                        <span className="flex items-center gap-1.5">
+                          <label
+                            htmlFor={`font-${f.name}`}
+                            className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2"
+                          >
+                            {f.label}
+                          </label>
+                          {!malformed && (
+                            // #1590: how the font falls back sits behind the (i).
+                            <InfoTip label={`${f.label} fallback`} align="start" testId="font-fallback-tip">
+                              {families.length === 0
+                                ? "The theme's default font."
+                                : families.length === 1
+                                  ? `Uses ${families[0]}.`
+                                  : `Uses ${families[0]}; without it, ${families.slice(1).join(", then ")}.`}
+                            </InfoTip>
+                          )}
+                        </span>
                         {/* qa-settings-32: the font by name; its CSS fallbacks under Advanced. */}
                         <select
                           id={`font-${f.name}`}
                           className={`${SELECT_FULL} ${malformed ? "border-crit ring-1 ring-crit" : ""}`}
                           value={families[0] ?? ""}
                           aria-invalid={!!malformed || undefined}
-                          aria-describedby={`font-${f.name}-hint`}
+                          aria-describedby={malformed ? `font-${f.name}-hint` : undefined}
                           onChange={(e) =>
                             setTokens("fonts", { [f.name]: e.target.value ? (KNOWN_FONTS[e.target.value] ?? stack) : null })
                           }
@@ -461,18 +473,11 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
                             </option>
                           ))}
                         </select>
-                        <p
-                          id={`font-${f.name}-hint`}
-                          data-testid={`font-${f.name}-hint`}
-                          className={`text-[13px] leading-[18px] ${malformed ? "text-crit" : "text-text2"}`}
-                        >
-                          {malformed ??
-                            (families.length === 0
-                              ? "The theme's default font."
-                              : families.length === 1
-                                ? `Uses ${families[0]}.`
-                                : `Uses ${families[0]}; without it, ${families.slice(1).join(", then ")}.`)}
-                        </p>
+                        {malformed && (
+                          <p id={`font-${f.name}-hint`} data-testid={`font-${f.name}-hint`} className="text-[13px] leading-[18px] text-crit">
+                            {malformed}
+                          </p>
+                        )}
                         <details open={malformed ? true : undefined} className="text-sm">
                           <summary className="cursor-pointer text-text2 hover:text-text">Advanced</summary>
                           <div className="mt-2 flex flex-col gap-1.5">
