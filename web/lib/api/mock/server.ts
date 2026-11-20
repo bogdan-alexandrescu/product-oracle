@@ -7478,6 +7478,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
 
   if (p[0] === "healthz") return reply("/healthz", "get", { status: "ok", database: "mock" });
+  if (p[0] === "version") return reply("/version", "get", { git_sha: "unknown" });
   if (p[0] !== "v1" && p[0] !== "uploads") return notFound("Route");
   // prd-order: every route that lists PRDs ranks them in the company PRD order (./prd-rank.ts).
   knowPrdOrder(() => ({ order: prdOrder(db), docs: db.documents }));

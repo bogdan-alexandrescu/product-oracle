@@ -38,7 +38,13 @@ RUN uv sync --frozen --no-dev
 # all of oracle/ (and the migration scripts) before it could serve.
 RUN python -m compileall -q oracle migrations
 
+# #1569: the commit this image was built from, served at /version (the deploy job passes it:
+# --build-arg GIT_SHA=$GITHUB_SHA). Last, so a new commit rebuilds no layer above.
+ARG GIT_SHA=unknown
+ENV ORACLE_GIT_SHA=$GIT_SHA
+
 EXPOSE 8000
 # oracle.startup: brings the database to head (Alembic only when it is not there), then
-# serves on 8000 in the same process.
+# serves on 8000 in the same process. On Cloud Run the deploy job migrates in its own step
+# (`python -m oracle.startup migrate`) and sets ORACLE_MIGRATE_AT_START=0: a start never migrates.
 CMD ["python", "-m", "oracle.startup"]

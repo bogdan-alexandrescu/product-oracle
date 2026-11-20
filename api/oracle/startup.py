@@ -13,6 +13,13 @@ UTF-8) or a database that can not be reached raises, and the start exits 1 witho
 serving, as ``alembic upgrade head`` would have; so does a database at a revision these
 scripts do not have (an older image started after a newer one migrated it).
 
+#1569: the deploy job (.github/workflows/ci.yml, docs/deploy/actions-deploy.md) migrates in
+its own step, ``python -m oracle.startup migrate`` (a Cloud Run job on the new image: it
+brings the database to head and exits, serving nothing), and sets ORACLE_MIGRATE_AT_START=0
+on the service, so a start never runs Alembic: a revision staged with no traffic before that
+step serves whatever the database holds (Oct 18: a migration that ran before the new image
+was live left the serving image on a schema it could not read, a 503).
+
 Cloud Run, Nov 12: an added instance took about 34 s before serving (9 s to Alembic's first
 log line, 24 s more to uvicorn's), so requests routed to it waited that long. Nov 13: about
 20 s (3.9 s to check the head, then 13.9 s to import the app); the check then ran in a thread
@@ -27,7 +34,9 @@ import os
 import pickle
 import re
 import signal
+import sys
 import time
+from collections.abc import Sequence
 from pathlib import Path
 
 API_DIR = Path(__file__).resolve().parents[1]
@@ -206,10 +215,24 @@ def _stop_check(pid: int, read: int) -> None:
     os.close(read)
 
 
-def main() -> None:
+def migrate_at_start() -> bool:
+    """False when ORACLE_MIGRATE_AT_START is 0, false or off: a start then never migrates."""
+    value = os.environ.get("ORACLE_MIGRATE_AT_START", "1").strip().lower()
+    return value not in {"0", "false", "off"}
+
+
+def main(argv: Sequence[str] = ()) -> None:
     _log_to_stderr(log.name, "alembic")
     started = time.perf_counter()
     url = database_url()
+    if list(argv) == ["migrate"]:
+        # The deploy's migrate step: to head, then exit; an error exits 1 before any traffic moves.
+        ran = migrate(url)
+        took = time.perf_counter() - started
+        log.info("migrations %s in %.1f s", "ran" if ran else "checked", took)
+        return
+    if argv:
+        raise SystemExit("usage: python -m oracle.startup [migrate]")
     # The head check waits on the database (on a new Cloud Run instance, mostly its first
     # connection) while the app's modules load: it runs in its own process, and nothing is
     # served until it has answered and, if the database is behind, Alembic has brought it to
@@ -238,7 +261,9 @@ def main() -> None:
         gc.enable()
     imported = time.perf_counter()
     at, migrated = _check_answer(pid, read)
-    ran = not at
+    ran = not at and migrate_at_start()
+    if not at and not ran:
+        log.warning("database not at head: not migrating at start (ORACLE_MIGRATE_AT_START=0)")
     if ran:
         upgrade(url)
         migrated += time.perf_counter() - imported
@@ -252,4 +277,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])

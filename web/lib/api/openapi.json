@@ -26,6 +26,27 @@
         }
       }
     },
+    "/version": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Build Commit",
+        "operationId": "build_commit",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Version"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/auth/login": {
       "post": {
         "tags": [
@@ -145413,6 +145434,19 @@
           "lock_version"
         ],
         "title": "VarianceOut"
+      },
+      "Version": {
+        "properties": {
+          "git_sha": {
+            "type": "string",
+            "title": "Git Sha"
+          }
+        },
+        "type": "object",
+        "required": [
+          "git_sha"
+        ],
+        "title": "Version"
       },
       "VersionAnchors": {
         "properties": {

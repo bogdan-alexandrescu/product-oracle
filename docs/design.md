@@ -58,8 +58,9 @@ writing the PRD alone from memory plus a few searches.
   server or secret to a task, clones one repo per workflow, fixes the model per
   profile, and cannot pause a workflow for a person. Four requests are filed:
   #1433, #1434, #1435, #1436 (X2 SwarmCloud gaps, X4b Public filing).
-- Hosting on existing GKE + Cloud SQL Postgres (pgvector) + GCS, gitops deploys
-  (P1 Hosting).
+- Hosting on Cloud Run (oracle-api, oracle-web) + Cloud SQL Postgres (pgvector) + GCS,
+  deployed from GitHub Actions after every test job passes (owner, Nov 20, #1569; P1
+  Hosting): `docs/deploy/actions-deploy.md`.
 - Python (FastAPI, async SQLAlchemy, Alembic) + Next.js/Tailwind, standalone repo
   (P4 Stack, P4b Repo location). The repo is **public** (R0 Repo visibility), so no
   company or customer data is ever committed; it lives in a gitignored `private/`.
