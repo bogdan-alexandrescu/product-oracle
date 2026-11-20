@@ -6,6 +6,7 @@ fails_when=the guard is not armed, or lets a foreign read or import through;
 no_claim=reads in a subprocess (a git or node child)."""
 
 import importlib.util
+import os
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,17 @@ def test_a_read_outside_api_raises():
         (ROOT / "web" / "package.json").read_text()
     with pytest.raises(ForeignRead, match=r"docs/build-brief.md is outside api/"):
         open(ROOT / "docs" / "build-brief.md", encoding="utf-8")  # noqa: SIM115
+
+
+def test_listing_a_directory_outside_api_raises():
+    web_app = ROOT / "web" / "app"
+    with pytest.raises(ForeignRead, match=r"web/app is outside api/"):
+        list(web_app.iterdir())
+    with pytest.raises(ForeignRead, match=r"web/app is outside api/"):
+        next(web_app.rglob("page.tsx"))
+    with pytest.raises(ForeignRead, match=r"docs is outside api/"):
+        os.listdir(ROOT / "docs")
+    assert "api" in os.listdir(ROOT)  # the root only names the trees
 
 
 def test_an_import_from_outside_api_raises():

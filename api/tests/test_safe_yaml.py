@@ -1,6 +1,7 @@
 """Untrusted YAML (oracle.safe_yaml): the probes from the security review answer fast,
-with a 422/413 or a failed import, on every path that reads YAML; the API's own YAML
-(templates, fixtures, modules) parses as it did with yaml.safe_load."""
+with a 422/413 or a failed import, on every path that reads YAML; the repo's own YAML
+(the API's templates, fixtures and modules, and the YAML the docs publish in
+docs/contracts/docs-yaml.json) parses as it did with yaml.safe_load."""
 
 import asyncio
 import gc
@@ -17,11 +18,12 @@ from oracle.docs.parser import DraftError, parse_draft, split_front_matter
 from oracle.runs import flows, roadmap
 from oracle.swarm import FakeRuntime, Outcome, set_runtime
 from oracle.templates.validation import check_template
+from tests._own_tree_only import CONTRACTS, contract
 from tests.fixtures import MARKDOWN, draft, import_draft, seed_auth
 from tests.test_mcp import api_token, mcp_client, text_of
 from tests.test_runs import get, started, tick
 
-# The API reads its own tree only (#1570): the web and docs parse their YAML themselves.
+# The API reads its own tree only (#1570): the YAML outside api/ comes from docs-yaml.json.
 REPO = Path(__file__).resolve().parents[1]
 FAST = 0.1  # seconds: every probe is answered within this
 # ...but 50,000 values are allowed, and building them takes longer (on the parse pool).
@@ -454,6 +456,10 @@ def test_every_template_and_fixture_parses_as_before():
 
     texts = _repo_yaml()  # the built-in templates are files under oracle/templates/builtin
     assert len(texts) > 50
+    if CONTRACTS.is_dir():  # the docs, the root's compose file, the agents' and web fixtures
+        published = contract("docs-yaml")["texts"]
+        assert len(published) > 25
+        texts += list(published.items())
     for name, body in [("SAMPLE_PRD", SAMPLE_PRD), ("SAMPLE_ROADMAP", SAMPLE_ROADMAP)]:
         fm, _, _ = split_front_matter(body.replace("\r\n", "\n"))
         if fm is not None:
