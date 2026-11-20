@@ -111,6 +111,20 @@ def on() -> FakeSwarmCloud:
     return FakeSwarmCloud(mcp=True, await_input=True, service_answer=True)
 
 
+class _LoopClock:
+    """The event loop's clock, moved forward by the test: a timeout under test is
+    reached at once, with no real wait."""
+
+    def __init__(self, monkeypatch) -> None:
+        self.offset = 0.0
+        loop = asyncio.get_running_loop()
+        real = loop.time
+        monkeypatch.setattr(loop, "time", lambda: real() + self.offset)
+
+    def forward(self, seconds: float) -> None:
+        self.offset += seconds
+
+
 @pytest.fixture
 async def owner():
     return await seed_auth()
@@ -198,8 +212,9 @@ async def test_features_follow_each_switch(client, owner):
 
 
 @pytest.mark.timing
-async def test_features_are_cached_and_bounded_by_the_timeout():
+async def test_features_are_cached_and_bounded_by_the_timeout(monkeypatch):
     import asyncio
+    import time
 
     swarm = on()
     runtime = swarm.runtime(features_ttl=60)
@@ -210,8 +225,11 @@ async def test_features_are_cached_and_bounded_by_the_timeout():
     await runtime.features(refresh=True)
     assert len(swarm.requests) == 2 * calls
 
+    clock = _LoopClock(monkeypatch)
+
     async def slow(request):
-        await asyncio.Event().wait()  # never answers; only the 0.2 s timeout ends it
+        clock.forward(0.2)  # the 0.2 s timeout is reached on the loop's clock, not waited
+        await asyncio.sleep(5)  # ends only if the timeout does not
         return httpx.Response(200, json={})
 
     from oracle.swarm import SwarmCloudRuntime
@@ -220,9 +238,9 @@ async def test_features_are_cached_and_bounded_by_the_timeout():
     runtime = SwarmCloudRuntime(
         "https://swarm.test", StaticBearer("x"), timeout=0.2, transport=httpx.MockTransport(slow)
     )
-    started_at = asyncio.get_running_loop().time()
+    started_at = time.monotonic()
     feats = await runtime.features()
-    assert asyncio.get_running_loop().time() - started_at < 1
+    assert time.monotonic() - started_at < 1
     assert set(feats.as_dict().values()) == {"unknown"}
     assert "within 0.2 s" in feats.reasons["mcp"]
 
@@ -4724,9 +4742,11 @@ async def test_a_slow_status_read_times_out_to_read_only(client, owner, monkeypa
     await started(client, auth)
     token = token_of(swarm)
     monkeypatch.setattr(service, "HOLD_READ_SECONDS", 0.3, raising=False)
+    clock = _LoopClock(monkeypatch)
 
     async def hangs(workflow_id):
-        await asyncio.Event().wait()  # never answers; only the read's timeout ends it
+        clock.forward(0.3)  # the read's timeout is reached on the loop's clock, not waited
+        await asyncio.sleep(5)  # ends only if the timeout does not
 
     monkeypatch.setattr(runtime, "status", hangs)
     err, said = await asyncio.wait_for(_push(token), 10)
