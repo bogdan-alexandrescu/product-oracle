@@ -13,18 +13,22 @@ The downgrade gives every stored ``alignment_report`` the company's zone back
 (America/Los_Angeles when none is set); ``company_timezone`` stays (0031_rituals'
 downgrade drops it), and so do the rituals' zones (each is a valid schedule).
 
+The next date is worked out here, frozen as oracle.rituals.schedule.next_occurrence was at
+this revision (#1575), so a later change to the app does not change this migration.
+
 Revision ID: 0039_company_timezone
 Revises: 0038_outcome_tracking
 """
 
 import json
+from calendar import monthrange
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time, timedelta
+from typing import Any
+from zoneinfo import ZoneInfo
 
 import sqlalchemy as sa
 from alembic import op
-
-from oracle.rituals.schedule import next_occurrence
 
 revision: str = "0039_company_timezone"
 down_revision: str | None = "0038_outcome_tracking"
@@ -33,6 +37,60 @@ depends_on: str | Sequence[str] | None = None
 
 # The Company time zone of a company that never set one, as of this revision.
 DEFAULT_ZONE = "America/Los_Angeles"
+# A Monday: week 0 of every every_n_weeks series.
+EPOCH = date(2024, 1, 1)
+# A stored schedule's defaults, as of this revision.
+RULE = {"interval": 1, "weekday": 0, "week_of_month": 1, "month": 1, "time": "09:00"}
+
+
+def _at(day: date, s: dict[str, Any]) -> datetime:
+    h, m = s["time"].split(":")
+    at = datetime.combine(day, time(int(h), int(m)), tzinfo=ZoneInfo(s["timezone"]))
+    return at.astimezone(UTC)
+
+
+def _nth_weekday(year: int, month: int, weekday: int, nth: int) -> date:
+    days = monthrange(year, month)[1]
+    if nth == -1:
+        last = date(year, month, days)
+        return last - timedelta(days=(last.weekday() - weekday) % 7)
+    first = date(year, month, 1)
+    return first + timedelta(days=(weekday - first.weekday()) % 7 + 7 * (nth - 1))
+
+
+def _months(s: dict[str, Any]) -> set[int]:
+    if s["freq"] == "monthly":
+        return set(range(1, 13))
+    if s["freq"] == "quarterly":
+        return {s["month"] + 3 * q for q in range(4)}
+    return {s["month"]}
+
+
+def _next_occurrence(schedule: dict[str, Any], after: datetime) -> datetime:
+    """The first due time of ``schedule`` strictly after ``after`` (UTC)."""
+    s = {**RULE, "timezone": DEFAULT_ZONE, **schedule}
+    local = after.astimezone(ZoneInfo(s["timezone"])).date()
+    if s["freq"] in ("weekly", "every_n_weeks"):
+        step = s["interval"] if s["freq"] == "every_n_weeks" else 1
+        day = local - timedelta(days=1)
+        for _ in range(7 * step + 8):
+            if day.weekday() == s["weekday"] and ((day - EPOCH).days // 7) % step == 0:
+                at = _at(day, s)
+                if at > after:
+                    return at
+            day += timedelta(days=1)
+    else:
+        months = _months(s)
+        year, month = local.year, local.month - 1
+        if month == 0:
+            year, month = year - 1, 12
+        for _ in range(26):
+            if month in months:
+                at = _at(_nth_weekday(year, month, s["weekday"], s["week_of_month"]), s)
+                if at > after:
+                    return at
+            year, month = (year + 1, 1) if month == 12 else (year, month + 1)
+    raise ValueError("no next occurrence")  # pragma: no cover - every rule repeats
 
 
 def upgrade() -> None:
@@ -85,7 +143,7 @@ def _rituals_on_the_company_zone() -> None:
             ),
             {
                 "s": json.dumps(moved),
-                "n": next_occurrence(moved, now) if status == "active" else None,
+                "n": _next_occurrence(moved, now) if status == "active" else None,
                 "id": ritual_id,
             },
         )
