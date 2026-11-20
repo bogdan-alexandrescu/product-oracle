@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/nav";
 import { useId, useState } from "react";
 
 import { Button, Dialog, InfoTip } from "@/components/ds";

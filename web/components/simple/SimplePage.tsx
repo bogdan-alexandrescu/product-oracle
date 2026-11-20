@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 import type { ReactNode } from "react";
 
 import { InfoTip } from "@/components/ds";

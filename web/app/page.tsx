@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/nav";
 import { useEffect } from "react";
 
 import { loadLanding } from "@/lib/experience";

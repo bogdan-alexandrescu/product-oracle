@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 
 import { MeetingChat } from "@/components/simple/chat/MeetingChat";
 import { SimplePage } from "@/components/simple/SimplePage";

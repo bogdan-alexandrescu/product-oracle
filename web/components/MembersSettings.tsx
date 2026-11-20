@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Link, useRouter } from "@/lib/nav";
 import { Fragment, useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 
 import { ActedCell, SETTLING, Unavailable, useActed } from "@/components/account/acted";

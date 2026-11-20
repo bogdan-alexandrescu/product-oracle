@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname } from "@/lib/nav";
 import { useEffect, useRef, useState, type RefObject } from "react";
 
 import { DiscussionThread } from "@/components/discuss/DiscussionThread";

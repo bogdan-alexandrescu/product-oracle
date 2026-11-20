@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "@/lib/nav";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { AuthCard } from "@/app/login/_components/AuthCard";

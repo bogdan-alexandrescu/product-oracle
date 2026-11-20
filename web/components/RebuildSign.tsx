@@ -8,8 +8,7 @@
 // while one waits on a person or to start; else only when the tab comes back. Always also on
 // a page change, on focus and after a change is saved.
 
-import Link from "next/link";
-import { useParams, usePathname } from "next/navigation";
+import { Link, useParams, usePathname } from "@/lib/nav";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { api, type Schemas } from "@/lib/api/client";

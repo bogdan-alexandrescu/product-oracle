@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/nav";
 import { useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ds";

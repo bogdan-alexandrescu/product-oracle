@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 import { useState } from "react";
 
 import { Button, Chip, Sparkline, ViewOnly } from "@/components/ds";

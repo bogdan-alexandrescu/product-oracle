@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname } from "@/lib/nav";
 import { createContext, useContext, type ReactNode } from "react";
 
 const TabsContext = createContext<ReactNode>(null);

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 
 import { SimpleEmpty, SimpleSection } from "@/components/simple/SimplePage";
 import { ErrorNote, Loading } from "@/components/ui";

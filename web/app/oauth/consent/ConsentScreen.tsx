@@ -1,8 +1,7 @@
 "use client";
 
 import createClient from "openapi-fetch";
-import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Link, usePathname, useRouter, useSearchParams } from "@/lib/nav";
 import { useEffect, useState } from "react";
 
 import { AuthCard } from "@/app/login/_components/AuthCard";

@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Link, useRouter } from "@/lib/nav";
 import { useMemo, useState, type ReactNode } from "react";
 
 import { Button, Chip, Inspector, InspectorRow, InspectorSection, confirmInPage } from "@/components/ds";

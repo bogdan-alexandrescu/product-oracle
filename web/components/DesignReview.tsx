@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 import { useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { Button, Chip, Icon, InfoTip, Inspector, InspectorSection, LinkButton, NotFoundPanel, Notice, Page, PageHeader, Panel, SegmentedControl, Sheet, Split, type ChipKind } from "@/components/ds";

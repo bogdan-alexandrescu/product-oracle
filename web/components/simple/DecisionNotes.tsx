@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 
 import type { Schemas } from "@/lib/api/client";
 import { datesInWords } from "@/lib/dates";

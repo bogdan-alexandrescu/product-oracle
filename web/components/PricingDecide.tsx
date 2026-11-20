@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/nav";
 import { useState } from "react";
 
 import { MEMOS_KEY } from "@/app/company/market/_components/lib";

@@ -1,6 +1,6 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useSearchParams } from "@/lib/nav";
 import { Suspense, useRef, useState, type KeyboardEvent } from "react";
 
 import { Button, PageSkeleton, ScrollStrip, ViewOnly } from "@/components/ds";

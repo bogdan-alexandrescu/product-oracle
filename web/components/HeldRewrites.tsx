@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/nav";
 import { useEffect, useRef, useState } from "react";
 
 import { Button, Chip } from "@/components/ds";

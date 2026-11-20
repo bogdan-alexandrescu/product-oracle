@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter } from "@/lib/nav";
 import { useLayoutEffect } from "react";
 
 import { DETAILED_HOME, modeOf, SIMPLE_HOME, saveMode, switchTarget, type Mode } from "@/lib/experience";

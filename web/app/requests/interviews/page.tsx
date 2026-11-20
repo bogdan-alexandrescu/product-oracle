@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/nav";
 
 import { Chip, DataTable, Icon, Page, Panel, type Column } from "@/components/ds";
 import { ErrorNote } from "@/components/ui";

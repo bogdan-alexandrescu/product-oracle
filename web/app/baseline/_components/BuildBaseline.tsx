@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { usd, type EstimateOut } from "@/app/runs/_lib";

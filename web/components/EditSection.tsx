@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/nav";
 import { useMemo, useState } from "react";
 
 import { Button, InfoTip, Notice, SegmentedControl } from "@/components/ds";

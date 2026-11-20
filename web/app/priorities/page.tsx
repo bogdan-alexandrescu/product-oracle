@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { Link, useSearchParams } from "@/lib/nav";
 import { Suspense, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 
 import {

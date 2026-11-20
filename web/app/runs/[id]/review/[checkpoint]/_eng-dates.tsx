@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/nav";
 import { useState, type ReactNode } from "react";
 
 import { Button, Chip, Icon, Inspector, InspectorSection, Page, PageHeader, Sheet, Split, toast } from "@/components/ds";

@@ -5,7 +5,7 @@
  * milestone's gate, a proposed milestone, a goal's metric and a new PRD from a milestone. The
  * grid opens them from its ⋯ menus and from the badges that ask for them (No gate, Not measured).
  */
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 import { useState, type ReactNode } from "react";
 
 import { Icon } from "@/components/ds/Icon";

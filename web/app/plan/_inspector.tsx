@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 import { useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
 

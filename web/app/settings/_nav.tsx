@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Link, usePathname, useRouter, useSearchParams } from "@/lib/nav";
 
 import { SELECT_FIELD } from "@/app/settings/_components/fields";
 import { LinkButton, ScrollStrip } from "@/components/ds";

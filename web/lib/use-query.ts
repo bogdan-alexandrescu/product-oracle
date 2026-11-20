@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter } from "@/lib/nav";
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 
 import { ApiError } from "@/lib/api/client";

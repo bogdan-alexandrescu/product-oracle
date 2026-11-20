@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 import { useCallback, useState } from "react";
 
 import { InfoTip } from "@/components/ds/InfoTip";

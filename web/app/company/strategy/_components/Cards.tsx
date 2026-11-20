@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/lib/nav";
 import { useState, type ReactNode } from "react";
 
 import { Button, Chip, InfoTip, LinkButton, Panel } from "@/components/ds";
