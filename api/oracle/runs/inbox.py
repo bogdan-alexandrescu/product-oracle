@@ -40,7 +40,6 @@ from oracle.runs.service import (
     FINAL,
     _checkpoint_out,
     _decider_names,
-    _draft_retry_refusal,
     _flow,
     _import_failed,
     _live_reasons,
@@ -212,7 +211,7 @@ async def _no_documents(db: AsyncSession) -> list[RunSummary]:
     for run, segment in refused.values():
         kind = _flow(run).target_kind or kinds.get(run.document_id) or "prd"
         review = reviews.get((run.id, segment.seq))
-        retry = _draft_retry_refusal(run, segment, review, kind, None) is None
+        retry = service._draft_retry_refusal(run, segment, review, kind, None) is None
         out.append(
             _summary(run, refs, None).model_copy(
                 update={"no_document": _no_document_text(run, refs, segment, retry)}
