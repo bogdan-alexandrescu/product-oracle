@@ -10,7 +10,7 @@
 //
 //   { "guard": "npx playwright test e2e/x.spec.ts --reporter=line --retries=0",
 //     "cwd": ".",                  (optional: where the guard runs; default the current one)
-//     "timeoutSeconds": 900,       (optional: a guard past it counts as not red)
+//     "timeoutSeconds": 900,       (optional: a guard past it counts as not red, as does one killed by a signal)
 //     "mutants": [
 //       { "name": "drops the month-first date", "file": "lib/dates.ts", "find": "...", "replace": "..." },
 //       { "name": "two edits at once", "edits": [{ "file": "...", "find": "...", "replace": "..." }] } ] }
@@ -51,6 +51,9 @@ function runGuard(spec, base, logPath) {
   });
   writeFileSync(logPath, `${r.stdout ?? ""}${r.stderr ?? ""}${r.error ? `\n${r.error.message}\n` : ""}`);
   if (r.error?.code === "ETIMEDOUT") return "timeout";
+  // A guard killed by a signal (an OOM kill, Ctrl-C) never judged the defect: not red. The
+  // shell reports a killed child as 128 + the signal (SIGINT 130, SIGKILL 137, SIGTERM 143).
+  if (r.signal || [130, 137, 143].includes(r.status)) return "killed";
   return r.status === 0 ? "green" : "red";
 }
 
@@ -99,7 +102,7 @@ export function run(specPath, { base = process.cwd(), logDir = tmpdir(), out = c
           writeFileSync(path, f.after);
         }
         const result = runGuard(spec, base, log);
-        out(`${result === "red" ? "red     " : "NOT RED "} ${m.name}${result === "timeout" ? " (timed out)" : ""} (log: ${log})`);
+        out(`${result === "red" ? "red     " : "NOT RED "} ${m.name}${result === "timeout" ? " (timed out)" : result === "killed" ? " (killed by a signal)" : ""} (log: ${log})`);
         if (result !== "red") survived.push(m.name);
       } finally {
         restore();

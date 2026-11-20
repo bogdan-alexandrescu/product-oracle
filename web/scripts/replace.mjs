@@ -68,7 +68,8 @@ export function plan(edits, base = process.cwd()) {
   return files;
 }
 
-// Writes every changed file through a temp file and a rename; restores all on a failed write.
+// Writes every changed file through a temp file (with the file's mode) and a rename; restores
+// all on a failed write.
 export function apply(files) {
   const written = [];
   let current;
@@ -77,6 +78,7 @@ export function apply(files) {
       if (f.after === f.before) continue;
       current = path;
       writeFileSync(`${path}.replace-tmp`, f.after);
+      chmodSync(`${path}.replace-tmp`, statSync(path).mode);
       renameSync(`${path}.replace-tmp`, path);
       written.push(path);
     }
