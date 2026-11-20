@@ -7,6 +7,8 @@
  */
 import type { Schemas } from "@/lib/api/client";
 
+import { reply } from "./typed";
+
 type NotionPage = Schemas["NotionPageOut"];
 
 export const MOCK_NOTION_CONNECTION_ID = "c0000000-0000-4000-8000-000000000004";
@@ -70,5 +72,5 @@ export function notionPages(url: URL): Response {
   const start = Number(url.searchParams.get("cursor") ?? 0) || 0;
   const items = matches.slice(start, start + size);
   const next = start + size < matches.length ? String(start + size) : null;
-  return json(200, { items, next_cursor: next } satisfies Schemas["NotionPagesOut"]);
+  return reply("/v1/connections/{connection_id}/notion/pages", "get", { items, next_cursor: next } satisfies Schemas["NotionPagesOut"]);
 }

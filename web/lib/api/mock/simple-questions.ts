@@ -2,6 +2,7 @@ import type { Schemas } from "../client";
 import { mockNowMs } from "./clock";
 import { companyDateInWords } from "./connections";
 import { MOCK_SCENARIO_KEY, stableUuid } from "./ids";
+import { reply } from "./typed";
 
 /**
  * prd-questions (mock): an invented PRD's open questions (Q1..Q16 of "Guided setup"), read
@@ -292,7 +293,7 @@ export async function routeQuestionChanges(
     held.change.undone = true;
     held.change.can_undo = false;
     const undo: Change = { ...held.change, id: crypto.randomUUID(), status: "undone", undoes_id: held.change.id, undone: false, at: iso(mockNowMs()) };
-    return json(200, { change: undo, flags: [] });
+    return reply("/v1/simple/changes/{change_id}/undo", "post", { change: undo, flags: [] }, 201);
   }
   if (p.length === 5 && (p[4] === "accept" || p[4] === "decline")) {
     // As questions.decide: an owner or the question's decider accepts or declines a proposal.
@@ -316,7 +317,9 @@ export async function routeQuestionChanges(
     c.status = p[4] === "accept" ? "accepted" : "declined";
     c.decided_by = ctx.me.id;
     c.decided_at = iso(mockNowMs());
-    return json(200, { change: c, flags: [] });
+    return p[4] === "accept"
+      ? reply("/v1/simple/changes/{change_id}/accept", "post", { change: c, flags: [] })
+      : reply("/v1/simple/changes/{change_id}/decline", "post", { change: c, flags: [] });
   }
   if (p.length !== 3) return null;
   const b = await readBody(req);
@@ -378,7 +381,7 @@ export async function routeQuestionChanges(
     }
   } else if (b.op === "decide_question") q.pending = { change_id: change.id, by: ctx.me.id, answer };
   db.changes.push({ change, was });
-  return json(201, { change, flags: [] });
+  return reply("/v1/simple/changes", "post", { change, flags: [] }, 201);
 }
 
 /**
@@ -486,7 +489,7 @@ function sheetChange(ctx: QuestionsCtx, db: QuestionsDb, b: Record<string, unkno
       change.after = { ...clean, n };
     }
     db.changes.push({ change, was: null });
-    return json(201, { change, flags: [] });
+    return reply("/v1/simple/changes", "post", { change, flags: [] }, 201);
   }
   const q = typeof target.decision_id === "string" ? findQuestion(db, target.decision_id) : undefined;
   if (!q || q.trashed) return b.op === "edit_question" ? json(404, { detail: "No such question" }) : null;
@@ -500,7 +503,7 @@ function sheetChange(ctx: QuestionsCtx, db: QuestionsDb, b: Record<string, unkno
     change.after = { status: "withdrawn" };
     q.withdrawn = true;
     db.changes.push({ change, was });
-    return json(201, { change, flags: [] });
+    return reply("/v1/simple/changes", "post", { change, flags: [] }, 201);
   }
   const clean = cleanQuestion(after, false);
   if (typeof clean === "string") return json(422, { detail: clean });
@@ -517,5 +520,5 @@ function sheetChange(ctx: QuestionsCtx, db: QuestionsDb, b: Record<string, unkno
     q.edited = { at: now, by: ctx.me.id };
   }
   db.changes.push({ change, was });
-  return json(201, { change, flags: [] });
+  return reply("/v1/simple/changes", "post", { change, flags: [] }, 201);
 }

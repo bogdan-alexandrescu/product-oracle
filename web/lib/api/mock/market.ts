@@ -14,6 +14,7 @@ import type { Schemas } from "@/lib/api/client";
 
 import { isHttpsSite } from "@/lib/https-site";
 import { stableUuid } from "./ids";
+import { reply } from "./typed";
 
 type CompetitorOut = Schemas["CompetitorOut"];
 type PageOut = Schemas["PageOut"];
@@ -373,8 +374,9 @@ export async function routeMarket(ctx: MarketContext, db: MarketDb, req: Request
   if (area === "competitors") {
     if (p.length === 2 && m === "GET") {
       const all = q.get("include_archived") === "true";
-      return json(
-        200,
+      return reply(
+        "/v1/competitors",
+        "get",
         db.competitors
           .filter((c) => all || c.status === "active")
           .sort((a, b) => a.name.localeCompare(b.name))
@@ -402,7 +404,7 @@ export async function routeMarket(ctx: MarketContext, db: MarketDb, req: Request
         lock_version: 1,
       };
       db.competitors.push(c);
-      return json(201, competitorOut(db, c, zone));
+      return reply("/v1/competitors", "post", competitorOut(db, c, zone), 201);
     }
     const c = db.competitors.find((x) => x.id === p[2]);
     if (!c) return fail(404, "No such alternative");
@@ -412,7 +414,7 @@ export async function routeMarket(ctx: MarketContext, db: MarketDb, req: Request
         .sort((a, b) => b.detected_at.localeCompare(a.detected_at))
         .slice(0, 20)
         .map((x) => changeOut(db, x));
-      return json(200, {
+      return reply("/v1/competitors/{competitor_id}", "get", {
         ...competitorOut(db, c, zone),
         page_list: db.pages.filter((x) => x.competitor_id === c.id).map(pageOut),
         changes,
@@ -444,7 +446,7 @@ export async function routeMarket(ctx: MarketContext, db: MarketDb, req: Request
         c.aliases = aliases;
       }
       c.lock_version += 1;
-      return json(200, competitorOut(db, c, zone));
+      return reply("/v1/competitors/{competitor_id}", "patch", competitorOut(db, c, zone));
     }
     if (p.length === 4 && m === "POST" && p[3] === "pages") {
       if (!approver) return notApprover();
@@ -469,14 +471,16 @@ export async function routeMarket(ctx: MarketContext, db: MarketDb, req: Request
         last_error: blocked ? BLOCKED : null,
       };
       db.pages.push(page);
-      return json(201, pageOut(page));
+      return reply("/v1/competitors/{competitor_id}/pages", "post", pageOut(page), 201);
     }
     if (p.length === 4 && m === "POST" && (p[3] === "archive" || p[3] === "restore")) {
       if (!approver) return notApprover();
       c.status = p[3] === "archive" ? "archived" : "active";
       if (c.status === "archived") for (const x of db.pages) if (x.competitor_id === c.id && x.status === "active") x.status = "paused";
       c.lock_version += 1;
-      return json(200, competitorOut(db, c, zone));
+      return p[3] === "archive"
+        ? reply("/v1/competitors/{competitor_id}/archive", "post", competitorOut(db, c, zone))
+        : reply("/v1/competitors/{competitor_id}/restore", "post", competitorOut(db, c, zone));
     }
     return fail(404, "Route not found");
   }
@@ -489,12 +493,12 @@ export async function routeMarket(ctx: MarketContext, db: MarketDb, req: Request
       const input = await body<Schemas["PagePatch"]>();
       if (input.label) page.label = input.label;
       if (input.status) page.status = input.status;
-      return json(200, pageOut(page));
+      return reply("/v1/competitor-pages/{page_id}", "patch", pageOut(page));
     }
     if (p.length === 3 && m === "DELETE") {
       db.pages = db.pages.filter((x) => x !== page);
       db.changes = db.changes.filter((x) => x.page_id !== page.id);
-      return new Response(null, { status: 204 });
+      return reply("/v1/competitor-pages/{page_id}", "delete", undefined, 204);
     }
     if (p.length === 4 && m === "POST" && p[3] === "check") {
       if (new URL(page.url).pathname.startsWith("/blocked")) {
@@ -502,7 +506,7 @@ export async function routeMarket(ctx: MarketContext, db: MarketDb, req: Request
         return fail(409, BLOCKED);
       }
       Object.assign(page, { last_checked_at: now().toISOString(), attempts: 0, last_error: null });
-      return json(200, pageOut(page));
+      return reply("/v1/competitor-pages/{page_id}/check", "post", pageOut(page));
     }
     return fail(404, "Route not found");
   }
@@ -518,13 +522,17 @@ export async function routeMarket(ctx: MarketContext, db: MarketDb, req: Request
         .filter((x) => !from || x.detected_at >= `${from}T00:00:00Z`)
         .filter((x) => !to || x.detected_at < `${to}T00:00:00Z`)
         .sort((a, b) => b.detected_at.localeCompare(a.detected_at));
-      return json(200, rows.map((x) => changeOut(db, x)));
+      return reply(
+        "/v1/competitor-changes",
+        "get",
+        rows.map((x) => changeOut(db, x)),
+      );
     }
     const ch = db.changes.find((x) => x.id === p[2]);
     if (!ch) return fail(404, "No such change");
     if (p.length === 3 && m === "GET") {
       const f = ch.web_finding_id ? db.findings.find((x) => x.id === ch.web_finding_id) : undefined;
-      return json(200, { ...changeOut(db, ch), diff: ch.diff, web_finding: f ? findingOut(db, f, zone) : null } satisfies ChangeDetail);
+      return reply("/v1/competitor-changes/{change_id}", "get", { ...changeOut(db, ch), diff: ch.diff, web_finding: f ? findingOut(db, f, zone) : null } satisfies ChangeDetail);
     }
     return fail(404, "Route not found");
   }
@@ -534,8 +542,9 @@ export async function routeMarket(ctx: MarketContext, db: MarketDb, req: Request
       const status = q.get("status") ?? "open";
       const older = q.get("include_older") === "true";
       const cutoff = now().getTime() - 90 * DAY_MS;
-      return json(
-        200,
+      return reply(
+        "/v1/competitor-web-findings",
+        "get",
         db.findings
           .filter((f) => f.status === status)
           .filter((f) => !q.get("competitor_id") || f.competitor_id === q.get("competitor_id"))
@@ -553,7 +562,7 @@ export async function routeMarket(ctx: MarketContext, db: MarketDb, req: Request
       if (p[3] === "dismiss") {
         const input = await body<Schemas["FindingDismissIn"]>();
         Object.assign(f, { status: "dismissed", dismiss_reason: input?.reason?.trim() || null });
-        return json(200, findingOut(db, f, zone));
+        return reply("/v1/competitor-web-findings/{finding_id}/dismiss", "post", findingOut(db, f, zone));
       }
       const input = await body<Schemas["PromoteIn"]>();
       f.status = "promoted";
@@ -572,13 +581,13 @@ export async function routeMarket(ctx: MarketContext, db: MarketDb, req: Request
         diff: [],
       };
       db.changes.push(ch);
-      return json(200, changeOut(db, ch));
+      return reply("/v1/competitor-web-findings/{finding_id}/promote", "post", changeOut(db, ch));
     }
     return fail(404, "Route not found");
   }
 
   if (area === "positioning" && p.length === 2) {
-    if (m === "GET") return json(200, positioningOut(db));
+    if (m === "GET") return reply("/v1/positioning", "get", positioningOut(db));
     if (m === "PUT") {
       if (!approver) return notApprover();
       const input = await body<Schemas["PositioningIn"]>();
@@ -593,7 +602,7 @@ export async function routeMarket(ctx: MarketContext, db: MarketDb, req: Request
         fields[f] = items;
       }
       Object.assign(db.positioning, { fields, updated_by_name: ctx.me.name ?? ctx.me.email, updated_at: now().toISOString(), lock_version: db.positioning.lock_version + 1 });
-      return json(200, positioningOut(db));
+      return reply("/v1/positioning", "put", positioningOut(db));
     }
   }
 
@@ -618,7 +627,9 @@ export async function routeMarket(ctx: MarketContext, db: MarketDb, req: Request
       Object.assign(db.positioning, { updated_by_name: ctx.me.name ?? ctx.me.email, updated_at: now().toISOString(), lock_version: db.positioning.lock_version + 1 });
     }
     s.status = p[3] === "accept" ? "accepted" : "dismissed";
-    return json(200, positioningOut(db));
+    return p[3] === "accept"
+      ? reply("/v1/positioning-suggestions/{suggestion_id}/accept", "post", positioningOut(db))
+      : reply("/v1/positioning-suggestions/{suggestion_id}/dismiss", "post", positioningOut(db));
   }
   return fail(404, "Route not found");
 }

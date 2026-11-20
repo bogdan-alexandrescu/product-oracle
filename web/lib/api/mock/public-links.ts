@@ -7,6 +7,7 @@
 import type { Schemas } from "@/lib/api/client";
 
 import { scored, type BaselineCaller, type BaselineState } from "./baseline";
+import { reply } from "./typed";
 
 type Kind = Schemas["LinkPreviewOut"]["kind"];
 type Page = { url: string; kind: Kind; title: string; text: string; last_modified: string | null };
@@ -122,7 +123,7 @@ export async function routeEvidenceLinks(
       retrieved_at: fetchedAt,
       link: { ...ev.link!, fetched_at: fetchedAt },
     });
-    return json(200, ev);
+    return reply("/v1/baseline/evidence/{evidence_id}/refresh", "post", ev);
   }
 
   const body = JSON.parse((await req.text()) || "{}") as Schemas["EvidenceLinkCreate"];
@@ -152,7 +153,7 @@ export async function routeEvidenceLinks(
       confidence_factors: result.confidence_factors,
       already_cited: cited,
     };
-    return json(200, out);
+    return reply("/v1/baseline/evidence/link/preview", "post", out);
   }
   if (cited) return json(409, { detail: "This link is already cited here; refresh it instead." });
   const row: Schemas["EvidenceOut"] = {
@@ -187,5 +188,5 @@ export async function routeEvidenceLinks(
     const scores = s.evidence.filter((e) => e.entity_id === target.id).map((e) => e.confidence ?? 0);
     target.confidence = Math.round((1 - scores.reduce((p, c) => p * (1 - c), 1)) * 1000) / 1000;
   }
-  return json(201, row);
+  return reply("/v1/baseline/evidence/link", "post", row, 201);
 }

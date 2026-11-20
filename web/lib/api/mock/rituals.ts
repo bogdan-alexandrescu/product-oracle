@@ -15,6 +15,7 @@ import { formatDate } from "@/lib/format";
 
 import { companyStamp } from "./connections";
 import { newCompany } from "./ids";
+import { reply } from "./typed";
 
 type RitualOut = Schemas["RitualOut"];
 type OccurrenceOut = Schemas["OccurrenceOut"];
@@ -896,12 +897,12 @@ async function route(ctx: RitualsContext, db: RitualsDb, req: Request, p: string
         if (bad.length) return invalid(bad);
         db.mode = (input as Schemas["SummarySettingsIn"]).mode;
       }
-      return json(200, { mode: db.mode, estimate: estimate(db) });
+      return reply("/v1/rituals/summaries", m === "PUT" ? "put" : "get", { mode: db.mode, estimate: estimate(db) });
     }
     if (p.length === 2) {
       if (m === "GET") {
         const order = (r: Ritual) => (r.builtin ? 0 : 1);
-        return json(200, [...db.rituals].sort((a, b) => order(a) - order(b)).map((r) => ritualOut(db, r, ctx)));
+        return reply("/v1/rituals", "get", [...db.rituals].sort((a, b) => order(a) - order(b)).map((r) => ritualOut(db, r, ctx)));
       }
       if (m === "POST") {
         if (!owner) return notOwner();
@@ -931,7 +932,7 @@ async function route(ctx: RitualsContext, db: RitualsDb, req: Request, p: string
           created_at: now().toISOString(),
         };
         db.rituals.push(r);
-        return json(201, ritualOut(db, r, ctx));
+        return reply("/v1/rituals", "post", ritualOut(db, r, ctx), 201);
       }
     }
     // As FastAPI: the owner role (a dependency), then the id and PATCH's body (RitualPatch) in
@@ -953,12 +954,12 @@ async function route(ctx: RitualsContext, db: RitualsDb, req: Request, p: string
     const r = db.rituals.find((x) => x.id === p[2]);
     if (!r) return fail(404, "Ritual not found");
     if (p.length === 3) {
-      if (m === "GET") return json(200, ritualOut(db, r, ctx));
+      if (m === "GET") return reply("/v1/rituals/{ritual_id}", "get", ritualOut(db, r, ctx));
       if (m === "DELETE") {
         if (r.builtin) return fail(409, "Built-in rituals pause; they are not deleted");
         db.rituals = db.rituals.filter((x) => x !== r);
         db.occurrences = db.occurrences.filter((o) => o.ritual_id !== r.id);
-        return new Response(null, { status: 204 });
+        return reply("/v1/rituals/{ritual_id}", "delete", undefined, 204);
       }
       if (patch) {
         const input = patch;
@@ -981,7 +982,7 @@ async function route(ctx: RitualsContext, db: RitualsDb, req: Request, p: string
           r.attendee_ids = input.attendee_ids;
         }
         r.lock_version += 1;
-        return json(200, ritualOut(db, r, ctx));
+        return reply("/v1/rituals/{ritual_id}", "patch", ritualOut(db, r, ctx));
       }
     }
     if (p.length === 4 && m === "POST" && (p[3] === "pause" || p[3] === "resume")) {
@@ -990,7 +991,7 @@ async function route(ctx: RitualsContext, db: RitualsDb, req: Request, p: string
       r.waits_for_goal = false;
       if (r.status === "active") r.next_due_at = nextOccurrence(r.schedule, now()).toISOString();
       r.lock_version += 1;
-      return json(200, ritualOut(db, r, ctx));
+      return p[3] === "pause" ? reply("/v1/rituals/{ritual_id}/pause", "post", ritualOut(db, r, ctx)) : reply("/v1/rituals/{ritual_id}/resume", "post", ritualOut(db, r, ctx));
     }
     if (p.length === 4 && m === "POST" && p[3] === "prepare") {
       // Retry a failed one, or build the next occurrence's pre-read now.
@@ -1006,12 +1007,13 @@ async function route(ctx: RitualsContext, db: RitualsDb, req: Request, p: string
       // As service.prepare: a paused ritual's next meeting does not move on.
       if (!failed && r.status === "active") r.next_due_at = nextOccurrence(r.schedule, due).toISOString();
       if (r.kind === REBUILD) await rebuildAfterReady(ctx, r, o);
-      return json(200, occurrenceOut(ctx, r, o));
+      return reply("/v1/rituals/{ritual_id}/prepare", "post", occurrenceOut(ctx, r, o));
     }
     if (p.length === 4 && m === "GET" && p[3] === "occurrences") {
       const limit = Number(q.get("limit") ?? 20);
-      return json(
-        200,
+      return reply(
+        "/v1/rituals/{ritual_id}/occurrences",
+        "get",
         db.occurrences
           .filter((o) => o.ritual_id === r.id)
           .sort((a, b) => b.due_at.localeCompare(a.due_at))
@@ -1043,13 +1045,13 @@ async function route(ctx: RitualsContext, db: RitualsDb, req: Request, p: string
   if (p.length === 3 && m === "GET") {
     if (r.kind === REBUILD) {
       syncRebuild(ctx, o);
-      return json(200, occurrenceOut(ctx, r, o));
+      return reply("/v1/ritual-occurrences/{occurrence_id}", "get", occurrenceOut(ctx, r, o));
     }
     // The mock summary run finishes on the second read after it starts.
     if (o.summary_state === "running" && (o.summary_reads = (o.summary_reads ?? 0) + 1) >= 2) {
       Object.assign(o, { summary_state: "ready", summary: r.kind === "metrics_review" ? METRICS_SUMMARY_TEXT : r.kind === DIGEST.kind ? DIGEST_TEXT : summaryText(r), summary_note: null });
     }
-    return json(200, occurrenceOut(ctx, r, o));
+    return reply("/v1/ritual-occurrences/{occurrence_id}", "get", occurrenceOut(ctx, r, o));
   }
   if (p.length === 4 && m === "GET" && p[3] === "pre-read.md") {
     const lines = [`# ${r.title}`, ""];
@@ -1061,7 +1063,7 @@ async function route(ctx: RitualsContext, db: RitualsDb, req: Request, p: string
   if (p.length === 4 && m === "POST" && p[3] === "read") {
     if (!o.read_by.includes(ctx.me.id)) o.read_by.push(ctx.me.id);
     (o.read_at ??= {})[ctx.me.id] = now().toISOString();
-    return new Response(null, { status: 204 });
+    return reply("/v1/ritual-occurrences/{occurrence_id}/read", "post", undefined, 204);
   }
   if (p.length === 4 && m === "POST" && (p[3] === "held" || p[3] === "skip")) {
     if (ctx.me.id !== r.owner_id) return fail(403, "Only the ritual's owner records it");
@@ -1074,10 +1076,10 @@ async function route(ctx: RitualsContext, db: RitualsDb, req: Request, p: string
       const unknown = (input.decision_ids ?? []).filter((id) => !decisions.some((d) => d.id === id));
       if (unknown.length) return fail(422, `decision_ids: no such decision: ${unknown.join(", ")}`);
       Object.assign(o, { status: "held", notes: input.notes || null, decision_ids: decisions.map((d) => d.id) });
-    } else {
-      Object.assign(o, { status: "skipped", skip_reason: skipIn!.reason });
+      return reply("/v1/ritual-occurrences/{occurrence_id}/held", "post", occurrenceOut(ctx, r, o));
     }
-    return json(200, occurrenceOut(ctx, r, o));
+    Object.assign(o, { status: "skipped", skip_reason: skipIn!.reason });
+    return reply("/v1/ritual-occurrences/{occurrence_id}/skip", "post", occurrenceOut(ctx, r, o));
   }
   if (p.length === 4 && p[3] === "skip" && (m === "PATCH" || m === "DELETE")) {
     // As the API (rituals.service.edit_skip_reason, unskip): the owner's, on a skipped occurrence.
@@ -1085,12 +1087,12 @@ async function route(ctx: RitualsContext, db: RitualsDb, req: Request, p: string
     if (o.status !== "skipped") return fail(409, `This occurrence is ${o.status}`);
     if (m === "PATCH") {
       o.skip_reason = skipIn!.reason;
-    } else {
-      const missed = Date.parse(o.ends_at) + MISSED_AFTER_MS <= now().getTime();
-      Object.assign(o, { status: !o.pre_read.built_at ? "failed" : missed ? "missed" : "ready", skip_reason: null });
-      if (!o.pre_read.built_at) o.failed_at = now().toISOString();
+      return reply("/v1/ritual-occurrences/{occurrence_id}/skip", "patch", occurrenceOut(ctx, r, o));
     }
-    return json(200, occurrenceOut(ctx, r, o));
+    const missed = Date.parse(o.ends_at) + MISSED_AFTER_MS <= now().getTime();
+    Object.assign(o, { status: !o.pre_read.built_at ? "failed" : missed ? "missed" : "ready", skip_reason: null });
+    if (!o.pre_read.built_at) o.failed_at = now().toISOString();
+    return reply("/v1/ritual-occurrences/{occurrence_id}/skip", "delete", occurrenceOut(ctx, r, o));
   }
   if (isSummary) {
     // The API's order (oracle.rituals.summaries.on_demand): readiness, a run under way, a
@@ -1103,7 +1105,38 @@ async function route(ctx: RitualsContext, db: RitualsDb, req: Request, p: string
     if (special?.flow === "metrics_variance" && !ctx.openVariances?.(o.id)) return fail(409, "This review has no open unusual week to explain");
     const id = ctx.uuid();
     Object.assign(o, { summary_state: "running", summary_run_id: id, summary_reads: 0, summary_note: null });
-    return json(201, { id, flow: special?.flow ?? "ritual_summary", status: "running", estimate_usd: priceOf(r.kind) });
+    const flow = special?.flow ?? "ritual_summary";
+    const flow_title = flow === "metrics_variance" ? "Explain with Oracle" : flow === "competitive_digest" ? DIGEST.title : "Summarize with Oracle";
+    return reply(
+      "/v1/ritual-occurrences/{occurrence_id}/summary",
+      "post",
+      {
+        id,
+        flow,
+        flow_title,
+        status: "running",
+        estimate_usd: priceOf(r.kind),
+        spent_usd: 0,
+        created_at: now().toISOString(),
+        can_retry: false,
+        can_stop_cancelling: false,
+        can_retry_lookup: false,
+        cancel_again: [],
+        can_dismiss_overrun: false,
+        can_decide: false,
+        can_retry_import: false,
+        knobs: { depth: "quick", roles: {}, checkpoints: {}, goals: [], features: [] },
+        needs_approval: false,
+        runtime: "fake",
+        notes: [],
+        note_refs: [],
+        segments: [],
+        checkpoints: [],
+        token_read_only: false,
+        open_proposals: 0,
+      },
+      201,
+    );
   }
   return fail(404, "Route not found");
 }

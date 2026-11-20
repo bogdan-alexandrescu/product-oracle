@@ -6,6 +6,7 @@
 import type { Schemas } from "@/lib/api/client";
 
 import type { DocumentSeed } from "./fixtures";
+import { reply } from "./typed";
 
 type Finding = Schemas["StrategyFindingOut"];
 type Stack = Schemas["StrategyStackOut"];
@@ -234,13 +235,14 @@ export async function routeStrategy(db: StrategyDb | undefined, req: Request, p:
       high: rows.filter((f) => f.severity === "high").length,
       waived: empty.findings.filter((f) => f.status === "waived").length,
     };
-    return json(200, { ...empty.stack, counts });
+    return reply("/v1/strategy/stack", "get", { ...empty.stack, counts });
   }
   if (p[2] === "findings" && p.length === 3 && req.method === "GET") {
     const status = q.get("status") ?? "open";
     const kind = q.get("kind");
-    return json(
-      200,
+    return reply(
+      "/v1/strategy/findings",
+      "get",
       empty.findings.filter((f) => (!status || f.status === status) && (!kind || f.kind === kind)),
     );
   }
@@ -253,7 +255,7 @@ export async function routeStrategy(db: StrategyDb | undefined, req: Request, p:
     if (!reason) return json(422, { detail: "a waiver needs a reason" });
     if (f.status !== "open") return json(409, { detail: `The finding is ${f.status}` });
     Object.assign(f, { status: "waived", waived_at: new Date().toISOString(), waive_reason: reason });
-    return json(200, f);
+    return reply("/v1/strategy/findings/{finding_id}/waive", "post", f);
   }
   if (p[2] === "findings" && p[4] === "reopen" && req.method === "POST") {
     const f = empty.findings.find((x) => x.id === p[3]);
@@ -262,11 +264,11 @@ export async function routeStrategy(db: StrategyDb | undefined, req: Request, p:
     if (!needed.includes(role)) return json(403, { detail: `Requires the ${needed[0]} role` });
     if (f.status !== "waived") return json(409, { detail: `The finding is ${f.status}` });
     Object.assign(f, { status: "open", waived_by: null, waived_at: null, waive_reason: null });
-    return json(200, f);
+    return reply("/v1/strategy/findings/{finding_id}/reopen", "post", f);
   }
   if (p[2] === "check" && req.method === "POST") {
     if (role !== "owner") return json(403, { detail: "Requires the owner role" });
-    return json(200, { opened: 0, resolved: 0 });
+    return reply("/v1/strategy/check", "post", { opened: 0, resolved: 0 });
   }
   return json(404, { detail: "Route not found" });
 }

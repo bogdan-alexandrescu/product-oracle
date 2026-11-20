@@ -7,6 +7,7 @@ import type { Schemas } from "@/lib/api/client";
 
 import { mockSetting } from "./connections";
 import { newCompany } from "./ids";
+import { reply } from "./typed";
 
 type DecisionOut = Schemas["DecisionOut"];
 type Summary = Schemas["DecisionSummary"];
@@ -550,6 +551,26 @@ export function logMeetingDecision(
 }
 
 /**
+ * edit-decisions: a decision only Simple's sheet holds, as the API's DecisionOut (one decisions table in the
+ * API): the fields the sheet keeps, the rest as a fresh decision has them.
+ */
+export function sheetDecisionOut(
+  ctx: DecisionsContext,
+  db: DecisionsDb,
+  d: { id: string; number: number; title: string; origin: string; status: Row["status"]; approver_id: string; at: string; subjects: Row["subjects"]; chosen?: string; ask?: string | null; context?: string | null; review_at?: string | null; created_by?: string | null },
+): DecisionOut {
+  const decided = d.status === "decided";
+  const row = blank(ctx, db, {
+    title: d.title, origin: d.origin as Row["origin"], approver_id: d.approver_id, status: d.status,
+    question: d.ask ?? null, context: d.context ?? null, review_at: d.review_at ?? null, subjects: d.subjects,
+    chosen_option: decided ? (d.chosen ?? "decided") : null, decided_at: decided ? d.at : null,
+    decided_by: decided ? d.approver_id : null, decided_actor: decided ? "user" : null,
+    created_by: d.created_by ?? null, created_at: d.at,
+  });
+  return outOf(ctx, db, { ...row, id: d.id, number: d.number });
+}
+
+/**
  * H9 Decide (oracle.pricing.decide): the approved memo version's proposed decision, origin
  * pricing, the pricing owner its approver; the same one again on a repeat.
  */
@@ -628,8 +649,9 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
     rows.sort((a, b) => b.number - a.number);
     const offset = Number(q.get("offset") ?? 0);
     const limit = Number(q.get("limit") ?? 50);
-    return json(
-      200,
+    return reply(
+      "/v1/decisions",
+      "get",
       rows.slice(offset, offset + limit).map((d) => summaryOf(ctx, d)),
     );
   }
@@ -661,12 +683,13 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
       created_by: me.id,
     });
     db.decisions.push(row);
-    return json(201, outOf(ctx, db, row));
+    return reply("/v1/decisions", "post", outOf(ctx, db, row), 201);
   }
 
   if (p[2] === "people" && m === "GET") {
-    return json(
-      200,
+    return reply(
+      "/v1/decisions/people",
+      "get",
       ctx.members.filter((x) => x.status !== "disabled").map((x) => ({ id: x.id, email: x.email, role: x.role })),
     );
   }
@@ -674,7 +697,7 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
   const d = p[2] ? find(ctx, db, p[2]) : undefined;
   if (!d) return fail(404, `decision ${p[2]} not found`);
   const action = p[3];
-  if (!action && m === "GET") return json(200, outOf(ctx, db, d));
+  if (!action && m === "GET") return reply("/v1/decisions/{decision}", "get", outOf(ctx, db, d));
   const checkpoint = classOf(d) === "checkpoint";
   const touch = () => Object.assign(d, { lock_version: d.lock_version + 1, updated_at: ctx.now() });
   const name = emailOf(ctx, d.approver_id) ?? "its approver";
@@ -705,7 +728,7 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
     if (b.review_at !== undefined) d.review_at = b.review_at ?? null;
     if (b.prediction !== undefined) d.prediction = b.prediction ?? null;
     touch();
-    return json(200, outOf(ctx, db, d));
+    return reply("/v1/decisions/{decision}", "patch", outOf(ctx, db, d));
   }
 
   if (action === "decide" && m === "POST") {
@@ -756,7 +779,7 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
       if (original?.status === "decided") original.status = "superseded";
     }
     touch();
-    return json(200, outOf(ctx, db, d));
+    return reply("/v1/decisions/{decision}/decide", "post", outOf(ctx, db, d));
   }
 
   if (action === "reassign" && m === "POST") {
@@ -766,7 +789,7 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
     if (!activeApprover(ctx, b.approver_id)) return fail(422, "The approver must be an active member with the approver role or above");
     d.approver_id = b.approver_id;
     touch();
-    return json(200, outOf(ctx, db, d));
+    return reply("/v1/decisions/{decision}/reassign", "post", outOf(ctx, db, d));
   }
 
   if (action === "withdraw" && m === "POST") {
@@ -779,7 +802,7 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
     d.withdrawn_by = me.id;
     d.withdrawn_reason = (await body<Schemas["WithdrawIn"]>()).reason.trim();
     touch();
-    return json(200, outOf(ctx, db, d));
+    return reply("/v1/decisions/{decision}/withdraw", "post", outOf(ctx, db, d));
   }
 
   if (action === "reviews" && m === "POST") {
@@ -843,7 +866,7 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
     }
     db.reviews.push(row);
     touch();
-    return json(200, outOf(ctx, db, d));
+    return reply("/v1/decisions/{decision}/reviews", "post", outOf(ctx, db, d));
   }
 
   if (action === "options-job" && m === "POST") {
@@ -878,7 +901,7 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
       started_at: at,
       finished_at: at,
     };
-    return json(201, job);
+    return reply("/v1/decisions/{decision}/options-job", "post", job, 201);
   }
   return fail(404, "Route not found");
 }

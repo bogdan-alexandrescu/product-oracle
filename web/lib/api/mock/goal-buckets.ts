@@ -10,6 +10,7 @@ import { MOCK_SCENARIO_KEY, stableUuid } from "./ids";
 import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashedSimple, type TrashEntryRow } from "./trash";
 import { planGoalNames, planSlices } from "./simple-plan";
 import { GOALS, goalId, goalParentKey, goalPositionOf, linkOf, goalRank, goalInTrash, keptTarget, roadmapGoal, storedUnit, roadmapGoalKey, roadmapGoalSeed, targetRead, writeRoadmapGoal, type RoadmapGoalFields } from "./simple-roadmap";
+import { reply } from "./typed";
 
 // trash-features-goals: `trashed` while in Settings › Trash (left out of every read, kept for Restore).
 // `key`: the Entity.key the API gives a goal at creation (goal_buckets._slug), named in its Trash entry.
@@ -345,7 +346,7 @@ export function placeBucketGoals(db: GoalBucketsDb, baseline: { key: string; typ
  * Ground Truth's goals): its attrs.position is its place in the one goal order, and the Ground Truth's goal
  * of the same key takes it too, so every page follows. Approvers and owners, as the API.
  */
-export async function placeBucketGoal(simple: { goal_buckets?: GoalBucketsDb }, role: string, req: Request, p: string[], baseline: { id?: string; key: string; type: string; attrs?: Record<string, unknown> | null }[]): Promise<Response | null> {
+export async function placeBucketGoal(simple: { goal_buckets?: GoalBucketsDb }, role: string, req: Request, p: string[], baseline: Omit<Schemas["EntityOut"], "evidence_count">[]): Promise<Response | null> {
   if (p[1] !== "baseline" || p[2] !== "entities" || !p[3] || p[4] || req.method !== "PATCH") return null;
   const g = simple.goal_buckets?.goals.find((x) => x.id === p[3]);
   if (!g) return null;
@@ -357,7 +358,23 @@ export async function placeBucketGoal(simple: { goal_buckets?: GoalBucketsDb }, 
   // goal-map-editing: or the Ground Truth goal of the same id (goal-ladder's goals are both).
   const e = baseline.find((x) => x.type === "goal" && (x.key === orderKey(g) || x.id === g.id));
   if (e) e.attrs = { ...e.attrs, position: g.position };
-  return json(200, { applied: true, entity: { id: g.id, type: "goal", key: orderKey(g), title: g.title, status: g.archived ? "rejected" : "confirmed", attrs: { ...(e?.attrs ?? {}), position: g.position } }, proposal: null });
+  const stamp = new Date().toISOString();
+  const entity: Schemas["EntityOut"] = {
+    origin: "user",
+    locked: false,
+    created_at: stamp,
+    updated_at: stamp,
+    ...e,
+    id: g.id,
+    type: "goal",
+    key: orderKey(g),
+    title: g.title,
+    status: g.archived ? "rejected" : "confirmed",
+    attrs: { ...(e?.attrs ?? {}), position: g.position },
+    evidence_count: 0,
+    position: g.position,
+  };
+  return reply("/v1/baseline/entities/{entity_id}", "patch", { applied: true, entity, proposal: null });
 }
 /** trash-features-goals (oracle.simple.trash_items): Settings › Trash and who writes there;
  * `propose`: a commenter's goal delete as a `delete_goal` change (./simple-changes.ts). */
@@ -367,7 +384,7 @@ export type GoalBucketsTrash = {
   name: string | null;
   now: () => string;
   people?: GoalPeople;
-  propose?: (goal: { id: string; title: string }, to: string | null, reason: string | null) => unknown;
+  propose?: (goal: { id: string; title: string }, to: string | null, reason: string | null) => Schemas["SimpleChangeOut"] | Response | undefined;
   /** every-field: why the restore is refused (trash_items.before_restore, which every restore goes through), else null. */
   refuseRestore?: (entry: TrashEntryRow) => string | null;
 };
@@ -496,7 +513,7 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb; g
   const db = goalBucketsDb(simple, people);
   const edits = role === "owner" || role === "approver";
   const m = req.method;
-  if (!p[3] && m === "GET") return json(200, out(db, edits, people));
+  if (!p[3] && m === "GET") return reply("/v1/simple/goal-buckets", "get", out(db, edits, people));
   // trash-features-goals: a goal's restore, by an owner or whoever deleted it (mayRestore).
   if (bin && p[3] === "goals" && p[4] && p[5] === "restore" && m === "POST") {
     if (role === "viewer") return json(403, { detail: "Requires the commenter role" });
@@ -508,7 +525,7 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb; g
     const refused = bin.refuseRestore?.(entry) ?? null;
     if (refused) return json(409, { detail: refused });
     // As Trash's Restore (trash_items.after_restore): the roadmap's items get the goals the delete moved back.
-    return json(200, restoreFromTrash(bin.trash, entry, bin.now(), { ...(simple as TrashedSimple), items: (simple as Partial<TrashedSimple>).items ?? [], goal_buckets: db }, bin.id));
+    return reply("/v1/simple/goal-buckets/goals/{goal_id}/restore", "post", restoreFromTrash(bin.trash, entry, bin.now(), { ...(simple as TrashedSimple), items: (simple as Partial<TrashedSimple>).items ?? [], goal_buckets: db }, bin.id));
   }
   // trash-features-goals: DELETE .../goals/{id}?to_goal_id=: approvers and owners delete it (and
   // restore it); a commenter proposes it to the owners; viewers are refused.
@@ -523,11 +540,11 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb; g
       const change = bin.propose?.(g, to, q.get("reason"));
       if (!change) return json(403, { detail: "Requires the approver role" });
       if (change instanceof Response) return change;
-      return json(200, { entry: null, change, can_restore: false });
+      return reply("/v1/simple/goal-buckets/goals/{goal_id}", "delete", { entry: null, change, can_restore: false });
     }
     const row = trashGoal(db, bin, g.id, to, q.get("reason"), simple as { changes?: [] });
     if (row instanceof Response) return row;
-    return json(200, { entry: entryOut(row, row.out.deleted_at, true), change: null, can_restore: true });
+    return reply("/v1/simple/goal-buckets/goals/{goal_id}", "delete", { entry: entryOut(row, row.out.deleted_at, true), change: null, can_restore: true });
   }
   if (!edits) return json(403, { detail: "Requires the approver role" });
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
@@ -539,7 +556,7 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb; g
     const order = Math.max(0, ...db.goals.filter((g) => !g.archived && !g.trashed).map((g) => g.order)) + 1;
     const g: Goal = { id: crypto.randomUUID(), key: keyOf(b.title!.trim()), title: b.title!.trim(), order, measure: b.measure!.trim(), target: b.target!.trim(), due: b.due!, archived: false, owner_id: owner.id };
     db.goals.push(g);
-    return json(201, { goal: goalOut(g, people), undo: signed({ goals: [], features: [], added_goal_id: g.id }) });
+    return reply("/v1/simple/goal-buckets/goals", "post", { goal: goalOut(g, people), undo: signed({ goals: [], features: [], added_goal_id: g.id }) }, 201);
   }
   if (p[3] === "goals" && p[4] && !p[5] && m === "PATCH") {
     // one-feature-panel: a roadmap item's goal is edited here too, as its goal bucket when it has one (the API's one goal entity).
@@ -568,7 +585,7 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb; g
       writeRoadmapGoal(simple, key!, now);
       const onRoadmap = (b as { on_roadmap?: boolean | null }).on_roadmap;
       if (onRoadmap != null) shown[key!] = onRoadmap;
-      return json(200, { goal: { id: p[4], title: now.title, order: 1, measure: now.metric, target: now.target, due: now.due, can_edit: true, on_roadmap: shown[key!] ?? true }, undo });
+      return reply("/v1/simple/goal-buckets/goals/{goal_id}", "patch", { goal: { id: p[4], title: now.title, order: 1, measure: now.metric, target: now.target, due: now.due, can_edit: true, on_roadmap: shown[key!] ?? true }, undo });
     }
     const owner = ownerIn(b, people);
     if (!owner.ok) return json(422, { detail: "Pick a member as its owner" });
@@ -577,18 +594,18 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb; g
     if (owner.set) g.owner_id = owner.id;
     const onRoadmap = (b as { on_roadmap?: boolean | null }).on_roadmap;
     if (onRoadmap != null) g.on_roadmap = onRoadmap;
-    return json(200, { goal: { ...goalOut(g, people), id: p[4] }, undo });
+    return reply("/v1/simple/goal-buckets/goals/{goal_id}", "patch", { goal: { ...goalOut(g, people), id: p[4] }, undo });
   }
   if (p[3] === "goals" && p[5] === "archive" && m === "POST") {
     const undo = archiveGoal(db, p[4], (body.to_goal_id as string | null | undefined) ?? null, bin?.now() ?? new Date().toISOString(), simple as { items?: ItemGoals[]; ids?: Record<string, string> });
     if (undo instanceof Response) return undo;
-    return json(200, { goal: null, undo });
+    return reply("/v1/simple/goal-buckets/goals/{goal_id}/archive", "post", { goal: null, undo });
   }
   // edit-goals-prds EG1: Restore an archived goal to the buckets, with Undo.
   if (p[3] === "goals" && p[5] === "unarchive" && m === "POST") {
     const done = unarchiveGoal(db, p[4]);
     if (done instanceof Response) return done;
-    return json(200, { goal: goalOut(done.g, people), undo: done.undo });
+    return reply("/v1/simple/goal-buckets/goals/{goal_id}/unarchive", "post", { goal: goalOut(done.g, people), undo: done.undo });
   }
   if (p[3] === "features" && p[5] === "move" && m === "POST") {
     const f = db.features.find((x) => x.id === p[4]);
@@ -600,7 +617,7 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb; g
     touchFeature(db, f.id);
     // The goal it is dropped on gets its contribution set (the API's TOP): no longer assumed.
     f.assumed_goal_ids = f.assumed_goal_ids?.filter((x) => x !== to && x !== body.from_goal_id);
-    return json(200, { goal: null, undo });
+    return reply("/v1/simple/goal-buckets/features/{feature_id}/move", "post", { goal: null, undo });
   }
   if (p[3] === "undo" && m === "POST") {
     const u = body as unknown as Undo;
@@ -635,7 +652,7 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb; g
       const g = db.goals.find((x) => x.id === u.added_goal_id);
       if (g) g.archived = true;
     }
-    return json(200, out(db, edits, people));
+    return reply("/v1/simple/goal-buckets/undo", "post", out(db, edits, people));
   }
   return null;
 }

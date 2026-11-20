@@ -14,6 +14,7 @@
 import type { Schemas } from "@/lib/api/client";
 
 import { mockConnectionProvider, mockSettingValue } from "./connections";
+import { reply } from "./typed";
 
 type Meeting = Schemas["FirefliesMeetingOut"];
 
@@ -139,13 +140,13 @@ export async function routeFirefliesBrowse(p: string[], q: URLSearchParams): Pro
     const skip = Number(q.get("cursor") ?? 0);
     if (skip > 0) await new Promise((r) => setTimeout(r, ALL_HANDS_PAGE_MS));
     const found = ALL_HANDS.filter((m) => inRange(m, q));
-    return json(200, { meetings: found.slice(skip, skip + PAGE), next_cursor: skip + PAGE < found.length ? String(skip + PAGE) : null });
+    return reply("/v1/connections/{connection_id}/fireflies/meetings", "get", { meetings: found.slice(skip, skip + PAGE), next_cursor: skip + PAGE < found.length ? String(skip + PAGE) : null });
   }
   if (p[4] === "meetings") {
     const found = search ? rows.filter((m) => m.title.toLowerCase().includes(search)) : rows;
     const skip = Number(q.get("cursor") ?? 0);
     const page = found.slice(skip, skip + PAGE);
-    return json(200, { meetings: page, next_cursor: skip + PAGE < found.length ? String(skip + PAGE) : null });
+    return reply("/v1/connections/{connection_id}/fireflies/meetings", "get", { meetings: page, next_cursor: skip + PAGE < found.length ? String(skip + PAGE) : null });
   }
   if (p[4] === "series") {
     const truncated = q.get("from") === SERIES_CUT_FROM;
@@ -170,7 +171,7 @@ export async function routeFirefliesBrowse(p: string[], q: URLSearchParams): Pro
         .filter((m) => m.series_key !== g.key && m.series_title.toLowerCase() === g.title.toLowerCase())
         .map((m) => ({ id: m.id, title: m.title, date: m.date }));
     }
-    return json(200, { series: [...groups.values()], truncated, scanned: truncated ? SERIES_CAP : rows.length });
+    return reply("/v1/connections/{connection_id}/fireflies/series", "get", { series: [...groups.values()], truncated, scanned: truncated ? SERIES_CAP : rows.length });
   }
   return json(404, { detail: "Route not found" });
 }

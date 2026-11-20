@@ -4,6 +4,7 @@
  * same thing here as on every other screen.
  */
 import { mockFetch } from "@/lib/api/mock/server";
+import { reply } from "@/lib/api/mock/typed";
 
 export const MOCK_CONSENT = {
   client_id: "pocl_mock-example-agent",
@@ -36,7 +37,7 @@ export async function consentMockFetch(req: Request): Promise<Response> {
   const readOnly = handle === MOCK_HANDLES.readOnly;
 
   if (url.pathname === "/oauth/authorize/request") {
-    return json(200, {
+    return reply("/oauth/authorize/request", "get", {
       client_id: MOCK_CONSENT.client_id,
       client_name: MOCK_CONSENT.client_name,
       redirect_uri: MOCK_CONSENT.redirect_uri,
@@ -57,7 +58,7 @@ export async function consentMockFetch(req: Request): Promise<Response> {
     if (decision.approve) back.searchParams.set("code", "poc_mock-code");
     else back.searchParams.set("error", "access_denied");
     back.searchParams.set("state", MOCK_CONSENT.state);
-    return json(200, { redirect_to: back.toString() });
+    return reply("/oauth/authorize/decision", "post", { redirect_to: back.toString() });
   }
   return json(404, { detail: "Route not found" });
 }

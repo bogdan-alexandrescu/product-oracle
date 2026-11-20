@@ -14,6 +14,7 @@ import { calibration } from "./quality";
 import { cannotApproveNow, refreshOrderGoals } from "./runs";
 
 import type { Db, DocumentRow, VersionRow } from "./server";
+import { reply } from "./typed";
 
 type Method = Schemas["PriorityRanking"]["method"];
 type Kind = "prd" | "roadmap";
@@ -823,7 +824,7 @@ function createOverride(st: LaneFState, me: string, input: Schemas["OverrideCrea
     no_longer_applies: false,
   };
   st.overrides.push(out);
-  return json(201, { ...out, preview_rank: row.rank, held_below: row.held_below ?? null });
+  return reply("/v1/priorities/overrides", "post", { ...out, preview_rank: row.rank, held_below: row.held_below ?? null }, 201);
 }
 
 /** Handles /v1/priorities/overrides[/{id}]. */
@@ -833,8 +834,9 @@ async function overridesRoute(st: LaneFState, me: string, req: Request, p: strin
   if (p.length === 3 && m === "GET") {
     const all = q.get("include_removed") === "true";
     const limit = Math.min(Number(q.get("limit") ?? 50) || 50, 200);
-    return json(
-      200,
+    return reply(
+      "/v1/priorities/overrides",
+      "get",
       st.overrides
         .filter((o) => all || !o.removed_at)
         .sort((a, b) => b.created_at.localeCompare(a.created_at))
@@ -854,7 +856,7 @@ async function overridesRoute(st: LaneFState, me: string, req: Request, p: strin
       removed_by: { id: me, name: me },
       removed_reason: input?.reason?.trim() || null,
     });
-    return json(200, o);
+    return reply("/v1/priorities/overrides/{override_id}", "delete", o);
   }
   return notFound("Route");
 }
@@ -1794,7 +1796,7 @@ function recommend(st: LaneFState, input: Schemas["RecommendIn"]): Response {
     [themeKey, themeReason] = [themes[0].key, "The first available theme."];
   }
   const theme = themes.find((t) => t.key === themeKey);
-  return json(200, {
+  return reply("/v1/drafts/recommend", "post", {
     kind,
     template: templateOption(template),
     reason,
@@ -1934,16 +1936,21 @@ function startDraft(db: Db, st: LaneFState, input: Schemas["StartDraftIn"], who?
   };
   db.documents.push(doc);
   db.versions.push(v);
-  return json(201, {
-    document_id: doc.id,
-    slug,
-    title,
-    kind: input.kind,
-    template: t.key,
-    template_version: tv.version,
-    theme: input.theme ?? null,
-    version: 1,
-  } satisfies Schemas["StartDraftOut"]);
+  return reply(
+    "/v1/drafts",
+    "post",
+    {
+      document_id: doc.id,
+      slug,
+      title,
+      kind: input.kind,
+      template: t.key,
+      template_version: tv.version,
+      theme: input.theme ?? null,
+      version: 1,
+    } satisfies Schemas["StartDraftOut"],
+    201,
+  );
 }
 
 // ---------------------------------------------------------------- state + routing
@@ -2133,7 +2140,7 @@ export async function laneF(
       const people = q.get("overrides") !== "false";
       const goals = db.baseline.entities.filter((e) => e.type === "goal").map((e) => [e.id, e.title]);
       const track = calibration(db.quality, Object.fromEntries(goals));
-      return json(200, goalTitles(db, applyOverrides(ranking(method, track, st.extraFeatures), people ? overrideInputs(st.overrides ?? []) : []), scenario));
+      return reply("/v1/priorities", "get", goalTitles(db, applyOverrides(ranking(method, track, st.extraFeatures), people ? overrideInputs(st.overrides ?? []) : []), scenario));
     }
     if (p[2] === "overrides") return overridesRoute(st, db.session ?? "someone", req, p, m);
     if (p[2] === "snapshots") {
@@ -2143,8 +2150,9 @@ export async function laneF(
       if (!["saved", "proposed", "discarded", "all"].includes(status)) return json(422, { detail: `unknown status '${status}'` });
       const shown = (s: SnapshotRow) => status === "all" || (s.status ?? "saved") === status;
       if (p.length === 3 && m === "GET") {
-        return json(
-          200,
+        return reply(
+          "/v1/priorities/snapshots",
+          "get",
           all()
             .filter(shown)
             .sort((a, b) => b.created_at.localeCompare(a.created_at))
@@ -2173,15 +2181,15 @@ export async function laneF(
           ranking: r.features,
         };
         st.snapshots.push(snap);
-        return json(201, snap);
+        return reply("/v1/priorities/snapshots", "post", snap, 201);
       }
       if (p.length === 4 && m === "GET") {
         const snap = all().find((s) => s.id === p[3] && shown(s));
-        return snap ? json(200, snap) : notFound("Snapshot");
+        return snap ? reply("/v1/priorities/snapshots/{snapshot_id}", "get", snap) : notFound("Snapshot");
       }
       if (p.length === 5 && p[4] === "compare" && m === "GET") {
         const snap = all().find((s) => s.id === p[3]);
-        return snap ? json(200, compare(db, snap)) : notFound("priority snapshot");
+        return snap ? reply("/v1/priorities/snapshots/{snapshot_id}/compare", "get", compare(db, snap)) : notFound("priority snapshot");
       }
     }
     return notFound("Route");
@@ -2191,8 +2199,9 @@ export async function laneF(
     if (p.length === 2 && m === "GET") {
       const kind = q.get("kind");
       const archived = q.get("include_archived") === "true";
-      return json(
-        200,
+      return reply(
+        "/v1/templates",
+        "get",
         st.templates
           .filter((t) => (!kind || t.kind === kind) && (archived || !t.archived_at))
           .map(templateSummary),
@@ -2221,12 +2230,12 @@ export async function laneF(
         versions: [newVersion(1, input.body, input.required_sections, db.user_id)],
       };
       st.templates.push(t);
-      return json(201, templateOut(t));
+      return reply("/v1/templates", "post", templateOut(t), 201);
     }
     if (p[2] === "validate" && m === "POST") {
       const input = await body<Schemas["TemplateValidateIn"]>();
       const c = checkTemplate(input.body ?? "", input.required_sections, new Set(st.themes.map((t) => t.key)));
-      return json(200, {
+      return reply("/v1/templates/validate", "post", {
         valid: c.valid,
         problems: c.problems,
         warnings: c.warnings,
@@ -2238,18 +2247,18 @@ export async function laneF(
     }
     const t = st.templates.find((x) => x.key === p[2]);
     if (!t) return notFound("Template");
-    if (p.length === 3 && m === "GET") return json(200, templateOut(t));
+    if (p.length === 3 && m === "GET") return reply("/v1/templates/{key}", "get", templateOut(t));
     if (p.length === 3 && m === "DELETE") {
       t.archived_at ??= now();
-      return json(200, templateOut(t));
+      return reply("/v1/templates/{key}", "delete", templateOut(t));
     }
     if (p[3] === "restore" && m === "POST") {
       t.archived_at = null;
-      return json(200, templateOut(t));
+      return reply("/v1/templates/{key}/restore", "post", templateOut(t));
     }
     if (p[3] === "versions" && p[4] && m === "GET") {
       const v = t.versions.find((x) => x.version === Number(p[4]));
-      return v ? json(200, v) : notFound("Template version");
+      return v ? reply("/v1/templates/{key}/versions/{n}", "get", v) : notFound("Template version");
     }
     if (p.length === 3 && m === "PATCH") {
       const input = await body<Schemas["TemplateUpdate"]>();
@@ -2263,7 +2272,7 @@ export async function laneF(
       }
       if (input.name != null) t.name = input.name;
       if (input.description !== undefined) t.description = input.description;
-      return json(200, templateOut(t));
+      return reply("/v1/templates/{key}", "patch", templateOut(t));
     }
     return notFound("Route");
   }
@@ -2272,8 +2281,9 @@ export async function laneF(
     if (p.length === 2 && m === "GET") {
       const kind = q.get("kind");
       const archived = q.get("include_archived") === "true";
-      return json(
-        200,
+      return reply(
+        "/v1/themes",
+        "get",
         st.themes.filter((t) => (!kind || t.kind === kind || t.kind === "any") && (archived || !t.archived_at)),
       );
     }
@@ -2304,12 +2314,12 @@ export async function laneF(
         updated_at: now(),
       };
       st.themes.push(t);
-      return json(201, t);
+      return reply("/v1/themes", "post", t, 201);
     }
     if (p[2] === "validate" && m === "POST") {
       const input = await body<Schemas["ThemeValidateIn"]>();
       const problems = checkTheme(input.tokens, input.css ?? "", input.slide_css);
-      return json(200, { valid: problems.length === 0, problems } satisfies Schemas["ThemeValidateOut"]);
+      return reply("/v1/themes/validate", "post", { valid: problems.length === 0, problems } satisfies Schemas["ThemeValidateOut"]);
     }
     if (p[2] === "preview" && m === "POST") {
       const input = await body<Schemas["ThemePreviewIn"]>();
@@ -2324,14 +2334,14 @@ export async function laneF(
     }
     const t = st.themes.find((x) => x.key === p[2]);
     if (!t) return notFound("Theme");
-    if (p.length === 3 && m === "GET") return json(200, t);
+    if (p.length === 3 && m === "GET") return reply("/v1/themes/{key}", "get", t);
     if (p.length === 3 && m === "DELETE") {
       t.archived_at ??= now();
-      return json(200, t);
+      return reply("/v1/themes/{key}", "delete", t);
     }
     if (p[3] === "restore" && m === "POST") {
       t.archived_at = null;
-      return json(200, t);
+      return reply("/v1/themes/{key}/restore", "post", t);
     }
     if (p.length === 3 && m === "PATCH") {
       const input = await body<Schemas["ThemeUpdate"]>();
@@ -2357,7 +2367,7 @@ export async function laneF(
         description: input.description !== undefined ? input.description : t.description,
         updated_at: now(),
       });
-      return json(200, t);
+      return reply("/v1/themes/{key}", "patch", t);
     }
     return notFound("Route");
   }
@@ -2365,7 +2375,7 @@ export async function laneF(
   // drafts
   if (p[2] === "recommend" && m === "POST") return recommend(st, await body<Schemas["RecommendIn"]>());
   if (p[2] === "defaults") {
-    if (m === "GET") return json(200, st.defaults);
+    if (m === "GET") return reply("/v1/drafts/defaults", "get", st.defaults);
     if (m === "PUT") {
       const input = await body<Schemas["DraftDefaults"]>();
       const problems: Problem[] = [];
@@ -2382,7 +2392,7 @@ export async function laneF(
       if (problems.length) return json(422, { detail: "defaults rejected", problems });
       // As the API does: the body replaces the setting (send both kinds to keep both).
       st.defaults = Object.fromEntries(Object.entries(input ?? {}).filter(([, v]) => v != null));
-      return json(200, st.defaults);
+      return reply("/v1/drafts/defaults", "put", st.defaults);
     }
   }
   if (p.length === 2 && m === "POST") {

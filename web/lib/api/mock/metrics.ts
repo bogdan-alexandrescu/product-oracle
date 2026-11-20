@@ -11,6 +11,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { addDays, calendarDay, dayIn } from "@/lib/dates";
 import { mockName as displayName } from "./people";
+import { reply } from "./typed";
 
 type MetricOut = Schemas["MetricOut"];
 type VarianceOut = Schemas["VarianceOut"];
@@ -315,19 +316,20 @@ export async function routeMetrics(ctx: MetricsContext, db: MetricsDb, req: Requ
     } else if (m === "DELETE") {
       db.analytics = null;
       for (const x of db.metrics) if (x.source === "posthog" && x.status !== "archived") Object.assign(x, { status: "paused", last_error: "Analytics disconnected" });
-      return new Response(null, { status: 204 });
+      return reply("/v1/company-integrations/analytics", "delete", undefined, 204);
     } else if (m !== "GET") return fail(405, "Method not allowed");
     const a = db.analytics;
-    return json(200, {
+    const out = {
       provider: "posthog", host: a?.host ?? null, project_id: a?.project_id ?? null, status: a ? "active" : "disconnected", last_error: null,
       connected_by_name: a ? nameOf(ctx, a.connected_by) : null, connected_at: a?.connected_at ?? null, metrics: posthogCount(),
-    } satisfies Schemas["AnalyticsOut"]); // prettier-ignore
+    } satisfies Schemas["AnalyticsOut"]; // prettier-ignore
+    return m === "PUT" ? reply("/v1/company-integrations/analytics", "put", out) : reply("/v1/company-integrations/analytics", "get", out);
   }
 
   if (p[1] === "metrics") {
     if (p.length === 2 && m === "GET") {
       const all = q.get("include_archived") === "true";
-      return json(200, ordered(db.metrics.filter((x) => all || x.status !== "archived")).map((x) => metricOut(ctx, db, x)));
+      return reply("/v1/metrics", "get", ordered(db.metrics.filter((x) => all || x.status !== "archived")).map((x) => metricOut(ctx, db, x)));
     }
     if (p.length === 2 && m === "POST") {
       if (!approver) return notApprover();
@@ -350,15 +352,15 @@ export async function routeMetrics(ctx: MetricsContext, db: MetricsDb, req: Requ
           db.values.push({ ...v, metric_id: x.id, source: "posthog", definition_version: 1, note: null, recorded_by: null, recorded_at: t });
           toGoal(ctx, x, v.week_start, v.value);
         }
-      return json(201, metricOut(ctx, db, x));
+      return reply("/v1/metrics", "post", metricOut(ctx, db, x), 201);
     }
     if (p[2] === "test" && p.length === 3 && m === "POST") {
       if (!approver) return notApprover();
       const { query } = await body<{ query: string }>();
       if (!db.analytics) return fail(409, "Connect PostHog in Settings › Analytics first");
       if (!query?.trim() || query.length > MAX_QUERY) return fail(422, "The query is 1 to 4,000 characters");
-      if (!/\bselect\b/i.test(query)) return json(200, { values: [], error: "HogQL: the query must start with SELECT" });
-      return json(200, { values: readQuery(query, week, 4), error: null });
+      if (!/\bselect\b/i.test(query)) return reply("/v1/metrics/test", "post", { values: [], error: "HogQL: the query must start with SELECT" });
+      return reply("/v1/metrics/test", "post", { values: readQuery(query, week, 4), error: null });
     }
     const x = db.metrics.find((y) => y.id === p[2]);
     if (!x) return fail(404, "Metric not found");
@@ -369,7 +371,7 @@ export async function routeMetrics(ctx: MetricsContext, db: MetricsDb, req: Requ
         .slice(-52)
         .map(valueOut);
       const variances = db.variances.filter((v) => v.metric_id === x.id).sort((a, b) => b.week_start.localeCompare(a.week_start)).map((v) => varianceOut(ctx, db, v));
-      return json(200, { ...metricOut(ctx, db, x), values, variances, definitions: x.definitions });
+      return reply("/v1/metrics/{metric_id}", "get", { ...metricOut(ctx, db, x), values, variances, definitions: x.definitions });
     }
     if (p.length === 3 && m === "PATCH") {
       if (!approver) return notApprover();
@@ -383,12 +385,13 @@ export async function routeMetrics(ctx: MetricsContext, db: MetricsDb, req: Requ
         next.definitions = [...x.definitions, { version: next.definition_version, unit: next.unit, query: next.query, at: now().toISOString() }];
       }
       Object.assign(x, next, { lock_version: x.lock_version + 1 });
-      return json(200, metricOut(ctx, db, x));
+      return reply("/v1/metrics/{metric_id}", "patch", metricOut(ctx, db, x));
     }
     if (p.length === 4 && m === "POST" && (p[3] === "archive" || p[3] === "restore")) {
       if (!approver) return notApprover();
       Object.assign(x, { status: p[3] === "archive" ? "archived" : "active", lock_version: x.lock_version + 1 });
-      return json(200, metricOut(ctx, db, x));
+      const out = metricOut(ctx, db, x);
+      return p[3] === "archive" ? reply("/v1/metrics/{metric_id}/archive", "post", out) : reply("/v1/metrics/{metric_id}/restore", "post", out);
     }
     if (p.length === 4 && m === "POST" && p[3] === "pull") {
       if (!approver) return notApprover();
@@ -399,7 +402,7 @@ export async function routeMetrics(ctx: MetricsContext, db: MetricsDb, req: Requ
       db.values.push({ ...v, metric_id: x.id, source: "posthog", definition_version: x.definition_version, note: null, recorded_by: null, recorded_at: now().toISOString() });
       toGoal(ctx, x, week, v.value);
       Object.assign(x, { status: "active", last_error: null, last_pulled_at: now().toISOString() });
-      return json(200, metricOut(ctx, db, x));
+      return reply("/v1/metrics/{metric_id}/pull", "post", metricOut(ctx, db, x));
     }
     if (p.length === 5 && p[3] === "values") {
       const day = p[4];
@@ -413,13 +416,13 @@ export async function routeMetrics(ctx: MetricsContext, db: MetricsDb, req: Requ
         const row: Value = { metric_id: x.id, week_start: day, value: input.value, source: x.source, definition_version: x.definition_version, note: input.note ?? null, recorded_by: ctx.me.id, recorded_at: now().toISOString() };
         db.values.push(row);
         toGoal(ctx, x, day, input.value);
-        return json(200, valueOut(row));
+        return reply("/v1/metrics/{metric_id}/values/{week_start}", "put", valueOut(row));
       }
       if (m === "DELETE") {
         if (!approver) return notApprover();
         db.values = db.values.filter((y) => !(y.metric_id === x.id && y.week_start === day));
         toGoal(ctx, x, day, null);
-        return new Response(null, { status: 204 });
+        return reply("/v1/metrics/{metric_id}/values/{week_start}", "delete", undefined, 204);
       }
     }
     return fail(404, "Route not found");
@@ -429,8 +432,9 @@ export async function routeMetrics(ctx: MetricsContext, db: MetricsDb, req: Requ
   if (p.length === 2 && m === "GET") {
     const status = q.get("status");
     const metric = q.get("metric_id");
-    return json(
-      200,
+    return reply(
+      "/v1/metric-variances",
+      "get",
       db.variances
         .filter((v) => (!status || v.status === status) && (!metric || v.metric_id === metric))
         .sort((a, b) => b.week_start.localeCompare(a.week_start))
@@ -461,5 +465,8 @@ export async function routeMetrics(ctx: MetricsContext, db: MetricsDb, req: Requ
     } else return fail(404, "Route not found");
   }
   v.lock_version += 1;
-  return json(200, varianceOut(ctx, db, v));
+  const out = varianceOut(ctx, db, v);
+  if (p[3] === "noise") return reply("/v1/metric-variances/{variance_id}/noise", "post", out);
+  if (p[3] === "explain") return reply("/v1/metric-variances/{variance_id}/explain", "post", out);
+  return reply("/v1/metric-variances/{variance_id}/unknown", "post", out);
 }

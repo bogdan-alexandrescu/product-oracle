@@ -14,6 +14,7 @@
 
 import type { Schemas } from "@/lib/api/client";
 import { MOCK_NOW } from "./clock";
+import { reply } from "./typed";
 import * as fd from "./fit-date-engine";
 import { PLAN_HARD_TARGET, PLAN_TARGET } from "./fit-date-engine";
 import plan from "./fit-date-plan.json";
@@ -200,10 +201,10 @@ export async function routeFitDate(scenario: string | null, role: string, req: R
   const one = p[2] === "prds" && p[4] === "fit-date";
   if (!list && !one) return null;
   const on = (FIT_SCENARIOS as readonly string[]).includes(scenario ?? "");
-  if (list) return json(200, on ? [goal((state ??= fresh(scenario)))] : []);
+  if (list) return reply("/v1/simple/fit-date", "get", on ? [goal((state ??= fresh(scenario)))] : []);
   if (!on || (p[3] !== PRD.slug && p[3] !== PRD.id)) return json(404, { detail: "No such PRD" });
   const s = (state ??= fresh(scenario));
-  if (req.method === "GET" && p.length === 5) return json(200, answer(s, role));
+  if (req.method === "GET" && p.length === 5) return reply("/v1/simple/prds/{prd}/fit-date", "get", answer(s, role));
   if (req.method !== "POST") return null;
   const body = JSON.parse((await req.text()) || "{}") as Schemas["FitPicksIn"];
   const picks = body.picks;
@@ -212,10 +213,10 @@ export async function routeFitDate(scenario: string | null, role: string, req: R
     // The milestone's date with these changes picked: the capacity queue (the API's fit_date_live).
     const after = fd.apply(plan, picks);
     const date = fd.schedule(after).milestones[plan.milestone];
-    return json(200, { date, target: plan.target, over_days: fd.gap(date, plan.target), pw_saved: fd.pwSaved(plan, after), picks });
+    return reply("/v1/simple/prds/{prd}/fit-date/live", "post", { date, target: plan.target, over_days: fd.gap(date, plan.target), pw_saved: fd.pwSaved(plan, after), picks });
   }
   if (!APPROVERS.has(role)) return json(403, { detail: "Only approvers can change the plan." });
-  if (p[5] === "draft") return json(200, draft(s, picks));
+  if (p[5] === "draft") return reply("/v1/simple/prds/{prd}/fit-date/draft", "post", draft(s, picks));
   if (p[5] === "approve") {
     const d = draft(s, picks);
     if (d.changes.length === 0) return json(422, { detail: "Pick at least one change." });
@@ -239,7 +240,7 @@ export async function routeFitDate(scenario: string | null, role: string, req: R
       was, date: d.date, target: s.target,
       moves: d.dates.filter((m) => m.what !== `${plan.milestone} target`).map((m) => `${m.what}: ${words(m.after ?? null)}`),
     };
-    return json(200, { prd: PRD, version: s.version, date: d.date, target: s.target, approved_at: s.approved.at, needs_estimate: d.needs_estimate, roadmap_version: s.roadmapVersion, roadmap_live: live, roadmap_decider: live ? null : DECIDER });
+    return reply("/v1/simple/prds/{prd}/fit-date/approve", "post", { prd: PRD, version: s.version, date: d.date, target: s.target, approved_at: s.approved.at, needs_estimate: d.needs_estimate, roadmap_version: s.roadmapVersion, roadmap_live: live, roadmap_decider: live ? null : DECIDER });
   }
   return null;
 }

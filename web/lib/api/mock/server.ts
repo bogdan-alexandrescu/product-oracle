@@ -11,6 +11,7 @@ import { sortGoals } from "@/lib/goal-order";
 import { citationHref, formatDate, formatDay, goalFigure } from "@/lib/format";
 import { parseBlocks, plainText, type Inline } from "@/lib/markdown";
 import { mockName as displayName } from "./people";
+import { reply, rawReply } from "./typed";
 
 import { MOCK_SCENARIO_KEY, mockUuid, newCompany, seeded, stableUuid } from "./ids";
 import { prdCode } from "./item-code";
@@ -29,7 +30,7 @@ import { stripRawTokens } from "@/lib/raw-tokens";
 import { POOL_SPENT_SCENARIO, SIMPLE_CHAT_POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal, poolSpentUntil } from "./claude-accounts";
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
 import { carriedFor, REPLACED_PRD_SCENARIO, seedReplacedBases } from "./replaced-prd";
-import { decidePricing, decisionInbox, enlargeDecisions, logMeetingDecision, logReadable, proposePricing, requestDecisions, routeDecisions, seedDecisions, type DecisionLogRow, type DecisionsContext, type DecisionsDb } from "./decisions";
+import { decidePricing, decisionInbox, enlargeDecisions, logMeetingDecision, logReadable, proposePricing, requestDecisions, routeDecisions, seedDecisions, sheetDecisionOut, type DecisionLogRow, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
 import { FIT_COMPANY_SCENARIO, FIT_SCENARIOS, fitDateGoal, routeFitDate } from "./fit-date";
 import { generalReply } from "./general-chat";
@@ -461,7 +462,7 @@ function followUpsRoute(db: Db, req: Request, p: string[], me: MemberRow): Respo
   const access = (db.access_failures ??= []).find((r) => r.id === p[2]);
   if (access && p[3] === "retry") {
     db.access_failures = db.access_failures.filter((r) => r.id !== access.id);
-    return json(200, {
+    return reply("/v1/member-follow-ups/{follow_up_id}/retry", "post", {
       id: access.id,
       member_id: access.id,
       kind: access.kind,
@@ -479,10 +480,10 @@ function followUpsRoute(db: Db, req: Request, p: string[], me: MemberRow): Respo
   const row = db.revoke_failures.find((r) => r.id === p[2]);
   if (!row) return notFound("Follow-up");
   if (row.dismissed) return json(409, { detail: "This follow-up is dismissed; nothing to do" });
-  const out = (status: string) => ({
+  const out = (status: "pending" | "done" | "failed" | "dismissed") => ({
     id: row.id,
     member_id: row.member_id,
-    kind: "provider_revoke",
+    kind: "provider_revoke" as const,
     provider: row.provider,
     status,
     attempts: row.attempts,
@@ -493,13 +494,13 @@ function followUpsRoute(db: Db, req: Request, p: string[], me: MemberRow): Respo
   });
   if (p[3] === "dismiss") {
     row.dismissed = true;
-    return json(200, { ...out("dismissed"), dismissed_at: now(), dismissed_by: me.id });
+    return reply("/v1/member-follow-ups/{follow_up_id}/dismiss", "post", { ...out("dismissed"), dismissed_at: now(), dismissed_by: me.id });
   }
   if (p[3] === "retry") {
     row.attempts += 1;
-    if (row.outcome === "not_configured") return json(200, out(row.status));
+    if (row.outcome === "not_configured") return reply("/v1/member-follow-ups/{follow_up_id}/retry", "post", out(row.status));
     db.revoke_failures = db.revoke_failures.filter((r) => r.id !== row.id);
-    return json(200, { ...out("done"), outcome: "revoked", last_error: null });
+    return reply("/v1/member-follow-ups/{follow_up_id}/retry", "post", { ...out("done"), outcome: "revoked", last_error: null });
   }
   return notFound("Route");
 }
@@ -3442,6 +3443,7 @@ function llmContext(db: Db, userId: string, role: Role): LlmContext {
     importRevision: (doc, base, key, heading, body, resolutions) =>
       importSections(db, doc, base as VersionRow, { [key]: { heading, body } }, resolutions),
     importSections: (doc, base, replace, resolutions) => importSections(db, doc, base as VersionRow, replace, resolutions),
+    versionOut: (v) => versionOut(db, v as VersionRow),
     memberName: (id) => db.members.find((m) => m.id === id)?.email ?? null,
     discussion: (id) => {
       const d = db.discussions?.discussions.find((x) => x.id === id);
@@ -3698,7 +3700,7 @@ function decideMemo(db: Db, me: MemberRow, slug: string): Response {
     },
     owner.id,
   );
-  return json(created ? 201 : 200, row);
+  return reply("/v1/pricing-memos/{doc}/decide", "post", row, created ? 201 : 200);
 }
 
 /** /v1/pricing-memos…, /v1/deal-outcomes… and the pricing_owner setting (H9); null for other routes. */
@@ -3706,7 +3708,7 @@ async function routePricing(db: Db, me: MemberRow, req: Request, p: string[], q:
   if (p[1] === "pricing-memos") {
     // H8's rule: below approver, there is no such memo.
     if (!atLeast(me.role, "approver")) return notFound("Pricing memo");
-    if (p.length === 2 && req.method === "GET") return json(200, pricingMemos(db));
+    if (p.length === 2 && req.method === "GET") return reply("/v1/pricing-memos", "get", pricingMemos(db));
     if (p.length === 4 && p[3] === "decide" && req.method === "POST") return decideMemo(db, me, p[2]);
     return null;
   }
@@ -5579,23 +5581,27 @@ async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[],
   // company PRD order as list_documents(db, "prd") gives them.
   if (p[1] === "simple" && p[2] === "one-pagers" && !p[3] && m === "GET") {
     const ranks = prdOrder(db);
-    return json(200, db.documents.filter((d) => d.kind === "prd" && !liveReplacers(db, d).length && canSee(me.role, d.visibility)).map((d) => documentSummary(db, d, ranks)).sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity)));
+    return reply(
+      "/v1/simple/one-pagers",
+      "get",
+      db.documents.filter((d) => d.kind === "prd" && !liveReplacers(db, d).length && canSee(me.role, d.visibility)).map((d) => documentSummary(db, d, ranks)).sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity)),
+    );
   }
   if (p[1] === "roadmaps" && p[2] === "company" && !p[3]) {
     if (m === "GET") {
       const found = company();
-      return found ? json(200, ref(found)) : json(404, { detail: "No company roadmap yet" });
+      return found ? reply("/v1/roadmaps/company", "get", ref(found)) : json(404, { detail: "No company roadmap yet" });
     }
     if (m === "POST") {
       if (!atLeast(me.role, "approver")) return forbidden("approver");
       const found = company();
-      if (found) return json(200, ref(found));
+      if (found) return reply("/v1/roadmaps/company", "post", ref(found));
       let slug = COMPANY_SLUG;
       for (let n = 2; db.documents.some((d) => d.slug === slug); n++) slug = `${COMPANY_SLUG}-${n}`;
       const at = now();
       const row: DocumentRow = { id: uuid(), slug, title: COMPANY_TITLE, status: "draft", kind: "roadmap", template: null, template_version: null, theme: null, created_at: at, updated_at: at, company_roadmap: true };
       db.documents.push(row);
-      return json(201, ref(row));
+      return reply("/v1/roadmaps/company", "post", ref(row), 201);
     }
   }
   if (p[1] === "roadmaps" && p[2] === "company" && p[3] === "queue" && !p[4] && m === "GET") {
@@ -5616,7 +5622,7 @@ async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[],
             })
             .filter((i) => !prd || (i.prd && (i.prd.slug === prd || i.prd.id === prd)))
         : [];
-    return json(200, { roadmap: found ? ref(found) : null, team_size: Math.trunc(cap.team_size), focus: Number(cap.focus), items });
+    return reply("/v1/roadmaps/company/queue", "get", { roadmap: found ? ref(found) : null, team_size: Math.trunc(cap.team_size), focus: Number(cap.focus), items });
   }
   if (p[1] === "documents" && p[2] && p[3] === "replaced-by" && !p[4] && m === "POST") {
     if (!atLeast(me.role, "approver")) return forbidden("approver");
@@ -5635,7 +5641,7 @@ async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[],
     }
     doc.replaced_by = by.map((d) => d.id);
     if (db.simple_roadmap) markReplaced(db, db.simple_roadmap);
-    return json(200, documentOut(db, doc));
+    return reply("/v1/documents/{doc}/replaced-by", "post", documentOut(db, doc));
   }
   return null;
 }
@@ -6655,7 +6661,7 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
   const out = (x: MemberRow): MemberRow => ({ ...x, open_tokens: openTokens(account, x.id) });
   const detailCtx: MembersContext = { db, me, uuid, now, openTokens: (id) => openTokens(account, id), credentials: (id) => liveCredentials(account, id) };
   if (p[1] === "members") {
-    if (!p[2] && m === "GET") return json(200, db.members.map(out));
+    if (!p[2] && m === "GET") return reply("/v1/members", "get", db.members.map(out));
     // A5: a member's detail, the preview of a change, and hand-over (./members.ts).
     const detail = await membersDetailRoute(detailCtx, req, p);
     if (detail) return detail;
@@ -6682,7 +6688,7 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
       // A viewer never carries the flag: a demotion to viewer clears it.
       if (nextRole === "viewer") target.engineering_lead = false;
       if (lead != null) target.engineering_lead = lead;
-      return json(200, out(target));
+      return reply("/v1/members/{user_id}", "patch", out(target));
     }
     // Removing a member disables them (C2): the row stays; an owner can restore them.
     if ((m === "POST" && p[3] === "disable") || (m === "DELETE" && !p[3])) {
@@ -6708,11 +6714,11 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
           if (i.email === target.email && i.status === "open") Object.assign(i, { status: "revoked", revoked_at: now() });
         }
       }
-      return m === "DELETE" ? json(204, undefined) : json(200, out(target));
+      return m === "DELETE" ? reply("/v1/members/{user_id}", "delete", undefined, 204) : reply("/v1/members/{user_id}/disable", "post", out(target));
     }
     if (m === "POST" && p[3] === "restore") {
       Object.assign(target, { status: "active", disabled_at: null, disabled_by: null, access_pending: null });
-      return json(200, out(target));
+      return reply("/v1/members/{user_id}/restore", "post", out(target));
     }
   }
   if (p[1] === "access-requests") {
@@ -6723,7 +6729,7 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
     const withPreset = (r: AccessRequestRow): AccessRequestRow => ({ ...r, default_role: presetRole(inviteRoles) });
     if (!p[2] && m === "GET") {
       const status = new URL(req.url).searchParams.get("status") ?? "pending";
-      return json(200, rows.filter((r) => status === "all" || r.status === status).sort((a, b) => b.created_at.localeCompare(a.created_at)).map(withPreset));
+      return reply("/v1/access-requests", "get", rows.filter((r) => status === "all" || r.status === status).sort((a, b) => b.created_at.localeCompare(a.created_at)).map(withPreset));
     }
     const row = rows.find((r) => r.id === p[2]);
     if (!row) return notFound("Access request");
@@ -6754,12 +6760,12 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
       };
       db.invites.unshift(invite);
       Object.assign(row, { status: "approved", role, invite_id: invite.id, decided_by: me.id, decided_at: now() });
-      return json(200, withPreset(row));
+      return reply("/v1/access-requests/{request_id}/approve", "post", withPreset(row));
     }
     if (p[3] === "decline" && m === "POST") {
       if (row.status !== "pending") return json(409, { detail: `This request was already ${row.status}` });
       Object.assign(row, { status: "declined", decided_by: me.id, decided_at: now() });
-      return json(200, withPreset(row));
+      return reply("/v1/access-requests/{request_id}/decline", "post", withPreset(row));
     }
     if (p[3] === "reopen" && m === "POST") {
       if (row.status !== "approved" && row.status !== "declined") return json(409, { detail: `This request is ${row.status}` });
@@ -6769,7 +6775,7 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
         return json(403, { detail: "Another person approved this request; ask an owner to undo it" });
       if (invite) Object.assign(invite, { status: "revoked", revoked_at: now() });
       Object.assign(row, { status: "pending", role: null, invite_id: null, decided_by: null, decided_at: null });
-      return json(200, withPreset(row));
+      return reply("/v1/access-requests/{request_id}/reopen", "post", withPreset(row));
     }
   }
   if (p[1] === "invites") {
@@ -6782,8 +6788,9 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
     const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
     if (!p[2] && m === "GET") {
       const status = new URL(req.url).searchParams.get("status") ?? "open";
-      return json(
-        200,
+      return reply(
+        "/v1/invites",
+        "get",
         db.invites
           // A5: an open invite past its expiry reads expired; ?status=open lists both (each needs an action).
           .map((i) => (expired(i) ? { ...i, status: "expired" as const } : i))
@@ -6833,7 +6840,7 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
         message: input.message?.trim() || null,
       };
       db.invites.push(invite);
-      return json(201, withInviter(invite));
+      return reply("/v1/invites", "post", withInviter(invite), 201);
     }
     // Approvers act on their own invites only; another's is not found.
     const invite = db.invites.find((i) => i.id === p[2] && (owner || i.invited_by === me.id));
@@ -6853,7 +6860,7 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
         (db.invites_resent ??= []).push(invite.id);
         Object.assign(invite, { email_status: scenario === "mail-off" ? "not_sent" : "queued", email_error: null, email_at: now() });
       }
-      return json(200, withInviter(invite));
+      return reply("/v1/invites/{invite_id}/resend", "post", withInviter(invite));
     }
     if (m === "POST" && (p[3] === "access" || p[3] === "email")) {
       if (invite.status !== "open") return json(409, { detail: `This invite was ${invite.status}; invite them again` });
@@ -6875,12 +6882,12 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
         (db.invites_resent ??= []).push(invite.id);
         Object.assign(invite, { email_status: scenario === "mail-off" ? "not_sent" : "queued", email_error: null, email_at: now() });
       }
-      return json(200, withInviter(invite));
+      return reply(p[3] === "access" ? "/v1/invites/{invite_id}/access" : "/v1/invites/{invite_id}/email", "post", withInviter(invite));
     }
     if (m === "DELETE") {
       if (invite.status === "accepted") return json(409, { detail: "This invite was already accepted" });
       if (invite.status === "open") Object.assign(invite, { status: "revoked", revoked_at: now() });
-      return json(204, undefined);
+      return reply("/v1/invites/{invite_id}", "delete", undefined, 204);
     }
   }
   return notFound("Route");
@@ -7362,7 +7369,7 @@ function startUpdate(db: Db, me: MemberRow, input: Schemas["StartDraftIn"]): Res
   v.imported_by = "draft-picker";
   db.documents.push(doc);
   db.versions.push(v);
-  return json(201, {
+  return reply("/v1/drafts", "post", {
     document_id: doc.id,
     slug,
     title,
@@ -7371,7 +7378,7 @@ function startUpdate(db: Db, me: MemberRow, input: Schemas["StartDraftIn"]): Res
     template_version: 1,
     theme: doc.theme ?? null,
     version: 1,
-  } satisfies Schemas["StartDraftOut"]);
+  } satisfies Schemas["StartDraftOut"], 201);
 }
 
 /** H9: a pricing memo from its template, for owners and approvers; the question and evidence window in its front matter. */
@@ -7396,7 +7403,7 @@ function startPricing(db: Db, me: MemberRow, input: Schemas["StartDraftIn"]): Re
   v.imported_by = "draft-picker";
   db.documents.push(doc);
   db.versions.push(v);
-  return json(201, { document_id: doc.id, slug, title, kind: "pricing", template: PRICING_TEMPLATE, template_version: 1, theme: doc.theme ?? null, version: 1 } satisfies Schemas["StartDraftOut"]);
+  return reply("/v1/drafts", "post", { document_id: doc.id, slug, title, kind: "pricing", template: PRICING_TEMPLATE, template_version: 1, theme: doc.theme ?? null, version: 1 } satisfies Schemas["StartDraftOut"], 201);
 }
 
 /**
@@ -7470,7 +7477,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   const m = req.method;
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
 
-  if (p[0] === "healthz") return json(200, { status: "ok", database: "mock" });
+  if (p[0] === "healthz") return reply("/healthz", "get", { status: "ok", database: "mock" });
   if (p[0] !== "v1" && p[0] !== "uploads") return notFound("Route");
   // prd-order: every route that lists PRDs ranks them in the company PRD order (./prd-rank.ts).
   knowPrdOrder(() => ({ order: prdOrder(db), docs: db.documents }));
@@ -7498,11 +7505,11 @@ async function route(db: Db, req: Request): Promise<Response> {
     }
     setSession(db, member.email);
     member.last_sign_in_at = now();
-    return json(200, meOut(db, withMockRole(member)));
+    return reply("/v1/auth/login", "post", meOut(db, withMockRole(member)));
   }
   if (p[1] === "auth" && p[2] === "logout" && m === "POST") {
     setSession(db, null);
-    return json(204, undefined);
+    return reply("/v1/auth/logout", "post", undefined, 204);
   }
   // C3: the customer page's routes carry no member credential, only the link's token and cookie.
   if (p[1] === "public" && p[2] === "interviews") {
@@ -7533,9 +7540,9 @@ async function route(db: Db, req: Request): Promise<Response> {
       const { note } = await body<Schemas["AccessNote"]>();
       if ((note ?? "").length > 500) return json(422, { detail: "A note is at most 500 characters" });
       db.access_note = out.note = note?.trim() || null;
-      return json(200, out);
+      return reply("/v1/auth/access/note", "post", out);
     }
-    if (!p[3] && m === "GET") return json(200, out);
+    if (!p[3] && m === "GET") return reply("/v1/auth/access", "get", out);
   }
   if (access) return json(401, { detail: "Not authenticated" });
   const member = db.members.find((x) => x.email === sessionOf(db));
@@ -7645,7 +7652,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (p[1] === "me" && p[2] === "capabilities" && m === "GET") {
     const caps = await capabilitiesOut(me.role, !!me.engineering_lead, engineeringLeads(db).length > 0);
     for (const op of (localStorage.getItem(MOCK_DENY_KEY) ?? "").split(",")) if (op.trim()) caps.operations[op.trim()] = false;
-    return json(200, { ...caps, simple_mode: localStorage.getItem(MOCK_SIMPLE_MODE_KEY) !== "off" });
+    return reply("/v1/me/capabilities", "get", { ...caps, simple_mode: localStorage.getItem(MOCK_SIMPLE_MODE_KEY) !== "off" });
   }
   if (p[1] === "me" && p[2] === "preferences") {
     db.preferences ??= {};
@@ -7694,9 +7701,9 @@ async function route(db: Db, req: Request): Promise<Response> {
     mine.simple_filters ??= null; // every PRD, goal and track until they pick some
     mine.simple_decisions_view ??= null; // List until they pick a view (prd-questions)
     if ((mine.experience as string) === "studio") mine.experience = "detailed"; // its name before #723's rename, as the API reads it
-    return json(200, mine);
+    return m === "PATCH" ? reply("/v1/me/preferences", "patch", mine) : reply("/v1/me/preferences", "get", mine);
   }
-  if (p[1] === "setup" && !p[2] && m === "GET") return json(200, setupOut(db, me));
+  if (p[1] === "setup" && !p[2] && m === "GET") return reply("/v1/setup", "get", setupOut(db, me));
   // I1: revoking a live user-less API token pauses the webhooks it made (members.service.revoke_api_token).
   const revoking = m === "DELETE" && p[1] === "api-tokens" && !p[3] && me.role === "owner"
     ? (db.account ??= seedAccount(db.members, uuid)).tokens.find((t) => t.id === p[2] && !t.user_id && !t.revoked_at && (t.kind === "personal" || t.kind === "service"))
@@ -7722,7 +7729,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   );
   if (revoking && accountOut?.status === 204) tokenRevoked(webhooksContext(db, me), revoking.id);
   if (accountOut) return accountOut;
-  if (p[1] === "me") return json(200, meOut(db, me));
+  if (p[1] === "me") return reply("/v1/me", "get", meOut(db, me));
   if (p[1] === "discussions" || p[1] === "discussion-changes") {
     db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
     const discussionsCtx: DiscussionsContext = {
@@ -7871,7 +7878,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       without_invite: String(mockSettingValue("sign_in_without_invite") ?? "request") as Schemas["SignInRulesOut"]["without_invite"],
       default_role: String(mockSettingValue("iap_default_role") ?? "commenter") as Role,
     };
-    return json(200, rules);
+    return reply("/v1/sign-in-rules", "get", rules);
   }
   // Tech briefs (./engineering.ts): every member reads.
   const briefs = await routeEngineering(req, p, q, {
@@ -7917,11 +7924,11 @@ async function route(db: Db, req: Request): Promise<Response> {
     db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
     const found = fromRunCheckpoint({ ...runsContext(db), db: db.runs }, p[3]);
     if (!found) return json(404, { detail: "Run not found" });
-    return json(200, { ...found, ...fromRun(db.baseline, p[3], found.actions), checkpoint: found.checkpoint });
+    return reply("/v1/baseline/from-run/{run_id}", "get", { ...found, ...fromRun(db.baseline, p[3], found.actions), checkpoint: found.checkpoint });
   }
   // The Ground Truth check (docs/ground-truth.md): flags only, for anyone who reads the roadmap.
   if (p[1] === "baseline" && p[2] === "check" && !p[3] && req.method === "GET") {
-    return json(200, groundTruthCheck(localStorage.getItem(MOCK_SCENARIO_KEY), db.baseline, db.simple_roadmap));
+    return reply("/v1/baseline/check", "get", groundTruthCheck(localStorage.getItem(MOCK_SCENARIO_KEY), db.baseline, db.simple_roadmap));
   }
   // Its own feature (router.py add_own_feature, fixes.own_feature): the item joins the Ground Truth as a feature
   // of its own with its own code, else the next free one; its proposed match is declined; an entry of its name is reused.
@@ -7967,7 +7974,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     // A proposal of the item's name, maybe shared with other items: confirmed for this item only.
     if (joined) confirmedFor(db.simple_roadmap, feature, p[3], true);
     const got = ANY_CODE.test(feature.key) ? feature.key : null;
-    return json(200, { status: "done", feature: { id: feature.id, code: got, name: feature.title }, code: got, proposal_id: null } satisfies Schemas["GroundTruthFixOut"]);
+    return reply("/v1/baseline/roadmap-items/{item_id}/own-feature", "post", { status: "done", feature: { id: feature.id, code: got, name: feature.title }, code: got, proposal_id: null } satisfies Schemas["GroundTruthFixOut"]);
   }
   // Confirm it from one roadmap item's flag (router.py confirm_entity's item_id): other items on a shared proposal wait for their own.
   if (p[1] === "baseline" && p[2] === "entities" && p[3] && p[4] === "confirm" && !p[5] && req.method === "POST" && q.get("item_id")) {
@@ -8144,7 +8151,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         section_keys: v2req.section_keys, dropped_section_keys: [], reasons: [],
       };
       proposed[v2req.id] = out.run_id;
-      return json(201, out);
+      return reply("/v1/spec-requests/{request_id}/regenerate", "post", out, 201);
     }
     const specs = await routeSpecs(
       {
@@ -8422,7 +8429,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         feedback_item_id: null,
       };
       db.comments.push(r);
-      return json(201, commentOut(db, r));
+      return reply("/v1/comments/{comment_id}/replies", "post", commentOut(db, r), 201);
     }
     if (m === "PATCH") {
       if (c.author_id !== me.id && !atLeast(me.role, "approver")) {
@@ -8431,7 +8438,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       const patch = await body<Schemas["CommentPatch"]>();
       if (patch.resolved != null) c.resolved_at = patch.resolved ? now() : null;
       if (patch.body != null) c.body = patch.body;
-      return json(200, commentOut(db, c));
+      return reply("/v1/comments/{comment_id}", "patch", commentOut(db, c));
     }
   }
 
@@ -8444,7 +8451,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     Object.assign(f, patch, { updated_at: now() });
     // fix3-discuss review: resolving whole-draft feedback made in Discuss closes its thread.
     if (patch.status && patch.status !== "open") closeFeedbackThread(db, f);
-    return json(200, f);
+    return reply("/v1/feedback/{feedback_id}", "patch", withSuggestion(db.llm, f));
   }
 
   // Product Oracle v2 read routes; viewers read (lanes add writes in ./v2.ts).
@@ -8686,7 +8693,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       if (!doc || !latest) return json(404, { detail: "No approved version of this roadmap" });
       if (!applyRoadmapVersion(db, doc, latest)) return json(409, { detail: "This roadmap's approved version has no plan table" });
       const out = appliedVersionOf(db.simple_roadmap!, doc.slug, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames });
-      return out ? json(200, out) : json(404, { detail: "No such roadmap" });
+      return out ? reply("/v1/simple/roadmap/apply-approved", "post", out) : json(404, { detail: "No such roadmap" });
     }
     // RP2 'Draft layer on roadmap': GET /v1/simple/roadmap/draft-prds, and Change dates / Leave out
     // on a draft item (approvers and up), as oracle.simple.router.
@@ -8702,7 +8709,7 @@ async function route(db: Db, req: Request): Promise<Response> {
           approved: (n: number) => !!doc && docVersions(db, doc).some((v) => v.number >= n && !!v.approved_at),
         };
       };
-      if (!p[4] && r.method === "GET") return json(200, draftPrdsOut(rm, state, atLeast(me.role, "approver")));
+      if (!p[4] && r.method === "GET") return reply("/v1/simple/roadmap/draft-prds", "get", draftPrdsOut(rm, state, atLeast(me.role, "approver")));
       if (p[4] === "items" && p[5] && (p[6] === "dates" || p[6] === "leave-out") && r.method === "POST") {
         if (!atLeast(me.role, "approver")) return json(403, { detail: "Requires the approver role" });
         const shown = draftPrdsOut(rm, state, true).flatMap((d) => d.items.map((i) => ({ item: i, prd: d.prd.id })));
@@ -8711,7 +8718,9 @@ async function route(db: Db, req: Request): Promise<Response> {
         const body = p[6] === "dates" ? ((await r.json()) as { start?: string; end?: string }) : {};
         const done = draftAct(rm, [hit.prd], p[6] === "dates" ? { kind: "dates", id: p[5], start: body.start ?? "", end: body.end ?? "" } : { kind: "leave", id: p[5] });
         if ("status" in done) return json(done.status, { detail: done.detail });
-        return new Response(null, { status: 204 });
+        return p[6] === "dates"
+          ? reply("/v1/simple/roadmap/draft-prds/items/{item_id}/dates", "post", undefined, 204)
+          : reply("/v1/simple/roadmap/draft-prds/items/{item_id}/leave-out", "post", undefined, 204);
       }
       return json(404, { detail: "Not Found" });
     }
@@ -8840,7 +8849,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         // The one-pagers' proposals are Simple changes too (a line's wording, a number fix: PR 1320 re-review).
         const onePagers = q.get("status") === "proposed" ? onePagerProposalsOut([...(db.simple_one_pager ? [db.simple_one_pager] : []), ...Object.values(db.simple_one_pagers ?? {})], { id: me.id, role: me.role }, q.get("mine") === "true") : [];
         // Newest first; a tie keeps each list's own order (the changes' is the order made, qaC-numfix).
-        return json(200, [...rows, ...sheet, ...onePagers].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)));
+        return reply("/v1/simple/changes", "get", [...rows, ...sheet, ...onePagers].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)));
       }
       if (engineRes) return engineRes;
     }
@@ -8919,14 +8928,14 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
 
   // O5: the roadmap audience registry (./audience.ts), every member.
-  if (p[1] === "roadmap-audiences" && p.length === 2 && m === "GET") return json(200, AUDIENCES);
+  if (p[1] === "roadmap-audiences" && p.length === 2 && m === "GET") return reply("/v1/roadmap-audiences", "get", AUDIENCES);
   // H8: an update starts from its template with its period (owners only); other kinds as before.
   if (p[1] === "drafts" && p.length === 2 && m === "POST") {
     const input = (await req.clone().json()) as Schemas["StartDraftIn"] | null;
     if (input?.kind === "update") return startUpdate(db, me, input);
     if (input?.kind === "pricing") return startPricing(db, me, input);
   }
-  if (p[1] === "priorities" && p[2] === "calibration" && p.length === 3 && m === "GET") return json(200, trackRecord(db));
+  if (p[1] === "priorities" && p[2] === "calibration" && p.length === 3 && m === "GET") return reply("/v1/priorities/calibration", "get", trackRecord(db));
   const handled = await laneF(db, req, p, m, me.role, localStorage.getItem(MOCK_SCENARIO_KEY), { id: me.id, name: memberName(me) });
   // E1: a draft started from the template's empty skeleton has nothing to derive yet.
   if (handled?.status === 201 && p[1] === "drafts" && p.length === 2 && m === "POST") {
@@ -8953,7 +8962,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     const to = decisionsCtx.members.find((x) => x.id === b.approver_id);
     if (!to || to.status === "disabled" || !["approver", "owner"].includes(to.role)) return json(422, { detail: "The approver must be an active member with the approver role or above" });
     simpleOnly.approver_id = b.approver_id;
-    return json(200, { id: simpleOnly.id, number: simpleOnly.number, title: simpleOnly.title, approver_id: b.approver_id });
+    return reply("/v1/decisions/{decision}/reassign", "post", sheetDecisionOut(decisionsCtx, db.decisions!, { ...simpleOnly, approver_id: b.approver_id }));
   }
   const decided = await routeDecisions(decisionsCtx, db.decisions!, req, p, q);
   // edit-decisions: a decision made from Simple's sheet is listed there; Reassign shows there too.
@@ -9005,8 +9014,9 @@ async function route(db: Db, req: Request): Promise<Response> {
       const to = ids.map((id) => db.members.find((x) => x.id === id && x.status !== "disabled" && atLeast(x.role, "approver"))).find((x) => !!x);
       return to ? displayName(to.email, to.name) : null;
     };
-    return json(
-      200,
+    return reply(
+      "/v1/rebuilds",
+      "get",
       rebuildsOut({
         runs: db.runs?.runs ?? [],
         documents: db.documents,
@@ -9154,7 +9164,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     const accessRequestRows = inboxAccessRequests(db, me);
     // O5-Q10: links revoked with their creator or document, for owners.
     const shareRevocations = shareInboxRows(sharesContext(db, me));
-    return json(200, {
+    return reply("/v1/inbox", "get", {
       ...inbox,
       share_revocations: shareRevocations,
       access_requests: accessRequestRows,
@@ -9186,7 +9196,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     // As list_documents: newest first (updated_at); prd-order: PRDs alone in the company PRD order.
     if (kind === "prd") out.sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity));
     else out.sort((a, b) => String(b.updated_at ?? "").localeCompare(String(a.updated_at ?? "")));
-    return json(200, out);
+    return reply("/v1/documents", "get", out);
   }
 
   // prd-order: an owner puts back PRDs' stored places (the One-pagers' Undo after a move).
@@ -9200,7 +9210,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     rows.forEach((d, n) => (d!.position = places[n].position ?? null));
     const after = prdOrder(db);
     const prds = db.documents.filter((d) => after.has(d.id) && canSee(me.role, d.visibility)).sort((a, b) => after.get(a.id)! - after.get(b.id)!);
-    return json(200, prds.map((d) => documentSummary(db, d, after)));
+    return reply("/v1/documents/prd-order", "put", prds.map((d) => documentSummary(db, d, after)));
   }
   const doc = findDocument(db, p[2]);
   // simple-prd-calm-page: the seeded one-pager's PRD, which the mock keeps only as its one-pager,
@@ -9209,11 +9219,11 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (!doc && op && (op.doc.slug === p[2] || op.doc.id === p[2]) && p[3] === "versions" && Number(p[4]) === op.version && !p[5] && m === "GET") {
     const row = { id: op.doc.id, slug: op.doc.slug, title: op.doc.title, kind: "prd" } as DocumentRow;
     const sections = op.sections.map((x) => ({ key: x.key, level: 2, heading: x.heading, body: x.body }));
-    return json(200, versionOut(db, buildVersion(row, { number: op.version, created_at: "2026-10-20T09:00:00Z", sections, citations: [] })));
+    return reply("/v1/documents/{doc}/versions/{n}", "get", versionOut(db, buildVersion(row, { number: op.version, created_at: "2026-10-20T09:00:00Z", sections, citations: [] })));
   }
   if (!doc) return notFound("Document");
   if (p.length === 3) {
-    return json(200, documentOut(db, doc));
+    return reply("/v1/documents/{doc}", "get", documentOut(db, doc));
   }
   // prd-order: an owner moves a PRD one place up or down; every PRD keeps its place (1..N).
   if (p[3] === "move" && p.length === 4 && m === "POST") {
@@ -9230,7 +9240,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       prds.forEach((d, n) => (d.position = n + 1));
     }
     const after = prdOrder(db);
-    return json(200, prds.filter((d) => canSee(me.role, d.visibility)).map((d) => documentSummary(db, d, after)));
+    return reply("/v1/documents/{doc}/move", "post", prds.filter((d) => canSee(me.role, d.visibility)).map((d) => documentSummary(db, d, after)));
   }
   // H8: who sees the document (owners only, with a reason; the API audits it).
   if (p[3] === "visibility" && p.length === 4 && m === "PATCH") {
@@ -9240,14 +9250,14 @@ async function route(db: Db, req: Request): Promise<Response> {
     if (input.visibility !== "company" && input.visibility !== "approvers") return json(422, { detail: "visibility is company or approvers" });
     doc.visibility = input.visibility;
     doc.updated_at = now();
-    return json(200, { ...documentSummary(db, doc), versions: docVersions(db, doc).map(summary) });
+    return reply("/v1/documents/{doc}/visibility", "patch", documentOut(db, doc));
   }
 
   if (p[3] === "diff") {
     const from = findVersion(db, doc, Number(q.get("from")));
     const to = findVersion(db, doc, Number(q.get("to")));
     if (!from || !to) return notFound("Version");
-    return json(200, {
+    return reply("/v1/documents/{doc}/diff", "get", {
       document_id: doc.id,
       from_version: from.number,
       to_version: to.number,
@@ -9266,12 +9276,12 @@ async function route(db: Db, req: Request): Promise<Response> {
       // As the API: by the version raised on, then age.
       .sort((a, b) => a.raised_on_version - b.raised_on_version || a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
       .map((f) => withAuthorName(db, withSuggestion(db.llm, f, docVersions(db, doc).at(-1)?.number ?? null)));
-    return json(200, items);
+    return reply("/v1/documents/{doc}/feedback", "get", items);
   }
 
   if (p[3] !== "versions") return notFound("Route");
   if (p.length === 4) {
-    if (m === "GET") return json(200, docVersions(db, doc).map(summary));
+    if (m === "GET") return reply("/v1/documents/{doc}/versions", "get", docVersions(db, doc).map(summary));
     return json(501, { detail: "Importing drafts is not available in mock mode" });
   }
 
@@ -9293,7 +9303,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       const prd = db.documents.find((d) => d.id === v.source?.document_id);
       out.warnings = dateWarnings(out.warnings ?? [], marks, v.sections, prd ? { title: prd.title, slug: prd.slug } : null);
     }
-    return json(200, { ...out, date_marks: marks });
+    return reply("/v1/documents/{doc}/versions/{n}", "get", { ...out, date_marks: marks });
   }
   if (sub === "markdown") {
     return new Response(versionMarkdown(doc, v), { headers: { "content-type": "text/markdown" } });
@@ -9305,10 +9315,11 @@ async function route(db: Db, req: Request): Promise<Response> {
       const c = addComment(db, v, input, { author_id: me.id });
       touch(db, doc.id);
       onFeedback(llm, doc.id, v.number);
-      return json(201, commentOut(db, c));
+      return reply("/v1/documents/{doc}/versions/{n}/comments", "post", commentOut(db, c), 201);
     }
-    return json(
-      200,
+    return reply(
+      "/v1/documents/{doc}/versions/{n}/comments",
+      "get",
       db.comments
         .filter((c) => c.version_id === v.id && !c.parent_id)
         .sort((a, b) => a.created_at.localeCompare(b.created_at))
@@ -9321,7 +9332,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     const text = (input.body ?? "").trim();
     if (!text || input.body.length > 4000) return json(422, { detail: "Feedback needs 1 to 4,000 characters" });
     const f = addGeneralFeedback(db, llm, doc, v, me.id, input.body, input.severity ?? null);
-    return json(201, withAuthorName(db, withSuggestion(db.llm, f)));
+    return reply("/v1/documents/{doc}/versions/{n}/feedback", "post", withAuthorName(db, withSuggestion(db.llm, f)), 201);
   }
   if (sub === "sections" && p[7] === "review" && m === "PUT") {
     if (!v.sections.some((s) => s.section_key === p[6])) return notFound("Section");
@@ -9332,16 +9343,16 @@ async function route(db: Db, req: Request): Promise<Response> {
     if (r.feedback_item_id) onFeedback(llm, doc.id, v.number);
     // D10: the last section approved approves the run review of this version.
     followRunReview(db, doc, v, false, me.id);
-    return json(200, { ...r, layer: sectionLayer(db, v.id, r.section_key) });
+    return reply("/v1/documents/{doc}/versions/{n}/sections/{key}/review", "put", { ...r, layer: sectionLayer(db, v.id, r.section_key) });
   }
   if (sub === "new-items" && m === "GET") {
     // S4: the draft's author (the person its run acted for, else its importer) sees what
     // changed in their own sources since the draft's run pinned them (oracle.docs.fresh).
     const found = runReviewOf(db, doc.id, v.number);
     const author = found ? found.run.created_by : v.imported_by;
-    if (!author || author !== me.id) return json(200, { version: v.number, as_of: null, count: null, visible: false });
+    if (!author || author !== me.id) return reply("/v1/documents/{doc}/versions/{n}/new-items", "get", { version: v.number, as_of: null, count: null, visible: false });
     const as_of = found?.run.snapshot_as_of ?? v.created_at;
-    return json(200, { version: v.number, as_of, count: itemsChangedSince(as_of, db.members.find((x) => x.id === author)?.email ?? "", me.email), visible: true });
+    return reply("/v1/documents/{doc}/versions/{n}/new-items", "get", { version: v.number, as_of, count: itemsChangedSince(as_of, db.members.find((x) => x.id === author)?.email ?? "", me.email), visible: true });
   }
   if (sub === "run-review" && m === "GET") {
     const found = runReviewOf(db, doc.id, v.number);
@@ -9351,7 +9362,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     const reviews = v.sections.map((x) => latestReview(db, v.id, x.section_key));
     const entries = sendBackEntries(runsContext(db), doc.id, v.number);
     const staged = db.feedback.filter((f) => f.document_id === doc.id && isStaged(withSuggestion(db.llm, f).suggestion)).length;
-    return json(200, {
+    return reply("/v1/documents/{doc}/versions/{n}/run-review", "get", {
       checkpoint_id: cp.id,
       run_id: run.id,
       kind: cp.kind,
@@ -9371,15 +9382,15 @@ async function route(db: Db, req: Request): Promise<Response> {
     });
   }
   if (sub === "feedback-package") {
-    return json(200, {
+    return reply("/v1/documents/{doc}/versions/{n}/feedback-package", "get", {
       document_id: doc.id,
       slug: doc.slug,
       title: doc.title,
       version: v.number,
       markdown: versionMarkdown(doc, v),
-      open_items: db.feedback.filter(
-        (f) => f.document_id === doc.id && f.status === "open" && f.raised_on_version <= v.number,
-      ),
+      open_items: db.feedback
+        .filter((f) => f.document_id === doc.id && f.status === "open" && f.raised_on_version <= v.number)
+        .map((f) => withSuggestion(db.llm, f)),
       locked_section_keys: lockedKeys(db, v),
       generated_at: now(),
     });
@@ -9390,7 +9401,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       .map((f) => withAuthorName(db, withSuggestion(db.llm, f, docVersions(db, doc).at(-1)?.number ?? null)));
     const counts: Record<string, number> = {};
     for (const f of items) counts[f.status] = (counts[f.status] ?? 0) + 1;
-    return json(200, { document_id: doc.id, version: v.number, items, counts });
+    return reply("/v1/documents/{doc}/versions/{n}/resolution-report", "get", { document_id: doc.id, version: v.number, items, counts });
   }
   if (sub === "approve" && m === "POST") {
     // F2: the designated decider, when the review policy names one, is the only one who approves.
@@ -9493,7 +9504,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         me.id,
       );
     }
-    return json(200, { document_id: doc.id, document_status: doc.status, version: summary(v) });
+    return reply("/v1/documents/{doc}/versions/{n}/approve", "post", { document_id: doc.id, document_status: doc.status, version: summary(v) });
   }
   // O5: audience= renders a roadmap for Board, Team or Engineering (./audience.ts).
   const audience = sub === "deck" || sub === "export" ? q.get("audience") : null;
@@ -9600,7 +9611,7 @@ function exportRoute(db: Db, doc: DocumentRow, v: VersionRow, sub: string | unde
     });
     // As the API's deck banner: "Audience Board" after the version.
     if (badge) deck.banner = deck.banner.replace(` · Version ${v.number}`, ` · Version ${v.number} · Audience ${badge}`);
-    return json(200, deck);
+    return reply("/v1/documents/{doc}/versions/{n}/deck", "get", deck);
   }
   if (sub === "export") {
     const format = q.get("format") ?? "html";
@@ -9625,7 +9636,7 @@ function exportRoute(db: Db, doc: DocumentRow, v: VersionRow, sub: string | unde
       });
     }
     if (format === "pdf") return new Response(exportPdf(doc, v, badge), { headers: { "content-type": "application/pdf" } });
-    return new Response(exportHtml(doc, v, db.branding, badge), { headers: { "content-type": "text/html" } });
+    return rawReply("/v1/documents/{doc}/versions/{n}/export", "get", new Response(exportHtml(doc, v, db.branding, badge), { headers: { "content-type": "text/html" } }));
   }
   return notFound("Route");
 }
@@ -9701,7 +9712,7 @@ async function withWaitingItems(db: Db, req: Request, res: Response): Promise<Re
     return r.json();
   };
   const me = (await get("/v1/me").catch(() => undefined)) as { user_id?: string; role?: string } | undefined;
-  return json(200, { ...out, items: await waitingItems(get, me?.user_id ?? "", out.questions, me?.role ?? "") });
+  return reply("/v1/simple/decisions/waiting", "get", { ...out, items: await waitingItems(get, me?.user_id ?? "", out.questions, me?.role ?? "") });
 }
 
 export async function mockFetch(req: Request): Promise<Response> {
@@ -9738,9 +9749,9 @@ export async function mockFetch(req: Request): Promise<Response> {
     const inboxCall = (search = "") => route(db, new Request(new URL(`/v1/inbox${search}`, url), { headers: req.headers }));
     let res =
       req.method === "GET" && url.pathname === "/v1/inbox/counts"
-        ? await inboxCall().then(async (r) => (r.ok ? json(200, inboxCounts((await r.json()) as Schemas["InboxOut"])) : r))
+        ? await inboxCall().then(async (r) => (r.ok ? reply("/v1/inbox/counts", "get", inboxCounts((await r.json()) as Schemas["InboxOut"])) : r))
         : req.method === "POST" && url.pathname === "/v1/inbox/seen"
-          ? await inboxCall("?mark_seen=true").then((r) => (r.ok ? new Response(null, { status: 204 }) : r))
+          ? await inboxCall("?mark_seen=true").then((r) => (r.ok ? reply("/v1/inbox/seen", "post", undefined, 204) : r))
           : await route(db, req);
     // home-waiting-one-list: the waiting list's items, read from the routes each kind lives on.
     if (req.method === "GET" && url.pathname === "/v1/simple/decisions/waiting" && res.ok) res = await withWaitingItems(db, req, res);

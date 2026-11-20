@@ -32,6 +32,7 @@ import { stableUuid } from "./ids";
 import { codedTitle, shownCode, shownTitle } from "./item-code";
 import { COMPANY_SLUG } from "./one-roadmap";
 import { canEditRoadmap, type SimpleDb } from "./simple-roadmap";
+import { reply } from "./typed";
 
 export type GoalMap = Schemas["GoalMapOut"];
 export type GmGoal = Schemas["GmGoal"];
@@ -631,12 +632,12 @@ export async function routeGoalMap(
   const read = async () => finish({ ...map, ...live(), can_edit: canEdit }, await items(), baseline());
   // goal_map.build's places: of a feature on the map or (Free canvas) an unplaced one.
   const carded = (m: GoalMap) => new Set([...m.features, ...m.unplaced].map((f) => f.id));
-  const out = async () => {
+  const mapOut = async () => {
     const m = await read();
     const on = carded(m);
-    return json(200, { ...m, places: Object.entries(mine).flatMap(([feature, [x, y]]) => (on.has(feature) ? [{ feature, x, y }] : [])) });
+    return { ...m, places: Object.entries(mine).flatMap(([feature, [x, y]]) => (on.has(feature) ? [{ feature, x, y }] : [])) };
   };
-  if (req.method === "GET" && !p[3]) return out();
+  if (req.method === "GET" && !p[3]) return reply("/v1/simple/goal-map", "get", await mapOut());
   const body = JSON.parse((await req.text()) || "null");
   if (req.method === "POST" && p[3] === "place-card") {
     // Viewers too: a place is the person's own view and never changes data.
@@ -644,14 +645,17 @@ export async function routeGoalMap(
     if (!carded(await read()).has(body?.feature)) return json(404, { detail: "No such feature on the map" });
     if (body.x == null || body.y == null) delete mine[body.feature];
     else mine[body.feature] = [Number(body.x), Number(body.y)];
-    return out();
+    return reply("/v1/simple/goal-map/place-card", "post", await mapOut());
   }
   if (req.method === "DELETE" && p[3] === "places") {
     for (const k of Object.keys(mine)) delete mine[k];
-    return out();
+    return reply("/v1/simple/goal-map/places", "delete", await mapOut());
   }
   if (!canEdit) return json(403, { detail: "Only owners and approvers can change the goal map" });
-  if (req.method === "POST" && p[3] === "links" && p[4] === "move") return moveMapLink(map, body ?? {}) ?? out();
+  if (req.method === "POST" && p[3] === "links" && p[4] === "move") {
+    const err = moveMapLink(map, body ?? {});
+    return err ?? reply("/v1/simple/goal-map/links/move", "post", await mapOut());
+  }
   if (req.method === "POST" && p[3] === "links" && p[4] === "detach") {
     // goal-map-editing: the feature no longer serves the milestone (goal_map.detach).
     const f = map.features.find((x) => x.id === body?.feature);
@@ -659,20 +663,20 @@ export async function routeGoalMap(
     f.milestones = f.milestones.filter((m) => m !== body.milestone);
     f.links = f.links.filter((l) => l.milestone !== body.milestone);
     if (!f.milestones.length) map.features = map.features.filter((x) => x !== f);
-    return out();
+    return reply("/v1/simple/goal-map/links/detach", "post", await mapOut());
   }
   if (req.method === "POST" && p[3] === "areas" && !p[4]) {
     const name = String(body?.name ?? "").trim();
     if (!name) return json(422, { detail: "Name the area" });
     map.areas.push({ id: crypto.randomUUID(), name, lever: String(body?.lever ?? "").trim() });
-    return out();
+    return reply("/v1/simple/goal-map/areas", "post", await mapOut());
   }
   if (req.method === "PUT" && p[3] === "areas" && p[4] === "order") {
     const ids: string[] = body?.ids ?? [];
     const by = new Map(map.areas.map((a) => [a.id, a]));
     if (ids.length !== by.size || new Set(ids).size !== ids.length || ids.some((x) => !by.has(x))) return json(422, { detail: "Send every area once, in the new order" });
     map.areas = ids.map((x) => by.get(x)!);
-    return out();
+    return reply("/v1/simple/goal-map/areas/order", "put", await mapOut());
   }
   if (req.method === "POST" && p[3] === "goals" && p[4] && p[5] === "metric") {
     const g = map.goals.find((x) => x.id === p[4]);
@@ -697,7 +701,7 @@ export async function routeGoalMap(
         m.status = gateStatus(m, map.today);
       }
     }
-    return out();
+    return reply("/v1/simple/goal-map/goals/{goal_id}/metric", "post", await mapOut());
   }
   if (req.method === "PATCH" && p[3] === "goals" && p[4]) {
     const g = map.goals.find((x) => x.id === p[4]);
@@ -709,7 +713,7 @@ export async function routeGoalMap(
     // One store: the Baseline goal's number moves with it.
     const e = baseline().find((x) => x.id === g.id);
     if (e) e.attrs = { ...e.attrs, target: t };
-    return out();
+    return reply("/v1/simple/goal-map/goals/{goal_id}", "patch", await mapOut());
   }
   if (req.method === "POST" && p[3] === "milestones") {
     const g = map.goals.find((x) => x.id === body?.goal);
@@ -728,7 +732,7 @@ export async function routeGoalMap(
       status: g.current === null ? "not_measured" : "on_track", areas, depends: after ? [after.id] : [], month: "Nov", due: null, due_on: null, days, confirmed: null, confirmed_on: null, proposed: true, can_change: false,
     });
     map.milestones = ordered(map.milestones);
-    return out();
+    return reply("/v1/simple/goal-map/milestones", "post", await mapOut());
   }
   if (req.method === "PATCH" && p[3] === "milestones" && p[4]) {
     const m = map.milestones.find((x) => x.id === p[4]);
@@ -748,9 +752,12 @@ export async function routeGoalMap(
       Object.assign(m, { confirmed: me.name, confirmed_on: "Nov 3", proposed: false });
     }
     map.milestones = ordered(map.milestones);
-    return out();
+    return reply("/v1/simple/goal-map/milestones/{milestone_id}", "patch", await mapOut());
   }
-  if (req.method === "POST" && p[3] === "links") return attachMapLink(map, body ?? {}, item) ?? out();
+  if (req.method === "POST" && p[3] === "links") {
+    const err = attachMapLink(map, body ?? {}, item);
+    return err ?? reply("/v1/simple/goal-map/links", "post", await mapOut());
+  }
   return json(404, { detail: "Not found" });
 }
 
@@ -849,8 +856,13 @@ export async function routeLadderMilestone(
   const map = db.goal_map;
   const m = map.milestones.find((x) => x.id === p[4]) as Held | undefined;
   if (!m) return null;
-  const out = (status = 200) =>
-    json(status, { id: m.id, roadmap_id: id("roadmap"), code: "", name: m.name, date: m.due_on ?? null, goal_id: m.goal, item_ids: [], counts_when: "", progress: "not_started", prd: null, prd_owner: null, pending: null, can_change: mapCanChange(db, me), can_propose: !mapCanChange(db, me) && me.role !== "viewer", carried_from: null });
+  const milestoneOut = () => ({
+    id: m.id, roadmap_id: id("roadmap"), code: "", name: m.name, date: m.due_on ?? null, goal_id: m.goal, item_ids: [], counts_when: "",
+    progress: "not_started" as const, prd: null, prd_owner: null, pending: null, can_change: mapCanChange(db, me), can_propose: !mapCanChange(db, me) && me.role !== "viewer", carried_from: null,
+    kind: "goal" as const, done_when_line: "", status: "on_track" as const, status_reason: null, status_set: null, status_set_by_name: null,
+    measure: null, baseline: null, target: null, current: null, sub_goal_of_id: null, sub_goal_ids: [], home_track_id: null, home_track_name: null,
+    from_track_id: null, to_track_id: null, from_track_name: null, to_track_name: null, goal_target: false,
+  });
   if (!mapCanChange(db, me)) return json(403, { detail: "Only an owner or the roadmap's decider (with none, its owner) changes its milestones" });
   if (req.method === "POST" && p[5] === "restore") {
     if (!m.trashed) return json(404, { detail: "No such deleted milestone" });
@@ -858,13 +870,13 @@ export async function routeLadderMilestone(
     if (refused) return json(409, { detail: refused });
     m.trashed = false;
     trash.entries = trash.entries.filter((e) => !(e.out.root.type === "milestone" && e.out.root.id === m.id));
-    return out();
+    return reply("/v1/simple/roadmap/milestones/{milestone_id}/restore", "post", milestoneOut());
   }
   if (m.trashed || p[5]) return json(404, { detail: "No such milestone" });
   if (req.method === "DELETE" && m.prd) return json(409, { detail: "A PRD's milestone is not deleted here" });
   if (req.method === "DELETE") {
     trashMapMilestone(m, me, trash, now());
-    return new Response(null, { status: 204 });
+    return reply("/v1/simple/roadmap/milestones/{milestone_id}", "delete", undefined, 204);
   }
   if (req.method === "PATCH") {
     const body = JSON.parse((await req.text()) || "{}") as { goal_id?: string | null; name?: string; date?: string | null };
@@ -875,7 +887,7 @@ export async function routeLadderMilestone(
     }
     if (body.name) m.name = body.name;
     if ("date" in body) m.due_on = body.date ?? null;
-    return out();
+    return reply("/v1/simple/roadmap/milestones/{milestone_id}", "patch", milestoneOut());
   }
   return json(405, { detail: "Method not allowed" });
 }

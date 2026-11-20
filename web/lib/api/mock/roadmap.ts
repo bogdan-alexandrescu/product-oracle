@@ -21,6 +21,7 @@ import { prdCode } from "./item-code";
 import type { PlanEditItem, PlanEditsDb } from "./plan-edits";
 import { diffItems, snapshot } from "./roadmap-diff";
 import itemsFixture from "./roadmap-items.json";
+import { reply } from "./typed";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
 type Item = Schemas["RoadmapItemOut"];
@@ -503,10 +504,10 @@ function itemsDiff(ctx: RoadmapContext, db: RoadmapDb, q: URLSearchParams): Resp
   const out: Schemas["ItemsDiffOut"] = {
     head: ref(head), base: null, options: { previous: option(previous), approved: option(approved) }, summary: null, items: [],
   };
-  if (!against) return json(200, out);
+  if (!against) return reply("/v1/roadmap-items/diff", "get", out);
   const live = (s: Side) => s.items.map((i) => liveItem(db, i));
   const diff = diffItems(live(against), live(head));
-  return json(200, { ...out, base: ref(against), summary: diff.summary, items: diff.items });
+  return reply("/v1/roadmap-items/diff", "get", { ...out, base: ref(against), summary: diff.summary, items: diff.items });
 }
 
 /**
@@ -550,7 +551,7 @@ function itemHistory(ctx: RoadmapContext, db: RoadmapDb, q: URLSearchParams): Re
     entries.push({ ...common, present: true, title: s.title, horizon: s.horizon, milestone_name: s.milestone_name, milestone_date: s.milestone_date, change });
     last = item;
   }
-  return json(200, { prd: { id: prd.id, slug: prd.slug, title: prd.title, version: null, approved: null }, item_key: key, entries });
+  return reply("/v1/roadmap-items/history", "get", { prd: { id: prd.id, slug: prd.slug, title: prd.title, version: null, approved: null }, item_key: key, entries });
 }
 
 /** The fixture's item in place of `seed`, keeping the mock's ids; its basis named by reference. */
@@ -922,7 +923,7 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
         view,
         items: withDependencyNames(ctx, db, doc, (v ? db.items[v.id] ?? [] : []).map((i) => withEngineering(db, liveItem(db, i), view))),
       };
-      return json(200, out);
+      return reply("/v1/roadmaps/{doc}/items", "get", out);
     }
     if (p[3] === "alignment" && m === "GET") {
       const v = itemsVersion(ctx, db, doc, n);
@@ -939,7 +940,7 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
       const extra = trackId ? unplanned(db, trackId, new Set(items.map((i) => i.item_key))) : [];
       counts.unplanned = extra.length;
       const out: Schemas["AlignmentReport"] = { mode: "read_only", generated_at: now(), roadmap: docRef(doc, v), track_id: trackId, connector: connector(), counts, items: rows, unplanned: extra };
-      return json(200, out);
+      return reply("/v1/roadmaps/{doc}/alignment", "get", out);
     }
     if (p[3] === "items" && p[4] === "staleness" && m === "POST") {
       if (!can("approver")) return forbidden();
@@ -976,7 +977,7 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
         for (const a of db.alerts ?? [])
           if (a.kind === "stale" && a.state !== "resolved" && a.item_key && done.has(a.item_key) && ours.has(a.track_id)) Object.assign(a, { state: "resolved", resolved_at: now() });
       }
-      return json(200, { changed, items: (v ? db.items[v.id] ?? [] : []).map((i) => withEngineering(db, liveItem(db, i), "full")) });
+      return reply("/v1/roadmaps/{doc}/items/staleness", "post", { changed, items: (v ? db.items[v.id] ?? [] : []).map((i) => withEngineering(db, liveItem(db, i), "full")) });
     }
     if (p[3] === "versions" && p[5] === "items" && m === "PUT") {
       if (!can("approver")) return forbidden();
@@ -994,9 +995,9 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
       const prd = q.get("prd") ? findDoc(q.get("prd")!) : undefined;
       if (q.get("prd") && !prd) return notFound(`document '${q.get("prd")}'`);
       const item = q.get("item_key");
-      return json(200, db.bases.filter((b) => (!prd || b.prd_document_id === prd.id) && (!q.get("status") || b.status === q.get("status")) && (!item || b.item_key === item)));
+      return reply("/v1/schedule-bases", "get", db.bases.filter((b) => (!prd || b.prd_document_id === prd.id) && (!q.get("status") || b.status === q.get("status")) && (!item || b.item_key === item)));
     }
-    if (p[2] === "rights" && m === "GET") return json(200, { rights: rights(), lead_named: !!ctx.leadNamed });
+    if (p[2] === "rights" && m === "GET") return reply("/v1/schedule-bases/rights", "get", { rights: rights(), lead_named: !!ctx.leadNamed });
     if (!p[2] && m === "POST") {
       const may = rights();
       if (!may) return notVerifier();
@@ -1023,7 +1024,7 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
         withdrawn_reason: null, rejected_by: null, rejected_at: null, rejected_reason: null, created_at: now(),
       };
       db.bases.push(row);
-      return json(201, row);
+      return reply("/v1/schedule-bases", "post", row, 201);
     }
     const row = p[2] ? db.bases.find((b) => b.id === p[2]) : undefined;
     // F3: what withdrawing would change, writing nothing.
@@ -1054,19 +1055,20 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
           if (marks) documents.push({ slug: doc.slug, version: v.number, marks });
         }
       }
-      return json(200, { basis_id: row.id, milestones, items, documents });
+      return reply("/v1/schedule-bases/{basis_id}/impact", "get", { basis_id: row.id, milestones, items, documents });
     }
     if (p[2] && (p[3] === "verify" || p[3] === "reject") && m === "POST") {
       if (rights() !== "verify") return notDecider();
       if (!row) return notFound("Schedule basis");
       if (row.status !== "proposed") return json(409, { detail: `Only a proposed basis is decided; this one is ${row.status}` });
       const b = await body<{ note?: string | null; reason?: string }>();
-      if (p[3] === "verify") Object.assign(row, { status: "verified", verified_by: ctx.userId, verified_at: now(), note: b?.note ?? row.note });
-      else {
-        if (!b?.reason?.trim()) return json(422, { detail: "reason: a rejection needs a reason" });
-        Object.assign(row, { status: "rejected", rejected_by: ctx.userId, rejected_at: now(), rejected_reason: b.reason });
+      if (p[3] === "verify") {
+        Object.assign(row, { status: "verified", verified_by: ctx.userId, verified_at: now(), note: b?.note ?? row.note });
+        return reply("/v1/schedule-bases/{basis_id}/verify", "post", row);
       }
-      return json(200, row);
+      if (!b?.reason?.trim()) return json(422, { detail: "reason: a rejection needs a reason" });
+      Object.assign(row, { status: "rejected", rejected_by: ctx.userId, rejected_at: now(), rejected_reason: b.reason });
+      return reply("/v1/schedule-bases/{basis_id}/reject", "post", row);
     }
     if (p[2] && p[3] === "withdraw" && m === "POST") {
       if (rights() !== "verify") return notDecider();
@@ -1084,7 +1086,7 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
           undated.push(ms.id);
         }
       }
-      return json(200, { basis: row, undated_milestones: undated, stale_items: [] });
+      return reply("/v1/schedule-bases/{basis_id}/withdraw", "post", { basis: row, undated_milestones: undated, stale_items: [] });
     }
     return null;
   }
@@ -1095,13 +1097,13 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
       if (rights() === null) return notVerifier();
       return trackerLinks(ctx, db, m, p, q, body);
     }
-    if (p[2] === "connector" && m === "GET") return json(200, connector());
+    if (p[2] === "connector" && m === "GET") return reply("/v1/tracker/connector", "get", connector());
     // F2: a tracker record's history.
     if (p[2] === "records" && p[3] && p[4] === "events" && !p[5] && m === "GET") {
       if (!db.records.some((r) => r.id === p[3]) && !(db.recordEvents ?? []).some((e) => e.record_id === p[3])) return notFound("Tracker record");
-      return json(200, (db.recordEvents ?? []).filter((e) => e.record_id === p[3]).map(({ observed_at, field, before, after }) => ({ observed_at, field, before, after })));
+      return reply("/v1/tracker/records/{record_id}/events", "get", (db.recordEvents ?? []).filter((e) => e.record_id === p[3]).map(({ observed_at, field, before, after }) => ({ observed_at, field, before, after })));
     }
-    if (p[2] === "records" && m === "GET") return json(200, db.records.filter((r) => !q.get("track_id") || r.track_id === q.get("track_id")));
+    if (p[2] === "records" && m === "GET") return reply("/v1/tracker/records", "get", db.records.filter((r) => !q.get("track_id") || r.track_id === q.get("track_id")));
     if (p[2] === "records" && m === "POST") {
       if (!can("approver")) return forbidden();
       const b = await body<Schemas["TrackerRecordsImport"]>();
@@ -1125,7 +1127,7 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
         }
         return row;
       });
-      return json(200, { created, updated, records: rows });
+      return reply("/v1/tracker/records", "post", { created, updated, records: rows });
     }
     return null;
   }
@@ -1143,7 +1145,7 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
     const problem = checkDate(db, findTrack(row.track_id)!, horizon, date, basisIds, b.item_keys ?? row.item_keys);
     if (problem) return json(422, { detail: problem });
     Object.assign(row, { horizon, target_date: date, basis_ids: basisIds, name: b.name ?? row.name, item_keys: b.item_keys ?? row.item_keys, status: b.status ?? row.status, lock_version: row.lock_version + 1, updated_at: now() });
-    return json(200, row);
+    return reply("/v1/milestones/{milestone_id}", "patch", row);
   }
 
   if (p[1] !== "tracks") return null;
@@ -1155,9 +1157,9 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
         "id", "title", "status", "owner_id", "prd", "prds", "started_version", "current_version", "latest_approved_version",
         "roadmap", "lock_version", "created_at", "monitored_at", "health", "headline",
       ];
-      return json(200, db.tracks.filter((t) => !status || t.status === status).map((t) => {
+      return reply("/v1/tracks", "get", db.tracks.filter((t) => !status || t.status === status).map((t) => {
         const o = overview(ctx, db, t);
-        return Object.fromEntries(SUMMARY.map((k) => [k, o[k]]));
+        return Object.fromEntries(SUMMARY.map((k) => [k, o[k]])) as Schemas["TrackSummary"];
       }));
     }
     if (m === "POST") {
@@ -1174,20 +1176,20 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
         started_version: accepted.number, current_version: accepted.number, lock_version: 1, created_at: now(), monitored_at: null, monitor: {},
       };
       db.tracks.push(t);
-      return json(201, overview(ctx, db, t));
+      return reply("/v1/tracks", "post", overview(ctx, db, t), 201);
     }
     return null;
   }
   const t = findTrack(p[2]);
   if (!t) return notFound("Track");
   if (!p[3]) {
-    if (m === "GET") return json(200, overview(ctx, db, t));
+    if (m === "GET") return reply("/v1/tracks/{track_id}", "get", overview(ctx, db, t));
     if (m === "PATCH") {
       if (!can("approver")) return forbidden();
       const b = await body<Schemas["TrackPatch"]>();
       if (b.lock_version !== t.lock_version) return json(409, { detail: "The track changed since it was loaded" });
       Object.assign(t, { title: b.title ?? t.title, status: b.status ?? t.status, owner_id: "owner_id" in b ? b.owner_id ?? null : t.owner_id, lock_version: t.lock_version + 1 });
-      return json(200, overview(ctx, db, t));
+      return reply("/v1/tracks/{track_id}", "patch", overview(ctx, db, t));
     }
     return null;
   }
@@ -1203,10 +1205,10 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
     }
     t.monitor = after;
     t.monitored_at = now();
-    return json(200, { overview: { ...o, monitored_at: t.monitored_at }, change_event_id: eventId, changed });
+    return reply("/v1/tracks/{track_id}/monitor", "post", { overview: { ...o, monitored_at: t.monitored_at }, change_event_id: eventId, changed });
   }
   if (p[3] === "changes" && m === "GET") {
-    return json(200, db.changes.filter((c) => c.track_id === t.id).map((c) => ({ id: c.id, cause: c.cause, actor: c.actor, data: c.data, created_at: c.created_at })));
+    return reply("/v1/tracks/{track_id}/changes", "get", db.changes.filter((c) => c.track_id === t.id).map((c) => ({ id: c.id, cause: c.cause, actor: c.actor, data: c.data, created_at: c.created_at })));
   }
   if (p[3] === "tracker-plan" && m === "GET") {
     const o = overview(ctx, db, t);
@@ -1215,14 +1217,14 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
     const epics = (rv ? db.items[rv.id] ?? [] : [])
       .filter((i) => i.horizon !== "later")
       .map((i) => ({ item_key: i.item_key, title: i.title, horizon: i.horizon, description: i.outcome, prd_link: i.prd.link, issues: i.requirements.map((r) => ({ title: r.title, requirement_key: r.key })) }));
-    return json(200, { track_id: o.id, would_write: false, connector: connector(), epics });
+    return reply("/v1/tracks/{track_id}/tracker-plan", "get", { track_id: o.id, would_write: false, connector: connector(), epics });
   }
   if (p[3] === "tracker-push" && m === "POST") {
     if (!can("approver")) return forbidden();
     return json(409, { detail: OFF_REASON });
   }
   if (p[3] === "milestones") {
-    if (m === "GET") return json(200, db.milestones.filter((x) => x.track_id === t.id));
+    if (m === "GET") return reply("/v1/tracks/{track_id}/milestones", "get", db.milestones.filter((x) => x.track_id === t.id));
     if (m === "POST") {
       if (!can("approver")) return forbidden();
       const b = await body<Schemas["MilestoneCreate"]>();
@@ -1235,7 +1237,7 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
         item_keys: b.item_keys ?? [], status: "planned", lock_version: 1, created_at: now(), updated_at: now(),
       };
       db.milestones.push(row);
-      return json(201, row);
+      return reply("/v1/tracks/{track_id}/milestones", "post", row, 201);
     }
   }
   // /v1/tracks/{id}/roadmap-run is answered by the runs mock (server.ts forwards it).
@@ -1799,7 +1801,7 @@ export function routePlan(ctx: PlanContext, db: RoadmapDb, req: Request, p: stri
   const scope = q.get("scope") ?? "all";
   if (scope !== "all" && scope !== "approved") return json(422, { detail: "scope: all or approved" });
   const out = planOut(ctx, db, scope);
-  return json(200, { ...out, items: out.items.map((i) => ({ ...i, code: ctx.code?.(i.id) ?? null })) });
+  return reply("/v1/plan", "get", { ...out, items: out.items.map((i) => ({ ...i, code: ctx.code?.(i.id) ?? null })) });
 }
 
 /**
@@ -1855,7 +1857,7 @@ const TRACKER_HISTORY_LIMIT = 20;
 const SHOWN_FIELDS: Schemas["TrackerFieldChange"]["field"][] = ["state", "target_date", "estimate"];
 
 function planHistory(ctx: PlanContext, db: RoadmapDb, q: URLSearchParams): Response {
-  const roadmap = q.get("roadmap");
+  const roadmap = q.get("roadmap") ?? "";
   const key = q.get("item") ?? "";
   // F2 §2: the tracker history of the item's issues (the Plan's seeded records), as
   // oracle.plan.service._tracker_events: one entry per import of an issue (its events share the
@@ -1875,7 +1877,7 @@ function planHistory(ctx: PlanContext, db: RoadmapDb, q: URLSearchParams): Respo
   for (const i of all) i.changes.sort((a, b) => SHOWN_FIELDS.indexOf(a.field) - SHOWN_FIELDS.indexOf(b.field));
   const tracker_events = all.slice(-TRACKER_HISTORY_LIMIT);
   const out = (versions: Schemas["ItemVersion"][]): Response =>
-    json(200, { roadmap, item: key, versions, tracker_events, tracker_events_older: all.length - tracker_events.length });
+    reply("/v1/plan/items/history", "get", { roadmap, item: key, versions, tracker_events, tracker_events_older: all.length - tracker_events.length });
   if (roadmap === ALERTS_ROADMAP_SLUG) {
     const a = ALERTS_APPROVED.find((i) => i.key === key);
     if (!a) return out([]);
@@ -2147,7 +2149,7 @@ function trackerLinks(
         milestone: i.milestone && { title: i.milestone.title, due: i.milestone.due }, linked: r ? linkOut(r) : null,
       };
     });
-    return json(200, out);
+    return reply("/v1/tracker/issues", "get", out);
   }
   if (p[2] === "links" && !p[3] && m === "POST") {
     return (async () => {
@@ -2170,17 +2172,17 @@ function trackerLinks(
       const fresh = issueRecord(issue, doc.id, b.item_key, ctx.userId, now());
       if (had) {
         Object.assign(had, { ...fresh, id: had.id, created_at: had.created_at });
-        return json(201, had);
+        return reply("/v1/tracker/links", "post", had, 201);
       }
       records.push(fresh);
-      return json(201, fresh);
+      return reply("/v1/tracker/links", "post", fresh, 201);
     })();
   }
   if (p[2] === "links" && p[3] && !p[4] && m === "DELETE") {
     const r = records.find((x) => x.id === p[3]);
     if (!r) return notFound("tracker record");
     Object.assign(r, { item_key: null, track_id: null, prd_document_id: null, updated_at: now() });
-    return new Response(null, { status: 204 });
+    return reply("/v1/tracker/links/{record_id}", "delete", undefined, 204);
   }
   return null;
 }
@@ -2344,8 +2346,9 @@ function trackAlerts(
     if (!["open", "kept", "resolved", "all"].includes(state)) return json(422, { detail: "state: open, kept, resolved or all" });
     const track = q.get("track_id");
     if (track && !db.tracks.some((t) => t.id === track)) return notFound("Track");
-    return json(
-      200,
+    return reply(
+      "/v1/track-alerts",
+      "get",
       alerts
         .filter((a) => (state === "all" || a.state === state) && (!track || a.track_id === track))
         .sort((a, b) => b.opened_at.localeCompare(a.opened_at))
@@ -2363,14 +2366,14 @@ function trackAlerts(
       const note = b?.note?.trim() || null;
       if (note && note.length > 500) return json(422, { detail: "note: at most 500 characters" });
       Object.assign(a, { state: "kept", kept_by: ctx.userId, kept_by_name: ctx.userName ?? null, kept_at: now(), note });
-      return json(200, alertOut(ctx, db, a));
+      return reply("/v1/track-alerts/{alert_id}/keep", "post", alertOut(ctx, db, a));
     });
   }
   if (verb === "reopen") {
     if (!inAlertAudience(ctx, db, a)) return json(403, { detail: "Only the people this alert goes to keep or reopen it" });
     if (a.state !== "kept") return json(409, { detail: "Only a kept alert can be reopened" });
     Object.assign(a, { state: "open", kept_by: null, kept_by_name: null, kept_at: null, note: null });
-    return json(200, alertOut(ctx, db, a));
+    return reply("/v1/track-alerts/{alert_id}/reopen", "post", alertOut(ctx, db, a));
   }
   if (verb === "accept-date") {
     const verifies = RANK[ctx.role] >= RANK.approver || (!!ctx.engineeringLead && RANK[ctx.role] >= RANK.commenter);
@@ -2401,7 +2404,7 @@ function trackAlerts(
       const out: AcceptDateOut = {
         alert: alertOut(ctx, db, a), basis, withdrawn_basis_ids: withdrawn.map((b) => b.id), milestones_moved: moved, stale_item_ids: [],
       };
-      return json(200, out);
+      return reply("/v1/track-alerts/{alert_id}/accept-date", "post", out);
     });
   }
   return null;

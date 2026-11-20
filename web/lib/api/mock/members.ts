@@ -13,6 +13,8 @@
 import type { Schemas } from "@/lib/api/client";
 import type { HandOver, Held, Impact, Responsibility } from "@/lib/api/members-types";
 
+import { reply } from "./typed";
+
 type MemberRow = Schemas["MemberOut"];
 type Role = MemberRow["role"];
 
@@ -197,7 +199,7 @@ export function impact(ctx: MembersContext, target: MemberRow, change: "remove" 
       },
       voids: { spend_approvals: h.spend_approvals, resumes: [], checkpoint_decisions: h.checkpoint_decisions },
       lapses: { section_approvals: h.section_approvals, version_approvals: h.version_approvals },
-      responsibilities: responsibilities(ctx, target.id),
+      responsibilities: responsibilities(ctx, target.id).map((r) => ({ ...r, holder_ok: false })),
       nothing: false,
     };
     return out;
@@ -245,7 +247,7 @@ export async function membersDetailRoute(ctx: MembersContext, req: Request, p: s
     const h = holdingOf(ctx, target.id);
     const inviter = ctx.db.invites.find((i) => i.email === target.email && i.status === "accepted");
     const by = inviter ? ctx.db.members.find((x) => x.id === inviter.invited_by) : undefined;
-    return json(200, {
+    return reply("/v1/members/{user_id}", "get", {
       ...target,
       open_tokens: ctx.openTokens(target.id),
       joined: inviter
@@ -265,18 +267,22 @@ export async function membersDetailRoute(ctx: MembersContext, req: Request, p: s
     const role = url.searchParams.get("role") as Role | null;
     if (change !== "remove" && change !== "role") return json(422, { detail: "change is remove or role" });
     if (change === "role" && (!role || !ORDER.includes(role))) return json(422, { detail: "role is viewer, commenter, approver or owner" });
-    return json(200, impact(ctx, target, change, change === "role" ? role : null));
+    const out = impact(ctx, target, change, change === "role" ? role : null);
+    return reply("/v1/members/{user_id}/impact", "get", {
+      ...out,
+      responsibilities: out.responsibilities.map((r) => ({ ...r, holder_ok: r.holder_ok ?? false })),
+    });
   }
   if (m === "GET" && p[3] === "approvals") {
     // As member_approvals: live ones, and lapsed ones too with ?lapsed=true.
     const lapsed = url.searchParams.get("lapsed") === "true";
-    return json(200, holdingOf(ctx, target.id).approvals.filter((a) => lapsed || !a.lapsed_at));
+    return reply("/v1/members/{user_id}/approvals", "get", holdingOf(ctx, target.id).approvals.filter((a) => lapsed || !a.lapsed_at));
   }
   if (m === "POST" && p[3] === "hand-over") {
     const input = JSON.parse((await req.text()) || "null") as { hand_over?: HandOver[] } | null;
     const refused = handOver(ctx, target.id, input?.hand_over ?? []);
     if (refused) return refused;
-    return json(200, { responsibilities: responsibilities(ctx, target.id) });
+    return reply("/v1/members/{user_id}/hand-over", "post", { responsibilities: responsibilities(ctx, target.id) });
   }
   return null;
 }

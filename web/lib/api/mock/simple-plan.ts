@@ -11,6 +11,8 @@
  */
 import type { Schemas } from "@/lib/api/client";
 
+import { reply } from "./typed";
+
 type Slice = Schemas["SimpleSlice"];
 type PlanOut = Schemas["SimplePlanOut"];
 type Role = Schemas["Me"]["role"];
@@ -391,13 +393,13 @@ export function routeSimplePlan(
     const out = planOut(mine, prd, role);
     // by_job: the job answers by the next read, with the dates the PRD's text gives.
     if (mine?.reading && !mine.stuck) Object.assign(mine, { reading: false, undated: false });
-    return json(200, out);
+    return reply("/v1/simple/prds/{prd}/plan", "get", out);
   }
   if (p[5] === "read-again" && !p[6] && req.method === "POST") {
     if (role !== "owner") return json(403, { detail: "Only an owner reads the plan again" });
     if (mine) mine.read_at = new Date().toISOString();
     if (mine?.by_job) mine.reading = true;
-    return json(200, planOut(mine, prd, role));
+    return reply("/v1/simple/prds/{prd}/plan/read-again", "post", planOut(mine, prd, role));
   }
   return null;
 }

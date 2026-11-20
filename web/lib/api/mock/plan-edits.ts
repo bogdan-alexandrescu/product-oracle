@@ -13,6 +13,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { prdCode, shownCode, shownName } from "./item-code";
+import { reply } from "./typed";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
 type Horizon = "now" | "next" | "later";
@@ -237,11 +238,15 @@ export async function routeChangeSets(ctx: PlanEditsContext, db: PlanEditsDb, re
         const offset = Number(q.get("offset") ?? 0);
         if (!(limit >= 1 && limit <= 100) || !(offset >= 0)) throw new Refused(422, "limit is 1-100, offset 0 or more");
         const rows = db.sets.filter((s) => s.roadmap === doc.slug && (!status || s.status === status)).reverse();
-        return json(200, rows.slice(offset, offset + limit).map((r) => view(ctx, db, doc, r)));
+        return reply(
+          "/v1/roadmaps/{doc}/change-sets",
+          "get",
+          rows.slice(offset, offset + limit).map((r) => view(ctx, db, doc, r)),
+        );
       }
       if (m !== "POST") return null;
       const open = db.sets.find((s) => s.roadmap === doc.slug && s.status === "draft");
-      if (open) return json(200, view(ctx, db, doc, open));
+      if (open) return reply("/v1/roadmaps/{doc}/change-sets", "post", view(ctx, db, doc, open));
       const live = liveVersion(ctx, doc);
       if (live == null) throw new Refused(422, `'${doc.slug}' has no approved version: edit the plan once a version is approved`);
       const row: ChangeSetRow = {
@@ -249,11 +254,11 @@ export async function routeChangeSets(ctx: PlanEditsContext, db: PlanEditsDb, re
         lock_version: 1, created_by: ctx.userId, created_at: ctx.now(), updated_at: ctx.now(),
       };
       db.sets.push(row);
-      return json(201, view(ctx, db, doc, row));
+      return reply("/v1/roadmaps/{doc}/change-sets", "post", view(ctx, db, doc, row), 201);
     }
     const row = db.sets.find((s) => s.id === p[4] && s.roadmap === doc.slug);
     if (!row) return json(404, { detail: "Change set not found" });
-    if (m === "GET" && !p[5]) return json(200, view(ctx, db, doc, row));
+    if (m === "GET" && !p[5]) return reply("/v1/roadmaps/{doc}/change-sets/{set_id}", "get", view(ctx, db, doc, row));
     const draft = () => {
       if (row.status !== "draft") throw new Refused(409, `This change set is ${row.status}: edit the plan again to change it`);
     };
@@ -267,13 +272,13 @@ export async function routeChangeSets(ctx: PlanEditsContext, db: PlanEditsDb, re
       codesFree(ctx, apply(itemsOf(ctx, db, doc.slug, row.base_version), changes), 422);
       row.changes = changes;
       stamp(row);
-      return json(200, view(ctx, db, doc, row));
+      return reply("/v1/roadmaps/{doc}/change-sets/{set_id}", "patch", view(ctx, db, doc, row));
     }
     if (m === "DELETE" && !p[5]) {
       draft();
       row.status = "discarded";
       stamp(row);
-      return json(200, view(ctx, db, doc, row));
+      return reply("/v1/roadmaps/{doc}/change-sets/{set_id}", "delete", view(ctx, db, doc, row));
     }
     if (m === "POST" && p[5] === "propose") {
       draft();
@@ -300,7 +305,7 @@ export async function routeChangeSets(ctx: PlanEditsContext, db: PlanEditsDb, re
         other.superseded_by_version = version.number;
         stamp(other);
       }
-      return json(200, view(ctx, db, doc, row));
+      return reply("/v1/roadmaps/{doc}/change-sets/{set_id}/propose", "post", view(ctx, db, doc, row));
     }
     return null;
   } catch (e) {

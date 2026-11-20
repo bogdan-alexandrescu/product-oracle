@@ -6,6 +6,7 @@
 import type { Schemas } from "@/lib/api/client";
 
 import { mockUuid, seeded } from "./ids";
+import { reply, rawReply } from "./typed";
 
 type Role = Schemas["Me"]["role"];
 type Launch = Omit<Schemas["LaunchOut"], "tasks" | "task_counts" | "notes">;
@@ -377,14 +378,14 @@ export async function routeLaunches(ctx: LaunchesContext, db: LaunchesDb, req: R
       let rows = [...db.changelog];
       for (const key of ["audience", "status"] as const) if (q.get(key)) rows = rows.filter((e) => e[key] === q.get(key));
       rows.sort((a, b) => b.released_on.localeCompare(a.released_on) || b.created_at.localeCompare(a.created_at));
-      return json(200, rows);
+      return reply("/v1/changelog", "get", rows);
     }
     if (p[2] === "export" && m === "GET") {
       const audience = q.get("audience") ?? "public";
       const since = q.get("since");
       const rows = db.changelog.filter((e) => e.status === "published" && e.audience === audience && (!since || e.released_on >= since));
       const format = q.get("format") ?? "md";
-      return new Response(exportText(rows, format), { status: 200, headers: { "Content-Type": format === "html" ? "text/html; charset=utf-8" : "text/markdown; charset=utf-8" } });
+      return rawReply("/v1/changelog/export", "get", new Response(exportText(rows, format), { status: 200, headers: { "Content-Type": format === "html" ? "text/html; charset=utf-8" : "text/markdown; charset=utf-8" } }));
     }
     if (!approver) return forbidden("approver");
     if (p.length === 2 && m === "POST") {
@@ -396,7 +397,7 @@ export async function routeLaunches(ctx: LaunchesContext, db: LaunchesDb, req: R
         created_actor: `user:${ctx.userId}`, lock_version: 1, created_at: now(), updated_at: now(),
       };
       db.changelog.push(e);
-      return json(201, e);
+      return reply("/v1/changelog", "post", e, 201);
     }
     const e = db.changelog.find((x) => x.id === p[2]);
     if (!e) return notFound("Changelog entry");
@@ -406,16 +407,16 @@ export async function routeLaunches(ctx: LaunchesContext, db: LaunchesDb, req: R
       for (const k of ["category", "audience", "title", "body", "released_on"] as const) if (b[k] != null) (e as Record<string, unknown>)[k] = b[k];
       e.lock_version += 1;
       e.updated_at = now();
-      return json(200, e);
+      return reply("/v1/changelog/{entry_id}", "patch", e);
     }
     if (p[3] === "publish" && m === "POST") {
       if (e.status === "withdrawn") return conflict("A withdrawn entry cannot be published");
       Object.assign(e, { status: "published", published_by: ctx.userId, published_actor: `user:${ctx.userId}`, published_at: now(), lock_version: e.lock_version + 1 });
-      return json(200, e);
+      return reply("/v1/changelog/{entry_id}/publish", "post", e);
     }
     if (p[3] === "withdraw" && m === "POST") {
       Object.assign(e, { status: "withdrawn", lock_version: e.lock_version + 1 });
-      return json(200, e);
+      return reply("/v1/changelog/{entry_id}/withdraw", "post", e);
     }
     return notFound("Route");
   }
@@ -440,7 +441,7 @@ export async function routeLaunches(ctx: LaunchesContext, db: LaunchesDb, req: R
     t.lock_version += 1;
     t.updated_at = now();
     const launch = db.launches.find((l) => l.id === t.launch_id)!;
-    return json(200, tasksOf(db, launch).find((x) => x.id === t.id));
+    return reply("/v1/launch-tasks/{task_id}", "patch", tasksOf(db, launch).find((x) => x.id === t.id)!);
   }
 
   if (area === "requester-notes" && m === "PATCH") {
@@ -455,7 +456,7 @@ export async function routeLaunches(ctx: LaunchesContext, db: LaunchesDb, req: R
     if (b.status === "sent") Object.assign(n, { status: "sent", channel: b.channel ?? n.channel, sent_on: b.sent_on ?? now().slice(0, 10), sent_by: ctx.userId });
     if (b.status === "skipped") Object.assign(n, { status: "skipped", skip_reason: b.skip_reason!.trim() });
     n.updated_at = now();
-    return json(200, n);
+    return reply("/v1/requester-notes/{note_id}", "patch", n);
   }
 
   if (area !== "launches") return notFound("Route");
@@ -464,7 +465,7 @@ export async function routeLaunches(ctx: LaunchesContext, db: LaunchesDb, req: R
     if (q.get("state")) rows = rows.filter((l) => l.state === q.get("state"));
     if (q.get("tier")) rows = rows.filter((l) => String(l.tier) === q.get("tier"));
     rows.sort((a, b) => b.created_at.localeCompare(a.created_at));
-    return json(200, rows.map((l) => summary(db, l)));
+    return reply("/v1/launches", "get", rows.map((l) => summary(db, l)));
   }
   if (p.length === 2 && m === "POST") {
     if (!approver) return forbidden("approver");
@@ -486,12 +487,12 @@ export async function routeLaunches(ctx: LaunchesContext, db: LaunchesDb, req: R
     if (known) l.items = items as Schemas["LaunchItem"][];
     db.launches.push(l);
     applyTier(db, l);
-    return json(201, out(db, l));
+    return reply("/v1/launches", "post", out(db, l), 201);
   }
   const launch = db.launches.find((l) => l.id === p[2]);
   if (!launch) return notFound("Launch");
-  if (p.length === 3 && m === "GET") return json(200, out(db, launch));
-  if (p[3] === "notes" && m === "GET") return json(200, db.notes.filter((n) => n.launch_id === launch.id));
+  if (p.length === 3 && m === "GET") return reply("/v1/launches/{launch_id}", "get", out(db, launch));
+  if (p[3] === "notes" && m === "GET") return reply("/v1/launches/{launch_id}/notes", "get", db.notes.filter((n) => n.launch_id === launch.id));
   if (!approver) return forbidden("approver");
   if (p.length === 3 && m === "PATCH") {
     const b = await body<Schemas["LaunchPatch"]>();
@@ -505,7 +506,7 @@ export async function routeLaunches(ctx: LaunchesContext, db: LaunchesDb, req: R
     }
     launch.lock_version += 1;
     launch.updated_at = now();
-    return json(200, out(db, launch));
+    return reply("/v1/launches/{launch_id}", "patch", out(db, launch));
   }
   if (p[3] === "launched" && m === "POST") {
     if (launch.state === "launched") return conflict("Already launched");
@@ -513,14 +514,14 @@ export async function routeLaunches(ctx: LaunchesContext, db: LaunchesDb, req: R
     const b = await body<Schemas["LaunchedIn"] | null>().catch(() => null);
     Object.assign(launch, { state: "launched", launched_at: b?.at ?? now(), lock_version: launch.lock_version + 1 });
     for (const e of db.changelog) if (e.launch_id === launch.id && e.status === "draft") e.released_on = launch.launched_at!.slice(0, 10);
-    return json(200, out(db, launch));
+    return reply("/v1/launches/{launch_id}/launched", "post", out(db, launch));
   }
   if (p[3] === "cancel" && m === "POST") {
     const b = await body<Schemas["CancelIn"]>();
     if (!b.reason?.trim()) return invalid("Say why the launch is cancelled");
     if (launch.state !== "planned" && launch.state !== "ready") return conflict(`A ${launch.state} launch cannot be cancelled`);
     Object.assign(launch, { state: "cancelled", cancel_reason: b.reason.trim(), lock_version: launch.lock_version + 1 });
-    return json(200, out(db, launch));
+    return reply("/v1/launches/{launch_id}/cancel", "post", out(db, launch));
   }
   if (p[3] === "draft" && m === "POST") {
     // The mock's kit run finishes at once: Oracle's drafts land on the tasks still to do (at
@@ -532,7 +533,34 @@ export async function routeLaunches(ctx: LaunchesContext, db: LaunchesDb, req: R
       Object.assign(t, { body: DRAFTS[t.key], status: "drafted" });
     }
     Object.assign(launch, { kit_run_id: mockUuid(), kit_error: null });
-    return json(201, { id: launch.kit_run_id, flow: "launch_kit", status: "succeeded" });
+    const run: Schemas["RunOut"] = {
+      id: launch.kit_run_id!,
+      flow: "launch_kit",
+      flow_title: "Launch kit",
+      status: "succeeded",
+      spent_usd: 3,
+      created_by: ctx.userId,
+      created_at: now(),
+      started_at: now(),
+      finished_at: now(),
+      can_retry: false,
+      can_stop_cancelling: false,
+      can_retry_lookup: false,
+      cancel_again: [],
+      can_dismiss_overrun: false,
+      can_decide: false,
+      can_retry_import: false,
+      knobs: { depth: "quick", roles: {}, checkpoints: {}, goals: [], features: [] },
+      needs_approval: false,
+      runtime: "fake",
+      notes: [],
+      note_refs: [],
+      segments: [],
+      checkpoints: [],
+      token_read_only: false,
+      open_proposals: 0,
+    };
+    return reply("/v1/launches/{launch_id}/draft", "post", run, 201);
   }
   if (p[3] === "tasks" && m === "POST") {
     const b = await body<Schemas["TaskCreate"]>();
@@ -543,7 +571,7 @@ export async function routeLaunches(ctx: LaunchesContext, db: LaunchesDb, req: R
       drafts: "no", optional: false, notice: null, lock_version: 1, updated_at: now(),
     };
     db.tasks.push(t);
-    return json(201, t);
+    return reply("/v1/launches/{launch_id}/tasks", "post", t, 201);
   }
   if (p[3] === "notes" && m === "POST") {
     const b = await body<Schemas["RequesterCreate"]>();
@@ -553,7 +581,7 @@ export async function routeLaunches(ctx: LaunchesContext, db: LaunchesDb, req: R
       skip_reason: null, notified_at: null, internal: false, notice: null, created_at: now(), updated_at: now(),
     };
     db.notes.push(n);
-    return json(201, n);
+    return reply("/v1/launches/{launch_id}/notes", "post", n, 201);
   }
   if (p[3] === "notify-members" && m === "POST") {
     if (launch.state !== "launched") return conflict("Mark the launch launched first");
@@ -564,7 +592,7 @@ export async function routeLaunches(ctx: LaunchesContext, db: LaunchesDb, req: R
         notified += 1;
       }
     }
-    return json(200, { notified });
+    return reply("/v1/launches/{launch_id}/notify-members", "post", { notified });
   }
   return notFound("Route");
 }

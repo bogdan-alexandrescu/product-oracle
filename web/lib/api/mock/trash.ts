@@ -11,6 +11,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { linkOf, reopenDraftOnly, type SimpleDb } from "./simple-roadmap";
+import { reply } from "./typed";
 
 type Role = Schemas["Me"]["role"];
 type TrashItem = Schemas["TrashItem"];
@@ -330,7 +331,7 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
     if (!atLeast(ctx.me.role, "commenter")) return json(403, { detail: "Requires the commenter role" });
     if (m === "GET" && !p[2]) {
       const mine = ctx.db.entries.filter((e) => owner || mayRestore(e, ctx.me));
-      return json(200, mine.map((e) => entryOut(e, now, mayRestore(e, ctx.me))).reverse());
+      return reply("/v1/trash", "get", mine.map((e) => entryOut(e, now, mayRestore(e, ctx.me))).reverse());
     }
     const entry = ctx.db.entries.find((e) => e.out.id === p[2]);
     if (!entry) return json(404, { detail: "Not in Trash" });
@@ -338,12 +339,12 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
       if (!mayRestore(entry, ctx.me)) return json(403, { detail: "Only an owner, or whoever deleted it, restores this" });
       const refused = entry.agenda || entry.request !== undefined || entry.outcome !== undefined ? (ctx.restoreRoot?.(entry) ?? null) : (ctx.refuseRestore?.(entry) ?? null);
       if (refused) return json(409, { detail: refused });
-      return json(200, restore(ctx, entry, now));
+      return reply("/v1/trash/{entry_id}/restore", "post", restore(ctx, entry, now));
     }
     if (!owner) return ownerOnly;
     if (m === "DELETE" && !p[3]) {
       purge(ctx.db, entry, now, ctx.simple?.());
-      return json(204, undefined);
+      return reply("/v1/trash/{entry_id}", "delete", undefined, 204);
     }
     return null;
   }
@@ -377,7 +378,7 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
         run_id: runId, document_slug: doc.slug, kind: doc.kind, flow, inputs, estimate_usd: estimate,
         approval_threshold_usd: 50, needs_owner_approval: estimate > 50, note: body.note ?? null,
       };
-      return json(200, out);
+      return reply("/v1/documents/{doc}/regenerate/estimate", "post", out);
     }
     const pending = body.run_id ? ctx.db.estimates[body.run_id] : undefined;
     if (!pending || pending.slug !== doc.slug) return json(404, { detail: `no regeneration of '${doc.slug}' with run ${body.run_id}` });
@@ -395,7 +396,7 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
       roadmap_read: doc.kind === "prd" ? (ctx.roadmapRead?.(ctx.me) ?? null) : null,
     } as RunOut;
     ctx.runs().push(run);
-    return json(200, run);
+    return reply("/v1/documents/{doc}/regenerate", "post", run);
   }
 
   const isDelete = m === "DELETE" && !leaf;
@@ -407,7 +408,10 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
   if (isRestore) {
     const entry = ctx.db.entries.find((e) => e.out.root.id === p[2] || e.out.root.slug === p[2] || e.out.items.some((i) => i.id === p[2] || i.slug === p[2]));
     if (!entry) return json(404, { detail: `${type} '${p[2]}' not found in Trash` });
-    return json(200, restore(ctx, entry, now));
+    const restored = restore(ctx, entry, now);
+    if (type === "document") return reply("/v1/documents/{doc}/restore", "post", restored);
+    if (type === "intake") return reply("/v1/intakes/{intake_id}/restore", "post", restored);
+    return reply("/v1/runs/{run_id}/restore", "post", restored);
   }
 
   let root: TrashItem;
@@ -449,6 +453,9 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
     const prds = docs.filter((d) => d.kind === "prd").map((d) => d.slug);
     const fed = prds.length && ctx.feeds ? ctx.feeds(prds, docs.map((d) => d.slug)) : { stays: [], goes: [] };
     const out: Schemas["DependentsOut"] = { root, items: said, published, working_runs: working.map((r) => r.id), feeds: fed.stays, feeds_going: fed.goes };
+    if (type === "document") return reply("/v1/documents/{doc}/dependents", "get", out);
+    if (type === "intake") return reply("/v1/intakes/{intake_id}/dependents", "get", out);
+    // mock-types: no dependents route for a run in the schema (the UI never asks for a run's dependents)
     return json(200, out);
   }
   if (working.length) return json(409, { detail: `A run is still working on this (${working[0].flow}, ${working[0].status}): cancel it first` });
@@ -470,7 +477,10 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
     released: ctx.onTrash?.([...ids]),
   };
   ctx.db.entries.push(entry);
-  return json(200, entryOut(entry, now, true));
+  const out2 = entryOut(entry, now, true);
+  if (type === "document") return reply("/v1/documents/{doc}", "delete", out2);
+  if (type === "intake") return reply("/v1/intakes/{intake_id}", "delete", out2);
+  return reply("/v1/runs/{run_id}", "delete", out2);
 }
 
 function latestVersion<D extends TrashDocument, V extends TrashVersion>(ctx: TrashContext<D, V>, doc: D): V | undefined {

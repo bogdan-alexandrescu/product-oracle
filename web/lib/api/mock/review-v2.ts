@@ -7,6 +7,7 @@
  * let it start against the mock. Synthetic placeholders only.
  */
 import type { Schemas } from "@/lib/api/client";
+import { reply } from "./typed";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
 type SectionRow = { section_key: string; heading: string; ordinal: number; layer: "brief" | "detail"; content_hash: string; body_md: string; body_text: string; level: number; citation_keys?: string[] };
@@ -35,7 +36,7 @@ export interface ReviewV2Context {
   now: () => string;
   hash: (text: string) => string;
   /** Imports the latest version of `doc` with one section replaced; returns VersionOut. */
-  editSection: (doc: DocumentLike, key: string, heading: string | null, body: string) => unknown;
+  editSection: (doc: DocumentLike, key: string, heading: string | null, body: string) => Schemas["VersionOut"];
   exportHtml: (doc: DocumentLike, v: VersionLike) => string;
 }
 
@@ -179,18 +180,18 @@ export async function routeReviewV2(ctx: ReviewV2Context, req: Request, p: strin
     if (p[3] === "read-all" && m === "POST") {
       const unread = mine.filter((n) => !n.read_at);
       unread.forEach((n) => (n.read_at = ctx.now()));
-      return json(200, { marked: unread.length });
+      return reply("/v1/me/notifications/read-all", "post", { marked: unread.length });
     }
     if (m === "GET") {
       const unread = q.get("unread") === "true";
-      return json(200, mine.filter((n) => !unread || !n.read_at).map((n) => without(n, "user_id")).sort((a, b) => b.created_at.localeCompare(a.created_at)));
+      return reply("/v1/me/notifications", "get", mine.filter((n) => !unread || !n.read_at).map((n) => without(n, "user_id")).sort((a, b) => b.created_at.localeCompare(a.created_at)));
     }
   }
   if (p[1] === "notifications" && p[3] === "read" && m === "POST") {
     const n = ctx.db.notifications.find((x) => x.id === p[2] && x.user_id === ctx.me.id);
     if (!n) return json(404, { detail: "Notification not found" });
     n.read_at ??= ctx.now();
-    return json(200, without(n, "user_id"));
+    return reply("/v1/notifications/{notification_id}/read", "post", without(n, "user_id"));
   }
   if (p[1] === "me" && p[2] === "review-queue" && m === "GET") {
     const items: Schemas["ReviewQueueItem"][] = [];
@@ -202,7 +203,7 @@ export async function routeReviewV2(ctx: ReviewV2Context, req: Request, p: strin
       if (!role || !doc || !latest || !state) continue;
       items.push({ document_id: doc.id, slug: doc.slug, title: doc.title, version: latest.number, section_key: a.section_key, heading: state.heading, role, status: state.status, rereview_requested: state.rereview_requested ?? false, due_at: a.due_at ?? null, overdue: state.overdue ?? false });
     }
-    return json(200, items);
+    return reply("/v1/me/review-queue", "get", items);
   }
 
   if (p[1] === "section-patches" && p[2]) {
@@ -217,7 +218,7 @@ export async function routeReviewV2(ctx: ReviewV2Context, req: Request, p: strin
         ...(current?.body_text ?? "").split(/\s+/).filter(Boolean).map((text) => ({ op: "equal" as const, text })),
         ...["An", "agent", "proposed", "this", "added", "sentence."].map((text) => ({ op: "insert" as const, text })),
       ];
-      return json(200, { ...patch, latest_version: latest.number, current_revision: currentRevision, current_heading: current?.heading ?? null, current_body_md: current?.body_md ?? null, rebase_needed: currentRevision !== patch.base_hash, words });
+      return reply("/v1/section-patches/{patch_id}", "get", { ...patch, latest_version: latest.number, current_revision: currentRevision, current_heading: current?.heading ?? null, current_body_md: current?.body_md ?? null, rebase_needed: currentRevision !== patch.base_hash, words });
     }
     const denied = need("approver");
     if (denied) return denied;
@@ -226,7 +227,7 @@ export async function routeReviewV2(ctx: ReviewV2Context, req: Request, p: strin
     if (patch.status !== "open") return json(409, { detail: `an ${patch.status} patch cannot be decided` });
     if (p[3] === "reject" && m === "POST") {
       Object.assign(patch, { status: "rejected", decided_by: ctx.me.id, decided_at: ctx.now(), decision_note: input.note ?? null, lock_version: patch.lock_version + 1 });
-      return json(200, patch);
+      return reply("/v1/section-patches/{patch_id}/reject", "post", patch);
     }
     if (p[3] === "accept" && m === "POST") {
       if (!currentRevision || input.base_revision !== currentRevision) {
@@ -234,21 +235,21 @@ export async function routeReviewV2(ctx: ReviewV2Context, req: Request, p: strin
       }
       const out = ctx.editSection(doc, patch.section_key, input.heading ?? patch.heading, input.body_md ?? patch.body_md);
       Object.assign(patch, { status: "accepted", decided_by: ctx.me.id, decided_at: ctx.now(), decision_note: input.note ?? null, applied_version: latest.number + 1, lock_version: patch.lock_version + 1 });
-      return json(201, out);
+      return reply("/v1/section-patches/{patch_id}/accept", "post", out, 201);
     }
   }
 
   if (p[1] === "campaigns" && p[2]) {
     const c = ctx.db.campaigns.find((x) => x.id === p[2]);
     if (!c) return json(404, { detail: "Campaign not found" });
-    if (m === "GET") return json(200, c);
+    if (m === "GET") return reply("/v1/campaigns/{campaign_id}", "get", c);
     if (m === "PATCH") {
       const denied = need("approver");
       if (denied) return denied;
       const input = await body<Schemas["CampaignPatch"]>();
       if (input.lock_version !== c.lock_version) return conflict(c.lock_version);
       Object.assign(c, { status: input.status, closed_at: input.status === "closed" ? ctx.now() : null, closed_by: input.status === "closed" ? ctx.me.id : null, lock_version: c.lock_version + 1, updated_at: ctx.now() });
-      return json(200, c);
+      return reply("/v1/campaigns/{campaign_id}", "patch", c);
     }
   }
 
@@ -261,8 +262,8 @@ export async function routeReviewV2(ctx: ReviewV2Context, req: Request, p: strin
   if (p[3] === "versions" && p[4] && (p[5] === "section-states" || p[5] === "publish-check" || p[5] === "publish")) {
     const v = versions.find((x) => x.number === Number(p[4]));
     if (!v) return json(404, { detail: "Version not found" });
-    if (p[5] === "section-states" && m === "GET") return json(200, statesOf(ctx, doc, v));
-    if (p[5] === "publish-check" && m === "GET") return json(200, publishCheck(ctx, doc, v));
+    if (p[5] === "section-states" && m === "GET") return reply("/v1/documents/{doc}/versions/{n}/section-states", "get", statesOf(ctx, doc, v));
+    if (p[5] === "publish-check" && m === "GET") return reply("/v1/documents/{doc}/versions/{n}/publish-check", "get", publishCheck(ctx, doc, v));
     if (p[5] === "publish" && m === "POST") {
       const denied = need("approver");
       if (denied) return denied;
@@ -276,10 +277,10 @@ export async function routeReviewV2(ctx: ReviewV2Context, req: Request, p: strin
         markdown: v.markdown ?? "", html: ctx.exportHtml(doc, v),
       };
       ctx.db.publications.push(pub);
-      return json(201, without(pub, "html"));
+      return reply("/v1/documents/{doc}/versions/{n}/publish", "post", without(pub, "html"), 201);
     }
   }
-  if (p[3] === "section-assignments" && m === "GET") return json(200, ctx.db.assignments.filter((a) => a.document_id === doc.id));
+  if (p[3] === "section-assignments" && m === "GET") return reply("/v1/documents/{doc}/section-assignments", "get", ctx.db.assignments.filter((a) => a.document_id === doc.id));
   if (p[3] === "sections" && p[4] && p[5] === "assignment" && m === "PUT") {
     const denied = need("approver");
     if (denied) return denied;
@@ -291,7 +292,7 @@ export async function routeReviewV2(ctx: ReviewV2Context, req: Request, p: strin
       ctx.db.assignments.push(row);
     }
     Object.assign(row, { owner_id: input.owner_id ?? null, reviewer_ids: input.reviewer_ids ?? [], due_at: input.due_at ?? null, lock_version: row.lock_version + 1, updated_at: ctx.now() });
-    return json(200, row);
+    return reply("/v1/documents/{doc}/sections/{key}/assignment", "put", row);
   }
   if (p[3] === "sections" && p[4] && !p[5] && m === "PUT") {
     const denied = need("commenter");
@@ -303,10 +304,10 @@ export async function routeReviewV2(ctx: ReviewV2Context, req: Request, p: strin
     if (!current || currentRevision !== input.base_revision) {
       return json(409, { detail: `section ${p[4]} changed since you loaded it (version ${input.base_version}); merge it and save again`, code: "section_conflict", base_version: input.base_version, latest_version: latest?.number ?? null, sections: [{ section_key: p[4], base_revision: input.base_revision, current_revision: currentRevision, current_heading: current?.heading ?? null, current_body_md: current?.body_md ?? null }] });
     }
-    return json(201, ctx.editSection(doc, p[4], input.heading ?? null, input.body_md));
+    return reply("/v1/documents/{doc}/sections/{key}", "put", ctx.editSection(doc, p[4], input.heading ?? null, input.body_md), 201);
   }
   if (p[3] === "review-policy") {
-    if (m === "GET") return json(200, policyOf(ctx, doc));
+    if (m === "GET") return reply("/v1/documents/{doc}/review-policy", "get", policyOf(ctx, doc));
     if (m === "PUT") {
       const denied = need("owner");
       if (denied) return denied;
@@ -315,15 +316,15 @@ export async function routeReviewV2(ctx: ReviewV2Context, req: Request, p: strin
       if ((existing?.lock_version ?? null) !== (input.lock_version ?? null)) return conflict(existing?.lock_version ?? null);
       const next: Schemas["ReviewPolicyOut"] = { document_id: doc.id, decider_id: input.decider_id ?? null, mandatory_reviewer_ids: input.mandatory_reviewer_ids ?? [], required_section_keys: input.required_section_keys ?? [], section_approval: input.section_approval ?? "required_sections", rereview_on_change: input.rereview_on_change ?? true, source: "document", lock_version: (existing?.lock_version ?? 0) + 1 };
       ctx.db.policies = [...ctx.db.policies.filter((x) => x.document_id !== doc.id), next];
-      return json(200, next);
+      return reply("/v1/documents/{doc}/review-policy", "put", next);
     }
   }
   if (p[3] === "section-patches" && m === "GET") {
     const status = q.get("status");
-    return json(200, ctx.db.patches.filter((x) => x.document_id === doc.id && (!status || x.status === status)));
+    return reply("/v1/documents/{doc}/section-patches", "get", ctx.db.patches.filter((x) => x.document_id === doc.id && (!status || x.status === status)));
   }
   if (p[3] === "campaigns") {
-    if (m === "GET") return json(200, ctx.db.campaigns.filter((c) => c.document_id === doc.id));
+    if (m === "GET") return reply("/v1/documents/{doc}/campaigns", "get", ctx.db.campaigns.filter((c) => c.document_id === doc.id));
     if (m === "POST") {
       const denied = need("approver");
       if (denied) return denied;
@@ -333,15 +334,15 @@ export async function routeReviewV2(ctx: ReviewV2Context, req: Request, p: strin
       const invited = (ctx.members ?? []).filter((x) => roles.includes(x.role) && !x.disabled_at).length;
       const c: Schemas["CampaignOut"] = { id: ctx.uuid(), document_id: doc.id, version_number: input.version ?? latest?.number ?? 1, title: input.title, message: input.message ?? null, due_at: input.due_at ?? null, audience_roles: roles, status: "open", created_by: ctx.me.id, closed_by: null, closed_at: null, lock_version: 1, created_at: ctx.now(), updated_at: ctx.now(), invited, comments: 0, participants: 0, open_change_requests: 0 };
       ctx.db.campaigns.unshift(c);
-      return json(201, c);
+      return reply("/v1/documents/{doc}/campaigns", "post", c, 201);
     }
   }
   if (p[3] === "publications") {
     const mine = ctx.db.publications.filter((x) => x.document_id === doc.id);
-    if (!p[4] && m === "GET") return json(200, mine.map(summaryOf));
+    if (!p[4] && m === "GET") return reply("/v1/documents/{doc}/publications", "get", mine.map(summaryOf));
     const pub = mine.find((x) => x.number === Number(p[4]));
     if (!pub) return json(404, { detail: `Publication ${p[4]} not found` });
-    if (!p[5] && m === "GET") return json(200, without(pub, "html"));
+    if (!p[5] && m === "GET") return reply("/v1/documents/{doc}/publications/{p}", "get", without(pub, "html"));
     if (p[5] === "export" && m === "GET") {
       if (q.get("format") === "md") return new Response(pub.markdown, { status: 200, headers: { "Content-Type": "text/markdown" } });
       return new Response(pub.html, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } });

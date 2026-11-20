@@ -8,6 +8,8 @@
  */
 import type { Schemas } from "@/lib/api/client";
 
+import { reply, rawReply } from "./typed";
+
 type Role = Schemas["Me"]["role"];
 type Spec = Schemas["SpecOut"];
 type Design = Schemas["DesignArtifactOut"];
@@ -74,7 +76,7 @@ export async function specStalenessAction(ctx: SpecsContext, req: Request): Prom
   for (const v of spec.versions) if (v.artifact_version.id === view.artifact_version_id) v.artifact_version = { ...v.artifact_version, freshness: to };
   for (const d of spec.design ?? []) if (d.version.id === view.artifact_version_id) d.version = { ...d.version, freshness: to };
   spec.freshness = spec.versions.map((v) => v.artifact_version.freshness).reduce((x, y) => (FRESH_ORDER.indexOf(y) > FRESH_ORDER.indexOf(x) ? y : x), "fresh");
-  return json(200, view);
+  return reply("/v1/trace/staleness/actions", "post", view);
 }
 
 /** The refusal of Approve on a spec document's version whose spec version may be stale (api/oracle/specs/service.py). */
@@ -354,8 +356,9 @@ export async function routeSpecs(ctx: SpecsContext, req: Request, p: string[], q
     if (!p[2] && m === "GET") {
       const prd = q.get("prd");
       const doc = prd ? ctx.documents?.find((d) => d.slug === prd || d.id === prd) : undefined;
-      return json(
-        200,
+      return reply(
+        "/v1/spec-requests",
+        "get",
         ctx.db.specs.filter((s) => !prd || s.request.source_document_id === (doc?.id ?? prd) || s.document_slug?.startsWith(`${prd}-`)).map((s) => ({ ...summary(s), state: stateOf(s) })),
       );
     }
@@ -418,11 +421,11 @@ export async function routeSpecs(ctx: SpecsContext, req: Request, p: string[], q
         feature_id: data.feature_id ?? null, tech_brief_version_id: data.tech_brief_version_id ?? null,
       };
       ctx.db.specs.unshift(spec);
-      return json(201, { spec, run_id: spec.run_id });
+      return reply("/v1/spec-requests", "post", { spec, run_id: runId }, 201);
     }
     const spec = ctx.db.specs.find((s) => s.request.id === p[2]);
     if (!spec) return fail(404, "spec request not found");
-    if (!p[3] && m === "GET") return json(200, { ...spec, ...summary(spec) });
+    if (!p[3] && m === "GET") return reply("/v1/spec-requests/{request_id}", "get", { ...spec, ...summary(spec) });
     if (p[3] === "regenerate" && m === "POST") {
       const denied = need("approver");
       if (denied) return denied;
@@ -436,7 +439,7 @@ export async function routeSpecs(ctx: SpecsContext, req: Request, p: string[], q
       spec.run_status = "draft";
       // #481: proposing it settles nothing; the versions stay as stale as they were.
       spec.regeneration_run_id = out.run_id;
-      return json(201, out);
+      return reply("/v1/spec-requests/{request_id}/regenerate", "post", out, 201);
     }
     return null;
   }
@@ -444,14 +447,18 @@ export async function routeSpecs(ctx: SpecsContext, req: Request, p: string[], q
   if (p[1] === "design-artifacts" && p[2]) {
     const d = findDesign(ctx.db, p[2]);
     if (!d) return fail(404, "design artifact version not found");
-    if (!p[3] && m === "GET") return json(200, d);
+    if (!p[3] && m === "GET") return reply("/v1/design-artifacts/{version_id}", "get", d);
     if (p[3] === "outputs" && p[4] && m === "GET") {
       const file = ctx.db.files[`${p[2]}/${p[4]}`];
       if (!file) return fail(404, `output '${p[4]}' not found`);
-      return new Response(file.content, {
-        status: 200,
-        headers: { "Content-Type": `${file.media_type}; charset=utf-8`, "Content-Security-Policy": CSP, "X-Content-Type-Options": "nosniff" },
-      });
+      return rawReply(
+        "/v1/design-artifacts/{version_id}/outputs/{name}",
+        "get",
+        new Response(file.content, {
+          status: 200,
+          headers: { "Content-Type": `${file.media_type}; charset=utf-8`, "Content-Security-Policy": CSP, "X-Content-Type-Options": "nosniff" },
+        }),
+      );
     }
     if (p[3] === "reviews" && m === "POST") {
       const denied = need("commenter");
@@ -496,7 +503,7 @@ export async function routeSpecs(ctx: SpecsContext, req: Request, p: string[], q
       }
       if (data.kind === "rejected") d.version = { ...d.version, status: "rejected" };
       if (data.kind === "changes_requested" && d.version.status === "draft") d.version = { ...d.version, status: "in_review" };
-      return json(201, { event, version: d.version });
+      return reply("/v1/design-artifacts/{version_id}/reviews", "post", { event, version: d.version }, 201);
     }
   }
   return null;

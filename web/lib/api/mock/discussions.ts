@@ -19,6 +19,7 @@ import { companyDayInWords } from "./connections";
 import { IN_CHAT, IN_CHAT_CODE, type LiveReply } from "./live";
 import { mockName } from "./people";
 import { readableRefusal } from "./refusal";
+import { reply as typedReply } from "./typed";
 
 type Role = Schemas["MemberOut"]["role"];
 type Member = { id: string; email: string; role: Role; status?: string | null };
@@ -1222,7 +1223,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     d.last_message_at = row.created_at;
     return row;
   };
-  const post = (d: DiscussionRow, input: Schemas["DiscussionMessageIn"]): Response => {
+  const post = (d: DiscussionRow, input: Schemas["DiscussionMessageIn"]): Response | MessageRow => {
     if (input.body.length > 8000) return refuse(422, "A message can be at most 8,000 characters");
     if (!input.body.trim()) return refuse(422, "A message needs some text");
     const mentions = [...new Set(input.mentions ?? [])];
@@ -1237,7 +1238,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       mentions_oracle: !!input.mention_oracle,
       reply_to: input.reply_to ?? null,
     });
-    return json(201, messageOut(row));
+    return row;
   };
   /** G2: always while it is just one person; else only when Oracle is addressed. */
   const wantsReply = (d: DiscussionRow, x: MessageRow) => {
@@ -1251,10 +1252,9 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       ...db.messages.filter((y) => y.discussion_id === d.id && y.author_kind === "person" && y.author_id).map((y) => y.author_id!),
     ]);
   const postWithReply = async (d: DiscussionRow, input: Schemas["DiscussionMessageIn"]): Promise<Response> => {
-    const res = post(d, input);
-    if (!res.ok) return res;
-    const message = (await res.json()) as Schemas["DiscussionMessageOut"];
-    const row = db.messages.find((x) => x.id === message.id)!;
+    const row = post(d, input);
+    if (row instanceof Response) return row;
+    const message = messageOut(row);
     const people = peopleIn(d);
     const alone = d.visibility === "private" && people.size === 1 && people.has(me.id);
     const script = wantsReply(d, row) ? (ctx.replyScript?.(d, row) ?? ctx.liveReply?.(row, alone) ?? null) : null;
@@ -1273,7 +1273,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
         })
       : null;
     if (reply) proposeFromPanel(d, row, reply.id);
-    return json(201, { message, reply: reply ? messageOut(reply) : null });
+    return typedReply("/v1/discussions/{discussion_id}/messages", "post", { message, reply: reply ? messageOut(reply) : null }, 201);
   };
   /**
    * G3 in the panel (mock): asked to rewrite or change a section, Oracle proposes a section_edit on it; asked on
@@ -1414,6 +1414,8 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     if (step === "suggest") {
       if (c.status !== "proposed") return refuse(409, "This change is already suggested");
       Object.assign(c, { status: "suggested", suggested_by: me.id });
+      c.lock_version += 1;
+      return typedReply("/v1/discussion-changes/{change_id}/suggest", "post", { change: changeOut(c, d), result: null }, 200);
     } else if (step === "edit") {
       const payload = input.payload;
       if (!payload || typeof payload !== "object" || Array.isArray(payload)) return refuse(422, "The change is incomplete");
@@ -1424,11 +1426,17 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       if (typeof input.rationale === "string") c.rationale = input.rationale.trim() || null;
       // A commenter's edit becomes their suggestion; an approver's keeps the status.
       if (!atLeast(me.role, "approver")) Object.assign(c, { status: "suggested", suggested_by: me.id });
+      c.lock_version += 1;
+      return typedReply("/v1/discussion-changes/{change_id}", "patch", { change: changeOut(c, d), result: null }, 200);
     } else if (step === "withdraw") {
       if (c.status !== "suggested" || c.suggested_by !== me.id) return refuse(403, "Only the person who suggested it can withdraw it");
       Object.assign(c, { status: c.proposed_by_kind === "oracle" ? "proposed" : "dismissed", suggested_by: null });
+      c.lock_version += 1;
+      return typedReply("/v1/discussion-changes/{change_id}/withdraw", "post", { change: changeOut(c, d), result: null }, 200);
     } else if (step === "dismiss") {
       Object.assign(c, { status: "dismissed", decision_note: str(input.note) || null });
+      c.lock_version += 1;
+      return typedReply("/v1/discussion-changes/{change_id}/dismiss", "post", { change: changeOut(c, d), result: null }, 200);
     } else if (verb === "Stage") {
       const locked = lockedOf(c, d);
       if (locked) return refuse(422, locked);
@@ -1460,6 +1468,8 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
             : ref,
       });
       line(`${name} staged: ${c.label}`);
+      c.lock_version += 1;
+      return typedReply("/v1/discussion-changes/{change_id}/stage", "post", { change: changeOut(c, d), result: null }, 200);
     } else if (verb === "Record") {
       // F3's own write: verified for a lead or an owner (an approver while no lead is named), proposed otherwise.
       if (!ctx.recordBasis) return refuse(422, "A basis_record change is not used this way");
@@ -1473,7 +1483,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       Object.assign(c, { status: "done", result_ref: { basis_id: basis.id } });
       line(`${name} ${VERB_PAST[verb]}: ${c.label}`);
       c.lock_version += 1;
-      return json(200, { change: changeOut(c, d), result: { basis_id: basis.id, status: basis.status } });
+      return typedReply("/v1/discussion-changes/{change_id}/verify", "post", { change: changeOut(c, d), result: { basis_id: basis.id, status: basis.status } }, 200);
     } else if (verb === "Propose" && c.kind === "goal_measure" && ctx.proposeGoalMeasure) {
       // A goal version takes B6's path: B5's checks (422) and Oracle's pushback once (409).
       const edit = input.payload && typeof input.payload === "object" && !Array.isArray(input.payload) ? (input.payload as Record<string, unknown>) : null;
@@ -1481,7 +1491,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       if (refused) return refused;
       line(`${name} ${VERB_PAST[verb]}: ${c.label}`);
       c.lock_version += 1;
-      return json(200, { change: changeOut(c, d), result: { proposal_id: c.result_ref?.proposal_id, status: "open" } });
+      return typedReply("/v1/discussion-changes/{change_id}/propose", "post", { change: changeOut(c, d), result: { proposal_id: c.result_ref?.proposal_id, status: "open" } }, 200);
     } else if (verb === "Ask") {
       // A question asked of that person (their Inbox), from this discussion.
       // As the API: on a checkpoint item whose stop waits and takes questions, the item's D8 question action (G4).
@@ -1502,7 +1512,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       Object.assign(c, { status: "done", result_ref: result });
       line(`${name} asked: ${c.label}`);
       c.lock_version += 1;
-      return json(200, { change: changeOut(c, d), result });
+      return typedReply("/v1/discussion-changes/{change_id}/ask", "post", { change: changeOut(c, d), result }, 200);
     } else if (verb === "Apply") {
       const p = c.edited_payload ?? c.payload;
       const reason = str(input.reason) || str(p.reason);
@@ -1524,7 +1534,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       Object.assign(c, { status: "done", override_reason: input.confirm === true ? reason : null, result_ref: { override_id } });
       line(`${name} applied: ${c.label}`);
       c.lock_version += 1;
-      return json(200, { change: changeOut(c, d), result: { override_id } });
+      return typedReply("/v1/discussion-changes/{change_id}/apply", "post", { change: changeOut(c, d), result: { override_id } }, 200);
     } else if (verb === "Propose" && c.kind === "decision") {
       // A proposed decision in the decision log, about this discussion.
       const p = c.edited_payload ?? c.payload;
@@ -1546,13 +1556,17 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       Object.assign(c, { status: "done", result_ref: result });
       line(`${name} proposed: ${c.label}`);
       c.lock_version += 1;
-      return json(200, { change: changeOut(c, d), result });
+      return typedReply("/v1/discussion-changes/{change_id}/propose", "post", { change: changeOut(c, d), result }, 200);
     } else if (verb) {
+      // The generic fallback: Resolve, "Use as answer", or Propose on a kind with no special path above (entity_edit).
       Object.assign(c, { status: "done", result_ref: { id: ctx.uuid() } });
       line(`${name} ${VERB_PAST[verb]}: ${c.label}`);
+      c.lock_version += 1;
+      if (step === "resolve") return typedReply("/v1/discussion-changes/{change_id}/resolve", "post", { change: changeOut(c, d), result: null }, 200);
+      if (step === "answer") return typedReply("/v1/discussion-changes/{change_id}/answer", "post", { change: changeOut(c, d), result: null }, 200);
+      return typedReply("/v1/discussion-changes/{change_id}/propose", "post", { change: changeOut(c, d), result: null }, 200);
     }
-    c.lock_version += 1;
-    return json(200, { change: changeOut(c, d), result: null });
+    return null;
   }
 
   // GET/POST /v1/discussions
@@ -1576,7 +1590,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
             ? [{ id: d.id, visibility: "private" as const, hidden: true as const, summary: d.summary_shared ? d.summary : null }]
             : [],
       );
-      return json(200, { items: items.slice(0, Number(q.get("limit") ?? 50)), next: null });
+      return typedReply("/v1/discussions", "get", { items: items.slice(0, Number(q.get("limit") ?? 50)), next: null }, 200);
     }
     if (m === "POST") {
       if (!atLeast(me.role, "commenter")) return refuse(403, "Requires the commenter role");
@@ -1628,7 +1642,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
         reply = ((await res.json()) as Schemas["DiscussionMessagePosted"]).reply ?? null;
         ctx.reviewFeedback?.(d, input.message.body);
       }
-      return json(201, { ...out(d), reply });
+      return typedReply("/v1/discussions", "post", { ...out(d), reply }, 201);
     }
     return null;
   }
@@ -1639,7 +1653,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
   const closed = () => d.status === "closed";
 
   if (!p[3]) {
-    if (m === "GET") return json(200, out(d));
+    if (m === "GET") return typedReply("/v1/discussions/{discussion_id}", "get", out(d), 200);
     if (m !== "PATCH") return null;
     const patch = await body<Schemas["DiscussionPatch"]>();
     if (patch.lock_version !== d.lock_version) return refuse(409, "Someone else changed this since you loaded it; reload and try again");
@@ -1687,7 +1701,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     }
     if (patch.summary_shared != null) d.summary_shared = patch.summary_shared;
     touch(d);
-    return json(200, out(d));
+    return typedReply("/v1/discussions/{discussion_id}", "patch", out(d), 200);
   }
 
   const writer = () => {
@@ -1719,7 +1733,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       research_reads: 0,
       ...(refusal ? { research_error: refusal } : {}),
     });
-    return json(201, messageOut(line));
+    return typedReply("/v1/discussions/{discussion_id}/research", "post", messageOut(line), 201);
   }
 
   if (p[3] === "messages") {
@@ -1740,7 +1754,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
         });
       }
       const rows = db.messages.filter((x) => x.discussion_id === d.id).sort((a, b) => a.created_at.localeCompare(b.created_at));
-      return json(200, { items: rows.map(messageOut), has_more: false });
+      return typedReply("/v1/discussions/{discussion_id}/messages", "get", { items: rows.map(messageOut), has_more: false }, 200);
     }
     if (!p[4] && m === "POST") return writer() ?? postWithReply(d, await body<Schemas["DiscussionMessageIn"]>());
     const row = db.messages.find((x) => x.id === p[4] && x.discussion_id === d.id && !x.deleted_at);
@@ -1752,12 +1766,12 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       if (p[5] === "cancel" && m === "POST") {
         if (row.status === "pending") row.status = "cancelled";
         else if (row.status === "streaming") row.cancel_requested = true;
-        return json(200, messageOut(row));
+        return typedReply("/v1/discussions/{discussion_id}/messages/{reply_id}/cancel", "post", messageOut(row), 200);
       }
       if (p[5] === "retry" && m === "POST") {
         if (row.status !== "failed" && row.status !== "cancelled") return refuse(409, "Only a failed or stopped reply can be retried");
         Object.assign(row, { status: "pending", body: "", citations: [], error_reason: null, error: null, cancel_requested: false });
-        return json(200, messageOut(row));
+        return typedReply("/v1/discussions/{discussion_id}/messages/{reply_id}/retry", "post", messageOut(row), 200);
       }
       return null;
     }
@@ -1774,12 +1788,12 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
         if (tooLong) return refuse(422, tooLong);
       }
       Object.assign(row, { body: text, edited_at: ctx.now() });
-      return json(200, messageOut(row));
+      return typedReply("/v1/discussions/{discussion_id}/messages/{message_id}", "patch", messageOut(row), 200);
     }
     if (m === "DELETE") {
       if (isFirst(row)) ctx.feedbackWithdrawn?.(d);
       Object.assign(row, { body: "", deleted_at: ctx.now() });
-      return json(204, null);
+      return typedReply("/v1/discussions/{discussion_id}/messages/{message_id}", "delete", undefined, 204);
     }
     return null;
   }
@@ -1801,7 +1815,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
         );
         if (refused) return refused;
       }
-      return json(200, out(d).participants);
+      return typedReply("/v1/discussions/{discussion_id}/participants", "post", out(d).participants, 200);
     }
     if (m === "DELETE" && p[4]) {
       const target = p[4];
@@ -1813,7 +1827,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       }
       const row = active(d).find((x) => x.user_id === target);
       if (row) row.left_at = ctx.now();
-      return json(204, null);
+      return typedReply("/v1/discussions/{discussion_id}/participants/{user_id}", "delete", undefined, 204);
     }
     return null;
   }
@@ -1830,12 +1844,17 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
         if (item.user_id === me.id && item.discussion_id === d.id && !item.done_at && (item.kind === "invited" || (at && at <= row.created_at)))
           item.done_at = ctx.now();
       }
-    return json(204, null);
+    return typedReply("/v1/discussions/{discussion_id}/read", "post", undefined, 204);
   }
   if (p[3] === "changes" && !p[4]) {
     if (m === "GET") {
       const rows = changesOf(d).filter((c) => !q.get("status") || c.status === q.get("status"));
-      return json(200, rows.sort((a, b) => a.created_at.localeCompare(b.created_at)).map((c) => changeOut(c, d)));
+      return typedReply(
+        "/v1/discussions/{discussion_id}/changes",
+        "get",
+        rows.sort((a, b) => a.created_at.localeCompare(b.created_at)).map((c) => changeOut(c, d)),
+        200,
+      );
     }
     if (m !== "POST") return null;
     const refused = writer();
@@ -1872,12 +1891,14 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       created_at: ctx.now(),
     };
     (db.changes ??= []).push(c);
-    return json(201, { change: changeOut(c, d), result: null });
+    return typedReply("/v1/discussions/{discussion_id}/changes", "post", { change: changeOut(c, d), result: null }, 201);
   }
   if (p[3] === "change-kinds" && m === "GET")
-    return json(
-      200,
+    return typedReply(
+      "/v1/discussions/{discussion_id}/change-kinds",
+      "get",
       (SUBJECT_KINDS[d.subject_kind] ?? []).map((kind) => ({ kind, verb: KIND_VERB[kind], schema: KIND_SCHEMA[kind] ?? { type: "object" } })),
+      200,
     );
   if (p[3] === "summary" && m === "POST") {
     const refused = writer();
@@ -1897,7 +1918,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       .slice(0, 1200);
     d.summary_status = "draft";
     touch(d);
-    return json(200, out(d));
+    return typedReply("/v1/discussions/{discussion_id}/summary", "post", out(d), 200);
   }
   // G7 Share as discussion: a new open discussion on the chat's subject from its edited summary.
   if (p[3] === "share" && m === "POST") {
@@ -1929,7 +1950,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     // As the API: the chat's open changes, of whatever kind, are copied as suggested by the sharer.
     for (const c of changesOf(d).filter((x) => x.status === "proposed" || x.status === "suggested" || x.status === "staged"))
       db.changes!.push({ ...c, id: ctx.uuid(), discussion_id: shared.id, status: "suggested", suggested_by: me.id, from_message_id: null, decision_note: null, override_reason: null, reason: null, result_ref: null, lock_version: 1, created_at: at });
-    return json(201, out(shared));
+    return typedReply("/v1/discussions/{discussion_id}/share", "post", out(shared), 201);
   }
   if (p[3] === "slack" && !p[4] && ctx.slack) return ctx.slack(d, req);
   return null;

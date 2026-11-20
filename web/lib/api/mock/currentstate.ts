@@ -7,6 +7,7 @@
 import type { Schemas } from "@/lib/api/client";
 
 import { MOCK_SCENARIO_KEY } from "./ids";
+import { reply } from "./typed";
 
 type State = Schemas["FeatureStateOut"];
 type Proof = Schemas["FeatureProofOut"];
@@ -148,7 +149,7 @@ export async function routeCurrentState(db: CurrentStateDb, rows: Row[], mayMove
   if (p[1] !== "feature-states") return null;
   rows = codedRows(db, rows, today);
   const m = req.method;
-  if (p.length === 2 && m === "GET") return json(200, featureStatesOut(db, rows, mayMove, today));
+  if (p.length === 2 && m === "GET") return reply("/v1/feature-states", "get", featureStatesOut(db, rows, mayMove, today));
   if (p.length !== 4 || m !== "POST") return null;
   if (!mayMove) return json(403, { detail: "Requires the approver role" });
   const i = rows.findIndex((r) => r.feature_id === p[2]);
@@ -161,27 +162,27 @@ export async function routeCurrentState(db: CurrentStateDb, rows: Row[], mayMove
     // Oracle re-reads each proof: the measured value of a past month is not read for this one yet.
     const thisMonth = MONTH[new Date(today).getUTCMonth()];
     s.proofs = s.proofs.map((x) => ({ ...x, checked_at: now, still_true: x.kind === "measured" && x.period && x.period !== thisMonth ? false : true }));
-    return json(200, { ...stateOut(db, r, i, today), checking: false });
+    return reply("/v1/feature-states/{feature_id}/check", "post", { ...stateOut(db, r, i, today), checking: false });
   }
   if (p[3] === "answer") {
     s.answer = body?.answer ?? null;
     s.answered_at = now;
     if (s.answer === "still_runs") s.checked_at = now;
     if (s.answer === "no_longer_runs") s.status = "desired";
-    return json(200, stateOut(db, r, i, today));
+    return reply("/v1/feature-states/{feature_id}/answer", "post", stateOut(db, r, i, today));
   }
   if (p[3] === "move") {
     if (body?.decision === "not_yet") {
       s.not_yet_at = now;
-      return json(200, stateOut(db, r, i, today));
+      return reply("/v1/feature-states/{feature_id}/move", "post", stateOut(db, r, i, today));
     }
     if (!stateOut(db, r, i, today).ready) return json(409, { detail: "Its proof is not all in yet" });
     Object.assign(s, { status: "current", moved_at: now, move_how: "owner_confirmed", shipped_at: s.shipped_at ?? now, checked_at: now, answer: null, answered_at: null });
-    return json(200, stateOut(db, r, i, today));
+    return reply("/v1/feature-states/{feature_id}/move", "post", stateOut(db, r, i, today));
   }
   if (p[3] === "shipped") {
     if (s.status !== "current") Object.assign(s, { status: "shipped", shipped_at: now, move_how: "marked_shipped" });
-    return json(200, stateOut(db, r, i, today));
+    return reply("/v1/feature-states/{feature_id}/shipped", "post", stateOut(db, r, i, today));
   }
   return null;
 }

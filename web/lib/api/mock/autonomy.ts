@@ -6,6 +6,8 @@
  */
 import type { Schemas } from "@/lib/api/client";
 
+import { reply } from "./typed";
+
 type Item = Schemas["AutonomyItem"];
 type Level = Item["level"];
 type Role = Schemas["Me"]["role"];
@@ -850,7 +852,7 @@ export async function routeAutonomy(db: AutonomyDb, req: Request, p: string[], m
         updated_by: any ? db.updated_by : null,
         updated_at: any ? db.updated_at : null,
       };
-      return json(200, out);
+      return reply("/v1/autonomy", "get", out);
     }
     if (p.length === 3 && m === "PUT") {
       const r = REGISTRY.find((x) => x.key === p[2]);
@@ -863,7 +865,7 @@ export async function routeAutonomy(db: AutonomyDb, req: Request, p: string[], m
       db.stored[r.key] = next;
       db.updated_by = me.id;
       db.updated_at = now();
-      return json(200, itemOut(r, next));
+      return reply("/v1/autonomy/{key}", "put", itemOut(r, next));
     }
     return null;
   }
@@ -872,7 +874,7 @@ export async function routeAutonomy(db: AutonomyDb, req: Request, p: string[], m
     if (!a || !a.notify_ids.includes(me.id)) return json(404, { detail: "Not found" });
     if (p[3] === "open") {
       if (!a.opened_by.includes(me.id)) a.opened_by.push(me.id);
-      return json(200, actionOut(a, me.id));
+      return reply("/v1/oracle-actions/{action_id}/open", "post", actionOut(a, me.id));
     }
     if (p[3] === "undo") {
       if (!a.undo) return json(409, { detail: "This action has no undo" });
@@ -883,7 +885,7 @@ export async function routeAutonomy(db: AutonomyDb, req: Request, p: string[], m
       a.undone_at = now();
       a.undone_by = me.id;
       if (!a.opened_by.includes(me.id)) a.opened_by.push(me.id);
-      return json(200, actionOut(a, me.id));
+      return reply("/v1/oracle-actions/{action_id}/undo", "post", actionOut(a, me.id));
     }
   }
   return null;

@@ -29,6 +29,7 @@ import { PLAN_PRD_SLUG, planGoalNames, planMilestones, planSlices, planSpan, typ
 import { COMPANY_SLUG, COMPANY_TITLE } from "./one-roadmap";
 import { featureKeyOf, startEffort } from "./simple-priorities";
 import { basePlan as fitBasePlan, PLAN_TARGET as FIT_PLAN_TARGET, schedule as fitSchedule } from "./fit-date-engine";
+import { reply } from "./typed";
 
 type Item = Schemas["SimpleRoadmapItem"];
 type Suggestion = Schemas["DateSuggestionOut"];
@@ -2460,7 +2461,7 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p:
   if (!p[3] && m === "GET") {
     if (q.get("roadmap") && !readableRoadmap(q.get("roadmap"), me.role)) return json(404, { detail: "No such roadmap" });
     const out = readRoadmap(db, me.role, q, me);
-    return out ? json(200, out) : json(422, { detail: "group: goal, track or prd" });
+    return out ? reply("/v1/simple/roadmap", "get", out) : json(422, { detail: "group: goal, track or prd" });
   }
   if (p[3] === "waiting" && !p[4] && m === "GET") {
     // roadmap-decide review (GET /v1/simple/roadmap/waiting): the whole roadmap's broken links and
@@ -2469,7 +2470,7 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p:
     if (one && !readableRoadmap(one, me.role)) return json(404, { detail: "No such roadmap" });
     const items = (readRoadmap(db, me.role, new URLSearchParams(one ? { roadmap: one } : {}), me)?.items ?? []).filter((i) => i.status !== "done");
     const links = items.flatMap((i) => i.flags).filter((f) => f.state === "red" && f.fixes.length > 0);
-    return json(200, { broken_links: links.length, dates_to_confirm: items.filter((i) => !!i.suggestion?.can_decide).length });
+    return reply("/v1/simple/roadmap/waiting", "get", { broken_links: links.length, dates_to_confirm: items.filter((i) => !!i.suggestion?.can_decide).length });
   }
   const slugOf = (id: string) => Object.keys(ROADMAPS).find((r) => roadmapId(r) === id) ?? null;
   // milestone-rename (goal_milestones.rename_target): PATCH on a goal's own milestone (id: the goal's)
@@ -2481,7 +2482,11 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p:
     if (me.role === "viewer" || me.role === "commenter" || !canEditRoadmap(db, target.roadmap, me)) return json(403, { detail: "Only an owner or the roadmap's decider (with none, its owner) changes its milestones" });
     setTargetName(db, target.goal, String(b.name));
     const { goal } = goalTargetOf(db, p[4])!;
-    return json(200, { id: goal.id, roadmap_id: roadmapId(target.roadmap), code: "", name: goal.name, date: goal.due, goal_id: goal.id, kind: "goal", goal_target: true, can_change: true, can_propose: false, item_ids: [], counts_when: "", progress: "not_started", prd: null, prd_owner: null, pending: null, carried_from: null });
+    return reply("/v1/simple/roadmap/milestones/{milestone_id}", "patch", {
+      id: goal.id, roadmap_id: roadmapId(target.roadmap), code: "", name: goal.name, date: goal.due, goal_id: goal.id, kind: "goal", goal_target: true,
+      can_change: true, can_propose: false, item_ids: [], counts_when: "", progress: "not_started", prd: null, prd_owner: null, pending: null, carried_from: null,
+      done_when_line: "", status: "on_track", sub_goal_ids: [],
+    });
   }
   const ms = await routeMilestones(db, { ...me, prdOwners: (slug) => prdOwnerIdsOf(db, slug) }, req, p, slugOf, (r) => canEditRoadmap(db, r, me), (r) => !!db.company_roadmap && r !== db.company_roadmap, oldCtx(db));
   if (ms) return ms;
@@ -2489,11 +2494,11 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p:
   if (!p[4] && m === "GET") {
     const status = q.get("status") ?? "open";
     const seeds = new Map(visibleItems(db, me.role).map((s) => [db.ids[s.key], s]));
-    return json(200, db.suggestions.filter((s) => s.status === status && seeds.has(s.item_id)).map((s) => ({ ...s, can_decide: canDecideItem(db, seeds.get(s.item_id)!, me) })));
+    return reply("/v1/simple/roadmap/date-suggestions", "get", db.suggestions.filter((s) => s.status === status && seeds.has(s.item_id)).map((s) => ({ ...s, can_decide: canDecideItem(db, seeds.get(s.item_id)!, me) })));
   }
   if (p[4] === "refresh" && m === "POST") {
     if (me.role !== "owner" && me.role !== "approver") return json(403, { detail: "Requires the approver role" });
-    return json(200, { open: regenerate(db, today) });
+    return reply("/v1/simple/roadmap/date-suggestions/refresh", "post", { open: regenerate(db, today) }, 200);
   }
   // D-b: accept and edit are changes (./simple-changes.ts routes them); dismiss and its Undo (reopen) are here.
   if (m !== "POST" || !p[4] || (p[5] !== "dismiss" && p[5] !== "reopen")) return null;
@@ -2510,7 +2515,7 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p:
     const keys = new Set(rows.map((x) => x.slice_code ?? ""));
     if (db.suggestions.some((x) => x.item_id === s.item_id && x.status === "open" && keys.has(x.slice_code ?? ""))) return json(409, { detail: "The item has an open date suggestion again" });
     for (const x of rows) Object.assign(x, { status: "open", decided_by: null, decided_at: null });
-    return json(200, { ...s, can_decide: true });
+    return reply("/v1/simple/roadmap/date-suggestions/{suggestion_id}/reopen", "post", { ...s, can_decide: true });
   }
   if (s.status !== "open") return json(409, { detail: `This suggestion is ${s.status} already` });
   const at = new Date(mockNowMs()).toISOString();
@@ -2518,7 +2523,7 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p:
   for (const x of db.suggestions) {
     if (x === s || (s.slice_code != null && x.item_id === s.item_id && x.status === "open" && x.slice_code != null)) Object.assign(x, { status: "dismissed", decided_by: me.id, decided_at: at });
   }
-  return json(200, { ...s, can_decide: true });
+  return reply("/v1/simple/roadmap/date-suggestions/{suggestion_id}/dismiss", "post", { ...s, can_decide: true });
 }
 
 export type { MockDraft, SeedItem, SimpleDb };

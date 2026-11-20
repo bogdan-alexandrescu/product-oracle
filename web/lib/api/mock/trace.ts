@@ -7,6 +7,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import type { V2Db } from "./v2";
+import { reply } from "./typed";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
 type Freshness = Schemas["ArtifactDependencyOut"]["freshness"];
@@ -320,7 +321,7 @@ export async function routeTrace(ctx: TraceContext, req: Request, p: string[], q
         whole_version_downstream: describe(ctx, onVersion.filter((x) => !x.upstream_section_key)),
         upstream: describe(ctx, v2.artifact_dependencies.filter((x) => x.document_version_id === v.id)).flatMap((o) => o.dependencies ?? []),
       };
-      return json(200, out);
+      return reply("/v1/documents/{doc}/versions/{n}/trace", "get", out);
     }
     if (p[5] === "evidence" && m === "GET") {
       const only = q.get("section");
@@ -338,13 +339,17 @@ export async function routeTrace(ctx: TraceContext, req: Request, p: string[], q
             }),
           })),
       };
-      return json(200, out);
+      return reply("/v1/documents/{doc}/versions/{n}/evidence", "get", out);
     }
     if (p[5] === "impact" && m === "GET") {
       const earlier = ctx.versions.filter((x) => x.document_id === d.id && x.number < v.number).map((x) => x.id);
       const deps = v2.artifact_dependencies.filter((x) => earlier.includes(x.upstream_version_id ?? "") && x.freshness !== "fresh");
       const changes = v2.change_events.filter((c) => c.subject_kind === "document_version" && c.subject_id === v.id);
-      return json(200, report(ctx, { kind: "document_version", id: v.id, ref: `${d.slug}@${v.number}`, title: `${d.title} v${v.number}`, document_id: d.id }, deps, { changes, preview: true }));
+      return reply(
+        "/v1/documents/{doc}/versions/{n}/impact",
+        "get",
+        report(ctx, { kind: "document_version", id: v.id, ref: `${d.slug}@${v.number}`, title: `${d.title} v${v.number}`, document_id: d.id }, deps, { changes, preview: true }),
+      );
     }
     if (p[5] === "section-links" && m === "POST") {
       if (!approver()) return forbidden();
@@ -365,7 +370,7 @@ export async function routeTrace(ctx: TraceContext, req: Request, p: string[], q
         });
       }
       v2.section_links.push(...created);
-      return json(201, created);
+      return reply("/v1/documents/{doc}/versions/{n}/section-links", "post", created, 201);
     }
     return null;
   }
@@ -377,7 +382,7 @@ export async function routeTrace(ctx: TraceContext, req: Request, p: string[], q
     const version = ctx.versions.find((x) => x.id === v2.section_links[i].version_id);
     if (version?.approved_at) return json(409, { detail: "an approved version's evidence links are pinned" });
     v2.section_links.splice(i, 1);
-    return json(204, null);
+    return reply("/v1/section-links/{item_id}", "delete", undefined, 204);
   }
 
   // /v1/baseline/entities/{id}/(trace|impact)
@@ -390,7 +395,7 @@ export async function routeTrace(ctx: TraceContext, req: Request, p: string[], q
     );
     if (p[4] === "impact") {
       const kind = e.type === "requirement" || e.type === "decision" ? e.type : "entity";
-      return json(200, report(ctx, { kind, id: e.id, ref: `${e.type}:${e.key}`, title: e.title, document_id: null }, deps, { preview: true }));
+      return reply("/v1/baseline/entities/{entity_id}/impact", "get", report(ctx, { kind, id: e.id, ref: `${e.type}:${e.key}`, title: e.title, document_id: null }, deps, { preview: true }));
     }
     const out: Schemas["EntityTrace"] = {
       truncated: false,
@@ -417,7 +422,7 @@ export async function routeTrace(ctx: TraceContext, req: Request, p: string[], q
       outputs: describe(ctx, deps),
       priority: null,
     };
-    return json(200, out);
+    return reply("/v1/baseline/entities/{entity_id}/trace", "get", out);
   }
 
   if (p[1] !== "trace") return null;
@@ -439,7 +444,7 @@ export async function routeTrace(ctx: TraceContext, req: Request, p: string[], q
       title = v && d ? `${d.title} v${v.number}` : null;
     }
     const subject = { kind: change.subject_kind, id: change.subject_id ?? null, ref: change.subject_ref ?? null, title, document_id: change.document_id ?? null };
-    return json(200, report(ctx, subject, deps, { change, preview: false }));
+    return reply("/v1/trace/changes/{change_id}/impact", "get", report(ctx, subject, deps, { change, preview: false }));
   }
   if (p[2] === "staleness" && p.length === 3 && m === "GET") {
     const states = q.get("freshness") ? [q.get("freshness")] : ["potentially_stale", "under_review"];
@@ -457,7 +462,7 @@ export async function routeTrace(ctx: TraceContext, req: Request, p: string[], q
     }
     const all = describe(ctx, deps, true);
     const next = offset + limit;
-    return json(200, { items: all.slice(offset, next), total: all.length, limit, offset, next_offset: next < all.length ? next : null });
+    return reply("/v1/trace/staleness", "get", { items: all.slice(offset, next), total: all.length, limit, offset, next_offset: next < all.length ? next : null });
   }
   if (p[2] === "staleness" && p[3] === "actions" && m === "POST") {
     if (!approver()) return forbidden();
@@ -488,7 +493,7 @@ export async function routeTrace(ctx: TraceContext, req: Request, p: string[], q
         actor: `user:${ctx.userId}`, data: { action: a.action }, created_at: ctx.now(),
       });
     }
-    return json(200, describe(ctx, v2.artifact_dependencies.filter((x) => (x.artifact_version_id ?? x.document_version_id) === id))[0]);
+    return reply("/v1/trace/staleness/actions", "post", describe(ctx, v2.artifact_dependencies.filter((x) => (x.artifact_version_id ?? x.document_version_id) === id))[0]);
   }
   if (p[2] === "dependencies" && p.length === 3 && m === "POST") {
     if (!approver()) return forbidden();
@@ -517,7 +522,7 @@ export async function routeTrace(ctx: TraceContext, req: Request, p: string[], q
       v2.artifact_dependencies.push(row);
       out.push(row);
     }
-    return json(201, out);
+    return reply("/v1/trace/dependencies", "post", out, 201);
   }
   return null;
 }

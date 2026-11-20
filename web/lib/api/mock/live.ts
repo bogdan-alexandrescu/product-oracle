@@ -14,6 +14,7 @@
 import type { Schemas } from "@/lib/api/client";
 
 import { liveConnections } from "./connections";
+import { reply } from "./typed";
 
 type Meeting = Schemas["LiveMeeting"];
 type Cite = Schemas["Cite"];
@@ -69,8 +70,9 @@ export function routeLive(req: Request, p: string[], q: URLSearchParams): Respon
   if (p[1] !== "live" || req.method !== "GET") return null;
   const sources = liveConnections();
   if (p[2] === "sources" && p.length === 3)
-    return json(
-      200,
+    return reply(
+      "/v1/live/sources",
+      "get",
       sources.map((c) => ({ connection_id: c.id, provider: "fireflies", label: label(c), tools: LIVE_TOOLS }) satisfies Schemas["LiveSourceOut"]),
     );
   if (p[2] !== "fireflies") return null;
@@ -80,13 +82,13 @@ export function routeLive(req: Request, p: string[], q: URLSearchParams): Respon
   if (p[4] === "meetings" && p.length === 5) {
     const limit = num("limit", 20);
     const offset = num("offset", 0);
-    return json(200, { total: LIVE_TOTAL, meetings: MEETINGS.slice(offset, offset + limit).map(meetingOf), skipped: 0, limit_capped: false, note: null, cite: cite(c, "list_meetings", 1) });
+    return reply("/v1/live/fireflies/{connection_id}/meetings", "get", { total: LIVE_TOTAL, meetings: MEETINGS.slice(offset, offset + limit).map(meetingOf), skipped: 0, limit_capped: false, note: null, cite: cite(c, "list_meetings", 1) });
   }
   if (p[4] === "search" && p.length === 5) {
     const words = (q.get("q") ?? "").toLowerCase();
     if (!words) return json(422, { detail: "q is required" });
     const found = MEETINGS.filter((m) => `${m.title} ${m.summary}`.toLowerCase().includes(words));
-    return json(200, {
+    return reply("/v1/live/fireflies/{connection_id}/search", "get", {
       total: found.length,
       matches: found.map((m) => ({ id: m.id, title: m.title, date: m.date, snippet: m.summary })),
       skipped: 0,
@@ -99,14 +101,14 @@ export function routeLive(req: Request, p: string[], q: URLSearchParams): Respon
     if (!m) return json(404, { detail: `No meeting ${decodeURIComponent(p[5])} in ${label(c)}.` });
     if (p.length === 6) {
       const all = q.get("part") === "all";
-      return json(200, { ...meetingOf(m), summary: m.summary, lines: all ? m.lines : null, truncated: false, skipped: 0, cite: cite(c, "get_meeting", 1, m.id) });
+      return reply("/v1/live/fireflies/{connection_id}/meetings/{meeting_id}", "get", { ...meetingOf(m), summary: m.summary, lines: all ? m.lines : null, truncated: false, skipped: 0, cite: cite(c, "get_meeting", 1, m.id) });
     }
     if (p[6] === "lines" && p.length === 7) {
       const offset = num("offset", 0);
       const limit = num("limit", 200);
       const lines = m.lines.slice(offset, offset + limit);
       const next = offset + lines.length < m.lines.length ? offset + lines.length : null;
-      return json(200, { lines, next_offset: next, skipped: 0, cite: cite(c, "get_lines", 1, m.id) });
+      return reply("/v1/live/fireflies/{connection_id}/meetings/{meeting_id}/lines", "get", { lines, next_offset: next, skipped: 0, cite: cite(c, "get_lines", 1, m.id) });
     }
   }
   return null;

@@ -7,6 +7,7 @@ import type { Schemas } from "@/lib/api/client";
 import type { CitedItem } from "./baseline";
 import { mockConnectionEndpoint, mockConnectionRows, reconnectReason, SEEDED_CONNECTION } from "./connections";
 import { mockUuid, PRODUCT_CHAT_ID, seeded, seededItemId } from "./ids";
+import { reply } from "./typed";
 
 type Source = Schemas["SourceOut"];
 // `folder`: the picked Drive folder a Google Doc came from (mock only).
@@ -647,25 +648,25 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     const need: Role = p.length === 2 || p[3] === "uploads" ? "commenter" : "approver";
     if (ROLE_ORDER.indexOf(ctx.me.role) < ROLE_ORDER.indexOf(need)) return json(403, { detail: `Requires the ${need} role` });
   }
-  if (p[1] === "search") return json(200, search(db, q));
+  if (p[1] === "search") return reply("/v1/search", "get", search(db, q));
   if (p[1] === "snapshots") {
     if (p.length === 2 && m === "POST") {
       const body = (await req.json()) as Schemas["SnapshotCreate"];
       const s = { id: uuid(), label: body.label ?? null, as_of: body.as_of ?? now(), created_by: null, created_at: now() };
       db.snapshots.push(s);
-      return json(201, s);
+      return reply("/v1/snapshots", "post", s, 201);
     }
-    if (p.length === 2) return json(200, db.snapshots);
+    if (p.length === 2) return reply("/v1/snapshots", "get", db.snapshots);
     return json(404, { detail: "Snapshot not found" });
   }
   if (p[1] === "source-items") {
     const i = db.items.find((x) => x.id === p[2]);
     if (!i) return json(404, { detail: "Item not found" });
-    return json(200, { ...itemOut(i), content: i.content, version_count: 1 });
+    return reply("/v1/source-items/{item_id}", "get", { ...itemOut(i), content: i.content, version_count: 1 });
   }
 
   if (p.length === 2) {
-    if (m === "GET") return json(200, db.sources.map((s) => counted(db, s)));
+    if (m === "GET") return reply("/v1/sources", "get", db.sources.map((s) => counted(db, s)));
     const body = (await req.json()) as Schemas["SourceCreate"];
     if (!AVAILABLE[body.kind]) return json(422, { detail: "connector not available yet" });
     const choice = choicesFor("google", ctx.me.email).find((c) => c.id === body.connection_id);
@@ -697,20 +698,21 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
       reconnect_reason: body.kind === "google_docs" ? (choice?.reconnect_reason ?? null) : null,
     };
     db.sources.push(s);
-    return json(201, s);
+    return reply("/v1/sources", "post", s, 201);
   }
   if (p[2] === "coverage") {
     if (m !== "GET") return json(405, { detail: "Method not allowed" });
     if (p[3] === "company") {
       if (ctx.me.role !== "owner") return json(403, { detail: "Company coverage is for owners" });
-      return json(200, companyCoverage(db, ctx));
+      return reply("/v1/sources/coverage/company", "get", companyCoverage(db, ctx));
     }
     const uses = ctx.uses();
-    return json(200, { as_of: now(), sources: db.sources.map((s) => coverageOf(s, db.items, uses)) });
+    return reply("/v1/sources/coverage", "get", { as_of: now(), sources: db.sources.map((s) => coverageOf(s, db.items, uses)) });
   }
   if (p[2] === "kinds") {
-    return json(
-      200,
+    return reply(
+      "/v1/sources/kinds",
+      "get",
       (Object.keys(PROVIDER) as Source["kind"][]).map((kind) => ({
         kind,
         provider: PROVIDER[kind],
@@ -727,7 +729,7 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     if (m === "DELETE") {
       db.sources = db.sources.filter((x) => x.id !== s.id);
       db.items = db.items.filter((i) => i.source_id !== s.id);
-      return json(204, undefined);
+      return reply("/v1/sources/{source_id}", "delete", undefined, 204);
     }
     if (m === "PATCH") {
       const patch = (await req.json()) as Schemas["SourcePatch"];
@@ -801,13 +803,15 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
         }
       }
       s.updated_at = now();
+      return reply("/v1/sources/{source_id}", "patch", counted(db, s));
     }
-    return json(200, counted(db, s));
+    return reply("/v1/sources/{source_id}", "get", counted(db, s));
   }
   if (sub === "pause" || sub === "resume") {
     s.status = sub === "pause" ? "paused" : "active";
     if (sub === "resume") s.last_error = null;
-    return json(200, counted(db, s));
+    if (sub === "pause") return reply("/v1/sources/{source_id}/pause", "post", counted(db, s));
+    return reply("/v1/sources/{source_id}/resume", "post", counted(db, s));
   }
   if (sub === "sync") {
     if (s.kind === "upload") return json(409, { detail: "Upload sources have nothing to sync: upload files instead" });
@@ -818,7 +822,7 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
       // As the API's _needs_attention: a refusal that is the fix reads once; any other names the edit.
       const message = upper(broken.message);
       s.last_error = broken.is_action ? `${message}, then it syncs again` : `${message}. Edit this source to sync it again.`;
-      return json(200, { source_id: s.id, outcome: "needs_attention", upserted: 0, versions_written: 0, deleted: 0, checkpoints: 0, retry_after: null, error: s.last_error, source: counted(db, s) });
+      return reply("/v1/sources/{source_id}/sync", "post", { source_id: s.id, outcome: "needs_attention", upserted: 0, versions_written: 0, deleted: 0, checkpoints: 0, retry_after: null, error: s.last_error, source: counted(db, s) });
     }
     // As the API's credential_for: a source a Disconnect left without a connection.
     if (PROVIDER[s.kind] && !s.connection_id) {
@@ -826,12 +830,12 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
       s.last_error = NO_CONNECTION;
     }
     if (s.status === "error") {
-      return json(200, { source_id: s.id, outcome: "error", upserted: 0, versions_written: 0, deleted: 0, checkpoints: 0, retry_after: null, error: s.last_error, source: counted(db, s) });
+      return reply("/v1/sources/{source_id}/sync", "post", { source_id: s.id, outcome: "error", upserted: 0, versions_written: 0, deleted: 0, checkpoints: 0, retry_after: null, error: s.last_error, source: counted(db, s) });
     }
     // Edited while it synced (MOCK_SYNC_SUPERSEDED_KEY): nothing kept, the source unchanged.
     if (localStorage.getItem(MOCK_SYNC_SUPERSEDED_KEY) === s.name) {
       localStorage.removeItem(MOCK_SYNC_SUPERSEDED_KEY);
-      return json(200, { source_id: s.id, outcome: "superseded", upserted: 0, versions_written: 0, deleted: 0, checkpoints: 0, retry_after: null, error: null, source: counted(db, s) });
+      return reply("/v1/sources/{source_id}/sync", "post", { source_id: s.id, outcome: "superseded", upserted: 0, versions_written: 0, deleted: 0, checkpoints: 0, retry_after: null, error: null, source: counted(db, s) });
     }
     // Slack rate-limits the first sync of channel C0RATELIMIT after its first checkpoint:
     // what it stored is kept and the next sync resumes (and finishes).
@@ -839,7 +843,7 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     if (channels.includes(RATE_LIMITED_CHANNEL) && !s.partly_synced_at && !s.last_synced_at) {
       s.partly_synced_at = now();
       s.last_error = "Rate limited by slack; the next sync resumes (retry after 30s)";
-      return json(200, { source_id: s.id, outcome: "rate_limited", upserted: 1, versions_written: 1, deleted: 0, checkpoints: 1, retry_after: 30, error: null, source: counted(db, s) });
+      return reply("/v1/sources/{source_id}/sync", "post", { source_id: s.id, outcome: "rate_limited", upserted: 1, versions_written: 1, deleted: 0, checkpoints: 1, retry_after: 30, error: null, source: counted(db, s) });
     }
     s.last_synced_at = now();
     s.partly_synced_at = null;
@@ -900,15 +904,15 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     const seen = out.item_count;
     // Each item read for the first time is a new version, as the API counts them.
     const written = db.items.length - before || (seen ? 1 : 0);
-    return json(200, { source_id: s.id, outcome: "completed", upserted: seen, versions_written: written, deleted, checkpoints: 1, retry_after: null, error: null, source: out });
+    return reply("/v1/sources/{source_id}/sync", "post", { source_id: s.id, outcome: "completed", upserted: seen, versions_written: written, deleted, checkpoints: 1, retry_after: null, error: null, source: out });
   }
   if (sub === "coverage" && m === "GET") {
     const limit = Number(q.get("limit") ?? 50);
     const offset = Number(q.get("offset") ?? 0);
     if (!(limit >= 1 && limit <= 100) || !(offset >= 0)) return json(422, { detail: "limit runs from 1 to 100" });
-    return json(200, coverageDetail(s, db.items, ctx.uses(), limit, offset));
+    return reply("/v1/sources/{source_id}/coverage", "get", coverageDetail(s, db.items, ctx.uses(), limit, offset));
   }
-  if (sub === "items") return json(200, db.items.filter((i) => i.source_id === s.id && !i.deleted_at).map(itemOut));
+  if (sub === "items") return reply("/v1/sources/{source_id}/items", "get", db.items.filter((i) => i.source_id === s.id && !i.deleted_at).map(itemOut));
   if (sub === "uploads" && m === "POST") {
     if (s.kind !== "upload") return json(409, { detail: "Only upload sources take files" });
     const form = await req.formData();
@@ -943,7 +947,7 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
       out.push(item);
     }
     s.last_synced_at = now();
-    return json(201, { items: out.map(itemOut), unchanged: [] });
+    return reply("/v1/sources/{source_id}/uploads", "post", { items: out.map(itemOut), unchanged: [] }, 201);
   }
   return json(404, { detail: "Route not found" });
 }
