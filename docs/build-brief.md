@@ -62,7 +62,7 @@ account pool.
 | MCP | official `mcp` SDK, Streamable HTTP | `api/oracle/mcp/` |
 | Web | Next.js 16 app router, React 19, Tailwind 4, typed client from OpenAPI (`openapi-fetch` + `openapi-typescript`) | `web/app/`, `web/components/`, `web/lib/api/` |
 | CLI | `oracle` (push/pull drafts, sync, Ground Truth YAML, Claude accounts, tick) | `api/oracle/cli/` |
-| Runtime | Cloud Run (api, web), Cloud SQL Postgres 16, HTTPS load balancer with IAP on the app; a second backend without IAP for `/mcp`, `/oauth/{register,token,revoke}` and `/.well-known/*` | deployed by hand today (local-only scripts, `private/deploy/`: they name company infrastructure); the `deploy` job of `.github/workflows/ci.yml` replaces them once `docs/deploy/actions-deploy.md` is applied (#1569) |
+| Runtime | Cloud Run (api, web), Cloud SQL Postgres 16, HTTPS load balancer with IAP on the app; a second backend without IAP for `/mcp`, `/oauth/{register,token,revoke}` and `/.well-known/*` | deployed by hand today (local-only scripts, `private/deploy/`: they name company infrastructure; they deploy the API through `ops/deploy/deploy-api.sh`); the `deploy` job of `.github/workflows/ci.yml` replaces them once `docs/deploy/actions-deploy.md` is applied (#1569) |
 
 **Request path:** every `/v1` route goes through
 1. auth: IAP header, session cookie, API token, OAuth access token or run token;

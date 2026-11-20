@@ -7,6 +7,8 @@
 // current checkout), 1 when one does not, 2 when one could not be asked (no answer, not 200,
 // no commit in the body, or git could not tell). --wait asks again every 10 s while the
 // answer is not 0, for up to that many seconds (a new revision taking its traffic).
+// ORACLE_VERSION_TOKEN, when set, is sent to every URL as "Authorization: Bearer <token>" (a
+// Google ID token for the service's IAP audience).
 import { spawnSync } from "node:child_process";
 import { containment } from "../lib/deployContainment.ts";
 import type { Answer } from "../lib/deployContainment.ts";
@@ -26,9 +28,13 @@ function contains(sha: string, served: string): boolean | null {
   return r.status === 0 ? true : r.status === 1 ? false : null;
 }
 
+const token = process.env.ORACLE_VERSION_TOKEN;
+const headers: Record<string, string> = { "cache-control": "no-cache" };
+if (token) headers.authorization = `Bearer ${token}`;
+
 async function ask(url: string): Promise<Answer> {
   try {
-    const r = await fetch(url, { signal: AbortSignal.timeout(10_000), headers: { "cache-control": "no-cache" } });
+    const r = await fetch(url, { signal: AbortSignal.timeout(10_000), headers });
     if (r.status !== 200) return { url, error: `HTTP ${r.status}` };
     const sha = servedSha(await r.json().catch(() => null));
     return sha ? { url, sha } : { url, error: "no commit in the answer" };
