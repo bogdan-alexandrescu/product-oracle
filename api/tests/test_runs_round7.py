@@ -30,15 +30,14 @@ from tests.test_adapter_v2 import (
     on,
 )
 from tests.test_adapter_v2 import settings as _v2_settings
-from tests.test_review_v2_security_6 import (
+from tests.test_review_v2_security import (
     _at_checkpoint,
     _lose,
     _lose_on_first_gate,
     _read,
     _run,
-    _started,
+    _started,  # the FakeRuntime fixture
 )
-from tests.test_review_v2_security_6 import runtime as runtime  # the FakeRuntime fixture
 from tests.test_runs import decide, get, started, tick
 
 # The same environment as test_adapter_v2 (Oracle's public URL, default timings).

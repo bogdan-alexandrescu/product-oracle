@@ -33,7 +33,7 @@ from tests.test_adapter_v2 import (
     token_of,
 )
 from tests.test_adapter_v2 import settings as _v2_settings
-from tests.test_review_v2_security_3 import member_token
+from tests.test_review_v2_security import member_token
 from tests.test_runs import get, pending, started, tick
 from tests.test_runs import runtime as runtime  # the FakeRuntime fixture
 
