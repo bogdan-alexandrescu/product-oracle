@@ -50,7 +50,7 @@ test("Ground Truth: a goal's values that could not be read say so, never no valu
 test("Ground Truth: an item's history that could not be read says so, never no changes", async ({ page }) => {
   await login(page);
   let d = await openActivation(page);
-  await expect(d.getByTestId("entity-history")).toContainText("No changes recorded");
+  await expect(d.getByTestId("entity-history").getByRole("listitem").last()).toContainText("Created");
   await expect(d.getByTestId("entity-history").getByTestId("load-error")).toHaveCount(0);
   const url = await calledUrl(page, /^\/v1\/baseline\/entities\/[^/?]+\/revisions/);
 
@@ -59,6 +59,7 @@ test("Ground Truth: an item's history that could not be read says so, never no c
   d = await openActivation(page);
   await seesReason(page, d.getByTestId("entity-history"), "the history");
   await expect(d.getByTestId("entity-history")).not.toContainText("No changes recorded");
+  await expect(d.getByTestId("entity-history").getByRole("listitem")).toHaveCount(0);
 });
 
 const inspector = (page: Page) => page.getByTestId("request-inspector").filter({ visible: true });
