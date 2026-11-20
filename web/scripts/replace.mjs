@@ -15,7 +15,7 @@
 //
 // "find" must occur exactly "count" times (default 1); with "all": true, at least once, and
 // every occurrence is replaced. Text is matched as is: no regex, no trimming.
-import { mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -143,6 +143,10 @@ function selfTest() {
     write("c.txt", "$& $1 a.b");
     r = run(spec([{ file: "c.txt", find: "a.b", replace: "$&-$1" }]), { base: dir });
     check("text is literal, not a pattern", r.ok && read("c.txt") === "$& $1 $&-$1");
+    write("s.sh", "echo one\n");
+    chmodSync(join(dir, "s.sh"), 0o755);
+    r = run(spec([{ file: "s.sh", find: "one", replace: "two" }]), { base: dir });
+    check("an executable file keeps its mode", r.ok && read("s.sh") === "echo two\n" && (statSync(join(dir, "s.sh")).mode & 0o777) === 0o755);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

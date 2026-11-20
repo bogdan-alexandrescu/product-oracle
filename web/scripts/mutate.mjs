@@ -168,6 +168,17 @@ function selfTest() {
     r = run(spec({ guard: `node -e "setTimeout(()=>{}, 60000)"`, timeoutSeconds: 1, mutants: [{ name: "slow", file: "lib.js", find: "keep", replace: "x" }] }), { base: dir, logDir: logs, out: quiet });
     check("a guard past its timeout is not green", !r.ok && /timeout before any defect/.test(r.line));
 
+    const lost = "require('fs').readFileSync('lib.js','utf8').includes('lose')";
+    for (const [name, killer] of [
+      ["the shell", `node -e "process.exit(${lost} ? 1 : 0)" || kill -9 $$`],
+      ["a child", `node -e "if (${lost}) process.kill(process.pid, 'SIGKILL')"`],
+    ]) {
+      const lines = [];
+      r = run(spec({ guard: killer, mutants: [{ name: "drop keep", file: "lib.js", find: "keep", replace: "lose" }] }), { base: dir, logDir: logs, out: (l) => lines.push(l) });
+      check(`a guard killed by a signal (${name}) is not red`, !r.ok && /left the guard green: drop keep/.test(r.line) && /^NOT RED .*\(killed by a signal\)/.test(lines[0] ?? ""));
+      check(`restores after a killed guard (${name})`, read("lib.js") === "keep also\n");
+    }
+
     r = run(spec({ guard, mutants: [] }), { base: dir, logDir: logs, out: quiet });
     check("an empty mutant list is refused", !r.ok && /no mutants/.test(r.line));
     check("the work tree is clean at the end", git(["status", "--porcelain"], dir).stdout.trim() === "?? new.js");
