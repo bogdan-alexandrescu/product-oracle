@@ -4,6 +4,8 @@ import Link from "next/link";
 
 import { Chip, DataTable, InfoTip, Inspector, InspectorRow, InspectorSection, type Column } from "@/components/ds";
 
+import { LoadError, Loading } from "@/components/ui";
+
 import { CompanyEmpty } from "../../_empty";
 import { StackPending, type StackLoad } from "./Cards";
 import { FindingRow } from "./DriftList";
@@ -223,7 +225,18 @@ export function StackTable({
 }
 
 /** The selected line's chain (vision → choice → goal → items) and its open findings. */
-export function StackInspector({ stack, row, onWaived }: { stack: Stack | undefined; row: StackRow | null; onWaived: (f: Finding) => void }) {
+export function StackInspector({
+  stack,
+  row,
+  onWaived,
+  findingsRead,
+}: {
+  stack: Stack | undefined;
+  row: StackRow | null;
+  onWaived: (f: Finding) => void;
+  /** #1586: the open findings' read, so one still loading or failed never reads as none. */
+  findingsRead: { loading: boolean; error: string | null; onRetry: () => void };
+}) {
   if (!row) return null;
   const title = row.item?.title ?? row.goal?.title ?? row.choice?.title ?? "";
   const doc = stack?.strategy?.document;
@@ -263,12 +276,16 @@ export function StackInspector({ stack, row, onWaived }: { stack: Stack | undefi
         <InspectorRow>{row.item ? row.item.title : row.items != null ? plural(row.items, "roadmap item") : "No roadmap items"}</InspectorRow>
       </InspectorSection>
       <InspectorSection label="Findings">
-        {row.findings.length ? (
+        {findingsRead.error ? (
+          <LoadError what="the findings" error={findingsRead.error} onRetry={findingsRead.onRetry} />
+        ) : row.findings.length ? (
           <ul className="-mx-4">
             {row.findings.map((f) => (
               <FindingRow key={f.id} finding={f} stack={stack} onWaived={onWaived} testId="inspector-finding" />
             ))}
           </ul>
+        ) : findingsRead.loading ? (
+          <Loading />
         ) : (
           <p className="text-sm text-text2">No open findings</p>
         )}

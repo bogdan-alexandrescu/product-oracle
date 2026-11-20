@@ -200,10 +200,15 @@ function Requests({ view }: { view: RequestsView }) {
         <div className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
           {findable && <FoundInSources found={found} onFiled={filed} />}
           {view === "themes" ? (
-            <Panel title="Themes" count={liveThemes.length}>
+            <Panel title="Themes" count={themes.data ? liveThemes.length : undefined}>
               {themes.error && (
                 <div className="px-4 pt-3">
                   <ErrorNote>{themes.error}</ErrorNote>
+                </div>
+              )}
+              {!themes.data && !themes.error && (
+                <div className="px-4 py-3">
+                  <Loading />
                 </div>
               )}
               {themes.data && <Themes themes={themes.data} onChange={themeChanged} />}

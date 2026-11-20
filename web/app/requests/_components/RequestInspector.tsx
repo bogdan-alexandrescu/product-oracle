@@ -170,7 +170,14 @@ export function RequestInspector({
               {(s.theme_title || s.theme_id) && <li>Theme: {s.theme_title ?? themes.find((t) => t.id === s.theme_id)?.title}</li>}
               {s.goal_ids.length > 0 && <li>Goals: {s.goal_ids.map((id) => goalTitles.get(id) ?? "A goal").join(", ")}</li>}
               {s.duplicate_of && <li>Same as: {requests.find((r) => r.id === s.duplicate_of)?.title ?? "another request"}</li>}
-              {s.feature_id && <li data-testid="suggested-feature">Feature: {featureTitle(s.feature_id) ?? "Loading…"}</li>}
+              {s.feature_id &&
+                (features.error ? (
+                  <li data-testid="suggested-feature">
+                    <LoadError what="the features" error={features.error} onRetry={() => void features.reload()} />
+                  </li>
+                ) : (
+                  <li data-testid="suggested-feature">Feature: {featureTitle(s.feature_id) ?? (features.loading ? "Loading…" : "A feature")}</li>
+                ))}
             </ul>
             {canSuggest && (
               <div className="flex flex-wrap gap-2">

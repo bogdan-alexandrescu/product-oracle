@@ -662,9 +662,10 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
         <HistoryPanel
           n={n}
           reports={reports}
-          loading={reportsQ.loading || !readiness}
-          error={reportsQ.error}
+          loading={reportsQ.loading || jobsQ.loading || !readiness}
+          error={reportsQ.error ?? jobsQ.error}
           jobs={jobs}
+          jobsAnswered={!!jobsQ.data}
           nameOf={nameOf}
           zone={zone}
           mayRetry={mayRetry}
@@ -1032,6 +1033,7 @@ function HistoryPanel({
   loading,
   error,
   jobs,
+  jobsAnswered,
   nameOf,
   zone,
   mayRetry,
@@ -1048,6 +1050,7 @@ function HistoryPanel({
   loading: boolean;
   error: string | null;
   jobs: Job[];
+  jobsAnswered: boolean;
   nameOf: (id: string | null | undefined) => string;
   zone: string;
   mayRetry: boolean;
@@ -1062,7 +1065,8 @@ function HistoryPanel({
   const [filter, setFilter] = useState<HistoryFilter>("all");
   const byId = new Map(jobs.map((j) => [j.id, j]));
   const reported = new Set((reports ?? []).map((r) => (typeof r.summary.job_id === "string" ? r.summary.job_id : null)).filter(Boolean));
-  const all: HistoryRow[] | undefined = reports && [
+  // #1586: History is answered once both reads are; a failed one never reads as no reports.
+  const all: HistoryRow[] | undefined = reports && jobsAnswered ? [
     ...reports.map((r): HistoryRow => ({
       kind: "report",
       id: r.id,
@@ -1072,7 +1076,7 @@ function HistoryPanel({
     })),
     // A model job with no report yet (queued, running, failed or cancelled).
     ...jobs.filter((j) => j.status !== "succeeded" && !reported.has(j.id)).map((j): HistoryRow => ({ kind: "job", id: j.id, at: j.created_at, job: j })),
-  ].sort((a, b) => b.at.localeCompare(a.at));
+  ].sort((a, b) => b.at.localeCompare(a.at)) : undefined;
   const evaluatorOf = (r: HistoryRow) => (r.kind === "job" ? "llm_job" : r.report.evaluator);
   const rows = all?.filter((r) => filter === "all" || evaluatorOf(r) === filter);
   const count = (f: HistoryFilter) => all?.filter((r) => evaluatorOf(r) === f).length ?? null;
@@ -1197,7 +1201,7 @@ function HistoryPanel({
         rowKey={(r) => r.id}
         loading={loading && !all}
         rowProps={() => ({ "data-testid": "history-row" })}
-        empty={all && all.length === 0 ? <EmptyHistory n={n} maySnapshot={maySnapshot} mayRate={mayRate} mayQueue={mayQueue} /> : "No reports match this filter"}
+        empty={!all && error ? null : all && all.length === 0 ? <EmptyHistory n={n} maySnapshot={maySnapshot} mayRate={mayRate} mayQueue={mayQueue} /> : "No reports match this filter"}
       />
     </Panel>
   );

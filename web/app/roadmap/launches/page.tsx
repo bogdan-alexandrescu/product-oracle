@@ -310,7 +310,7 @@ function Launches() {
                   if (phone) setSheet(true);
                 }}
                 loading={q.loading && !q.data}
-                empty={emptyText(current, rows.length, can("create_launch"))}
+                empty={q.error && !q.data ? null : emptyText(current, rows.length, can("create_launch"))}
                 rowProps={(l) => ({ "data-testid": "launch-row", "data-state": l.state })}
               />
             )}

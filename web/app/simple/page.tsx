@@ -492,7 +492,10 @@ export default function SimpleHome() {
     ? "Checking what waits on you…"
     : reads
     ? "Here is where the plan stands."
-    : brokenOthers > 0 && inboxCount === 0 && parts.slice(0, -1).every(([n]) => n === 0)
+    : // #1586: a failed waiting list is not "nothing waits"; Decisions below says why.
+      waiting.error && !waiting.data
+      ? "Could not check what waits on you."
+      : brokenOthers > 0 && inboxCount === 0 && parts.slice(0, -1).every(([n]) => n === 0)
       ? `You can propose fixes for ${brokenWords}.`
       : waits;
   // Nothing waits and no review is due (a new company): no walk to offer. Unknown until its reads answer.
