@@ -1347,7 +1347,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
             />
           )}
           {!phone && moreActions}
-          {(held.rows.length > 0 || heldOpen) && (
+          {(held.rows.length > 0 || held.error || heldOpen) && (
             <HeldRewritesButton open={held.open} active={heldOpen} onClick={() => setHeldOpen((o) => !o)} />
           )}
           {/* qa-docs-12: a phone keeps the version and the view in one row; the rest is behind More. */}
@@ -1649,7 +1649,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
           bottom on a phone); the outline, section and review panel keep their layout behind it. */}
       <Sheet open={heldOpen} side tall title="Held rewrites" onClose={() => setHeldOpen(false)} testId="held-drawer">
         <div className="p-4 [&>section]:mb-0 [&>section]:border-0 [&>section]:p-0 [&>section]:shadow-none [&>section>div:first-child]:hidden">
-          <HeldRewritesPanel doc={doc} rows={held.rows} headings={headings} canDecide={canDecide} onChanged={held.reload} onClose={() => setHeldOpen(false)} />
+          <HeldRewritesPanel doc={doc} rows={held.rows} error={held.error} headings={headings} canDecide={canDecide} onChanged={held.reload} onClose={() => setHeldOpen(false)} />
         </div>
       </Sheet>
       {/* Phone: Sections and Review, each opening a sheet. */}

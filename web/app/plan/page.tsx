@@ -356,6 +356,7 @@ export default function PlanPage() {
                 onSelect={onSelect}
                 me={userId}
                 loading={q.loading}
+                failed={!!q.error}
                 onLink={canLink ? onLink : undefined}
               />
               )}

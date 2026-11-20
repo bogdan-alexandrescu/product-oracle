@@ -126,7 +126,8 @@ export function LinksPicker({ value, onChange, known }: { value: Links; onChange
           </ul>
         )}
         <input className={INPUT} aria-label="Find an item to link" value={find} onChange={(e) => setFind(e.target.value)} placeholder="Find a goal, feature, risk…" />
-        {needle && (
+        {needle && entitiesQ.error && <LoadError what="the Ground Truth" error={entitiesQ.error} onRetry={() => void entitiesQ.reload()} />}
+        {needle && !entitiesQ.error && (
           <ul className="flex flex-col gap-0.5">
             {matches.length === 0 ? (
               <li className="text-sm text-text2">{entitiesQ.loading ? "Loading…" : "No Ground Truth item matches"}</li>

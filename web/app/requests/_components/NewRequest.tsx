@@ -4,7 +4,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useRef, useState } from "react";
 
 import { Button, Dialog, SegmentedControl } from "@/components/ds";
-import { ErrorNote, INPUT } from "@/components/ui";
+import { ErrorNote, INPUT, LoadError } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { formatAge } from "@/lib/format";
@@ -270,7 +270,9 @@ export function NewRequestDialog({
         </div>
         <fieldset className="flex flex-col gap-1">
           <legend className="text-sm font-semibold text-text2">Goal (optional)</legend>
-          {offered.length === 0 ? (
+          {goals.error ? (
+            <LoadError what="the goals" error={goals.error} onRetry={() => void goals.reload()} />
+          ) : offered.length === 0 ? (
             <p className="text-sm text-text2">{goals.loading ? "Loading goals…" : "No goals yet"}</p>
           ) : (
             offered.map((g) => {
