@@ -93,3 +93,51 @@ test("Request spec: how the spec is drafted sits behind a tip", async ({ page })
   await expect(dialog).toBeVisible();
   await behindTip(page, "request-spec-tip", "Oracle drafts the spec from the approved PRD in a run.");
 });
+
+test("Market: what each empty tab is for sits behind a tip; who adds stays one line", async ({ page }) => {
+  await login(page);
+  await page.goto("/company/market");
+  const tabs = page.getByRole("tablist", { name: "Market" });
+  await expect(page.getByTestId("alternatives-empty").filter({ visible: true })).toContainText("No alternatives yet");
+  await behindTip(page, "alternatives-empty-tip", "Add what a customer could use instead of you");
+  await tabs.getByRole("tab", { name: "Change log" }).click();
+  await page.getByRole("group", { name: "View" }).getByRole("button", { name: /^From the web/ }).click();
+  await expect(page.getByTestId("findings-empty")).toContainText("Nothing from the web to vet");
+  await behindTip(page, "findings-empty-tip", "Once a month Oracle searches the web for news, reviews and launches");
+  await tabs.getByRole("tab", { name: "Pricing" }).click();
+  await expect(page.getByTestId("pricing-empty")).toContainText("No pricing memos yet");
+  await behindTip(page, "pricing-empty-tip", "A memo sets out one pricing question, two to four options");
+  await tabs.getByRole("tab", { name: "Win and loss" }).click();
+  await expect(page.getByTestId("deals-empty")).toContainText("No win or loss records yet");
+  await behindTip(page, "deals-empty-tip", "Record why each deal was won, lost or churned");
+});
+
+test("Market: a reader who cannot add is told who does, in one line", async ({ page }) => {
+  await login(page, "viewer@example.com");
+  await page.goto("/company/market");
+  const empty = page.getByTestId("alternatives-empty").filter({ visible: true });
+  await expect(empty.getByText("Approvers and owners add them.")).toBeVisible();
+  await behindTip(page, "alternatives-empty-tip", "Oracle then reads their public pages every week");
+});
+
+test("Updates: what the list holds, and who it is for, sit behind tips", async ({ page }) => {
+  await scenario(page, "empty");
+  await login(page);
+  await page.goto("/company/updates");
+  await expect(page.getByTestId("updates-empty")).toContainText("No updates yet");
+  await behindTip(page, "updates-empty-tip", "Oracle drafts the board and investor updates from your goals and metrics.");
+});
+
+test("Updates: a commenter sees who the page is for, and the why behind a tip", async ({ page }) => {
+  await login(page, "commenter@example.com");
+  await page.goto("/company/updates");
+  await expect(page.getByTestId("updates-not-found").filter({ visible: true })).toContainText("Updates are for owners and approvers");
+  await behindTip(page, "updates-not-found-tip", "until an owner shares one with the whole company");
+});
+
+test("Composition: how the first revision is made sits behind a tip", async ({ page }) => {
+  await login(page, "viewer@example.com");
+  await page.goto("/documents/referral-link/composition?tab=history");
+  await expect(page.getByTestId("history-empty")).toContainText("No revisions yet");
+  await behindTip(page, "history-empty-tip", "An approver makes the first revision by choosing Use these modules");
+});
