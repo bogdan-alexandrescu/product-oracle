@@ -21,33 +21,16 @@ from oracle.runs.schemas import TickOut, TickUnchecked
 from oracle.runs.service import (
     DECIDED,
     FINAL,
-    LOST_LOOKUP_SECONDS,
-    STUCK_LOOKUP_SECONDS,
     Unavailable,
     _advance,
     _art,
     _attempts_cost,
-    _awaiting_items,
     _ceiling,
-    _count_not_found,
     _current_attempt,
-    _detach,
-    _end_workflow,
     _finish,
     _flow,
-    _give_up,
     _known_sum,
-    _live,
-    _locked,
-    _lookup_exhausted,
-    _not_found,
-    _note,
-    _parse_at,
-    _read_on,
-    _read_once_more,
     _recompute_spend,
-    _record_agents,
-    _record_wait,
     _refs,
     _replay,
     _resume_advance,
@@ -58,12 +41,8 @@ from oracle.runs.service import (
     _segments,
     _set_art,
     _set_knob,
-    _shown,
     _spent,
-    _submit,
     _TickStats,
-    _waiting,
-    _within,
     log,
 )
 from oracle.runtokens import revoke_run_tokens
@@ -105,7 +84,7 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
     run_id = run.id
     runtime = service.get_runtime()
     segments = await _segments(db, run.id)
-    wf = _live(run)
+    wf = service._live(run)
     if wf is not None and (wf.get("cancel_pending") or run.status in FINAL):
         if not await _retry_pending_cancel(db, run, wf, segments, stats) or run.status != "running":
             return
@@ -143,7 +122,7 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
                     # the next tick resumes the advance again.
                     raise
                 run, segments = await _resume_failed(db, run.id, resuming.seq, exc, stats)
-        wf = _live(run)
+        wf = service._live(run)
         if wf is not None and not wf.get("cancel_pending") and run.status not in FINAL:
             # Its status, cost and the ceiling, a wait's expiry and the workflow's end:
             # read whatever the resume did.
@@ -160,12 +139,12 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
             return
         # A submission the runtime refused earlier, or one a request queued: the caller
         # submits it (what this pass wrote, a cancel confirmed above, commits first).
-        if any(_waiting(s) for s in segments):
+        if any(service._waiting(s) for s in segments):
             await db.commit()
             return
-        if (awaiting := _awaiting_items(segments)) is not None:
+        if (awaiting := service._awaiting_items(segments)) is not None:
             # F4 lane B: the draft's roadmap items, re-checked on every tick.
-            await _submit(db, run, awaiting, segments)
+            await service._submit(db, run, awaiting, segments)
             await db.commit()
             return
         # Resumed after an overrun with a finished segment not yet advanced.
@@ -177,13 +156,13 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
 
     segment_id, workflow_id = running.id, running.swarm_workflow_id or ""
     await db.commit()  # nothing held across the runtime calls
-    status = await _within(runtime.status(workflow_id), deadline)
+    status = await service._within(runtime.status(workflow_id), deadline)
     files: dict[str, str] = {}
     skipped: dict[str, str] = {}
     if status.terminal and status.state == "succeeded":
-        files, skipped = await _within(runtime.read_artifacts(workflow_id), deadline)
+        files, skipped = await service._within(runtime.read_artifacts(workflow_id), deadline)
 
-    run, segments = await _locked(db, run_id)
+    run, segments = await service._locked(db, run_id)
     running = next((s for s in segments if s.id == segment_id), None)
     if (
         run is None
@@ -221,8 +200,8 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
             run, segments, {"seq": earlier.seq, "id": running.swarm_workflow_id}, status.cost_usd
         )
     _recompute_spend(run, segments)
-    _record_agents(running, workflow_id, status)
-    _record_wait(
+    service._record_agents(running, workflow_id, status)
+    service._record_wait(
         run, running, workflow_id, _current_attempt(art, running).get("submitted_at"), status
     )
     art = _art(running)
@@ -360,11 +339,11 @@ _SPENDING = ("running", "awaiting_checkpoint")
 def _rested(pending: dict[str, Any]) -> bool:
     """A cancel past :data:`NOT_FOUND_TRIES` (in the Inbox) is tried again now and then
     (only the cancel call rests: the workflow's status and cost are read every tick)."""
-    tried = _parse_at(pending.get("tried_at"))
+    tried = service._parse_at(pending.get("tried_at"))
     return (
         bool(pending.get("stuck"))
         and tried is not None
-        and (service._now() - tried).total_seconds() < STUCK_LOOKUP_SECONDS
+        and (service._now() - tried).total_seconds() < service.STUCK_LOOKUP_SECONDS
     )
 
 
@@ -389,19 +368,21 @@ async def _retry_pending_cancel(
     if not wf.get("id"):
         label = wf.get("lookup") or ""
         try:
-            found = await runtime.find_by_label(label, since=_parse_at(wf.get("lookup_since")))
+            found = await runtime.find_by_label(
+                label, since=service._parse_at(wf.get("lookup_since"))
+            )
         except RuntimeUnavailable as exc:
             log.warning("run %s: looking up %s to cancel it: %s", run.id, label, exc)
             lookups = int(pending.get("lookups") or 0) + 1
             since = wf.get("lookup_since") or pending.get("since")
-            if _lookup_exhausted({"submitted_at": since, "lookups": lookups}):
+            if service._lookup_exhausted({"submitted_at": since, "lookups": lookups}):
                 # Never found, never ruled out: looked for in the background instead.
                 await _stop_looking(db, run, wf, segments, state, exc)
                 return True
             _set_knob(run, "workflow", {**wf, "cancel_pending": {**pending, "lookups": lookups}})
             return False
         if not found:
-            await _end_workflow(db, run, wf, state)
+            await service._end_workflow(db, run, wf, state)
             return True
         wf = {**wf, "id": found}
         _set_knob(run, "workflow", wf)
@@ -411,11 +392,11 @@ async def _retry_pending_cancel(
     except RuntimeUnavailable as exc:
         if exc.gone and pending.get("confirmed"):
             # Its cancel was confirmed: read once more before it is taken as ended.
-            _read_once_more(run, wf)
-            await _end_workflow(db, run, wf, state)
+            service._read_once_more(run, wf)
+            await service._end_workflow(db, run, wf, state)
             return True
         if exc.gone:
-            await _give_up(db, run, wf, state)
+            await service._give_up(db, run, wf, state)
             return True
         if rested:
             log.warning("run %s: %s not read (resting): %s", run.id, wf["id"], exc)
@@ -425,32 +406,36 @@ async def _retry_pending_cancel(
             # read on in the background, so that nothing waits on it here.
             note = (
                 f"SwarmCloud confirmed cancelling workflow {wf['id']}, but its last cost could "
-                f"not be read ({_shown(exc)}); Oracle reads it in the background until it "
+                f"not be read ({service._shown(exc)}); Oracle reads it in the background until it "
                 "ends and counts it on the run."
             )
             target = next((s for s in segments if s.seq == wf.get("start_seq")), None)
-            _note(target or segments[0], note)
-            _read_on(run, wf)
-            await _end_workflow(db, run, wf, state)
+            service._note(target or segments[0], note)
+            service._read_on(run, wf)
+            await service._end_workflow(db, run, wf, state)
             return True
-        if _not_found(exc):
+        if service._not_found(exc):
             # Proves nothing: counted (kept, not rolled back), and tried again.
-            marker = {**pending, "tried_at": service._now().isoformat(), "error": _shown(exc)}
-            _count_not_found(marker, pending, True)
+            marker = {
+                **pending,
+                "tried_at": service._now().isoformat(),
+                "error": service._shown(exc),
+            }
+            service._count_not_found(marker, pending, True)
             _set_knob(run, "workflow", {**wf, "cancel_pending": marker})
             stats.errors.append(f"run {run.id}: {exception_text(exc)}")
             return False
         raise
     _take_cost(run, wf, status, segments)
     if status.terminal:
-        await _end_workflow(db, run, wf, state)
+        await service._end_workflow(db, run, wf, state)
         return True
     if pending.get("confirmed"):
         # Confirmed and winding down: read on in the background until it ends.
-        _read_on(run, wf, costed=True)
-        await _end_workflow(db, run, wf, state)
+        service._read_on(run, wf, costed=True)
+        await service._end_workflow(db, run, wf, state)
         return True
-    if not rested and await _detach(db, run, cancel=True, state=state):
+    if not rested and await service._detach(db, run, cancel=True, state=state):
         return True
     if run.status in _SPENDING and (ceiling := _overrun(run)) is not None:
         await _pause_overrun(db, run, ceiling, stats)
@@ -479,19 +464,20 @@ async def _stop_looking(
         why="cancel",
     )
     note = (
-        f"After {service._duration(LOST_LOOKUP_SECONDS)} SwarmCloud's task listing still "
+        f"After {service._duration(service.LOST_LOOKUP_SECONDS)} SwarmCloud's task listing still "
         "neither shows "
-        f"submission {label} nor rules it out ({_shown(exc)}). Its run token is revoked, and "
+        f"submission {label} nor rules it out ({service._shown(exc)}). Its run token is revoked, "
+        "and "
         f"Oracle keeps looking for it in the background every "
-        f"{service._duration(STUCK_LOOKUP_SECONDS)}: if it landed, Oracle cancels it and "
+        f"{service._duration(service.STUCK_LOOKUP_SECONDS)}: if it landed, Oracle cancels it and "
         "counts its "
         "cost."
     )
     log.warning("run %s: %s", run.id, note)
     target = next((s for s in segments if s.seq == wf.get("start_seq")), None)
     if target is not None or segments:
-        _note(target or segments[0], note)
-    await _end_workflow(db, run, wf, state)
+        service._note(target or segments[0], note)
+    await service._end_workflow(db, run, wf, state)
 
 
 def _attempt_of(label: str | None, fallback: int) -> int:
@@ -559,7 +545,7 @@ async def _tick_one(
     run = await db.scalar(select(Run).where(Run.id == run_id).with_for_update(skip_locked=True))
     if run is None or not (
         run.status in ("running", "paused_overrun")
-        or _live(run) is not None
+        or service._live(run) is not None
         or (run.knobs or {}).get("searches")
     ):
         await db.rollback()
@@ -585,7 +571,7 @@ async def _stamp_checked(db: AsyncSession, run_id: uuid.UUID, since: datetime) -
         return
     art = _art(current)
     progress = art.get("progress") or {}
-    if (at := _parse_at(progress.get("checked_at"))) is not None and at >= since:
+    if (at := service._parse_at(progress.get("checked_at"))) is not None and at >= since:
         await db.rollback()
         return
     same = progress.get("workflow_id") == current.swarm_workflow_id
@@ -638,7 +624,7 @@ async def _has_waiting(db: AsyncSession, run_id: uuid.UUID) -> bool:
     """Whether a segment of the run waits to be submitted (:func:`_waiting`), read without
     a lock: :func:`submit_queued` locks the run and looks again."""
     segments = await _segments(db, run_id)
-    waiting = any(_waiting(s) for s in segments)
+    waiting = any(service._waiting(s) for s in segments)
     await db.rollback()
     return waiting
 

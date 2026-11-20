@@ -10,22 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit, company_time
 from oracle.runs import service, workflow
 from oracle.runs.models import Run, RunSegment
-from oracle.runs.service import (
-    _art,
-    _checkpoints,
-    _current_attempt,
-    _detach,
-    _drivable,
-    _live,
-    _locked,
-    _note,
-    _parse_at,
-    _plan_entry,
-    _set_art,
-    _set_knob,
-    _within,
-    log,
-)
+from oracle.runs.service import _art, _checkpoints, _current_attempt, _set_art, _set_knob, log
 from oracle.runtokens import RunToken, mint_run_token, revoke_run_tokens
 from oracle.swarm import Parked, RuntimeUnavailable, WorkflowStatus
 from oracle.swarm.runtime import MCP_SERVER
@@ -80,7 +65,9 @@ def _mark_key_refresh(
     refresh = dict(wf.get("key_refresh") or {})
     if refresh.get("state") == "refused":
         return wf
-    minted = _parse_at(refresh.get("minted_at")) if refresh.get("state") == "stored" else None
+    minted = (
+        service._parse_at(refresh.get("minted_at")) if refresh.get("state") == "stored" else None
+    )
     if minted is not None:
         parks = [p for p in parks if p.expired_at is None or p.expired_at > minted]
     handled = list(refresh.get("parks") or [])
@@ -123,7 +110,7 @@ async def refresh_key(
     records what SwarmCloud answered. The token goes only in the call's body. Returns an
     error to report once (a 403 or a 422), else None. Commits."""
     run = await db.scalar(select(Run).where(Run.id == run_id).with_for_update(skip_locked=True))
-    wf = _drivable(run) if run is not None else None
+    wf = service._drivable(run) if run is not None else None
     refresh = dict((wf or {}).get("key_refresh") or {})
     if (
         run is None
@@ -133,7 +120,7 @@ async def refresh_key(
     ):
         await db.rollback()
         return None
-    minted = _parse_at(refresh.get("minted_at"))
+    minted = service._parse_at(refresh.get("minted_at"))
     if minted is not None and (service._now() - minted).total_seconds() < KEY_REFRESH_SECONDS:
         await db.rollback()
         return None
@@ -158,14 +145,14 @@ async def refresh_key(
     await db.commit()
     refused: RuntimeUnavailable | None = None
     try:
-        await _within(
+        await service._within(
             service.get_runtime().store_mcp_credentials(workflow_id, server, token, seconds),
             deadline,
         )
     except RuntimeUnavailable as exc:
         refused = exc
-    run, segments = await _locked(db, run_id)
-    wf = _live(run) if run is not None else None
+    run, segments = await service._locked(db, run_id)
+    wf = service._live(run) if run is not None else None
     if run is None or wf is None or wf["id"] != workflow_id:
         await db.commit()
         return None
@@ -179,9 +166,11 @@ async def refresh_key(
     if refused is None:
         refresh["state"] = "stored"
         # The decision's tail rule (:func:`_left`) counts from the renewed key.
-        minted_at = _parse_at(refresh.get("minted_at")) or service._now()
+        minted_at = service._parse_at(refresh.get("minted_at")) or service._now()
         wf["expires_at"] = workflow.expires_at(minted_at, seconds).isoformat()
-        _note(target, _renewed_note(service._now(), await company_time.company_time_zone(db)))
+        service._note(
+            target, _renewed_note(service._now(), await company_time.company_time_zone(db))
+        )
         await audit.record(
             db, None, "run.key_renewed", "run", run.id,
             {"workflow_id": workflow_id, "server": server, "expires_in": seconds},
@@ -197,7 +186,7 @@ async def refresh_key(
         # The key SwarmCloud refused was sent nowhere else: it is not left valid.
         await revoke_run_tokens(db, run.id)
         code = "key_refresh_forbidden" if status == 403 else "key_refresh_refused"
-        _note(target, workflow.ADVICE[code])
+        service._note(target, workflow.ADVICE[code])
         error = f"run {run_id}: SwarmCloud refused the run's key renewal (HTTP {status})"
         log.warning("run %s: key renewal refused: %s", run.id, refused)
     else:
@@ -221,7 +210,7 @@ async def _pause_workflow(
     its files when they are written (resuming opens its checkpoint in the Inbox), else it
     is submitted again as a new workflow once the run is resumed."""
     current = next((s for s in segments if s.status == "running"), None)
-    entry = _plan_entry(wf, current.seq) if current is not None else None
+    entry = service._plan_entry(wf, current.seq) if current is not None else None
     if current is not None and entry is not None:
         round_ = int(entry.get("round") or 1)
         producers = tuple(entry["work"]) if round_ == 1 else (entry["revises"][round_ - 2],)
@@ -255,13 +244,13 @@ async def _pause_workflow(
                     "decides",
                 }
             cp.payload = {**(cp.payload or {}), "wait": wait}
-    _note(
+    service._note(
         current or segments[0],
         "Paused on overrun: Oracle cancelled the run's SwarmCloud workflow so that nothing "
         "more is spent; resuming continues as a new workflow.",
     )
-    if not await _detach(db, run, cancel=True, state="paused"):
-        _note(
+    if not await service._detach(db, run, cancel=True, state="paused"):
+        service._note(
             current or segments[0],
             "SwarmCloud did not confirm cancelling the workflow: Oracle cancels it again on "
             "every tick and keeps counting its cost, and submits nothing after it until "

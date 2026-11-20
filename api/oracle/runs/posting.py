@@ -18,27 +18,17 @@ from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.runs.service import (
     DECIDED,
     ITEMS_FILE,
-    NOT_FOUND_TRIES,
     Invalid,
     Unavailable,
     _art,
-    _clip,
     _console_findings,
-    _detach,
     _flow,
-    _live,
     _next,
-    _not_found,
-    _note,
-    _plan_entry,
     _rt,
     _segments,
     _set_art,
     _set_knob,
-    _set_wait,
-    _shown,
     _target_kind,
-    _unconfirmed,
 )
 from oracle.swarm import RecordedAnswer, RuntimeUnavailable
 from oracle.swarm.runtime import MERGE, NOT_YET
@@ -83,7 +73,7 @@ async def _undecide(db: AsyncSession, run: Run, cp: Checkpoint) -> bool:
     if cp.status not in DECIDED or not isinstance(wait.get("posting"), dict):
         return False
     wait.pop("posting")
-    _set_wait(cp, wait)
+    service._set_wait(cp, wait)
     decided_by, kind = cp.decided_by, cp.status
     await service._restore_agents_file(db, run, cp)
     cp.status = "pending"
@@ -129,13 +119,13 @@ async def _hold_unread(
         return
     why = "SwarmCloud did not serve it" if exc.needs == "unread" else "its verdict is unreadable"
     console = service._unread_console(
-        run, segment, _live(run), wait, why, by=exc.by, at=exc.at, via=exc.via
+        run, segment, service._live(run), wait, why, by=exc.by, at=exc.at, via=exc.via
     )
     if exc.needs == "unreadable":
         console.update(reason="the recorded verdict could not be read", needs="unreadable")
     wait["console"] = console
-    _set_wait(cp, wait)
-    _note(
+    service._set_wait(cp, wait)
+    service._note(
         segment,
         f"{cp.kind} was already answered in SwarmCloud, and Oracle could not read the answer "
         f"({why}). Until it does, the run's agents may read Oracle but not write to it; "
@@ -165,15 +155,16 @@ async def _count_post_404(
         {
             "checkpoint_id": str(checkpoint_id),
             "tries": tries,
-            "error": _shown(cause),
+            "error": service._shown(cause),
             "at": service._now().isoformat(),
         },
     )
     await db.commit()
-    if tries >= NOT_FOUND_TRIES:
+    if tries >= service.NOT_FOUND_TRIES:
         raise Unavailable(
             f"SwarmCloud did not confirm the decision: it answered HTTP 404 {tries} times "
-            f"without saying the wait does not exist ({_shown(cause)}). Decide again later, "
+            f"without saying the wait does not exist ({service._shown(cause)}). Decide again "
+            "later, "
             "or in the Inbox, Cancel ends the run."
         ) from None
 
@@ -254,7 +245,7 @@ async def _decide_in_workflow(
     may simply be sent again."""
     settings = get_runtime_settings()
     wait = dict((cp.payload or {}).get("wait") or {})
-    entry = _plan_entry(wf, segment.seq) or {}
+    entry = service._plan_entry(wf, segment.seq) or {}
     round_ = int(wait.get("round") or 1)
     approved = cp.status == "approved"
     answered = bool(wait.get("console")) and (approved or round_ <= len(entry.get("revises") or []))
@@ -266,27 +257,27 @@ async def _decide_in_workflow(
         return await _already_answered(db, run, cp, segment, segments, wf, wait, verdict, None)
     if not approved and round_ > len(entry.get("revises") or []):
         # The workflow's next steps assume approval: re-run the segment on its own.
-        _note(
+        service._note(
             segment,
             f"Changes requested at {cp.kind} (round {round_}): the workflow had no revision "
             "step for it, so Oracle cancelled it and re-runs the segment as a new workflow.",
         )
-        if not await _detach(db, run, cancel=True, state="cancelled"):
-            raise _unconfirmed("re-run the segment")
+        if not await service._detach(db, run, cancel=True, state="cancelled"):
+            raise service._unconfirmed("re-run the segment")
         return False
     left = _left(wf)
     steps = workflow.agent_steps_after(wf.get("segments") or [], segment.seq, approved, round_)
     tail = workflow.tail_seconds(steps, settings)
     if left < tail:
-        _note(
+        service._note(
             segment,
             f"Decided at {cp.kind} with {_duration(left)} of the run's credential left, under "
             f"the {_duration(tail)} tail that the {steps} agent step(s) after the wait need: "
             "Oracle did not post the decision to SwarmCloud, cancelled the waiting workflow "
             "and continued as a new workflow with a fresh run token.",
         )
-        if not await _detach(db, run, cancel=True, state="tail"):
-            raise _unconfirmed("continue the run as a new workflow")
+        if not await service._detach(db, run, cancel=True, state="tail"):
+            raise service._unconfirmed("continue the run as a new workflow")
         return False
     edits = cp.review if isinstance(cp.review, dict) and cp.review.get("kind") == "edits" else None
     payload: dict[str, Any] = (
@@ -312,7 +303,7 @@ async def _decide_in_workflow(
             return await _already_answered(
                 db, run, cp, segment, segments, wf, wait, payload["verdict"], exc
             )
-        if _not_found(exc):
+        if service._not_found(exc):
             # Proves nothing, and is counted (decide_checkpoint): past NOT_FOUND_TRIES the
             # run shows in the Inbox with Cancel.
             raise _PostNotFound(exc) from None
@@ -333,9 +324,11 @@ async def _decide_in_workflow(
             "the run as a new workflow "
             "from the Inbox decision."
         )
-        _note(segment, workflow.advice(exc.code, fallback))
-        if not await _detach(db, run, cancel=True, state=_shown(exc.code) or "refused"):
-            raise _unconfirmed("continue the run as a new workflow") from None
+        service._note(segment, workflow.advice(exc.code, fallback))
+        if not await service._detach(
+            db, run, cancel=True, state=service._shown(exc.code) or "refused"
+        ):
+            raise service._unconfirmed("continue the run as a new workflow") from None
         return False
     _set_knob(run, "post_404", None)
     wait["answered"] = {
@@ -346,11 +339,11 @@ async def _decide_in_workflow(
         "on_behalf_of": on_behalf_of,
         "via": "mcp",
     }
-    _set_wait(cp, wait)
+    service._set_wait(cp, wait)
     if not await _follow(
         db, run, cp, segment, segments, wf, entry, round_, approved, note_by=on_behalf_of
     ):
-        raise _unconfirmed("end the run")
+        raise service._unconfirmed("end the run")
     return True
 
 
@@ -411,13 +404,17 @@ async def _already_answered(
     record = await _read_recorded(cp, wf, wait, artifact)
     detail = exc.detail if exc is not None else {}
     console = wait.get("console") or {}
-    by = record.answered_by or _shown(detail.get("answered_by")) or console.get("answered_by")
+    by = (
+        record.answered_by
+        or service._shown(detail.get("answered_by"))
+        or console.get("answered_by")
+    )
     at = (
         record.answered_at.isoformat()
         if record.answered_at
-        else _shown(detail.get("answered_at")) or console.get("answered_at")
+        else service._shown(detail.get("answered_at")) or console.get("answered_at")
     )
-    via = record.via or _shown(detail.get("via")) or console.get("via")
+    via = record.via or service._shown(detail.get("via")) or console.get("via")
     ours = record.answer_id == str(cp.id) and record.by_oracle
     approved = verdict == MERGE
     if record.verdict is None and not approved:
@@ -434,11 +431,11 @@ async def _already_answered(
     wait.pop("console", None)
     wait["recorded"] = service._recorded(record, by, at, via, ours)
     if not ours:
-        _note(
+        service._note(
             segment, service._outside_note(cp, round_, replace(record, answered_by=by, via=via), at)
         )
     if record.verdict is None:
-        _note(
+        service._note(
             segment,
             f"Oracle could not read the verdict SwarmCloud recorded for {cp.kind} (round "
             f"{round_}); the Inbox approved, which needs no work the workflow did not do "
@@ -453,7 +450,7 @@ async def _already_answered(
         if record.verdict is None:
             pass
         elif record.verdict == verdict:
-            _note(
+            service._note(
                 segment,
                 f"SwarmCloud already held a {verdict} answer for {cp.kind} (round {round_}), "
                 "the same verdict as the Inbox decision, so the run follows the workflow on "
@@ -469,11 +466,11 @@ async def _already_answered(
                 else "the next segment depends on this wait whatever its verdict, so the "
                 "workflow went on into it, as the approval needs, and Oracle follows it"
             )
-            _note(
+            service._note(
                 segment,
                 f"SwarmCloud's console recorded NOT_YET for {cp.kind} (round {round_})"
                 f" ({by or 'someone'}{f' via {via}' if via else ''}"
-                f"{': ' + _clip(applied) if applied else ''}), but the Inbox approved. The "
+                f"{': ' + service._clip(applied) if applied else ''}), but the Inbox approved. The "
                 f"approval needs no work the workflow did not do: {how}.",
             )
         wait["answered"] = {
@@ -488,8 +485,8 @@ async def _already_answered(
             "kept_earlier": True,
             "not_applied": not_applied,
         }
-        _set_wait(cp, wait)
-        entry = _plan_entry(wf, segment.seq) or {}
+        service._set_wait(cp, wait)
+        entry = service._plan_entry(wf, segment.seq) or {}
         if not await _follow(
             db,
             run,
@@ -505,18 +502,18 @@ async def _already_answered(
             not_applied=not_applied,
             stop_rest=record.verdict != verdict,
         ):
-            raise _unconfirmed("end the run")
+            raise service._unconfirmed("end the run")
         return True
-    _note(
+    service._note(
         segment,
         f"SwarmCloud held {record.verdict} for {cp.kind} (round {round_}), but the latest "
         f"Inbox decision is {verdict}, which needs a revision the workflow did not run: Oracle "
         "takes its decision as a correction, cancelled the workflow (which had gone on with "
         "the recorded answer) and continued as a new workflow carrying the decision.",
     )
-    _set_wait(cp, wait)
-    if not await _detach(db, run, cancel=True, state="corrected"):
-        raise _unconfirmed("continue the run as a new workflow")
+    service._set_wait(cp, wait)
+    if not await service._detach(db, run, cancel=True, state="corrected"):
+        raise service._unconfirmed("continue the run as a new workflow")
     return False
 
 
@@ -577,7 +574,7 @@ async def _follow(
         if last:
             # What follows a MERGE in the last round's shape is pass-through: stop it.
             more = round_ < len(entry.get("reviews") or []) or stop_rest
-            if not await _detach(db, run, cancel=more, state="ended") and strict:
+            if not await service._detach(db, run, cancel=more, state="ended") and strict:
                 return False
         await _next(db, run, segment, segments)
         return True

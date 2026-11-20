@@ -28,47 +28,32 @@ from oracle.runs.service import (
     CANCEL_FOLLOW_UP_GRACE_SECONDS,
     CHECKPOINT_TITLES,
     FINAL,
-    RESUME_VOIDED,
-    STUCK_LOOKUP_SECONDS,
     Forbidden,
     NotFound,
     RunError,
     Unavailable,
-    _accepted,
     _advance,
     _art,
     _can_dismiss_overrun,
     _cancel_again_ids,
-    _cancel_call,
     _cancel_follow_up,
-    _cancel_pending,
-    _Cancelled,
     _ceiling,
     _checkpoints,
     _cost_unknown,
     _creator,
     _current_attempt,
-    _end_workflow,
     _finish,
     _flow,
     _import_draft,
     _import_failed,
     _link_requests,
-    _live,
-    _note,
-    _note_art,
-    _parse_at,
     _segments,
     _set_art,
     _set_knob,
-    _set_wait,
     _settle_cancel_follow_ups,
-    _shown,
-    _submit,
     _target_kind,
     _TickStats,
     log,
-    unqueue,
 )
 from oracle.runtokens import revoke_run_tokens
 from oracle.swarm import RecordedAnswer, RuntimeUnavailable
@@ -119,7 +104,7 @@ def _manages(principal: Principal, run: Run) -> bool:
 def _cancel_stuck(run: Run) -> dict[str, Any] | None:
     """The live workflow whose cancel is past :data:`NOT_FOUND_TRIES` 404s that prove
     nothing (in the Inbox with Cancel), if any."""
-    wf = _live(run)
+    wf = service._live(run)
     return wf if wf is not None and (wf.get("cancel_pending") or {}).get("stuck") else None
 
 
@@ -155,8 +140,8 @@ async def _stop_cancelling(db: AsyncSession, run: Run) -> bool:
     segments = await _segments(db, run.id)
     target = next((s for s in segments if s.seq == wf.get("start_seq")), None)
     if target is not None or segments:
-        _note(target or segments[0], stopped)
-    await _end_workflow(db, run, wf, pending.get("state") or "cancelled", stopped=True)
+        service._note(target or segments[0], stopped)
+    await service._end_workflow(db, run, wf, pending.get("state") or "cancelled", stopped=True)
     if run.status not in FINAL:
         await _end_stopped(db, run, segments, wf)
     return True
@@ -233,7 +218,7 @@ async def retry_lookup(db: AsyncSession, principal: Principal, run_id: uuid.UUID
     entry = _cost_unknown(run)
     if entry is None:
         raise RunError("nothing to look up: no workflow of this run has an unknown cost")
-    last = _parse_at((run.knobs or {}).get("lookup_retried_at"))
+    last = service._parse_at((run.knobs or {}).get("lookup_retried_at"))
     if last is not None and (service._now() - last).total_seconds() < RETRY_LOOKUP_SECONDS:
         raise TooSoon(
             f"Retry lookup read this run's workflow less than {RETRY_LOOKUP_SECONDS} s ago; "
@@ -287,7 +272,7 @@ async def retry_import(db: AsyncSession, principal: Principal, run_id: uuid.UUID
         await db.commit()
         raise RunError("nothing to retry: the run changed since its import stopped")
     attempt.pop("resume_failures", None)
-    _note_art(
+    service._note_art(
         art,
         f"An owner retried importing {segment.name}'s output (it failed with "
         f"{failed.get('error')} on {failed.get('count')} tries in a row).",
@@ -503,7 +488,7 @@ async def _hold_console_approval(
         blocking=True,
     )
     wait["console"] = console
-    _set_wait(cp, wait)
+    service._set_wait(cp, wait)
     await audit.record(
         db,
         None,
@@ -520,7 +505,7 @@ async def _hold_console_approval(
             "held": "blocking_problems",
         },
     )
-    _note(
+    service._note(
         segment,
         f"{cp.kind} was approved in SwarmCloud by {record.answered_by or 'someone'}: "
         f"{service._said(record, at)}. The {CHECKPOINT_TITLES.get(cp.kind, cp.kind).lower()} has "
@@ -786,13 +771,13 @@ async def _retry_draft_import(
         await feature_set.fill_document(db, run.id, run.document_id)
         await run_order.fill_document(db, run.id, run.document_id)
         await _link_requests(db, run)
-        _note_art(
+        service._note_art(
             art,
             f"{who} retried importing {name}{after}: imported as {imported.get('slug')} "
             f"v{imported.get('version')}.",
         )
     else:
-        _note_art(
+        service._note_art(
             art,
             f"{who} retried importing {name}{after}: still not imported (the segment shows why).",
         )
@@ -854,7 +839,7 @@ async def cancel_again(
     segments = await _segments(db, run.id)
     target = next((x for x in segments if x.seq == e.get("seq")), segments[0] if segments else None)
     if target is not None:
-        _note(
+        service._note(
             target,
             "Cancel again: Oracle cancels the workflow again (its cancel calls were stopped), "
             "and keeps reading its status and cost until it ends.",
@@ -893,7 +878,7 @@ async def end_as_oracle(db: AsyncSession, run_id: uuid.UUID, reason: str) -> boo
         return False
     for segment in await _segments(db, run.id):
         if segment.status in ("pending", "running"):
-            unqueue(segment)
+            service.unqueue(segment)
             segment.status = "cancelled"
             segment.finished_at = service._now()
     await _finish(db, run, "cancelled", reason)
@@ -917,7 +902,7 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
         raise RunError(f"run is already {run.status}")
     runtime = service.get_runtime()
     # What to ask SwarmCloud, read without the lock.
-    wf = _live(run)
+    wf = service._live(run)
     ids: list[str] = []
     # The segment each workflow is cancelled for (its follow-up's target).
     targets: dict[str, uuid.UUID] = {}
@@ -944,7 +929,7 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
     found: dict[tuple[str, str | None], str | None | RuntimeUnavailable] = {}
     for key, since in lookups.items():
         try:
-            found[key] = await runtime.find_by_label(key[0], since=_parse_at(since))
+            found[key] = await runtime.find_by_label(key[0], since=service._parse_at(since))
         except RuntimeUnavailable as exc:
             log.warning("run %s: looking up %s: %s", run_id, key[0], exc)
             found[key] = exc
@@ -960,7 +945,7 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
         row.next_attempt_at = service._now() + timedelta(seconds=CANCEL_FOLLOW_UP_GRACE_SECONDS)
     await db.commit()
     follow_up_ids = {i: row.id for i, row in follow_ups.items()}
-    done = {i: await _cancel_call({"id": i}) for i in ids}
+    done = {i: await service._cancel_call({"id": i}) for i in ids}
 
     # Under the review gate and the run's row lock, as the run is now: the caller is read
     # again (the transaction that checked it ended with the calls above), and what the run
@@ -979,7 +964,7 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
             raise Forbidden(refusal)
         if run.status in FINAL:
             break
-        now_wf = _live(run)
+        now_wf = service._live(run)
         want_cancel: list[str] = []
         want_find: dict[tuple[str, str | None], str | None] = {}
         if now_wf is not None and now_wf.get("id"):
@@ -996,16 +981,16 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
             break
         await db.rollback()
         for i in new_cancel:
-            done[i] = await _cancel_call({"id": i})
+            done[i] = await service._cancel_call({"id": i})
         for key, since in new_find.items():
             try:
-                found[key] = await runtime.find_by_label(key[0], since=_parse_at(since))
+                found[key] = await runtime.find_by_label(key[0], since=service._parse_at(since))
             except RuntimeUnavailable as exc:
                 log.warning("run %s: looking up %s: %s", run_id, key[0], exc)
                 found[key] = exc
             hit = found[key]
             if isinstance(hit, str):
-                done[hit] = await _cancel_call({"id": hit})
+                done[hit] = await service._cancel_call({"id": hit})
     else:
         await db.rollback()
         raise Unavailable("the run kept changing while Oracle cancelled it; cancel it again")
@@ -1018,7 +1003,7 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
         await db.commit()
         return
     segments = await _segments(db, run.id)
-    wf = _live(run)
+    wf = service._live(run)
     for s in segments:
         if s.status == "running" and wf is not None and s.swarm_workflow_id == wf["id"]:
             s.status = "cancelled"
@@ -1029,7 +1014,7 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
                 # cancelled again by the tick (its cost read) until SwarmCloud confirms.
                 wf = service._attach_for_cancel(run, s, s.swarm_workflow_id)
             else:
-                out = done.get(s.swarm_workflow_id) or await _cancel_call(
+                out = done.get(s.swarm_workflow_id) or await service._cancel_call(
                     {"id": s.swarm_workflow_id}
                 )
                 if out.final is not None:
@@ -1039,7 +1024,7 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
                 attempt = _current_attempt(_art(s), s)
                 label = attempt.get("label") or s.swarm_workflow_id
                 if out.error is not None and not out.ended and not out.gone:
-                    s.error = f"cancel not confirmed by the runtime: {_shown(out.error)}"
+                    s.error = f"cancel not confirmed by the runtime: {service._shown(out.error)}"
                     # Not attached (one workflow is): cancelled and costed in the
                     # background until SwarmCloud confirms.
                     service._search_for(
@@ -1081,7 +1066,7 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
                     # Lost since Oracle looked (or sent again under the same label): the
                     # earlier lookup says nothing of it, so it is looked up now.
                     try:
-                        result = await runtime.find_by_label(label, since=_parse_at(since))
+                        result = await runtime.find_by_label(label, since=service._parse_at(since))
                     except RuntimeUnavailable as exc:
                         result = exc
                 until = service._credential_end(lost)
@@ -1124,8 +1109,8 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
     # confirm either: Oracle stops cancelling it, and keeps reading its cost.
     await _finish(db, run, "cancelled", state="cancelled", done=done)
     await _stop_cancelling(db, run)
-    if _cancel_pending(run) and segments:
-        _note(
+    if service._cancel_pending(run) and segments:
+        service._note(
             segments[0],
             "Run cancelled; SwarmCloud did not confirm cancelling its workflow yet, so Oracle "
             "cancels it again on every tick and keeps counting its cost.",
@@ -1156,17 +1141,17 @@ async def stop_run(
             s.status = "cancelled"
             s.finished_at = service._now()
         elif s.status == "pending":
-            unqueue(s)
+            service.unqueue(s)
             s.status = "cancelled"
     for cp in await _checkpoints(db, [run.id]):
         if cp.status == "pending":
             cp.status = "skipped"
             cp.note = "Run cancelled."
             cp.decided_at = service._now()
-    wf = _live(run)
-    done: dict[str, _Cancelled] = {}
+    wf = service._live(run)
+    done: dict[str, service._Cancelled] = {}
     if wf is not None and wf.get("id"):
-        done[wf["id"]] = _Cancelled(
+        done[wf["id"]] = service._Cancelled(
             error=RuntimeUnavailable("cancelled at the runtime once the disable commits")
         )
     await _finish(db, run, "cancelled", state="cancelled", done=done)
@@ -1181,7 +1166,11 @@ def _retryable_seq(run: Run, segments: list[RunSegment]) -> int | None:
     """The segment a failed run can be retried from: the one that failed (its stop's
     approvals before it kept), while no workflow of the run is still attached and its
     spend is within its ceiling."""
-    if run.status != "failed" or _live(run) is not None or service._overrun(run) is not None:
+    if (
+        run.status != "failed"
+        or service._live(run) is not None
+        or service._overrun(run) is not None
+    ):
         return None
     failed = [s for s in segments if s.status == "failed"]
     return failed[-1].seq if failed else None
@@ -1210,7 +1199,7 @@ async def retry_segment(
         raise RunError("nothing to retry: only the segment a failed run stopped at can be retried")
     was = segment.error
     art = _art(segment)
-    _note_art(art, f"Retried by a person after it failed: {was or 'no reason given'}")
+    service._note_art(art, f"Retried by a person after it failed: {was or 'no reason given'}")
     _set_art(segment, art)
     segment.error = None
     segment.finished_at = None
@@ -1221,7 +1210,7 @@ async def retry_segment(
 
         # Its draft roadmap runs again with it: no stale failure, and no Derive meanwhile.
         await draft_items.run_retried(db, run)
-    await _submit(db, run, segment, segments)
+    await service._submit(db, run, segment, segments)
     await audit.record(
         db, principal, "run.segment_retried", "run", run.id, {"seq": seq, "error": was}
     )
@@ -1269,7 +1258,7 @@ async def retry(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> No
     runtime = service.get_runtime()
     found: str | None = None
     try:
-        found = await runtime.find_by_label(label, since=_parse_at(since))
+        found = await runtime.find_by_label(label, since=service._parse_at(since))
     except RuntimeUnavailable as exc:
         log.warning("run %s: retry: %s still not resolved: %s", run_id, label, exc)
 
@@ -1296,7 +1285,7 @@ async def retry(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> No
     _set_knob(run, "stuck_lookup", None)
     if found:
         art.pop("lost", None)
-        _accepted(run, segment, art, found, lost, art.pop("pending_note", None), runtime)
+        service._accepted(run, segment, art, found, lost, art.pop("pending_note", None), runtime)
     else:
         art.pop("lost", None)
         art["abandoned"] = [*(art.get("abandoned") or []), label]
@@ -1308,17 +1297,18 @@ async def retry(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> No
             until=service._credential_end(lost),
             why="retry",
         )
-        _note_art(
+        service._note_art(
             art,
             f"Retried from the Inbox by an approver: submission {label} was neither found "
             "nor ruled out, so the segment was submitted again under a new key. If the lost "
             "one landed it runs without Oracle's data (its token is revoked) until Oracle "
-            f"finds it: Oracle looks for it every {service._duration(STUCK_LOOKUP_SECONDS)}, then "
+            "finds it: Oracle looks for it every "
+            f"{service._duration(service.STUCK_LOOKUP_SECONDS)}, then "
             "cancels it and counts its cost.",
         )
         _set_art(segment, art)
         await revoke_run_tokens(db, run.id)
-        await _submit(db, run, segment, segments)
+        await service._submit(db, run, segment, segments)
     await audit.record(
         db, principal, "run.retried", "run", run.id, {"label": label, "found": found}
     )
@@ -1355,12 +1345,14 @@ async def resume(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
     elif not any(s.status == "running" for s in segments):
         # A Resume voided before its segment was submitted left that segment unqueued
         # (marked): queue it again; otherwise advance past the last segment that ran.
-        voided = [s for s in segments if s.status == "pending" and _art(s).get(RESUME_VOIDED)]
+        voided = [
+            s for s in segments if s.status == "pending" and _art(s).get(service.RESUME_VOIDED)
+        ]
         if voided:
             art = _art(voided[0])
-            art.pop(RESUME_VOIDED, None)
+            art.pop(service.RESUME_VOIDED, None)
             _set_art(voided[0], art)
-            await _submit(db, run, voided[0], segments)
+            await service._submit(db, run, voided[0], segments)
         else:
             done = [s for s in segments if s.status == "succeeded"]
             if done:

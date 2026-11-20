@@ -14,41 +14,25 @@ from oracle.priorities import run_order
 from oracle.runs import feature_set, flows, service, waits, workflow
 from oracle.runs.models import Run, RunSegment
 from oracle.runs.service import (
-    COST_UNKNOWN_SECONDS,
     FINAL,
     ITEMS_FILE,
-    NOT_FOUND_TRIES,
-    SEARCH_SECONDS,
-    STUCK_LOOKUP_SECONDS,
     _advance,
     _art,
     _attempts_cost,
-    _cancel_call,
-    _Cancelled,
     _current_attempt,
-    _detach,
-    _drivable,
     _finish,
     _flow,
     _known_sum,
-    _live,
-    _not_found,
-    _note,
-    _note_art,
-    _parse_at,
-    _plan_entry,
     _recompute_spend,
-    _record_workflow_wait,
     _rt,
     _set_art,
     _set_knob,
-    _shown,
     _spent,
-    _submit,
     _target_kind,
     _TickStats,
     log,
 )
+from oracle.runs.submission import _Cancelled
 from oracle.swarm import RuntimeUnavailable, WorkflowStatus
 from oracle.swarm.settings import get_runtime_settings
 
@@ -67,8 +51,8 @@ def _search_end(entry: dict[str, Any]) -> datetime:
     rules it out, or does not serve its status: the credential's end (else
     :data:`SEARCH_SECONDS` after it was sent) plus a step's timeout of slack, for a step
     already running then. A workflow whose status reads is followed until it ends."""
-    sent = _parse_at(entry.get("submitted_at")) or service._now()
-    end = _parse_at(entry.get("until")) or sent + timedelta(seconds=SEARCH_SECONDS)
+    sent = service._parse_at(entry.get("submitted_at")) or service._now()
+    end = service._parse_at(entry.get("until")) or sent + timedelta(seconds=service.SEARCH_SECONDS)
     return end + timedelta(seconds=get_runtime_settings().step_seconds)
 
 
@@ -76,7 +60,7 @@ def _cost_cap(entry: dict[str, Any]) -> datetime:
     """A searched workflow whose cost is unknown (its status does not read) is read again
     now and then until this, shown in the Inbox with it: :func:`_search_end` plus
     :data:`COST_UNKNOWN_SECONDS`."""
-    return _search_end(entry) + timedelta(seconds=COST_UNKNOWN_SECONDS)
+    return _search_end(entry) + timedelta(seconds=service.COST_UNKNOWN_SECONDS)
 
 
 def _search_for(
@@ -103,13 +87,13 @@ def _search_for(
     entries = copy.deepcopy(list((run.knobs or {}).get("searches") or []))
     if not label:
         return
-    at = _parse_at(submitted_at)
+    at = service._parse_at(submitted_at)
     for e in entries:
         same_id = bool(workflow_id) and e.get("id") == workflow_id
         same_sent = (
             e.get("label") == label
             and at is not None
-            and _parse_at(e.get("submitted_at")) == at
+            and service._parse_at(e.get("submitted_at")) == at
             and (not workflow_id or not e.get("id") or e.get("id") == workflow_id)
         )
         # Two looks for the same label, neither known by its id: when this one does not
@@ -127,7 +111,7 @@ def _search_for(
             _set_knob(run, "searches", entries)
             return
     sent = at or service._now()
-    end = _parse_at(until) or sent + timedelta(seconds=SEARCH_SECONDS)
+    end = service._parse_at(until) or sent + timedelta(seconds=service.SEARCH_SECONDS)
     entry: dict[str, Any] = {
         "label": label,
         "seq": seq,
@@ -154,7 +138,7 @@ def _searching(run: Run) -> str | None:
     entries = (run.knobs or {}).get("searches") or []
     if not entries:
         return None
-    every = service._duration(STUCK_LOOKUP_SECONDS)
+    every = service._duration(service.STUCK_LOOKUP_SECONDS)
     says: list[str] = []
     lost = [str(e.get("label")) for e in entries if not e.get("id")]
     if lost:
@@ -224,8 +208,11 @@ def _higher(cost: Decimal | None, recorded: Any) -> float | None:
 
 
 def _rests(at: Any) -> bool:
-    looked = _parse_at(at)
-    return looked is not None and (service._now() - looked).total_seconds() < STUCK_LOOKUP_SECONDS
+    looked = service._parse_at(at)
+    return (
+        looked is not None
+        and (service._now() - looked).total_seconds() < service.STUCK_LOOKUP_SECONDS
+    )
 
 
 async def _read_call(workflow_id: str) -> _Cancelled:
@@ -268,17 +255,20 @@ async def _search_earlier(
                 continue
             e["looked_at"] = service._now().isoformat()
             try:
-                found = await runtime.find_by_label(label, since=_parse_at(e.get("submitted_at")))
+                found = await runtime.find_by_label(
+                    label, since=service._parse_at(e.get("submitted_at"))
+                )
             except RuntimeUnavailable as exc:
                 e["lookups"] = int(e.get("lookups") or 0) + 1
-                e["error"] = _shown(exc)
+                e["error"] = service._shown(exc)
                 if service._now() >= _search_end(e):
                     if segment is not None:
-                        _note(
+                        service._note(
                             segment,
                             f"Oracle stopped looking for submission {label}: its credential "
                             "would have expired, and SwarmCloud's task listing never showed "
-                            f"it nor ruled it out ({_shown(exc)}). If it landed, cancel it in "
+                            f"it nor ruled it out ({service._shown(exc)}). If it landed, cancel it "
+                            "in "
                             "SwarmCloud's console; its cost is not counted here.",
                         )
                     continue
@@ -397,7 +387,7 @@ async def _overrun_after_end(
                 f"After the run ended its spend reached {_usd_text(run.spent_usd)}, over its "
                 f"{_usd_text(ceiling)} ceiling: {still}."
             )
-        _note(segment, said)
+        service._note(segment, said)
     await audit.record(
         db,
         None,
@@ -421,7 +411,7 @@ async def _found_call(e: dict[str, Any]) -> _Cancelled:
     """The network half of a look at a searched workflow (:func:`_found_apply` records
     it): calls only, nothing written, so the caller may hold no lock."""
     wid = e["id"]
-    return await (_cancel_call({"id": wid}) if _found_cancels(e) else _read_call(wid))
+    return await (service._cancel_call({"id": wid}) if _found_cancels(e) else _read_call(wid))
 
 
 def _last_cost(segment: RunSegment | None, wid: str) -> float:
@@ -468,7 +458,7 @@ def _found_apply(
                         f"earlier; it ended {final.state} (${final.cost_usd} counted in the "
                         "run's spend)."
                     )
-                _note(segment, said)
+                service._note(segment, said)
             return False
         for key in ("unread", "not_found", "stuck", "error", "cost_unknown"):
             e.pop(key, None)
@@ -492,7 +482,7 @@ def _found_apply(
         return True
     if out.forgotten or (out.gone and e.get("cancelled")):
         if segment is not None:
-            _note(
+            service._note(
                 segment,
                 f"SwarmCloud no longer knows workflow {wid} (submission {label}, HTTP 404) "
                 "after it confirmed its cancel: Oracle takes it as ended, its cost what "
@@ -502,7 +492,7 @@ def _found_apply(
         return False
     if out.gone:
         if segment is not None:
-            _note(
+            service._note(
                 segment,
                 f"SwarmCloud does not know workflow {wid} (submission {label}, HTTP 404): "
                 "Oracle stopped checking it; its cost is what Oracle last read.",
@@ -510,11 +500,11 @@ def _found_apply(
         return False
     # Nothing read this time: its cost is unknown (whether or not it was winding down).
     e.pop("winding", None)
-    e["error"] = _shown(out.error or out.unread) or "its status was not read"
+    e["error"] = service._shown(out.error or out.unread) or "its status was not read"
     e["unread"] = int(e.get("unread") or 0) + 1
-    if _not_found(out.error) or _not_found(out.unread):
+    if service._not_found(out.error) or service._not_found(out.unread):
         e["not_found"] = int(e.get("not_found") or 0) + 1
-        if e["not_found"] >= NOT_FOUND_TRIES:
+        if e["not_found"] >= service.NOT_FOUND_TRIES:
             e["stuck"] = True
     if e.get("stuck") or service._now() >= _search_end(e):
         e.setdefault("cost_unknown", service._now().isoformat())
@@ -531,7 +521,7 @@ def _under_cap(segment: RunSegment | None, e: dict[str, Any]) -> bool:
     stopped = f"Oracle stopped reading it at its cap ({_cost_cap(e).isoformat(timespec='minutes')})"
     if segment is not None:
         if e.get("winding") and not e.get("cost_unknown"):
-            _note(
+            service._note(
                 segment,
                 f"Workflow {wid} (submission {label}) still read CANCELLING after SwarmCloud "
                 f"confirmed its cancel, since {str(e.get('winding_since'))[:16]}. {stopped}; "
@@ -539,7 +529,7 @@ def _under_cap(segment: RunSegment | None, e: dict[str, Any]) -> bool:
                 "in the run's spend). If it still runs, cancel it in SwarmCloud's console.",
             )
         else:
-            _note(
+            service._note(
                 segment,
                 f"Cost unknown for workflow {wid} (submission {label}): SwarmCloud has not "
                 f"served its status since {str(e.get('cost_unknown'))[:16]} "
@@ -602,7 +592,7 @@ def _note_refused(
     refused = art.setdefault("refused_files", {})
     held: list[str] = []
     for name, why in sorted(skipped.items()):
-        why = _shown(why) or "no reason given"
+        why = service._shown(why) or "no reason given"
         if name in needed:
             held.append(f"{name} ({why})")
             note = (
@@ -619,7 +609,7 @@ def _note_refused(
             )
         if name not in refused:
             refused[name] = why
-            _note_art(art, note)
+            service._note_art(art, note)
     if not held:
         return None
     # Read on the run page as it is (after "run <id>: "): words only.
@@ -673,7 +663,7 @@ async def _tick_workflow(
     start = service._take_cost(run, wf, status, segments)
     current = next((s for s in segments if s.status == "running"), None)
     service._record_running(wf, status, segments)
-    _record_workflow_wait(run, wf, status, segments)
+    service._record_workflow_wait(run, wf, status, segments)
     expired = [p for p in status.parked if p.mcp_expired]
     if expired:
         # Its key expired while the step waited in SwarmCloud's queue: renewed after this
@@ -681,7 +671,7 @@ async def _tick_workflow(
         wf = service._mark_key_refresh(run, wf, status, expired)
     for parked in status.parked:
         if parked.reason == "CREDENTIAL_MISSING" and not parked.mcp_expired:
-            _note(
+            service._note(
                 current or start or segments[0], workflow.ADVICE[service._key_park_advice(parked)]
             )
     if run.status == "paused_overrun":
@@ -696,7 +686,7 @@ async def _tick_workflow(
     if run.status == "awaiting_checkpoint":
         # An answer given outside the Inbox is followed; the workflow ending is noticed.
         await service._watch_wait(db, run, wf, status, segments)
-        followed = _drivable(run)
+        followed = service._drivable(run)
         if run.status != "running" or followed is None or followed["id"] != wf["id"]:
             service._record_running(wf, status, segments)
             return  # still waiting, or done with this workflow
@@ -704,7 +694,7 @@ async def _tick_workflow(
 
     while run.status == "running":
         current = next((s for s in segments if s.status == "running"), None)
-        entry = _plan_entry(wf, current.seq) if current is not None else None
+        entry = service._plan_entry(wf, current.seq) if current is not None else None
         if current is None or entry is None:
             break
         round_ = int(entry.get("round") or 1)
@@ -751,8 +741,8 @@ async def _tick_workflow(
                 # run was paused): the checkpoint opens in the Inbox only.
                 wait["ended"] = "expired"
                 wait["ended_at"] = service._now().isoformat()
-                _note(current, workflow.ADVICE["expired"])
-                await _detach(db, run, cancel=False, state="expired")
+                service._note(current, workflow.ADVICE["expired"])
+                await service._detach(db, run, cancel=False, state="expired")
             stats.finished += 1
             if await _advance(db, run, current, segments, wait=wait):
                 stats.advanced += 1
@@ -764,18 +754,18 @@ async def _tick_workflow(
         stats.finished += 1
         if entry.get("checkpoint"):
             # Its checkpoint waits in the Inbox only: the workflow has nothing left.
-            await _detach(db, run, cancel=False, state="ended")
+            await service._detach(db, run, cancel=False, state="ended")
         if await _advance(db, run, current, segments):
             stats.advanced += 1
     # A segment that started during this check shows what the check read.
     service._record_running(wf, status, segments)
-    _record_workflow_wait(run, wf, status, segments)
+    service._record_workflow_wait(run, wf, status, segments)
 
-    if status.terminal and run.status == "running" and _live(run) is not None:
+    if status.terminal and run.status == "running" and service._live(run) is not None:
         current = next((s for s in segments if s.status == "running"), None)
         if status.state == "succeeded":
             if current is None:
-                await _detach(db, run, cancel=False, state="ended")
+                await service._detach(db, run, cancel=False, state="ended")
                 return
             error = f"the workflow ended before '{current.name}' wrote its files"
         else:
@@ -837,7 +827,7 @@ def _queued_expiry(run: Run, wf: dict[str, Any], status: WorkflowStatus) -> floa
     expired before it started (mcp_credential_expired), else None: it started before
     the key's ``expires_at`` (SwarmCloud's start time, else Oracle saw it working), or
     the failure came before that moment (its start time not served)."""
-    expires = _parse_at(wf.get("expires_at"))
+    expires = service._parse_at(wf.get("expires_at"))
     failed = next((st for st in status.steps if st.state in ("FAILED", "DEAD_LETTERED")), None)
     if expires is None or failed is None:
         return None
@@ -851,8 +841,8 @@ def _queued_expiry(run: Run, wf: dict[str, Any], status: WorkflowStatus) -> floa
             return None
     elif service._now() < expires:
         return None
-    submitted = _parse_at(wf.get("submitted_at"))
-    since = _parse_at((qw.get("waiting") or {}).get(failed.step_id)) or submitted or expires
+    submitted = service._parse_at(wf.get("submitted_at"))
+    since = service._parse_at((qw.get("waiting") or {}).get(failed.step_id)) or submitted or expires
     if submitted is not None:
         since = max(since, submitted)
     return max((expires - since).total_seconds(), 0.0)
@@ -886,7 +876,7 @@ async def _restart_queued(
     if attempt:
         attempt["state"] = "failed"
     _set_art(current, art)
-    _note(current, waits.restarted_note(waited))
+    service._note(current, waits.restarted_note(waited))
     _set_knob(
         run,
         "queue_restart",
@@ -898,8 +888,8 @@ async def _restart_queued(
         },
     )
     _set_knob(run, "queue_wait", None)
-    await _detach(db, run, cancel=False, state="ended")
-    await _submit(db, run, current, segments)
+    await service._detach(db, run, cancel=False, state="ended")
+    await service._submit(db, run, current, segments)
     await audit.record(
         db,
         None,

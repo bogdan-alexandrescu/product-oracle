@@ -47,31 +47,20 @@ from oracle.runs.service import (
     Unavailable,
     _about,
     _art,
-    _cancel_pending,
-    _cause,
     _checkpoints,
-    _detach,
-    _drivable,
     _finish,
     _flow,
-    _live,
-    _note,
     _open_questions,
     _record_decider,
     _replay,
     _segments,
     _set_art,
     _set_knob,
-    _set_wait,
-    _shown,
     _staged_actions,
-    _submit,
     _TickStats,
-    _unconfirmed,
     approve_gate_of,
     blocking_open,
     log,
-    unqueue,
 )
 from oracle.runtokens import revoke_run_tokens
 from oracle.swarm import RuntimeUnavailable
@@ -293,7 +282,7 @@ async def decide_checkpoint(
     if edited is not None:
         _write_edits(run, cp, segment, edited)
     if unapplied:
-        _note(segment, _unapplied_note(unapplied))
+        service._note(segment, _unapplied_note(unapplied))
     _record_decider(cp, *decider)
     data: dict[str, Any] = {"run_id": str(run.id), "kind": cp.kind}
     if edited is not None:
@@ -339,15 +328,15 @@ async def decide_checkpoint(
         from oracle.engineering import store as brief_store
 
         await brief_store.on_checkpoint_approved(db, principal, run, cp, segment)
-    wf = _drivable(run)
+    wf = service._drivable(run)
     live = (
         (redo and wf is not None)
         or (wf is not None and wait.get("workflow_id") == wf["id"])
-        or _cancel_pending(run)
+        or service._cancel_pending(run)
     )
     if redo:
         title = _flow(run).segment(segment.name).title
-        _note(
+        service._note(
             segment,
             f"An approver chose Redo from '{title}' at {cp.kind}: Oracle cancels the run's "
             "workflow and runs the segment again as a new workflow with the findings (one more "
@@ -358,7 +347,7 @@ async def decide_checkpoint(
         # (the caller was checked above), and its post, or the cancel it needs, is made
         # with the gate and the run's row lock released (:func:`_finish_decision`). A post
         # that does not finish leaves this marker for the tick to complete.
-        _set_wait(
+        service._set_wait(
             cp,
             {
                 **wait,
@@ -383,9 +372,9 @@ async def decide_checkpoint(
             raise Forbidden(f"{voided}: the decision was voided before it reached the run")
         return
     await _continue_decided(db, run, cp, segment, segments, later, decision, note)
-    if _cancel_pending(run):
+    if service._cancel_pending(run):
         # Nothing is submitted after a workflow SwarmCloud may still be running.
-        raise _unconfirmed("continue the run as a new workflow")
+        raise service._unconfirmed("continue the run as a new workflow")
     await db.commit()  # the router submits it (submit_queued), outside the gate
 
 
@@ -617,7 +606,7 @@ async def _continue_decided(
         # them as findings, _send_back_findings): the writer fixes what Oracle refused.
         if problems := await service._problem_findings(db, run, cp):
             review += "\n" + "\n".join(problems) + "\n"
-    await _submit(db, run, target, segments, change_request=note, review=review)
+    await service._submit(db, run, target, segments, change_request=note, review=review)
 
 
 def _owes(cp: Checkpoint) -> bool:
@@ -664,7 +653,7 @@ async def _complete_decision(
         await _failed_try(db, run_id, checkpoint_id, exc)
         if isinstance(exc, RuntimeUnavailable):
             raise Unavailable(
-                f"SwarmCloud did not confirm the decision ({_shown(exc)}); the decision is "
+                f"SwarmCloud did not confirm the decision ({service._shown(exc)}); the decision is "
                 "recorded and Oracle delivers it on its next tick, there is no need to decide "
                 "again",
                 cause=exc,
@@ -693,26 +682,26 @@ async def _failed_try(
     wait = dict(((cp.payload or {}).get("wait") or {}) if cp is not None else {})
     posting = wait.get("posting")
     held = exc.held if isinstance(exc, Unavailable) else None
-    now_wf = _live(run)
+    now_wf = service._live(run)
     if held is not None and now_wf is not None and now_wf.get("id") == held["id"]:
         # The cancel's marker (its tries, a 404 count), as the failed pass left it.
         _set_knob(run, "workflow", {**now_wf, "cancel_pending": held["cancel_pending"]})
         await revoke_run_tokens(db, run.id)
     if cp is not None and cp.status in DECIDED and isinstance(posting, dict):
         first = not posting.get("error")
-        why = _cause(exc)
+        why = service._cause(exc)
         wait["posting"] = {
             **posting,
             "tries": int(posting.get("tries") or 0) + 1,
             "error": why,
             "tried_at": service._now().isoformat(),
         }
-        _set_wait(cp, wait)
+        service._set_wait(cp, wait)
         if first:
             segments = await _segments(db, run.id)
             seq = (cp.payload or {}).get("segment_seq")
             target = next((x for x in segments if x.seq == seq), None) or segments[0]
-            _note(
+            service._note(
                 target,
                 f"The decision at {cp.kind} is recorded; SwarmCloud did not take it yet "
                 f"({why}). Oracle tries again on every tick.",
@@ -762,7 +751,7 @@ async def _finish_decision_now(
     if cp.status not in DECIDED or run.status not in ("awaiting_checkpoint", "paused_overrun"):
         # Voided, or the run ended meanwhile (cancelled, failed): nothing is owed.
         wait.pop("posting")
-        _set_wait(cp, wait)
+        service._set_wait(cp, wait)
         await db.commit()
         return
     if run.status == "paused_overrun":
@@ -785,7 +774,7 @@ async def _finish_decision_now(
     try:
         await _deliver_decision(db, run, cp, wait, posting, stats)
     except Unavailable as exc:
-        held = _live(run)
+        held = service._live(run)
         if held is not None and held.get("cancel_pending"):
             # A cancel SwarmCloud did not confirm: its marker outlives the rollback, so
             # its tries are counted and a cancel stuck on 404s reaches the Inbox.
@@ -810,29 +799,29 @@ async def _deliver_decision(
     later = next((x for x in segments if x.seq > segment.seq), None)
     decision, note, redo = cp.status, cp.note, bool(posting.get("redo"))
     user_id = uuid.UUID(posting["user_id"]) if posting.get("user_id") else None
-    held = _live(run)
+    held = service._live(run)
     if held is not None and held.get("cancel_pending"):
         # A cancel not confirmed yet (an earlier try, or the one the run was cancelled
         # with): made again; nothing is submitted after a workflow that may still run.
         if not await service._retry_pending_cancel(db, run, held, segments, stats):
             await db.commit()  # the cancel's tries and cost, counted
-            raise _unconfirmed("go on with the decision")
-    wf = _drivable(run)
+            raise service._unconfirmed("go on with the decision")
+    wf = service._drivable(run)
     if redo:
-        if wf is not None and not await _detach(db, run, cancel=True, state="redo"):
-            raise _unconfirmed("redo the segment")
+        if wf is not None and not await service._detach(db, run, cancel=True, state="redo"):
+            raise service._unconfirmed("redo the segment")
     elif wf is not None and wait.get("workflow_id") == wf["id"]:
         posted = await service._decide_in_workflow(db, run, cp, segment, segments, wf, user_id)
         if posted:
-            if _cancel_pending(run):
-                raise _unconfirmed("go on with the decision")
+            if service._cancel_pending(run):
+                raise service._unconfirmed("go on with the decision")
             _finished_posting(cp)
             await db.commit()
             return
     await _continue_decided(db, run, cp, segment, segments, later, decision, note)
-    if _cancel_pending(run):
+    if service._cancel_pending(run):
         # Nothing is submitted after a workflow SwarmCloud may still be running.
-        raise _unconfirmed("continue the run as a new workflow")
+        raise service._unconfirmed("continue the run as a new workflow")
     _finished_posting(cp)
     await db.commit()  # the router submits it (submit_queued), outside the gate
 
@@ -841,7 +830,7 @@ def _finished_posting(cp: Checkpoint) -> None:
     wait = dict((cp.payload or {}).get("wait") or {})
     wait.pop("posting", None)
     wait.pop("voided", None)
-    _set_wait(cp, wait)
+    service._set_wait(cp, wait)
 
 
 def _posting_id(posting: dict[str, Any], key: str) -> uuid.UUID | None:
@@ -893,7 +882,7 @@ async def _void_owed(
         "why": why,
         "at": service._now().isoformat(),
     }
-    _set_wait(cp, wait)
+    service._set_wait(cp, wait)
     decided_by, kind = cp.decided_by, cp.status
     await _restore_agents_file(db, run, cp)
     cp.status = "pending"
@@ -907,7 +896,7 @@ async def _void_owed(
     segments = await _segments(db, run.id)
     target = next((s for s in segments if s.seq == (cp.payload or {}).get("segment_seq")), None)
     if target is not None:
-        _note(
+        service._note(
             target,
             f"The decision at {cp.kind} was voided before it reached the run ({why}): "
             "the checkpoint waits for an approver's decision again.",
@@ -1044,7 +1033,7 @@ async def void_decision(
     decision, the run's tokens die. A submission under way finds it so and cancels its
     workflow (:func:`submit_queued`)."""
     decision = (segment.artifacts or {}).get("decision") or {}
-    unqueue(segment)
+    service.unqueue(segment)
     art = _art(segment)
     art.pop("pending_note", None)
     art.pop("pending_review", None)

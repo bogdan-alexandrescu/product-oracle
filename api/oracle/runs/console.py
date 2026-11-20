@@ -18,16 +18,10 @@ from oracle.runs.models import Checkpoint, CheckpointAction, Run, RunSegment
 from oracle.runs.service import (
     _about,
     _checkpoints,
-    _clip,
     _creator,
-    _detach,
     _flow,
-    _note,
-    _plan_entry,
     _record_decider,
     _rt,
-    _set_wait,
-    _shown,
     _staged_actions,
     _usd,
     approve_gate_of,
@@ -98,12 +92,19 @@ async def _watch_wait(
             )
             if answered_step:
                 # W5: answered, not read yet: held until it is (read again next tick).
-                _unread(run, cp, segment, wf, wait, f"SwarmCloud did not serve it ({_shown(exc)})")
+                _unread(
+                    run,
+                    cp,
+                    segment,
+                    wf,
+                    wait,
+                    f"SwarmCloud did not serve it ({service._shown(exc)})",
+                )
             return
         log.warning("run %s: cannot read wait %s: %s", run.id, wait.get("step_id"), exc)
         record = RecordedAnswer(state="answered") if answered_step else RecordedAnswer()
     wait["checked_at"] = service._now().isoformat()
-    _set_wait(cp, wait)
+    service._set_wait(cp, wait)
     if record.answered:
         if record.verdict is None:
             # Never guessed: shown in the Inbox, and read again next time.
@@ -150,7 +151,7 @@ async def _take_answer(
     applied = "; ".join(findings) or None
     by = record.answered_by
     wait["recorded"] = _recorded(record, by, at, record.via, ours)
-    entry = _plan_entry(wf, segment.seq) or {}
+    entry = service._plan_entry(wf, segment.seq) or {}
     approved = record.verdict == MERGE
     revise = round_ <= len(entry.get("revises") or [])
     if voided:
@@ -185,7 +186,7 @@ async def _take_answer(
         if cp.kind in apply_edits.FILES and (
             unapplied := apply_edits.edit_count((await _staged_actions(db, [cp])).get(cp.id, []))
         ):
-            _note(segment, service._unapplied_note(unapplied))
+            service._note(segment, service._unapplied_note(unapplied))
     if not counted or (not approved and not revise):
         console = _console_record(run, segment, record, at, revise)
         console.update(
@@ -196,7 +197,7 @@ async def _take_answer(
             member_id=str(member.id) if member is not None else None,
         )
         wait["console"] = console
-        _set_wait(cp, wait)
+        service._set_wait(cp, wait)
         await audit.record(
             db,
             None,
@@ -214,7 +215,7 @@ async def _take_answer(
         )
         if not counted:
             label = f" (labelled for {record.on_behalf_of})" if record.on_behalf_of else ""
-            _note(
+            service._note(
                 segment,
                 f"{cp.kind} (round {round_}) was answered in SwarmCloud by {by or 'someone'}"
                 f"{label}: {_said(record, at)}. It does not count ({reason}), so the "
@@ -222,7 +223,7 @@ async def _take_answer(
                 "changes.",
             )
         else:
-            _note(
+            service._note(
                 segment,
                 f"{_outside_note(cp, round_, record, at)} The workflow has no revision step "
                 "there and went on regardless; "
@@ -258,7 +259,7 @@ async def _take_answer(
     elif ours and record.on_behalf_of:
         # Oracle's own post: the label is the one Oracle sent, for its Inbox user.
         cp.decided_by = await db.scalar(select(User.id).where(User.email == record.on_behalf_of))
-    _set_wait(cp, wait)
+    service._set_wait(cp, wait)
     if approved and cp.kind == eng_check.KIND and run.flow != SPEC_FLOW:
         # walk-eng-check: a counted console approval records the lead's verdicts, answers
         # and sizes as Oracle's Approve does (decide_checkpoint), so the later stages read
@@ -310,7 +311,7 @@ async def _take_answer(
             + f" {by} is an Oracle {member.role if member else 'member'}, so it counts: "
             "Oracle follows that answer."
         )
-    _note(segment, what)
+    service._note(segment, what)
     await service._follow(
         db,
         run,
@@ -406,7 +407,7 @@ def _unreadable(
     approver may approve (the workflow did what an approval needs, whatever was recorded)
     or Redo the segment as a new workflow. Read again each minute meanwhile."""
     round_ = int(wait.get("round") or 1)
-    entry = _plan_entry(wf, segment.seq) or {}
+    entry = service._plan_entry(wf, segment.seq) or {}
     at = record.answered_at.isoformat() if record.answered_at else None
     first = (wait.get("console") or {}).get("needs") != "unreadable"
     console = _console_record(run, segment, record, at, round_ <= len(entry.get("revises") or []))
@@ -414,11 +415,11 @@ def _unreadable(
         counted=None, reason="the recorded verdict could not be read", needs="unreadable"
     )
     wait["console"] = console
-    _set_wait(cp, wait)
+    service._set_wait(cp, wait)
     log.warning("run %s: wait %s answered, verdict not readable", run.id, wait.get("step_id"))
     if first:
         artifact = wait.get("artifact") or workflow.review_artifact(round_)
-        _note(
+        service._note(
             segment,
             f"{cp.kind} (round {round_}) was answered in SwarmCloud"
             f"{f' by {record.answered_by}' if record.answered_by else ''}, but Oracle could not "
@@ -442,7 +443,7 @@ def _unread_console(
     """What the Inbox shows of a wait answered in SwarmCloud that Oracle has not read
     yet (``needs: unread``)."""
     round_ = int(wait.get("round") or 1)
-    entry = (_plan_entry(wf, segment.seq) or {}) if wf is not None else {}
+    entry = (service._plan_entry(wf, segment.seq) or {}) if wf is not None else {}
     earlier = wait.get("console") or {}
     console = _console_record(
         run, segment, RecordedAnswer(), None, round_ <= len(entry.get("revises") or [])
@@ -477,13 +478,14 @@ def _unread(
     if needs not in (None, "unread"):
         return
     wait["console"] = _unread_console(run, segment, wf, wait, why)
-    _set_wait(cp, wait)
+    service._set_wait(cp, wait)
     if needs is None:
         round_ = int(wait.get("round") or 1)
-        _note(
+        service._note(
             segment,
             f"{cp.kind} (round {round_}) was answered in SwarmCloud, and Oracle cannot read "
-            f"the answer yet ({_clip(why)}). Until it does, the run's agents may read Oracle "
+            f"the answer yet ({service._clip(why)}). Until it does, the run's agents may read "
+            "Oracle "
             "but not write to it; Oracle reads it again on every tick, then applies the "
             "approver rule.",
         )
@@ -506,7 +508,7 @@ def _recorded(
 
 def _said(record: RecordedAnswer, at: str | None) -> str:
     """What was answered in SwarmCloud, for a note: the verdict, findings, via and when."""
-    findings = f" ({_clip('; '.join(record.findings))})" if record.findings else ""
+    findings = f" ({service._clip('; '.join(record.findings))})" if record.findings else ""
     return (
         f"{record.verdict or 'it'}{findings} in SwarmCloud"
         f"{f' via {record.via}' if record.via else ''}{f' at {at}' if at else ''}"
@@ -551,8 +553,8 @@ async def _wait_ended(
         wait = dict((cp.payload or {}).get("wait") or {})
         wait["ended"] = "expired" if expired else status.state
         wait["ended_at"] = service._now().isoformat()
-        _set_wait(cp, wait)
+        service._set_wait(cp, wait)
         seq = (cp.payload or {}).get("segment_seq")
         target = next((s for s in segments if s.seq == seq), segments[0])
-        _note(target, note)
-    await _detach(db, run, cancel=False, state="expired" if expired else "ended")
+        service._note(target, note)
+    await service._detach(db, run, cancel=False, state="expired" if expired else "ended")
