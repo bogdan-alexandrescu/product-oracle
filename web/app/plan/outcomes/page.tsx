@@ -433,7 +433,17 @@ function Outcomes() {
             tools={
               // qa-plan-48: with no outcome at all, no filters (each would read 0) and no
               // table headers: only the empty state and its action.
-              !none && (
+              none ? (
+                // #1590: how outcomes are recorded sits behind the (i), in the head, so the
+                // empty state holds no button but its action.
+                <InfoTip label="how outcomes are recorded" align="end" testId="outcomes-empty-tip">
+                  Approving a roadmap records a prediction for each item that
+                  serves a goal.
+                  {canApprove
+                    ? " You can also track an outcome for an item yourself."
+                    : ""}
+                </InfoTip>
+              ) : (
                 <FilterChips
                   label="Outcomes by state"
                   testId="outcome-filters"
@@ -451,14 +461,6 @@ function Outcomes() {
               >
                 <p className="font-display text-lg font-bold text-text">
                   No outcomes yet
-                  {/* #1590: how outcomes are recorded sits behind the (i). */}
-                  <InfoTip label="how outcomes are recorded" align="start" testId="outcomes-empty-tip">
-                    Approving a roadmap records a prediction for each item that
-                    serves a goal.
-                    {canApprove
-                      ? " You can also track an outcome for an item yourself."
-                      : ""}
-                  </InfoTip>
                 </p>
                 {canApprove && !tracking && (
                   <Button variant="primary" onClick={() => setTracking(true)} data-testid="outcome-track">

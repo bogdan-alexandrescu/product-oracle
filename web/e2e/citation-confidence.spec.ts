@@ -1,6 +1,6 @@
 import { expect, type Locator, type Page, test } from "./test";
 
-import { login, openSection, openTab } from "./helpers";
+import { hoverCard, login, openSection, openTab } from "./helpers";
 
 /**
  * Change D (owner decision 2026-10-20): a citation keeps the confidence its writer computed.
@@ -48,18 +48,17 @@ test("citation card: confidence beside the source, low ones marked, the note whe
   await page.goto("/documents/annual-billing/v/2");
   const problem = await openSection(page, "problem");
 
-  await problem.getByTestId("cite-c4").hover();
-  const card = page.getByRole("tooltip");
+  const card = await hoverCard(page, problem.getByTestId("cite-c4"), "GitHub · High confidence");
   await expect(card.getByTestId("cite-source")).toContainText("GitHub · High confidence");
   await expect(card.getByTestId("low-confidence")).toHaveCount(0);
 
-  await problem.getByTestId("cite-c2").hover();
+  await hoverCard(page, problem.getByTestId("cite-c2"), "Meeting notes");
   await expect(card.getByTestId("cite-source")).toHaveText(/^Meeting notes( · retrieved .*)?$/);
   await expect(card.getByTestId("low-confidence")).toHaveText("Low confidence");
   await expect(problem.getByTestId("cite-c2")).toHaveAccessibleName(/low confidence/);
 
   const goal = await openSection(page, "goal-trace");
-  await goal.getByTestId("cite-c3").hover();
+  await hoverCard(page, goal.getByTestId("cite-c3"), `Notion · ${NOTE}`);
   await expect(card.getByTestId("cite-source")).toContainText(`Notion · ${NOTE}`);
   await expect(card.locator("g1")).toHaveCount(0);
 });

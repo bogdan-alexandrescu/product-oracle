@@ -273,6 +273,9 @@ test("evidence: a section counts as unsupported only when nothing under it is su
 test("evidence: the note on rendered pages shows once on a desktop", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await evidenceTab(page);
+  // #1590: the note sits behind its (i); open, it shows once.
+  await expect(page.getByText(/never s(ee|how) these links/).filter({ visible: true })).toHaveCount(0);
+  await page.getByTestId("evidence-links-tip").filter({ visible: true }).click();
   await expect(page.getByText(/never s(ee|how) these links/).filter({ visible: true })).toHaveCount(1);
 });
 
