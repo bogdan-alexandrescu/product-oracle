@@ -365,17 +365,27 @@ async def list_for_roadmaps(
         await db.commit()
         drafts.forget("milestones")
         rows = await _rows(db, list(docs), fresh=True)
+    # Each PRD milestone's place in the plans, in the order the rows above are stored.
     in_plan = {
-        (doc_id, prd.id, m.code)
-        for doc_id in docs
-        for prd in kd_prds.get(doc_id, [])
-        for m in (views[prd.id].milestones if views.get(prd.id) is not None else [])
+        key: n
+        for n, key in enumerate(
+            (doc_id, prd.id, m.code)
+            for doc_id in docs
+            for prd in kd_prds.get(doc_id, [])
+            for m in (views[prd.id].milestones if views.get(prd.id) is not None else [])
+        )
     }
-    shown = [
-        r for r in rows
-        if (r.origin_prd_id is None and r.deleted_at is None)
-        or (r.roadmap_id, r.origin_prd_id, r.code) in in_plan
-    ]  # fmt: skip
+    # flaky-digests: oldest first, those stored at once in their plans' order, then by id;
+    # never the order Postgres scans the rows in (it moves with the table's free space).
+    shown = sorted(
+        (
+            r for r in rows
+            if (r.origin_prd_id is None and r.deleted_at is None)
+            or (r.roadmap_id, r.origin_prd_id, r.code) in in_plan
+        ),
+        key=lambda r: (r.created_at, in_plan.get((r.roadmap_id, r.origin_prd_id, r.code), -1),
+                       str(r.id)),
+    )  # fmt: skip
     if not shown:
         return []
     w = await drafts.who(db, set(docs) | set(prds_by_id))
