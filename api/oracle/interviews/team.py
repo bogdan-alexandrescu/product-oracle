@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
 from oracle.auth.deps import Principal
+from oracle.errors import exception_text
 from oracle.intake import answers, service
 from oracle.intake.schemas import AnswerIn
 from oracle.interviews import turns
@@ -51,7 +52,7 @@ async def open_for(db: AsyncSession, principal: Principal, intake_id: uuid.UUID)
     try:
         intake = await service.get_intake(db, intake_id)
     except service.IntakeError as e:
-        raise InterviewError(e.status, str(e)) from e
+        raise InterviewError(e.status, exception_text(e)) from e
     row = await db.scalar(
         select(Interview).where(
             Interview.kind == "team",
@@ -349,7 +350,7 @@ async def _turn(
                 AnswerIn(kind="answer", body=joined, knowledge_state="user_decision"),
             )
         except service.IntakeError as e:
-            raise InterviewError(e.status, str(e)) from e
+            raise InterviewError(e.status, exception_text(e)) from e
     if closing is not None:
         note = _message(row, question_id, "oracle", "closing", closing, **call)
         db.add(note)

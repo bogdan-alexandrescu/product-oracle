@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit
 from oracle.auth.models import Role, User
 from oracle.authz import has_role
+from oracle.errors import exception_text
 
 if TYPE_CHECKING:
     from oracle.auth.deps import Principal
@@ -233,7 +234,7 @@ async def _move_policies(
                 db, principal, POLICY_SETTING, changed({**DEFAULT_POLICY, **company})
             )
         except InvalidSetting as e:
-            raise MemberError("invalid", f"Company review policy: {e}") from None
+            raise MemberError("invalid", f"Company review policy: {exception_text(e)}") from None
         row = await db.scalar(select(TenantSetting).where(TenantSetting.key == POLICY_SETTING))
         row.value = value
         row.updated_by = principal.id
@@ -260,7 +261,7 @@ async def _move_policies(
         try:
             await set_policy(db, principal, doc, body)
         except (PolicyError, ReviewError, VersionConflict) as e:
-            message = getattr(e, "detail", None) or getattr(e, "message", None) or str(e)
+            message = getattr(e, "detail", None) or getattr(e, "message", None) or exception_text(e)
             raise MemberError("invalid", f"Review policy of {doc.slug}: {message}") from None
         count += 1
     return count
@@ -417,7 +418,7 @@ async def _questions_move(db, principal, from_id, to) -> int:
         try:
             await patch(db, principal, q, QuestionPatch(asked_to=to))
         except IntakeError as e:
-            raise MemberError("invalid", f"Question {q.id}: {e}") from None
+            raise MemberError("invalid", f"Question {q.id}: {exception_text(e)}") from None
     return len(rows)
 
 

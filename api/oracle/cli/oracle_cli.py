@@ -30,6 +30,7 @@ from urllib.parse import quote
 import httpx
 
 from oracle import safe_yaml
+from oracle.errors import exception_text
 
 DEFAULT_URL = "http://localhost:8000"
 TIMEOUT = httpx.Timeout(30.0, read=120.0)
@@ -58,7 +59,7 @@ def _send(client: httpx.Client, method: str, path: str, **kwargs: Any) -> httpx.
     try:
         return client.request(method, path, **kwargs)
     except httpx.HTTPError as e:
-        raise CliError(f"cannot reach {client.base_url}: {e}") from e
+        raise CliError(f"cannot reach {client.base_url}: {exception_text(e)}") from e
 
 
 def _api_error(resp: httpx.Response) -> CliError:
@@ -641,7 +642,7 @@ def main(
     try:
         return args.func(args, transport, out or sys.stdout)
     except CliError as e:
-        print(f"oracle: {e}", file=err or sys.stderr)
+        print(f"oracle: {exception_text(e)}", file=err or sys.stderr)
         return e.code
 
 

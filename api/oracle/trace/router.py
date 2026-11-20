@@ -22,6 +22,7 @@ from oracle.baseline.evidence import run_versions, withheld_from
 from oracle.baseline.models import Entity, Evidence
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion, Section
+from oracle.errors import exception_text
 from oracle.routing import APIRouter
 from oracle.sources.models import Source, SourceItem
 from oracle.trace import evidence, impact, staleness, views
@@ -62,7 +63,7 @@ async def _version(db, doc: str, n: int) -> tuple[Document, DocumentVersion]:
         document = await docs_service.get_document_or_404(db, doc)
         version = await docs_service.get_version_row(db, document, n)
     except docs_service.NotFoundError as exc:
-        raise _404(str(exc)) from exc
+        raise _404(exception_text(exc)) from exc
     return document, version
 
 
@@ -348,11 +349,11 @@ async def act_on_staleness(body: StalenessAction, principal: Approver, db: Tenan
             dependency_ids=body.dependency_ids, reason=body.reason,
         )  # fmt: skip
     except staleness.NotFound as exc:
-        raise _404(str(exc)) from exc
+        raise _404(exception_text(exc)) from exc
     except staleness.Invalid as exc:
-        raise HTTPException(422, str(exc)) from exc
+        raise HTTPException(422, exception_text(exc)) from exc
     except staleness.Conflict as exc:
-        raise HTTPException(409, str(exc)) from exc
+        raise HTTPException(409, exception_text(exc)) from exc
     await db.commit()
     return await _downstream_view(db, body)
 
@@ -374,9 +375,9 @@ async def create_artifact_dependencies(
             document_version_id=body.document_version_id, upstream=body.upstream,
         )  # fmt: skip
     except staleness.NotFound as exc:
-        raise _404(str(exc)) from exc
+        raise _404(exception_text(exc)) from exc
     except staleness.Invalid as exc:
-        raise HTTPException(422, str(exc)) from exc
+        raise HTTPException(422, exception_text(exc)) from exc
     await db.commit()
     for r in rows:
         await db.refresh(r)

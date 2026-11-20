@@ -15,6 +15,8 @@ from typing import Any
 
 import httpx
 
+from oracle.errors import exception_text
+
 
 class CredentialRejected(Exception):
     """The provider says the credential is invalid, expired or revoked."""
@@ -91,7 +93,7 @@ async def _get(client: httpx.AsyncClient, method: str, url: str, **kwargs) -> ht
     try:
         return await client.request(method, url, **kwargs)
     except httpx.HTTPError as e:
-        raise ProviderUnavailable(f"cannot reach {httpx.URL(url).host}: {e}") from e
+        raise ProviderUnavailable(f"cannot reach {httpx.URL(url).host}: {exception_text(e)}") from e
 
 
 # --- GitHub -------------------------------------------------------------------------
@@ -205,7 +207,7 @@ async def identify_fireflies(
             {"query": "query { user { user_id email name } }"},
         )
     except fireflies.EndpointRefused as e:
-        raise CredentialRefused(str(e)) from None
+        raise CredentialRefused(exception_text(e)) from None
     except httpx.HTTPError as e:
         if fireflies.address_refused(e):
             raise CredentialRefused(fireflies._PRIVATE) from None

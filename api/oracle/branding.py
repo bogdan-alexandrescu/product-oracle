@@ -42,6 +42,7 @@ from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import has_role, not_for_runs, recheck_caller, require_role
 from oracle.base_model import BaseModel
 from oracle.branding_models import BrandAsset
+from oracle.errors import exception_text
 from oracle.routing import APIRouter
 from oracle.tenancy import current_tenant
 
@@ -507,7 +508,7 @@ async def put_branding(body: BrandingIn, principal: Owner, db: TenantDB) -> Bran
     try:
         accent = check_accent(body.accent or None)
     except ValueError as e:
-        raise _invalid(str(e)) from None
+        raise _invalid(exception_text(e)) from None
     value = await stored(db)
     value.update(
         display_name=name, accent=accent, public_disclaimer=disclaimer, oracle_mark=body.oracle_mark
@@ -537,7 +538,7 @@ async def upload_brand_logo(
     try:
         png, width, height = reencode_logo(data)
     except InvalidLogo as e:
-        raise _invalid(str(e)) from None
+        raise _invalid(exception_text(e)) from None
     sha = hashlib.sha256(png).hexdigest()
     if await db.scalar(select(BrandAsset.id).where(BrandAsset.sha256 == sha)) is None:
         try:

@@ -53,6 +53,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import safe_yaml
+from oracle.errors import exception_text
 from oracle.priorities.models import PRIORITY_METHODS, PrioritySnapshot
 
 FILE = "priority.yaml"
@@ -162,7 +163,7 @@ def load_order(text: str) -> Any:
         try:
             data = safe_yaml.load(text)
         except safe_yaml.SafeYamlError as exc:
-            raise PriorityOrderError(exc.code, f"{FILE} is refused: {exc}") from exc
+            raise PriorityOrderError(exc.code, f"{FILE} is refused: {exception_text(exc)}") from exc
         size = len(json.dumps(data, default=str).encode())
         if size > MAX_STORED_BYTES:
             raise PriorityOrderError(
@@ -174,7 +175,7 @@ def load_order(text: str) -> Any:
     except Exception as exc:  # noqa: BLE001 - agent output: every failure is a refusal
         raise PriorityOrderError(
             "unreadable_yaml",
-            f"{FILE} could not be read ({type(exc).__name__}: {str(exc)[:200]})",
+            f"{FILE} could not be read ({type(exc).__name__}: {exception_text(exc)[:200]})",
         ) from exc
 
 
@@ -208,7 +209,7 @@ def check_order(text: str, *, known: Known) -> OrderCheck:
     try:
         data = load_order(text)
     except PriorityOrderError as exc:
-        out.add("unreadable_yaml", str(exc))
+        out.add("unreadable_yaml", exception_text(exc))
         return out
     if not isinstance(data, dict):
         out.add("unreadable_yaml", f"{FILE} is not a mapping with version, method and order")

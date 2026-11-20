@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle.auth.deps import Principal
 from oracle.connections import service
 from oracle.connections.models import Connection
+from oracle.errors import exception_text
 from oracle.sources.base import (
     ConnectorAuthError,
     ConnectorConfigError,
@@ -182,7 +183,7 @@ async def open_connection(
     try:
         credential = await service.credential_for(db, conn, touch=False)
     except service.ConnectionUnavailable as e:
-        raise HTTPException(status.HTTP_409_CONFLICT, str(e)) from None
+        raise HTTPException(status.HTTP_409_CONFLICT, exception_text(e)) from None
     return conn, credential.access_token
 
 
@@ -209,12 +210,14 @@ async def provider_error(
             "or an organization policy blocks it",
         )
     if isinstance(error, ConnectorAuthError):
-        await service.mark_failure(db, conn, "expired", f"Rejected while browsing: {error}")
+        await service.mark_failure(
+            db, conn, "expired", f"Rejected while browsing: {exception_text(error)}"
+        )
         return HTTPException(
             status.HTTP_409_CONFLICT, f"{name} rejected the connection: reconnect it"
         )
     if isinstance(error, ConnectorConfigError):
-        message = str(error)
+        message = exception_text(error)
         return HTTPException(
             status.HTTP_409_CONFLICT, f"{message[:1].upper()}{message[1:]}: reconnect it"
         )

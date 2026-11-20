@@ -23,6 +23,7 @@ from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document
+from oracle.errors import exception_text
 from oracle.modules import registry, service
 from oracle.modules.catalog import builtin_packs, pack_members
 from oracle.modules.composer import CompositionProblem
@@ -71,7 +72,7 @@ def _refused(detail: str, problems: list[CompositionProblem]) -> JSONResponse:
 
 
 def _registry_refused(e: RegistryError) -> JSONResponse:
-    return _refused(str(e), [CompositionProblem(code=e.code, message=str(e))])
+    return _refused(exception_text(e), [CompositionProblem(code=e.code, message=exception_text(e))])
 
 
 def _not_found(message: str) -> HTTPException:
@@ -82,7 +83,7 @@ async def _document(db: AsyncSession, doc: str) -> Document:
     try:
         document = await docs_service.get_document_or_404(db, doc)
     except docs_service.NotFoundError as e:
-        raise _not_found(str(e)) from e
+        raise _not_found(exception_text(e)) from e
     if document.kind != "prd":
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT, "module compositions apply to PRDs only"
@@ -204,7 +205,7 @@ async def create_module_override(key: str, data: ModuleContractIn, db: TenantDB,
     try:
         row = await registry.create_override(db, key, data.contract, principal.id)
     except registry.NotFound as e:
-        raise _not_found(str(e)) from e
+        raise _not_found(exception_text(e)) from e
     except RegistryError as e:
         return _registry_refused(e)
     await audit.record(
@@ -365,9 +366,9 @@ async def recommend_composition(data: CompositionRecommendIn, db: TenantDB, prin
             db, data, document=document, role=principal.role, actor_id=principal.id
         )
     except service.NotFound as e:
-        raise _not_found(str(e)) from e
+        raise _not_found(exception_text(e)) from e
     except service.CompositionRefused as e:
-        return _refused(str(e), e.problems)
+        return _refused(exception_text(e), e.problems)
     return out
 
 
@@ -402,9 +403,9 @@ async def confirm_composition_revision(
             db, document, data, role=principal.role, actor=principal, actor_id=principal.id
         )
     except service.NotFound as e:
-        raise _not_found(str(e)) from e
+        raise _not_found(exception_text(e)) from e
     except service.CompositionRefused as e:
-        return _refused(str(e), e.problems)
+        return _refused(exception_text(e), e.problems)
     await audit.record(
         db, principal, "composition.revision", "composition_revision", revision.id,
         {
@@ -435,9 +436,9 @@ async def publish_composition(doc: str, data: PublishIn, db: TenantDB, principal
     try:
         revision = await service.publish(db, document, data.version)
     except service.NotFound as e:
-        raise _not_found(str(e)) from e
+        raise _not_found(exception_text(e)) from e
     except service.Conflict as e:
-        raise HTTPException(status.HTTP_409_CONFLICT, str(e)) from e
+        raise HTTPException(status.HTTP_409_CONFLICT, exception_text(e)) from e
     await audit.record(
         db, principal, "composition.publish", "composition_revision", revision.id,
         {"document_id": str(document.id), "number": revision.number, "version": data.version},

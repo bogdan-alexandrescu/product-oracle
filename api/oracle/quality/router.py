@@ -18,6 +18,7 @@ from fastapi import Depends, HTTPException, Query
 
 from oracle.auth.deps import Principal, TenantDB, same_origin
 from oracle.authz import require_role
+from oracle.errors import exception_text
 from oracle.jobs import service as jobs_service
 from oracle.jobs.schemas import LlmJobOut
 from oracle.quality import criteria, outcomes, service
@@ -58,7 +59,7 @@ async def _call[T](op: Awaitable[T]) -> T:
     try:
         return await op
     except (service.QualityError, outcomes.OutcomeError) as e:
-        raise HTTPException(e.status, str(e)) from e
+        raise HTTPException(e.status, exception_text(e)) from e
 
 
 @router.get("/quality/criteria", response_model=list[CriterionInfo])

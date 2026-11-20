@@ -47,6 +47,7 @@ from oracle.auth.deps import TenantDB, same_origin
 from oracle.authz import has_role
 from oracle.base_model import BaseModel
 from oracle.baseline.models import Entity
+from oracle.errors import exception_text
 from oracle.roadmap.models import RoadmapItem
 from oracle.routing import APIRouter
 from oracle.simple import drafts, service
@@ -433,7 +434,7 @@ async def _codes_free(db: AsyncSession, entry: TrashEntry, principal: Any) -> No
             else:
                 await changes._not_taken(db, e, code, read_.by_id(), own_only=True)
     except changes.ChangeError as err:
-        raise trash.Conflict(f"{err}: rename it first") from err
+        raise trash.Conflict(f"{exception_text(err)}: rename it first") from err
 
 
 async def after_restore(
@@ -873,7 +874,7 @@ async def _call(op: Any) -> Any:
     try:
         return await op
     except trash.TrashError as exc:
-        raise HTTPException(exc.status, str(exc)) from exc
+        raise HTTPException(exc.status, exception_text(exc)) from exc
 
 
 @router.delete("/roadmap/items/{item_id}", response_model=TrashedOut, name="delete_simple_item")

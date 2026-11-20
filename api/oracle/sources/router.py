@@ -30,6 +30,7 @@ from oracle.authz import require_role
 from oracle.connections.models import Connection
 from oracle.connections.providers import reconnect_reason
 from oracle.connections.router import endpoint_url as connection_endpoint
+from oracle.errors import exception_text
 from oracle.routing import APIRouter
 from oracle.sources import coverage, items, service, store, uploads
 from oracle.sources import search as search_service
@@ -102,18 +103,18 @@ def _shared(principal: Principal) -> items.RunReads | None:
 
 def _http(exc: Exception) -> HTTPException:
     if isinstance(exc, service.BadRequestError):
-        return HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+        return HTTPException(status.HTTP_400_BAD_REQUEST, exception_text(exc))
     if isinstance(exc, service.RateLimitedError):
         return HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS,
-            str(exc),
+            exception_text(exc),
             headers={"Retry-After": str(exc.retry_after)},
         )
     if isinstance(exc, service.NotFoundError):
-        return HTTPException(status.HTTP_404_NOT_FOUND, str(exc))
+        return HTTPException(status.HTTP_404_NOT_FOUND, exception_text(exc))
     if isinstance(exc, service.ConflictError | sync_engine.SyncRefused):
-        return HTTPException(status.HTTP_409_CONFLICT, str(exc))
-    return HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc))
+        return HTTPException(status.HTTP_409_CONFLICT, exception_text(exc))
+    return HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, exception_text(exc))
 
 
 _ERRORS = (
@@ -324,7 +325,9 @@ async def update_source(
     try:
         source = await service.update_source(db, source, changes)
     except service.StaleError as e:
-        return JSONResponse({"code": e.code, "message": str(e)}, status.HTTP_409_CONFLICT)
+        return JSONResponse(
+            {"code": e.code, "message": exception_text(e)}, status.HTTP_409_CONFLICT
+        )
     except _ERRORS as e:
         raise _http(e) from e
     return await _one_out(db, source, principal)
@@ -403,7 +406,7 @@ async def upload_files(
             data = await f.read(uploads.MAX_BYTES + 1)
             events.append(uploads.to_item(uploads.UploadedFile(f.filename or "", data)))
     except uploads.UploadError as e:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from e
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, exception_text(e)) from e
 
     item_ids, unchanged = [], []
     for event in events:

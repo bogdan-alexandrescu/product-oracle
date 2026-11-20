@@ -29,6 +29,7 @@ from oracle.baseline.models import Entity
 from oracle.decisions import capture
 from oracle.docs import visibility
 from oracle.docs.models import Document, DocumentVersion, Section
+from oracle.errors import exception_text
 from oracle.members.names import display_name
 from oracle.requests import replies
 from oracle.requests.models import EXCERPT_MAX, ProductRequest, RequestReply, RequestTheme
@@ -801,7 +802,7 @@ async def disqualify(
             db, body.reason, body.basis.model_dump(mode="json") if body.basis else None
         )
     except replies.ReplyError as e:
-        raise RequestError(e.status, str(e)) from e
+        raise RequestError(e.status, exception_text(e)) from e
     row.state = "disqualified"
     row.disqualify_reason = body.reason
     row.decision_note = body.note or None
@@ -1084,7 +1085,7 @@ async def _flush_theme(db: AsyncSession) -> None:
     try:
         await flush_or_conflict(db)
     except IntegrityError as e:
-        if "ux_request_themes_title" in str(e):
+        if "ux_request_themes_title" in exception_text(e):
             raise _conflict(TITLE_TAKEN) from e
         raise
 
@@ -1369,7 +1370,7 @@ async def keep_no(
     try:
         await decisions.review(db, principal, d, ReviewIn(verdict="reaffirmed", note=note))
     except decisions.DecisionError as e:
-        raise RequestError(e.status, str(e)) from e
+        raise RequestError(e.status, exception_text(e)) from e
     row.asked_again_since = _now()
     await flush_or_conflict(db)
     await audit.record(

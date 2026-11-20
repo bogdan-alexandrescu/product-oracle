@@ -37,6 +37,7 @@ from oracle.discussions.schemas import (
     DiscussionChangeOut,
     DiscussionPerson,
 )
+from oracle.errors import exception_text
 from oracle.jobs import prompting
 from oracle.members.names import display_name
 
@@ -833,7 +834,7 @@ async def withdraw(
             try:
                 await actions.remove_action(db, principal, row.run_id, row.checkpoint_id, row.id)
             except Exception as e:  # D8 refuses: the change stays as it is
-                raise DiscussionError(409, str(e)) from e
+                raise DiscussionError(409, exception_text(e)) from e
             c = await db.get(DiscussionChange, change_id, populate_existing=True)
     c.suggested_by = c.suggested_at = c.result_ref = None
     c.status = "proposed" if c.proposed_by_kind == "oracle" else "dismissed"
@@ -950,7 +951,7 @@ async def propose(
         except baseline.GoalFieldsInvalid:
             raise  # B5: 422 with every problem (the app's handler)
         except baseline.BaselineError as e:
-            raise DiscussionError(422, str(e)) from e
+            raise DiscussionError(422, exception_text(e)) from e
         if isinstance(out, goal_interview.GoalMeasurePushback):
             return c, None
         proposal_id = out.result_ref["proposal_id"]
@@ -964,7 +965,7 @@ async def propose(
                 entity_id=uuid.UUID(str(p["entity_id"])), edge_id=None,
             )  # fmt: skip
         except baseline.BaselineError as e:
-            raise DiscussionError(422, str(e)) from e
+            raise DiscussionError(422, exception_text(e)) from e
         proposal_id, status = str(proposal.id), proposal.status
     await _done(db, principal, d, c, {"proposal_id": proposal_id}, "proposed")
     return c, {"proposal_id": proposal_id, "status": status}
@@ -1055,7 +1056,7 @@ async def ask(
         except ValidationError as e:
             raise DiscussionError(422, f"The question does not read: {e.errors()[0]['msg']}") from e
         except intake.IntakeError as e:
-            raise DiscussionError(e.status, str(e)) from e
+            raise DiscussionError(e.status, exception_text(e)) from e
         ref = {"question_id": str(question.id)}
     await _done(db, principal, d, c, ref, "asked")
     return c, ref
@@ -1109,7 +1110,7 @@ async def _ask_at_checkpoint(
     try:
         return await actions.put_action(db, principal, d.run_id, cp.id, body, source=source)
     except runs.RunError as e:
-        raise DiscussionError(getattr(e, "status", 409), str(e)) from e
+        raise DiscussionError(getattr(e, "status", 409), exception_text(e)) from e
 
 
 async def apply(
@@ -1150,11 +1151,11 @@ async def apply(
     try:
         out = await priorities.create_override(db, body, principal)
     except priorities.InvalidError as e:
-        raise DiscussionError(422, str(e)) from e
+        raise DiscussionError(422, exception_text(e)) from e
     except priorities.ConflictError as e:
-        raise DiscussionError(409, str(e)) from e
+        raise DiscussionError(409, exception_text(e)) from e
     except priorities.ForbiddenError as e:
-        raise DiscussionError(403, str(e)) from e
+        raise DiscussionError(403, exception_text(e)) from e
     if reason:
         c.override_reason = why if out.kept_after_pushback else c.override_reason
     ref = {"override_id": str(out.id)}
@@ -1190,7 +1191,7 @@ async def resolve(
             note=p.get("reason"),
         )  # fmt: skip
     except baseline.BaselineError as e:
-        raise DiscussionError(e.status_code, str(e)) from e
+        raise DiscussionError(e.status_code, exception_text(e)) from e
     await _done(db, principal, d, c, {"conflict_id": str(conflict.id)}, "resolved")
     return c, {"conflict_id": str(conflict.id), "status": conflict.status}
 
@@ -1212,7 +1213,7 @@ async def answer(
     try:
         question = await intake.get_question(db, uuid.UUID(str(p["question_id"])))
     except intake.IntakeError as e:
-        raise DiscussionError(e.status, str(e)) from e
+        raise DiscussionError(e.status, exception_text(e)) from e
     if not (has_role(seat.role, "approver") or question.asked_to == principal.user_id):
         raise DiscussionError(403, "The person asked, or an approver, uses it as the answer")
     try:
@@ -1220,7 +1221,7 @@ async def answer(
             db, principal, question, AnswerIn(kind="answer", body=p["body"])
         )
     except intake.IntakeError as e:
-        raise DiscussionError(e.status, str(e)) from e
+        raise DiscussionError(e.status, exception_text(e)) from e
     ref = {"answer_id": str(result["answer"].id)}
     await _done(db, principal, d, c, ref, "answered")
     return c, ref

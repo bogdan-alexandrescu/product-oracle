@@ -30,6 +30,7 @@ from pydantic import (
 )
 
 from oracle.base_model import BaseModel
+from oracle.errors import exception_text
 
 SEMVER_PATTERN = r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$"
 # "goals.outcomes", "constraints.solutions", "ai_agent.tool-policies".
@@ -346,7 +347,7 @@ class FieldValidator(_Strict):
             try:
                 re.compile(v)
             except re.error as e:
-                raise ValueError(f"pattern does not compile: {e}") from None
+                raise ValueError(f"pattern does not compile: {exception_text(e)}") from None
         return self
 
 

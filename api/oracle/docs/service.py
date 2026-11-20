@@ -49,6 +49,7 @@ from oracle.docs.schemas import (
     VersionWarning,
 )
 from oracle.docs.visibility import default_for as default_visibility
+from oracle.errors import exception_text
 from oracle.members.names import display_name
 from oracle.models import AuditEvent
 from oracle.review import service as review_service
@@ -660,7 +661,7 @@ async def _template_meta_async(db: AsyncSession, body: str):
         return await safe_yaml.run_parse_within(_template_meta, body, name="the template")
     except safe_yaml.ParseTimeout as exc:
         await db.rollback()
-        raise DraftError([ImportProblem(code=exc.code, message=str(exc))]) from None
+        raise DraftError([ImportProblem(code=exc.code, message=exception_text(exc))]) from None
 
 
 async def read_version(
@@ -1328,7 +1329,7 @@ async def import_draft(
                 strip_state_labels, markdown, name="the draft"
             )
         except safe_yaml.ParseTimeout as exc:
-            raise DraftError([ImportProblem(code=exc.code, message=str(exc))]) from exc
+            raise DraftError([ImportProblem(code=exc.code, message=exception_text(exc))]) from exc
     if exported and (found.kind if found is not None else kind) == "roadmap":
         markdown = without_prds_line(markdown)
     # Off the event loop, time-capped: the draft is untrusted text (oracle.safe_yaml).

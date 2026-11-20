@@ -41,6 +41,7 @@ from oracle.blockers.schemas import (
     FeasibilityScopeIn,
 )
 from oracle.docs import service as docs_service
+from oracle.errors import exception_text
 from oracle.routing import APIRouter
 from oracle.v2.schemas import BlockerStatus, FeasibilityExperimentOut, Importance
 
@@ -52,7 +53,7 @@ Approver = Annotated[Principal, Depends(require_role("approver"))]
 
 
 def _fail(exc: service.BlockerError) -> HTTPException:
-    return HTTPException(exc.status_code, str(exc))
+    return HTTPException(exc.status_code, exception_text(exc))
 
 
 async def _commit_strategy(db, principal: Principal, entity_id: uuid.UUID) -> BlockerStrategy:
@@ -72,7 +73,7 @@ async def _document(db, doc: str):
     try:
         return await docs_service.get_document_or_404(db, doc)
     except docs_service.NotFoundError as e:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from e
+        raise HTTPException(status.HTTP_404_NOT_FOUND, exception_text(e)) from e
 
 
 # --- blockers -------------------------------------------------------------------------------

@@ -38,6 +38,7 @@ from oracle.auth.deps import Principal
 from oracle.auth.models import User
 from oracle.engineering import codemap
 from oracle.engineering.models import CodeMap
+from oracle.errors import exception_text
 from oracle.runs.models import Run
 from oracle.sources.models import Source
 from oracle.tenancy import current_tenant, tenant_session
@@ -203,7 +204,7 @@ async def _read(text: str) -> tuple[dict[str, Any] | None, list[codemap.Problem]
     try:
         return await safe_yaml.run_parse_within(codemap.read, text, name=codemap.FILE)
     except safe_yaml.ParseTimeout as exc:
-        return None, [codemap.Problem(code="unreadable", message=str(exc))]
+        return None, [codemap.Problem(code="unreadable", message=exception_text(exc))]
 
 
 async def import_map(

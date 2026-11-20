@@ -31,6 +31,7 @@ from oracle.base_model import BaseModel
 from oracle.connections import service
 from oracle.connections.providers import DRIVE_READONLY, RECONNECT_TO_CHOOSE_FILES
 from oracle.connections.router import ProviderHttp, UserPrincipal
+from oracle.errors import exception_text
 from oracle.routing import APIRouter
 from oracle.sources.base import ConnectorAuthError, ConnectorError, ConnectorRateLimited
 from oracle.sources.connectors.google_docs import (
@@ -243,7 +244,7 @@ async def _read(
     try:
         credential = await service.get_credential(db, conn.id, user_id, http=http)
     except service.ConnectionUnavailable as e:
-        raise HTTPException(status.HTTP_409_CONFLICT, str(e)) from None
+        raise HTTPException(status.HTTP_409_CONFLICT, exception_text(e)) from None
     secrets = {**credential.extra, "access_token": credential.access_token}
     try:
         answer = await read(_Drive(http, credential.access_token))
@@ -255,7 +256,7 @@ async def _read(
             headers={"Retry-After": str(wait)},
         ) from None
     except ConnectorAuthError as e:
-        detail = redact(str(e), secrets)
+        detail = redact(exception_text(e), secrets)
         await service.mark_failure(db, conn, "expired", f"Rejected while browsing: {detail}")
         raise HTTPException(
             status.HTTP_409_CONFLICT, "Google rejected the connection: reconnect it"
@@ -263,7 +264,7 @@ async def _read(
     except ConnectorError as e:
         raise HTTPException(
             status.HTTP_502_BAD_GATEWAY,
-            f"Google Drive could not be read: {redact(str(e), secrets)}",
+            f"Google Drive could not be read: {redact(exception_text(e), secrets)}",
         ) from None
     except (httpx.HTTPError, ValueError):
         raise HTTPException(

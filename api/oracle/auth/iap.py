@@ -26,6 +26,7 @@ from oracle.auth.jwks import KeyCache
 from oracle.auth.models import User
 from oracle.auth.service import hash_password_async, reserved_email
 from oracle.config import get_settings
+from oracle.errors import exception_text
 from oracle.members import access
 from oracle.members import service as members
 from oracle.models import Tenant
@@ -61,7 +62,7 @@ async def verify_assertion(assertion: str, audiences: list[str]) -> dict[str, An
     try:
         header = jwt.get_unverified_header(assertion)
     except jwt.InvalidTokenError as e:
-        raise InvalidAssertion(str(e)) from e
+        raise InvalidAssertion(exception_text(e)) from e
     if header.get("alg") != "ES256" or not isinstance(header.get("kid"), str):
         raise InvalidAssertion("unexpected alg or kid")
     key = await _keys.get(header["kid"])
@@ -78,7 +79,7 @@ async def verify_assertion(assertion: str, audiences: list[str]) -> dict[str, An
             options={"require": ["exp", "iat", "iss", "aud", "sub", "email"]},
         )
     except jwt.InvalidTokenError as e:
-        raise InvalidAssertion(str(e)) from e
+        raise InvalidAssertion(exception_text(e)) from e
     if not isinstance(claims.get("email"), str) or "@" not in claims["email"]:
         raise InvalidAssertion("no email claim")
     return claims

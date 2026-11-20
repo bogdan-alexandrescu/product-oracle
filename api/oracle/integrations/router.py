@@ -24,6 +24,7 @@ from oracle.auth.service import may_sign_in
 from oracle.authz import recheck_caller, require_role
 from oracle.base_model import BaseModel
 from oracle.connections import oauth
+from oracle.errors import exception_text
 from oracle.integrations import slack_api, slack_oauth
 from oracle.integrations.models import CompanyIntegration
 from oracle.metrics import posthog
@@ -175,7 +176,7 @@ async def oauth_slack_notifications_callback(
     try:
         st = oauth.decode_state(state, slack_oauth.STATE_PROVIDER)
     except oauth.InvalidState as e:
-        return _back(error=str(e))
+        return _back(error=exception_text(e))
     if principal.user_id != st.user_id or principal.tenant_id != st.tenant_id:
         return _back(error="This install was started by another person")
     if error or not code:
@@ -394,7 +395,7 @@ async def put_analytics_integration(
         await posthog.check_host(conn.host)
         await posthog.query_number(conn, posthog.KEY_CHECK_QUERY)
     except posthog.HostError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from None
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, exception_text(exc)) from None
     except posthog.PostHogError as exc:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT, f"PostHog refused the key: {exc.detail}"

@@ -33,6 +33,7 @@ from dataclasses import dataclass, field
 from html.parser import HTMLParser
 
 from oracle import parse_budget
+from oracle.errors import exception_text
 
 SVG_NS = "http://www.w3.org/2000/svg"
 XLINK_NS = "http://www.w3.org/1999/xlink"
@@ -523,7 +524,7 @@ def sanitize_svg(candidate: str, *, title: str) -> Sanitized:
         parser = ET.XMLParser(target=ET.TreeBuilder(insert_comments=False, insert_pis=False))
         root = ET.fromstring(candidate, parser=parser)
     except ET.ParseError as exc:
-        return Sanitized("", blocked=[f"not well-formed SVG: {exc}"])
+        return Sanitized("", blocked=[f"not well-formed SVG: {exception_text(exc)}"])
     if _local(root.tag) != (SVG_NS, "svg"):
         return Sanitized("", blocked=["the root element must be <svg> in the SVG namespace"])
     blocked: list[str] = []

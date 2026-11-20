@@ -12,6 +12,7 @@ from oracle import company_time
 from oracle.auth.models import User
 from oracle.baseline import goals
 from oracle.baseline.models import Entity
+from oracle.errors import exception_text
 from oracle.members.names import display_name
 from oracle.metrics import posthog, pull
 from oracle.metrics.models import Metric, MetricValue, MetricVariance
@@ -131,7 +132,7 @@ def _query(query: str | None) -> None:
     try:
         posthog.check_query(query)
     except posthog.QueryRefused as exc:
-        raise MetricError(str(exc)) from None
+        raise MetricError(exception_text(exc)) from None
 
 
 def _definition(metric: Metric) -> dict[str, Any]:

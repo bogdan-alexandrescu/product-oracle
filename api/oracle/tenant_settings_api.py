@@ -101,6 +101,7 @@ from oracle.base_model import BaseModel
 from oracle.baseline.models import LINK_KINDS
 from oracle.branding import DEFAULT as BRANDING_DEFAULT
 from oracle.confidence import DEFAULTS as CONFIDENCE_DEFAULTS
+from oracle.errors import exception_text
 from oracle.rituals.schedule import DEFAULT_ZONE as COMPANY_ZONE
 from oracle.routing import APIRouter
 from oracle.sources.models import ITEM_KINDS, SOURCE_KINDS
@@ -324,7 +325,7 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
         try:
             return await validate_policy(session, value)
         except PolicyError as e:
-            raise InvalidSetting(str(e)) from None
+            raise InvalidSetting(exception_text(e)) from None
     if key == "publish_latest_only":
         if not isinstance(value, bool):
             raise InvalidSetting("publish_latest_only must be true or false")
@@ -391,7 +392,7 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
         try:
             return validate_setting(value)
         except ValueError as e:
-            raise InvalidSetting(str(e)) from None
+            raise InvalidSetting(exception_text(e)) from None
     if key == "company_timezone":
         from oracle.rituals.schedule import zone
 
@@ -617,7 +618,7 @@ async def put_setting(key: str, body: SettingIn, principal: Owner, db: TenantDB)
     try:
         value = await validate(db, principal, key, body.value)
     except InvalidSetting as e:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from None
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, exception_text(e)) from None
     row = await db.scalar(select(TenantSetting).where(TenantSetting.key == key))
     if row is None:
         row = TenantSetting(key=key, value=value, updated_by=principal.id)

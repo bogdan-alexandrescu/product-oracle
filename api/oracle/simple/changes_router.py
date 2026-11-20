@@ -40,6 +40,7 @@ from fastapi import Body, Depends, HTTPException, Query, Response, status
 from oracle.auth.deps import Principal, TenantDB
 from oracle.docs import service as docs
 from oracle.docs.schemas import DocumentSummary
+from oracle.errors import exception_text
 from oracle.export.pdf import PdfUnavailable, html_to_pdf, overflow_headers
 from oracle.routing import APIRouter
 from oracle.simple import changes, drafts, one_pager
@@ -353,7 +354,7 @@ async def export_simple_one_pager(doc: str, principal: Reader, db: TenantDB) -> 
     try:
         content = await asyncio.to_thread(html_to_pdf, html)
     except PdfUnavailable as e:
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(e)) from None
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, exception_text(e)) from None
     return Response(
         content=content,
         media_type="application/pdf",

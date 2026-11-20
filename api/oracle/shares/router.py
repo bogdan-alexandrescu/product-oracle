@@ -25,6 +25,7 @@ from oracle.authz import has_role
 from oracle.base_model import BaseModel
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document
+from oracle.errors import exception_text
 from oracle.members.names import display_name
 from oracle.review.models import DocumentPublication
 from oracle.roadmap import public as roadmap_public
@@ -183,7 +184,7 @@ async def _document(db, doc: str) -> Document:
     try:
         return await docs_service.get_document_or_404(db, doc)
     except docs_service.NotFoundError as e:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from e
+        raise HTTPException(status.HTTP_404_NOT_FOUND, exception_text(e)) from e
 
 
 def _shareable(document: Document) -> None:

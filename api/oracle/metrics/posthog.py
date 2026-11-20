@@ -30,6 +30,7 @@ from oracle.baseline.public_links import (
     public_addresses,
     system_resolve,
 )
+from oracle.errors import exception_text
 
 CLOUD_HOSTS = {"us": "https://us.posthog.com", "eu": "https://eu.posthog.com"}
 MAX_ERROR = 300
@@ -222,7 +223,7 @@ async def query_number(conn: Connection, hogql: str) -> float | None:
         try:
             check_query(hogql)
         except QueryRefused as exc:
-            raise PostHogError(str(exc)) from None
+            raise PostHogError(exception_text(exc)) from None
         hogql = limited(hogql)
     transport = _transport or guarded_transport(resolve)
     url = f"{conn.base_url}/api/projects/{conn.project_id}/query/"
@@ -234,7 +235,7 @@ async def query_number(conn: Connection, hogql: str) -> float | None:
                 headers={"Authorization": f"Bearer {conn.api_key}"},
             )
     except httpx.HTTPError as exc:
-        detail = redact(f"Could not reach PostHog: {exc}", conn.api_key)
+        detail = redact(f"Could not reach PostHog: {exception_text(exc)}", conn.api_key)
         log.warning("PostHog query failed: %s", detail)
         raise PostHogError(UNREACHABLE, detail=detail) from None
     if response.status_code >= 400:

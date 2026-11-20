@@ -15,6 +15,7 @@ from fastapi import Depends, HTTPException, Query, Response, status
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import has_role, recheck_caller, require_role
+from oracle.errors import exception_text
 from oracle.metrics import posthog, service
 from oracle.metrics.models import Metric, MetricVariance
 from oracle.metrics.schemas import (
@@ -42,7 +43,7 @@ _ERRORS = {404: {"description": "Not found"}, 409: {"description": "Conflict"}}
 
 
 def _fail(exc: service.MetricError) -> HTTPException:
-    return HTTPException(exc.status_code, str(exc))
+    return HTTPException(exc.status_code, exception_text(exc))
 
 
 def _owner_or_approver(principal: Principal, metric: Metric) -> None:

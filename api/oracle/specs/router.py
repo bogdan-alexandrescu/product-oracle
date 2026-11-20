@@ -17,6 +17,7 @@ from fastapi import Depends, HTTPException, Response, status
 from oracle import changes, wording
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role
+from oracle.errors import exception_text
 from oracle.routing import APIRouter
 from oracle.runs import extensions
 from oracle.specs import lineage, service
@@ -45,8 +46,8 @@ extensions.register_importer("spec", service.import_spec)
 
 def _http(exc: service.SpecError) -> HTTPException:
     if exc.refs:
-        return wording.Refused(exc.status, str(exc), exc.refs)
-    return HTTPException(exc.status, str(exc))
+        return wording.Refused(exc.status, exception_text(exc), exc.refs)
+    return HTTPException(exc.status, exception_text(exc))
 
 
 @router.post(

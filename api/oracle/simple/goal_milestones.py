@@ -31,6 +31,7 @@ from oracle import audit, company_time
 from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.docs.models import Document
+from oracle.errors import exception_text
 from oracle.members.names import display_name
 from oracle.roadmap import company
 from oracle.roadmap.models import ProductTrack, TrackMilestone
@@ -902,7 +903,7 @@ def _checked(given: Any) -> dict[str, Any]:
     try:
         v = SimpleGoalMilestonePatch.model_validate({k: given[k] for k in FIELDS if k in given})
     except ValueError as e:
-        raise _error(422, f"after.milestone: {e}") from None
+        raise _error(422, f"after.milestone: {exception_text(e)}") from None
     return {k: getattr(v, k) for k in v.model_fields_set}
 
 

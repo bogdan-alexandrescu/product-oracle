@@ -63,6 +63,7 @@ from typing import Any
 import httpx
 
 from oracle.company_time import calendar_day_with_year
+from oracle.errors import exception_text
 from oracle.sources.base import (
     ORACLE_SLACK_USERS,
     ZONE_KEY,
@@ -501,7 +502,7 @@ class SlackConnector:
         try:
             return await self._person(slack)
         except ConnectorConfigError as e:
-            if str(e) == BOT_TOKEN:
+            if exception_text(e) == BOT_TOKEN:
                 raise ConnectorNeedsAttention(BOT_TOKEN_SYNC) from None
             raise
 

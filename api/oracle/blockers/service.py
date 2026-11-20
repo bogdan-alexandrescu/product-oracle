@@ -71,6 +71,7 @@ from oracle.blockers.schemas import (
     dump,
 )
 from oracle.docs.models import Document
+from oracle.errors import exception_text
 from oracle.tenant_settings_api import get_setting
 from oracle.v2.concurrency import expect_version, flush_or_conflict
 from oracle.v2.models import (
@@ -178,7 +179,7 @@ def spec_of(entity: Entity) -> BlockerSpec:
         return BlockerSpec.model_validate(raw)
     except ValidationError as e:
         raise InvalidError(
-            f"The blocker strategy of constraint:{entity.key} cannot be read: {e}"
+            f"The blocker strategy of constraint:{entity.key} cannot be read: {exception_text(e)}"
         ) from e
 
 

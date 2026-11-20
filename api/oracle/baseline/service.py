@@ -43,6 +43,7 @@ from oracle.baseline.models import (
     Proposal,
 )
 from oracle.baseline.schemas import ProposalRun
+from oracle.errors import exception_text
 from oracle.v2 import links
 from oracle.v2.models import DocumentSectionLink
 
@@ -341,7 +342,7 @@ async def _check_archivable(
     try:
         await blockers.require_archiver(db, principal, entity, verb)
     except blockers.ForbiddenError as e:
-        raise ForbiddenError(str(e)) from None
+        raise ForbiddenError(exception_text(e)) from None
 
 
 def _check_status(status: str | None) -> None:
@@ -1058,7 +1059,7 @@ def _edge_create_args(fields: dict[str, Any]) -> dict[str, Any]:
             "status": fields.get("status"),
         }
     except (KeyError, ValueError) as e:
-        raise InvalidError(f"proposal has a bad edge field: {e}") from None
+        raise InvalidError(f"proposal has a bad edge field: {exception_text(e)}") from None
 
 
 async def submit_proposal(
@@ -1882,12 +1883,12 @@ async def link_new_feature(
         try:
             await changes.create(db, writer.principal, body, commit=False)
         except changes.ChangeError as exc:
-            raise InvalidError(str(exc)) from exc
+            raise InvalidError(exception_text(exc)) from exc
         except drafts.DraftError as exc:
             # A submitted draft of the roadmap waits for approval: no change until it is decided.
             raise ConflictError(
                 f"“{row.title}” can't be linked yet: its roadmap has a draft waiting for "
                 "approval. Add it once that draft is approved or withdrawn."
                 if exc.status == 409
-                else str(exc)
+                else exception_text(exc)
             ) from exc

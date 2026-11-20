@@ -29,6 +29,7 @@ from typing import Any, Literal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.base_model import BaseModel
+from oracle.errors import exception_text
 
 Status = Literal["pass", "warning", "critical", "not_applicable"]
 # Who asks: the dashboard ("advisory") or the publish transaction ("publish").
@@ -140,7 +141,7 @@ async def evaluate(ctx: ReadinessContext, keys: Iterable[str] | None = None) -> 
                     hard=reg.hard,
                     status="critical" if reg.hard else "warning",
                     rationale="The check could not run, so it cannot vouch for readiness.",
-                    error=f"{type(e).__name__}: {e}",
+                    error=f"{type(e).__name__}: {exception_text(e)}",
                 )
             )
             continue

@@ -22,6 +22,7 @@ from sqlalchemy import func, or_, select
 from oracle import audit
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.authz import has_role, recheck_caller
+from oracle.errors import exception_text
 from oracle.routing import APIRouter
 from oracle.webhooks import outbox, service
 from oracle.webhooks.events import EVENT_TYPES
@@ -72,7 +73,7 @@ Owner = Annotated[Principal, Depends(owner_after_absent)]
 
 
 def _refused(e: service.WebhookError) -> HTTPException:
-    return HTTPException(_STATUS[e.code], str(e))
+    return HTTPException(_STATUS[e.code], exception_text(e))
 
 
 async def _write(db, principal: Principal) -> None:

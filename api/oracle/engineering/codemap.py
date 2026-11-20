@@ -30,6 +30,7 @@ import re
 from typing import Any, Literal
 
 from oracle.base_model import BaseModel
+from oracle.errors import exception_text
 
 VERSION = 1
 FILE = "code_map.json"
@@ -126,7 +127,9 @@ def _load(text: str) -> tuple[dict[str, Any] | None, list[Problem]]:
         # Stored as JSONB, which refuses NaN and Infinity: refused as it is read.
         data = json.loads(text, parse_constant=_no_constant, parse_float=_finite)
     except _NotFinite as exc:
-        return None, [_p("unreadable", f"{FILE} has the number {exc}: numbers must be finite")]
+        return None, [
+            _p("unreadable", f"{FILE} has the number {exception_text(exc)}: numbers must be finite")
+        ]
     except (ValueError, RecursionError) as exc:
         return None, [_p("unreadable", f"{FILE} is not JSON ({type(exc).__name__})")]
     if not isinstance(data, dict):

@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit
 from oracle.auth.deps import Principal
 from oracle.docs.models import Document, DocumentVersion
+from oracle.errors import exception_text
 from oracle.runs import service as runs_service
 from oracle.runs.models import Run
 from oracle.runs.schemas import RunCreate
@@ -94,7 +95,7 @@ async def _spec_request_id(db: AsyncSession, document: Document) -> uuid.UUID:
 
 
 def _spec_error(exc: Exception) -> Exception:
-    error = Invalid(str(exc))
+    error = Invalid(exception_text(exc))
     error.status = getattr(exc, "status", Invalid.status)
     return error
 

@@ -34,6 +34,7 @@ from oracle.auth.service import (
 )
 from oracle.config import get_settings
 from oracle.db import dispose_engine
+from oracle.errors import exception_text
 from oracle.models import PLACEHOLDER_NAME, Tenant
 from oracle.modules.service import ensure_seeded
 from oracle.templates.defaults import ensure_default_template
@@ -153,7 +154,7 @@ async def _main(args: argparse.Namespace) -> None:
             token_name=args.token_name,
         )
     except (ReservedEmailError, SeedRefused) as e:
-        raise SystemExit(f"oracle.seed: {e}") from None
+        raise SystemExit(f"oracle.seed: {exception_text(e)}") from None
     finally:
         await dispose_engine()
     print(format_result(r, password_given=bool(args.password)))

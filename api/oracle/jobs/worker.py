@@ -46,6 +46,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.decisions.models import Decision
 from oracle.docs.models import Document
+from oracle.errors import exception_text
 from oracle.interviews.models import Interview
 from oracle.jobs import kinds, prompting
 from oracle.jobs.models import LlmJob
@@ -370,21 +371,29 @@ async def _run_job(
                 # Out of time before any model call: as if never claimed.
                 released = await release_claim(tenant_id, job_id)
                 return Outcome("deferred" if released else "cancelled")
-            return await _finish(s, job_id, call, "transient", str(e))
+            return await _finish(s, job_id, call, "transient", exception_text(e))
         except NoClaudeAccount as e:
             await s.rollback()
             return await _finish(
-                s, job_id, call, "failed", str(e), reason=e.reason, next_reset=e.next_reset_at
+                s,
+                job_id,
+                call,
+                "failed",
+                exception_text(e),
+                reason=e.reason,
+                next_reset=e.next_reset_at,
             )
         except (LlmUnavailable, prompting.AnswerError) as e:
             await s.rollback()
-            return await _finish(s, job_id, call, "transient", str(e))
+            return await _finish(s, job_id, call, "transient", exception_text(e))
         except LlmAuthError as e:
             await s.rollback()
-            return await _finish(s, job_id, call, "failed", f"Claude rejected the credential: {e}")
+            return await _finish(
+                s, job_id, call, "failed", f"Claude rejected the credential: {exception_text(e)}"
+            )
         except kinds.JobInputError as e:
             await s.rollback()
-            return await _finish(s, job_id, call, "failed", str(e))
+            return await _finish(s, job_id, call, "failed", exception_text(e))
         except Exception as e:  # one broken job must not stop the queue
             log.exception("built-in job %s failed", job_id)
             await s.rollback()

@@ -25,6 +25,7 @@ from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role
 from oracle.baseline import public_links
 from oracle.config import get_settings
+from oracle.errors import exception_text
 from oracle.routing import APIRouter
 from oracle.runtokens import RunToken
 from oracle.tenant_settings_api import company_timezone, get_setting
@@ -188,9 +189,9 @@ async def fetch_web_page(
             raise WebError(429, "web_cap_reached", "No page reads are left for this run.")
         row = await read_page(db, fetcher, run_id, url)
     except WebError as exc:
-        return _failed(exc.status, exc.code, str(exc))
+        return _failed(exc.status, exc.code, exception_text(exc))
     except public_links.LinkError as exc:
-        return _failed(exc.status_code, exc.code, str(exc))
+        return _failed(exc.status_code, exc.code, exception_text(exc))
     left = get_settings().web_fetch_max_per_run - await models.pages_in_run(db, run_id)
     await db.commit()
     return WebPageOut(

@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.authz import require_role_now
+from oracle.errors import exception_text
 from oracle.priorities import service
 from oracle.priorities.schemas import (
     CompareOut,
@@ -87,11 +88,11 @@ async def create_priority_override(
     except service.Pushback as e:
         return JSONResponse(PushbackOut.model_validate(e.body).model_dump(mode="json"), 409)
     except service.InvalidError as e:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from e
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, exception_text(e)) from e
     except service.ConflictError as e:
-        raise HTTPException(status.HTTP_409_CONFLICT, str(e)) from e
+        raise HTTPException(status.HTTP_409_CONFLICT, exception_text(e)) from e
     except service.ForbiddenError as e:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, str(e)) from e
+        raise HTTPException(status.HTTP_403_FORBIDDEN, exception_text(e)) from e
 
 
 @router.delete("/priorities/overrides/{override_id}", response_model=OverrideOut)
@@ -107,11 +108,11 @@ async def remove_priority_override(
             db, override_id, data.reason if data else None, principal
         )
     except service.NotFoundError as e:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from e
+        raise HTTPException(status.HTTP_404_NOT_FOUND, exception_text(e)) from e
     except service.ConflictError as e:
-        raise HTTPException(status.HTTP_409_CONFLICT, str(e)) from e
+        raise HTTPException(status.HTTP_409_CONFLICT, exception_text(e)) from e
     except service.ForbiddenError as e:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, str(e)) from e
+        raise HTTPException(status.HTTP_403_FORBIDDEN, exception_text(e)) from e
 
 
 @router.get("/priorities/overrides", response_model=list[OverrideOut])
@@ -155,7 +156,7 @@ async def get_priority_snapshot(
     try:
         return await service.read_snapshot(db, snapshot_id, status)
     except service.NotFoundError as e:
-        raise HTTPException(404, str(e)) from e
+        raise HTTPException(404, exception_text(e)) from e
 
 
 @router.get("/priorities/snapshots/{snapshot_id}/compare", response_model=CompareOut)
@@ -168,4 +169,4 @@ async def compare_priority_snapshot(
     try:
         return await service.compare(db, snapshot_id, principal)
     except service.NotFoundError as e:
-        raise HTTPException(404, str(e)) from e
+        raise HTTPException(404, exception_text(e)) from e

@@ -67,6 +67,7 @@ from oracle.authz import has_role
 from oracle.baseline import service as baseline
 from oracle.baseline.models import Entity
 from oracle.docs.models import DocumentVersion
+from oracle.errors import exception_text
 from oracle.launches import service as launches
 from oracle.launches.models import TASK_AUDIENCES, Launch, LaunchTask
 from oracle.launches.models import TASK_STATUSES as LAUNCH_TASK_STATUSES
@@ -409,7 +410,7 @@ async def _plan(
         try:
             after["target"] = _target(typed_target(dict(g.attrs or {}), after["target"]))
         except TargetKept as e:
-            raise ChangeError(422, str(e)) from e
+            raise ChangeError(422, exception_text(e)) from e
         return target, current, after
 
     if kind == "override":
@@ -564,7 +565,7 @@ async def _plan(
 
 def _fail(e: Exception) -> ChangeError:
     if isinstance(e, launches.LaunchError):
-        return ChangeError(e.status, str(e))
+        return ChangeError(e.status, exception_text(e))
     if isinstance(e, priorities.Pushback):
         return ChangeError(409, {"message": e.body["detail"], "pushback": e.body["pushback"],
                                  "reason_check": e.body.get("reason_check"),
@@ -573,7 +574,9 @@ def _fail(e: Exception) -> ChangeError:
                                  "hint": "after.confirm: true keeps the pin"})  # fmt: skip
     status = {priorities.InvalidError: 422, priorities.ConflictError: 409,
               priorities.ForbiddenError: 403, priorities.NotFoundError: 404}  # fmt: skip
-    return ChangeError(next((s for t, s in status.items() if isinstance(e, t)), 422), str(e))
+    return ChangeError(
+        next((s for t, s in status.items() if isinstance(e, t)), 422), exception_text(e)
+    )
 
 
 async def _pin(db: AsyncSession, principal: Any, feature_id: str, o: dict, confirm: bool) -> str:
@@ -654,7 +657,7 @@ async def _apply(
                 # goal-target-kept: a measured goal never loses its number or unit here.
                 attrs = typed_target(attrs, values["target"])
             except TargetKept as e:
-                raise ChangeError(422, str(e)) from e
+                raise ChangeError(422, exception_text(e)) from e
             attrs["metric"] = values["measure"]
             attrs["due"] = values["due"]
             attrs = {k: v for k, v in attrs.items() if not (k in GOAL_ATTRS and v is None)}

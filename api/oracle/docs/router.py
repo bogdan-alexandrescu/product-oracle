@@ -27,6 +27,7 @@ from oracle.docs.schemas import (
     VisibilityIn,
     rejected_detail,
 )
+from oracle.errors import exception_text
 from oracle.http import read_capped_body
 from oracle.jobs import service as jobs_service
 from oracle.review.schemas import ConflictResponse
@@ -42,7 +43,7 @@ Approver = Annotated[Principal, Depends(require_role("approver"))]
 
 
 def _not_found(exc: service.NotFoundError) -> HTTPException:
-    return HTTPException(status.HTTP_404_NOT_FOUND, str(exc))
+    return HTTPException(status.HTTP_404_NOT_FOUND, exception_text(exc))
 
 
 def _draft_rejected(exc: DraftError) -> JSONResponse:
@@ -105,7 +106,7 @@ async def set_document_visibility(
     except service.NotFoundError as exc:
         raise _not_found(exc) from exc
     except service.VisibilityKindError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, exception_text(exc)) from exc
 
 
 @router.post(
@@ -183,7 +184,7 @@ async def import_version(
         raise _not_found(exc) from exc
     except service.BaseVersionConflictError as exc:
         body = ConflictResponse(
-            detail=str(exc),
+            detail=exception_text(exc),
             code=exc.code,  # type: ignore[arg-type]
             base_version=exc.base,
             latest_version=exc.latest,
@@ -192,7 +193,7 @@ async def import_version(
         )
         return JSONResponse(body.model_dump(mode="json"), status.HTTP_409_CONFLICT)
     except service.ImportConflictError as exc:
-        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+        raise HTTPException(status.HTTP_409_CONFLICT, exception_text(exc)) from exc
     if result.created:
         # Oracle's reporting job writes this version's reports (when it is on).
         await jobs_service.on_version_imported(

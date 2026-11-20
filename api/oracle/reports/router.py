@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import recheck_caller, require_role
+from oracle.errors import exception_text
 from oracle.integrations import slack_oauth
 from oracle.reports import alignment, clock, service
 from oracle.reports import slack as report_slack
@@ -97,7 +98,7 @@ async def create_alignment_report(
             post_to_slack=body.post_to_slack,
         )
     except alignment.NoTracks as e:
-        raise HTTPException(status.HTTP_409_CONFLICT, str(e)) from None
+        raise HTTPException(status.HTTP_409_CONFLICT, exception_text(e)) from None
     if report.slack_status == "pending":
         await report_slack.deliver(db, report, actor=principal)
     await db.commit()

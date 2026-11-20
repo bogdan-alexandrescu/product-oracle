@@ -26,6 +26,7 @@ from fastapi import Depends, HTTPException, Query, Response, status
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.authz import has_role, require_role
 from oracle.docs.schemas import Audience
+from oracle.errors import exception_text
 from oracle.export import offload, present, render
 from oracle.export.deck import build_deck, render_deck_html, theme_class, unlink_code
 from oracle.export.pdf import PdfUnavailable, html_to_pdf, overflow_headers
@@ -89,9 +90,11 @@ async def with_audience(db, ev: ExportVersion, audience: str | None) -> ExportVe
     try:
         check_audience(ev, audience)
     except variants.PublicNotReady as e:
-        raise HTTPException(status.HTTP_409_CONFLICT, {"code": e.code, "message": str(e)}) from None
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, {"code": e.code, "message": exception_text(e)}
+        ) from None
     except variants.AudienceError as e:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from None
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, exception_text(e)) from None
     await load_audience(db, ev)
     return apply_audience(ev, audience)
 
@@ -102,11 +105,11 @@ async def _load(
     try:
         ev = await load_export_version(db, doc, n)
     except NotFound as e:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from None
+        raise HTTPException(status.HTTP_404_NOT_FOUND, exception_text(e)) from None
     try:
         ev = apply_layer(ev, layer, present)
     except NoBrief as e:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from None
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, exception_text(e)) from None
     return await with_audience(db, ev, audience)
 
 
@@ -200,7 +203,7 @@ async def export_version(
     except offload.Refused as e:
         return e.response()
     except PdfUnavailable as e:
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(e)) from None
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, exception_text(e)) from None
     return Response(
         content=content,
         media_type=MEDIA_TYPES[fmt],

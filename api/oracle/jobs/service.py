@@ -23,6 +23,7 @@ from oracle.claude_accounts.pool import readable_refusal
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.schemas import ImportProblem, VersionOut
+from oracle.errors import exception_text
 from oracle.jobs import kinds, prompting
 from oracle.jobs.models import LlmJob, LlmSuggestion
 from oracle.jobs.schemas import (
@@ -91,7 +92,7 @@ async def get_document(db: AsyncSession, doc: str) -> Document:
     try:
         return await docs_service.get_document_or_404(db, doc)
     except docs_service.NotFoundError as e:
-        raise JobError(404, str(e)) from e
+        raise JobError(404, exception_text(e)) from e
 
 
 async def get_version(db: AsyncSession, document: Document, n: int | None) -> DocumentVersion:
@@ -108,7 +109,7 @@ async def get_version(db: AsyncSession, document: Document, n: int | None) -> Do
     try:
         return await docs_service.get_version_row(db, document, n)
     except docs_service.NotFoundError as e:
-        raise JobError(404, str(e)) from e
+        raise JobError(404, exception_text(e)) from e
 
 
 async def latest_number(db: AsyncSession, document_id: uuid.UUID) -> int | None:
@@ -1056,7 +1057,7 @@ async def apply_refinement(
     try:
         markdown = compose_markdown(base.front_matter, sections, replace, resolutions)
     except docs_service.DraftError as e:
-        raise JobError(422, f"the revised draft does not import: {e}") from e
+        raise JobError(422, f"the revised draft does not import: {exception_text(e)}") from e
     # Imported as a person, so nothing downstream holds sections: every section of the
     # base must survive, or nothing is imported.
     lost = lost_sections([s.section_key for s in sections], markdown)
@@ -1081,9 +1082,9 @@ async def apply_refinement(
         )
     except docs_service.DraftError as e:
         await db.rollback()
-        raise JobError(422, f"the revised draft does not import: {e}") from e
+        raise JobError(422, f"the revised draft does not import: {exception_text(e)}") from e
     except docs_service.ImportConflictError as e:
-        raise JobError(409, str(e)) from e
+        raise JobError(409, exception_text(e)) from e
     if not result.created:
         raise JobError(409, "the revision is identical to an existing version")
     number = result.version.number

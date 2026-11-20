@@ -24,6 +24,7 @@ from markdown_it import MarkdownIt
 from oracle import safe_yaml
 from oracle.docs import layers
 from oracle.docs.parser import CITATION_RE, SECTION_ID_RE, split_front_matter
+from oracle.errors import exception_text
 
 SOURCES_SECTION_ID = "sources"
 SOURCES_HEADING = "Sources and data points"
@@ -135,7 +136,10 @@ def check_template(body: str, *, theme_keys: set[str] | None = None) -> Template
             fm = safe_yaml.load(yaml_text) or {}
         except safe_yaml.SafeYamlError as e:
             problems.append(
-                Problem("invalid_front_matter", f"The front matter is not valid YAML: {e}")
+                Problem(
+                    "invalid_front_matter",
+                    f"The front matter is not valid YAML: {exception_text(e)}",
+                )
             )
             fm = {}
         if not isinstance(fm, dict):
@@ -261,7 +265,11 @@ def check_template(body: str, *, theme_keys: set[str] | None = None) -> Template
             safe_yaml.load(m.group(1))
         except safe_yaml.SafeYamlError as e:
             line = rest[: m.start()].count("\n") + 1 + offset
-            problems.append(Problem("invalid_layout", f"layout block is not valid YAML: {e}", line))
+            problems.append(
+                Problem(
+                    "invalid_layout", f"layout block is not valid YAML: {exception_text(e)}", line
+                )
+            )
     return result
 
 

@@ -34,6 +34,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import company_time
+from oracle.errors import exception_text
 from oracle.jobs import prompting
 from oracle.llm import gateway
 from oracle.llm.transports import LlmOutOfTime
@@ -139,7 +140,7 @@ def parse_answer(text: str, allowed: set[str]) -> tuple[str, dict[str, Any] | No
     try:
         value = prompting.parse_answer(text)
     except prompting.AnswerError as e:
-        raise UnreadableAnswer(str(e)) from None
+        raise UnreadableAnswer(exception_text(e)) from None
     contradicts = value.get("contradicts")
     if not isinstance(contradicts, bool):
         raise UnreadableAnswer("contradicts must be true or false")
